@@ -22,12 +22,17 @@ struct StudioTaskComposer: View {
     let onRun: () -> Void
     let onStop: () -> Void
     let onShowModels: () -> Void
+    /// Puts a prompt from the page's history in the field (↑, or Recent prompts) as an undo step.
+    let onRecallPrompt: (String) -> Void
+    /// "Run variations" beside Run; nil hides it (a command without a seed).
+    var onRunVariations: ((StudioVariationCount) -> Void)?
     /// Whether the composer carries the scope note: only while no side column is open. The
     /// inspector shows it at its top, beside the controls it explains, and the Command view as
     /// its "Not sent" line.
     var showsScopeNote = true
     @Environment(\.studioModelTitles) private var titles
     @Environment(\.studioScopeSource) private var scopeSource
+    @Environment(\.studioLibraryItems) private var libraryItems
 
     @State private var editingChip: String?
 
@@ -112,7 +117,18 @@ struct StudioTaskComposer: View {
         .frame(minHeight: 22, alignment: .leading)
         .focused(promptFocus)
         .onSubmit(onRun)
+        .studioAttachmentPasteKey(isActive: promptFocus.wrappedValue) {
+            StudioAttachmentPaste.paste(into: &draft, slots: slots, allowsText: true)
+        }
+        .studioPromptHistoryKeys(
+            isActive: promptFocus.wrappedValue, history: promptHistory, text: draft.prompt, recall: onRecallPrompt
+        )
         .accessibilityLabel(presentation.promptPlaceholder.isEmpty ? "Prompt" : presentation.promptPlaceholder)
+    }
+
+    /// The prompts this page has run, newest first; none where the composer draws no prompt.
+    private var promptHistory: [String] {
+        showsPrompt && promptField != nil ? StudioPromptHistory.prompts(for: task, in: libraryItems) : []
     }
 
     // MARK: - Chip strip
@@ -124,6 +140,16 @@ struct StudioTaskComposer: View {
             }
             modelChip
             Spacer(minLength: 8)
+            if !promptHistory.isEmpty {
+                StudioRecentPromptsMenu(prompts: promptHistory) { prompt in
+                    onRecallPrompt(prompt)
+                    promptFocus.wrappedValue = true
+                }
+            }
+            // A batch already runs once per file; variations of a batch are not offered.
+            if let onRunVariations, slots.batchRunCount(in: draft) == nil {
+                StudioVariationsRunButton(isEnabled: sendEnabled, disabledReason: readiness.message(titles: titles), run: onRunVariations)
+            }
             if isRunning { stopButton } else { sendButton }
         }
     }
@@ -234,7 +260,17 @@ struct StudioTaskComposer: View {
         .accessibilityLabel("Stop current run")
     }
 
+    @ViewBuilder
     private var sendButton: some View {
+        if let count = slots.batchRunCount(in: draft) {
+            StudioBatchRunButton(count: count, isEnabled: sendEnabled,
+                                 blockedReason: readiness.blocksRun ? readiness.message(titles: titles) : nil, action: onRun)
+        } else {
+            singleSendButton
+        }
+    }
+
+    private var singleSendButton: some View {
         Button(action: onRun) {
             ZStack {
                 Circle().fill(sendEnabled ? MereRunTheme.accent : MereRunTheme.surfaceRaised)

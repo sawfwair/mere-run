@@ -56,6 +56,7 @@ struct StudioPluginsView: View {
     @State private var selectedID: String?
     @State private var selectedChannel = ""
     @State private var searchText = ""
+    @FocusState private var searchFocused: Bool
     @State private var catalogURL = ""
     @State private var statusMessage = "Loading the official plugin catalog"
     @State private var operationOutput = ""
@@ -161,6 +162,8 @@ struct StudioPluginsView: View {
                     .foregroundStyle(MereRunTheme.textMuted)
                 TextField("Search plugins or capabilities", text: $searchText)
                     .textFieldStyle(.plain)
+                    .focused($searchFocused)
+                    .studioSearchFocus(.page, focused: $searchFocused)
             }
             .padding(10)
             .merePanel()

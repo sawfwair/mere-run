@@ -6,7 +6,8 @@ import SwiftUI
 /// to a kind or favorites, searchable, shown as rows or as a grid of thumbnails, grouped by day,
 /// keyboard-navigable (arrows move, Space previews), with Quick Look surfacing on hover. Picking a
 /// row of another domain switches the destination; ⌘ and ⇧ build a batch to reveal, save, or
-/// delete in one go, and any row can be dragged onto another task's well or out to Finder or another app.
+/// delete in one go, and any row can be dragged onto another task's well or out to Finder or another app,
+/// or sent to another task's input or shared from its context menu.
 struct StudioLibraryPanel: View {
     let items: [StudioLibraryItem]
     let domain: StudioDomain
@@ -30,8 +31,10 @@ struct StudioLibraryPanel: View {
     let onEdit: (StudioLibraryItem) -> Void
     /// "Use these settings": put the run's recorded prompt, model, and options in its task's composer.
     let onUseSettings: (StudioLibraryItem) -> Void
-    /// "Compare": focus the first image result with the second beside it.
-    let onCompare: (StudioLibraryItem, StudioLibraryItem) -> Void
+    /// "Compare": two to four finished results of one kind, or a variation group, side by side.
+    let onCompare: ([StudioLibraryItem]) -> Void
+    /// "Run variations": the row's command 2, 4, or 8 times with a new seed each.
+    let onRunVariations: (StudioLibraryItem, StudioVariationCount) -> Void
     /// Extra leading space for the header while the window's traffic lights sit over it.
     var leadingInset: CGFloat = 0
 
@@ -42,10 +45,20 @@ struct StudioLibraryPanel: View {
     @State private var batch: Set<UUID> = []
     @State private var anchorID: UUID?
     @State private var pendingDelete: StudioLibraryDeleteRequest?
+    @State private var showsFilters = false
+    @State private var collectionPrompt: StudioCollectionNamePrompt?
+    /// The collection, model, and task filters, per window beside the kind and favorites ones.
+    /// Empty means no filter.
+    @SceneStorage("studio.libraryCollection") private var storedCollectionID = ""
+    @SceneStorage("studio.libraryModel") private var storedModelID = ""
+    @SceneStorage("studio.libraryTask") private var storedTask = ""
     @FocusState private var renameFocused: Bool
+    @EnvironmentObject private var library: StudioLibraryStore
+    @FocusState private var searchFocused: Bool
     @Environment(\.studioLibrarySeed) private var seed
     @Environment(\.studioReferenceDate) private var referenceDate
     @Environment(\.studioModelTitles) private var titles
+    @Environment(\.studioScopeSource) private var scopeSource
 
     /// The layout the column draws in — the user's, unless a render is staging the other one.
     private var effectiveViewMode: StudioLibraryViewMode {
@@ -62,8 +75,60 @@ struct StudioLibraryPanel: View {
             domain: domain,
             kind: kind,
             favoritesOnly: favoritesOnly,
-            query: searchText
+            query: searchText,
+            collection: selectedCollection,
+            modelID: modelFilter.wrappedValue,
+            task: taskFilter.wrappedValue
         )
+    }
+
+    private var selectedCollection: StudioLibraryCollection? {
+        let id = seed?.collectionID ?? UUID(uuidString: storedCollectionID)
+        return library.collections.first { $0.id == id }
+    }
+
+    private var collectionFilter: Binding<UUID?> {
+        Binding(
+            get: { selectedCollection?.id },
+            set: { storedCollectionID = $0?.uuidString ?? "" }
+        )
+    }
+
+    private var modelFilter: Binding<String?> {
+        Binding(
+            get: { seed?.modelID ?? (storedModelID.isEmpty ? nil : storedModelID) },
+            set: { storedModelID = $0 ?? "" }
+        )
+    }
+
+    private var taskFilter: Binding<StudioTask?> {
+        Binding(
+            get: { seed?.task ?? StudioTask(rawValue: storedTask) },
+            set: { storedTask = $0?.rawValue ?? "" }
+        )
+    }
+
+    /// The tasks and models the filter offers: what the rows in scope hold, plus the current
+    /// choice when no row in scope holds it any more, so it can still be seen and cleared.
+    private var taskOptions: [StudioLibraryFilterOption<StudioTask>] {
+        var options = StudioLibraryPresenter.taskOptions(in: scopedItems, scope: effectiveScope)
+        if let task = taskFilter.wrappedValue, !options.contains(where: { $0.value == task }) {
+            options.append(StudioLibraryFilterOption(value: task, title: task.title))
+        }
+        return options
+    }
+
+    private var modelOptions: [StudioLibraryFilterOption<String>] {
+        var options = StudioLibraryPresenter.modelOptions(in: scopedItems, titles: titles)
+        if let modelID = modelFilter.wrappedValue, !options.contains(where: { $0.value == modelID }) {
+            options.append(StudioLibraryFilterOption(value: modelID, title: StudioModelNaming.displayName(modelID, titles: titles)))
+        }
+        return options
+    }
+
+    /// Every grouped row's "2 of 4", read across the whole Library so a filter never renumbers it.
+    private var variationPositions: [UUID: StudioVariationPosition] {
+        StudioVariations.positions(in: items)
     }
 
     private var scopedItems: [StudioLibraryItem] {
@@ -110,6 +175,17 @@ struct StudioLibraryPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             searchRow
+            if !library.collections.isEmpty {
+                StudioLibraryCollectionChips(
+                    collections: library.collections,
+                    memberCount: library.memberCount,
+                    selectedID: collectionFilter,
+                    onNew: { collectionPrompt = .create(itemIDs: []) },
+                    onRename: { collectionPrompt = .rename($0) },
+                    onDelete: { library.deleteCollection(id: $0.id) },
+                    onDrop: addDroppedFiles
+                )
+            }
 
             if filteredItems.isEmpty {
                 emptyState
@@ -139,6 +215,7 @@ struct StudioLibraryPanel: View {
         } message: {
             Text("Deleting removes the run from the Library. Its files stay on disk unless you move them to the Trash.")
         }
+        .studioCollectionNamePrompt($collectionPrompt, library: library)
         .onAppear(perform: applyBatchSeed)
         .onChange(of: selectedID) { _, newValue in
             // A programmatic selection (a run finishing, a deep link) replaces the batch, so the
@@ -215,6 +292,9 @@ struct StudioLibraryPanel: View {
                 .textFieldStyle(.plain)
                 .font(.callout)
                 .foregroundStyle(MereRunTheme.textPrimary)
+                .focused($searchFocused)
+                .studioSearchFocus(.library, focused: $searchFocused)
+                .accessibilityLabel("Search Library")
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
@@ -238,29 +318,41 @@ struct StudioLibraryPanel: View {
         }
     }
 
-    private var isFiltering: Bool { kind != .all || favoritesOnly }
+    private var isFiltering: Bool {
+        kind != .all || favoritesOnly || modelFilter.wrappedValue != nil || taskFilter.wrappedValue != nil
+    }
 
     private var filterMenu: some View {
-        Menu {
-            Picker("Kind", selection: $kind) {
-                ForEach(StudioLibraryKind.allCases) { option in
-                    Label(option.title, systemImage: option.systemImage).tag(option)
-                }
-            }
-            .pickerStyle(.inline)
-            Divider()
-            Toggle("Favorites only", isOn: $favoritesOnly)
+        Button {
+            showsFilters.toggle()
         } label: {
             Image(systemName: isFiltering ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                 .font(.callout.weight(.medium))
+                .frame(width: 22, height: 24)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .frame(width: 22, height: 24)
-        .foregroundStyle(isFiltering ? MereRunTheme.accent : MereRunTheme.textMuted)
-        .help("Filter the Library by kind or favorites")
+        .buttonStyle(.mereIcon(tint: isFiltering ? MereRunTheme.accent : MereRunTheme.textMuted))
+        .popover(isPresented: $showsFilters, arrowEdge: .bottom) {
+            StudioLibraryFilterPanel(
+                kind: $kind,
+                favoritesOnly: $favoritesOnly,
+                task: taskFilter,
+                modelID: modelFilter,
+                taskOptions: taskOptions,
+                modelOptions: modelOptions
+            )
+        }
+        .help("Filter the Library by kind, task, model, or favorites")
         .accessibilityLabel("Filter")
-        .accessibilityValue(favoritesOnly ? "\(kind.title), favorites only" : kind.title)
+        .accessibilityValue(filterSummary)
+    }
+
+    /// What the filter is set to, for VoiceOver: "Images, Generate, Z-Image Nano, favorites only".
+    private var filterSummary: String {
+        var parts = [kind.title]
+        if let task = taskFilter.wrappedValue { parts.append(task.title) }
+        if let modelID = modelFilter.wrappedValue { parts.append(StudioModelNaming.displayName(modelID, titles: titles)) }
+        if favoritesOnly { parts.append("favorites only") }
+        return parts.joined(separator: ", ")
     }
 
     private var viewModeButton: some View {
@@ -293,7 +385,13 @@ struct StudioLibraryPanel: View {
     private var emptyMessage: String {
         if items.isEmpty { return "Runs you create will land here." }
         if scopedItems.isEmpty { return "No \(domain.title) runs yet. Choose All to see every run." }
+        if let selectedCollection, !scopedItems.contains(where: { selectedCollection.contains($0.id) }) {
+            return "Nothing in \(selectedCollection.name) here yet. Drag a run onto it, or use Add to collection."
+        }
         if favoritesOnly { return "No favorites here yet. Star a run to keep it close." }
+        if modelFilter.wrappedValue != nil || taskFilter.wrappedValue != nil {
+            return "No runs match these filters. Clear them to see every run."
+        }
         if kind != .all { return "No \(kind.title.lowercased()) here. Choose All kinds to see every run." }
         return "No matching runs."
     }
@@ -310,8 +408,9 @@ struct StudioLibraryPanel: View {
                         .padding(.bottom, 2)
 
                     if effectiveViewMode == .list {
+                        let positions = variationPositions
                         ForEach(section.items) { item in
-                            row(for: item)
+                            row(for: item, variation: positions[item.id])
                         }
                     } else {
                         grid(for: section.items)
@@ -332,11 +431,25 @@ struct StudioLibraryPanel: View {
         }
         .onKeyPress(.upArrow) { moveSelection(by: -1) }
         .onKeyPress(.downArrow) { moveSelection(by: 1) }
+        // File ▸ Delete from Library… (⌘⌫) reads this only while the list has focus.
+        .focusedValue(\.studioLibraryDeletion, deletion)
     }
 
-    private func row(for item: StudioLibraryItem) -> some View {
+    /// What ⌘⌫ deletes: the batch, else the open row, through the same confirmation as the
+    /// context menu's Delete….
+    private var deletion: StudioLibraryDeletion? {
+        let ids = batch.isEmpty ? Set(selectedID.map { [$0] } ?? []) : batch
+        let visible = Set(filteredItems.map(\.id))
+        guard !ids.isEmpty, ids.isSubset(of: visible) else { return nil }
+        return StudioLibraryDeletion(count: ids.count) {
+            pendingDelete = StudioLibraryDeleteRequest(ids: ids, count: ids.count)
+        }
+    }
+
+    private func row(for item: StudioLibraryItem, variation: StudioVariationPosition?) -> some View {
         StudioLibraryRow(
             item: item,
+            variation: variation,
             progress: progressByID[item.id],
             isSelected: isSelected(item.id),
             isRenaming: renamingID == item.id,
@@ -350,6 +463,7 @@ struct StudioLibraryPanel: View {
         )
         .studioFileDrag(item.outputURL)
         .contextMenu { menu(for: item) }
+        .studioShareAnchor()
     }
 
     private func grid(for sectionItems: [StudioLibraryItem]) -> some View {
@@ -364,6 +478,7 @@ struct StudioLibraryPanel: View {
                 )
                 .studioFileDrag(item.outputURL)
                 .contextMenu { menu(for: item) }
+                .studioShareAnchor()
             }
         }
         .padding(.horizontal, 2)
@@ -373,18 +488,24 @@ struct StudioLibraryPanel: View {
     @ViewBuilder
     private func menu(for item: StudioLibraryItem) -> some View {
         if batch.count > 1, batch.contains(item.id) {
-            if let pair = comparablePair {
-                Button("Compare") { onCompare(pair.0, pair.1) }
+            if let comparable = comparableBatch {
+                Button("Compare \(comparable.count)") { onCompare(comparable) }
                 Divider()
             }
             Button("Reveal \(batch.count) in Finder") { onReveal(urls(in: batch)) }
             Button("Save \(batch.count) to…") { onExport(items(in: batch)) }
+            StudioShareMenuItem(urls: urls(in: batch))
+            Divider()
+            collectionItems(for: batchIDs)
             Divider()
             Button("Delete \(batch.count)…", role: .destructive) {
                 pendingDelete = StudioLibraryDeleteRequest(ids: batch, count: batch.count)
             }
         } else {
             if let url = item.outputURL {
+                StudioSendToMenuItems(url: url)
+                StudioShareMenuItem(urls: [url])
+                Divider()
                 Button("Quick Look") { onQuickLook(url) }
                 Button("Reveal in Finder") { onReveal([url]) }
                 Button("Save to…") { onExport([item]) }
@@ -392,12 +513,22 @@ struct StudioLibraryPanel: View {
             Button(item.isStarred ? "Remove from Favorites" : "Add to Favorites") {
                 onToggleFavorite(item.id)
             }
+            collectionItems(for: [item.id])
+            if let group = item.variationGroup {
+                let members = StudioCompare.groupItems(group, in: items)
+                if members.count >= StudioCompare.selectionRange.lowerBound {
+                    Button("Compare \(members.count) variations") { onCompare(members) }
+                }
+            }
             if item.commandDraft != nil, item.templateID != nil {
                 Divider()
                 if StudioLibraryDraftRestoration.canRestore(item) {
                     Button("Use these settings") { onUseSettings(item) }
                 }
                 Button("Run again") { onRetry(item) }
+                if StudioVariations.applies(to: item, source: scopeSource) {
+                    StudioVariationsMenuItems { onRunVariations(item, $0) }
+                }
                 Button("Edit command…") { onEdit(item) }
             }
             Divider()
@@ -415,9 +546,9 @@ struct StudioLibraryPanel: View {
                 .foregroundStyle(MereRunTheme.textSecondary)
             Spacer(minLength: 0)
             // Icons, not labels: three words do not fit a 248pt column beside the count.
-            if let pair = comparablePair {
-                batchAction(systemImage: "rectangle.split.2x1", label: "Compare", tint: MereRunTheme.textSecondary) {
-                    onCompare(pair.0, pair.1)
+            if let comparable = comparableBatch {
+                batchAction(systemImage: StudioVariationSymbols.compare, label: "Compare", tint: MereRunTheme.textSecondary) {
+                    onCompare(comparable)
                 }
             }
             batchAction(systemImage: "folder", label: "Reveal in Finder", tint: MereRunTheme.textSecondary) {
@@ -428,6 +559,23 @@ struct StudioLibraryPanel: View {
                 onExport(items(in: batch))
             }
             .disabled(urls(in: batch).isEmpty)
+            Menu {
+                StudioCollectionMenuItems(
+                    itemIDs: batchIDs,
+                    collections: library.collections,
+                    onToggle: { library.toggleMembership(collectionID: $0.id, itemIDs: batchIDs) },
+                    onNew: { collectionPrompt = .create(itemIDs: batchIDs) }
+                )
+            } label: {
+                Image(systemName: "rectangle.stack.badge.plus")
+                    .font(.callout.weight(.medium))
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .frame(width: 26, height: 24)
+            .foregroundStyle(MereRunTheme.textSecondary)
+            .help("Add to collection")
+            .accessibilityLabel("Add \(batch.count) runs to a collection")
             batchAction(systemImage: "trash", label: "Delete \(batch.count) runs", tint: MereRunTheme.red) {
                 pendingDelete = StudioLibraryDeleteRequest(ids: batch, count: batch.count)
             }
@@ -454,6 +602,37 @@ struct StudioLibraryPanel: View {
         .buttonStyle(.mereIcon(tint: tint))
         .help(label)
         .accessibilityLabel(label)
+    }
+
+    // MARK: - Collections
+
+    /// A row's or a batch's collection items: Add to collection, and Remove from the collection
+    /// the column is showing.
+    @ViewBuilder
+    private func collectionItems(for ids: [UUID]) -> some View {
+        StudioAddToCollectionMenu(
+            itemIDs: ids,
+            collections: library.collections,
+            onToggle: { library.toggleMembership(collectionID: $0.id, itemIDs: ids) },
+            onNew: { collectionPrompt = .create(itemIDs: ids) }
+        )
+        if let selectedCollection, ids.contains(where: selectedCollection.contains) {
+            Button("Remove from \(selectedCollection.name)") {
+                library.removeFromCollection(id: selectedCollection.id, itemIDs: ids)
+            }
+        }
+    }
+
+    /// The batch in the column's order, so a collection lists its runs the way they were seen.
+    private var batchIDs: [UUID] {
+        filteredItems.map(\.id).filter(batch.contains)
+    }
+
+    private func addDroppedFiles(_ collection: StudioLibraryCollection, _ urls: [URL]) -> Bool {
+        let ids = library.itemIDs(producing: urls)
+        guard !ids.isEmpty else { return false }
+        library.addToCollection(id: collection.id, itemIDs: ids)
+        return true
     }
 
     // MARK: - Selection
@@ -513,16 +692,13 @@ struct StudioLibraryPanel: View {
         items(in: ids).compactMap(\.outputURL)
     }
 
-    /// The two rows a batch can compare: exactly two, both finished with a picture. The older
-    /// run is the "A" side (the column lists newest first, so this is the reverse of its order):
-    /// a comparison reads as what changed since.
-    private var comparablePair: (StudioLibraryItem, StudioLibraryItem)? {
+    /// The rows a batch can compare: two to four, all finished and of one kind (pictures,
+    /// sounds, or videos). The oldest run is the "A" side (the column lists newest first, so
+    /// this is the reverse of its order): a comparison reads as what changed since.
+    private var comparableBatch: [StudioLibraryItem]? {
         let selected = items(in: batch)
-        guard selected.count == 2, batch.count == 2,
-              selected.allSatisfy({ $0.status == .completed && StudioLibraryPresenter.fileKind(of: $0) == .image })
-        else { return nil }
-        let ordered = selected.sorted { $0.createdAt < $1.createdAt }
-        return (ordered[0], ordered[1])
+        guard selected.count == batch.count, StudioCompare.comparableMedia(selected) != nil else { return nil }
+        return selected.sorted { $0.createdAt < $1.createdAt }
     }
 
     // MARK: - Rename
@@ -548,6 +724,10 @@ struct StudioLibrarySeed: Equatable {
     var scope: StudioLibraryScope?
     /// How many of the visible rows start out selected together.
     var batchCount: Int?
+    /// The collection, model, and task the column starts filtered to.
+    var collectionID: UUID?
+    var modelID: String?
+    var task: StudioTask?
 }
 
 private struct StudioLibrarySeedKey: EnvironmentKey {
@@ -578,6 +758,8 @@ private struct StudioLibraryDeleteRequest: Identifiable {
 /// favorite star and Quick Look; renaming happens in place, never in a dialog.
 private struct StudioLibraryRow: View {
     let item: StudioLibraryItem
+    /// "2 of 4" for a run of a "Run variations" group.
+    let variation: StudioVariationPosition?
     let progress: StudioRunProgress?
     let isSelected: Bool
     let isRenaming: Bool
@@ -630,6 +812,12 @@ private struct StudioLibraryRow: View {
                             Circle()
                                 .fill(statusColor)
                                 .frame(width: 8, height: 8)
+                        }
+                        if let variation {
+                            Image(systemName: StudioVariationSymbols.variations)
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(MereRunTheme.accent)
+                                .help(variation.title)
                         }
                         Text(meta)
                             .font(.caption.weight(.medium))
@@ -693,14 +881,16 @@ private struct StudioLibraryRow: View {
         StudioLibraryRowMeta.kindTitle(for: item)
     }
 
-    /// "Generate · 12:43 PM" once done; "Running · 62%" / "Queued" / "Failed · 12:43 PM" otherwise.
+    /// "Generate · 12:43 PM" once done; "Running · 62%" / "Queued" / "Failed · 12:43 PM" otherwise,
+    /// led by "2 of 4" for a run of a variation group.
     private var meta: String {
-        StudioLibraryRowMeta.text(
+        let text = StudioLibraryRowMeta.text(
             item: item,
             kindTitle: kindTitle,
             progress: progress,
             formatter: Self.timeFormatter
         )
+        return variation.map { "\($0.index) of \($0.count) · " + text } ?? text
     }
 
     private var statusColor: Color? {

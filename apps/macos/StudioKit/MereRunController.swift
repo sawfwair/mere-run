@@ -1496,9 +1496,9 @@ package final class MereRunController: ObservableObject {
         case .started(let job):
             guard job.lane == .inference else { return }
             setForeground(job)
-        case .output:
+        case .output, .queued, .reordered:
             // Raw chunks are for submitters streaming a utility command; the console mirrors the
-            // folded state on `.changed`.
+            // folded state on `.changed`. Queue moves change no run's state.
             return
         case .changed(let job):
             guard job.lane == .inference else { return }

@@ -499,6 +499,7 @@ final class JobStoreTests: XCTestCase {
             case .output(let job, let stream, let text): trace.append("output:\(stream.label):\(text):\(job.log.lines.count)")
             case .changed(let job): trace.append("changed:\(job.log.lines.count)")
             case .finished: trace.append("finished")
+            case .queued, .reordered: trace.append("queue")
             }
         }
         defer { subscription.cancel() }

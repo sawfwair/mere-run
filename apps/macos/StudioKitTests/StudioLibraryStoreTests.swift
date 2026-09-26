@@ -767,7 +767,7 @@ final class StudioLibraryStoreTests: XCTestCase {
         try Data([0]).write(to: sidecar)
 
         var trashed: [URL] = []
-        let store = StudioLibraryStore(libraryURL: url, trashItem: { trashed.append($0) })
+        let store = StudioLibraryStore(libraryURL: url, trashItem: { trashed.append($0); return nil })
         var kept = makeItem(prompt: "kept")
         kept.outputURL = primary
         var item = makeItem(prompt: "a ceramic coffee mug")
@@ -804,7 +804,7 @@ final class StudioLibraryStoreTests: XCTestCase {
     func testDeleteSkipsFilesThatAreAlreadyGone() throws {
         let url = try temporaryLibraryURL()
         var trashed: [URL] = []
-        let store = StudioLibraryStore(libraryURL: url, trashItem: { trashed.append($0) })
+        let store = StudioLibraryStore(libraryURL: url, trashItem: { trashed.append($0); return nil })
         var item = makeItem(prompt: "already gone")
         item.outputURL = url.deletingLastPathComponent().appendingPathComponent("missing.png")
         store.upsert(item)

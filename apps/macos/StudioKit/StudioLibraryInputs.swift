@@ -20,8 +20,9 @@ package struct StudioAttachmentRequirement: Equatable {
         self.allowsMultiple = allowsMultiple
     }
 
+    /// A batching slot takes several files as well as a list slot does.
     package init(slot: StudioAttachmentSlot) {
-        self.init(label: slot.label, acceptedTypes: slot.acceptedTypes, allowsMultiple: slot.allowsMultiple)
+        self.init(label: slot.label, acceptedTypes: slot.acceptedTypes, allowsMultiple: slot.allowsMultiple || slot.batches)
     }
 
     /// Whether the entry point takes a folder rather than files.

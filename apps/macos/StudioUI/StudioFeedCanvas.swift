@@ -9,8 +9,6 @@ struct StudioFeedActions {
     let vary: (StudioLibraryItem) -> Void
     /// Re-run with the same command.
     let rerun: (StudioLibraryItem) -> Void
-    /// Load an output into the composer's well.
-    let useAsInput: (URL) -> Void
     /// Copy an output to a place the user picks.
     let saveTo: (URL) -> Void
     let cancel: (Job) -> Void
@@ -26,6 +24,11 @@ struct StudioFeedActions {
     /// The slot the empty state's primary control fills; nil when the task needs no file first.
     let attach: StudioAttachTarget?
     var focus: (StudioLibraryItem, URL) -> Void = { _, _ in }
+    /// "Run variations": the row's command 2, 4, or 8 times with a new seed each. nil where the
+    /// surface does not offer it.
+    var runVariations: ((StudioLibraryItem, StudioVariationCount) -> Void)?
+    /// Opens Compare on these rows. nil where the surface does not offer it.
+    var compare: (([StudioLibraryItem]) -> Void)?
 }
 
 /// What the readiness card needs to offer the next step itself. The model picker is the
@@ -48,8 +51,6 @@ struct StudioReadinessActions {
 struct StudioFeedCanvas: View {
     /// The task's glyph and empty-state words: the mode's, or a shared-workspace task's own.
     let presentation: StudioTaskPresentation
-    /// The composer's slots, so a card knows whether "Use as input" can take its output.
-    let slots: [StudioAttachmentSlot]
     let cards: [StudioFeedCard]
     let readiness: ModelReadinessState
     /// The `model pull` the readiness card reports, while one runs for this mode's model.
@@ -60,10 +61,14 @@ struct StudioFeedCanvas: View {
     @Binding var newResultID: UUID?
     let actions: StudioFeedActions
     let readinessActions: StudioReadinessActions
+    /// The Library row the page has selected, whose card Space previews.
+    var selectedID: UUID?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visibleCardIDs: Set<UUID> = []
     @State private var scrollTarget: UUID?
+    /// The finished cards picked with "Select to compare", in the order they were picked.
+    @State private var compareSelection: [UUID] = []
 
     private enum Metrics {
         static let cardSpacing: CGFloat = 14
@@ -115,8 +120,9 @@ struct StudioFeedCanvas: View {
                             StudioEmptyState(presentation: presentation, onUseExample: actions.useExample, attach: actions.attach)
                                 .padding(.vertical, MereRunTheme.Spacing.xl)
                         }
+                        let variations = StudioVariations.positions(in: cards.map(\.item))
                         ForEach(cards) { card in
-                            cardView(card)
+                            cardView(card, variation: variations[card.id])
                                 .id(card.id)
                                 .background {
                                     GeometryReader { geometry in
@@ -145,6 +151,10 @@ struct StudioFeedCanvas: View {
                 }
                 .coordinateSpace(name: "feed")
                 .defaultScrollAnchor(.bottom)
+                // Space previews a result the way it does in the Library, once the feed has focus.
+                .focusable()
+                .focusEffectDisabled()
+                .onKeyPress(.space, action: quickLookSelection)
                 .onPreferenceChange(StudioFeedCardFramesKey.self) { frames in
                     let bounds = CGRect(origin: .zero, size: container.size)
                     let visible = Set(frames.filter { $0.value.intersects(bounds) }.map(\.key))
@@ -152,7 +162,11 @@ struct StudioFeedCanvas: View {
                 }
             }
             .overlay(alignment: .bottom) {
-                if pendingNewResultIsOffscreen, let newResultID {
+                if !comparedItems.isEmpty, let compare = actions.compare {
+                    StudioCompareSelectionBar(items: comparedItems, onCompare: compare) { compareSelection = [] }
+                        .padding(.bottom, 10)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else if pendingNewResultIsOffscreen, let newResultID {
                     StudioNewResultPill {
                         scrollTarget = newResultID
                     }
@@ -173,16 +187,43 @@ struct StudioFeedCanvas: View {
         }
     }
 
+    /// Space on the focused feed: Quick Look the selected run's result, else the newest one.
+    /// Ignored when no finished card has a file, so the key is never swallowed for nothing.
+    private func quickLookSelection() -> KeyPress.Result {
+        let results = cards.filter { $0.kind == .generation && $0.item.outputURL != nil }
+        guard let card = results.first(where: { $0.item.id == selectedID }) ?? results.last,
+              let url = card.item.outputURL else { return .ignored }
+        QuickLookCoordinator.shared.preview(url)
+        return .handled
+    }
+
+    /// The picked cards still in the feed, in the order they were picked.
+    private var comparedItems: [StudioLibraryItem] {
+        compareSelection.compactMap { id in cards.first { $0.id == id && $0.kind == .generation }?.item }
+    }
+
+    private func toggleCompare(_ item: StudioLibraryItem) {
+        if let index = compareSelection.firstIndex(of: item.id) {
+            compareSelection.remove(at: index)
+        } else {
+            compareSelection.append(item.id)
+        }
+    }
+
     @ViewBuilder
-    private func cardView(_ card: StudioFeedCard) -> some View {
+    private func cardView(_ card: StudioFeedCard, variation: StudioVariationPosition?) -> some View {
         let highlighted = highlightedID == card.id
         switch card.kind {
         case .generation:
             StudioGenerationCard(
-                slots: slots,
                 item: card.item,
                 isHighlighted: highlighted,
-                actions: actions
+                actions: actions,
+                variation: variation,
+                variationGroup: card.item.variationGroup.map { StudioCompare.groupItems($0, in: cards.map(\.item)) } ?? [],
+                isPickedForCompare: compareSelection.contains(card.id),
+                onPickForCompare: actions.compare != nil && StudioCompare.media(of: card.item) != nil
+                    ? { toggleCompare(card.item) } : nil
             )
         case .running:
             if let job = card.job {
@@ -294,6 +335,7 @@ private struct StudioCardHeader: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Settings: \(chips.joined(separator: ", "))")
             }
+            StudioLineageBreadcrumb(item: item)
         }
     }
 }
@@ -381,14 +423,26 @@ enum StudioFeedChips {
 struct StudioGenerationCard: View {
     @Environment(\.studioReferenceDate) private var referenceDate
 
-    /// The composer's slots: "Use as input" is offered when one of them takes the output.
-    let slots: [StudioAttachmentSlot]
     let item: StudioLibraryItem
     let isHighlighted: Bool
     let actions: StudioFeedActions
+    /// Where the run sits in its "Run variations" group, if it was one.
+    var variation: StudioVariationPosition?
+    /// The group's finished runs Compare opens with; empty until two have finished.
+    var variationGroup: [StudioLibraryItem] = []
+    var isPickedForCompare = false
+    /// "Select to compare"; nil where the card cannot be compared.
+    var onPickForCompare: (() -> Void)?
     @Environment(\.studioModelTitles) private var titles
+    @Environment(\.studioScopeSource) private var scopeSource
 
     @State private var copied = false
+
+    /// Where the command takes a seed, Vary and the menu offer a group of variations too.
+    private var variationsRun: ((StudioVariationCount) -> Void)? {
+        guard let run = actions.runVariations, StudioVariations.applies(to: item, source: scopeSource) else { return nil }
+        return { run(item, $0) }
+    }
 
     private var canRestoreSettings: Bool {
         StudioLibraryDraftRestoration.canRestore(item)
@@ -436,9 +490,10 @@ struct StudioGenerationCard: View {
         return text
     }
 
-    private var canUseAsInput: Bool {
-        guard let primaryURL else { return false }
-        return slots.contains { $0.accepts(primaryURL) }
+    /// What Share… hands the picker: every picture, clip, sound, or mesh the run made, else its
+    /// primary file.
+    private var shareURLs: [URL] {
+        mediaFiles.isEmpty ? primaryURL.map { [$0] } ?? [] : mediaFiles
     }
 
     var body: some View {
@@ -447,13 +502,16 @@ struct StudioGenerationCard: View {
         // it): found once per body, since finding it stats the artifacts and reads a file's front.
         let card = StudioResultRenderers.cardRendering(for: item, files: files)
         VStack(alignment: .leading, spacing: 12) {
-            StudioCardHeader(item: item, when: StudioFeedTime.label(for: item.createdAt, now: referenceDate ?? Date()))
+            StudioCardHeader(item: item, when: [variation.map { "\($0.index) of \($0.count)" },
+                                                StudioFeedTime.label(for: item.createdAt, now: referenceDate ?? Date())]
+                .compactMap { $0 }.joined(separator: " · "))
             outputs(card: card)
             actionRow
         }
         .padding(.vertical, 14)
         .padding(.horizontal, 16)
         .feedPanel(isHighlighted: isHighlighted)
+        .studioShareAnchor()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Generation: \(item.displayTitle)")
     }
@@ -522,21 +580,41 @@ struct StudioGenerationCard: View {
                 }
                 .buttonStyle(.mereSecondary)
             }
-            if item.commandDraft != nil, item.templateID != nil {
+            if let variationsRun {
+                StudioVaryMenuButton(vary: { actions.vary(item) }, run: variationsRun)
+            } else if item.commandDraft != nil, item.templateID != nil {
                 cardIcon("shuffle", help: "Vary with a new seed") { actions.vary(item) }
+            }
+            if variationGroup.count >= StudioCompare.selectionRange.lowerBound, let compare = actions.compare {
+                Button { compare(variationGroup) } label: {
+                    Label("Compare \(variationGroup.count)", systemImage: StudioVariationSymbols.compare)
+                }
+                .buttonStyle(.mereSecondary)
+                .help("Compare this run's variations side by side")
             }
             if canRestoreSettings {
                 cardIcon("slider.horizontal.3", help: "Use these settings") { actions.useSettings(item) }
+            }
+            if !shareURLs.isEmpty {
+                StudioShareButton(urls: shareURLs)
             }
             Menu {
                 if item.commandDraft != nil, item.templateID != nil {
                     Button("Rerun with the same settings") { actions.rerun(item) }
                 }
+                if let variationsRun {
+                    StudioVariationsMenuItems(run: variationsRun)
+                }
+                if let onPickForCompare {
+                    Button(isPickedForCompare ? "Deselect for compare" : "Select to compare", action: onPickForCompare)
+                }
                 if canRestoreSettings {
                     Button("Use these settings") { actions.useSettings(item) }
                 }
                 if let primaryURL {
-                    Button("Use as input") { actions.useAsInput(primaryURL) }.disabled(!canUseAsInput)
+                    StudioSendToMenuItems(url: primaryURL)
+                    StudioShareMenuItem(urls: shareURLs)
+                    Divider()
                     Button("Quick Look") { QuickLookCoordinator.shared.preview(primaryURL) }
                     Button("Open") { NSWorkspace.shared.open(primaryURL) }
                     Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([primaryURL]) }
@@ -550,7 +628,19 @@ struct StudioGenerationCard: View {
             .fixedSize()
             .accessibilityLabel("More result actions")
             Spacer(minLength: 8)
+            if let onPickForCompare {
+                Button(action: onPickForCompare) {
+                    Image(systemName: isPickedForCompare ? "checkmark.circle.fill" : "circle")
+                        .font(.callout.weight(.medium))
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.mereIcon(tint: isPickedForCompare ? MereRunTheme.accent : MereRunTheme.textMuted))
+                .help(isPickedForCompare ? "Deselect for compare" : "Select to compare")
+                .accessibilityLabel("Select to compare")
+                .accessibilityAddTraits(isPickedForCompare ? [.isButton, .isSelected] : .isButton)
+            }
             if let primaryURL {
+                StudioSendToButton(url: primaryURL)
                 Button("Save to…") { actions.saveTo(primaryURL) }
                     .buttonStyle(.mereSecondary)
                     .help("Save a copy of the output")
@@ -619,6 +709,7 @@ private struct StudioOutputGrid: View {
                     .background(MereRunTheme.surfaceRaised.opacity(0.6))
                     .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
                     .studioFileDrag(url)
+                    .studioOutputContextMenu(url)
             }
         }
     }
@@ -648,14 +739,10 @@ private struct StudioOutputGrid: View {
             else { QuickLookCoordinator.shared.preview(url) }
         }
         .studioFileDrag(url)
-        .contextMenu {
-            Button("Open") { NSWorkspace.shared.open(url) }
-            Button("Quick Look") { QuickLookCoordinator.shared.preview(url) }
-            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
-        }
+        .studioOutputContextMenu(url)
         .help(url.lastPathComponent)
         .accessibilityLabel("Output \(url.lastPathComponent)")
-        .accessibilityHint("Click to inspect the output; drag to copy the file out")
+        .accessibilityHint("Click to inspect the output; drag it onto an input or out to Finder; right-click to send or share it")
     }
 }
 

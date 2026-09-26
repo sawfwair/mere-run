@@ -358,7 +358,8 @@ struct StudioModelsView: View {
                 StudioModelsSearchPill(
                     text: $searchText,
                     placeholder: modelStore.hasInventory
-                        ? "Search \(installedRows.count) \(installedRows.count == 1 ? "model" : "models")" : "Search models"
+                        ? "Search \(installedRows.count) \(installedRows.count == 1 ? "model" : "models")" : "Search models",
+                    searchField: .page
                 )
 
                 Button("Pull…") {
@@ -1615,6 +1616,9 @@ private struct StudioModelListRow: View {
 private struct StudioModelsSearchPill: View {
     @Binding var text: String
     let placeholder: String
+    /// The search shortcut this pill answers, if any.
+    var searchField: StudioSearchField?
+    @FocusState private var focused: Bool
 
     var body: some View {
         HStack(spacing: 6) {
@@ -1625,6 +1629,8 @@ private struct StudioModelsSearchPill: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundStyle(MereRunTheme.textPrimary)
+                .focused($focused)
+                .studioSearchFocus(searchField, focused: $focused)
             if !text.isEmpty {
                 Button {
                     text = ""

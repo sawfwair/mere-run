@@ -83,10 +83,14 @@ package enum StudioFeedCardBuilder {
         }
     }
 
-    /// The queued cards in submission order; the first is "next".
+    /// The queued cards in the order their lane will start them — the queue's own order, which
+    /// the user can change from Activity — with stale queued rows that have no job after them in
+    /// submission order; the first is "next".
     package static func queuePosition(of card: StudioFeedCard, in cards: [StudioFeedCard]) -> Int? {
-        let queued = cards.filter { $0.kind == .queued }
-        return queued.firstIndex(where: { $0.id == card.id })
+        let queued = cards.filter { $0.kind == .queued }.enumerated().sorted {
+            ($0.element.job?.queuePosition ?? Int.max, $0.offset) < ($1.element.job?.queuePosition ?? Int.max, $1.offset)
+        }
+        return queued.firstIndex { $0.element.id == card.id }
     }
 }
 

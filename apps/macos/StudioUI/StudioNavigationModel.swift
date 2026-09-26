@@ -4,15 +4,10 @@ import StudioKit
 import SwiftUI
 
 extension StudioDomain {
-    /// ⌘1…⌘9 for the first nine domains, ⌥⌘1… for the rest, in sidebar order.
+    /// ⌘1…⌘9 for the first nine domains, ⌥⌘1… for the rest, in sidebar order
+    /// (`StudioKeyboardShortcuts.domainCombo`).
     package var keyboardShortcut: KeyboardShortcut? {
-        guard let index = Self.allCases.firstIndex(of: self) else { return nil }
-        if index < 9, let key = "\(index + 1)".first {
-            return KeyboardShortcut(KeyEquivalent(key), modifiers: .command)
-        }
-        let offset = index - 9
-        guard offset < 9, let key = "\(offset + 1)".first else { return nil }
-        return KeyboardShortcut(KeyEquivalent(key), modifiers: [.command, .option])
+        StudioKeyboardShortcuts.domainCombo(self)?.keyboardShortcut
     }
 }
 
@@ -43,6 +38,11 @@ package final class NavigationModel: ObservableObject {
     /// Whether the sidebar footer's Activity popover is open. The shell draws it over the window,
     /// so the state lives here rather than inside the sidebar column.
     @Published package var showActivity = false
+    /// A task workspace whose composer should take focus when it next shows: set by Use as input
+    /// and Send to, cleared by the workspace once its prompt has it.
+    @Published package var composerFocusRequest: StudioTask?
+    /// The search field Edit ▸ Find in List or Search Library last asked to focus.
+    @Published package var searchFocusRequest: StudioSearchFocusRequest?
 
     package init(destination: StudioDestination = .default) {
         self.destination = destination
@@ -103,6 +103,11 @@ package final class NavigationModel: ObservableObject {
             inspectorTasks.insert(task)
             showCommandColumn = false
         }
+    }
+
+    /// Asks `field` to take focus: ⌘F for the current list, ⌘L for the Library.
+    package func requestSearchFocus(_ field: StudioSearchField) {
+        searchFocusRequest = StudioSearchFocusRequest(field: field)
     }
 
     /// Shows or hides the Command view column; the inspector's memory for the task survives.

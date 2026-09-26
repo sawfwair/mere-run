@@ -24,6 +24,10 @@ struct StudioComposer: View {
     let onRun: () -> Void
     let onStop: () -> Void
     let onShowModels: () -> Void
+    /// Puts a prompt from the page's history in the field (↑, or Recent prompts) as an undo step.
+    let onRecallPrompt: (String) -> Void
+    /// "Run variations" beside Run; nil hides it (a command without a seed, a conversation).
+    var onRunVariations: ((StudioVariationCount) -> Void)?
     /// Whether the composer carries the scope note: only while no side column is open. The
     /// inspector shows it at its top, beside the controls it explains, and the Command view as
     /// its "Not sent" line.
@@ -31,6 +35,7 @@ struct StudioComposer: View {
 
     @EnvironmentObject private var controller: MereRunController
     @Environment(\.studioScopeSource) private var scopeSource
+    @Environment(\.studioLibraryItems) private var libraryItems
     @State private var editingChip: StudioComposerChipKind?
 
     private enum Metrics {
@@ -121,8 +126,21 @@ struct StudioComposer: View {
             .frame(minHeight: 22, alignment: .leading)
             .focused(promptFocus)
             .onSubmit(onRun)
+            .studioAttachmentPasteKey(isActive: promptFocus.wrappedValue) {
+                StudioAttachmentPaste.paste(
+                    into: &draft, slots: mode.attachmentSlots(for: draft, source: scopeSource), allowsText: true
+                )
+            }
+            .studioPromptHistoryKeys(
+                isActive: promptFocus.wrappedValue, history: promptHistory, text: draft.prompt, recall: onRecallPrompt
+            )
             .accessibilityLabel(mode.promptPlaceholder)
         }
+    }
+
+    /// The prompts this page has run, newest first.
+    private var promptHistory: [String] {
+        mode == .listen ? [] : StudioPromptHistory.prompts(for: mode.task, in: libraryItems)
     }
 
     // MARK: - Chip strip
@@ -138,7 +156,14 @@ struct StudioComposer: View {
             }
             Spacer(minLength: 8)
             HStack(spacing: 8) {
+                if !promptHistory.isEmpty {
+                    StudioRecentPromptsMenu(prompts: promptHistory, onPick: recallFromMenu)
+                }
                 if showsPaperclip { paperclipButton }
+                // A batch already runs once per file; variations of a batch are not offered.
+                if let onRunVariations, mode.attachmentSlots(for: draft, source: scopeSource).batchRunCount(in: draft) == nil {
+                    StudioVariationsRunButton(isEnabled: sendEnabled, disabledReason: sendHelp, run: onRunVariations)
+                }
                 if isRunning { stopButton } else { sendButton }
             }
         }
@@ -496,6 +521,12 @@ struct StudioComposer: View {
 
     // MARK: - Right cluster
 
+    /// A prompt picked from Recent prompts: into the field, with the field focused to edit it.
+    private func recallFromMenu(_ prompt: String) {
+        onRecallPrompt(prompt)
+        promptFocus.wrappedValue = true
+    }
+
     /// Only a collapsed well (Chat's per-turn image) needs the paperclip; declared slots pick
     /// from the well itself.
     private var showsPaperclip: Bool {
@@ -532,7 +563,17 @@ struct StudioComposer: View {
         .accessibilityLabel("Stop current run")
     }
 
+    @ViewBuilder
     private var sendButton: some View {
+        if let count = mode.attachmentSlots(for: draft, source: scopeSource).batchRunCount(in: draft) {
+            StudioBatchRunButton(count: count, isEnabled: sendEnabled,
+                                 blockedReason: sendEnabled ? nil : sendHelp, action: onRun)
+        } else {
+            singleSendButton
+        }
+    }
+
+    private var singleSendButton: some View {
         Button(action: onRun) {
             ZStack {
                 Circle().fill(sendEnabled ? MereRunTheme.accent : MereRunTheme.surfaceRaised)
@@ -606,10 +647,11 @@ struct StudioComposerChipLabel: View {
 
 /// One 48×48 slot of the attachment well. Empty: a dashed outline with a plus. Filled: the
 /// file's thumbnail (or a kind glyph for audio and video) with a hover-revealed remove button.
-/// Accepts a drop (a Finder file or a Library row), a paste (⌘V while focused), and a click:
-/// straight to the open panel, or — when the Library holds a file the slot takes — a menu of
-/// From Disk…, From Library…, and, on an audio slot, Record…, which files the recording with
-/// the task's domain.
+/// Accepts a drop (a Finder file or a Library row), a paste (⌘V while focused: a copied file,
+/// picture, or sound, routed like a drop), and a click: straight to the open panel, or — when
+/// the Library holds a file the slot takes — a menu of From Disk…, From Library…, and, on an
+/// audio slot, Record…, which files the recording with the task's domain. A batching slot that
+/// holds several files draws their stack instead (`StudioBatchWellTile`).
 struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
     let slot: StudioAttachmentSlot
     @Binding var draft: Draft
@@ -639,7 +681,16 @@ struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
         StudioLibraryInputs.hasCandidates(in: libraryItems, for: target.requirement)
     }
 
+    @ViewBuilder
     var body: some View {
+        if slot.isBatched(in: draft) {
+            StudioBatchWellTile(slot: slot, draft: $draft, onAddFromDisk: onPick)
+        } else {
+            singleTile
+        }
+    }
+
+    private var singleTile: some View {
         StudioAttachMenu(
             target: target,
             chooseFromDisk: onPick,
@@ -678,7 +729,9 @@ struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
         } isTargeted: { targeted in
             withAnimation(MereRunTheme.Motion.quick) { isDropTargeted = targeted }
         }
-        .onPasteCommand(of: [.fileURL, .image]) { _ in paste() }
+        .onPasteCommand(of: [.fileURL, .image, .audio]) { _ in
+            StudioAttachmentPaste.paste(into: &draft, slots: [slot], allowsText: false)
+        }
         .contextMenu {
             Button("Choose from Disk…", action: onPick)
             if hasLibraryChoices {
@@ -766,17 +819,5 @@ struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(MereRunTheme.accent)
         }
-    }
-
-    private func paste() {
-        let pasteboard = NSPasteboard.general
-        let urls = StudioAttachmentPasteboard.fileURLs(from: pasteboard, for: slot)
-        if !urls.isEmpty {
-            slot.attach(urls, to: &draft)
-            return
-        }
-        guard slot.acceptedTypes.contains(where: { UTType.image.conforms(to: $0) }),
-              let url = try? StudioAttachmentPasteboard.writePastedImage(from: pasteboard) else { return }
-        slot.attach([url], to: &draft)
     }
 }

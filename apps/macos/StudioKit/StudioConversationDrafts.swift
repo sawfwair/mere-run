@@ -18,7 +18,7 @@ extension StudioTaskSessions {
         }
     }
 
-    private func conversationDraftKey(_ id: UUID?, mode: StudioMode) -> String {
+    func conversationDraftKey(_ id: UUID?, mode: StudioMode) -> String {
         mode.task.rawValue + ".conversation." + (id?.uuidString ?? "new")
     }
 }

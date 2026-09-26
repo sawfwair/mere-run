@@ -56,6 +56,8 @@ struct StudioRunDetailView: View {
             content
                 .frame(maxWidth: .infinity, minHeight: 180, alignment: .topLeading)
 
+            StudioLineageLinks(item: item)
+
             if artifacts.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {

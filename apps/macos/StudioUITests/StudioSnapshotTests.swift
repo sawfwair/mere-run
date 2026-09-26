@@ -406,6 +406,90 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    /// The Activity popover as the run queue, light and dark: a run in flight with step progress
+    /// and a history estimate, a model pull with the CLI's own estimate, two runs waiting for a
+    /// GPU slot, a background CLI read, and two finished runs with their way into the Library. The
+    /// store is its own, behind a recording process runner, so nothing launches.
+    func testRunQueuePopoverSnapshots() throws {
+        let runner = RecordingProcessRunner()
+        let store = JobStore(processRunner: runner)
+        let model = "image-zimage-nano"
+
+        // Two finished runs of the same template and model: the history the running one's
+        // estimate is measured from.
+        let done = try XCTUnwrap(store.job(store.submit(try Self.queueRequest(.imageGenerate, model: model))))
+        done.markRunning(status: done.status, at: Date().addingTimeInterval(-92))
+        runner.starts[0].termination(0)
+        let failed = try XCTUnwrap(store.job(store.submit(try Self.queueRequest(.imageGenerate, model: model))))
+        failed.markRunning(status: failed.status, at: Date().addingTimeInterval(-12))
+        runner.starts[1].termination(1)
+        pumpMainQueue()
+
+        let running = try XCTUnwrap(store.job(store.submit(try Self.queueRequest(.imageGenerate, model: model))))
+        runner.starts[2].stderr("{\"event\":\"progress\",\"stage\":\"denoising\",\"step\":14,\"total_steps\":24}\n")
+        running.markRunning(status: running.status, at: StudioSnapshotRenderer.referenceDate.addingTimeInterval(-41))
+        _ = store.submit(try Self.queueRequest(.modelPull, model: "vision-chat-qwen3.6-vl-4b"))
+        runner.starts[3].stderr("[vision-chat-qwen3.6-vl-4b] 25%  1.2 GB / 4.8 GB  9.7 MB/s  ETA 3m 20s\n")
+        _ = store.submit(try Self.queueRequest(.imageGenerate, model: "image-flux2-klein"))
+        _ = store.submit(try Self.queueRequest(.musicGenerate, model: ""))
+        let read = store.submit(.utility(
+            arguments: ["model", "list", "--json"],
+            configuration: Self.queueConfiguration(["model", "list", "--json"]),
+            displayCommand: "mere.run model list --json"
+        ))
+        store.job(read)?.markRunning(status: "Running", at: StudioSnapshotRenderer.referenceDate.addingTimeInterval(-2))
+        pumpMainQueue()
+
+        let size = CGSize(width: StudioActivityPopover.width + 40, height: 760)
+        for appearance in StudioSnapshotAppearance.allCases {
+            let view = StudioActivityPopover(
+                jobs: store,
+                status: .ready(installedModels: 12),
+                appVersion: "1.0",
+                cliVersion: "1.0",
+                modelsRoot: "",
+                resolvedCLI: "/Applications/MereRun.app/Contents/MacOS/mere.run",
+                onOpenServer: {},
+                onOpenModels: {}
+            )
+            .padding(20)
+            .frame(width: size.width, height: size.height, alignment: .top)
+            .background(MereRunTheme.background)
+            try fixture.write(view, size: size, appearance: appearance, name: "activity-run-queue-\(appearance.rawValue)")
+        }
+    }
+
+    private func pumpMainQueue() {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+    }
+
+    private static func queueRequest(_ templateID: CommandTemplateID, model: String) throws -> JobRequest {
+        let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
+        var draft = template.defaultDraft()
+        draft.prompt = "a ceramic coffee mug in soft morning light"
+        if !model.isEmpty { draft.model = model }
+        let arguments = template.arguments(from: draft, source: .contract)
+        return JobRequest(
+            lane: .inference,
+            template: template,
+            draft: draft,
+            requestID: UUID(),
+            configuration: queueConfiguration(arguments),
+            displayCommand: (["mere.run"] + arguments).shellQuoted(),
+            scopeSource: .contract
+        )
+    }
+
+    private static func queueConfiguration(_ arguments: [String]) -> MereRunProcessConfiguration {
+        MereRunProcessConfiguration(
+            executableURL: URL(fileURLWithPath: "/usr/bin/true"),
+            arguments: arguments,
+            currentDirectoryURL: FileManager.default.temporaryDirectory,
+            environment: [:],
+            keepsStandardInputOpen: false
+        )
+    }
+
     /// The menu bar extra's panel in each server state, light and dark: stopped; running with two
     /// resident text models, a speech sidecar, live traffic, and Studio work in flight; running
     /// outside Studio; and stopped unexpectedly. `/runtime/status` is answered by
@@ -414,7 +498,7 @@ final class StudioSnapshotTests: XCTestCase {
         SnapshotRuntimeEndpoint.install()
         defer { SnapshotRuntimeEndpoint.uninstall() }
         // The panel as it drops from the menu bar: a card over the desktop.
-        let size = CGSize(width: StudioMenuBarPanel.width + 40, height: 600)
+        let size = CGSize(width: StudioMenuBarPanel.width + 40, height: 860)
 
         // Every render polls the stub, whose token count never moves, so each render sets the
         // decode history it shows after that poll rather than inheriting the last render's.
@@ -427,7 +511,7 @@ final class StudioSnapshotTests: XCTestCase {
             let controller = fixture.controller
             XCTAssertEqual(controller.runtimeHost, "127.0.0.1")
             XCTAssertEqual(controller.runtimePort, 8_080)
-            let panel = StudioMenuBarPanel(controller: controller, onOpenStudio: {}, onOpenServer: {})
+            let panel = StudioMenuBarPanel(controller: controller, onOpenStudio: {}, onOpenServer: {}, onOpenActivity: {})
                 .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg))
                 .overlay {
                     RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
@@ -1682,14 +1766,13 @@ final class StudioSnapshotTests: XCTestCase {
             let noop: (StudioLibraryItem) -> Void = { _ in }
             return StudioFeedCanvas(
                 presentation: StudioTaskPresentation(mode: .createImage),
-                slots: StudioMode.createImage.attachmentSlots,
                 cards: shown,
                 readiness: readiness,
                 pullJob: nil,
                 highlightedID: nil,
                 newResultID: .constant(nil),
                 actions: StudioFeedActions(
-                    vary: noop, rerun: noop, useAsInput: { _ in }, saveTo: { _ in }, cancel: { _ in },
+                    vary: noop, rerun: noop, saveTo: { _ in }, cancel: { _ in },
                     remove: { _ in }, retry: noop, delete: noop, useSettings: noop, pullModel: { _ in },
                     useExample: { _ in }, attach: nil
                 ),
@@ -1858,6 +1941,45 @@ final class StudioSnapshotTests: XCTestCase {
         }
         try render(.musicTranscribe, name: "music-transcribe-compact-light", appearance: .light,
                    size: CGSize(width: 960, height: 760), inspector: false)
+    }
+
+    /// An output's next step: a finished song on Music ▸ Compose and a batch of pictures on
+    /// Image ▸ Generate, each a feed card with Share and "Send to" beside Save to… (light and
+    /// dark). The Send to and context menus are AppKit windows an offscreen render cannot
+    /// capture, so their contents are covered by `StudioSendDestinationsTests`.
+    func testSendToAndShareSnapshots() throws {
+        let music = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.musicReadinessResponses)
+        )
+        defer { music.tearDown() }
+        let runs = try music.seedLibraryInputRuns()
+        let song = try XCTUnwrap(runs.first { $0.prompt.hasPrefix("Harbor at dawn") })
+        let mugs = try XCTUnwrap(runs.first { $0.prompt.hasPrefix("Four ceramic mugs") })
+        let noop: (StudioLibraryItem) -> Void = { _ in }
+        let actions = StudioFeedActions(
+            vary: noop, rerun: noop, saveTo: { _ in }, cancel: { _ in }, remove: { _ in }, retry: noop, delete: noop,
+            useSettings: noop, pullModel: { _ in }, useExample: { _ in }, attach: nil
+        )
+        func card(_ item: StudioLibraryItem, on task: StudioTask) -> some View {
+            StudioGenerationCard(item: item, isHighlighted: false, actions: actions)
+                .padding(24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .background(MereRunTheme.background)
+                .environment(\.studioOutputRouting, StudioOutputRouting(
+                    currentTask: task,
+                    inputSlots: task.mode?.attachmentSlots ?? [],
+                    destinations: { StudioSendDestinations.destinations(for: $0, excluding: task) },
+                    useAsInput: { _ in },
+                    send: { _, _ in }
+                ))
+        }
+        for appearance in StudioSnapshotAppearance.allCases {
+            try music.write(card(song, on: .musicCompose), size: CGSize(width: 760, height: 260), appearance: appearance,
+                            name: "send-to-card-song-\(appearance.rawValue)", settle: 2)
+        }
+        try music.write(card(mugs, on: .imageGenerate), size: CGSize(width: 820, height: 420), appearance: .light,
+                        name: "send-to-card-pictures-light", settle: 2)
     }
 
     /// Library items as inputs. Music ▸ Transcribe empty in the window, with a composed song and a

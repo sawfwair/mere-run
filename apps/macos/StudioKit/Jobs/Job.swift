@@ -14,9 +14,9 @@ package struct JobID: Hashable, Codable, Sendable {
 /// The concurrency lane a job executes in. Lanes are independent: a saturated inference lane
 /// never delays a `model list`, and a readiness probe never takes an inference slot.
 package enum JobLane: Hashable, CaseIterable, Sendable {
-    /// Memory-heavy model runs: generation, chat turns, training, pulls. Small cap, FIFO queue.
+    /// Memory-heavy model runs: generation, chat turns, training, pulls. Small cap, ordered queue.
     case inference
-    /// Short CLI reads and writes: list, status, config, guide. Larger cap, FIFO queue.
+    /// Short CLI reads and writes: list, status, config, guide. Larger cap, ordered queue.
     case utility
     /// Readiness and status probes. Never queued; deduplicated by `JobRequest.dedupeKey`.
     case probe
@@ -25,7 +25,8 @@ package enum JobLane: Hashable, CaseIterable, Sendable {
     /// no foreground console, no Library row, and no completion notification.
     case service
 
-    /// How many jobs may execute at once in this lane; further submissions wait in FIFO order.
+    /// How many jobs may execute at once in this lane; further submissions wait in the lane's
+    /// queue, first in first out unless the user reorders it (`JobStore.moveQueued`).
     package var capacity: Int {
         switch self {
         case .inference: return 2
@@ -448,6 +449,13 @@ package final class Job: ObservableObject, Identifiable {
     /// "Completed", "Exited 64", "Resident session ready".
     @Published package private(set) var status = "Queued"
     @Published package private(set) var progress: StudioRunProgress?
+    /// Where the current determinate progress stage began, for measuring its step rate. Nil
+    /// before the first determinate update and during an indeterminate stage.
+    package private(set) var progressStage: StudioProgressStage?
+    /// The process launched but the CLI reported it is waiting for machine admission (another
+    /// `mere.run` process holds the memory it needs); cleared when it reports the grant or makes
+    /// progress.
+    @Published package private(set) var isAwaitingMachineAdmission = false
     @Published package private(set) var log = LogRing()
     /// Capped, NUL-stripped stdout for the console's live pane.
     @Published package private(set) var liveText = ""
@@ -464,6 +472,8 @@ package final class Job: ObservableObject, Identifiable {
     package var process: MereRunRunningProcess?
     package var outputWatchTask: Task<Void, Never>?
     package var cancelRequested = false
+    /// The job's place in its lane's queue while it waits (0 is next); nil once it leaves it.
+    package var queuePosition: Int?
 
     private var confirmedArtifacts = ArtifactResolution.empty
     private var stdoutBuffer = ""
@@ -499,6 +509,13 @@ package final class Job: ObservableObject, Identifiable {
     package var lane: JobLane { request.lane }
     package var displayCommand: String { request.displayCommand }
     package var exitCode: Int32? { state.exitCode }
+    /// When the job settled: finished, cancelled, or (for a queued job) removed.
+    package var endedAt: Date? {
+        switch state {
+        case .finished(_, let date), .cancelled(_, let date): return date
+        case .queued, .running, .preflightFailed: return result?.completedAt
+        }
+    }
     package var primaryArtifactURL: URL? {
         artifacts.first { $0.role == .primary }?.url
     }
@@ -594,6 +611,14 @@ package final class Job: ObservableObject, Identifiable {
                text.localizedCaseInsensitiveContains("session ready") {
                 status = "Resident session ready"
             }
+            // `CLIProcessAdmissionBootstrap` and the retry paths announce the wait and the grant.
+            for line in LogRing.normalizedLines(text) {
+                if line.localizedCaseInsensitiveContains("queued by machine admission") {
+                    isAwaitingMachineAdmission = true
+                } else if line.hasPrefix("Machine admission granted") {
+                    isAwaitingMachineAdmission = false
+                }
+            }
         case .system:
             break
         }
@@ -602,7 +627,9 @@ package final class Job: ObservableObject, Identifiable {
             // Collapse repeated carriage-return progress updates into one structured value
             // instead of flooding the log with hundreds of lines.
             if let progress = StudioProgressParser.parse(line) {
+                trackStage(of: progress, at: Date())
                 self.progress = progress
+                isAwaitingMachineAdmission = false
                 continue
             }
             // The receipt is the app's transport for reading the run's outputs, not something a
@@ -630,6 +657,8 @@ package final class Job: ObservableObject, Identifiable {
     /// settles the state and status, and records the result.
     package func finish(exitCode: Int32, at date: Date = Date(), resolver: ArtifactResolver) -> JobResult {
         progress = nil
+        progressStage = nil
+        isAwaitingMachineAdmission = false
 
         // Conversation replies are prose, not artifacts — never run output-file detection on them
         // (a path-like substring in a reply must not become a bogus artifact or status). Raw
@@ -754,6 +783,17 @@ package final class Job: ObservableObject, Identifiable {
     }
 
     // MARK: Private
+
+    /// Keeps the stage's start while updates of the same label move forward; a new label, a
+    /// fraction that went back, or an indeterminate update starts over.
+    private func trackStage(of next: StudioRunProgress, at date: Date) {
+        guard let fraction = next.fractionCompleted else {
+            progressStage = nil
+            return
+        }
+        if let stage = progressStage, stage.label == next.label, fraction >= stage.startFraction { return }
+        progressStage = StudioProgressStage(label: next.label, startedAt: date, startFraction: fraction)
+    }
 
     private func consumeVideoSessionOutput(_ text: String) {
         interactiveOutputBuffer += text

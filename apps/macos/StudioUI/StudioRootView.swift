@@ -66,6 +66,8 @@ private struct StudioWorkspaceView: View {
     /// A run of this mode that finished while its card was off-screen ("New result ↓").
     @State private var newResultID: UUID?
     @State private var pendingRestrictedPull: StudioRunRequest?
+    /// A batch some of whose files can't run, waiting on the user's answer.
+    @State private var pendingBatch: StudioBatchReview?
     @State private var studioErrorStorage: String?
     private var studioError: String? {
         get { studioErrorStorage }
@@ -79,8 +81,6 @@ private struct StudioWorkspaceView: View {
     @State private var outputFallbackAnnounced = false
     /// What Run again or Vary left out of a Library row's recorded command.
     @State private var replayNotice: StudioScopeNotice?
-    /// The "B" side Library ▸ Compare asked for, handed to the focused result once it opens.
-    @State private var pendingComparison: StudioResultSelection?
 
     /// Once per session: the first run that moved says so; later ones would only repeat it.
     private func announceOutputFallback(_ reason: String) {
@@ -301,10 +301,15 @@ private struct StudioWorkspaceView: View {
     // independently type-checked expression.
     var body: some View {
         observedShell
+            .modifier(StudioUndoBinding(registrars: [controller.taskSessions.undo, library.undo]))
             .environment(\.studioTaskSessions, controller.taskSessions)
             .environment(\.studioTaskRunner, prompt.runner)
             .environment(\.studioTaskScope, destination.task.rawValue)
             .environment(\.studioLibraryItems, library.items)
+            .environment(\.studioLibraryLinks, StudioLibraryLinks(
+                library: library, open: selectLibraryItem, removeLink: { library.removeSource($0, from: $1) }))
+            .environment(\.studioOutputRouting, outputRouting)
+            .environment(\.studioSearchFocusRequest, navigation.searchFocusRequest)
     }
 
     // MARK: - Shell
@@ -365,6 +370,18 @@ private struct StudioWorkspaceView: View {
         return StudioActivity.lanes.reduce(0) { $0 + controller.jobs.running(in: $1).count }
     }
 
+    /// Opens what an Activity row points at: a finished run's row in the Library, or the page a
+    /// running or waiting job belongs to.
+    private func openFromActivity(_ job: Job) {
+        navigation.showActivity = false
+        let libraryID = job.request.conversationID ?? job.request.requestID
+        if job.state.isTerminal, let item = library.items.first(where: { $0.id == libraryID }) {
+            navigation.open(libraryItem: item.id, mode: item.mode)
+        } else if let task = job.request.templateID?.studioTask {
+            navigation.open(task: task)
+        }
+    }
+
     /// The Activity popover, drawn over the whole window rather than inside the sidebar column: it
     /// is 340pt wide and would be clipped by the column, and it must float over the Library.
     @ViewBuilder
@@ -389,7 +406,10 @@ private struct StudioWorkspaceView: View {
                     onOpenModels: {
                         navigation.showActivity = false
                         navigation.open(task: .modelsInstalled)
-                    }
+                    },
+                    onOpen: openFromActivity,
+                    batches: prompt.runner.activeBatches(),
+                    onStopBatch: { prompt.runner.stopBatch($0) }
                 )
                 .padding(.leading, 10)
                 .padding(.bottom, 56)
@@ -564,7 +584,8 @@ private struct StudioWorkspaceView: View {
             onRetry: retryLibraryItem,
             onEdit: editLibraryItem,
             onUseSettings: useLibraryItemSettings,
-            onCompare: compareLibraryItems,
+            onCompare: openComparison,
+            onRunVariations: runLibraryVariations,
             leadingInset: windowChromeInset
         )
     }
@@ -628,7 +649,12 @@ private struct StudioWorkspaceView: View {
                 lastSeed: lastSeed,
                 onShowModels: { navigation.open(task: .modelsInstalled) },
                 onShowAdapters: { navigation.open(task: .modelsAdapters) },
-                onClose: toggleInspector
+                onClose: toggleInspector,
+                pageDefaults: StudioInspectorPageDefaults(
+                    status: prompt.pageDefaultsStatus(for: mode),
+                    save: prompt.savePageDefaults,
+                    restore: prompt.restoreAppDefaults
+                )
             )
         }
     }
@@ -808,10 +834,14 @@ private struct StudioWorkspaceView: View {
 
     private var promptWorkspace: some View {
         VStack(spacing: 0) {
-            if let selection = focusedResult, let item = library.items.first(where: { $0.id == selection.itemID }) {
+            if let compared = comparedItems {
+                StudioCompareView(items: compared,
+                    onClose: { controller.taskSessions.setComparison(nil, for: destination.task); promptFocused = true },
+                    onKeep: { toggleLibraryFavorite($0.id) }, onUseSettings: useLibraryItemSettings)
+                .id(compared.map(\.id))
+            } else if let selection = focusedResult, let item = library.items.first(where: { $0.id == selection.itemID }) {
                 StudioResultWorkspaceView(item: item, url: selection.url, items: library.items,
-                    initialComparison: pendingComparison,
-                    onClose: { focusedResult = nil; pendingComparison = nil; promptFocused = true }, onVary: varyLibraryItem,
+                    onClose: { focusedResult = nil; promptFocused = true }, onVary: varyLibraryItem,
                     onSave: saveOutput, onContinue: continueResult)
             } else if mode.isConversational {
                 converseSurface
@@ -819,7 +849,12 @@ private struct StudioWorkspaceView: View {
                 canvas
             }
 
-            if focusedResult == nil { composer }
+            if focusedResult == nil && comparedItems == nil {
+                if let batch = prompt.runner.activeBatch(for: destination.task) {
+                    StudioBatchStatusBar(progress: batch, onStop: { prompt.runner.stopBatch(batch.group) })
+                }
+                composer
+            }
 
             if let studioError {
                 MereBanner(severity: .error, text: studioError, onDismiss: { self.studioError = nil })
@@ -865,7 +900,10 @@ private struct StudioWorkspaceView: View {
                     .transition(.opacity)
             }
         }
-        .onPasteCommand(of: [.image]) { _ in pasteImageFromClipboard() }
+        .onPasteCommand(of: [.fileURL, .image, .audio]) { _ in
+            // The canvas takes a paste the way it takes a drop: into the first slot that fits.
+            StudioAttachmentPaste.paste(into: &draft, slots: mode.attachmentSlots(for: draft, source: scopeSource), allowsText: false)
+        }
     }
 
     @ViewBuilder
@@ -900,14 +938,14 @@ private struct StudioWorkspaceView: View {
         } else {
             StudioFeedCanvas(
                 presentation: StudioTaskPresentation(mode: mode, slots: mode.attachmentSlots(for: draft, source: scopeSource)),
-                slots: mode.attachmentSlots(for: draft, source: scopeSource),
                 cards: feedCards,
                 readiness: readiness,
                 pullJob: activePullJob,
                 highlightedID: highlightedCardID,
                 newResultID: $newResultID,
                 actions: feedActions,
-                readinessActions: readinessActions
+                readinessActions: readinessActions,
+                selectedID: navigation.selectedLibraryID
             )
         }
     }
@@ -928,7 +966,6 @@ private struct StudioWorkspaceView: View {
         }
         navigation.selectedLibraryID = item.id
         controller.taskSessions.rememberSelection(item.id, for: mode)
-        pendingComparison = nil
         focusedResult = StudioResultSelection(itemID: item.id, url: url)
     }
 
@@ -960,27 +997,6 @@ private struct StudioWorkspaceView: View {
             refreshReadiness()
         }
         promptFocused = true
-    }
-
-    /// Library ▸ Compare on two finished image runs: focuses the first with the second beside
-    /// it, the same view Focus ▸ Compare reaches, so the pair is one click from the column.
-    private func compareLibraryItems(_ first: StudioLibraryItem, _ second: StudioLibraryItem) {
-        func picture(of item: StudioLibraryItem) -> URL? {
-            item.allArtifactURLs.first { StudioOutputFileKind.classify($0) == .image && FileManager.default.fileExists(atPath: $0.path) }
-        }
-        guard let firstURL = picture(of: first), let secondURL = picture(of: second) else {
-            studioError = "Compare needs two image results that are still on disk."
-            return
-        }
-        studioError = nil
-        libraryOverlay = false
-        navigation.selectedLibraryID = first.id
-        controller.taskSessions.rememberSelection(first.id, for: first.mode)
-        pendingComparison = StudioResultSelection(itemID: second.id, url: secondURL)
-        controller.taskSessions.setFocus(StudioResultSelection(itemID: first.id, url: firstURL), for: first.mode.task)
-        if first.mode != mode || !showsPromptWorkspace {
-            navigation.open(destination: first.mode.destination)
-        }
     }
 
     /// Models ▸ "Use for … by default": records the choice and moves the mode's composer onto
@@ -1022,7 +1038,6 @@ private struct StudioWorkspaceView: View {
         StudioFeedActions(
             vary: varyLibraryItem,
             rerun: retryLibraryItem,
-            useAsInput: useOutputAsInput,
             saveTo: saveOutput,
             cancel: { jobMonitor.cancel($0) },
             remove: removeQueued,
@@ -1032,7 +1047,9 @@ private struct StudioWorkspaceView: View {
             pullModel: pullModel,
             useExample: useExamplePrompt,
             attach: inputAttachTarget,
-            focus: focusResult
+            focus: focusResult,
+            runVariations: runLibraryVariations,
+            compare: openComparison
         )
     }
 
@@ -1072,6 +1089,8 @@ private struct StudioWorkspaceView: View {
             onRun: runStudioCommand,
             onStop: stopModeRun,
             onShowModels: { navigation.open(task: .modelsInstalled) },
+            onRecallPrompt: prompt.recallPrompt,
+            onRunVariations: prompt.offersVariations ? { runComposerVariations($0) } : nil,
             showsScopeNote: !showsInspectorColumn && !showsCommandColumn
         )
     }
@@ -1150,6 +1169,7 @@ private struct StudioWorkspaceView: View {
 
     private var lifecycleShell: some View {
         presentedShell
+        .studioBatchConfirmation($pendingBatch, onRun: runBatch)
         // The footer reads whether a server answers from the endpoint monitor. What `status`
         // still tells it — the installed-model count, and that the CLI answers at all — changes
         // only when the inventory or the CLI settings do, so the probe runs then, not on a timer.
@@ -1520,6 +1540,10 @@ private struct StudioWorkspaceView: View {
         do {
             if let taskDraft = taskDraftBinding {
                 // The task workspace's Run and the Command view's Run submit the same draft.
+                if let review = try prompt.runner.reviewBatch(taskDraft.wrappedValue, task: destination.task) {
+                    studioError = StudioBatchLaunch.start(review, pending: &pendingBatch, run: runBatch)
+                    return
+                }
                 navigation.selectedLibraryID = try prompt.runner.run(taskDraft.wrappedValue, task: destination.task).id
                 return
             }
@@ -1528,12 +1552,25 @@ private struct StudioWorkspaceView: View {
                 if !runServer(base) { _ = try prompt.runTask(base, task: destination.task) }
                 return
             }
+            if let review = try prompt.reviewPromptBatch() {
+                studioError = StudioBatchLaunch.start(review, pending: &pendingBatch, run: runBatch)
+                return
+            }
             guard let submission = try prompt.runPrompt(inventory: modelInventory) else { return }
             if let reason = submission.outputFallbackReason { announceOutputFallback(reason) }
             navigation.selectedLibraryID = submission.request.conversationID ?? submission.request.id
         } catch {
             studioError = error.localizedDescription
         }
+    }
+
+    /// Runs the files of the current task's batch, one run each, and shows the first.
+    private func runBatch(_ paths: [String]) {
+        let submission = taskDraftBinding.map { prompt.runner.runBatch($0.wrappedValue, task: destination.task, paths: paths) }
+            ?? prompt.runPromptBatch(paths: paths)
+        guard let submission else { return }
+        navigation.selectedLibraryID = submission.requests.first?.id
+        studioError = StudioBatchLaunch.failureMessage(submission)
     }
 
     /// Runs a server task's command through the server's owner, so it starts in the service lane
@@ -1582,6 +1619,51 @@ private struct StudioWorkspaceView: View {
         }
         commandDraft.seed = String(Int.random(in: 1...Int(Int32.max)))
         runLibraryItem(item, draft: commandDraft)
+    }
+
+    // MARK: - Variations and Compare
+
+    /// "Run variations" on a result: its recorded command once per new seed, as one group.
+    private func runLibraryVariations(_ item: StudioLibraryItem, _ count: StudioVariationCount) {
+        do {
+            let requests = try prompt.runner.replayVariations(of: item, seeds: StudioVariations.seeds(count: count.rawValue))
+            studioError = nil
+            navigation.selectedLibraryID = requests.last?.id
+            replayNotice = StudioLibraryReplay.notice(for: item, source: scopeSource)
+        } catch {
+            studioError = error.localizedDescription
+        }
+    }
+
+    /// The composer's "Run variations": the draft once per new seed, as one group.
+    private func runComposerVariations(_ count: StudioVariationCount) {
+        do {
+            let submission = try prompt.runPromptVariations(seeds: StudioVariations.seeds(count: count.rawValue))
+            studioError = nil
+            if let reason = submission.outputFallbackReason { announceOutputFallback(reason) }
+            navigation.selectedLibraryID = submission.requests.last?.id
+        } catch {
+            studioError = error.localizedDescription
+        }
+    }
+
+    /// The comparison the current task's page shows in place of its canvas.
+    private var comparedItems: [StudioLibraryItem]? {
+        controller.taskSessions.comparison(for: destination.task, items: library.items)
+    }
+
+    /// Opens Compare on the page of the task that made the first row, from the Library or a card.
+    private func openComparison(_ items: [StudioLibraryItem]) {
+        guard let first = items.first else { return }
+        if let missing = StudioCompare.missingFile(in: items) {
+            studioError = "\(missing.lastPathComponent) is no longer on disk."
+            return
+        }
+        let task = StudioCompare.hostTask(for: first)
+        studioError = nil
+        libraryOverlay = false
+        controller.taskSessions.setComparison(items, for: task)
+        if task != destination.task { navigation.open(destination: task.destination) }
     }
 
     /// A contextual next step on an Analyze result: opens the sibling task with this run's input
@@ -1647,14 +1729,55 @@ private struct StudioWorkspaceView: View {
         }
     }
 
-    /// Loads an output into the composer's well as the next run's input.
-    private func useOutputAsInput(_ url: URL) {
-        guard draft.attach(dropped: [url], for: mode, source: scopeSource) else {
-            studioError = "\(mode.title) does not take \(url.lastPathComponent) as an input."
+    // MARK: - Use as input and Send to
+
+    /// What an output's "Use as input" and "Send to" do on the page the window shows, for the
+    /// feed, the Analyze canvas, the result rows, and the Library column alike.
+    private var outputRouting: StudioOutputRouting {
+        let task = destination.task
+        return StudioOutputRouting(
+            currentTask: task,
+            inputSlots: prompt.inputSlots(for: task),
+            destinations: { url in prompt.sendDestinations(for: url, excluding: task) },
+            useAsInput: { url in useOutputAsInput(url, on: task) },
+            send: sendOutput
+        )
+    }
+
+    /// Loads an output into the page's own well, where a drop of it would land.
+    private func useOutputAsInput(_ url: URL, on task: StudioTask) {
+        guard prompt.useAsInput(url, on: task) else {
+            studioError = "\(task.title) does not take \(url.lastPathComponent) as an input."
             return
         }
         studioError = nil
-        promptFocused = true
+        focusComposer(of: task)
+    }
+
+    /// Send to: fills the destination's slot, opens its page on its composer rather than a
+    /// focused result or a picked Library row, and focuses the prompt.
+    private func sendOutput(_ url: URL, to target: StudioSendDestination) {
+        guard prompt.send(url, to: target) else {
+            studioError = "\(target.task.title) does not take \(url.lastPathComponent) as an input."
+            return
+        }
+        studioError = nil
+        libraryOverlay = false
+        // The page opens on the file rather than an earlier run; an open thread stays open.
+        if target.task.mode?.isConversational != true { navigation.selectedLibraryID = nil }
+        navigation.open(task: target.task)
+        focusComposer(of: target.task)
+    }
+
+    /// A prompt mode's composer is the root's; a task workspace focuses its own when it sees
+    /// the request, whether it is already showing or appears for it. A Project or Manage page
+    /// (Voices, Train) has no prompt to focus.
+    private func focusComposer(of task: StudioTask) {
+        if task.mode != nil {
+            promptFocused = true
+        } else if task.showsPromptChrome {
+            navigation.composerFocusRequest = task
+        }
     }
 
     /// Copies an output to a location the user picks.
@@ -1913,30 +2036,6 @@ private struct StudioWorkspaceView: View {
             slot.attach(urls, to: &next)
             draft = next
             studioError = nil
-        }
-    }
-
-    /// Pastes an image from the clipboard into the well (Edit ▸ Paste / ⌘V when the canvas, not a
-    /// text field, holds focus): the first empty image slot, else the first image slot. Prefers a
-    /// pasted image file; otherwise writes the pasted bitmap to a temporary PNG.
-    private func pasteImageFromClipboard() {
-        guard let slot = mode.pastedImageSlot(in: draft, source: scopeSource) else { return }
-        let pasteboard = NSPasteboard.general
-        let urls = StudioAttachmentPasteboard.fileURLs(from: pasteboard, for: slot)
-        if !urls.isEmpty {
-            slot.attach(urls, to: &draft)
-            studioError = nil
-            return
-        }
-        do {
-            guard let url = try StudioAttachmentPasteboard.writePastedImage(from: pasteboard) else {
-                studioError = "The clipboard has no image to paste."
-                return
-            }
-            slot.attach([url], to: &draft)
-            studioError = nil
-        } catch {
-            studioError = "Could not paste image: \(error.localizedDescription)"
         }
     }
 

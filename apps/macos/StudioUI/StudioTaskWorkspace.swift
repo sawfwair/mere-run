@@ -42,6 +42,8 @@ struct StudioTaskWorkspace: View {
     @State private var highlightedCardID: UUID?
     @State private var newResultID: UUID?
     @State private var isDropTargeted = false
+    /// A batch some of whose files can't run, waiting on the user's answer.
+    @State private var pendingBatch: StudioBatchReview?
 
     init(task: StudioTask, models: StudioModelStore) {
         self.task = task
@@ -99,7 +101,12 @@ struct StudioTaskWorkspace: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let selection = focusedResult, let item = library.items.first(where: { $0.id == selection.itemID }) {
+            if let compared = comparedItems {
+                StudioCompareView(items: compared,
+                    onClose: { sessions?.setComparison(nil, for: task); promptFocused = true },
+                    onKeep: { library.setFavorite(id: $0.id, isFavorite: !$0.isStarred) }, onUseSettings: useSettings)
+                .id(compared.map(\.id))
+            } else if let selection = focusedResult, let item = library.items.first(where: { $0.id == selection.itemID }) {
                 StudioResultWorkspaceView(item: item, url: selection.url, items: library.items,
                     onClose: { focusedResult = nil; promptFocused = true }, onVary: vary,
                     onSave: saveOutput, onContinue: { _, _, _ in })
@@ -107,7 +114,12 @@ struct StudioTaskWorkspace: View {
                 canvas
             }
 
-            if focusedResult == nil { composer }
+            if focusedResult == nil && comparedItems == nil {
+                if let batch = runner?.activeBatch(for: task) {
+                    StudioBatchStatusBar(progress: batch, onStop: { runner?.stopBatch(batch.group) })
+                }
+                composer
+            }
 
             if let error {
                 MereBanner(severity: .error, text: error, onDismiss: { self.error = nil })
@@ -163,10 +175,17 @@ struct StudioTaskWorkspace: View {
                     .transition(.opacity)
             }
         }
+        .onPasteCommand(of: [.fileURL, .image, .audio]) { _ in
+            // The canvas takes a paste the way it takes a drop: into the first slot that fits.
+            StudioAttachmentPaste.paste(into: &draft, slots: draft.slots(source: scopeSource), allowsText: false)
+        }
+        .studioBatchConfirmation($pendingBatch, onRun: runBatch)
         .onAppear {
             jobMonitor.attach(controller.jobs)
             refreshReadiness()
+            takeComposerFocusRequest()
         }
+        .onChange(of: navigation.composerFocusRequest) { _, _ in takeComposerFocusRequest() }
         .onChange(of: StudioTaskSchema.requirement(for: draft, source: scopeSource)) { _, _ in
             error = nil
             refreshReadiness()
@@ -215,14 +234,14 @@ struct StudioTaskWorkspace: View {
         } else {
             StudioFeedCanvas(
                 presentation: presentation,
-                slots: draft.slots(source: scopeSource),
                 cards: feedCards,
                 readiness: readiness,
                 pullJob: activePullJob,
                 highlightedID: highlightedCardID,
                 newResultID: $newResultID,
                 actions: feedActions,
-                readinessActions: readinessActions
+                readinessActions: readinessActions,
+                selectedID: navigation.selectedLibraryID
             )
         }
     }
@@ -242,6 +261,8 @@ struct StudioTaskWorkspace: View {
             onRun: run,
             onStop: { runner?.stop(task: task) },
             onShowModels: { navigation.open(task: .modelsInstalled) },
+            onRecallPrompt: { sessions?.recallPrompt($0, for: task) },
+            onRunVariations: StudioVariations.applies(to: draft, source: scopeSource) ? { runVariations($0) } : nil,
             showsScopeNote: !navigation.showCommandColumn && !(task.showsPromptChrome && navigation.showsInspector(for: task))
         )
     }
@@ -252,7 +273,6 @@ struct StudioTaskWorkspace: View {
         StudioFeedActions(
             vary: vary,
             rerun: rerun,
-            useAsInput: useAsInput,
             saveTo: saveOutput,
             cancel: { _ = jobMonitor.cancel($0) },
             remove: removeQueued,
@@ -267,7 +287,9 @@ struct StudioTaskWorkspace: View {
                 promptFocused = true
             },
             attach: inputTarget,
-            focus: focusResult
+            focus: focusResult,
+            runVariations: replayVariations,
+            compare: openComparison
         )
     }
 
@@ -294,8 +316,60 @@ struct StudioTaskWorkspace: View {
         error = nil
         guard let runner else { return }
         do {
+            if let review = try runner.reviewBatch(draft, task: task) {
+                error = StudioBatchLaunch.start(review, pending: &pendingBatch, run: runBatch)
+                return
+            }
             let request = try runner.run(draft, task: task)
             navigation.selectedLibraryID = request.id
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// Runs the batch's files, one run each, and shows the first.
+    private func runBatch(_ paths: [String]) {
+        guard let runner else { return }
+        let submission = runner.runBatch(draft, task: task, paths: paths)
+        navigation.selectedLibraryID = submission.requests.first?.id
+        error = StudioBatchLaunch.failureMessage(submission)
+    }
+
+    /// Opens Compare on this page for cards picked in its feed or a variation group.
+    private func openComparison(_ items: [StudioLibraryItem]) {
+        if let missing = StudioCompare.missingFile(in: items) {
+            error = "\(missing.lastPathComponent) is no longer on disk."
+            return
+        }
+        error = nil
+        sessions?.setComparison(items, for: task)
+    }
+
+    /// The comparison this task's page shows in place of its canvas.
+    private var comparedItems: [StudioLibraryItem]? {
+        sessions?.comparison(for: task, items: library.items)
+    }
+
+    /// The composer's "Run variations": the draft once per new seed, as one group.
+    private func runVariations(_ count: StudioVariationCount) {
+        error = nil
+        guard let runner else { return }
+        do {
+            let requests = try runner.runVariations(draft, task: task, seeds: StudioVariations.seeds(count: count.rawValue))
+            navigation.selectedLibraryID = requests.last?.id
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// "Run variations" on a result: its recorded command once per new seed, as one group.
+    private func replayVariations(_ item: StudioLibraryItem, _ count: StudioVariationCount) {
+        error = nil
+        guard let runner else { return }
+        do {
+            let requests = try runner.replayVariations(of: item, seeds: StudioVariations.seeds(count: count.rawValue))
+            navigation.selectedLibraryID = requests.last?.id
+            replayNotice = StudioLibraryReplay.notice(for: item, source: scopeSource)
         } catch {
             self.error = error.localizedDescription
         }
@@ -317,15 +391,13 @@ struct StudioTaskWorkspace: View {
         }
     }
 
-    private func useAsInput(_ url: URL) {
-        var next = draft
-        guard next.attach(dropped: [url], slots: next.slots(source: scopeSource)) else {
-            error = "\(task.title) does not take \(url.lastPathComponent) as an input."
-            return
-        }
-        draft = next
+    /// Takes focus for the composer when Use as input or Send to asked for this task's.
+    private func takeComposerFocusRequest() {
+        guard navigation.composerFocusRequest == task else { return }
+        navigation.composerFocusRequest = nil
         error = nil
-        promptFocused = true
+        // A workspace that has just appeared is not in the window yet; focus lands next turn.
+        Task { @MainActor in promptFocused = true }
     }
 
     /// Library ▸ "Use these settings" on one of this task's rows: the recorded command becomes
@@ -337,8 +409,15 @@ struct StudioTaskWorkspace: View {
         }
         var next = draft
         next.adopt(restored)
-        draft = next
-        sessions?.set(Optional<StudioTaskCommandState>.none, for: task.rawValue + ".commandOverride")
+        let overrideKey = task.rawValue + ".commandOverride"
+        // The draft's setter writes through these sessions, so without them there is nothing to write.
+        sessions?.undoably(StudioPromptTaskController.useSettingsUndoName,
+                           keys: [StudioTaskSessions.taskDraftKey(task), overrideKey]) {
+            draft = next
+            sessions?.set(Optional<StudioTaskCommandState>.none, for: overrideKey)
+        }
+        // From a Compare pane: back to the composer the settings landed in.
+        sessions?.setComparison(nil, for: task)
         error = nil
         navigation.selectedLibraryID = item.id
         promptFocused = true

@@ -25,6 +25,8 @@ struct StudioInspector: View {
     let onShowModels: () -> Void
     let onShowAdapters: () -> Void
     let onClose: () -> Void
+    /// Save as my defaults and Restore app defaults, for the page's draft.
+    let pageDefaults: StudioInspectorPageDefaults
 
     @EnvironmentObject private var controller: MereRunController
     @Environment(\.studioScopeSource) var scopeSource
@@ -63,6 +65,7 @@ struct StudioInspector: View {
                     if !advancedFields.isEmpty {
                         advancedSection
                     }
+                    StudioInspectorDefaultsSection(defaults: pageDefaults)
                 }
             }
         }
@@ -119,7 +122,7 @@ struct StudioInspector: View {
                     .frame(width: 22, height: 22)
             }
             .buttonStyle(.mereIcon(tint: MereRunTheme.textMuted))
-            .help("Hide Inspector (⌥⌘I)")
+            .help(StudioKeyboardShortcuts.help("Hide Inspector", .showInspector))
             .accessibilityLabel("Hide Inspector")
         }
         .padding(.horizontal, 16)
@@ -162,7 +165,9 @@ struct StudioInspector: View {
                 if showAdvanced,
                    StudioInspectorSchema.advancedChanged(mode: mode, draft: draft, baseline: baseline, source: scopeSource) {
                     resetButton {
-                        StudioInspectorSchema.resetAdvanced(for: mode, &draft, to: baseline, source: scopeSource)
+                        StudioUndoNaming.reset("Advanced Settings", in: controller.taskSessions) {
+                            StudioInspectorSchema.resetAdvanced(for: mode, &draft, to: baseline, source: scopeSource)
+                        }
                     }
                 }
             }
@@ -592,6 +597,7 @@ struct StudioInspectorSectionView<Content: View>: View {
     let canReset: Bool
     let onReset: () -> Void
     @ViewBuilder let content: () -> Content
+    @Environment(\.studioTaskSessions) private var sessions
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -601,7 +607,7 @@ struct StudioInspectorSectionView<Content: View>: View {
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
-                Button("Reset", action: onReset)
+                Button("Reset") { StudioUndoNaming.reset(title, in: sessions, onReset) }
                     .buttonStyle(.plain)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(MereRunTheme.textMuted)

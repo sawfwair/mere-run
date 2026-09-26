@@ -9,7 +9,7 @@ package enum JobStoreError: LocalizedError {
     }
 }
 
-/// Owns every job's lifecycle: lane capacities and FIFO queues, child processes behind the
+/// Owns every job's lifecycle: lane capacities and queues, child processes behind the
 /// `MereRunProcessRunning` seam, output consumption, live artifact detection, cancellation and
 /// completion. Jobs stay observable after they finish (the most recent
 /// `finishedJobRetentionLimit` per lane), so a view can keep showing a result without the store
@@ -24,6 +24,10 @@ package final class JobStore: ObservableObject {
     /// Synchronous lifecycle notifications, sent after the job's published state has changed.
     /// A subscriber therefore reads consistent values without an extra main-actor hop.
     package enum Event {
+        /// The job was submitted to a full lane and is waiting in its queue.
+        case queued(Job)
+        /// The user moved a waiting job within this lane's queue.
+        case reordered(JobLane)
         /// The job left the queue and its process launch was attempted.
         case started(Job)
         /// One chunk of process output arrived, exactly as the child wrote it. Sent after the job
@@ -114,8 +118,8 @@ package final class JobStore: ObservableObject {
 
     // MARK: Submitting
 
-    /// Registers the job and starts it when its lane has a free slot; otherwise it waits in FIFO
-    /// order. Probe jobs with a `dedupeKey` return the matching in-flight job instead of starting
+    /// Registers the job and starts it when its lane has a free slot; otherwise it joins the back
+    /// of its lane's queue. Probe jobs with a `dedupeKey` return the matching in-flight job instead of starting
     /// a duplicate, or supersede it when the configuration differs.
     ///
     /// `id` lets a submitter name the job before submitting it (so it can hand the id to a
@@ -141,7 +145,53 @@ package final class JobStore: ObservableObject {
         order.append(job.id)
         queues[request.lane, default: []].append(job.id)
         pump(request.lane)
+        if job.state.isQueued {
+            events.send(.queued(job))
+        }
         return job.id
+    }
+
+    /// Whether `moveQueued(_:by:)` would move the job: it is waiting, the new place is inside its
+    /// lane's queue, and the move never puts a run ahead of the queued pull of the model it needs.
+    package func canMoveQueued(_ id: JobID, by offset: Int) -> Bool {
+        guard offset != 0, let job = jobs[id], job.state.isQueued,
+              let queue = queues[job.lane], let index = queue.firstIndex(of: id),
+              queue.indices.contains(index + offset) else { return false }
+        return !movePassesItsDownload(id, by: offset)
+    }
+
+    /// Whether moving the job by `offset` would take it past the queued `model pull` of the model it
+    /// needs (moving up), or take a pull past a run that needs its model (moving down).
+    package func movePassesItsDownload(_ id: JobID, by offset: Int) -> Bool {
+        guard let moving = jobs[id], let queue = queues[moving.lane],
+              let index = queue.firstIndex(of: id) else { return false }
+        let passed = (offset < 0 ? queue[max(index + offset, 0)..<index] : queue[(index + 1)..<min(index + offset + 1, queue.count)])
+            .compactMap { jobs[$0] }
+        return passed.contains { other in
+            offset < 0 ? Self.pull(other, downloadsModelOf: moving) : Self.pull(moving, downloadsModelOf: other)
+        }
+    }
+
+    /// `pull` is a `model pull` of the model `run` runs with.
+    private static func pull(_ pull: Job, downloadsModelOf run: Job) -> Bool {
+        guard pull.request.templateID == .modelPull, run.request.templateID != .modelPull,
+              let model = pull.request.draft?.model, !model.isBlank else { return false }
+        return run.request.draft?.model == model
+    }
+
+    /// Moves a waiting job `offset` places within its lane's queue (negative is toward the front).
+    /// Admission always takes the head of the queue, so the new order is the order the lane starts
+    /// them in. Running jobs and other lanes are untouched. Returns false when the job is not
+    /// waiting, the move would leave the queue, or it would put a run ahead of its model's pull.
+    @discardableResult
+    package func moveQueued(_ id: JobID, by offset: Int) -> Bool {
+        guard canMoveQueued(id, by: offset), let lane = jobs[id]?.lane,
+              let index = queues[lane]?.firstIndex(of: id) else { return false }
+        queues[lane]?.remove(at: index)
+        queues[lane]?.insert(id, at: index + offset)
+        renumberQueue(lane)
+        events.send(.reordered(lane))
+        return true
     }
 
     /// Terminates a running job (SIGTERM) or removes a queued one. Returns false when the job is
@@ -152,6 +202,8 @@ package final class JobStore: ObservableObject {
         switch job.state {
         case .queued:
             queues[job.lane]?.removeAll { $0 == id }
+            job.queuePosition = nil
+            renumberQueue(job.lane)
             complete(job, with: job.cancelBeforeStart())
             return true
         case .running:
@@ -236,7 +288,17 @@ package final class JobStore: ObservableObject {
         while hasCapacity(in: lane), let next = queues[lane]?.first {
             queues[lane]?.removeFirst()
             guard let job = jobs[next] else { continue }
+            job.queuePosition = nil
             start(job)
+        }
+        renumberQueue(lane)
+    }
+
+    /// Records each waiting job's place in its lane's queue on the job itself, so a surface that
+    /// holds only the job (a feed card) reads the order admission will follow.
+    private func renumberQueue(_ lane: JobLane) {
+        for (index, id) in (queues[lane] ?? []).enumerated() {
+            jobs[id]?.queuePosition = index
         }
     }
 

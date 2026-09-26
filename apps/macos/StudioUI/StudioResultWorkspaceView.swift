@@ -170,6 +170,7 @@ struct StudioResultWorkspaceView: View {
             if let parentID = item.parentID, let parent = items.first(where: { $0.id == parentID }) {
                 Text("From \(parent.displayTitle)").font(.caption).foregroundStyle(MereRunTheme.textSecondary).lineLimit(1)
             }
+            StudioLineageLinks(item: item, visibleLimit: 2)
             if comparison != nil {
                 Button(showsSettings ? "Hide changed settings" : "Show changed settings") { showsSettings.toggle() }
                     .font(.caption).buttonStyle(.borderless)
@@ -194,7 +195,7 @@ struct StudioResultWorkspaceView: View {
     private func resetViewport() { zoom = 1; pan = .zero }
 }
 
-private struct StudioResultImagePane: View {
+struct StudioResultImagePane: View {
     let url: URL
     let label: String
     @Binding var zoom: CGFloat

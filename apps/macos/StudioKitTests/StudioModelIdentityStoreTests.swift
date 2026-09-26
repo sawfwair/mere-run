@@ -196,14 +196,16 @@ final class StudioModelIdentityStoreTests: XCTestCase {
             )
         }
         let arguments = ["x", "--model", model]
-        try await settle(store) { store.identity(of: arguments, model: model, for: self.video) == .unidentified }
-        try await Task.sleep(for: .milliseconds(80))
+        // Wait for the first, failing answer to be recorded rather than for one read to land in
+        // the short window where it shows as unidentified: a slow runner can poll past it.
+        _ = store.identity(of: arguments, model: model, for: video)
+        try await settle(store) { await attempts.lines.count == 1 }
         try await settle(store) {
             if case .resolved = store.identity(of: arguments, model: model, for: self.video) { return true }
             return false
         }
         let count = await attempts.lines.count
-        XCTAssertEqual(count, 2)
+        XCTAssertEqual(count, 2, "asked once more after the backoff, and no more")
     }
 
     /// M-c: installing or removing a model, or refreshing the inventory, changes what the CLI

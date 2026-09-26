@@ -113,6 +113,24 @@ surface for is still reachable the day the contract declares it.
   `ProcessRunner`, and the read-only `StudioJobMonitor`.
 - `StudioKit/MereRunController.swift`: the facade views bind to.
 - `StudioKit/StudioLibraryStore.swift`: local library persistence.
+- `StudioKit/StudioLibraryCollections.swift` and `StudioKit/StudioLibraryLineage.swift`:
+  Library collections and the Made from / Used in index.
+- `StudioKit/StudioVariations.swift` and `StudioKit/StudioCompare.swift`: Run
+  variations (seeds, groups, where it applies) and Compare's picking, settings
+  diff, and transport; `StudioUI/StudioCompareView.swift` and
+  `StudioUI/StudioVariationControls.swift` draw them.
+- `StudioKit/StudioUndo.swift`, `StudioKit/StudioDraftUndo.swift`, and
+  `StudioKit/StudioTaskSessions+Undo.swift`: undo registration, draft change
+  names and patches, and the session-side steps. `StudioUI/StudioUndoBinding.swift`
+  hands the key window's `UndoManager` to the stores.
+- `StudioKit/StudioKeyboardShortcuts.swift`: every key the menus bind, with the
+  system and text-editing keys it must leave alone. `StudioKit/StudioPromptHistory.swift`
+  and `StudioKit/StudioPageDefaults.swift`: the composer's prompt recall and the
+  inspector's saved defaults.
+- `StudioKit/StudioInputBatch.swift` and `StudioKit/StudioTaskRunner+Batch.swift`:
+  which slots batch, the per-file checks, and running and stopping a batch;
+  `StudioUI/StudioBatchInputs.swift` draws the stack, its list, Run N, and the
+  batch bars.
 
 The declarative schemas live in StudioKit beside the model, and the views that
 draw them in StudioUI, one file each side:
@@ -198,11 +216,30 @@ and the menu bar extra take from `StudioLocalServer`, not the slower status
 poll), and "CLI not responding" (in red) if the probe never answers within six
 seconds, with "N running" on a second
 line while jobs are in flight. It opens the **Activity popover**
-(`StudioUI/StudioActivity.swift`), a 340pt panel the shell draws over the window from the
-bottom-left: one row per running or queued job in the inference and utility
-lanes (never a probe) with its progress and a stop control, over the app↔CLI
-version handshake and a link into the Server page. A row for one of Studio's own
-CLI reads names the work ("System · Checking models"), never the subcommand.
+(`StudioUI/StudioActivity.swift`), the run queue: a 400pt panel the shell draws
+over the window from the bottom-left that lists everything running and waiting
+across every page, grouped by lane (Model runs, Background tasks, Servers; never
+a probe). Each row shows the task's glyph, title, and model; where the job
+stands ("Denoising 15/24", "Waiting for a GPU slot · 2nd in line", or "Waiting
+for memory" while the CLI waits on machine admission); its progress; elapsed
+time; and time left only when it can be measured: the CLI's own download
+estimate, this run's step rate in its current `--progress-json` stage ("40 sec
+left in denoising"), or the median of the same template and model's recent
+successful runs in this session ("about 2 min left"). A run with none of those,
+or one that has outlasted its history, shows no estimate. Stop uses each page's
+own path (SIGINT first for a Session task, SIGTERM otherwise, removal for a
+queued job); Open goes to the job's page; a waiting job has Move up and Move
+down. `JobStore` admission always takes the head of a lane's queue, so
+`JobStore.moveQueued` reorders exactly what starts next. It never puts a run
+ahead of the queued pull of the model it needs; that row's Move up is disabled
+with "Waits for its model download." A feed's queued
+cards number themselves from the same order. Cancel all queued empties every
+queue and leaves running jobs alone. The last few finished runs sit at the
+bottom with Show in Library. The model behind all of it is
+`StudioKit/Jobs/StudioRunQueue.swift` (`StudioRunQueue`, `StudioRunETA`). A row
+for one of Studio's own CLI reads names the work ("System · Checking models"),
+never the subcommand. The popover's footer carries the app↔CLI version
+handshake and a link into the Server page.
 With nothing running the same panel shows the local server and the models root;
 the resolved CLI path is the footer's tooltip. When `status --json` reports
 `modelLocationIssues` (a registered drive that did not answer in time, usually
@@ -226,7 +263,11 @@ a tinted thermal warning when the Mac is throttling (`StudioMachineMonitor` read
 Mach host statistics every two seconds; the decode rate is the change in
 generated tokens between endpoint polls); the resident text models (each with
 Unload), sidecars, and a Load menu of the server's other text models; the same
-job rows as the Activity popover, and Open Studio, Server Settings…, and Quit.
+job rows as the Activity popover, and Open Studio, Show Activity (which opens
+the Studio window with the run queue showing), Server Settings…, and Quit. While
+runs are in flight the glyph carries their count, and so does the Dock icon's
+badge (`StudioRunQueueCounter`: running plus queued inference runs, republished
+only when the number changes).
 It reads the same `StudioLocalServer` the Server page drives, so the two never
 disagree. Quit asks first while a server Studio started or an inference job is
 still running, since every child process ends with the app; the app delegate owns
@@ -261,8 +302,8 @@ under its command's domain (`CommandTemplateID.studioDomain`), so 3D meshes land
 under 3D and benchmark reports under Models — and picking a row from another
 domain switches the destination to it.
 
-Beside the search field are a kind filter (All / Images / Video / Audio / Text,
-plus "Favorites only") and a list-or-grid toggle; grid is three thumbnails
+Beside the search field are a filter (kind, task, model, and "Favorites only";
+see below) and a list-or-grid toggle; grid is three thumbnails
 across with the title on hover. Thumbnails are the real thing per kind — the
 picture, an `AVAssetImageGenerator` poster frame for video, a peak silhouette
 for audio, the first line for a text result — decoded off the main actor and
@@ -271,9 +312,10 @@ Rows carry a hover star (`StudioLibraryItem.isFavorite`, an additive optional
 written as `nil` when unstarred), rename in place, and drag as file URLs onto
 another task's well, composer, or canvas, or out to Finder or any app. ⌘ and ⇧ click build a batch (`StudioLibrarySelection`) with a bar for
 Reveal, Save to…, and Delete; Delete asks first and offers to move the run's
-files to the Trash. A batch of exactly two finished image runs adds **Compare**
-to the bar and the context menu, which opens the older run in the result
-workspace with the newer beside it. Search matches a run's title, kind, prompt,
+files to the Trash. Delete, rename, and the favorite star are undoable (see
+[Undo and redo](#undo-and-redo)). A batch of two to four finished runs of one kind (images,
+sounds, or videos) adds **Compare** to the bar and the context menu (see
+[Variations and Compare](#variations-and-compare)). Search matches a run's title, kind, prompt,
 model (the name the app shows or the exact id, from the thread, the recorded
 draft, or a legacy row's `--model` argument); a whole status word ("failed",
 "running") narrows to that status and the rest of the query must still match,
@@ -283,6 +325,57 @@ Filtering and day-grouping live in `StudioLibraryPresenter`, so both are
 testable without a view. The view mode, kind, and favorites filter persist per
 window under `studio.libraryView`, `studio.libraryKind`, and
 `studio.libraryFavorites`.
+
+The filter button opens a popover (`StudioUI/StudioLibraryFilterPanel.swift`)
+with the kind, a **Task** menu, a **Model** menu, and Favorites only. The task
+and model menus list only what the rows in scope hold ("Video · Generate" under
+All tasks), and Clear resets all four. The task and model choices persist per
+window under `studio.libraryTask` and `studio.libraryModel`.
+
+### Collections
+
+A collection is a named set of Library runs. Collections show as chips under
+the search field once the first one exists
+(`StudioUI/StudioLibraryCollectionsBar.swift`); a chip shows its run count,
+a click filters the column to it (a second click shows everything again), and
+its context menu has Rename… and Delete collection. The chosen collection
+persists per window under `studio.libraryCollection`, and it narrows the
+column the way Favorites only does, inside the current scope.
+
+A row's context menu, a multi-selection's menu, and the batch bar offer **Add
+to collection**: each collection with a check mark when the runs are already
+in it (choosing it again takes them out), then New collection…, which asks for
+a name and adds the runs to it. Dragging a row onto a chip adds that run.
+While a collection is chosen, the menu also offers Remove from it. A run can
+be in several collections. Deleting a collection keeps its runs, and deleting
+a run leaves its collections, then returns to them on Undo.
+
+Collections live in `collections.json` beside `library.json`, as a versioned
+object that lists each collection's runs. `library.json` stays the array
+every earlier build reads. A `collections.json` this build cannot read is moved
+aside as `collections.corrupt-<time>.json` rather than overwritten.
+
+### Made from and Used in
+
+A run records the Library runs whose output files it read as inputs
+(`StudioLibraryItem.sourceItemIDs`, an additive optional written only when
+there is one). From Library…, Send to, a drag, and a typed path all leave the
+file's path in the run's command, so one match covers them all:
+`StudioLibraryLineage` reads the recorded input and every positional argument
+and option the command's contract declares as an input file, never an output
+destination, and matches each against earlier runs' artifacts. Runs from
+before this have nothing recorded, and their links are inferred the same way
+the first time the index is read after the Library changes. Nothing inferred
+is written back.
+
+A run's detail (`StudioRunDetailView`) and a focused result show **Made from**
+and **Used in**, each linked run as a link that opens it the way picking its
+Library row does. A Made from link's context menu has **Remove link**. Removing
+an inferred link writes the run's remaining sources down, so an empty list is
+kept and the link does not come back. Feed cards show a one-line lineage under
+their settings: "From <run>" and "Used in <run>" or "Used in N runs". The window
+root hands the index and the navigation to every result surface as
+`studioLibraryLinks`.
 
 A row's context menu offers **Use these settings** (also on a finished card's
 icon row and beside Retry on a failed card): the run's task opens with its
@@ -307,17 +400,132 @@ sessions synchronously. `studio.drafts` remains a migration source for earlier
 prompt-only scene state; importing it preserves unvisited tasks and gives full
 session drafts precedence.
 
-Menus follow macOS convention: File ▸ New Chat (⌘N) and Import Receipt…; View ▸
-Show Library (⌥⌘L), Show Inspector (⌥⌘I), Show Command View (⌥⌘C), and the system sidebar toggle; Go ▸ every domain
-(⌘1–⌘9, then ⌥⌘1…) plus the current domain's tasks; Run ▸ Run (⌘↩), Stop (⌘.),
-Open Last Output (⇧⌘O), and Reveal Last Output in Finder (⇧⌘R), acting on the
-current composer; Window ▸ Open Studio and Command Console (⇧⌘C); Help ▸
-mere.run Guide (⌘?), the mere.run link, and Export Diagnostics…. ⌥⌘C is always
-the task's Command view, disabled on the few tasks without one. Settings has
+### Variations and Compare
+
+**Run variations** submits one command 2, 4, or 8 times, each with its own
+random seed recorded in its argv. It sits beside Run in both composers, under
+Vary on a finished card (click varies once; the menu runs a group), and in the
+card's and the Library row's menus. It is offered only where the command takes
+`--seed` for the model it runs (`StudioVariations.applies`, read from the
+option scope), so transcription, chat, or AP-BWE enhancement never show it,
+and neither does a composer holding a batch, which already runs once per file,
+or a Train page's run. Stop acts on the group's first run, the one that starts.
+A composer's variations go through the same gates, Command edits, and
+validation as Run; a Library row's replay its recorded command
+(`StudioLibraryReplay`), never the task's current edits. Either way the runs
+are submitted through `StudioTaskRunner.submitVariations`, so each is a job in
+the run queue, and the rows share `StudioLibraryItem.variationGroup` (an
+additive optional; older rows decode as `nil`). Rows and cards of a group read
+"2 of 4", and a card whose group has two finished runs offers **Compare N**.
+
+**Compare** (`StudioUI/StudioCompareView.swift`, rules in
+`StudioKit/StudioCompare.swift`) replaces the canvas of the task that made the
+first run, like a focused result, and is stored per task under `"<task>.compare"`
+(`StudioTaskSessions.setComparison`); Results, "Use these settings", Send to, and
+focusing a result close it. It opens on the page of the task that made the first
+run when that page has a canvas, else on its mode's page. It takes two to four hand-picked results
+of one kind from a Library batch or from cards picked with **Select to compare**
+(the feed's floating bar), or up to eight runs of one variation group:
+
+- Images: side by side with one zoom and pan, or an A/B slider with a draggable
+  divider and a picker for each side.
+- Sounds: stacked waveforms on one playhead. One side plays at a time; the
+  A/B/C control, a click on a waveform, or the keys 1–8 switch sides at the same
+  moment (`StudioCompareTransport`), and Space plays or pauses. These keys are
+  the shortcut table's Compare section (`StudioShortcutContext.compare`), live
+  only while Compare has focus, so they never reach a text field or the menus.
+- Videos: side by side on one play button and scrubber; only the chosen side is
+  heard.
+
+Every pane lists its seed and model and the options whose values differ across
+the panes, read from each run's recorded argv with omitted flags at their
+contract defaults (`StudioCompare.settings`); destinations and credentials never
+show. Each pane offers Keep (the favorite star, undoable), Use these settings,
+and Send to.
+
+### Undo and redo
+
+Edit ▸ Undo (⌘Z) and Redo (⇧⌘Z) run through the key window's `UndoManager`,
+with named steps such as "Undo Delete Run" and "Undo Change Steps". Undo is
+registered where the user's work is written, not per control:
+`StudioTaskSessions.setTaskDraft` for task drafts, the `draft` setter of
+`StudioPromptTaskController` for prompt drafts, and `StudioLibraryStore` for
+Library rows. StudioKit holds a `StudioUndo` per store; the window hands it the
+manager while it is key (`StudioUndoBinding`), and with none nothing is
+registered.
+
+- **Library.** Delete (a run, a batch, or a chat thread), rename, Add to or
+  Remove from Favorites, every collection edit (New, Rename, and Delete
+  Collection, Add to and Remove from Collection), and Remove Link. A deletion
+  is written at once. When the user chose to move the files, they go to the
+  macOS Trash (`FileManager.trashItem`) and Undo moves them back from where
+  the Trash put them, then returns the rows to their places. Nothing waits in an app-owned holding area, so there is nothing to
+  purge and a deletion that is never undone is exactly the one the user asked
+  for; a file emptied from the Trash since stays gone and its row comes back
+  pointing at it. Removing a thread the app emptied itself (taking back its only
+  turn to edit) is not an undo step.
+- **Drafts.** Inspector and composer options, model switches, attachments added
+  or removed, Reset (named for its section, or "Reset Advanced Settings"), and
+  Library ▸ "Use these settings", which replaces the draft, its Command view
+  override, and focus as one step that Undo brings back whole. Changes to the
+  same field less than a second apart coalesce, so a slider drag is one step.
+  Models ▸ "Use for … by default" is one step with the drafts it moved.
+- **Typing is the text field's.** A text field keeps its own undo while it is
+  focused, so draft undo never registers typed text: the prompt, the system
+  prompt, the seed, free-text options, numbers typed in the Command view, and
+  extra arguments. A change arriving in an event where another registrar (the
+  field's typing) already registered a step is left to that step too. Draft
+  steps are therefore undone as patches: only the values the step changed go
+  back, so undoing a model switch keeps the prompt typed after it.
+
+Menus follow macOS convention: File ▸ New Chat, Quick Look, Delete from
+Library…, and Import Receipt…; Edit ▸ Find in List and Search Library; View ▸
+Show Library, Show Inspector, Show Command View, and the system sidebar toggle;
+Go ▸ every domain plus the current domain's tasks; Run ▸ Run, Stop, Open Last
+Output, and Reveal Last Output in Finder, acting on the current composer;
+Window ▸ Open Studio and Command Console; Help ▸ mere.run Guide, Keyboard
+Shortcuts, the mere.run link, and Export Diagnostics…. The keys are in
+[Keyboard shortcuts](#keyboard-shortcuts). ⌥⌘C is always the task's Command
+view, disabled on the few tasks without one. Settings has
 General, Models, Server, and Advanced tabs; its path settings are pickers with
 Choose…, Reveal, and Reset, and the Server tab's endpoint and key
 apply on Apply or Return, not per keystroke. First run shows the Image empty state with its "Get the model"
 path and a one-time dismissible banner; there is no Welcome sheet.
+
+### Keyboard shortcuts
+
+Every key Studio binds is one table, `StudioKit/StudioKeyboardShortcuts.swift`.
+The menus bind their items from it, Help ▸ Keyboard Shortcuts
+(`StudioUI/StudioKeyboardShortcutsView.swift`) lists it, and
+`StudioKeyboardShortcutsTests` hold it unique and clear of the keys macOS owns.
+A menu key reaches AppKit before the focused text field, so no menu item takes
+a key a text field uses. ⌘⌫ and Space act only while the Library list or the
+feed has focus. ↑ and ↓ act only in the composer's prompt.
+
+| Keys | Action | Where |
+| --- | --- | --- |
+| ⌘N | New Chat | File |
+| ⌘Y | Quick Look the Library's selected run | File |
+| ⌘⌫ | Delete from Library…, through the usual confirmation and undo | File, while the Library list has focus |
+| ⌘F | Find in List: the page's own list (Models, Adapters, Plugins) or the Library beside it | Edit |
+| ⌘L | Search Library, showing the Library column first | Edit |
+| ⌃⌘S | Show or hide the sidebar | View |
+| ⇧⌘L | Show or hide the Library column | View |
+| ⌘E | Show or hide the inspector | View |
+| ⌥⌘C | Show or hide the Command view | View |
+| ⌘1–⌘9, ⌥⌘1–⌥⌘6 | The sidebar's sections, in sidebar order | Go |
+| ⌘↩ | Run the current task | Run |
+| ⌘. | Stop | Run |
+| ⇧⌘O | Open Last Output | Run |
+| ⇧⌘R | Reveal Last Output in Finder | Run |
+| ⇧⌘C | Command Console | Window |
+| ⌘? | mere.run Guide | Help |
+| Space | Quick Look the selected run, or the newest result | Library list or feed, with focus |
+| ↑ / ↓ | Recall an earlier prompt on this page / step back to what you typed | Composer prompt, on its first / last line |
+
+⇧⌘L takes precedence over the system's Search With Google service while
+Studio is in front. Studio has no Find panel, so ⌘E does not shadow Use
+Selection for Find.
 
 ## Composer, feed, and Analyze
 
@@ -329,7 +537,9 @@ Voice: reference audio; Vision and Audio tasks: their required input; Chat: a
 per-turn image that stays behind the paperclip until attached — and every slot
 takes a drop, a paste (⌘V), or a click to pick, storing straight into the draft
 field the CLI flag reads. Code and Sound ▸ Generate declare no slots. A click
-offers the Library as well as the disk; see [Library items as inputs](#library-items-as-inputs). Under the
+offers the Library as well as the disk; see [Library items as inputs](#library-items-as-inputs).
+⌘V in the prompt attaches copied files, pictures, and sounds; see
+[Paste into the composer](#paste-into-the-composer). Under the
 prompt, a **chip strip** shows up to four contract essentials (size, length,
 duration, steps, seed, resolution, task, voice mode, thinking) as menus with
 popover editors for custom values; some modes show only the model chip. The **model chip** is the only
@@ -345,14 +555,27 @@ the exact id in the tooltip. The chips and the inspector bind the same `StudioDr
 changed in one shows in the other. ⌘↩ runs; while a conversation turn streams,
 the send circle becomes Stop.
 
+**Prompt history.** ↑ on the prompt's first line recalls the page's earlier
+prompts, newest first, and ↓ on its last line steps back toward the newest
+and then to what was typed before the first ↑. On any other line the arrows
+move the caret as usual. A clock button beside Run lists the page's twelve most
+recent prompts. The history is read from the Library
+(`StudioKit/StudioPromptHistory.swift`): the prompts of the runs the page's feed
+shows, and a thread's user turns, each once. It is not a separate record, so
+deleting a run takes its prompt with it. A recall goes through the page's own
+draft write as one undo step ("Undo Recall Prompt"), because the text field did
+not type it. The keys go through a local key monitor installed while the
+prompt has focus (`StudioUI/StudioPromptHistoryControls.swift`).
+
 The **feed** above the composer (`StudioUI/StudioFeedCanvas.swift`, cards derived in
 `StudioKit/StudioFeedCards.swift`) lists the mode's runs oldest first, newest beside the
 composer. A finished run is a generation card: prompt, the chips it ran with
 (read from its own command), every output in a grid of 236pt tiles (images,
 video, 3D; audio gets the waveform player, text the Markdown renderer), and
-Vary (rerun with a fresh, recorded seed), Rerun, Use as input, Quick Look,
-Reveal, Copy, and Save to…; outputs drag onto another task's well or out to
-Finder. A run in flight is a
+Vary (rerun with a fresh, recorded seed), Rerun, Share, Send to (with Use as
+input), Quick Look, Reveal, Copy, and Save to…; outputs drag onto another task's
+well or out to Finder; see [Send to and Share](#send-to-and-share). A run in
+flight is a
 card that observes its `Job` directly — progress bar, "Denoising 15/24 · 0:41",
 Cancel, and the log tail behind an Activity disclosure — and a queued run is a
 row with Remove; both come from `JobStore`, not from a controller mirror. A
@@ -501,7 +724,7 @@ first, naming the thread.
 
 ## Inspector, Command view, and Command Console
 
-The **inspector** (⌥⌘I, the header's Inspector toggle, remembered per task under
+The **inspector** (⌘E, the header's Inspector toggle, remembered per task under
 `studio.inspectorTasks`) is a 300pt column rendered from the capability
 contract. `StudioKit/StudioContractSchema.swift` binds each option
 `MereRunCapabilityCatalog` declares to the `StudioDraft` field the app keeps it
@@ -519,8 +742,21 @@ range the mode's models use, seconds-or-frames, the model picker, the LoRA and
 ACE-Step adapter rows, the mask and outpaint canvas, the ordered MiniMax
 references, and the voice profile list — and marks the attachments the
 composer's well owns so the inspector never repeats them. Each section has
-Reset, and the header badge counts the draft fields that differ from the mode's
+Reset, and the header badge counts the draft fields that differ from the page's
 defaults.
+
+The inspector ends with **Defaults**: "Save as my defaults" keeps the draft's
+settings as the page's own starting point, and "Restore app defaults" forgets
+them and puts the settings back to the app's (`StudioKit/StudioPageDefaults.swift`).
+Fresh drafts and every Reset then start from the saved values. A save keeps
+the options the draft's model uses, the ones its inspector shows. It never
+keeps the inputs, the prompt, the seed, the model (Models ▸ "Use for … by
+default" owns that), output paths, or credentials. A kept value that a later
+draft's model does not use is hidden and left out of the run like any other
+value the model does not take. The values are typed `StudioContractValue`s
+stored in the task-session file under `"<task>.pageDefaults"`, per template
+on the task workspace. Save and Restore are each one undo step; Restore brings
+back both the saved defaults and the draft.
 
 The inspector shows only the flags the binding table maps to a draft field, so
 no control can look live and change nothing. That makes it thin where the table
@@ -645,12 +881,122 @@ original path. Wells, the composer, and the task workspace's canvas take the
 drop through their existing `dropDestination(for: URL.self)`, which routes the
 file to the first slot that accepts it and refuses anything else.
 
+## Send to and Share
+
+An output goes on from wherever it is shown. Feed cards carry a **Send to**
+button beside Save to… and a Share button; the card's "…" menu, output tiles,
+result rows, stems, and Library rows carry the same items in their context
+menus (`StudioUI/StudioOutputActions.swift`):
+
+- **Use as input** fills the current page's own well, routed the way a drop of
+  the file would be. It appears only when a slot of the model the page runs
+  takes the file.
+- **Send to** lists every other page and slot that takes the file, grouped by
+  domain in sidebar order: a picture goes to Video ▸ Generate's start or end
+  frame, the Vision tasks, 3D ▸ From image, Image ▸ Generate's input or
+  reference, or Chat; a song or a stem goes to Music ▸ Separate, Transcribe, and
+  Analyze, Audio ▸ Transcribe, Enhance, and Who Spoke, Voice ▸ Speak's and
+  Voices' reference audio, and Sound ▸ Video Foley; a clip goes to Vision ▸
+  Track and Depth and to Video Foley. An item names its slot only when the task
+  takes the file in more than one ("Generate · Start frame").
+- **Share…** opens the system share picker (`NSSharingServicePicker`) for the
+  output file or files, anchored to the card or row.
+
+The destinations are not a per-page table. `StudioSendDestinations`
+(`StudioKit/StudioSendDestinations.swift`) reads every prompt mode's
+`attachmentSlots` and every task-draft template's `StudioTaskSchema.slots`, and
+offers a slot when the file conforms to one of the types it declares. A
+catch-all `.data` type or a folder slot never makes a destination, and the page
+showing the output is left out, because its well is Use as input. When the menu
+opens, `StudioPromptTaskController.sendDestinations(for:excluding:)` keeps only
+the slots each page's well shows for the model its draft runs, so a file never
+lands in a slot the page hides, such as an end frame the video model does not
+take. Commands
+without a well of their own, such as Video ▸ Generate's Retake and Dub It (run
+from the Command view), and the live Session pages are not listed.
+
+Choosing a destination fills that slot through its own `attach`
+(`StudioPromptTaskController.send(_:to:)`), leaves the rest of that page's
+draft as the user left it, opens the page on its composer, and focuses the
+prompt. A task-draft page switches to the variant that declares the slot when
+its current variant does not take the file (a clip sent to Vision ▸ Depth moves
+it to Depth's video variant). A prompt mode that is not active takes the file
+as it activates, over the draft it parked. The window root supplies
+`studioOutputRouting` for whatever page is showing; a view hosted without it
+offers neither Use as input nor Send to.
+
+## Paste into the composer
+
+⌘V attaches what was copied wherever an attachment can go: the composer's
+prompt, a well slot, or the canvas. `StudioAttachmentPasteboard`
+(`StudioKit/StudioAttachmentPasteboard.swift`) reads the pasteboard in order:
+file URLs (a Finder copy), then a picture (a screenshot or Copy Image) or a
+sound, then text. A rich-text selection that carries a picture of itself, as
+Word and web pages copy, reads as text. A copied picture or sound is written
+to `~/Library/Application Support/MereRun/Pasted/`, named like a screenshot
+("Pasted image 2026-09-26 at 14.03.11.png"), and only when a slot takes it; the
+app never writes into the user's folders. The files then take the drop path,
+so a paste lands where dropping the same file would.
+
+Text still pastes into the prompt as text, and so does anything no slot takes
+that carries words (a Finder copy pastes its file name, as before). Anything
+else no slot takes is refused with the system beep and no banner. A SwiftUI text field pastes through its
+own field editor, so the prompt's ⌘V goes through a key monitor that is
+installed only while the prompt has focus and only for its window. Edit ▸
+Paste chosen from the menu bar reaches the wells and the canvas, but in the
+prompt it pastes text as before.
+
+## Batch inputs
+
+Several files given to a task whose input takes one run the task once per
+file. Drop them on the well or the canvas, paste them, choose several in the
+open panel, or check several in the Library picker. The well then shows a stack
+with the count ("12 files"), and Run reads **Run 12**. A click on the stack
+lists the files in the order they run, each with its folder and a remove
+button, with **Add files…** and **Clear** below. A drop or paste on the stack
+adds to it. Removing down to one file leaves a plain attachment, and every
+change is an Undo step ("Add Files", "Remove File", "Clear Files").
+
+Which inputs batch comes from the slot schema, not a per-page table:
+`StudioAttachmentSlot.batchesRuns(for:)` (`StudioKit/StudioInputBatch.swift`)
+marks a task's first slot when it holds one required file (not a list or a
+folder), stays in the well between runs, and belongs to a Generate or Analyze
+task that is not a conversation. Transcribe, Read, Find, Segment, Track,
+Enhance, Separate, Depth, Pose, Faces, Who Spoke, 3D ▸ From image, and the
+Earth tasks batch. Slots that already take a list, such as Faces ▸ Batch's
+pictures or 3D's views, keep their own list; optional inputs such as Image ▸
+Generate's input picture, live sessions, and training projects never batch.
+When several files are dropped, files still fill the other slots that take
+them first, so two pictures dropped on Faces ▸ Compare still fill its
+reference and candidate.
+
+The batch lives in the draft (`StudioTaskDraft.batchInputPaths`, and
+`StudioDraft.batchInputs` for the prompt tasks), with its first file also in
+the slot itself, so the canvas and the Command view show the first run. Both
+fields are optional in saved drafts. On Run, `StudioTaskRunner.reviewBatch`
+(or `StudioPromptTaskController.reviewPromptBatch`) checks readiness once for
+the batch, then each file: that it is still on disk, is a file the slot takes,
+can be read, and makes a command the contract accepts. Nothing is created
+while checking. When some files can't run, an alert names them and why and
+offers **Skip and run N**; when none can, the banner says why. Each file then
+becomes its own run through `StudioTaskRunner`, in order, named by
+`StudioOutputLocation` after its own input, so every run writes its own
+result. The runs wait in the inference lane in batch order, and their Library
+rows share a `batchGroup` id (`StudioLibraryItem.batchGroup`, optional and
+additive).
+
+While a batch has runs in flight, a bar over the page's composer shows how far
+it has come ("4 of 12 done") with **Stop batch**, and the Activity popover
+lists it above the lanes with the same control. Stop batch takes the batch's
+waiting runs out of the queue first, then stops the running ones; finished
+results stay.
+
 ## Focus, compare, and continue
 
 Click an image or **Focus** on its result card to inspect it in the workspace.
-**Compare** selects another result and links zoom and pan; batching two image
-rows in the Library and choosing Compare lands in the same view with the pair
-already side by side. The settings area
+**Compare** selects another result and links zoom and pan (a Library batch or
+a variation group opens the fuller view in
+[Variations and Compare](#variations-and-compare)). The settings area
 shows differences between the recorded commands. **Continue with…** opens a
 new draft for editing, reference guidance, video, image understanding, or
 segmentation. The resulting run records its parent; the original stays in Library.
@@ -1193,6 +1539,13 @@ with the reason it stays CLI-only.
 - `StudioKitTests/CommandArgumentGoldenTests` and `CommandDefaultDraftTests` pin
   every template's argv and starting draft against recorded fixtures, so a
   refactor that changes a command line has to say so.
+- `StudioKitTests/StudioInputBatchTests` sweeps every task's well in both draft
+  schemas for which slots batch, and runs batches through the task runner:
+  one run per file with its own destination, a shared group, a bad file named
+  and skipped, readiness checked once, and Stop batch.
+  `StudioUITests/StudioBatchInputSnapshotTests` renders the stacked well with
+  Run 12, the file list, the batch bars, and the Library picker's checks, light
+  and dark, when `MERERUN_STUDIO_SNAPSHOT_DIR` is set.
 
 `StudioUITests/StudioSnapshotTests` renders the shell for visual review without
 driving the live app: every domain at its default task at 1440×820 in light and dark, plus
@@ -1203,6 +1556,7 @@ images, a run held open by the process seam mid-denoise, a queued run behind a
 concurrent model pull, and the inspector open with two changed settings; then
 the same feed with the Command view column), the Library column in list, grid,
 mixed-kind, and batch states, the Activity popover over those jobs and idle, the
+run queue with running, waiting, and finished rows, the
 composer with the boards' sample prompt and an in-test image attached
 (Image ▸ Generate and Vision ▸ Find), the Analyze board (Vision ▸ Find over a
 1024×1024 in-test image with a seeded `vision ground` document, and

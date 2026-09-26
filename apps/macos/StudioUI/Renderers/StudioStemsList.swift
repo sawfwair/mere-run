@@ -24,7 +24,9 @@ struct StudioStemsList: View {
             hairline
         } else {
             ForEach(stems) { stem in
+                // A stem goes on like any output: Send to ▸ Transcribe, Share…, Reveal.
                 StudioStemRow(stem: stem)
+                    .studioOutputContextMenu(stem.url)
                 hairline
             }
         }
@@ -101,9 +103,6 @@ struct StudioStemRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
-        .contextMenu {
-            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([stem.url]) }
-        }
         .task(id: stem.path) { player.load(url: stem.url) }
         .onReceive(ticker) { _ in player.refresh() }
         .onDisappear { player.stop() }

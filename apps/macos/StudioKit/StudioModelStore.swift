@@ -23,7 +23,9 @@ package final class StudioModelStore: ObservableObject {
         controller.jobs.events.sink { [weak self, weak controller] event in
             let job: Job
             switch event {
-            case .started(let value), .changed(let value), .output(let value, _, _), .finished(let value, _): job = value
+            case .queued(let value), .started(let value), .changed(let value), .output(let value, _, _),
+                 .finished(let value, _): job = value
+            case .reordered: return
             }
             guard job.request.templateID == .modelPull, controller?.usesCurrentConfiguration(job) == true else { return }
             self?.objectWillChange.send()

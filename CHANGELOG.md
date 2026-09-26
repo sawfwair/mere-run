@@ -6,6 +6,79 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Studio's composer recalls earlier prompts. ↑ on the prompt's first line
+  steps back through the page's prompts from the Library, newest first and each
+  once; ↓ steps forward and back to what was typed. A clock button beside Run
+  lists the recent prompts. A recall is an undo step.
+- Studio has a coherent set of keyboard shortcuts, listed in Help ▸ Keyboard
+  Shortcuts: ⌘L searches the Library, ⌘F searches the current list, ⌘Y and
+  Space Quick Look the selected run, ⌘⌫ deletes the focused Library selection
+  through the usual confirmation and undo, ⌘E shows the inspector, and ⇧⌘L
+  shows the Library column. Show Library and Show Inspector moved from ⌥⌘L and
+  ⌥⌘I to ⇧⌘L and ⌘E.
+- Each Studio inspector can "Save as my defaults" and "Restore app defaults".
+  Saved defaults keep the page's settings, never its inputs, prompt, seed,
+  model, or output paths; fresh drafts and Reset start from them, and a value
+  the current model does not use stays hidden and out of the run. Both are
+  undo steps.
+- Studio's Activity popover is now a run queue: everything running and waiting
+  across every page, grouped by lane, with each job's model, status (including
+  waiting for a GPU slot or for memory), progress, elapsed time, and time left
+  when it can be measured from progress events or recent runs of the same
+  template and model. Rows offer Stop, Open, and Move up or down for queued
+  jobs; Cancel all queued clears every queue; recent runs link into the
+  Library. The menu bar extra and the Dock icon show the number of runs in
+  flight.
+- Studio supports Undo and Redo (⌘Z, ⇧⌘Z) with named Edit menu steps. Library
+  deletions of runs and chat threads, renames, and favorites can be undone; a
+  deletion that moved files to the Trash moves them back. Inspector and composer
+  changes, model switches, attachments, Reset, and "Use these settings" undo
+  too, with slider drags coalesced into one step. Text fields keep their own
+  undo for typing.
+- Studio can use Library items as inputs. Every attachment entry point (well
+  slots, empty-state Choose buttons, the Analyze canvas's Replace, and path
+  rows) offers From Disk… and From Library… when the Library holds a compatible
+  file. The searchable Library picker lists each stem or picture of a
+  multi-output run. Library rows and output tiles drag onto wells and
+  canvases. Video inputs no longer accept audio-only files.
+- Studio outputs can go straight to another task. Feed cards, output tiles,
+  result rows, stems, and Library rows offer Send to, which lists every page
+  and slot that takes the file, grouped by domain, and Use as input for the
+  current page. Choosing a destination fills that slot, opens the page, and
+  focuses its composer. Share… opens the system share picker for the output.
+  ⌘V in the composer, a well, or the canvas attaches copied files, screenshots,
+  and copied audio through the same path as a drop. Pasted pictures and sounds
+  are written under Application Support, and text still pastes as text.
+- Studio's Library has collections: named sets of runs, shown as chips under
+  the search field that filter the column. Runs join from their context menu's
+  Add to collection, from a multi-selection, or by being dragged onto a chip. A
+  run can be in several collections, and deleting a collection keeps its runs.
+  The filter beside the search field also narrows by task and by model. Runs
+  record the Library items their inputs came from: a run's detail and a focused
+  result show Made from and Used in links that open those runs, and feed cards
+  show a one-line lineage. Links for older runs are inferred from their input
+  paths. Collection and link edits undo. Collections live in `collections.json`
+  beside `library.json`, which only gains an optional `sourceItemIDs` field, so
+  earlier builds still read the Library.
+- Studio runs a task once per file when several files are dropped, pasted, or
+  picked for an input that takes one (Transcribe, Read, Find, Enhance,
+  Separate, Depth, and more, decided by the slot schema). The well shows the
+  stack with a file list to remove or add files, Run reads "Run 12", and the
+  Library picker can check several files. Readiness is checked once and every
+  file is checked before anything runs, with the option to skip the ones that
+  can't. Each file is its own run with its own output, queued in order, and
+  the Library rows share a batch id. A bar on the page and a row in the
+  Activity popover follow the batch and stop it.
+- Studio can run variations: the composer, a finished card, and a Library row
+  run the same command 2, 4, or 8 times, each with its own recorded random
+  seed, wherever the command takes `--seed` for its model. The runs join the
+  run queue and are grouped in the Library. Compare opens a variation group,
+  or two to four picked results of one kind, in place of the canvas: images
+  side by side with linked zoom and pan or on an A/B slider, sounds as
+  stacked waveforms on one playhead with instant A/B switching, and videos
+  side by side on one transport. Each pane lists its seed, model, and the
+  settings that differ, and offers Keep, Use these settings, and Send to.
+
 ## 0.58.0 - 2026-09-26
 
 - Add native Breeze TTS 2 speech synthesis for voice design, reference

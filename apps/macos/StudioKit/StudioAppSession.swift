@@ -6,6 +6,8 @@ import Foundation
 package final class StudioAppSession: ObservableObject {
     package let controller: MereRunController
     package let library: StudioLibraryStore
+    /// Running plus queued runs, for the Dock badge and the menu bar extra.
+    package let runQueue = StudioRunQueueCounter()
 
     package init() {
         controller = MereRunController(
@@ -14,6 +16,7 @@ package final class StudioAppSession: ObservableObject {
         )
         library = StudioLibraryStore()
         library.observe(controller: controller)
+        runQueue.attach(controller.jobs)
         controller.servingMonitor.start(controller: controller)
         controller.machineMonitor.start()
         _ = controller.localServer

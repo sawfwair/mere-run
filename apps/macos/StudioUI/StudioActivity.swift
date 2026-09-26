@@ -173,21 +173,136 @@ enum StudioActivity {
 
     /// "ETA 3m 20s" → "3 min left"; the largest unit is enough at a glance.
     private static func timeLeft(in detail: String) -> String? {
-        guard let eta = detail.range(of: #"ETA\s+\d+[hms]"#, options: .regularExpression) else { return nil }
-        let value = detail[eta].dropFirst(3).trimmingCharacters(in: .whitespaces)
-        let amount = value.prefix { $0.isNumber }
-        guard !amount.isEmpty, let unit = value.dropFirst(amount.count).first else { return nil }
-        switch unit {
-        case "h": return "\(amount) hr left"
-        case "m": return "\(amount) min left"
-        default: return "\(amount) sec left"
-        }
+        StudioRunETA.downloadSecondsLeft(detail).map { "\(roughDuration($0)) left" }
     }
 }
 
-/// The Activity popover: what this Mac is working on right now, one row per running or queued job
-/// with the control to stop it, over the app↔CLI version handshake and a way into the Server page.
-/// With nothing running it shows the machine's own state instead, in the same shape.
+
+// MARK: - Run queue copy
+
+/// Every string the run queue shows, as pure functions of a job and where it stands.
+extension StudioActivity {
+    /// The heading over one lane's jobs.
+    static func laneTitle(_ lane: JobLane) -> String {
+        switch lane {
+        case .inference: return "Model runs"
+        case .utility: return "Background tasks"
+        case .service: return "Servers"
+        case .probe: return "Checks"
+        }
+    }
+
+    /// "3 running · 2 queued" beside the popover's title; "Nothing running" when idle.
+    static func queueSummary(_ sections: [StudioRunQueueSection]) -> String {
+        let queued = sections.reduce(0) { $0 + $1.queuedCount }
+        let running = sections.reduce(0) { $0 + $1.entries.count } - queued
+        switch (running, queued) {
+        case (0, 0): return "Nothing running"
+        case (_, 0): return "\(running) running"
+        case (0, _): return "\(queued) queued"
+        default: return "\(running) running · \(queued) queued"
+        }
+    }
+
+    /// Where the job stands: its stage while it runs, why it is waiting while it waits.
+    @MainActor
+    static func statusText(for job: Job, status: StudioRunQueueStatus) -> String {
+        switch status {
+        case .running:
+            // A pull's progress line is the CLI's raw transfer readout; its time line says it
+            // better, so the status stays "Downloading model".
+            if job.request.templateID == .modelPull { return job.status }
+            return StudioRunningStatus.text(progress: job.progress, fallback: job.status)
+        case .waitingForMemory:
+            return "Waiting for memory"
+        case .queued(let position):
+            let place = position == 0 ? "next" : "\(ordinal(position + 1)) in line"
+            return job.lane == .inference ? "Waiting for a GPU slot · \(place)" : "Queued · \(place)"
+        }
+    }
+
+    /// The line under a running job's status: how long it has run and, when it can be measured,
+    /// how long it has left. A pull's line is the CLI's own byte count and estimate.
+    @MainActor
+    static func timeLine(for job: Job, elapsed: TimeInterval, eta: StudioRunETA?) -> String {
+        if job.request.templateID == .modelPull, let download = downloadDetail(job.progress) {
+            return download
+        }
+        let clock = StudioTimeFormat.string(elapsed)
+        return eta.map { "\(clock) · \(etaText($0))" } ?? clock
+    }
+
+    /// "3 min left" from the CLI, "40 sec left in denoising" from this run's steps, "about 2 min
+    /// left" from recent runs of the same template and model.
+    static func etaText(_ eta: StudioRunETA) -> String {
+        let amount = roughDuration(eta.remaining)
+        switch eta.source {
+        case .download: return "\(amount) left"
+        case .stage(let label): return "\(amount) left in \(label.lowercased())"
+        case .history: return "about \(amount) left"
+        }
+    }
+
+    /// How a finished run ended: "Completed in 1:32", "Failed · exit 1", "Cancelled", or why it
+    /// never started.
+    @MainActor
+    static func outcomeText(for job: Job) -> String {
+        switch job.state {
+        case .finished(0, let endedAt):
+            return job.startedAt.map { "Completed in \(StudioTimeFormat.string(endedAt.timeIntervalSince($0)))" } ?? "Completed"
+        case .finished(let exit, _):
+            return "Failed · exit \(exit)"
+        case .cancelled:
+            return "Cancelled"
+        case .preflightFailed(let failure):
+            return "Didn't start · \(failure.message)"
+        case .queued, .running:
+            return job.status
+        }
+    }
+
+    /// The friendly name of the model a job runs, or nil for work that names none. A pull already
+    /// names its model in its title.
+    @MainActor
+    static func modelName(for job: Job, titles: StudioModelTitles) -> String? {
+        guard job.request.templateID != .modelPull,
+              let model = job.request.draft?.model.trimmingCharacters(in: .whitespacesAndNewlines),
+              !model.isEmpty else { return nil }
+        return StudioModelNaming.displayName(model, titles: titles)
+    }
+
+    /// The glyph of the domain a job belongs to; a raw CLI read has none, so it gets a gear.
+    @MainActor
+    static func systemImage(for job: Job) -> String {
+        job.request.templateID.map { StudioDomain(templateID: $0).systemImage } ?? "gearshape"
+    }
+
+    /// "45 sec", "3 min", "1 hr": the largest unit, which is all a glance needs.
+    static func roughDuration(_ seconds: TimeInterval) -> String {
+        let total = max(Int(seconds.rounded()), 1)
+        if total >= 3_600 { return "\(total / 3_600) hr" }
+        if total >= 60 { return "\(total / 60) min" }
+        return "\(total) sec"
+    }
+
+    /// "2nd", "3rd", "11th".
+    static func ordinal(_ number: Int) -> String {
+        let suffix: String
+        switch (number % 10, number % 100) {
+        case (_, 11...13): suffix = "th"
+        case (1, _): suffix = "st"
+        case (2, _): suffix = "nd"
+        case (3, _): suffix = "rd"
+        default: suffix = "th"
+        }
+        return "\(number)\(suffix)"
+    }
+}
+
+/// The Activity popover, which is the run queue: everything running and waiting across every
+/// page, grouped by lane, with Stop, Open and — for a waiting job — Move up and Move down on each
+/// row, and the last few finished runs below with a way into the Library. With nothing in flight
+/// it shows the machine's own state above those, in the same shape.
 ///
 /// It observes the `JobStore` directly — the lane contents for which rows exist, each `Job` for its
 /// own progress — rather than any mirrored copy of that state.
@@ -200,33 +315,64 @@ struct StudioActivityPopover: View {
     let resolvedCLI: String
     let onOpenServer: () -> Void
     let onOpenModels: () -> Void
+    /// Opens a job's page, or a finished run's row in the Library.
+    var onOpen: (Job) -> Void = { _ in }
+    /// Batches with files still running or waiting, each shown once above the lanes.
+    var batches: [StudioBatchProgress] = []
+    var onStopBatch: (UUID) -> Void = { _ in }
     @Environment(\.studioModelTitles) private var titles
 
-    /// Bumped whenever a job starts or finishes: lane membership is not itself published, so the
-    /// row list is re-derived from the store's own event stream.
+    /// Bumped on every job event: lane membership and queue order are not themselves published,
+    /// so the row list is re-derived from the store's own event stream.
     @State private var generation = 0
 
-    static let width: CGFloat = 340
+    static let width: CGFloat = 400
+    static let maxListHeight: CGFloat = 520
     static let cornerRadius: CGFloat = MereRunTheme.Radius.popover
 
     var body: some View {
-        // Reading `generation` here is what ties the row list to the store's start/finish events.
+        // Reading `generation` here is what ties the row list to the store's events.
         _ = generation
-        let rows = StudioActivity.rows(in: jobs, titles: titles)
+        let sections = StudioRunQueue.sections(in: jobs)
+        let recent = StudioRunQueue.recentlyFinished(in: jobs)
         return VStack(alignment: .leading, spacing: 0) {
-            header(rows)
-            if rows.isEmpty {
-                machineDetails
-            } else {
-                ForEach(rows) { row in
-                    if let job = jobs.job(row.id) {
-                        StudioActivityJobRow(job: job, row: row) { jobs.cancel(row.id) }
+            header(sections)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if sections.isEmpty {
+                        machineDetails
+                    }
+                    if !batches.isEmpty {
+                        eyebrow(batches.count == 1 ? "Batch" : "Batches")
+                        ForEach(batches) { batch in
+                            StudioBatchQueueRow(progress: batch, onStop: { onStopBatch(batch.group) })
+                        }
+                    }
+                    ForEach(sections) { section in
+                        eyebrow(StudioActivity.laneTitle(section.lane))
+                        ForEach(section.entries) { entry in
+                            queueRow(entry)
+                        }
+                    }
+                    if !recent.isEmpty {
+                        eyebrow("Recently finished")
+                        ForEach(recent) { job in
+                            StudioRecentRunRow(
+                                job: job,
+                                title: StudioActivity.title(for: job, titles: titles),
+                                model: StudioActivity.modelName(for: job, titles: titles),
+                                onOpen: { onOpen(job) }
+                            )
+                        }
                     }
                 }
+                .padding(.bottom, 4)
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(maxHeight: Self.maxListHeight)
+            .fixedSize(horizontal: false, vertical: true)
             Divider()
                 .overlay(MereRunTheme.border.opacity(0.4))
-                .padding(.top, 4)
             footer
         }
         .padding(.vertical, 6)
@@ -247,21 +393,52 @@ struct StudioActivityPopover: View {
         .accessibilityLabel("Activity")
     }
 
-    private func header(_ rows: [StudioActivityRow]) -> some View {
-        HStack(spacing: 8) {
+    private func queueRow(_ entry: StudioRunQueueEntry) -> some View {
+        let job = entry.job
+        return StudioQueueRow(
+            job: job,
+            entry: entry,
+            title: StudioActivity.title(for: job, titles: titles),
+            model: StudioActivity.modelName(for: job, titles: titles),
+            typicalDuration: StudioRunETA.typicalDuration(of: StudioRunETA.recentDurations(like: job, in: jobs)),
+            onStop: { StudioRunQueue.stop(job, in: jobs) },
+            onMove: { jobs.moveQueued(job.id, by: $0) },
+            onOpen: job.request.templateID == nil ? nil : { onOpen(job) }
+        )
+    }
+
+    private func header(_ sections: [StudioRunQueueSection]) -> some View {
+        let queued = sections.reduce(0) { $0 + $1.queuedCount }
+        return HStack(spacing: 8) {
             Text("Activity")
                 .font(.system(size: 12.5, weight: .semibold))
                 .foregroundStyle(MereRunTheme.textPrimary)
-            Spacer(minLength: 12)
-            Text(rows.isEmpty ? "Nothing running" : StudioActivity.summary(rows))
+                .accessibilityAddTraits(.isHeader)
+            Text(StudioActivity.queueSummary(sections))
                 .font(.caption.weight(.medium))
+                .monospacedDigit()
                 .foregroundStyle(MereRunTheme.textMuted)
+            Spacer(minLength: 12)
+            if queued > 0 {
+                Button("Cancel all queued") { StudioRunQueue.cancelAllQueued(in: jobs) }
+                    .buttonStyle(.plain)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(MereRunTheme.accent)
+                    .help("Take every waiting job out of the queue; running jobs keep going")
+                    .accessibilityLabel(queued == 1 ? "Cancel 1 queued job" : "Cancel \(queued) queued jobs")
+            }
         }
         .padding(.horizontal, 14)
         .padding(.top, 8)
-        .padding(.bottom, 6)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
+        .padding(.bottom, 2)
+    }
+
+    private func eyebrow(_ title: String) -> some View {
+        MereEyebrow(title)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 2)
     }
 
     /// What the popover says when no job is in flight: the local server and the models, drawn as
@@ -336,6 +513,196 @@ struct StudioActivityPopover: View {
         .padding(.horizontal, 14)
         .padding(.top, 8)
         .padding(.bottom, 4)
+    }
+}
+
+/// One running or waiting job in the run queue: its task glyph, title and model, where it stands,
+/// its progress, elapsed time and honest time left, and its controls. It observes its own `Job`,
+/// so a chatty run redraws this row and nothing else.
+struct StudioQueueRow: View {
+    @Environment(\.studioReferenceDate) private var referenceDate
+
+    @ObservedObject var job: Job
+    let entry: StudioRunQueueEntry
+    let title: String
+    let model: String?
+    /// The median duration of recent successful runs like this one, for the history estimate.
+    let typicalDuration: TimeInterval?
+    let onStop: () -> Void
+    let onMove: (Int) -> Void
+    /// Nil for work with no page of its own (a raw CLI read).
+    let onOpen: (() -> Void)?
+
+    private var isWaiting: Bool { job.state.isQueued }
+    private var status: String { StudioActivity.statusText(for: job, status: entry.status) }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            StudioQueueGlyph(systemImage: StudioActivity.systemImage(for: job), tint: tint)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(MereRunTheme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if let model {
+                    Text(model)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(MereRunTheme.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                if entry.status == .running, let progress = job.progress {
+                    StudioProgressBar(fraction: progress.fractionCompleted)
+                        .padding(.vertical, 2)
+                }
+                Text(status)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(entry.status == .running ? MereRunTheme.textMuted : MereRunTheme.yellow)
+                    .lineLimit(1)
+                if let startedAt = job.startedAt, job.state.isRunning {
+                    TimelineView(.periodic(from: startedAt, by: 1)) { context in
+                        timeLine(now: referenceDate ?? context.date, startedAt: startedAt)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            controls
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(title), \(status)")
+    }
+
+    private var tint: Color {
+        entry.status == .running ? MereRunTheme.accent : MereRunTheme.yellow
+    }
+
+    private func timeLine(now: Date, startedAt: Date) -> some View {
+        let elapsed = now.timeIntervalSince(startedAt)
+        let eta = StudioRunETA.estimate(
+            progress: job.progress,
+            stage: job.progressStage,
+            elapsed: elapsed,
+            typicalDuration: typicalDuration,
+            now: now
+        )
+        return Text(StudioActivity.timeLine(for: job, elapsed: elapsed, eta: eta))
+            .font(.caption.weight(.medium))
+            .monospacedDigit()
+            .foregroundStyle(MereRunTheme.textMuted)
+            .lineLimit(1)
+    }
+
+    private var controls: some View {
+        HStack(spacing: 0) {
+            if isWaiting {
+                iconButton(
+                    "chevron.up",
+                    help: entry.waitsForModelDownload ? "Waits for its model download." : "Move up in the queue",
+                    label: "Move \(title) up",
+                    enabled: entry.canMoveUp
+                ) {
+                    onMove(-1)
+                }
+                iconButton("chevron.down", help: "Move down in the queue", label: "Move \(title) down", enabled: entry.canMoveDown) {
+                    onMove(1)
+                }
+            }
+            if let onOpen {
+                iconButton("arrow.up.forward.square", help: "Open this job's page", label: "Open \(title)", enabled: true, action: onOpen)
+            }
+            iconButton(
+                isWaiting ? "xmark" : "stop",
+                help: isWaiting ? "Remove this job from the queue" : "Stop this job",
+                label: isWaiting ? "Remove \(title) from the queue" : "Stop \(title)",
+                enabled: true,
+                action: onStop
+            )
+        }
+    }
+
+    private func iconButton(
+        _ systemImage: String,
+        help: String,
+        label: String,
+        enabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .medium))
+                .frame(width: 26, height: 26)
+        }
+        .buttonStyle(.mereIcon)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.35)
+        .help(help)
+        .accessibilityLabel(label)
+    }
+}
+
+/// A finished run under the queue: how it ended, and the way to its row in the Library.
+struct StudioRecentRunRow: View {
+    let job: Job
+    let title: String
+    let model: String?
+    let onOpen: () -> Void
+
+    private var succeeded: Bool { job.state.exitCode == 0 }
+    private var outcome: String { StudioActivity.outcomeText(for: job) }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            StudioQueueGlyph(
+                systemImage: StudioActivity.systemImage(for: job),
+                tint: succeeded ? MereRunTheme.green : MereRunTheme.textMuted
+            )
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(MereRunTheme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text([model, outcome].compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption.weight(.medium))
+                    .monospacedDigit()
+                    .foregroundStyle(succeeded ? MereRunTheme.textMuted : MereRunTheme.red)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Show in Library", action: onOpen)
+                .buttonStyle(.plain)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(MereRunTheme.accent)
+                .padding(.top, 2)
+                .help("Open this run in the Library")
+                .accessibilityLabel("Show \(title) in the Library")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(title), \(outcome)")
+    }
+}
+
+/// A job's domain glyph on a soft tile, tinted by where the job stands.
+private struct StudioQueueGlyph: View {
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(tint)
+            .frame(width: 26, height: 26)
+            .background {
+                RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
+                    .fill(MereRunTheme.surfaceRaised)
+            }
+            .accessibilityHidden(true)
     }
 }
 
