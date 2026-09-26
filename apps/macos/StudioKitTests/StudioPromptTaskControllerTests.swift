@@ -413,6 +413,55 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         XCTAssertEqual(prompt.draft, image)
     }
 
+    /// Send to fills the destination's slot and nothing else: a prompt mode that is not active
+    /// takes the file as it activates, over the draft it parked; the active one takes it at once;
+    /// a task draft takes it at once, on the variant that declares the slot. Use as input routes
+    /// into the page's own well like a drop, and refuses a file no slot takes.
+    func testSendToFillsTheDestinationSlotAndUseAsInputRoutesLikeADrop() throws {
+        let picture = URL(fileURLWithPath: "/Outputs/mug.png")
+        let clip = URL(fileURLWithPath: "/Outputs/take.mp4")
+        func destination(_ url: URL, _ task: StudioTask, slot: String? = nil) throws -> StudioSendDestination {
+            try XCTUnwrap(StudioSendDestinations.destinations(for: url).first { $0.task == task && (slot == nil || $0.slot.id == slot) })
+        }
+
+        activate(.video)
+        prompt.draft.prompt = "The mug turns slowly"
+        activate(.createImage)
+        let image = prompt.draft
+        XCTAssertTrue(prompt.send(picture, to: try destination(picture, .videoGenerate, slot: "startFrame")))
+        XCTAssertEqual(prompt.draft, image)
+        let activation = prompt.activate(.video, preferredID: nil)
+        XCTAssertNil(activation.selectedLibraryID)
+        XCTAssertEqual(prompt.draft.inputPath, picture.path)
+        XCTAssertEqual(prompt.draft.prompt, "The mug turns slowly")
+
+        XCTAssertTrue(prompt.send(picture, to: try destination(picture, .videoGenerate, slot: "endFrame")))
+        XCTAssertEqual(prompt.draft.endImagePath, picture.path)
+
+        XCTAssertTrue(prompt.send(clip, to: try destination(clip, .visionDepth)))
+        let depth = try XCTUnwrap(controller.taskSessions.taskDraft(for: .visionDepth))
+        XCTAssertEqual(depth.templateID, .visionDepthVideo)
+        XCTAssertEqual(depth.primaryInputPath, clip.path)
+        XCTAssertFalse(prompt.send(clip, to: try destination(picture, .visionRead)))
+
+        // Only slots the destination's model shows are offered, and only those take a send.
+        let offered = prompt.sendDestinations(for: picture, excluding: nil)
+        for destination in offered where destination.task.mode != nil {
+            XCTAssertTrue(prompt.inputSlots(for: destination.task).contains { $0.id == destination.slot.id }, destination.id)
+        }
+        let hidden = StudioSendDestinations.destinations(for: picture).filter { !offered.contains($0) }
+        XCTAssertFalse(hidden.isEmpty, "some model hides a slot that takes a picture")
+        for destination in hidden { XCTAssertFalse(prompt.send(picture, to: destination), destination.id) }
+
+        activate(.findObjects)
+        XCTAssertTrue(prompt.inputSlots(for: .visionFind).contains { $0.accepts(picture) })
+        XCTAssertTrue(prompt.useAsInput(picture, on: .visionFind))
+        XCTAssertEqual(prompt.draft.inputPath, picture.path)
+        XCTAssertFalse(prompt.useAsInput(clip, on: .visionFind))
+        XCTAssertTrue(prompt.useAsInput(picture, on: .visionPose))
+        XCTAssertEqual(controller.taskSessions.taskDraft(for: .visionPose)?.primaryInputPath, picture.path)
+    }
+
     func testAnalyzeHandoffKeepsSourceAndTargetSettingsSeparate() {
         activate(.segment)
         prompt.draft.model = "segment-model"

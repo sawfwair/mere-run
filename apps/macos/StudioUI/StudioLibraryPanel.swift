@@ -6,7 +6,8 @@ import SwiftUI
 /// to a kind or favorites, searchable, shown as rows or as a grid of thumbnails, grouped by day,
 /// keyboard-navigable (arrows move, Space previews), with Quick Look surfacing on hover. Picking a
 /// row of another domain switches the destination; ⌘ and ⇧ build a batch to reveal, save, or
-/// delete in one go, and any row can be dragged onto another task's well or out to Finder or another app.
+/// delete in one go, and any row can be dragged onto another task's well or out to Finder or another app,
+/// or sent to another task's input or shared from its context menu.
 struct StudioLibraryPanel: View {
     let items: [StudioLibraryItem]
     let domain: StudioDomain
@@ -350,6 +351,7 @@ struct StudioLibraryPanel: View {
         )
         .studioFileDrag(item.outputURL)
         .contextMenu { menu(for: item) }
+        .studioShareAnchor()
     }
 
     private func grid(for sectionItems: [StudioLibraryItem]) -> some View {
@@ -364,6 +366,7 @@ struct StudioLibraryPanel: View {
                 )
                 .studioFileDrag(item.outputURL)
                 .contextMenu { menu(for: item) }
+                .studioShareAnchor()
             }
         }
         .padding(.horizontal, 2)
@@ -379,12 +382,16 @@ struct StudioLibraryPanel: View {
             }
             Button("Reveal \(batch.count) in Finder") { onReveal(urls(in: batch)) }
             Button("Save \(batch.count) to…") { onExport(items(in: batch)) }
+            StudioShareMenuItem(urls: urls(in: batch))
             Divider()
             Button("Delete \(batch.count)…", role: .destructive) {
                 pendingDelete = StudioLibraryDeleteRequest(ids: batch, count: batch.count)
             }
         } else {
             if let url = item.outputURL {
+                StudioSendToMenuItems(url: url)
+                StudioShareMenuItem(urls: [url])
+                Divider()
                 Button("Quick Look") { onQuickLook(url) }
                 Button("Reveal in Finder") { onReveal([url]) }
                 Button("Save to…") { onExport([item]) }

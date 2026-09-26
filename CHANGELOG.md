@@ -20,6 +20,15 @@ The format is based on Keep a Changelog.
   file. The searchable Library picker lists each stem or picture of a
   multi-output run. Library rows and output tiles drag onto wells and
   canvases. Video inputs no longer accept audio-only files.
+- Studio outputs can go straight to another task. Feed cards, output tiles,
+  result rows, stems, and Library rows offer Send to, which lists every page
+  and slot that takes the file, grouped by domain, and Use as input for the
+  current page. Choosing a destination fills that slot, opens the page, and
+  focuses its composer. Share… opens the system share picker for the output.
+  ⌘V in the composer, a well, or the canvas attaches copied files, screenshots,
+  and copied audio through the same path as a drop. Pasted pictures and sounds
+  are written under Application Support, and text still pastes as text.
+
 ## 0.58.0 - 2026-09-26
 
 - Add native Breeze TTS 2 speech synthesis for voice design, reference

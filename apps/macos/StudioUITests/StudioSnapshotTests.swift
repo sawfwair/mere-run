@@ -1766,14 +1766,13 @@ final class StudioSnapshotTests: XCTestCase {
             let noop: (StudioLibraryItem) -> Void = { _ in }
             return StudioFeedCanvas(
                 presentation: StudioTaskPresentation(mode: .createImage),
-                slots: StudioMode.createImage.attachmentSlots,
                 cards: shown,
                 readiness: readiness,
                 pullJob: nil,
                 highlightedID: nil,
                 newResultID: .constant(nil),
                 actions: StudioFeedActions(
-                    vary: noop, rerun: noop, useAsInput: { _ in }, saveTo: { _ in }, cancel: { _ in },
+                    vary: noop, rerun: noop, saveTo: { _ in }, cancel: { _ in },
                     remove: { _ in }, retry: noop, delete: noop, useSettings: noop, pullModel: { _ in },
                     useExample: { _ in }, attach: nil
                 ),
@@ -1942,6 +1941,45 @@ final class StudioSnapshotTests: XCTestCase {
         }
         try render(.musicTranscribe, name: "music-transcribe-compact-light", appearance: .light,
                    size: CGSize(width: 960, height: 760), inspector: false)
+    }
+
+    /// An output's next step: a finished song on Music ▸ Compose and a batch of pictures on
+    /// Image ▸ Generate, each a feed card with Share and "Send to" beside Save to… (light and
+    /// dark). The Send to and context menus are AppKit windows an offscreen render cannot
+    /// capture, so their contents are covered by `StudioSendDestinationsTests`.
+    func testSendToAndShareSnapshots() throws {
+        let music = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.musicReadinessResponses)
+        )
+        defer { music.tearDown() }
+        let runs = try music.seedLibraryInputRuns()
+        let song = try XCTUnwrap(runs.first { $0.prompt.hasPrefix("Harbor at dawn") })
+        let mugs = try XCTUnwrap(runs.first { $0.prompt.hasPrefix("Four ceramic mugs") })
+        let noop: (StudioLibraryItem) -> Void = { _ in }
+        let actions = StudioFeedActions(
+            vary: noop, rerun: noop, saveTo: { _ in }, cancel: { _ in }, remove: { _ in }, retry: noop, delete: noop,
+            useSettings: noop, pullModel: { _ in }, useExample: { _ in }, attach: nil
+        )
+        func card(_ item: StudioLibraryItem, on task: StudioTask) -> some View {
+            StudioGenerationCard(item: item, isHighlighted: false, actions: actions)
+                .padding(24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .background(MereRunTheme.background)
+                .environment(\.studioOutputRouting, StudioOutputRouting(
+                    currentTask: task,
+                    inputSlots: task.mode?.attachmentSlots ?? [],
+                    destinations: { StudioSendDestinations.destinations(for: $0, excluding: task) },
+                    useAsInput: { _ in },
+                    send: { _, _ in }
+                ))
+        }
+        for appearance in StudioSnapshotAppearance.allCases {
+            try music.write(card(song, on: .musicCompose), size: CGSize(width: 760, height: 260), appearance: appearance,
+                            name: "send-to-card-song-\(appearance.rawValue)", settle: 2)
+        }
+        try music.write(card(mugs, on: .imageGenerate), size: CGSize(width: 820, height: 420), appearance: .light,
+                        name: "send-to-card-pictures-light", settle: 2)
     }
 
     /// Library items as inputs. Music ▸ Transcribe empty in the window, with a composed song and a

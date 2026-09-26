@@ -121,6 +121,11 @@ struct StudioComposer: View {
             .frame(minHeight: 22, alignment: .leading)
             .focused(promptFocus)
             .onSubmit(onRun)
+            .studioAttachmentPasteKey(isActive: promptFocus.wrappedValue) {
+                StudioAttachmentPaste.paste(
+                    into: &draft, slots: mode.attachmentSlots(for: draft, source: scopeSource), allowsText: true
+                )
+            }
             .accessibilityLabel(mode.promptPlaceholder)
         }
     }
@@ -606,10 +611,10 @@ struct StudioComposerChipLabel: View {
 
 /// One 48×48 slot of the attachment well. Empty: a dashed outline with a plus. Filled: the
 /// file's thumbnail (or a kind glyph for audio and video) with a hover-revealed remove button.
-/// Accepts a drop (a Finder file or a Library row), a paste (⌘V while focused), and a click:
-/// straight to the open panel, or — when the Library holds a file the slot takes — a menu of
-/// From Disk…, From Library…, and, on an audio slot, Record…, which files the recording with
-/// the task's domain.
+/// Accepts a drop (a Finder file or a Library row), a paste (⌘V while focused: a copied file,
+/// picture, or sound, routed like a drop), and a click: straight to the open panel, or — when
+/// the Library holds a file the slot takes — a menu of From Disk…, From Library…, and, on an
+/// audio slot, Record…, which files the recording with the task's domain.
 struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
     let slot: StudioAttachmentSlot
     @Binding var draft: Draft
@@ -678,7 +683,9 @@ struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
         } isTargeted: { targeted in
             withAnimation(MereRunTheme.Motion.quick) { isDropTargeted = targeted }
         }
-        .onPasteCommand(of: [.fileURL, .image]) { _ in paste() }
+        .onPasteCommand(of: [.fileURL, .image, .audio]) { _ in
+            StudioAttachmentPaste.paste(into: &draft, slots: [slot], allowsText: false)
+        }
         .contextMenu {
             Button("Choose from Disk…", action: onPick)
             if hasLibraryChoices {
@@ -766,17 +773,5 @@ struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(MereRunTheme.accent)
         }
-    }
-
-    private func paste() {
-        let pasteboard = NSPasteboard.general
-        let urls = StudioAttachmentPasteboard.fileURLs(from: pasteboard, for: slot)
-        if !urls.isEmpty {
-            slot.attach(urls, to: &draft)
-            return
-        }
-        guard slot.acceptedTypes.contains(where: { UTType.image.conforms(to: $0) }),
-              let url = try? StudioAttachmentPasteboard.writePastedImage(from: pasteboard) else { return }
-        slot.attach([url], to: &draft)
     }
 }

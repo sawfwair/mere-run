@@ -9,8 +9,6 @@ struct StudioFeedActions {
     let vary: (StudioLibraryItem) -> Void
     /// Re-run with the same command.
     let rerun: (StudioLibraryItem) -> Void
-    /// Load an output into the composer's well.
-    let useAsInput: (URL) -> Void
     /// Copy an output to a place the user picks.
     let saveTo: (URL) -> Void
     let cancel: (Job) -> Void
@@ -48,8 +46,6 @@ struct StudioReadinessActions {
 struct StudioFeedCanvas: View {
     /// The task's glyph and empty-state words: the mode's, or a shared-workspace task's own.
     let presentation: StudioTaskPresentation
-    /// The composer's slots, so a card knows whether "Use as input" can take its output.
-    let slots: [StudioAttachmentSlot]
     let cards: [StudioFeedCard]
     let readiness: ModelReadinessState
     /// The `model pull` the readiness card reports, while one runs for this mode's model.
@@ -179,7 +175,6 @@ struct StudioFeedCanvas: View {
         switch card.kind {
         case .generation:
             StudioGenerationCard(
-                slots: slots,
                 item: card.item,
                 isHighlighted: highlighted,
                 actions: actions
@@ -381,8 +376,6 @@ enum StudioFeedChips {
 struct StudioGenerationCard: View {
     @Environment(\.studioReferenceDate) private var referenceDate
 
-    /// The composer's slots: "Use as input" is offered when one of them takes the output.
-    let slots: [StudioAttachmentSlot]
     let item: StudioLibraryItem
     let isHighlighted: Bool
     let actions: StudioFeedActions
@@ -436,9 +429,10 @@ struct StudioGenerationCard: View {
         return text
     }
 
-    private var canUseAsInput: Bool {
-        guard let primaryURL else { return false }
-        return slots.contains { $0.accepts(primaryURL) }
+    /// What Share… hands the picker: every picture, clip, sound, or mesh the run made, else its
+    /// primary file.
+    private var shareURLs: [URL] {
+        mediaFiles.isEmpty ? primaryURL.map { [$0] } ?? [] : mediaFiles
     }
 
     var body: some View {
@@ -454,6 +448,7 @@ struct StudioGenerationCard: View {
         .padding(.vertical, 14)
         .padding(.horizontal, 16)
         .feedPanel(isHighlighted: isHighlighted)
+        .studioShareAnchor()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Generation: \(item.displayTitle)")
     }
@@ -528,6 +523,9 @@ struct StudioGenerationCard: View {
             if canRestoreSettings {
                 cardIcon("slider.horizontal.3", help: "Use these settings") { actions.useSettings(item) }
             }
+            if !shareURLs.isEmpty {
+                StudioShareButton(urls: shareURLs)
+            }
             Menu {
                 if item.commandDraft != nil, item.templateID != nil {
                     Button("Rerun with the same settings") { actions.rerun(item) }
@@ -536,7 +534,9 @@ struct StudioGenerationCard: View {
                     Button("Use these settings") { actions.useSettings(item) }
                 }
                 if let primaryURL {
-                    Button("Use as input") { actions.useAsInput(primaryURL) }.disabled(!canUseAsInput)
+                    StudioSendToMenuItems(url: primaryURL)
+                    StudioShareMenuItem(urls: shareURLs)
+                    Divider()
                     Button("Quick Look") { QuickLookCoordinator.shared.preview(primaryURL) }
                     Button("Open") { NSWorkspace.shared.open(primaryURL) }
                     Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([primaryURL]) }
@@ -551,6 +551,7 @@ struct StudioGenerationCard: View {
             .accessibilityLabel("More result actions")
             Spacer(minLength: 8)
             if let primaryURL {
+                StudioSendToButton(url: primaryURL)
                 Button("Save to…") { actions.saveTo(primaryURL) }
                     .buttonStyle(.mereSecondary)
                     .help("Save a copy of the output")
@@ -619,6 +620,7 @@ private struct StudioOutputGrid: View {
                     .background(MereRunTheme.surfaceRaised.opacity(0.6))
                     .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
                     .studioFileDrag(url)
+                    .studioOutputContextMenu(url)
             }
         }
     }
@@ -648,14 +650,10 @@ private struct StudioOutputGrid: View {
             else { QuickLookCoordinator.shared.preview(url) }
         }
         .studioFileDrag(url)
-        .contextMenu {
-            Button("Open") { NSWorkspace.shared.open(url) }
-            Button("Quick Look") { QuickLookCoordinator.shared.preview(url) }
-            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
-        }
+        .studioOutputContextMenu(url)
         .help(url.lastPathComponent)
         .accessibilityLabel("Output \(url.lastPathComponent)")
-        .accessibilityHint("Click to inspect the output; drag to copy the file out")
+        .accessibilityHint("Click to inspect the output; drag it onto an input or out to Finder; right-click to send or share it")
     }
 }
 
