@@ -301,6 +301,7 @@ private struct StudioWorkspaceView: View {
     // independently type-checked expression.
     var body: some View {
         observedShell
+            .modifier(StudioUndoBinding(registrars: [controller.taskSessions.undo, library.undo]))
             .environment(\.studioTaskSessions, controller.taskSessions)
             .environment(\.studioTaskRunner, prompt.runner)
             .environment(\.studioTaskScope, destination.task.rawValue)

@@ -14,6 +14,12 @@ The format is based on Keep a Changelog.
   jobs; Cancel all queued clears every queue; recent runs link into the
   Library. The menu bar extra and the Dock icon show the number of runs in
   flight.
+- Studio supports Undo and Redo (⌘Z, ⇧⌘Z) with named Edit menu steps. Library
+  deletions of runs and chat threads, renames, and favorites can be undone; a
+  deletion that moved files to the Trash moves them back. Inspector and composer
+  changes, model switches, attachments, Reset, and "Use these settings" undo
+  too, with slider drags coalesced into one step. Text fields keep their own
+  undo for typing.
 - Studio can use Library items as inputs. Every attachment entry point (well
   slots, empty-state Choose buttons, the Analyze canvas's Replace, and path
   rows) offers From Disk… and From Library… when the Library holds a compatible

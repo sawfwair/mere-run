@@ -162,7 +162,9 @@ struct StudioInspector: View {
                 if showAdvanced,
                    StudioInspectorSchema.advancedChanged(mode: mode, draft: draft, baseline: baseline, source: scopeSource) {
                     resetButton {
-                        StudioInspectorSchema.resetAdvanced(for: mode, &draft, to: baseline, source: scopeSource)
+                        StudioUndoNaming.reset("Advanced Settings", in: controller.taskSessions) {
+                            StudioInspectorSchema.resetAdvanced(for: mode, &draft, to: baseline, source: scopeSource)
+                        }
                     }
                 }
             }
@@ -592,6 +594,7 @@ struct StudioInspectorSectionView<Content: View>: View {
     let canReset: Bool
     let onReset: () -> Void
     @ViewBuilder let content: () -> Content
+    @Environment(\.studioTaskSessions) private var sessions
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -601,7 +604,7 @@ struct StudioInspectorSectionView<Content: View>: View {
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
-                Button("Reset", action: onReset)
+                Button("Reset") { StudioUndoNaming.reset(title, in: sessions, onReset) }
                     .buttonStyle(.plain)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(MereRunTheme.textMuted)

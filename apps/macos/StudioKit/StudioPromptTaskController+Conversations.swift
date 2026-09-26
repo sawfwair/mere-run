@@ -88,7 +88,8 @@ extension StudioPromptTaskController {
             setConversation(nil, draft: edited)
             sessions.rememberSelection(nil, for: mode)
         } else {
-            draft = edited
+            // Taking a turn back is not an undo step, so the draft it refills is not one either.
+            sessions.undo.suppressing { draft = edited }
         }
         return true
     }

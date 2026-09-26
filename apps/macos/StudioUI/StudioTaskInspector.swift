@@ -20,6 +20,7 @@ struct StudioTaskInspector: View {
     let onClose: () -> Void
     @Environment(\.studioModelTitles) private var titles
     @Environment(\.studioScopeSource) private var scopeSource
+    @Environment(\.studioTaskSessions) private var sessions
 
     @State private var showAdvanced = false
 
@@ -163,7 +164,11 @@ struct StudioTaskInspector: View {
                 Spacer(minLength: 0)
                 if showAdvanced, advancedFields.contains(where: { $0.changedCount(draft: draft, baseline: baseline) > 0 }) {
                     Button("Reset") {
-                        for field in advancedFields { field.reset(&draft, to: baseline) }
+                        StudioUndoNaming.reset("Advanced Settings", in: sessions) {
+                            var next = draft
+                            for field in advancedFields { field.reset(&next, to: baseline) }
+                            draft = next
+                        }
                     }
                     .buttonStyle(.plain)
                     .font(.caption.weight(.medium))
