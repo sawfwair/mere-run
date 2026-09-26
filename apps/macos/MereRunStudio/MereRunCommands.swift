@@ -9,15 +9,36 @@ import UniformTypeIdentifiers
 /// `StudioSceneActions` the key window publishes as a focused scene value: the Studio window
 /// publishes its composer, Library, and navigation; the Command Console publishes its own
 /// Run/Stop and forwards navigation to the Studio window. Items stay disabled when no window
-/// of ours is key.
+/// of ours is key. Every key comes from `StudioKeyboardShortcuts`, which Help ▸ Keyboard
+/// Shortcuts lists.
 struct MereRunCommands: Commands {
     @ObservedObject var controller: MereRunController
     @ObservedObject var library: StudioLibraryStore
+    @ObservedObject var navigation: NavigationModel
     let updater: SPUUpdater
     let isStudioOpen: Bool
 
     @Environment(\.openWindow) private var openWindow
     @FocusedValue(\.studioActions) private var actions: StudioSceneActions?
+    @FocusedValue(\.studioLibraryDeletion) private var libraryDeletion: StudioLibraryDeletion?
+
+    /// The output of the run the Library has selected, for File ▸ Quick Look.
+    private var selectedOutput: URL? {
+        library.items.first { $0.id == navigation.selectedLibraryID }?.outputURL
+    }
+
+    /// The list Edit ▸ Find in List searches on the current page.
+    private var findField: StudioSearchField? {
+        actions.flatMap { StudioKeyboardShortcuts.findField(for: $0.destination.task) }
+    }
+
+    /// Focuses a list's search, showing the Library column first when that is the list.
+    private func focusSearch(_ field: StudioSearchField) {
+        if field == .library, let actions, !actions.showLibrary.wrappedValue {
+            actions.showLibrary.wrappedValue = true
+        }
+        navigation.requestSearchFocus(field)
+    }
 
     /// Writes a secret-free support report the user can attach to an issue.
     private func exportDiagnostics() {
@@ -41,8 +62,24 @@ struct MereRunCommands: Commands {
             Button("New Chat") {
                 actions?.newChat()
             }
-            .keyboardShortcut("n", modifiers: .command)
+            .studioShortcut(.newChat)
             .disabled(actions?.canNewChat != true)
+
+            Divider()
+
+            Button("Quick Look") {
+                if let selectedOutput { QuickLookCoordinator.shared.preview(selectedOutput) }
+            }
+            .studioShortcut(.quickLook)
+            .disabled(actions == nil || selectedOutput == nil)
+
+            // Enabled only while the Library list has focus, so ⌘⌫ in a text field still
+            // deletes to the start of the line.
+            Button(libraryDeletion?.title ?? "Delete from Library…") {
+                libraryDeletion?.confirm()
+            }
+            .studioShortcut(.deleteFromLibrary)
+            .disabled(libraryDeletion == nil)
 
             Divider()
 
@@ -50,6 +87,21 @@ struct MereRunCommands: Commands {
                 actions?.importReceipt()
             }
             .disabled(actions == nil)
+        }
+
+        CommandGroup(after: .pasteboard) {
+            Divider()
+            Button("Find in List") {
+                if let findField { focusSearch(findField) }
+            }
+            .studioShortcut(.find)
+            .disabled(findField == nil)
+
+            Button("Search Library") {
+                focusSearch(.library)
+            }
+            .studioShortcut(.searchLibrary)
+            .disabled(actions?.canShowLibrary != true)
         }
 
         CommandGroup(after: .appInfo) {
@@ -65,23 +117,23 @@ struct MereRunCommands: Commands {
             Button("Command Console") {
                 if let actions { actions.openConsole() } else { openWindow(id: StudioConsoleWindow.id) }
             }
-            .keyboardShortcut("c", modifiers: [.command, .shift])
+            .studioShortcut(.commandConsole)
             Divider()
         }
 
         // The system Show/Hide Sidebar item already lives in this group (NavigationSplitView owns it).
         CommandGroup(after: .sidebar) {
             Toggle("Show Library", isOn: actions?.showLibrary ?? .constant(false))
-                .keyboardShortcut("l", modifiers: [.command, .option])
+                .studioShortcut(.showLibrary)
                 .disabled(actions?.canShowLibrary != true)
 
             Toggle("Show Inspector", isOn: actions?.showInspector ?? .constant(false))
-                .keyboardShortcut("i", modifiers: [.command, .option])
+                .studioShortcut(.showInspector)
                 .disabled(actions?.canShowInspector != true)
 
             // ⌥⌘C is always the task's Command view; the Console window is Window ▸ Command Console.
             Toggle("Show Command View", isOn: actions?.showCommand ?? .constant(false))
-                .keyboardShortcut("c", modifiers: [.command, .option])
+                .studioShortcut(.showCommandView)
                 .disabled(actions?.canShowCommand != true)
 
             Divider()
@@ -117,13 +169,13 @@ struct MereRunCommands: Commands {
             Button("Run") {
                 actions?.runComposer()
             }
-            .keyboardShortcut(.return, modifiers: .command)
+            .studioShortcut(.run)
             .disabled(actions?.canRun != true)
 
             Button("Stop") {
                 actions?.stop()
             }
-            .keyboardShortcut(".", modifiers: .command)
+            .studioShortcut(.stop)
             .disabled(actions?.canStop != true)
 
             Divider()
@@ -131,13 +183,13 @@ struct MereRunCommands: Commands {
             Button("Open Last Output") {
                 controller.openLastOutput()
             }
-            .keyboardShortcut("o", modifiers: [.command, .shift])
+            .studioShortcut(.openLastOutput)
             .disabled(controller.lastOutputURL == nil)
 
             Button("Reveal Last Output in Finder") {
                 controller.revealLastOutput()
             }
-            .keyboardShortcut("r", modifiers: [.command, .shift])
+            .studioShortcut(.revealLastOutput)
             .disabled(controller.lastOutputURL == nil)
         }
 
@@ -145,8 +197,12 @@ struct MereRunCommands: Commands {
             Button("mere.run Guide") {
                 actions?.showGuide()
             }
-            .keyboardShortcut("?", modifiers: .command)
+            .studioShortcut(.guide)
             .disabled(actions == nil)
+
+            Button("Keyboard Shortcuts") {
+                openWindow(id: StudioKeyboardShortcutsWindow.id)
+            }
 
             Link("mere.run", destination: URL(string: "https://mere.run")!)
             Divider()

@@ -22,12 +22,15 @@ struct StudioTaskComposer: View {
     let onRun: () -> Void
     let onStop: () -> Void
     let onShowModels: () -> Void
+    /// Puts a prompt from the page's history in the field (↑, or Recent prompts) as an undo step.
+    let onRecallPrompt: (String) -> Void
     /// Whether the composer carries the scope note: only while no side column is open. The
     /// inspector shows it at its top, beside the controls it explains, and the Command view as
     /// its "Not sent" line.
     var showsScopeNote = true
     @Environment(\.studioModelTitles) private var titles
     @Environment(\.studioScopeSource) private var scopeSource
+    @Environment(\.studioLibraryItems) private var libraryItems
 
     @State private var editingChip: String?
 
@@ -115,7 +118,15 @@ struct StudioTaskComposer: View {
         .studioAttachmentPasteKey(isActive: promptFocus.wrappedValue) {
             StudioAttachmentPaste.paste(into: &draft, slots: slots, allowsText: true)
         }
+        .studioPromptHistoryKeys(
+            isActive: promptFocus.wrappedValue, history: promptHistory, text: draft.prompt, recall: onRecallPrompt
+        )
         .accessibilityLabel(presentation.promptPlaceholder.isEmpty ? "Prompt" : presentation.promptPlaceholder)
+    }
+
+    /// The prompts this page has run, newest first; none where the composer draws no prompt.
+    private var promptHistory: [String] {
+        showsPrompt && promptField != nil ? StudioPromptHistory.prompts(for: task, in: libraryItems) : []
     }
 
     // MARK: - Chip strip
@@ -127,6 +138,12 @@ struct StudioTaskComposer: View {
             }
             modelChip
             Spacer(minLength: 8)
+            if !promptHistory.isEmpty {
+                StudioRecentPromptsMenu(prompts: promptHistory) { prompt in
+                    onRecallPrompt(prompt)
+                    promptFocus.wrappedValue = true
+                }
+            }
             if isRunning { stopButton } else { sendButton }
         }
     }

@@ -52,6 +52,7 @@ struct StudioLibraryPanel: View {
     @SceneStorage("studio.libraryTask") private var storedTask = ""
     @FocusState private var renameFocused: Bool
     @EnvironmentObject private var library: StudioLibraryStore
+    @FocusState private var searchFocused: Bool
     @Environment(\.studioLibrarySeed) private var seed
     @Environment(\.studioReferenceDate) private var referenceDate
     @Environment(\.studioModelTitles) private var titles
@@ -283,6 +284,9 @@ struct StudioLibraryPanel: View {
                 .textFieldStyle(.plain)
                 .font(.callout)
                 .foregroundStyle(MereRunTheme.textPrimary)
+                .focused($searchFocused)
+                .studioSearchFocus(.library, focused: $searchFocused)
+                .accessibilityLabel("Search Library")
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
@@ -418,6 +422,19 @@ struct StudioLibraryPanel: View {
         }
         .onKeyPress(.upArrow) { moveSelection(by: -1) }
         .onKeyPress(.downArrow) { moveSelection(by: 1) }
+        // File ▸ Delete from Library… (⌘⌫) reads this only while the list has focus.
+        .focusedValue(\.studioLibraryDeletion, deletion)
+    }
+
+    /// What ⌘⌫ deletes: the batch, else the open row, through the same confirmation as the
+    /// context menu's Delete….
+    private var deletion: StudioLibraryDeletion? {
+        let ids = batch.isEmpty ? Set(selectedID.map { [$0] } ?? []) : batch
+        let visible = Set(filteredItems.map(\.id))
+        guard !ids.isEmpty, ids.isSubset(of: visible) else { return nil }
+        return StudioLibraryDeletion(count: ids.count) {
+            pendingDelete = StudioLibraryDeleteRequest(ids: ids, count: ids.count)
+        }
     }
 
     private func row(for item: StudioLibraryItem) -> some View {

@@ -332,7 +332,7 @@ extension StudioTaskSessions {
     package func taskDraft(for task: StudioTask) -> StudioTaskDraft? {
         let key = Self.taskDraftKey(task)
         if let known = cachedTaskDraft(for: key) { return known }
-        guard let fresh = StudioTaskDraftMigration.imported(for: task, from: self) ?? StudioTaskDraft(task: task) else {
+        guard let fresh = StudioTaskDraftMigration.imported(for: task, from: self) ?? freshTaskDraft(for: task) else {
             return nil
         }
         // Every reader gets this same value until the first edit parks it, so the Command

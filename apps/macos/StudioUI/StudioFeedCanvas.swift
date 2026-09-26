@@ -56,6 +56,8 @@ struct StudioFeedCanvas: View {
     @Binding var newResultID: UUID?
     let actions: StudioFeedActions
     let readinessActions: StudioReadinessActions
+    /// The Library row the page has selected, whose card Space previews.
+    var selectedID: UUID?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visibleCardIDs: Set<UUID> = []
@@ -141,6 +143,10 @@ struct StudioFeedCanvas: View {
                 }
                 .coordinateSpace(name: "feed")
                 .defaultScrollAnchor(.bottom)
+                // Space previews a result the way it does in the Library, once the feed has focus.
+                .focusable()
+                .focusEffectDisabled()
+                .onKeyPress(.space, action: quickLookSelection)
                 .onPreferenceChange(StudioFeedCardFramesKey.self) { frames in
                     let bounds = CGRect(origin: .zero, size: container.size)
                     let visible = Set(frames.filter { $0.value.intersects(bounds) }.map(\.key))
@@ -167,6 +173,16 @@ struct StudioFeedCanvas: View {
             }
             .animation(reduceMotion ? nil : MereRunTheme.Motion.standard, value: pendingNewResultIsOffscreen)
         }
+    }
+
+    /// Space on the focused feed: Quick Look the selected run's result, else the newest one.
+    /// Ignored when no finished card has a file, so the key is never swallowed for nothing.
+    private func quickLookSelection() -> KeyPress.Result {
+        let results = cards.filter { $0.kind == .generation && $0.item.outputURL != nil }
+        guard let card = results.first(where: { $0.item.id == selectedID }) ?? results.last,
+              let url = card.item.outputURL else { return .ignored }
+        QuickLookCoordinator.shared.preview(url)
+        return .handled
     }
 
     @ViewBuilder

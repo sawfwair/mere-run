@@ -6,6 +6,21 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Studio's composer recalls earlier prompts. ↑ on the prompt's first line
+  steps back through the page's prompts from the Library, newest first and each
+  once; ↓ steps forward and back to what was typed. A clock button beside Run
+  lists the recent prompts. A recall is an undo step.
+- Studio has a coherent set of keyboard shortcuts, listed in Help ▸ Keyboard
+  Shortcuts: ⌘L searches the Library, ⌘F searches the current list, ⌘Y and
+  Space Quick Look the selected run, ⌘⌫ deletes the focused Library selection
+  through the usual confirmation and undo, ⌘E shows the inspector, and ⇧⌘L
+  shows the Library column. Show Library and Show Inspector moved from ⌥⌘L and
+  ⌥⌘I to ⇧⌘L and ⌘E.
+- Each Studio inspector can "Save as my defaults" and "Restore app defaults".
+  Saved defaults keep the page's settings, never its inputs, prompt, seed,
+  model, or output paths; fresh drafts and Reset start from them, and a value
+  the current model does not use stays hidden and out of the run. Both are
+  undo steps.
 - Studio's Activity popover is now a run queue: everything running and waiting
   across every page, grouped by lane, with each job's model, status (including
   waiting for a GPU slot or for memory), progress, elapsed time, and time left

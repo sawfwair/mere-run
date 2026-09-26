@@ -37,6 +37,7 @@ struct StudioAdaptersView: View {
     @State private var payload: StudioAdapterCatalogPayload?
     @State private var selectedID: String?
     @State private var searchText = ""
+    @FocusState private var searchFocused: Bool
     @State private var statusMessage = "Loading adapters"
     @State private var isRefreshing = false
     @State private var pullingID: String?
@@ -131,6 +132,8 @@ struct StudioAdaptersView: View {
                     .foregroundStyle(MereRunTheme.textMuted)
                 TextField("Search adapters", text: $searchText)
                     .textFieldStyle(.plain)
+                    .focused($searchFocused)
+                    .studioSearchFocus(.page, focused: $searchFocused)
                 if !searchText.isEmpty {
                     Button {
                         searchText = ""

@@ -309,6 +309,7 @@ private struct StudioWorkspaceView: View {
             .environment(\.studioLibraryLinks, StudioLibraryLinks(
                 library: library, open: selectLibraryItem, removeLink: { library.removeSource($0, from: $1) }))
             .environment(\.studioOutputRouting, outputRouting)
+            .environment(\.studioSearchFocusRequest, navigation.searchFocusRequest)
     }
 
     // MARK: - Shell
@@ -645,7 +646,12 @@ private struct StudioWorkspaceView: View {
                 lastSeed: lastSeed,
                 onShowModels: { navigation.open(task: .modelsInstalled) },
                 onShowAdapters: { navigation.open(task: .modelsAdapters) },
-                onClose: toggleInspector
+                onClose: toggleInspector,
+                pageDefaults: StudioInspectorPageDefaults(
+                    status: prompt.pageDefaultsStatus(for: mode),
+                    save: prompt.savePageDefaults,
+                    restore: prompt.restoreAppDefaults
+                )
             )
         }
     }
@@ -926,7 +932,8 @@ private struct StudioWorkspaceView: View {
                 highlightedID: highlightedCardID,
                 newResultID: $newResultID,
                 actions: feedActions,
-                readinessActions: readinessActions
+                readinessActions: readinessActions,
+                selectedID: navigation.selectedLibraryID
             )
         }
     }
@@ -1090,6 +1097,7 @@ private struct StudioWorkspaceView: View {
             onRun: runStudioCommand,
             onStop: stopModeRun,
             onShowModels: { navigation.open(task: .modelsInstalled) },
+            onRecallPrompt: prompt.recallPrompt,
             showsScopeNote: !showsInspectorColumn && !showsCommandColumn
         )
     }

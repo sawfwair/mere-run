@@ -19,6 +19,7 @@ struct StudioThreadList: View {
     var leadingInset: CGFloat = 0
 
     @State private var searchText = ""
+    @FocusState private var searchFocused: Bool
     @State private var renamingID: UUID?
     @State private var renameText = ""
     /// The thread Delete was chosen on, while its confirmation is up.
@@ -115,6 +116,8 @@ struct StudioThreadList: View {
                 .textFieldStyle(.plain)
                 .font(.callout)
                 .foregroundStyle(MereRunTheme.textPrimary)
+                .focused($searchFocused)
+                .studioSearchFocus(.library, focused: $searchFocused)
             if !searchText.isEmpty {
                 Button {
                     searchText = ""

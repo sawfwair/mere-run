@@ -227,7 +227,8 @@ struct StudioTaskWorkspace: View {
                 highlightedID: highlightedCardID,
                 newResultID: $newResultID,
                 actions: feedActions,
-                readinessActions: readinessActions
+                readinessActions: readinessActions,
+                selectedID: navigation.selectedLibraryID
             )
         }
     }
@@ -247,6 +248,7 @@ struct StudioTaskWorkspace: View {
             onRun: run,
             onStop: { runner?.stop(task: task) },
             onShowModels: { navigation.open(task: .modelsInstalled) },
+            onRecallPrompt: { sessions?.recallPrompt($0, for: task) },
             showsScopeNote: !navigation.showCommandColumn && !(task.showsPromptChrome && navigation.showsInspector(for: task))
         )
     }

@@ -26,12 +26,19 @@ struct StudioTaskInspector: View {
 
     static let width = StudioLayoutPolicy.inspectorWidth
 
-    private var baseline: StudioTaskDraft { StudioTaskDraft(templateID: draft.templateID) }
+    /// Where Reset and the changed count read from: the template's fresh draft with the page's
+    /// saved defaults over it.
+    private var baseline: StudioTaskDraft {
+        sessions?.freshTaskDraft(for: task, templateID: draft.templateID) ?? StudioTaskDraft(templateID: draft.templateID)
+    }
     private var sections: [StudioTaskSection] { StudioTaskSchema.sections(for: task, draft: draft, source: scopeSource) }
     private var advancedFields: [StudioContractField<StudioTaskDraft>] {
         StudioTaskSchema.advanced(for: task, draft: draft, source: scopeSource)
     }
-    private var changedCount: Int { StudioTaskSchema.changedCount(for: task, draft: draft, source: scopeSource) }
+    private var changedCount: Int {
+        StudioTaskSchema.fields(for: task, draft: draft, source: scopeSource)
+            .reduce(0) { $0 + $1.changedCount(draft: draft, baseline: baseline) }
+    }
     private var dependencies: [String: (carries: Bool, dependsOn: String?)] { StudioTaskSchema.dependencies(for: draft) }
 
     var body: some View {
@@ -50,6 +57,13 @@ struct StudioTaskInspector: View {
                     outputSection
                     if !advancedFields.isEmpty {
                         advancedSection
+                    }
+                    if let sessions {
+                        StudioInspectorDefaultsSection(defaults: StudioInspectorPageDefaults(
+                            status: sessions.pageDefaultsStatus(for: task, draft: draft, source: scopeSource),
+                            save: { sessions.savePageDefaults(for: task, draft: draft, source: scopeSource) },
+                            restore: { sessions.restoreAppDefaults(for: task, source: scopeSource) }
+                        ))
                     }
                 }
             }
@@ -89,7 +103,7 @@ struct StudioTaskInspector: View {
                     .frame(width: 22, height: 22)
             }
             .buttonStyle(.mereIcon(tint: MereRunTheme.textMuted))
-            .help("Hide Inspector (⌥⌘I)")
+            .help(StudioKeyboardShortcuts.help("Hide Inspector", .showInspector))
             .accessibilityLabel("Hide Inspector")
         }
         .padding(.horizontal, 16)
