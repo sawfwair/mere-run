@@ -72,6 +72,35 @@ enum StudioVideoPosterLoader {
     }
 }
 
+/// The thumbnail for one file of a run rather than its primary output — the Library input
+/// picker's file rows: the picture, a poster frame, a peak silhouette, or a kind glyph.
+struct StudioFileThumbnail: View {
+    let url: URL
+    let side: CGFloat
+    let fallbackSystemImage: String
+
+    var body: some View {
+        Group {
+            switch StudioOutputFileKind.classify(url) {
+            case .image:
+                StudioAsyncImagePreview(
+                    url: url, maxPixelSize: side * 2, contentMode: .fill, fallbackSystemImage: fallbackSystemImage
+                )
+            case .video:
+                StudioPosterThumbnail(url: url, side: side, fallbackSystemImage: fallbackSystemImage)
+            case .audio:
+                StudioWaveformThumbnail(url: url, side: side)
+            case .text, .model3D, .other:
+                Image(systemName: url.hasDirectoryPath ? "folder" : "doc")
+                    .font(.system(size: max(10, side * 0.4), weight: .medium))
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 /// The thumbnail for one Library row or grid tile.
 struct StudioLibraryThumbnail: View {
     let item: StudioLibraryItem

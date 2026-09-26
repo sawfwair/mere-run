@@ -453,8 +453,7 @@ struct ContractFormPathRow: View {
                     .help(path.isBlank ? label : path)
                 Spacer(minLength: 4)
             }
-            Button(path.isBlank ? "Choose…" : "Change…") { choose() }
-                .buttonStyle(.mereSecondary)
+            StudioAttachButton(target: target, title: path.isBlank ? "Choose…" : "Change…", chooseFromDisk: chooseFromDisk)
                 .accessibilityLabel("Choose \(label.lowercased())")
             if !path.isBlank {
                 Button {
@@ -471,15 +470,34 @@ struct ContractFormPathRow: View {
         .frame(minHeight: 24)
     }
 
-    private func choose() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = allowsMultipleSelection
-        panel.canChooseDirectories = isDirectory
-        panel.canChooseFiles = !isDirectory
-        if !isDirectory { panel.allowedContentTypes = allowedTypes }
-        if panel.runModal() == .OK {
-            path = panel.urls.map(\.path).joined(separator: "\n")
+    private var requirement: StudioAttachmentRequirement {
+        StudioAttachmentRequirement(
+            label: label,
+            acceptedTypes: isDirectory ? [.folder] : allowedTypes,
+            allowsMultiple: allowsMultipleSelection
+        )
+    }
+
+    /// What Choose… takes from the Library: one file, which replaces a single path and joins a
+    /// list, the way a well slot treats it.
+    private var target: StudioAttachTarget {
+        let path = $path
+        let allowsMultiple = allowsMultipleSelection
+        return StudioAttachTarget(requirement: requirement) { urls in
+            let chosen = urls.map(\.path)
+            guard allowsMultiple else {
+                path.wrappedValue = chosen.first ?? path.wrappedValue
+                return
+            }
+            let existing = StudioAttachmentSlot.separatedPaths(path.wrappedValue)
+            path.wrappedValue = (existing + chosen.filter { !existing.contains($0) }).joined(separator: "\n")
         }
+    }
+
+    /// A disk pick replaces the value, as the open panel always has.
+    private func chooseFromDisk() {
+        let urls = StudioAttachmentPicker.chooseFromDisk(for: requirement)
+        if !urls.isEmpty { path = urls.map(\.path).joined(separator: "\n") }
     }
 }
 

@@ -153,7 +153,7 @@ package enum StudioTaskSchema {
         case "--input-list": return [.plainText]
         case "--view", "--second", "--image", "--ref-image": return [.image]
         case "--audio", "--ref-audio", "--source-audio", "--reference-audio", "--driving-audio": return [.audio]
-        case "--video", "--driving-video": return [.movie, .video, .audiovisualContent]
+        case "--video", "--driving-video": return [.movie, .video]
         case "--plan", "--dataset", "--manifest", "--cameras": return [.json]
         default: return [.data]
         }

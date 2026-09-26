@@ -281,7 +281,7 @@ struct StudioConversationView: View {
     @ViewBuilder
     private var content: some View {
         if messages.isEmpty && !isRunning {
-            StudioEmptyState(mode: mode, onUseExample: onUseExample, onAttach: nil)
+            StudioEmptyState(mode: mode, onUseExample: onUseExample)
         } else {
             ScrollViewReader { proxy in
                 GeometryReader { geometry in

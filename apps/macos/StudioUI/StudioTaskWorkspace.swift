@@ -266,7 +266,7 @@ struct StudioTaskWorkspace: View {
                 draft = next
                 promptFocused = true
             },
-            attach: chooseInput,
+            attach: inputTarget,
             focus: focusResult
         )
     }
@@ -284,7 +284,7 @@ struct StudioTaskWorkspace: View {
 
     private var analyzeActions: StudioAnalyzeActions {
         StudioAnalyzeActions(
-            replaceInput: chooseInput,
+            input: inputTarget,
             openTask: { target, _ in navigation.open(destination: target.destination) },
             save: saveAnalyzeResult
         )
@@ -305,12 +305,16 @@ struct StudioTaskWorkspace: View {
         controller.checkReadiness(for: task, requirement: StudioTaskSchema.requirement(for: draft, source: scopeSource))
     }
 
-    private func chooseInput() {
-        guard let slot = StudioTaskSchema.primarySlot(for: draft.templateID) else { return }
-        var next = draft
-        StudioAttachmentPicker.pick(for: slot, into: &next)
-        draft = next
-        error = nil
+    /// The primary slot, for the empty state's Choose… and the Analyze canvas's Replace: a pick
+    /// from disk or the Library lands where the well would put it.
+    private var inputTarget: StudioAttachTarget? {
+        guard let slot = StudioTaskSchema.primarySlot(for: draft.templateID) else { return nil }
+        return StudioAttachTarget(requirement: StudioAttachmentRequirement(slot: slot)) { urls in
+            var next = draft
+            slot.attach(urls, to: &next)
+            draft = next
+            error = nil
+        }
     }
 
     private func useAsInput(_ url: URL) {

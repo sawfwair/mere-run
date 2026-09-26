@@ -1691,7 +1691,7 @@ final class StudioSnapshotTests: XCTestCase {
                 actions: StudioFeedActions(
                     vary: noop, rerun: noop, useAsInput: { _ in }, saveTo: { _ in }, cancel: { _ in },
                     remove: { _ in }, retry: noop, delete: noop, useSettings: noop, pullModel: { _ in },
-                    useExample: { _ in }, attach: {}
+                    useExample: { _ in }, attach: nil
                 ),
                 readinessActions: StudioReadinessActions(
                     scope: StudioModelScope(mode: .createImage, source: .contract), model: .constant("image-zimage-turbo"), modelInventory: inventory,
@@ -1858,6 +1858,78 @@ final class StudioSnapshotTests: XCTestCase {
         }
         try render(.musicTranscribe, name: "music-transcribe-compact-light", appearance: .light,
                    size: CGSize(width: 960, height: 760), inspector: false)
+    }
+
+    /// Library items as inputs. Music ▸ Transcribe empty in the window, with a composed song and a
+    /// four-stem separation in the Library, so its "Choose audio…" and the well's plus open the
+    /// From Disk / From Library menu (light and dark); the From Library picker for that audio
+    /// slot, the stems listed under their run (light and dark); the picker for an image slot over
+    /// a batch of pictures; the picker with nothing to offer; and the attach controls side by
+    /// side with and without Library choices, so the chevron appears only where a menu opens.
+    /// The menu itself is an AppKit window that an offscreen render cannot capture.
+    func testLibraryInputSnapshots() throws {
+        let music = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.musicReadinessResponses)
+        )
+        defer { music.tearDown() }
+        let runs = try music.seedLibraryInputRuns()
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(music.controller)
+                .environmentObject(music.library)
+                .environmentObject(navigation)
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try music.write(view, size: Self.fidelitySize, appearance: appearance,
+                            name: "library-input-transcribe-empty-\(appearance.rawValue)", settle: 2.5,
+                            afterAppear: { navigation.open(task: .musicTranscribe) })
+        }
+
+        let audioSlot = try XCTUnwrap(StudioTaskSchema.primarySlot(for: .musicTranscribe))
+        let imageSlot = StudioMode.findObjects.attachmentSlots[0]
+        let pickerSize = CGSize(width: 400, height: 520)
+        func picker(_ slot: StudioAttachmentSlot, items: [StudioLibraryItem]) -> some View {
+            StudioLibraryInputPicker(
+                requirement: StudioAttachmentRequirement(slot: slot), items: items,
+                onPick: { _ in }, onChooseFromDisk: {}
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(MereRunTheme.surface)
+        }
+        for appearance in StudioSnapshotAppearance.allCases {
+            try music.write(picker(audioSlot, items: runs), size: pickerSize, appearance: appearance,
+                            name: "library-input-picker-audio-\(appearance.rawValue)", settle: 2)
+        }
+        try music.write(picker(imageSlot, items: runs), size: pickerSize, appearance: .light,
+                        name: "library-input-picker-image-light", settle: 2)
+        try music.write(picker(audioSlot, items: runs.filter { $0.mode == .createImage }), size: pickerSize,
+                        appearance: .light, name: "library-input-picker-empty-light", settle: 1)
+
+        var draft = StudioTaskDraft(templateID: .musicTranscribe)
+        func controls(items: [StudioLibraryItem]) -> some View {
+            let target = StudioAttachTarget(requirement: StudioAttachmentRequirement(slot: audioSlot)) { _ in }
+            return VStack(alignment: .leading, spacing: 18) {
+                HStack(spacing: 14) {
+                    StudioAttachmentSlotView(slot: audioSlot, draft: Binding(get: { draft }, set: { draft = $0 }), onPick: {})
+                    StudioAttachButton(target: target, title: "Choose audio…", systemImage: "paperclip", prominence: .primary)
+                    StudioAttachButton(target: target, title: "Replace")
+                }
+                ContractFormPathRow(label: "Reference audio", path: .constant(""), allowedTypes: [.audio])
+                    .frame(width: 320)
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(MereRunTheme.background)
+            .environment(\.studioLibraryItems, items)
+        }
+        for appearance in StudioSnapshotAppearance.allCases {
+            try music.write(controls(items: runs), size: CGSize(width: 480, height: 150), appearance: appearance,
+                            name: "library-input-controls-menu-\(appearance.rawValue)", settle: 1)
+        }
+        try music.write(controls(items: []), size: CGSize(width: 480, height: 150), appearance: .light,
+                        name: "library-input-controls-disk-only-light", settle: 1)
     }
 
     /// The shared task workspace, rendered directly: Audio ▸ Enhance as an Analyze
@@ -5193,5 +5265,80 @@ private struct RegionEditorPreview: View {
                 }
                 .mereMediaFrame()
         }
+    }
+}
+
+// MARK: - Library inputs
+
+private extension SnapshotFixture {
+    /// Finished runs whose files other tasks take, written to disk so the thumbnails draw: a
+    /// composed song, a four-stem separation of it with its JSON manifest, yesterday's narration,
+    /// a batch of three pictures and a single one, and a failed song that is never offered.
+    /// Returns every row, newest first, as the Library holds them.
+    @discardableResult
+    func seedLibraryInputRuns() throws -> [StudioLibraryItem] {
+        let directory = root.appendingPathComponent("library-inputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        func file(_ name: String) -> URL { directory.appendingPathComponent(name, isDirectory: false) }
+
+        let song = file("harbor-at-dawn.wav")
+        try Self.writeSilentWAV(to: song, seconds: 8)
+        let stems = ["vocals", "drums", "bass", "other"].map { file("harbor-at-dawn_\($0).wav") }
+        for (index, stem) in stems.enumerated() {
+            try Self.writeSilentWAV(to: stem, seconds: 3 + index * 2)
+        }
+        let manifest = file("harbor-at-dawn_stems.json")
+        try Data("{\"stems\":4}".utf8).write(to: manifest)
+        let narration = file("welcome.wav")
+        try Self.writeSilentWAV(to: narration, seconds: 5)
+        let mugs = (0..<3).map { file("mugs-\($0 + 1).png") }
+        for (index, mug) in mugs.enumerated() {
+            try Self.writeFixturePNG(to: mug, size: CGSize(width: 512, height: 512), hueOffset: CGFloat(index) * 0.22)
+        }
+        let lighthouse = file("lighthouse.png")
+        try Self.writeFixturePNG(to: lighthouse, size: CGSize(width: 768, height: 512), hueOffset: 0.5)
+
+        let now = StudioSnapshotRenderer.referenceDate
+        func row(
+            _ mode: StudioMode,
+            prompt: String,
+            minutesAgo: Double,
+            outputs: [URL],
+            templateID: CommandTemplateID? = nil,
+            input: URL? = nil,
+            status: StudioLibraryStatus = .completed
+        ) -> StudioLibraryItem {
+            var item = StudioLibraryItem(
+                id: UUID(),
+                mode: mode,
+                prompt: prompt,
+                inputURL: input,
+                outputURL: outputs.first,
+                createdAt: now.addingTimeInterval(-minutesAgo * 60),
+                updatedAt: now.addingTimeInterval(-minutesAgo * 60 + 30),
+                status: status,
+                exitCode: status == .completed ? 0 : 1,
+                commandPreview: "mere.run",
+                outputText: nil
+            )
+            item.templateID = templateID
+            item.artifactURLs = outputs
+            if templateID == .musicSeparate {
+                item.artifactRoles = Dictionary(uniqueKeysWithValues: stems.map { ($0.standardizedFileURL.path, StudioArtifactRole.stem) })
+            }
+            return item
+        }
+
+        let rows = [
+            row(.music, prompt: "", minutesAgo: 4, outputs: stems + [manifest], templateID: .musicSeparate, input: song),
+            row(.music, prompt: "Harbor at dawn, lo-fi with brushed drums and a warm Rhodes", minutesAgo: 12, outputs: [song]),
+            row(.music, prompt: "Storm chorus, too loud", minutesAgo: 20, outputs: [file("storm.wav")], status: .failed),
+            row(.createImage, prompt: "Four ceramic mugs in soft morning light", minutesAgo: 40, outputs: mugs),
+            row(.createImage, prompt: "A lighthouse on a basalt shore at dusk", minutesAgo: 180, outputs: [lighthouse]),
+            row(.speak, prompt: "Welcome aboard. Everything you make here stays on this Mac.", minutesAgo: 60 * 26,
+                outputs: [narration]),
+        ]
+        for item in rows.reversed() { library.upsert(item) }
+        return rows
     }
 }

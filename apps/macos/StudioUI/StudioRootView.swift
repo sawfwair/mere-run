@@ -304,6 +304,7 @@ private struct StudioWorkspaceView: View {
             .environment(\.studioTaskSessions, controller.taskSessions)
             .environment(\.studioTaskRunner, prompt.runner)
             .environment(\.studioTaskScope, destination.task.rawValue)
+            .environment(\.studioLibraryItems, library.items)
     }
 
     // MARK: - Shell
@@ -991,7 +992,7 @@ private struct StudioWorkspaceView: View {
 
     private var analyzeActions: StudioAnalyzeActions {
         StudioAnalyzeActions(
-            replaceInput: chooseAttachment,
+            input: inputAttachTarget,
             openTask: openSiblingTask,
             save: saveAnalyzeResult
         )
@@ -1030,7 +1031,7 @@ private struct StudioWorkspaceView: View {
             useSettings: useLibraryItemSettings,
             pullModel: pullModel,
             useExample: useExamplePrompt,
-            attach: chooseAttachment,
+            attach: inputAttachTarget,
             focus: focusResult
         )
     }
@@ -1902,15 +1903,14 @@ private struct StudioWorkspaceView: View {
 
     // MARK: - Attachments
 
-    private func chooseAttachment() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = mode.acceptedTypes.isEmpty ? [.item] : mode.acceptedTypes
-        if panel.runModal() == .OK, let url = panel.url {
+    /// The mode's input slot, for the empty state's "Choose image…" and the Analyze canvas's
+    /// Replace: a pick from disk or the Library lands where the well would put it.
+    private var inputAttachTarget: StudioAttachTarget? {
+        guard let slot = mode.attachmentSlots(for: draft, source: scopeSource)
+            .first(where: { $0.storage == .path(\.inputPath) }) else { return nil }
+        return StudioAttachTarget(requirement: StudioAttachmentRequirement(slot: slot)) { urls in
             var next = draft
-            next.replaceInput(url.path)
+            slot.attach(urls, to: &next)
             draft = next
             studioError = nil
         }

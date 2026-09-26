@@ -172,12 +172,11 @@ struct StudioInstantMeshCamerasOverride: View {
                 viewRow(index: index, path: path)
             }
             if views.count < 6, let viewSlot {
-                Button {
-                    StudioAttachmentPicker.pick(for: viewSlot, into: &draft)
-                } label: {
-                    Label("Add views…", systemImage: "photo.stack")
-                }
-                .buttonStyle(.mereSecondary)
+                StudioAttachButton(
+                    target: StudioAttachTarget(slot: viewSlot, draft: $draft),
+                    title: "Add views…",
+                    systemImage: "photo.stack"
+                )
                 .controlSize(.small)
             }
         }

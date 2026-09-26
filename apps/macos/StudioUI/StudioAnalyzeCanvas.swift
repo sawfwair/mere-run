@@ -6,8 +6,9 @@ import SwiftUI
 
 /// What the Analyze canvas asks the workspace to do beyond the shared feed actions.
 struct StudioAnalyzeActions {
-    /// Pick a different input; writes the composer's well so the two never disagree.
-    let replaceInput: () -> Void
+    /// The input slot Choose…/Replace fills, from disk or the Library; it writes the composer's
+    /// well so the two never disagree. nil when the task has no file input.
+    let input: StudioAttachTarget?
     /// Continue in a sibling task, carrying this input, prompt, and what the result found on it.
     let openTask: (StudioTask, [StudioAnalyzeDetection]) -> Void
     /// Write part of the result somewhere the user picks.
@@ -176,7 +177,7 @@ struct StudioAnalyzeCanvas: View {
             if hasBody {
                 content
             } else {
-                StudioEmptyState(presentation: presentation, onUseExample: actions.useExample, onAttach: actions.attach)
+                StudioEmptyState(presentation: presentation, onUseExample: actions.useExample, attach: actions.attach)
                     .padding(MereRunTheme.Spacing.xxxl)
             }
         }
@@ -245,9 +246,8 @@ struct StudioAnalyzeCanvas: View {
                 .foregroundStyle(MereRunTheme.textSecondary)
             StudioAnalyzeChip(text: inputDescription)
                 .help(inputURL?.path ?? "No input attached")
-            if inputKind != .text, inputKind != .none {
-                Button(inputURL == nil ? "Choose…" : "Replace", action: analyze.replaceInput)
-                    .buttonStyle(.mereSecondary)
+            if inputKind != .text, inputKind != .none, let input = analyze.input {
+                StudioAttachButton(target: input, title: inputURL == nil ? "Choose…" : "Replace")
                     .help("Pick a different \(inputKind.noun)")
             }
         }

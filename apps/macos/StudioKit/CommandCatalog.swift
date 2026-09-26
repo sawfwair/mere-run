@@ -369,7 +369,7 @@ package enum CommandInputKind: Equatable {
         case .file(let types): return types
         case .image: return [.image]
         case .audio: return [.audio]
-        case .video: return [.movie, .video, .audiovisualContent]
+        case .video: return [.movie, .video]
         }
     }
 }

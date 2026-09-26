@@ -98,6 +98,12 @@ package struct StudioAttachmentSlot: Identifiable, Equatable {
     /// Whether a dropped or pasted file belongs in this slot. A folder slot takes any directory;
     /// a file slot with no declared types takes any file.
     package func accepts(_ url: URL) -> Bool {
+        Self.accepts(url, acceptedTypes: acceptedTypes)
+    }
+
+    /// The rule behind `accepts`, for an entry point that declares types without a slot (a
+    /// contract path row).
+    package static func accepts(_ url: URL, acceptedTypes: [UTType]) -> Bool {
         guard url.isFileURL else { return false }
         if acceptedTypes.contains(.folder) {
             return (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
@@ -231,7 +237,7 @@ extension StudioMode {
         case .track:
             return [
                 StudioAttachmentSlot(
-                    id: "input", label: "Video", acceptedTypes: [.movie, .video, .audiovisualContent],
+                    id: "input", label: "Video", acceptedTypes: [.movie, .video],
                     storage: .path(\.inputPath), isRequired: true
                 ),
             ]
