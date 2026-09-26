@@ -6,6 +6,10 @@ operational integrations and typed workflow-graph nodes, but they run
 out-of-process and speak one fixed protocol. A plugin manifest cannot inject a
 shell command into your workflow bundle.
 
+For complete examples, see [Triage support tickets](./business/customer-support.md)
+with Computer Use and [Search a shared archive](./business/shared-archive.md)
+with Archive Tools.
+
 ## Discover plugins
 
 The CLI reads the public plugin catalog and can return either a human-readable

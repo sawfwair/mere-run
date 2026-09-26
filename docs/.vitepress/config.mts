@@ -54,6 +54,7 @@ export default defineConfig({
       { text: 'Create', link: '/runtime/image' },
       { text: 'Understand', link: '/runtime/vision' },
       { text: 'Automate', link: '/workflows' },
+      { text: 'For business', link: '/business/' },
       { text: 'Serve', link: '/runtime/api-server' },
       { text: 'Reference', link: '/cli' }
     ],
@@ -67,6 +68,15 @@ export default defineConfig({
           { text: 'Linux quickstart', link: '/linux-quickstart' },
           { text: 'CLI reference', link: '/cli' },
           { text: 'Offline cookbooks', link: '/cookbooks' },
+        ]
+      },
+      {
+        text: 'For business',
+        items: [
+          { text: 'Business use cases', link: '/business/' },
+          { text: 'Triage support tickets', link: '/business/customer-support' },
+          { text: 'Adapt a support workflow', link: '/business/adapt-support-workflow' },
+          { text: 'Search a shared archive', link: '/business/shared-archive' }
         ]
       },
       {
