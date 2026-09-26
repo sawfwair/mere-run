@@ -6,6 +6,23 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.57.0 - 2026-09-25
+
+- Add native GLiNER2.5 Decide extraction through `text extract`, batch and
+  long-document inference, `POST /v1/text/extractions`, and Studio's Text >
+  Extract page. The pinned English 340M checkpoint supports entities, relation
+  pairs, structured records, and classification in one encoder pass. Real
+  checkpoint checks cover schema combinations, batch order, and document
+  offsets; broader extraction quality and the separate 1B and multilingual
+  checkpoints remain unqualified.
+- Add `gate --all-installed --only-model` for targeted installed-checkpoint
+  reruns while retaining fail-closed full-catalog coverage. Run the high-memory
+  DeepSeek V4 Flash check last, await its sidecar, and require its benchmark
+  response to pass semantic checks. A local real-checkpoint targeted run passed;
+  packaged-candidate evidence belongs to this release.
+- Avoid repeating the full macOS, Linux, and iOS CI matrix after a merge-queue
+  commit has passed the required checks. CLI-only changes still run macOS and
+  Linux checks but do not build the unchanged iOS client.
 - `speech transcribe --task translate` now translates. It always ran
   Qwen3-ASR, but the task never reached the prompt, so it returned a
   transcript in the spoken language. The prompt now asks Qwen3-ASR for an
