@@ -43,7 +43,15 @@ struct StudioLibraryPanel: View {
     @State private var batch: Set<UUID> = []
     @State private var anchorID: UUID?
     @State private var pendingDelete: StudioLibraryDeleteRequest?
+    @State private var showsFilters = false
+    @State private var collectionPrompt: StudioCollectionNamePrompt?
+    /// The collection, model, and task filters, per window beside the kind and favorites ones.
+    /// Empty means no filter.
+    @SceneStorage("studio.libraryCollection") private var storedCollectionID = ""
+    @SceneStorage("studio.libraryModel") private var storedModelID = ""
+    @SceneStorage("studio.libraryTask") private var storedTask = ""
     @FocusState private var renameFocused: Bool
+    @EnvironmentObject private var library: StudioLibraryStore
     @Environment(\.studioLibrarySeed) private var seed
     @Environment(\.studioReferenceDate) private var referenceDate
     @Environment(\.studioModelTitles) private var titles
@@ -63,8 +71,55 @@ struct StudioLibraryPanel: View {
             domain: domain,
             kind: kind,
             favoritesOnly: favoritesOnly,
-            query: searchText
+            query: searchText,
+            collection: selectedCollection,
+            modelID: modelFilter.wrappedValue,
+            task: taskFilter.wrappedValue
         )
+    }
+
+    private var selectedCollection: StudioLibraryCollection? {
+        let id = seed?.collectionID ?? UUID(uuidString: storedCollectionID)
+        return library.collections.first { $0.id == id }
+    }
+
+    private var collectionFilter: Binding<UUID?> {
+        Binding(
+            get: { selectedCollection?.id },
+            set: { storedCollectionID = $0?.uuidString ?? "" }
+        )
+    }
+
+    private var modelFilter: Binding<String?> {
+        Binding(
+            get: { seed?.modelID ?? (storedModelID.isEmpty ? nil : storedModelID) },
+            set: { storedModelID = $0 ?? "" }
+        )
+    }
+
+    private var taskFilter: Binding<StudioTask?> {
+        Binding(
+            get: { seed?.task ?? StudioTask(rawValue: storedTask) },
+            set: { storedTask = $0?.rawValue ?? "" }
+        )
+    }
+
+    /// The tasks and models the filter offers: what the rows in scope hold, plus the current
+    /// choice when no row in scope holds it any more, so it can still be seen and cleared.
+    private var taskOptions: [StudioLibraryFilterOption<StudioTask>] {
+        var options = StudioLibraryPresenter.taskOptions(in: scopedItems, scope: effectiveScope)
+        if let task = taskFilter.wrappedValue, !options.contains(where: { $0.value == task }) {
+            options.append(StudioLibraryFilterOption(value: task, title: task.title))
+        }
+        return options
+    }
+
+    private var modelOptions: [StudioLibraryFilterOption<String>] {
+        var options = StudioLibraryPresenter.modelOptions(in: scopedItems, titles: titles)
+        if let modelID = modelFilter.wrappedValue, !options.contains(where: { $0.value == modelID }) {
+            options.append(StudioLibraryFilterOption(value: modelID, title: StudioModelNaming.displayName(modelID, titles: titles)))
+        }
+        return options
     }
 
     private var scopedItems: [StudioLibraryItem] {
@@ -111,6 +166,17 @@ struct StudioLibraryPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             searchRow
+            if !library.collections.isEmpty {
+                StudioLibraryCollectionChips(
+                    collections: library.collections,
+                    memberCount: library.memberCount,
+                    selectedID: collectionFilter,
+                    onNew: { collectionPrompt = .create(itemIDs: []) },
+                    onRename: { collectionPrompt = .rename($0) },
+                    onDelete: { library.deleteCollection(id: $0.id) },
+                    onDrop: addDroppedFiles
+                )
+            }
 
             if filteredItems.isEmpty {
                 emptyState
@@ -140,6 +206,7 @@ struct StudioLibraryPanel: View {
         } message: {
             Text("Deleting removes the run from the Library. Its files stay on disk unless you move them to the Trash.")
         }
+        .studioCollectionNamePrompt($collectionPrompt, library: library)
         .onAppear(perform: applyBatchSeed)
         .onChange(of: selectedID) { _, newValue in
             // A programmatic selection (a run finishing, a deep link) replaces the batch, so the
@@ -239,29 +306,41 @@ struct StudioLibraryPanel: View {
         }
     }
 
-    private var isFiltering: Bool { kind != .all || favoritesOnly }
+    private var isFiltering: Bool {
+        kind != .all || favoritesOnly || modelFilter.wrappedValue != nil || taskFilter.wrappedValue != nil
+    }
 
     private var filterMenu: some View {
-        Menu {
-            Picker("Kind", selection: $kind) {
-                ForEach(StudioLibraryKind.allCases) { option in
-                    Label(option.title, systemImage: option.systemImage).tag(option)
-                }
-            }
-            .pickerStyle(.inline)
-            Divider()
-            Toggle("Favorites only", isOn: $favoritesOnly)
+        Button {
+            showsFilters.toggle()
         } label: {
             Image(systemName: isFiltering ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                 .font(.callout.weight(.medium))
+                .frame(width: 22, height: 24)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .frame(width: 22, height: 24)
-        .foregroundStyle(isFiltering ? MereRunTheme.accent : MereRunTheme.textMuted)
-        .help("Filter the Library by kind or favorites")
+        .buttonStyle(.mereIcon(tint: isFiltering ? MereRunTheme.accent : MereRunTheme.textMuted))
+        .popover(isPresented: $showsFilters, arrowEdge: .bottom) {
+            StudioLibraryFilterPanel(
+                kind: $kind,
+                favoritesOnly: $favoritesOnly,
+                task: taskFilter,
+                modelID: modelFilter,
+                taskOptions: taskOptions,
+                modelOptions: modelOptions
+            )
+        }
+        .help("Filter the Library by kind, task, model, or favorites")
         .accessibilityLabel("Filter")
-        .accessibilityValue(favoritesOnly ? "\(kind.title), favorites only" : kind.title)
+        .accessibilityValue(filterSummary)
+    }
+
+    /// What the filter is set to, for VoiceOver: "Images, Generate, Z-Image Nano, favorites only".
+    private var filterSummary: String {
+        var parts = [kind.title]
+        if let task = taskFilter.wrappedValue { parts.append(task.title) }
+        if let modelID = modelFilter.wrappedValue { parts.append(StudioModelNaming.displayName(modelID, titles: titles)) }
+        if favoritesOnly { parts.append("favorites only") }
+        return parts.joined(separator: ", ")
     }
 
     private var viewModeButton: some View {
@@ -294,7 +373,13 @@ struct StudioLibraryPanel: View {
     private var emptyMessage: String {
         if items.isEmpty { return "Runs you create will land here." }
         if scopedItems.isEmpty { return "No \(domain.title) runs yet. Choose All to see every run." }
+        if let selectedCollection, !scopedItems.contains(where: { selectedCollection.contains($0.id) }) {
+            return "Nothing in \(selectedCollection.name) here yet. Drag a run onto it, or use Add to collection."
+        }
         if favoritesOnly { return "No favorites here yet. Star a run to keep it close." }
+        if modelFilter.wrappedValue != nil || taskFilter.wrappedValue != nil {
+            return "No runs match these filters. Clear them to see every run."
+        }
         if kind != .all { return "No \(kind.title.lowercased()) here. Choose All kinds to see every run." }
         return "No matching runs."
     }
@@ -384,6 +469,8 @@ struct StudioLibraryPanel: View {
             Button("Save \(batch.count) to…") { onExport(items(in: batch)) }
             StudioShareMenuItem(urls: urls(in: batch))
             Divider()
+            collectionItems(for: batchIDs)
+            Divider()
             Button("Delete \(batch.count)…", role: .destructive) {
                 pendingDelete = StudioLibraryDeleteRequest(ids: batch, count: batch.count)
             }
@@ -399,6 +486,7 @@ struct StudioLibraryPanel: View {
             Button(item.isStarred ? "Remove from Favorites" : "Add to Favorites") {
                 onToggleFavorite(item.id)
             }
+            collectionItems(for: [item.id])
             if item.commandDraft != nil, item.templateID != nil {
                 Divider()
                 if StudioLibraryDraftRestoration.canRestore(item) {
@@ -435,6 +523,23 @@ struct StudioLibraryPanel: View {
                 onExport(items(in: batch))
             }
             .disabled(urls(in: batch).isEmpty)
+            Menu {
+                StudioCollectionMenuItems(
+                    itemIDs: batchIDs,
+                    collections: library.collections,
+                    onToggle: { library.toggleMembership(collectionID: $0.id, itemIDs: batchIDs) },
+                    onNew: { collectionPrompt = .create(itemIDs: batchIDs) }
+                )
+            } label: {
+                Image(systemName: "rectangle.stack.badge.plus")
+                    .font(.callout.weight(.medium))
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .frame(width: 26, height: 24)
+            .foregroundStyle(MereRunTheme.textSecondary)
+            .help("Add to collection")
+            .accessibilityLabel("Add \(batch.count) runs to a collection")
             batchAction(systemImage: "trash", label: "Delete \(batch.count) runs", tint: MereRunTheme.red) {
                 pendingDelete = StudioLibraryDeleteRequest(ids: batch, count: batch.count)
             }
@@ -461,6 +566,37 @@ struct StudioLibraryPanel: View {
         .buttonStyle(.mereIcon(tint: tint))
         .help(label)
         .accessibilityLabel(label)
+    }
+
+    // MARK: - Collections
+
+    /// A row's or a batch's collection items: Add to collection, and Remove from the collection
+    /// the column is showing.
+    @ViewBuilder
+    private func collectionItems(for ids: [UUID]) -> some View {
+        StudioAddToCollectionMenu(
+            itemIDs: ids,
+            collections: library.collections,
+            onToggle: { library.toggleMembership(collectionID: $0.id, itemIDs: ids) },
+            onNew: { collectionPrompt = .create(itemIDs: ids) }
+        )
+        if let selectedCollection, ids.contains(where: selectedCollection.contains) {
+            Button("Remove from \(selectedCollection.name)") {
+                library.removeFromCollection(id: selectedCollection.id, itemIDs: ids)
+            }
+        }
+    }
+
+    /// The batch in the column's order, so a collection lists its runs the way they were seen.
+    private var batchIDs: [UUID] {
+        filteredItems.map(\.id).filter(batch.contains)
+    }
+
+    private func addDroppedFiles(_ collection: StudioLibraryCollection, _ urls: [URL]) -> Bool {
+        let ids = library.itemIDs(producing: urls)
+        guard !ids.isEmpty else { return false }
+        library.addToCollection(id: collection.id, itemIDs: ids)
+        return true
     }
 
     // MARK: - Selection
@@ -555,6 +691,10 @@ struct StudioLibrarySeed: Equatable {
     var scope: StudioLibraryScope?
     /// How many of the visible rows start out selected together.
     var batchCount: Int?
+    /// The collection, model, and task the column starts filtered to.
+    var collectionID: UUID?
+    var modelID: String?
+    var task: StudioTask?
 }
 
 private struct StudioLibrarySeedKey: EnvironmentKey {

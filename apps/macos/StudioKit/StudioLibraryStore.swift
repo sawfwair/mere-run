@@ -3,16 +3,23 @@ import Foundation
 
 @MainActor
 package final class StudioLibraryStore: ObservableObject {
-    @Published package private(set) var items: [StudioLibraryItem] = []
+    @Published package private(set) var items: [StudioLibraryItem] = [] {
+        didSet { lineageCache = nil }
+    }
+    /// The user's collections, kept in `collections.json` beside the library
+    /// (`StudioLibraryCollections.swift`).
+    @Published package internal(set) var collections: [StudioLibraryCollection] = []
     /// Last persistence failure, surfaced non-blockingly so silent history loss is detectable.
-    @Published package private(set) var lastPersistenceError: String?
+    @Published package internal(set) var lastPersistenceError: String?
     /// Rows in the library file this build cannot read: written by a different version, or
     /// holding a field of an unexpected type. They ride through every save untouched and are
     /// counted here so the UI can say history exists that is not shown.
     @Published package private(set) var preservedRowCount = 0
 
     package let libraryURL: URL
-    private let fileManager: FileManager
+    let fileManager: FileManager
+    /// `lineage`, built lazily and dropped whenever the rows change.
+    var lineageCache: StudioLibraryLineage?
     private weak var observedController: MereRunController?
     private var subscriptions = Set<AnyCancellable>()
     private var completedRequests = Set<UUID>()
@@ -35,6 +42,7 @@ package final class StudioLibraryStore: ObservableObject {
         self.fileManager = fileManager
         self.trashItem = trashItem
         load()
+        loadCollections()
     }
 
     /// What the UI shows when the file holds rows this build cannot read.
@@ -200,6 +208,8 @@ package final class StudioLibraryStore: ObservableObject {
             parentID: request.parentID
         )
         item.inputIdentity = item.inputURL.flatMap(StudioInputIdentity.read)
+        let sources = StudioLibraryLineage.sources(for: item, in: items)
+        item.sourceItemIDs = sources.isEmpty ? nil : sources
         upsert(item)
         return item
     }
@@ -664,7 +674,7 @@ package final class StudioLibraryStore: ObservableObject {
         try? fileManager.moveItem(at: libraryURL, to: Self.siblingURL(of: libraryURL, tag: "corrupt"))
     }
 
-    private static func siblingURL(of libraryURL: URL, tag: String) -> URL {
+    static func siblingURL(of libraryURL: URL, tag: String) -> URL {
         libraryURL
             .deletingPathExtension()
             .appendingPathExtension("\(tag)-\(DateFormatter.mereRunTimestamp.string(from: Date()))")

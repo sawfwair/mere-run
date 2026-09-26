@@ -34,6 +34,17 @@ The format is based on Keep a Changelog.
   ⌘V in the composer, a well, or the canvas attaches copied files, screenshots,
   and copied audio through the same path as a drop. Pasted pictures and sounds
   are written under Application Support, and text still pastes as text.
+- Studio's Library has collections: named sets of runs, shown as chips under
+  the search field that filter the column. Runs join from their context menu's
+  Add to collection, from a multi-selection, or by being dragged onto a chip. A
+  run can be in several collections, and deleting a collection keeps its runs.
+  The filter beside the search field also narrows by task and by model. Runs
+  record the Library items their inputs came from: a run's detail and a focused
+  result show Made from and Used in links that open those runs, and feed cards
+  show a one-line lineage. Links for older runs are inferred from their input
+  paths. Collection and link edits undo. Collections live in `collections.json`
+  beside `library.json`, which only gains an optional `sourceItemIDs` field, so
+  earlier builds still read the Library.
 
 ## 0.58.0 - 2026-09-26
 

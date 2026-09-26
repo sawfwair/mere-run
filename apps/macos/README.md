@@ -113,6 +113,8 @@ surface for is still reachable the day the contract declares it.
   `ProcessRunner`, and the read-only `StudioJobMonitor`.
 - `StudioKit/MereRunController.swift`: the facade views bind to.
 - `StudioKit/StudioLibraryStore.swift`: local library persistence.
+- `StudioKit/StudioLibraryCollections.swift` and `StudioKit/StudioLibraryLineage.swift`:
+  Library collections and the Made from / Used in index.
 - `StudioKit/StudioUndo.swift`, `StudioKit/StudioDraftUndo.swift`, and
   `StudioKit/StudioTaskSessions+Undo.swift`: undo registration, draft change
   names and patches, and the session-side steps. `StudioUI/StudioUndoBinding.swift`
@@ -288,8 +290,8 @@ under its command's domain (`CommandTemplateID.studioDomain`), so 3D meshes land
 under 3D and benchmark reports under Models — and picking a row from another
 domain switches the destination to it.
 
-Beside the search field are a kind filter (All / Images / Video / Audio / Text,
-plus "Favorites only") and a list-or-grid toggle; grid is three thumbnails
+Beside the search field are a filter (kind, task, model, and "Favorites only";
+see below) and a list-or-grid toggle; grid is three thumbnails
 across with the title on hover. Thumbnails are the real thing per kind — the
 picture, an `AVAssetImageGenerator` poster frame for video, a peak silhouette
 for audio, the first line for a text result — decoded off the main actor and
@@ -311,6 +313,57 @@ Filtering and day-grouping live in `StudioLibraryPresenter`, so both are
 testable without a view. The view mode, kind, and favorites filter persist per
 window under `studio.libraryView`, `studio.libraryKind`, and
 `studio.libraryFavorites`.
+
+The filter button opens a popover (`StudioUI/StudioLibraryFilterPanel.swift`)
+with the kind, a **Task** menu, a **Model** menu, and Favorites only. The task
+and model menus list only what the rows in scope hold ("Video · Generate" under
+All tasks), and Clear resets all four. The task and model choices persist per
+window under `studio.libraryTask` and `studio.libraryModel`.
+
+### Collections
+
+A collection is a named set of Library runs. Collections show as chips under
+the search field once the first one exists
+(`StudioUI/StudioLibraryCollectionsBar.swift`); a chip shows its run count,
+a click filters the column to it (a second click shows everything again), and
+its context menu has Rename… and Delete collection. The chosen collection
+persists per window under `studio.libraryCollection`, and it narrows the
+column the way Favorites only does, inside the current scope.
+
+A row's context menu, a multi-selection's menu, and the batch bar offer **Add
+to collection**: each collection with a check mark when the runs are already
+in it (choosing it again takes them out), then New collection…, which asks for
+a name and adds the runs to it. Dragging a row onto a chip adds that run.
+While a collection is chosen, the menu also offers Remove from it. A run can
+be in several collections. Deleting a collection keeps its runs, and deleting
+a run leaves its collections, then returns to them on Undo.
+
+Collections live in `collections.json` beside `library.json`, as a versioned
+object that lists each collection's runs. `library.json` stays the array
+every earlier build reads. A `collections.json` this build cannot read is moved
+aside as `collections.corrupt-<time>.json` rather than overwritten.
+
+### Made from and Used in
+
+A run records the Library runs whose output files it read as inputs
+(`StudioLibraryItem.sourceItemIDs`, an additive optional written only when
+there is one). From Library…, Send to, a drag, and a typed path all leave the
+file's path in the run's command, so one match covers them all:
+`StudioLibraryLineage` reads the recorded input and every positional argument
+and option the command's contract declares as an input file, never an output
+destination, and matches each against earlier runs' artifacts. Runs from
+before this have nothing recorded, and their links are inferred the same way
+the first time the index is read after the Library changes. Nothing inferred
+is written back.
+
+A run's detail (`StudioRunDetailView`) and a focused result show **Made from**
+and **Used in**, each linked run as a link that opens it the way picking its
+Library row does. A Made from link's context menu has **Remove link**. Removing
+an inferred link writes the run's remaining sources down, so an empty list is
+kept and the link does not come back. Feed cards show a one-line lineage under
+their settings: "From <run>" and "Used in <run>" or "Used in N runs". The window
+root hands the index and the navigation to every result surface as
+`studioLibraryLinks`.
 
 A row's context menu offers **Use these settings** (also on a finished card's
 icon row and beside Retry on a failed card): the run's task opens with its
@@ -346,11 +399,12 @@ Library rows. StudioKit holds a `StudioUndo` per store; the window hands it the
 manager while it is key (`StudioUndoBinding`), and with none nothing is
 registered.
 
-- **Library.** Delete (a run, a batch, or a chat thread), rename, and Add to or
-  Remove from Favorites. A deletion is written at once. When the user chose to
-  move the files, they go to the macOS Trash (`FileManager.trashItem`) and Undo
-  moves them back from where the Trash put them, then returns the rows to their
-  places. Nothing waits in an app-owned holding area, so there is nothing to
+- **Library.** Delete (a run, a batch, or a chat thread), rename, Add to or
+  Remove from Favorites, every collection edit (New, Rename, and Delete
+  Collection, Add to and Remove from Collection), and Remove Link. A deletion
+  is written at once. When the user chose to move the files, they go to the
+  macOS Trash (`FileManager.trashItem`) and Undo moves them back from where
+  the Trash put them, then returns the rows to their places. Nothing waits in an app-owned holding area, so there is nothing to
   purge and a deletion that is never undone is exactly the one the user asked
   for; a file emptied from the Trash since stays gone and its row comes back
   pointing at it. Removing a thread the app emptied itself (taking back its only

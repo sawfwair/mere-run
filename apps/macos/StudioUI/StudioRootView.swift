@@ -306,6 +306,8 @@ private struct StudioWorkspaceView: View {
             .environment(\.studioTaskRunner, prompt.runner)
             .environment(\.studioTaskScope, destination.task.rawValue)
             .environment(\.studioLibraryItems, library.items)
+            .environment(\.studioLibraryLinks, StudioLibraryLinks(
+                library: library, open: selectLibraryItem, removeLink: { library.removeSource($0, from: $1) }))
             .environment(\.studioOutputRouting, outputRouting)
     }
 

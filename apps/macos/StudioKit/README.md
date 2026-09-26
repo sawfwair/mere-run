@@ -50,7 +50,10 @@ well slots, chips, and inspector sections from the template's contract.
 `MereRunController` owns CLI configuration and submission. `JobStore` owns jobs,
 queues, cancellation, and completion. `StudioLibraryStore` records history and
 artifacts independently of window lifetime. Historical replay uses recorded
-arguments rather than the active task's command overrides.
+arguments rather than the active task's command overrides. It also keeps the
+user's collections in `collections.json` beside the library, and records
+which Library rows a run read as inputs; `StudioLibraryLineage` turns those
+records, or a legacy row's input paths, into Made from and Used in links.
 
 The native process runner observes process exit and drains both output streams,
 then reports completion after the final decoding callbacks.

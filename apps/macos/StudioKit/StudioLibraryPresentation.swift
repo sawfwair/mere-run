@@ -74,19 +74,31 @@ package struct StudioLibraryFilter: Equatable {
     package var kind: StudioLibraryKind = .all
     package var favoritesOnly = false
     package var query = ""
+    /// Only the rows in this collection.
+    package var collection: StudioLibraryCollection?
+    /// Only the rows that ran this model (`StudioLibraryItem.recordedModelID`).
+    package var modelID: String?
+    /// Only the rows this task made (`StudioLibraryItem.task`).
+    package var task: StudioTask?
 
     package init(
         scope: StudioLibraryScope = .domain,
         domain: StudioDomain = .image,
         kind: StudioLibraryKind = .all,
         favoritesOnly: Bool = false,
-        query: String = ""
+        query: String = "",
+        collection: StudioLibraryCollection? = nil,
+        modelID: String? = nil,
+        task: StudioTask? = nil
     ) {
         self.scope = scope
         self.domain = domain
         self.kind = kind
         self.favoritesOnly = favoritesOnly
         self.query = query
+        self.collection = collection
+        self.modelID = modelID
+        self.task = task
     }
 }
 
@@ -113,6 +125,9 @@ package enum StudioLibraryPresenter {
         return items.filter { item in
             if filter.scope == .domain, item.domain != filter.domain { return false }
             if filter.favoritesOnly, !item.isStarred { return false }
+            if let collection = filter.collection, !collection.contains(item.id) { return false }
+            if let modelID = filter.modelID, item.recordedModelID != modelID { return false }
+            if let task = filter.task, item.task != task { return false }
             let hasText = item.outputText?.isBlank == false
             if !filter.kind.matches(fileKind: fileKind(of: item), hasText: hasText) { return false }
             guard !query.isEmpty else { return true }
@@ -134,6 +149,24 @@ package enum StudioLibraryPresenter {
         guard let modelID = item.recordedModelID else { return false }
         return modelID.lowercased().contains(query)
             || StudioModelNaming.displayName(modelID, titles: titles).lowercased().contains(query)
+    }
+
+    /// The models the filter menu offers: every model a row in `items` ran, named the way the
+    /// app shows it, in alphabetical order of that name.
+    package static func modelOptions(in items: [StudioLibraryItem], titles: StudioModelTitles) -> [StudioLibraryFilterOption<String>] {
+        let ids = Set(items.compactMap(\.recordedModelID))
+        return ids.map { StudioLibraryFilterOption(value: $0, title: StudioModelNaming.displayName($0, titles: titles)) }
+            .sorted { ($0.title.localizedLowercase, $0.value) < ($1.title.localizedLowercase, $1.value) }
+    }
+
+    /// The tasks the filter menu offers: every task a row in `items` came from, in sidebar order.
+    /// Under All tasks each is named with its domain ("Video · Generate"), since several domains
+    /// have a Generate.
+    package static func taskOptions(in items: [StudioLibraryItem], scope: StudioLibraryScope) -> [StudioLibraryFilterOption<StudioTask>] {
+        let tasks = Set(items.map(\.task))
+        return StudioTask.allCases.filter(tasks.contains).map { task in
+            StudioLibraryFilterOption(value: task, title: scope == .all ? "\(task.domain.title) · \(task.title)" : task.title)
+        }
     }
 
     /// The rows the column shows before the kind, favorites, and search filters narrow them — the
@@ -208,4 +241,25 @@ package enum StudioLibraryScope: String, CaseIterable, Identifiable {
     case all
 
     package var id: String { rawValue }
+}
+
+/// One choice in the Library's task or model filter: the value it filters by and its label.
+package struct StudioLibraryFilterOption<Value: Hashable>: Hashable, Identifiable {
+    package let value: Value
+    package let title: String
+
+    package init(value: Value, title: String) {
+        self.value = value
+        self.title = title
+    }
+
+    package var id: Value { value }
+}
+
+extension StudioLibraryItem {
+    /// The task a row is filed under: its command's task when it records one, otherwise the
+    /// task of the mode that created it.
+    package var task: StudioTask {
+        templateID?.studioTask ?? mode.task
+    }
 }

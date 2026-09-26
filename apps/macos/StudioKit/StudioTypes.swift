@@ -1148,6 +1148,11 @@ package struct StudioLibraryItem: Codable, Identifiable, Equatable {
     /// The original result from which this request was derived.
     package var parentID: UUID? = nil
     package var inputIdentity: StudioInputIdentity? = nil
+    /// The Library rows whose output files this run read as inputs, recorded when it was
+    /// submitted (see `StudioLibraryLineage`). Optional and additive: nil means nothing was
+    /// recorded, so the links are inferred from the run's input paths; an empty list means the
+    /// user removed every link.
+    package var sourceItemIDs: [UUID]? = nil
 
     package var isStarred: Bool { isFavorite == true }
 

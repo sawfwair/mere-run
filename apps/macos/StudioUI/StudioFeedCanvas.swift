@@ -289,6 +289,7 @@ private struct StudioCardHeader: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Settings: \(chips.joined(separator: ", "))")
             }
+            StudioLineageBreadcrumb(item: item)
         }
     }
 }
