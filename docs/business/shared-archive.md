@@ -1,31 +1,23 @@
-# Search a shared archive
+# Search your document archive
 
-Use Archive Tools to make a local, searchable index of mixed documents and
-images. The plugin reads source files without changing them. Start with its
-fictional Harbourline Operations fixture, then apply the same steps to a
-shared drive your team is allowed to index.
+This guide is for a team with a mounted document folder that its operator may
+read and index. Archive Tools creates a local SQLite index of documents and
+images without changing the source files. You can search that index and
+investigate questions that need evidence from several files.
 
-## See the Harbourline example
+Choose a folder that contains work your team needs to search. Start with a
+small, approved part of the archive. Keep the database and run records outside
+the source folder. The plugin does not copy the source drive's access rules to
+the index, so protect the index under your organization's access and retention
+policy.
 
-Harbourline is a fictional regional cold-storage company. Its sample archive
-has 58 files across maintenance, safety, procurement, compliance, finance, and
-capital planning. One question asks whether a Freezer 3 repair was covered by
-warranty and when the warranty expires. A useful answer needs a repair record,
-an invoice, and a vendor agreement. If the records do not establish whether
-the charge was reimbursed, the answer must say that this part is unresolved.
+## Install Archive Tools
 
-Archive Tools converts files locally, reduces personally identifiable
-information (PII) before embedding text, and stores a SQLite index. Its
-bounded investigator can search that index and return source-linked claims.
-A citation shows which file was retrieved; a person still checks whether the
-file supports the claim.
-
-## Install and check readiness
-
-Install `mere.run` on an Apple Silicon Mac, then inspect your model capacity.
-Archive Tools needs the local anonymization, embedding, captioning, and OCR
-commands. Indexing images can download the default caption model on first use,
-so complete a connected first run before trying to index offline.
+On an Apple Silicon Mac, install `mere.run` and check model capacity. Archive
+Tools uses local text anonymization, image embedding, optical character
+recognition (OCR), and image captioning. The first caption can download its
+default checkpoint, so complete the first index while connected to the
+network.
 
 ```bash
 mere.run model capabilities
@@ -36,116 +28,105 @@ mere.run plugin install mere-archive-tools --yes
 mere-archive-tools doctor
 ```
 
-`doctor` checks the installed command surface, document conversion, and
-SQLite full-text search. It does not index your files. The first image caption
-can download `mlx-community/Qwen3-VL-2B-Instruct-4bit` unless that checkpoint
-is already cached. For model installation and storage, see
+The `doctor` command checks command availability, document conversion, and
+SQLite full-text search. It does not confirm that every model is installed or
+index a file. For model storage, see
 [Model management](../runtime/model-management.md).
 
-## Generate and index fictional files
+## Index an approved folder
 
-Create the Harbourline fixture on your machine. The command writes a source
-folder and `benchmark.json` manifest under `./harbourline-demo`:
-
-```bash
-mere-archive-tools benchmark prepare \
-  --dataset harbourline-operations-archive \
-  --output-dir ./harbourline-demo
-```
-
-Create a reduced-content index. Keep the database and run directory outside
-the generated source folder:
+In the following commands, replace `/Volumes/Shared/APPROVED_FOLDER` with the
+mounted folder that your operator may index. Choose a work directory outside
+that folder. The `umask` setting limits access to newly created local files:
 
 ```bash
+ARCHIVE_SOURCE="/Volumes/Shared/APPROVED_FOLDER"
+ARCHIVE_WORK_DIR="$HOME/mere-run-archive"
+umask 077
+mkdir -p "$ARCHIVE_WORK_DIR"
+chmod 700 "$ARCHIVE_WORK_DIR"
 mere-archive-tools index \
-  --source ./harbourline-demo/source \
-  --database ./harbourline.sqlite3 \
-  --output-dir ./harbourline-index-run \
+  --source "$ARCHIVE_SOURCE" \
+  --database "$ARCHIVE_WORK_DIR/archive.sqlite3" \
+  --output-dir "$ARCHIVE_WORK_DIR/first-run" \
   --storage-tier safe-content
 ```
 
-The `safe-content` tier retains short reduced summaries, keywords, and
-embeddings. It does not retain the complete extracted body. The index command
-records per-file errors and a durable `run.json` file. Review coverage before
-you treat search results as complete:
+The `safe-content` tier stores short, reduced summaries, keywords, and
+embeddings—numeric representations used for similarity search. It does not
+store the complete extracted document body. It still
+retains file paths and derived information that may be sensitive. The plugin
+reduces personally identifiable information (PII) before embedding text, but
+that reduction cannot guarantee that every sensitive value is removed.
+
+To check coverage and file errors, inspect the index statistics and run
+record:
 
 ```bash
-mere-archive-tools stats --database ./harbourline.sqlite3
-mere-archive-tools benchmark evaluate \
-  ./harbourline-demo/benchmark.json \
-  --database ./harbourline.sqlite3 \
-  --output ./harbourline-evaluation.json
+mere-archive-tools stats --database "$ARCHIVE_WORK_DIR/archive.sqlite3"
+cat "$ARCHIVE_WORK_DIR/first-run/run.json"
 ```
 
-The evaluation checks source custody, retention, PII canaries, and retrieval
-against 30 fixture questions. Review the report's file errors and retrieval
-metrics. Its canary test checks exact fictional values; it does not prove that
-all sensitive information is absent.
+Resolve file errors before treating search results as complete. The plugin
+supports common text, Office, PDF, and image files. It rejects hosted OCR
+during document conversion, so a scanned PDF may appear as a file error. For
+source formats and storage tiers, see the
+[Archive Tools plugin guide](https://github.com/sawfwair/mere-run-plugins/blob/main/docs/plugins/archive-tools.md).
 
-## Search and investigate
+## Search and check the source
 
-Search for the repair before using an agent. The result identifies source
-paths and whether each file is still available:
+Set `ARCHIVE_QUESTION` to a question your team needs answered from this folder.
+Replace the uppercase placeholder before running the command:
 
 ```bash
+ARCHIVE_QUESTION="REPLACE_WITH_A_QUESTION_ABOUT_YOUR_ARCHIVE"
 mere-archive-tools search \
-  --database ./harbourline.sqlite3 \
-  --query "Freezer 3 repair warranty and vendor agreement"
+  --database "$ARCHIVE_WORK_DIR/archive.sqlite3" \
+  --query "$ARCHIVE_QUESTION"
 ```
 
-For a question that requires several searches, install Pi and the default
-local investigation model. The model is separate from the plugin:
+Search results identify source paths and whether each file is available.
+Open the retrieved files and check that they cover the question. If a result
+points to an unavailable path, mount the source drive again. The index does
+not contain a copy of the original file.
+
+If the question requires several searches, install Pi, the local agent runner,
+and the default investigation model. Follow the support check from
+`mere.run model capabilities`;
+do not bypass it to fit a model on an undersized Mac:
 
 ```bash
 mere.run agent onboard --install-pi
 mere.run model pull text-chat-bonsai-27b-2bit
 mere-archive-tools investigate \
-  --database ./harbourline.sqlite3 \
-  --question "Was the Freezer 3 repair covered by warranty, and when does that warranty expire?" \
-  --diagnostics ./harbourline-investigation-metrics.json
+  --database "$ARCHIVE_WORK_DIR/archive.sqlite3" \
+  --question "$ARCHIVE_QUESTION" \
+  --diagnostics "$ARCHIVE_WORK_DIR/investigation-metrics.json"
 ```
 
 The investigator can make up to four searches with five results per search by
-default. It can cite only paths returned by those searches. Read its supported
-and unresolved claims, then open the cited source files. The plugin checks
-citation membership, not whether a passage proves the claim. An installed
-model passed this fictional case on a 128 GB test Mac; that result does not
-qualify other archives or smaller machines.
+default. It returns source-linked claims and unresolved points. Check each
+claim in the cited file before using the answer. A citation confirms that a
+path was returned by search; it does not prove that the file supports the
+claim. If the investigation model does not fit your Mac, use search without
+the investigator.
 
-## Apply the workflow to your files
+## Maintain and evaluate the index
 
-Choose a mounted source folder that the operator may read. Keep generated
-artifacts outside that folder and start with `safe-content`:
+For an interrupted index run, inspect the manifest before resuming it:
 
 ```bash
-mere-archive-tools index \
-  --source /Volumes/Shared \
-  --database ./shared-archive.sqlite3 \
-  --output-dir ./shared-archive-run \
-  --storage-tier safe-content
+mere-archive-tools resume "$ARCHIVE_WORK_DIR/first-run/run.json"
 ```
 
-For an interrupted run, inspect `./shared-archive-run/run.json` and use
-`mere-archive-tools resume ./shared-archive-run/run.json`. Later index runs
-compare file metadata and hashes, reuse identical content, and remove records
-for source paths that disappeared. They do not delete source files.
+To refresh the archive after source files change, run `index` again with the
+same database and a new output directory. The plugin reuses identical content
+and removes index records for paths that disappeared. It does not delete
+source files.
 
-The plugin does not reproduce the drive's access-control list. Protect the
-SQLite database and search interface under your organization's access,
-encryption, backup, and retention rules. Its default image mode embeds reduced
-captions and OCR; `--image-index visual` also embeds source pixels and requires
-a separate privacy review. For storage tiers, limits, and source formats, see
-the [Archive Tools plugin guide](https://github.com/sawfwair/mere-run-plugins/blob/main/docs/plugins/archive-tools.md).
-
-## Troubleshoot the first index
-
-- If `doctor` reports a missing command, update `mere.run` before indexing.
-  `doctor` checks command availability, not every model checkpoint.
-- If the first image takes longer than a text file, check whether `mere.run`
-  is downloading its default caption model. Complete that step while the Mac
-  has network access.
-- If a scanned PDF appears in the file-error list, render its pages to images
-  and index those images. Archive Tools rejects hosted OCR during document
-  conversion.
-- If search returns a path marked unavailable, mount the source drive again.
-  The index does not contain a copy of the original file.
+Check retrieval against questions whose answers and source files your team
+already knows. Record missing files, incorrect matches, claim errors, and
+elapsed time. Review the index's access, backup, and retention settings before
+you let more people query it. Image mode embeds reduced captions and OCR by
+default; `--image-index visual` also embeds source pixels and needs a separate
+privacy review.

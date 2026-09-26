@@ -1,46 +1,35 @@
-# Triage support tickets in an existing app
+# Triage tickets in your support app
 
-Use this guide to test one support ticket without adding a model call to the
-ticketing app. A local classifier suggests the team and priority. A vision
-language model reads the selected app window and operates its controls through
-Computer Use. A person checks the saved draft before sending anything.
+This guide is for a support team that wants to classify a ticket and save a
+reply draft in its ticketing website. GLiNER2.5 Decide suggests the team and
+priority. Ornith uses Computer Use to operate the selected macOS window. A
+person checks the ticket before sending the reply.
 
-## See the Northline Care example
+Start with one ticket that your team authorizes for a draft-only run. You can
+use the workflow without adding model code or an API to the ticketing app.
+A separate controller connects the steps to an inbox.
 
-Northline Care is a fictional ticketing app. Its controls contain no GLiNER or
-Ornith integration. In the recorded pilot, a customer reported a duplicate
-charge and asked for help before the weekend. The workflow used:
+## Prepare your Mac and ticket
 
-| Component | Job in the pilot |
-| --- | --- |
-| GLiNER2.5 Decide | Classified the request as `Billing` with `High` priority |
-| Ornith 35B | Read the page and selected ticket actions using the classification as input |
-| Computer Use with Cua Driver | Changed the visible controls, added tags, and saved a reply as a draft |
+Use an Apple Silicon Mac with macOS 15 or later. Open the ticketing website in
+one window and select the ticket that you will process. Record its ticket ID,
+status, customer message, and any order or account context needed for triage.
+List the actual team, priority, and tag choices in your app. Decide which
+outcomes require human review before an app action.
 
-One GLiNER classification request took 682 ms of wall time. That figure does
-not include operating the app. A completed Ornith pass recorded 10 actions,
-12 observations, and about nine minutes of wall time. The ticket was assigned
-to Billing, marked High, tagged, and left with one saved draft and no sent
-reply. These observations describe a synthetic pilot, not production accuracy
-or throughput. The demo run records are not bundled with `mere.run`; the steps
-that follow let you collect results for your own ticket.
-
-## Prepare a one-ticket pilot
-
-Use an Apple Silicon Mac with macOS 15 or later, a ticketing app you can open
-in a macOS window, and a `mere.run` release that supports GLiNER classification
-and Ornith image input. Ornith's recommended 4-bit model needs at least 32 GB
-of unified memory; 48 GB is the conservative recommendation. Install Pi for
-the Computer Use agent.
-
-Check that your `mere.run` binary has the required command:
+Ornith's 4-bit model needs at least 32 GB of unified memory; 48 GB is the
+conservative recommendation. Check that your `mere.run` command supports
+classification:
 
 ```bash
 mere.run text classify --help
 ```
 
-If the command is unavailable, build the source checkout and use its release
-executable in the same terminal where you run the plugin:
+For source build prerequisites, see
+[Getting started](../getting-started.md#build-the-package).
+
+If classification is unavailable, build `mere.run` from source and use that
+binary in the terminal where you run the plugin:
 
 ```bash
 git clone https://github.com/sawfwair/mere-run.git
@@ -50,11 +39,7 @@ export PATH="$PWD/.build/release:$PATH"
 mere.run text classify --help
 ```
 
-An older installed release might lack GLiNER or the Ornith image API support
-that Computer Use needs. For build prerequisites, see
-[Getting started](../getting-started.md#build-the-package).
-
-Check your machine and pull the two models before you start the ticket:
+To install the models and Pi, the local agent runner, run:
 
 ```bash
 mere.run model capabilities
@@ -63,9 +48,7 @@ mere.run model pull text-agent-ornith-35b-mlx-4bit
 mere.run agent onboard --install-pi
 ```
 
-Install Computer Use. The plugin installs the separately signed Cua Driver
-app. Grant that app Accessibility and Screen Recording in macOS System
-Settings, then check the installed model and driver:
+To install Computer Use and check the selected-window setup, run:
 
 ```bash
 mere.run plugin install mere-computer-use --yes
@@ -74,113 +57,116 @@ mere-computer-use doctor --model text-agent-ornith-35b-mlx-4bit
 mere-computer-use windows
 ```
 
-The plugin installs neither Ornith nor GLiNER. It can start the local Ornith
-API when a run begins. `doctor` checks readiness without changing a ticket.
-For installation details and model limits, see the
+Grant `CuaDriver.app` Accessibility and Screen Recording permissions in macOS
+System Settings if `doctor` reports that they are missing. The plugin can start
+the local Ornith API for a run. It does not install the models. For driver
+setup and supported models, see the
 [Computer Use plugin guide](https://github.com/sawfwair/mere-run-plugins/blob/main/docs/plugins/computer-use.md).
-The plugin uses the MIT-licensed Cua Driver and excludes Cua's optional
-perception components with AGPL dependencies. Review the separate model terms
-before using the workflow with business data.
+If `doctor` reports that the installed CLI cannot process Ornith screenshots,
+use the source build described in this guide.
 
-## Classify a sample ticket
+## Classify the selected ticket
 
-Save the following fictional request as a `ticket-classification.json` file.
-The labels are the actions your team wants to consider, not universal support
-categories:
+Create a private work directory outside a source repository:
+
+```bash
+umask 077
+mkdir -p "$HOME/mere-run-support"
+chmod 700 "$HOME/mere-run-support"
+cd "$HOME/mere-run-support"
+```
+
+Create the `ticket-classification.json` file in that directory.
+Use the ticket's actual message and relevant context as `text`. Replace each
+uppercase label with a team or priority that your app accepts. Include every
+team and priority that the controller may select. `No action` tells your
+controller to skip the ticket; it does not need to be a team in the app.
+The following file shows the request shape. It contains placeholders, so edit
+it before running the command:
 
 ```json
 {
-  "text": "I placed one order for a jacket, but my card shows two charges. Please check before the weekend.",
+  "text": "REPLACE_WITH_TICKET_MESSAGE_AND_RELEVANT_CONTEXT",
   "tasks": [
     {
       "name": "team",
-      "labels": ["Billing", "Fulfillment", "Care Team", "No action"]
+      "labels": ["TEAM_LABEL_A", "TEAM_LABEL_B", "No action"]
     },
     {
       "name": "priority",
-      "labels": ["High", "Normal", "Low"]
+      "labels": ["PRIORITY_LABEL_A", "PRIORITY_LABEL_B"]
     }
   ]
 }
 ```
 
-Check that the request fits the checkpoint, then inspect its selected labels
-and scores:
+To check that the request fits the model and then get suggestions, run:
 
 ```bash
 mere.run text classify --input ticket-classification.json --preflight --pretty
 mere.run text classify --input ticket-classification.json --pretty
 ```
 
-The model scores depend on your labels and examples. Review the result before
-using it to change a ticket. Add a `No action` rule for resolved requests and
-cases below your chosen confidence threshold. For classification options and
-limits, see [GLiNER2.5 Decide](../runtime/gliner25-decide.md).
+Review both selected labels and scores. The scores are not calibrated
+probabilities. Skip a resolved ticket or a `No action` result. If the message
+does not support the suggested team or priority, leave the app unchanged and
+send the ticket for human review. For task limits and more request options, see
+[GLiNER2.5 Decide](../runtime/gliner25-decide.md).
 
-## Plan and run the app action
+## Save a draft in the selected window
 
-Open one sample ticket and use `mere-computer-use windows` to get that window's
-process ID and window ID. The following task uses `Billing` and `High` as
-reviewed example labels. Replace them with the labels you accepted for your
-ticket:
+In the `mere-computer-use windows` output, find the process ID and window ID
+for the window that contains your selected ticket. Use the team and priority
+that you accepted after reviewing GLiNER's output. In the following command,
+replace `WINDOW_PID`, `WINDOW_ID`, `TEAM_LABEL`, and `PRIORITY_LABEL` with those
+values:
 
 ```bash
+SUPPORT_TASK="Work only on the selected ticket.
+Suggested team: TEAM_LABEL; priority: PRIORITY_LABEL.
+Recheck the ticket ID and message before changing anything.
+Set those fields only if the visible request supports them.
+Add relevant tags. Write a reply and save it as a draft.
+Do not send a reply or change ticket status. Observe the final state."
 mere-computer-use plan \
   --pid WINDOW_PID \
   --window-id WINDOW_ID \
   --model text-agent-ornith-35b-mlx-4bit \
-  --task "Inspect this ticket. Suggestion: team Billing, priority High. Set those fields only if the visible request supports them. Add relevant tags. Write a helpful reply and save it as a draft. Do not send a reply or change the ticket status. Observe the final state." \
-  --output ./support-pilot-run
+  --max-actions 12 \
+  --task "$SUPPORT_TASK" \
+  --output ./support-ticket-run
 ```
 
-Replace `WINDOW_PID` and `WINDOW_ID` with the numeric values from `windows`.
-`plan` creates `./support-pilot-run/run.json` without operating the app. Review
-the selected window and task in that file. Then run the plan:
+The `plan` command creates `./support-ticket-run/run.json` without changing
+the app. Review its window and task. To let Ornith operate that window, run:
 
 ```bash
-mere-computer-use run ./support-pilot-run/run.json
+mere-computer-use run ./support-ticket-run/run.json
 ```
 
-The plugin limits actions to the chosen window and records the action count
-and model report. It cannot certify that the ticket has the right values. In
-the app, check the assigned team, priority, tags, draft content, and sent
-reply count. Use the app's own API or audit log for an independent check when
-one exists. If the run stops early, inspect the app before using
-`mere-computer-use resume ./support-pilot-run/run.json`.
+The task text instructs Ornith to save a draft, but the prompt is not a
+technical block on the app's **Send** control. Use an account or app setting
+that prevents sending during the first run when your ticketing system provides
+one. Keep an operator present.
 
-## Extend the pilot to an inbox
+After the run, open the same ticket in the app. Check the team, priority,
+tags, draft text, unchanged status, and sent-reply count. Use a
+read-only API or audit log for an independent check when you have access. A
+model report or action count alone does not verify the final ticket state.
 
-The one-ticket pilot above is reproducible with the public CLI and plugin. It
-requires you to review the GLiNER result and pass accepted labels to Computer
-Use. The Northline multi-ticket runner is a separate, unpublished demo harness;
-the public plugin does not yet provide an inbox controller. To build one for
-your app, use the following order:
+If the run stops, inspect the ticket before doing more work. The
+`mere-computer-use resume ./support-ticket-run/run.json` command displays the
+saved record; it does not replay the actions. If work remains, create a new
+plan only after checking whether a draft was already saved.
 
-1. Observe the selected ticket and read its message, order context, and status.
-2. Classify the observed text with `mere.run text classify` or its loopback API.
-3. Skip resolved tickets, `No action` results, and uncertain results that
-   need a person to decide.
-4. Give Ornith the accepted labels, the current page, and explicit limits on
-   what it may change. Require **Save draft** rather than **Send**.
-5. Verify the final state in the app before advancing to another ticket.
-6. Save the initial observation, classification scores, actions, final state,
-   and wall time. Resume only after checking what the previous run changed.
+## Process more than one ticket
 
-The page can change between classification and action. The controller must
-recheck the selected ticket before every change. Use a small labeled set of
-your own requests to measure classification errors and the full workflow's
-time and success rate. For a pilot of label selection before any app action,
-see [GLiNER2.5 Decide](../runtime/gliner25-decide.md). For app mapping, controller
-requirements, and a prompt you can paste into Codex or Claude, see
-[Adapt the support workflow](./adapt-support-workflow.md).
+The commands in this guide require you to review GLiNER's result and pass the
+accepted labels to Computer Use. The plugin does not discover or classify an
+entire inbox by itself. To connect the steps for your website, follow
+[Adapt the support workflow](./adapt-support-workflow.md). That guide covers
+ticket discovery, changes between observation and action, verification,
+resume, and a prompt for a coding agent.
 
-## Troubleshoot the first run
-
-- If `doctor` reports missing permissions, grant Accessibility and Screen
-  Recording to `CuaDriver.app`, then run `doctor` again.
-- If `doctor` cannot start Ornith or the agent cannot process screenshots,
-  confirm that your `mere.run` binary includes Qwen-family image API support
-  and that `text-agent-ornith-35b-mlx-4bit` is installed.
-- If `run.json` reports `verification: observation-only`, no action was
-  recorded. Check the selected window and the app's ticket state before
-  retrying. Do not infer success from the model's final text alone.
+Measure classification errors, completed actions, and total wall time on a
+set of tickets from your own workflow before increasing the scope.

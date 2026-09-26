@@ -1,48 +1,42 @@
-# mere.run for business
+# Use mere.run in your business
 
-Start with work your team already does in an app or a folder. `mere.run` runs
-models on your machine. Companion plugins connect those models to a selected
-window or a local collection of files. You can test one task before you build a
-larger workflow.
+These guides are for teams that want to use local models with a ticketing
+website or a shared document archive. Start with work that your team can
+verify in the source app or files. `mere.run` does not require an inference
+API key.
 
-These guides use fictional data and show the checks needed to decide whether a
-result is useful. They do not require an inference API key.
+## Choose a workflow
 
-## Choose a first workflow
-
-| Task | Start with | What the pilot verifies |
+| Your task | Guide | First result to check |
 | --- | --- | --- |
-| Route a support request and prepare a reply | [Triage support tickets](./customer-support.md) | Classification, visible app actions, saved draft, and no sent reply |
-| Set up the workflow for your ticketing website | [Adapt the support workflow](./adapt-support-workflow.md) | App mapping, one-ticket verification, and a controller plan |
-| Find evidence across years of mixed files | [Search a shared archive](./shared-archive.md) | Index coverage, source-linked search results, and unresolved claims |
+| Route support requests and prepare replies | [Triage tickets in your support app](./customer-support.md) | The selected ticket has the intended team, priority, tags, and saved draft. No reply was sent. |
+| Find information across a shared drive | [Search your document archive](./shared-archive.md) | Search returns the expected source files, and cited claims match those files. |
 
-The support guide uses a fictional Northline Care ticket to explain how
-GLiNER2.5 Decide, Ornith, and Cua Driver work together. The archive guide uses
-Archive Tools and its locally generated Harbourline fixture. Both guides
-include commands you can run with the public CLI and plugins.
+For support, GLiNER2.5 Decide suggests a team and priority. Ornith uses the
+Computer Use plugin to operate the selected window. The
+[support adaptation guide](./adapt-support-workflow.md) explains how to map
+your own website and includes a prompt that you can paste into Codex or Claude
+while a ticket is open.
 
-For an existing ticketing website, the [adaptation guide](./adapt-support-workflow.md)
-includes a prompt you can paste into a coding agent while the website is open.
+For documents, Archive Tools indexes an approved folder without changing its
+source files. You can search the index or ask a question that requires several
+files. Your team controls who can read the source folder and the derived index.
 
-## Pilot with your own work
+## Prepare your first run
 
-1. Pick one task with a result a person can check, such as a saved draft or a
-   source document that answers a specific question.
-2. Define the allowed actions and the stop condition before starting an agent.
-   Keep sending, deleting, and other irreversible actions outside the first
-   pilot.
-3. Run the workflow on fictional or approved sample data. Record model output,
-   action history, elapsed time, and the final state in the source app or files.
-4. Compare the result with your own expected answer. Check the underlying
-   ticket or cited documents; a model report alone is not verification.
-5. Expand to more cases only after you know which errors need human review.
+1. Choose an operator and a small set of work that the operator may process.
+2. Define the expected result and how you will check it in the source app or
+   files.
+3. Install the models and plugin required by the guide you chose.
+4. Run one ticket or one folder, inspect the result, and record elapsed time.
+5. Expand the scope after you have checked errors, access, and recovery.
 
-Inference runs locally, but installation and model pulls use the network.
-Computer Use can enter information into the selected app, so that app's own
-network and access rules still apply. Archive Tools keeps its index locally;
-your organization remains responsible for source permissions, index access,
-backup, and retention.
+`mere.run` model inference runs on your Mac. Installing software and pulling
+models use the network. A ticketing website can still send data through its
+own service.
+An archive index contains derived information from your files, even when you
+choose reduced retention. Apply your organization's access and retention rules
+to both the source and the run records.
 
-For installation and model sizing, see [Getting started](../getting-started.md)
-and [Model management](../runtime/model-management.md). For the plugin
-installation boundary, see [Companion plugins](../plugins.md).
+For platform setup, see [Getting started](../getting-started.md) and
+[Model management](../runtime/model-management.md).
