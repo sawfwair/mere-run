@@ -329,7 +329,9 @@ Voice: reference audio; Vision and Audio tasks: their required input; Chat: a
 per-turn image that stays behind the paperclip until attached — and every slot
 takes a drop, a paste (⌘V), or a click to pick, storing straight into the draft
 field the CLI flag reads. Code and Sound ▸ Generate declare no slots. A click
-offers the Library as well as the disk; see [Library items as inputs](#library-items-as-inputs). Under the
+offers the Library as well as the disk; see [Library items as inputs](#library-items-as-inputs).
+⌘V in the prompt attaches copied files, pictures, and sounds; see
+[Paste into the composer](#paste-into-the-composer). Under the
 prompt, a **chip strip** shows up to four contract essentials (size, length,
 duration, steps, seed, resolution, task, voice mode, thinking) as menus with
 popover editors for custom values; some modes show only the model chip. The **model chip** is the only
@@ -350,9 +352,10 @@ The **feed** above the composer (`StudioUI/StudioFeedCanvas.swift`, cards derive
 composer. A finished run is a generation card: prompt, the chips it ran with
 (read from its own command), every output in a grid of 236pt tiles (images,
 video, 3D; audio gets the waveform player, text the Markdown renderer), and
-Vary (rerun with a fresh, recorded seed), Rerun, Use as input, Quick Look,
-Reveal, Copy, and Save to…; outputs drag onto another task's well or out to
-Finder. A run in flight is a
+Vary (rerun with a fresh, recorded seed), Rerun, Share, Send to (with Use as
+input), Quick Look, Reveal, Copy, and Save to…; outputs drag onto another task's
+well or out to Finder; see [Send to and Share](#send-to-and-share). A run in
+flight is a
 card that observes its `Job` directly — progress bar, "Denoising 15/24 · 0:41",
 Cancel, and the log tail behind an Activity disclosure — and a queued run is a
 row with Remove; both come from `JobStore`, not from a controller mirror. A
@@ -644,6 +647,71 @@ so Finder copies the file, and its file URL, so a Studio drop target reads the
 original path. Wells, the composer, and the task workspace's canvas take the
 drop through their existing `dropDestination(for: URL.self)`, which routes the
 file to the first slot that accepts it and refuses anything else.
+
+## Send to and Share
+
+An output goes on from wherever it is shown. Feed cards carry a **Send to**
+button beside Save to… and a Share button; the card's "…" menu, output tiles,
+result rows, stems, and Library rows carry the same items in their context
+menus (`StudioUI/StudioOutputActions.swift`):
+
+- **Use as input** fills the current page's own well, routed the way a drop of
+  the file would be. It appears only when a slot of the model the page runs
+  takes the file.
+- **Send to** lists every other page and slot that takes the file, grouped by
+  domain in sidebar order: a picture goes to Video ▸ Generate's start or end
+  frame, the Vision tasks, 3D ▸ From image, Image ▸ Generate's input or
+  reference, or Chat; a song or a stem goes to Music ▸ Separate, Transcribe, and
+  Analyze, Audio ▸ Transcribe, Enhance, and Who Spoke, Voice ▸ Speak's and
+  Voices' reference audio, and Sound ▸ Video Foley; a clip goes to Vision ▸
+  Track and Depth and to Video Foley. An item names its slot only when the task
+  takes the file in more than one ("Generate · Start frame").
+- **Share…** opens the system share picker (`NSSharingServicePicker`) for the
+  output file or files, anchored to the card or row.
+
+The destinations are not a per-page table. `StudioSendDestinations`
+(`StudioKit/StudioSendDestinations.swift`) reads every prompt mode's
+`attachmentSlots` and every task-draft template's `StudioTaskSchema.slots`, and
+offers a slot when the file conforms to one of the types it declares. A
+catch-all `.data` type or a folder slot never makes a destination, and the page
+showing the output is left out, because its well is Use as input. When the menu
+opens, `StudioPromptTaskController.sendDestinations(for:excluding:)` keeps only
+the slots each page's well shows for the model its draft runs, so a file never
+lands in a slot the page hides, such as an end frame the video model does not
+take. Commands
+without a well of their own, such as Video ▸ Generate's Retake and Dub It (run
+from the Command view), and the live Session pages are not listed.
+
+Choosing a destination fills that slot through its own `attach`
+(`StudioPromptTaskController.send(_:to:)`), leaves the rest of that page's
+draft as the user left it, opens the page on its composer, and focuses the
+prompt. A task-draft page switches to the variant that declares the slot when
+its current variant does not take the file (a clip sent to Vision ▸ Depth moves
+it to Depth's video variant). A prompt mode that is not active takes the file
+as it activates, over the draft it parked. The window root supplies
+`studioOutputRouting` for whatever page is showing; a view hosted without it
+offers neither Use as input nor Send to.
+
+## Paste into the composer
+
+⌘V attaches what was copied wherever an attachment can go: the composer's
+prompt, a well slot, or the canvas. `StudioAttachmentPasteboard`
+(`StudioKit/StudioAttachmentPasteboard.swift`) reads the pasteboard in order:
+file URLs (a Finder copy), then a picture (a screenshot or Copy Image) or a
+sound, then text. A rich-text selection that carries a picture of itself, as
+Word and web pages copy, reads as text. A copied picture or sound is written
+to `~/Library/Application Support/MereRun/Pasted/`, named like a screenshot
+("Pasted image 2026-09-26 at 14.03.11.png"), and only when a slot takes it; the
+app never writes into the user's folders. The files then take the drop path,
+so a paste lands where dropping the same file would.
+
+Text still pastes into the prompt as text, and so does anything no slot takes
+that carries words (a Finder copy pastes its file name, as before). Anything
+else no slot takes is refused with the system beep and no banner. A SwiftUI text field pastes through its
+own field editor, so the prompt's ⌘V goes through a key monitor that is
+installed only while the prompt has focus and only for its window. Edit ▸
+Paste chosen from the menu bar reaches the wells and the canvas, but in the
+prompt it pastes text as before.
 
 ## Focus, compare, and continue
 

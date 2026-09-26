@@ -147,12 +147,6 @@ extension Array where Element == StudioAttachmentSlot {
         let accepting = filter { $0.accepts(url) }
         return accepting.first { !$0.isFilled(in: draft) } ?? accepting.first
     }
-
-    /// The slot a pasted bitmap (no file on the pasteboard) lands in.
-    package func pastedImageSlot<Draft: StudioAttachmentDraft>(in draft: Draft) -> StudioAttachmentSlot? {
-        let accepting = filter { slot in slot.acceptedTypes.contains { UTType.image.conforms(to: $0) } }
-        return accepting.first { !$0.isFilled(in: draft) } ?? accepting.first
-    }
 }
 
 extension StudioAttachmentDraft {
@@ -282,11 +276,6 @@ extension StudioMode {
     ) -> StudioAttachmentSlot? {
         attachmentSlots(for: draft, source: source).slot(for: url, in: draft)
     }
-
-    /// The slot a pasted bitmap (no file on the pasteboard) lands in.
-    package func pastedImageSlot(in draft: StudioDraft, source: StudioScopeSource) -> StudioAttachmentSlot? {
-        attachmentSlots(for: draft, source: source).pastedImageSlot(in: draft)
-    }
 }
 
 extension StudioDraft {
@@ -308,32 +297,6 @@ extension StudioDraft {
         default:
             break
         }
-    }
-}
-
-/// Reads attachments off the pasteboard: file URLs first, else a pasted bitmap saved as PNG.
-package enum StudioAttachmentPasteboard {
-    /// File URLs on the pasteboard that `slot` accepts.
-    package static func fileURLs(from pasteboard: NSPasteboard, for slot: StudioAttachmentSlot) -> [URL] {
-        let urls = pasteboard.readObjects(
-            forClasses: [NSURL.self],
-            options: [.urlReadingFileURLsOnly: true]
-        ) as? [URL] ?? []
-        return urls.filter(slot.accepts)
-    }
-
-    /// Writes a pasted bitmap to a PNG in the temporary directory; nil when there is no image.
-    package static func writePastedImage(from pasteboard: NSPasteboard) throws -> URL? {
-        guard let image = NSImage(pasteboard: pasteboard),
-              let tiff = image.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiff),
-              let data = bitmap.representation(using: .png, properties: [:]) else {
-            return nil
-        }
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("pasted-\(UUID().uuidString).png")
-        try data.write(to: url)
-        return url
     }
 }
 

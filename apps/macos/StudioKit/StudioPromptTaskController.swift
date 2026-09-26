@@ -20,6 +20,9 @@ package final class StudioPromptTaskController {
     @ObservationIgnored package let runner: StudioTaskRunner
     @ObservationIgnored private let seededDrafts: [StudioMode: StudioDraft]
     @ObservationIgnored private var pendingAnalyzeHandoff: StudioAnalyzeHandoff?
+    /// A file "Send to" is carrying into a prompt mode that is not active yet: the arriving
+    /// draft (parked, fresh, or a thread's) takes it once `activate` has resolved which it is.
+    @ObservationIgnored private var pendingSend: (destination: StudioSendDestination, url: URL)?
 
     package init(controller: MereRunController, library: StudioLibraryStore,
                  seededDrafts: [StudioMode: StudioDraft] = [:]) {
@@ -95,7 +98,10 @@ package final class StudioPromptTaskController {
             } else if !selection.hasMemory, let recent = StudioThreadListPresenter.threads(in: library.items).first {
                 // Resolve the preset before replacing active state, so an intermediate navigation
                 // update cannot save the departing task's draft under the arriving task's key.
-                if recent.mode != newMode { return activate(recent.mode, preferredID: recent.id) }
+                // A file on its way here stays here rather than following the other preset.
+                if recent.mode != newMode, pendingSend?.destination.task.mode != newMode {
+                    return activate(recent.mode, preferredID: recent.id)
+                }
                 conversationID = recent.id
                 selectedID = recent.id
                 applyConversationSettings(from: recent, to: &nextDraft)
@@ -124,6 +130,12 @@ package final class StudioPromptTaskController {
             selectedID = nil
         }
         pendingAnalyzeHandoff = nil
+        if let pending = pendingSend, pending.destination.task.mode == newMode {
+            pending.destination.attach(pending.url, to: &nextDraft)
+            // The page opens on the file, not on an earlier run; a thread stays open.
+            if !newMode.isConversational { selectedID = nil }
+        }
+        pendingSend = nil
         active = ActiveTask(mode: newMode, draft: nextDraft, conversationID: conversationID)
         persistDraft()
         sessions.rememberSelection(selectedID, for: newMode)
@@ -175,6 +187,92 @@ package final class StudioPromptTaskController {
         sessions.set(Optional<StudioTaskCommandState>.none, for: action.task.rawValue + ".commandOverride")
         sessions.setFocus(nil, for: action.task)
         if mode == activatedMode { draft = next }
+        return true
+    }
+
+    // MARK: Send to and Use as input
+
+    /// The slots of `task`'s own well, for the model its draft runs: what the page's
+    /// "Use as input" can fill.
+    package func inputSlots(for task: StudioTask) -> [StudioAttachmentSlot] {
+        if let mode = task.mode {
+            let current = mode == activatedMode
+                ? draft : sessions.value(for: task.rawValue + ".draft", default: Optional<StudioDraft>.none) ?? freshDraft(for: mode)
+            return mode.attachmentSlots(for: current, source: controller.scopeSource)
+        }
+        guard task.usesTaskDraft, let taskDraft = sessions.taskDraft(for: task) else { return [] }
+        return taskDraft.slots(source: controller.scopeSource)
+    }
+
+    /// "Use as input" on the page showing `task`: `url` goes to the slot of its well a drop of
+    /// the file would pick. false when no slot takes it.
+    package func useAsInput(_ url: URL, on task: StudioTask) -> Bool {
+        if let mode = task.mode, mode == activatedMode {
+            var next = draft
+            guard next.attach(dropped: [url], for: mode, source: controller.scopeSource) else { return false }
+            draft = next
+            return true
+        }
+        guard task.usesTaskDraft, var next = sessions.taskDraft(for: task),
+              next.attach(dropped: [url], slots: next.slots(source: controller.scopeSource)) else { return false }
+        sessions.setTaskDraft(next, for: task)
+        return true
+    }
+
+    /// The destinations "Send to" offers `url` from the page showing `current`: those whose page
+    /// shows the slot for the model its draft runs, so a sent file never lands in a well the
+    /// page hides (Chat's picture with a text-only model, an end frame the video model does not
+    /// take).
+    package func sendDestinations(for url: URL, excluding current: StudioTask?) -> [StudioSendDestination] {
+        var shown: [StudioTask: [StudioAttachmentSlot]] = [:]
+        return StudioSendDestinations.destinations(for: url, excluding: current).filter { shows($0, for: url, shown: &shown) }
+    }
+
+    /// Whether `destination`'s page shows its slot once `url` is sent there: the page's well for
+    /// the model its draft runs, after the variant switch a task draft makes when its current
+    /// variant does not take the file. `shown` keeps each page's well for the next destination.
+    private func shows(
+        _ destination: StudioSendDestination,
+        for url: URL,
+        shown: inout [StudioTask: [StudioAttachmentSlot]]
+    ) -> Bool {
+        let task = destination.task
+        guard task.mode == nil else {
+            let slots = shown[task] ?? inputSlots(for: task)
+            shown[task] = slots
+            return slots.contains { $0.id == destination.slot.id }
+        }
+        guard var draft = sessions.taskDraft(for: task) else { return false }
+        if StudioTaskSchema.slots(for: draft.templateID).contains(where: { $0.label == destination.slot.label && $0.accepts(url) }) {
+            let slots = shown[task] ?? draft.slots(source: controller.scopeSource)
+            shown[task] = slots
+            return slots.contains { $0.label == destination.slot.label }
+        }
+        destination.attach(url, to: &draft)
+        return draft.slots(source: controller.scopeSource).contains { $0.label == destination.slot.label }
+    }
+
+    /// "Send to": puts `url` in `destination`'s slot and leaves the rest of that page's draft as
+    /// the user left it. A task draft takes it now; a prompt mode takes it now when active, else
+    /// as it activates. The destination's focused result closes, so the page opens on its
+    /// composer. false when the slot does not take the file or the page's model hides the slot.
+    package func send(_ url: URL, to destination: StudioSendDestination) -> Bool {
+        var shown: [StudioTask: [StudioAttachmentSlot]] = [:]
+        guard destination.takes(url), shows(destination, for: url, shown: &shown) else { return false }
+        sessions.setFocus(nil, for: destination.task)
+        if let mode = destination.task.mode {
+            if mode == activatedMode {
+                var next = draft
+                destination.attach(url, to: &next)
+                draft = next
+            } else {
+                pendingSend = (destination, url)
+            }
+            return true
+        }
+        guard var next = sessions.taskDraft(for: destination.task) else { return false }
+        destination.attach(url, to: &next)
+        sessions.setTaskDraft(next, for: destination.task)
         return true
     }
 

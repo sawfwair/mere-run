@@ -86,8 +86,9 @@ struct StudioResultMetricRow: View {
 }
 
 /// A file or folder the run wrote or read, with Reveal and — where the panel's own action row
-/// does not offer it — Quick Look. The caller says which it is, so the row never asks the disk
-/// while drawing; a glyph the file kind cannot say (a tensor file) is passed in.
+/// does not offer it — Quick Look; its context menu adds Use as input, Send to, and Share….
+/// The caller says which it is, so the row never asks the disk while drawing; a glyph the file
+/// kind cannot say (a tensor file) is passed in.
 struct StudioResultFileRow: View {
     let url: URL
     var detail: String?
@@ -133,6 +134,7 @@ struct StudioResultFileRow: View {
             .padding(.vertical, 8)
             .accessibilityElement(children: .contain)
             .studioFileDrag(url)
+            .studioOutputContextMenu(url)
             StudioResultHairline()
         }
     }

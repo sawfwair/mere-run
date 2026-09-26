@@ -112,6 +112,9 @@ struct StudioTaskComposer: View {
         .frame(minHeight: 22, alignment: .leading)
         .focused(promptFocus)
         .onSubmit(onRun)
+        .studioAttachmentPasteKey(isActive: promptFocus.wrappedValue) {
+            StudioAttachmentPaste.paste(into: &draft, slots: slots, allowsText: true)
+        }
         .accessibilityLabel(presentation.promptPlaceholder.isEmpty ? "Prompt" : presentation.promptPlaceholder)
     }
 

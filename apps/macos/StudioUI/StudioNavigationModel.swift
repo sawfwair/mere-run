@@ -43,6 +43,9 @@ package final class NavigationModel: ObservableObject {
     /// Whether the sidebar footer's Activity popover is open. The shell draws it over the window,
     /// so the state lives here rather than inside the sidebar column.
     @Published package var showActivity = false
+    /// A task workspace whose composer should take focus when it next shows: set by Use as input
+    /// and Send to, cleared by the workspace once its prompt has it.
+    @Published package var composerFocusRequest: StudioTask?
 
     package init(destination: StudioDestination = .default) {
         self.destination = destination

@@ -163,10 +163,16 @@ struct StudioTaskWorkspace: View {
                     .transition(.opacity)
             }
         }
+        .onPasteCommand(of: [.fileURL, .image, .audio]) { _ in
+            // The canvas takes a paste the way it takes a drop: into the first slot that fits.
+            StudioAttachmentPaste.paste(into: &draft, slots: draft.slots(source: scopeSource), allowsText: false)
+        }
         .onAppear {
             jobMonitor.attach(controller.jobs)
             refreshReadiness()
+            takeComposerFocusRequest()
         }
+        .onChange(of: navigation.composerFocusRequest) { _, _ in takeComposerFocusRequest() }
         .onChange(of: StudioTaskSchema.requirement(for: draft, source: scopeSource)) { _, _ in
             error = nil
             refreshReadiness()
@@ -215,7 +221,6 @@ struct StudioTaskWorkspace: View {
         } else {
             StudioFeedCanvas(
                 presentation: presentation,
-                slots: draft.slots(source: scopeSource),
                 cards: feedCards,
                 readiness: readiness,
                 pullJob: activePullJob,
@@ -252,7 +257,6 @@ struct StudioTaskWorkspace: View {
         StudioFeedActions(
             vary: vary,
             rerun: rerun,
-            useAsInput: useAsInput,
             saveTo: saveOutput,
             cancel: { _ = jobMonitor.cancel($0) },
             remove: removeQueued,
@@ -317,15 +321,13 @@ struct StudioTaskWorkspace: View {
         }
     }
 
-    private func useAsInput(_ url: URL) {
-        var next = draft
-        guard next.attach(dropped: [url], slots: next.slots(source: scopeSource)) else {
-            error = "\(task.title) does not take \(url.lastPathComponent) as an input."
-            return
-        }
-        draft = next
+    /// Takes focus for the composer when Use as input or Send to asked for this task's.
+    private func takeComposerFocusRequest() {
+        guard navigation.composerFocusRequest == task else { return }
+        navigation.composerFocusRequest = nil
         error = nil
-        promptFocused = true
+        // A workspace that has just appeared is not in the window yet; focus lands next turn.
+        Task { @MainActor in promptFocused = true }
     }
 
     /// Library ▸ "Use these settings" on one of this task's rows: the recorded command becomes

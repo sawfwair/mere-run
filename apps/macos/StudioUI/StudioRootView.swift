@@ -305,6 +305,7 @@ private struct StudioWorkspaceView: View {
             .environment(\.studioTaskRunner, prompt.runner)
             .environment(\.studioTaskScope, destination.task.rawValue)
             .environment(\.studioLibraryItems, library.items)
+            .environment(\.studioOutputRouting, outputRouting)
     }
 
     // MARK: - Shell
@@ -865,7 +866,10 @@ private struct StudioWorkspaceView: View {
                     .transition(.opacity)
             }
         }
-        .onPasteCommand(of: [.image]) { _ in pasteImageFromClipboard() }
+        .onPasteCommand(of: [.fileURL, .image, .audio]) { _ in
+            // The canvas takes a paste the way it takes a drop: into the first slot that fits.
+            StudioAttachmentPaste.paste(into: &draft, slots: mode.attachmentSlots(for: draft, source: scopeSource), allowsText: false)
+        }
     }
 
     @ViewBuilder
@@ -900,7 +904,6 @@ private struct StudioWorkspaceView: View {
         } else {
             StudioFeedCanvas(
                 presentation: StudioTaskPresentation(mode: mode, slots: mode.attachmentSlots(for: draft, source: scopeSource)),
-                slots: mode.attachmentSlots(for: draft, source: scopeSource),
                 cards: feedCards,
                 readiness: readiness,
                 pullJob: activePullJob,
@@ -1022,7 +1025,6 @@ private struct StudioWorkspaceView: View {
         StudioFeedActions(
             vary: varyLibraryItem,
             rerun: retryLibraryItem,
-            useAsInput: useOutputAsInput,
             saveTo: saveOutput,
             cancel: { jobMonitor.cancel($0) },
             remove: removeQueued,
@@ -1647,14 +1649,55 @@ private struct StudioWorkspaceView: View {
         }
     }
 
-    /// Loads an output into the composer's well as the next run's input.
-    private func useOutputAsInput(_ url: URL) {
-        guard draft.attach(dropped: [url], for: mode, source: scopeSource) else {
-            studioError = "\(mode.title) does not take \(url.lastPathComponent) as an input."
+    // MARK: - Use as input and Send to
+
+    /// What an output's "Use as input" and "Send to" do on the page the window shows, for the
+    /// feed, the Analyze canvas, the result rows, and the Library column alike.
+    private var outputRouting: StudioOutputRouting {
+        let task = destination.task
+        return StudioOutputRouting(
+            currentTask: task,
+            inputSlots: prompt.inputSlots(for: task),
+            destinations: { url in prompt.sendDestinations(for: url, excluding: task) },
+            useAsInput: { url in useOutputAsInput(url, on: task) },
+            send: sendOutput
+        )
+    }
+
+    /// Loads an output into the page's own well, where a drop of it would land.
+    private func useOutputAsInput(_ url: URL, on task: StudioTask) {
+        guard prompt.useAsInput(url, on: task) else {
+            studioError = "\(task.title) does not take \(url.lastPathComponent) as an input."
             return
         }
         studioError = nil
-        promptFocused = true
+        focusComposer(of: task)
+    }
+
+    /// Send to: fills the destination's slot, opens its page on its composer rather than a
+    /// focused result or a picked Library row, and focuses the prompt.
+    private func sendOutput(_ url: URL, to target: StudioSendDestination) {
+        guard prompt.send(url, to: target) else {
+            studioError = "\(target.task.title) does not take \(url.lastPathComponent) as an input."
+            return
+        }
+        studioError = nil
+        libraryOverlay = false
+        // The page opens on the file rather than an earlier run; an open thread stays open.
+        if target.task.mode?.isConversational != true { navigation.selectedLibraryID = nil }
+        navigation.open(task: target.task)
+        focusComposer(of: target.task)
+    }
+
+    /// A prompt mode's composer is the root's; a task workspace focuses its own when it sees
+    /// the request, whether it is already showing or appears for it. A Project or Manage page
+    /// (Voices, Train) has no prompt to focus.
+    private func focusComposer(of task: StudioTask) {
+        if task.mode != nil {
+            promptFocused = true
+        } else if task.showsPromptChrome {
+            navigation.composerFocusRequest = task
+        }
     }
 
     /// Copies an output to a location the user picks.
@@ -1913,30 +1956,6 @@ private struct StudioWorkspaceView: View {
             slot.attach(urls, to: &next)
             draft = next
             studioError = nil
-        }
-    }
-
-    /// Pastes an image from the clipboard into the well (Edit ▸ Paste / ⌘V when the canvas, not a
-    /// text field, holds focus): the first empty image slot, else the first image slot. Prefers a
-    /// pasted image file; otherwise writes the pasted bitmap to a temporary PNG.
-    private func pasteImageFromClipboard() {
-        guard let slot = mode.pastedImageSlot(in: draft, source: scopeSource) else { return }
-        let pasteboard = NSPasteboard.general
-        let urls = StudioAttachmentPasteboard.fileURLs(from: pasteboard, for: slot)
-        if !urls.isEmpty {
-            slot.attach(urls, to: &draft)
-            studioError = nil
-            return
-        }
-        do {
-            guard let url = try StudioAttachmentPasteboard.writePastedImage(from: pasteboard) else {
-                studioError = "The clipboard has no image to paste."
-                return
-            }
-            slot.attach([url], to: &draft)
-            studioError = nil
-        } catch {
-            studioError = "Could not paste image: \(error.localizedDescription)"
         }
     }
 
