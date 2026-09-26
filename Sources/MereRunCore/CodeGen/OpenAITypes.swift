@@ -1132,6 +1132,10 @@ public struct OpenAIAudioSpeechRequest: Codable, Sendable {
     public var speed: Double?
     public var instructions: String?
     public var temperature: Float?
+    /// mere.run extension for Breeze TTS 2.
+    public var seed: UInt64?
+    /// mere.run extension for Breeze TTS 2.
+    public var cfg_scale: Float?
 
     public init(
         model: String? = nil,
@@ -1140,7 +1144,9 @@ public struct OpenAIAudioSpeechRequest: Codable, Sendable {
         response_format: String? = nil,
         speed: Double? = nil,
         instructions: String? = nil,
-        temperature: Float? = nil
+        temperature: Float? = nil,
+        seed: UInt64? = nil,
+        cfg_scale: Float? = nil
     ) {
         self.model = model
         self.input = input
@@ -1149,6 +1155,8 @@ public struct OpenAIAudioSpeechRequest: Codable, Sendable {
         self.speed = speed
         self.instructions = instructions
         self.temperature = temperature
+        self.seed = seed
+        self.cfg_scale = cfg_scale
     }
 }
 

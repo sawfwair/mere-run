@@ -14,14 +14,16 @@ public struct BreezeGenerationParameters: Sendable {
     public let topK: Int
     public let topP: Float
     public let cfgScale: Float
+    public let seed: UInt64?
 
     public init(maxFrames: Int = 750, temperature: Float = 0.9, topK: Int = 50,
-                topP: Float = 1, cfgScale: Float = 4) {
+                topP: Float = 1, cfgScale: Float = 4, seed: UInt64? = nil) {
         self.maxFrames = maxFrames
         self.temperature = temperature
         self.topK = topK
         self.topP = topP
         self.cfgScale = cfgScale
+        self.seed = seed
     }
 }
 
@@ -93,6 +95,7 @@ public final class BreezeTTSModel: Module, @unchecked Sendable {
         guard referenceAudio == nil || referenceTranscript?.isEmpty == false else {
             throw BreezeTTSError.invalidRequest("Voice cloning requires the exact reference transcript.")
         }
+        if let seed = parameters.seed { MLXRandom.seed(seed) }
         let conditionalPrompt = try promptEmbeddings(
             text: text, instruction: instruction, referenceAudio: referenceAudio,
             referenceTranscript: referenceTranscript, tokenizer: tokenizer, audioTokenizer: audioTokenizer

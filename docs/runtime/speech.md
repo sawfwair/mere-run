@@ -142,7 +142,12 @@ mere.run speech synthesize "I am speaking with a new direction." \
 ```
 
 Breeze TTS 2 needs the exact reference transcript for cloning. It produces
-24 kHz WAV output and supports `--stream` for incremental audio chunks.
+24 kHz WAV output and supports `--stream` for incremental audio chunks. For
+smaller first chunks, use `--stream-chunk-tokens 5`. English text can include
+vocal event markers such as `(laugh)` and `(sigh)`. The Breeze-only `--seed`
+control repeats the sampling sequence; `--cfg-scale` sets voice instruction
+guidance from 0 through 20 (default 4). Studio exposes both controls for
+Breeze style and clone modes.
 
 `speech-tts-qwen3-customvoice` also speaks as one of its named speakers in
 style mode: `aiden`, `dylan`, `eric`, `ono_anna`, `ryan`, `serena`, `sohee`,

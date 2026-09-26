@@ -48,6 +48,12 @@ extension MereRunCapabilityCatalog {
                 flag: "--temperature", label: "Temperature", kind: .number,
                 defaultValue: "0.6", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 2, step: 0.05)
             ),
+            .init(flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .expert,
+                  range: .init(min: 0, max: 2_147_483_647, step: 1))
+                .scoped(SpeechSynthesizeFamily.only(.breeze, .breezeClone)),
+            .init(flag: "--cfg-scale", label: "CFG scale", kind: .number,
+                  group: Group.sampling, tier: .expert, range: .init(min: 0, max: 20, step: 0.1))
+                .scoped(SpeechSynthesizeFamily.only(.breeze, .breezeClone)),
             .init(flag: "--stream", label: "Stream", kind: .boolean, group: Group.output, tier: .expert),
             .init(
                 flag: "--stream-chunk-tokens", label: "Chunk tokens", kind: .integer,

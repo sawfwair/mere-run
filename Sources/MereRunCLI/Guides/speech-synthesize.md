@@ -117,12 +117,21 @@ mere.run speech synthesize "A directed line." \
   --model speech-tts-breeze-2 --mode clone \
   --ref-audio ./reference.wav --ref-text "Exact reference transcript." \
   --voice "Speak slowly and softly" --output ./directed.wav
+
+mere.run speech synthesize "(laugh) That was unexpected." \
+  --model speech-tts-breeze-2 --seed 42 --cfg-scale 4 \
+  --voice "A playful, amused voice" --stream --stream-chunk-tokens 5 \
+  --output ./laugh.wav
 ```
 
 Use the exact words spoken in the reference clip. Breeze TTS 2 does not have
 named speakers. Its model generates 24 kHz
 audio, and `--language` is a hint for the other TTS backends; Breeze uses the
 text and reference directly.
+English vocal event markers such as `(laugh)`, `(cough)`, `(clears throat)`,
+and `(sigh)` can be included in the text. `--seed` repeats the sampling sequence
+and `--cfg-scale` adjusts how strongly a voice instruction guides generation;
+both controls apply only to Breeze TTS 2. CFG defaults to 4 and accepts 0–20.
 
 ## Prompting Patterns
 

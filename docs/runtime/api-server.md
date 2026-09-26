@@ -886,12 +886,14 @@ whole-image conditioning rather than strict masked inpainting.
 
 `POST /v1/audio/speech` accepts:
 
-- `model`: `speech-tts-qwen3-nano`, a local Qwen3-TTS model path, or OpenAI
+- `model`: `speech-tts-qwen3-nano`, `speech-tts-breeze-2`, a local supported TTS model path, or OpenAI
   names such as `tts-1` mapped to the local default
 - `input`: required text
-- `voice`: OpenAI voice names are translated to Qwen3-TTS style descriptions;
+- `voice`: OpenAI voice names are translated to speech style descriptions;
   custom descriptions are passed through
 - `speed`, `instructions`, and `temperature`
+- `seed` and `cfg_scale`: optional mere.run extensions for Breeze TTS 2 only;
+  CFG accepts finite values from 0 through 20 and defaults to 4
 - `response_format`: `wav`, `mp3`, `opus`, `aac`, or `flac`; non-WAV formats
   require `ffmpeg`
 

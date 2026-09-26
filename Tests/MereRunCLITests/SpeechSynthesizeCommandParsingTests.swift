@@ -60,6 +60,57 @@ final class SpeechSynthesizeCommandParsingTests: XCTestCase {
         XCTAssertEqual(plan.exportPlan.options.format, .float32)
     }
 
+    func testBreezeSeedAndCFGPassThroughCLIAndAPI() throws {
+        let output = URL(fileURLWithPath: "/fixture/output.wav")
+        let cli = try SpeechSynthesize.parse([
+            "(laugh) Hello", "--output", output.path, "--model", "speech-tts-breeze-2",
+            "--seed", "42", "--cfg-scale", "3.5"
+        ])
+        let request = try cli.synthesisPlan(outputURL: output).request
+        XCTAssertEqual(request.seed, 42)
+        XCTAssertEqual(request.cfgScale, 3.5)
+
+        let api = try APIServerContract.speechPlan(from: OpenAIAudioSpeechRequest(
+            model: "speech-tts-breeze-2", input: "(laugh) Hello", seed: 42, cfg_scale: 3.5
+        ))
+        XCTAssertEqual(try api.synthesisPlan(outputURL: output).request, request)
+    }
+
+    func testBreezeCFGRejectsInvalidValuesBeforeModelLoading() async throws {
+        let output = URL(fileURLWithPath: "/tmp/breeze-cfg-invalid.wav")
+        for value in ["nan", "inf", "-1", "20.1"] {
+            let cli = try SpeechSynthesize.parse([
+                "Hello", "--output", output.path, "--model", "speech-tts-breeze-2", "--cfg-scale=\(value)"
+            ])
+            do { try await cli.run(); XCTFail("Invalid CFG scale was accepted") }
+            catch SpeechSynthesisError.invalidInput(let field, _) { XCTAssertEqual(field, .cfgScale) }
+        }
+        XCTAssertThrowsError(try APIServerContract.speechPlan(from: OpenAIAudioSpeechRequest(
+            model: "speech-tts-breeze-2", input: "Hello", cfg_scale: .infinity
+        )))
+    }
+
+    func testBreezeControlsAreRejectedForQwen() async throws {
+        let cli = try SpeechSynthesize.parse([
+            "Hello", "--output", "/tmp/qwen-seed-invalid.wav", "--seed", "42"
+        ])
+        do { try await cli.run(); XCTFail("Qwen accepted a Breeze-only seed") }
+        catch { XCTAssertTrue(String(describing: error).contains("Breeze TTS 2")) }
+        XCTAssertThrowsError(try APIServerContract.speechPlan(from: OpenAIAudioSpeechRequest(
+            input: "Hello", cfg_scale: 4
+        )))
+        XCTAssertThrowsError(try APIServerContract.speechPlan(from: OpenAIAudioSpeechRequest(
+            model: "missing-speech-fixture", input: "Hello", seed: 42
+        )))
+        let request = TTSRequest(text: "Hello", seed: 42, outputURL: URL(fileURLWithPath: "/tmp/unused.wav"))
+        do {
+            _ = try await Qwen3TTSGenerator().generateAudio(request)
+            XCTFail("Direct Qwen request accepted a Breeze seed")
+        } catch SpeechSynthesisError.invalidInput(let field, _) {
+            XCTAssertEqual(field, .seed)
+        }
+    }
+
     func testInvalidScalarsFailBeforeModelLookupAndOutputCreation() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer {

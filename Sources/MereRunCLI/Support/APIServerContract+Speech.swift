@@ -18,11 +18,13 @@ extension APIServerContract {
         let responseFormat: String
         let speed: Float
         let temperature: Float
+        let seed: UInt64?
+        let cfgScale: Float?
 
         func synthesisPlan(outputURL: URL) throws -> SpeechSynthesisPlan {
             try SpeechSynthesisPlan(request: TTSRequest(
                 text: input, voiceDescription: voiceDescription, speed: speed,
-                temperature: temperature, outputURL: outputURL
+                temperature: temperature, seed: seed, cfgScale: cfgScale, outputURL: outputURL
             ))
         }
 
@@ -43,6 +45,11 @@ extension APIServerContract {
         let speed = try speechSpeed(request.speed)
         let temperature = request.temperature ?? TTSRequest.defaultTemperature
         do {
+            try SpeechSynthesisPlan.validateCFGScale(request.cfg_scale)
+        } catch SpeechSynthesisError.invalidInput(_, let message) {
+            throw APIRequestValidationError.invalidField("cfg_scale", message)
+        }
+        do {
             try SpeechSynthesisPlan.validateParameters(text: input, temperature: temperature, speed: speed)
         } catch SpeechSynthesisError.invalidInput(let field, let message) {
             throw APIRequestValidationError.invalidField(field == .text ? "input" : field.rawValue, message)
@@ -59,13 +66,27 @@ extension APIServerContract {
             }
             promptUTF8Bytes += componentBytes
         }
+        let modelID = normalizedSpeechModelID(request.model)
+        if request.seed != nil || request.cfg_scale != nil {
+            let selection: SpeechSynthesisModelSelection
+            do {
+                selection = try SpeechSynthesisModelSelection.resolve(modelID)
+            } catch {
+                throw APIRequestValidationError.invalidField("model", "expected a supported Breeze TTS 2 model")
+            }
+            guard selection.backend == .breeze else {
+                throw APIRequestValidationError.invalidField("model", "seed and cfg_scale require Breeze TTS 2")
+            }
+        }
         return SpeechPlan(
-            modelID: normalizedSpeechModelID(request.model),
+            modelID: modelID,
             input: input,
             voiceDescription: voiceDescription,
             responseFormat: responseFormat,
             speed: speed,
-            temperature: temperature
+            temperature: temperature,
+            seed: request.seed,
+            cfgScale: request.cfg_scale
         )
     }
 

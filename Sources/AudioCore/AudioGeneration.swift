@@ -42,6 +42,10 @@ public struct TTSRequest: Sendable, Hashable {
     public var language: String
     public var speed: Float
     public var temperature: Float
+    /// Optional Breeze TTS 2 sampling seed. Other backends reject this control.
+    public var seed: UInt64?
+    /// Optional Breeze TTS 2 classifier-free guidance scale.
+    public var cfgScale: Float?
     public var outputURL: URL
 
     public init(
@@ -53,6 +57,8 @@ public struct TTSRequest: Sendable, Hashable {
         language: String = TTSRequest.defaultLanguage,
         speed: Float = TTSRequest.defaultSpeed,
         temperature: Float = TTSRequest.defaultTemperature,
+        seed: UInt64? = nil,
+        cfgScale: Float? = nil,
         outputURL: URL
     ) {
         self.text = text
@@ -63,6 +69,8 @@ public struct TTSRequest: Sendable, Hashable {
         self.language = language
         self.speed = speed
         self.temperature = temperature
+        self.seed = seed
+        self.cfgScale = cfgScale
         self.outputURL = outputURL
     }
 }

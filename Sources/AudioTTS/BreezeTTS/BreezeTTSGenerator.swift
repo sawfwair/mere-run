@@ -103,7 +103,9 @@ public actor BreezeTTSGenerator {
                 instruction: request.voiceDescription,
                 referenceAudio: reference,
                 referenceTranscript: transcript,
-                parameters: BreezeGenerationParameters(temperature: request.temperature),
+                parameters: BreezeGenerationParameters(
+                    temperature: request.temperature, cfgScale: request.cfgScale ?? 4, seed: request.seed
+                ),
                 onToken: { token in
                     frameCount += 1
                     if streamingOptions?.emitTokenEvents == true {

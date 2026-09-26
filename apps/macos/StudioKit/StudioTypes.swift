@@ -297,6 +297,7 @@ package struct StudioDraft: Codable, Equatable, Sendable {
     package var voiceProfile = ""
     package var refAudioPath = ""
     package var refText = ""
+    package var speechCFGScale: Double?
     package var saveProfileName = ""
     /// A CustomVoice named speaker (`--speaker`) in style mode. Optional preserves saved Studio
     /// drafts from before speakers were exposed; nil sends none.
@@ -428,6 +429,7 @@ package struct StudioDraft: Codable, Equatable, Sendable {
         voiceProfile = ""
         refAudioPath = ""
         refText = ""
+        speechCFGScale = nil
         saveProfileName = ""
         voiceSpeaker = nil
         temperature = base?.temperature ?? 0.7
@@ -758,6 +760,8 @@ package enum StudioCommandAdapter {
 
         case .speak:
             draft.prompt = prompt
+            draft.seed = studioDraft.seed
+            draft.speechCFGScale = studioDraft.speechCFGScale
             draft.secondaryText = secondary.isEmpty ? draft.secondaryText : secondary
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
             draft.voiceMode = studioDraft.voiceMode

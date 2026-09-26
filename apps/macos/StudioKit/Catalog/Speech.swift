@@ -101,6 +101,8 @@ extension CommandArguments {
         }
         if !draft.language.isBlank, draft.language != "auto" { args.option(F.language, draft.language) }
         args.option(F.temperature, format(draft.temperature))
+        if !draft.seed.isBlank { args.option(F.seed, draft.seed) }
+        if let scale = draft.speechCFGScale { args.option(F.cfgScale, format(scale)) }
         if draft.stream {
             args.flag(F.stream)
             args.option(F.streamChunkTokens, String(draft.speechStreamChunkTokens))

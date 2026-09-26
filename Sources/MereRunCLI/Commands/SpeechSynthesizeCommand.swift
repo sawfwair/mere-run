@@ -74,6 +74,12 @@ struct SpeechSynthesize: AsyncParsableCommand {
     @Option(name: [.long], help: "Sampling temperature (default: 0.6).")
     var temperature: Float = TTSRequest.defaultTemperature
 
+    @Option(name: [.long], help: "Breeze TTS 2 sampling seed (unsigned integer).")
+    var seed: UInt64?
+
+    @Option(name: [.customLong("cfg-scale")], help: "Breeze TTS 2 voice guidance scale (0–20; default: 4).")
+    var cfgScale: Float?
+
     @Flag(name: [.long], help: "Enable streaming TTS mode.")
     var stream: Bool = false
 
@@ -109,7 +115,7 @@ struct SpeechSynthesize: AsyncParsableCommand {
             request: TTSRequest(
                 text: text, voiceDescription: voiceDescription, voiceMode: mode == .clone ? .clone : .style,
                 speaker: normalized(speaker), cloneReference: cloneReference, language: normalizedLanguageOrAuto(language),
-                temperature: temperature, outputURL: outputURL
+                temperature: temperature, seed: seed, cfgScale: cfgScale, outputURL: outputURL
             ),
             streamingOptions: streamingOptions
         )
@@ -118,7 +124,11 @@ struct SpeechSynthesize: AsyncParsableCommand {
     func run() async throws {
         try SpeechSynthesisPlan.validateParameters(text: text, temperature: temperature, speed: TTSRequest.defaultSpeed)
         try SpeechSynthesisPlan.validateStreamingOptions(streamingOptions)
+        try SpeechSynthesisPlan.validateCFGScale(cfgScale)
         let selection = try SpeechSynthesisModelSelection.resolve(model)
+        if selection.backend != .breeze && (seed != nil || cfgScale != nil) {
+            throw ValidationError("--seed and --cfg-scale are supported only by Breeze TTS 2.")
+        }
         if selection.backend == .breeze && mode == .clone
             && normalized(profile) == nil && normalized(refText) == nil {
             throw ValidationError("Breeze TTS 2 cloning requires --ref-text with the exact reference transcript or a saved profile.")
@@ -183,6 +193,7 @@ struct SpeechSynthesize: AsyncParsableCommand {
 
     private func runStreaming(plan: SpeechSynthesisPlan, executor: any SpeechSynthesisExecutor) async throws -> TTSResult {
         var tokenCount = 0
+        var streamedSamples = 0
         let progressStream = progressJson ? JSONProgressStream() : nil
         for try await event in try SpeechSynthesisOperation.stream(plan, executor: executor) {
             switch event {
@@ -195,8 +206,13 @@ struct SpeechSynthesize: AsyncParsableCommand {
                         FileHandle.standardError.write(Data("[generating] \(tokenCount) tokens\n".utf8))
                     }
                 }
-            case .audioChunk:
-                break
+            case .audioChunk(let samples, _):
+                streamedSamples += samples.count
+                if let progressStream {
+                    progressStream.mark(stage: "audioChunk", step: streamedSamples, totalSteps: 0)
+                } else if !quiet {
+                    FileHandle.standardError.write(Data("[audioChunk] \(streamedSamples) samples\n".utf8))
+                }
             case .completed(let result):
                 return result
             }
