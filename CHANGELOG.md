@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.59.0 - 2026-09-26
+
 - Studio's composer recalls earlier prompts. ↑ on the prompt's first line
   steps back through the page's prompts from the Library, newest first and each
   once; ↓ steps forward and back to what was typed. A clock button beside Run
@@ -35,12 +37,12 @@ The format is based on Keep a Changelog.
   changes, model switches, attachments, Reset, and "Use these settings" undo
   too, with slider drags coalesced into one step. Text fields keep their own
   undo for typing.
-- Studio can use Library items as inputs. Every attachment entry point (well
-  slots, empty-state Choose buttons, the Analyze canvas's Replace, and path
-  rows) offers From Disk… and From Library… when the Library holds a compatible
-  file. The searchable Library picker lists each stem or picture of a
-  multi-output run. Library rows and output tiles drag onto wells and
-  canvases. Video inputs no longer accept audio-only files.
+- Extend Library input selection to every attachment entry point, including
+  well slots, empty-state Choose buttons, the Analyze canvas's Replace, and
+  path rows. These entry points offer From Disk… and From Library… when the
+  Library holds a compatible file. The searchable picker lists each file of a
+  multi-output run, and Library rows and output tiles drag onto wells and
+  canvases.
 - Studio outputs can go straight to another task. Feed cards, output tiles,
   result rows, stems, and Library rows offer Send to, which lists every page
   and slot that takes the file, grouped by domain, and Use as input for the
