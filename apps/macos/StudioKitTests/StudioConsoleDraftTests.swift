@@ -46,8 +46,9 @@ final class StudioConsoleDraftTests: XCTestCase {
     func testSeedingEveryTemplateRebuildsItsOwnCommand() throws {
         for template in CommandCatalog.templates {
             guard let capability = template.id.capability else { continue }
-            let expected = template.arguments(from: template.defaultDraft(), source: .contract)
-            let draft = StudioConsoleCommand.seed(template: template, draft: template.defaultDraft(), source: .contract)
+            let defaultDraft = template.defaultDraft()
+            let expected = template.arguments(from: defaultDraft, source: .contract)
+            let draft = StudioConsoleCommand.seed(template: template, draft: defaultDraft, source: .contract)
             let rebuilt = StudioConsoleCommand.arguments(for: capability, draft: draft)
 
             XCTAssertEqual(
