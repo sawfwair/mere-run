@@ -1,9 +1,12 @@
-# Triage tickets in your support app
+# Triage tickets and save drafts
 
 This guide is for a support team that wants to classify a ticket and save a
 reply draft in its ticketing website. GLiNER2.5 Decide suggests the team and
 priority. Ornith uses Computer Use to operate the selected macOS window. A
 person checks the ticket before sending the reply.
+
+To route tickets by using GLiNER and Cua Driver without Ornith, follow
+[Route tickets with GLiNER and Cua Driver](./direct-ticket-triage.md).
 
 Start with one ticket that your team authorizes for a draft-only run. You can
 use the workflow without adding model code or an API to the ticketing app.

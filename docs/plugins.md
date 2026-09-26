@@ -7,9 +7,10 @@ out-of-process and speak one fixed protocol. A plugin manifest cannot inject a
 shell command into your workflow bundle.
 
 For business setup guides, see
-[Triage tickets in your support app](./business/customer-support.md) with
-Computer Use and [Search your document archive](./business/shared-archive.md)
-with Archive Tools.
+[Route tickets with GLiNER and Cua Driver](./business/direct-ticket-triage.md),
+[Triage tickets and save drafts](./business/customer-support.md) with Ornith,
+and [Search your document archive](./business/shared-archive.md) with Archive
+Tools.
 
 ## Discover plugins
 
