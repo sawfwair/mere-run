@@ -24,6 +24,8 @@ struct StudioComposer: View {
     let onRun: () -> Void
     let onStop: () -> Void
     let onShowModels: () -> Void
+    /// "Run variations" beside Run; nil hides it (a command without a seed, a conversation).
+    var onRunVariations: ((StudioVariationCount) -> Void)?
     /// Whether the composer carries the scope note: only while no side column is open. The
     /// inspector shows it at its top, beside the controls it explains, and the Command view as
     /// its "Not sent" line.
@@ -144,6 +146,9 @@ struct StudioComposer: View {
             Spacer(minLength: 8)
             HStack(spacing: 8) {
                 if showsPaperclip { paperclipButton }
+                if let onRunVariations {
+                    StudioVariationsRunButton(isEnabled: sendEnabled, disabledReason: sendHelp, run: onRunVariations)
+                }
                 if isRunning { stopButton } else { sendButton }
             }
         }

@@ -99,7 +99,11 @@ struct StudioTaskWorkspace: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let selection = focusedResult, let item = library.items.first(where: { $0.id == selection.itemID }) {
+            if let compared = comparedItems {
+                StudioCompareView(items: compared,
+                    onClose: { sessions?.setComparison(nil, for: task); promptFocused = true },
+                    onKeep: { library.setFavorite(id: $0.id, isFavorite: !$0.isStarred) }, onUseSettings: useSettings)
+            } else if let selection = focusedResult, let item = library.items.first(where: { $0.id == selection.itemID }) {
                 StudioResultWorkspaceView(item: item, url: selection.url, items: library.items,
                     onClose: { focusedResult = nil; promptFocused = true }, onVary: vary,
                     onSave: saveOutput, onContinue: { _, _, _ in })
@@ -107,7 +111,7 @@ struct StudioTaskWorkspace: View {
                 canvas
             }
 
-            if focusedResult == nil { composer }
+            if focusedResult == nil && comparedItems == nil { composer }
 
             if let error {
                 MereBanner(severity: .error, text: error, onDismiss: { self.error = nil })
@@ -247,6 +251,7 @@ struct StudioTaskWorkspace: View {
             onRun: run,
             onStop: { runner?.stop(task: task) },
             onShowModels: { navigation.open(task: .modelsInstalled) },
+            onRunVariations: StudioVariations.applies(to: draft, source: scopeSource) ? { runVariations($0) } : nil,
             showsScopeNote: !navigation.showCommandColumn && !(task.showsPromptChrome && navigation.showsInspector(for: task))
         )
     }
@@ -271,7 +276,9 @@ struct StudioTaskWorkspace: View {
                 promptFocused = true
             },
             attach: inputTarget,
-            focus: focusResult
+            focus: focusResult,
+            runVariations: replayVariations,
+            compare: { sessions?.setComparison($0, for: task) }
         )
     }
 
@@ -300,6 +307,36 @@ struct StudioTaskWorkspace: View {
         do {
             let request = try runner.run(draft, task: task)
             navigation.selectedLibraryID = request.id
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// The comparison this task's page shows in place of its canvas.
+    private var comparedItems: [StudioLibraryItem]? {
+        sessions?.comparison(for: task, items: library.items)
+    }
+
+    /// The composer's "Run variations": the draft once per new seed, as one group.
+    private func runVariations(_ count: StudioVariationCount) {
+        error = nil
+        guard let runner else { return }
+        do {
+            let requests = try runner.runVariations(draft, task: task, seeds: StudioVariations.seeds(count: count.rawValue))
+            navigation.selectedLibraryID = requests.last?.id
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// "Run variations" on a result: its recorded command once per new seed, as one group.
+    private func replayVariations(_ item: StudioLibraryItem, _ count: StudioVariationCount) {
+        error = nil
+        guard let runner else { return }
+        do {
+            let requests = try runner.replayVariations(of: item, seeds: StudioVariations.seeds(count: count.rawValue))
+            navigation.selectedLibraryID = requests.last?.id
+            replayNotice = StudioLibraryReplay.notice(for: item, source: scopeSource)
         } catch {
             self.error = error.localizedDescription
         }

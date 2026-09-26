@@ -204,6 +204,15 @@ package final class StudioLibraryStore: ObservableObject {
         return item
     }
 
+    /// Files the rows of one "Run variations" submission under one group, once they are started.
+    /// Part of submitting the runs, so not an undo step of its own.
+    package func assignVariationGroup(_ group: UUID, to ids: [UUID]) {
+        for index in items.indices where ids.contains(items[index].id) {
+            items[index].variationGroup = group
+        }
+        save()
+    }
+
     package func markRunning(id: UUID) {
         setStatus(.running, id: id)
     }

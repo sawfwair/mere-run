@@ -113,6 +113,10 @@ surface for is still reachable the day the contract declares it.
   `ProcessRunner`, and the read-only `StudioJobMonitor`.
 - `StudioKit/MereRunController.swift`: the facade views bind to.
 - `StudioKit/StudioLibraryStore.swift`: local library persistence.
+- `StudioKit/StudioVariations.swift` and `StudioKit/StudioCompare.swift`: Run
+  variations (seeds, groups, where it applies) and Compare's picking, settings
+  diff, and transport; `StudioUI/StudioCompareView.swift` and
+  `StudioUI/StudioVariationControls.swift` draw them.
 - `StudioKit/StudioUndo.swift`, `StudioKit/StudioDraftUndo.swift`, and
   `StudioKit/StudioTaskSessions+Undo.swift`: undo registration, draft change
   names and patches, and the session-side steps. `StudioUI/StudioUndoBinding.swift`
@@ -299,9 +303,9 @@ written as `nil` when unstarred), rename in place, and drag as file URLs onto
 another task's well, composer, or canvas, or out to Finder or any app. ⌘ and ⇧ click build a batch (`StudioLibrarySelection`) with a bar for
 Reveal, Save to…, and Delete; Delete asks first and offers to move the run's
 files to the Trash. Delete, rename, and the favorite star are undoable (see
-[Undo and redo](#undo-and-redo)). A batch of exactly two finished image runs adds **Compare**
-to the bar and the context menu, which opens the older run in the result
-workspace with the newer beside it. Search matches a run's title, kind, prompt,
+[Undo and redo](#undo-and-redo)). A batch of two to four finished runs of one kind (images,
+sounds, or videos) adds **Compare** to the bar and the context menu (see
+[Variations and Compare](#variations-and-compare)). Search matches a run's title, kind, prompt,
 model (the name the app shows or the exact id, from the thread, the recorded
 draft, or a legacy row's `--model` argument); a whole status word ("failed",
 "running") narrows to that status and the rest of the query must still match,
@@ -334,6 +338,43 @@ launch credentials and preserves unreadable files. Prompt edits update task
 sessions synchronously. `studio.drafts` remains a migration source for earlier
 prompt-only scene state; importing it preserves unvisited tasks and gives full
 session drafts precedence.
+
+### Variations and Compare
+
+**Run variations** submits one command 2, 4, or 8 times, each with its own
+random seed recorded in its argv. It sits beside Run in both composers, under
+Vary on a finished card (click varies once; the menu runs a group), and in the
+card's and the Library row's menus. It is offered only where the command takes
+`--seed` for the model it runs (`StudioVariations.applies`, read from the
+option scope), so transcription, chat, or AP-BWE enhancement never show it.
+A composer's variations go through the same gates, Command edits, and
+validation as Run; a Library row's replay its recorded command
+(`StudioLibraryReplay`), never the task's current edits. Either way the runs
+are submitted through `StudioTaskRunner.submitVariations`, so each is a job in
+the run queue, and the rows share `StudioLibraryItem.variationGroup` (an
+additive optional; older rows decode as `nil`). Rows and cards of a group read
+"2 of 4", and a card whose group has two finished runs offers **Compare N**.
+
+**Compare** (`StudioUI/StudioCompareView.swift`, rules in
+`StudioKit/StudioCompare.swift`) replaces the canvas of the task that made the
+first run, like a focused result, and is stored per task under `"<task>.compare"`
+(`StudioTaskSessions.setComparison`). It takes two to four hand-picked results
+of one kind from a Library batch or from cards picked with **Select to compare**
+(the feed's floating bar), or up to eight runs of one variation group:
+
+- Images: side by side with one zoom and pan, or an A/B slider with a draggable
+  divider and a picker for each side.
+- Sounds: stacked waveforms on one playhead. One side plays at a time; the
+  A/B/C control, a click on a waveform, or the keys 1–8 switch sides at the same
+  moment (`StudioCompareTransport`), and Space plays or pauses.
+- Videos: side by side on one play button and scrubber; only the chosen side is
+  heard.
+
+Every pane lists its seed and model and the options whose values differ across
+the panes, read from each run's recorded argv with omitted flags at their
+contract defaults (`StudioCompare.settings`); destinations and credentials never
+show. Each pane offers Keep (the favorite star, undoable), Use these settings,
+and Send to.
 
 ### Undo and redo
 

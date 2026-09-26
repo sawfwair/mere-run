@@ -31,8 +31,10 @@ struct StudioLibraryPanel: View {
     let onEdit: (StudioLibraryItem) -> Void
     /// "Use these settings": put the run's recorded prompt, model, and options in its task's composer.
     let onUseSettings: (StudioLibraryItem) -> Void
-    /// "Compare": focus the first image result with the second beside it.
-    let onCompare: (StudioLibraryItem, StudioLibraryItem) -> Void
+    /// "Compare": two to four finished results of one kind, or a variation group, side by side.
+    let onCompare: ([StudioLibraryItem]) -> Void
+    /// "Run variations": the row's command 2, 4, or 8 times with a new seed each.
+    let onRunVariations: (StudioLibraryItem, StudioVariationCount) -> Void
     /// Extra leading space for the header while the window's traffic lights sit over it.
     var leadingInset: CGFloat = 0
 
@@ -47,6 +49,7 @@ struct StudioLibraryPanel: View {
     @Environment(\.studioLibrarySeed) private var seed
     @Environment(\.studioReferenceDate) private var referenceDate
     @Environment(\.studioModelTitles) private var titles
+    @Environment(\.studioScopeSource) private var scopeSource
 
     /// The layout the column draws in — the user's, unless a render is staging the other one.
     private var effectiveViewMode: StudioLibraryViewMode {
@@ -65,6 +68,11 @@ struct StudioLibraryPanel: View {
             favoritesOnly: favoritesOnly,
             query: searchText
         )
+    }
+
+    /// Every grouped row's "2 of 4", read across the whole Library so a filter never renumbers it.
+    private var variationPositions: [UUID: StudioVariationPosition] {
+        StudioVariations.positions(in: items)
     }
 
     private var scopedItems: [StudioLibraryItem] {
@@ -311,8 +319,9 @@ struct StudioLibraryPanel: View {
                         .padding(.bottom, 2)
 
                     if effectiveViewMode == .list {
+                        let positions = variationPositions
                         ForEach(section.items) { item in
-                            row(for: item)
+                            row(for: item, variation: positions[item.id])
                         }
                     } else {
                         grid(for: section.items)
@@ -335,9 +344,10 @@ struct StudioLibraryPanel: View {
         .onKeyPress(.downArrow) { moveSelection(by: 1) }
     }
 
-    private func row(for item: StudioLibraryItem) -> some View {
+    private func row(for item: StudioLibraryItem, variation: StudioVariationPosition?) -> some View {
         StudioLibraryRow(
             item: item,
+            variation: variation,
             progress: progressByID[item.id],
             isSelected: isSelected(item.id),
             isRenaming: renamingID == item.id,
@@ -376,8 +386,8 @@ struct StudioLibraryPanel: View {
     @ViewBuilder
     private func menu(for item: StudioLibraryItem) -> some View {
         if batch.count > 1, batch.contains(item.id) {
-            if let pair = comparablePair {
-                Button("Compare") { onCompare(pair.0, pair.1) }
+            if let comparable = comparableBatch {
+                Button("Compare \(comparable.count)") { onCompare(comparable) }
                 Divider()
             }
             Button("Reveal \(batch.count) in Finder") { onReveal(urls(in: batch)) }
@@ -399,12 +409,21 @@ struct StudioLibraryPanel: View {
             Button(item.isStarred ? "Remove from Favorites" : "Add to Favorites") {
                 onToggleFavorite(item.id)
             }
+            if let group = item.variationGroup {
+                let members = StudioCompare.groupItems(group, in: items)
+                if members.count >= StudioCompare.selectionRange.lowerBound {
+                    Button("Compare \(members.count) variations") { onCompare(members) }
+                }
+            }
             if item.commandDraft != nil, item.templateID != nil {
                 Divider()
                 if StudioLibraryDraftRestoration.canRestore(item) {
                     Button("Use these settings") { onUseSettings(item) }
                 }
                 Button("Run again") { onRetry(item) }
+                if StudioVariations.applies(to: item, source: scopeSource) {
+                    StudioVariationsMenuItems { onRunVariations(item, $0) }
+                }
                 Button("Edit command…") { onEdit(item) }
             }
             Divider()
@@ -422,9 +441,9 @@ struct StudioLibraryPanel: View {
                 .foregroundStyle(MereRunTheme.textSecondary)
             Spacer(minLength: 0)
             // Icons, not labels: three words do not fit a 248pt column beside the count.
-            if let pair = comparablePair {
-                batchAction(systemImage: "rectangle.split.2x1", label: "Compare", tint: MereRunTheme.textSecondary) {
-                    onCompare(pair.0, pair.1)
+            if let comparable = comparableBatch {
+                batchAction(systemImage: StudioVariationSymbols.compare, label: "Compare", tint: MereRunTheme.textSecondary) {
+                    onCompare(comparable)
                 }
             }
             batchAction(systemImage: "folder", label: "Reveal in Finder", tint: MereRunTheme.textSecondary) {
@@ -520,16 +539,13 @@ struct StudioLibraryPanel: View {
         items(in: ids).compactMap(\.outputURL)
     }
 
-    /// The two rows a batch can compare: exactly two, both finished with a picture. The older
-    /// run is the "A" side (the column lists newest first, so this is the reverse of its order):
-    /// a comparison reads as what changed since.
-    private var comparablePair: (StudioLibraryItem, StudioLibraryItem)? {
+    /// The rows a batch can compare: two to four, all finished and of one kind (pictures,
+    /// sounds, or videos). The oldest run is the "A" side (the column lists newest first, so
+    /// this is the reverse of its order): a comparison reads as what changed since.
+    private var comparableBatch: [StudioLibraryItem]? {
         let selected = items(in: batch)
-        guard selected.count == 2, batch.count == 2,
-              selected.allSatisfy({ $0.status == .completed && StudioLibraryPresenter.fileKind(of: $0) == .image })
-        else { return nil }
-        let ordered = selected.sorted { $0.createdAt < $1.createdAt }
-        return (ordered[0], ordered[1])
+        guard selected.count == batch.count, StudioCompare.comparableMedia(selected) != nil else { return nil }
+        return selected.sorted { $0.createdAt < $1.createdAt }
     }
 
     // MARK: - Rename
@@ -585,6 +601,8 @@ private struct StudioLibraryDeleteRequest: Identifiable {
 /// favorite star and Quick Look; renaming happens in place, never in a dialog.
 private struct StudioLibraryRow: View {
     let item: StudioLibraryItem
+    /// "2 of 4" for a run of a "Run variations" group.
+    let variation: StudioVariationPosition?
     let progress: StudioRunProgress?
     let isSelected: Bool
     let isRenaming: Bool
@@ -637,6 +655,12 @@ private struct StudioLibraryRow: View {
                             Circle()
                                 .fill(statusColor)
                                 .frame(width: 8, height: 8)
+                        }
+                        if let variation {
+                            Image(systemName: StudioVariationSymbols.variations)
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(MereRunTheme.accent)
+                                .help(variation.title)
                         }
                         Text(meta)
                             .font(.caption.weight(.medium))
@@ -700,14 +724,16 @@ private struct StudioLibraryRow: View {
         StudioLibraryRowMeta.kindTitle(for: item)
     }
 
-    /// "Generate · 12:43 PM" once done; "Running · 62%" / "Queued" / "Failed · 12:43 PM" otherwise.
+    /// "Generate · 12:43 PM" once done; "Running · 62%" / "Queued" / "Failed · 12:43 PM" otherwise,
+    /// led by "2 of 4" for a run of a variation group.
     private var meta: String {
-        StudioLibraryRowMeta.text(
+        let text = StudioLibraryRowMeta.text(
             item: item,
             kindTitle: kindTitle,
             progress: progress,
             formatter: Self.timeFormatter
         )
+        return variation.map { "\($0.index) of \($0.count) · " + text } ?? text
     }
 
     private var statusColor: Color? {

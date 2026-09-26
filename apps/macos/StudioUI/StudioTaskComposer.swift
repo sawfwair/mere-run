@@ -22,6 +22,8 @@ struct StudioTaskComposer: View {
     let onRun: () -> Void
     let onStop: () -> Void
     let onShowModels: () -> Void
+    /// "Run variations" beside Run; nil hides it (a command without a seed).
+    var onRunVariations: ((StudioVariationCount) -> Void)?
     /// Whether the composer carries the scope note: only while no side column is open. The
     /// inspector shows it at its top, beside the controls it explains, and the Command view as
     /// its "Not sent" line.
@@ -127,6 +129,9 @@ struct StudioTaskComposer: View {
             }
             modelChip
             Spacer(minLength: 8)
+            if let onRunVariations {
+                StudioVariationsRunButton(isEnabled: sendEnabled, disabledReason: readiness.message(titles: titles), run: onRunVariations)
+            }
             if isRunning { stopButton } else { sendButton }
         }
     }

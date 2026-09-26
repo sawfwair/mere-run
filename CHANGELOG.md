@@ -34,6 +34,15 @@ The format is based on Keep a Changelog.
   ⌘V in the composer, a well, or the canvas attaches copied files, screenshots,
   and copied audio through the same path as a drop. Pasted pictures and sounds
   are written under Application Support, and text still pastes as text.
+- Studio can run variations: the composer, a finished card, and a Library row
+  run the same command 2, 4, or 8 times, each with its own recorded random
+  seed, wherever the command takes `--seed` for its model. The runs join the
+  run queue and are grouped in the Library. Compare opens a variation group,
+  or two to four picked results of one kind, in place of the canvas: images
+  side by side with linked zoom and pan or on an A/B slider, sounds as
+  stacked waveforms on one playhead with instant A/B switching, and videos
+  side by side on one transport. Each pane lists its seed, model, and the
+  settings that differ, and offers Keep, Use these settings, and Send to.
 
 ## 0.58.0 - 2026-09-26
 

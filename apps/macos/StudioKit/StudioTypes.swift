@@ -1148,6 +1148,9 @@ package struct StudioLibraryItem: Codable, Identifiable, Equatable {
     /// The original result from which this request was derived.
     package var parentID: UUID? = nil
     package var inputIdentity: StudioInputIdentity? = nil
+    /// The "Run variations" submission this row is one of (`StudioVariations`): every run of the
+    /// group shares the id. Optional and additive, so rows written before variations decode as nil.
+    package var variationGroup: UUID? = nil
 
     package var isStarred: Bool { isFavorite == true }
 
