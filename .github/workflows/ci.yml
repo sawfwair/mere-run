@@ -595,7 +595,7 @@ jobs:
     needs: changes
     if: always()
     runs-on: ubuntu-22.04
-    container: swift:6.0-jammy
+    container: swift:6.1-jammy
     env:
       RUN_GATE: ${{ needs.changes.result == 'success' && needs.changes.outputs.code == 'true' && needs.changes.outputs.linux == 'true' }}
     steps:
@@ -670,7 +670,7 @@ jobs:
             .build/checkouts
             .build/native/linux-x86_64
             .build/repositories
-          key: swiftpm-${{ runner.os }}-${{ runner.arch }}-swift-6.0-${{ hashFiles('Package.swift', 'Package.resolved', 'scripts/prepare-linux-native.sh', 'scripts/linux-arm64-bf16-toolchain.sh') }}
+          key: swiftpm-${{ runner.os }}-${{ runner.arch }}-swift-6.1-${{ hashFiles('Package.swift', 'Package.resolved', 'scripts/prepare-linux-native.sh', 'scripts/linux-arm64-bf16-toolchain.sh') }}
       - name: Run Linux CLI compatibility gate
         if: env.RUN_GATE == 'true'
         run: ./scripts/check-linux.sh

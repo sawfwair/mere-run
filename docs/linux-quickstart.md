@@ -263,6 +263,8 @@ plan with MLX's unfused attention.
 
 ## Build from source on Linux
 
+Use Swift 6.1 or newer. The resolved SwiftPM networking packages require it.
+
 Install the package layer first:
 
 ```bash
