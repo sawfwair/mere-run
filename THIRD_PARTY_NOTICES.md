@@ -23,6 +23,18 @@ code; those source-derived implementations are noted below as well.
 When any vendored artifact changes, update this file in the same pull request
 with the new upstream source, version or commit when known, and license data.
 
+## SwiftPM networking dependencies
+
+The following resolved packages are used by the CLI and relay server. Each is
+licensed under Apache 2.0 and carries the SwiftNIO Project copyright notice.
+Their upstream `NOTICE.txt` files identify additional bundled components.
+
+| Package | Resolved version | Upstream license and notices |
+| --- | --- | --- |
+| [SwiftNIO](https://github.com/apple/swift-nio) | `2.103.0` | [License](https://github.com/apple/swift-nio/blob/2.103.0/LICENSE.txt), [notices](https://github.com/apple/swift-nio/blob/2.103.0/NOTICE.txt) |
+| [SwiftNIO Extras](https://github.com/apple/swift-nio-extras) | `1.35.1` | [License](https://github.com/apple/swift-nio-extras/blob/1.35.1/LICENSE.txt), [notices](https://github.com/apple/swift-nio-extras/blob/1.35.1/NOTICE.txt) |
+| [SwiftNIO HTTP/2](https://github.com/apple/swift-nio-http2) | `1.46.0` | [License](https://github.com/apple/swift-nio-http2/blob/1.46.0/LICENSE.txt), [notices](https://github.com/apple/swift-nio-http2/blob/1.46.0/NOTICE.txt) |
+
 ## Binary package runtime dependencies
 
 ### Sparkle for macOS updates

@@ -442,7 +442,7 @@ patch_mlx_cpu_jit_f16c_probe() {
       }
       if (line2 == "      __builtin_cpu_supports(\"f16c\");") {
         print "  // MERERUN_MLX_X86_AVX2_IMPLIES_F16C: the Clang shipped with the"
-        print "  // Swift 6.0 Jammy image rejects f16c as a builtin feature string."
+        print "  // Swift Jammy image rejects f16c as a builtin feature string."
         print "  // Every production x86 CPU implementing AVX2 also implements F16C."
         print "  return __builtin_cpu_supports(\"avx2\") && __builtin_cpu_supports(\"fma\");"
         patched=1
