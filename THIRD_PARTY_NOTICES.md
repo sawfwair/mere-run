@@ -1027,6 +1027,44 @@ SOFTWARE.
 - rebuild note: generated from a temporary upstream checkout plus the C ABI shim in [`scripts/rebuild_magentart_xcframework.sh`](./scripts/rebuild_magentart_xcframework.sh)
 - code license: Apache License 2.0
 - model weights: [`google/magenta-realtime-2`](https://huggingface.co/google/magenta-realtime-2), revision `010aa0dcb0dfd27b24f0ad07b4dad63e8f9521cc`, Creative Commons Attribution 4.0 International
+- native build components: the pinned upstream CMake build links
+  [MLX v0.31.1](https://github.com/ml-explore/mlx/tree/v0.31.1) (MIT,
+  copyright © 2023 Apple Inc.),
+  [SentencePiece v0.2.0](https://github.com/google/sentencepiece/tree/v0.2.0)
+  (Apache License 2.0), and
+  [TensorFlow Lite v2.21.0](https://github.com/tensorflow/tensorflow/tree/v2.21.0/tensorflow/lite)
+  (Apache License 2.0) into the framework executable
+- Metal resources: the rebuild script copies the MLX build's `mlx.metallib`
+  into both `Resources/mlx.metallib` and `Resources/default.metallib`; the
+  tracked files are identical (SHA-256
+  `8a3a3b6c8b433adc2201f59e417619a6351e55d848ff23559803bab59a543a99`)
+
+The Apache License 2.0 text for the Apache-licensed components appears in
+[YuE2 source license](#yue2-source-license). The MLX license text follows.
+
+```text
+MIT License
+
+Copyright © 2023 Apple Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
 
 ```
 Copyright 2026 Google LLC
