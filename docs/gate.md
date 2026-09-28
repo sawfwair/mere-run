@@ -70,6 +70,9 @@ golden hash: images and audio must decode, JSON must parse, geometry and mesh
 directories must contain artifacts, MP4s must decode, and audio-bearing video
 must contain non-silent decoded audio.
 
+On Linux, install FFmpeg with the `drawtext` filter and the DejaVu Sans font.
+The OCR checks use them to render a text page before running inference.
+
 ## Usage
 
 ```bash
