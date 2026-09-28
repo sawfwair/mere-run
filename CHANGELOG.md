@@ -6,11 +6,27 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.60.0 - 2026-09-28
+
 - Linux CUDA packages include the pinned `llama-cli` and its shared libraries
   for isolated GGUF chat. The package build rejects a missing CLI, and chat
   forwards the requested reasoning mode to llama.cpp.
 - `text code` now returns the code response without the model's reasoning by
   default. Pass `--thinking` to show the reasoning.
+- Linux shell tools use `/bin/sh`, LFM2 model lookup preserves directory-name
+  case, and geometry exports replace existing directories atomically. The
+  LightOn OCR gate renders its fixture through FFmpeg, and video decoding
+  bounds `showinfo` to the selected frames.
+- On Linux, targeted installed-model gates no longer depend on unrelated
+  incomplete companion models. The complete installed-model gate remains
+  fail-closed. The catalog reports InsightFace Buffalo-L as unsupported on
+  Linux, and `model pull --all` includes every managed companion.
+- Linux CUDA packages include license and notice files for their bundled
+  Swift, Foundation, ICU, dispatch, BlocksRuntime, and OpenBLAS libraries.
+  Package fixtures check that these files are present.
+- Refresh SwiftNIO, SwiftNIO Extras, and SwiftNIO HTTP/2 dependencies. Linux
+  source builds require Swift 6.1 or later.
+
 
 ## 0.59.0 - 2026-09-26
 
