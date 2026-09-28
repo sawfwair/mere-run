@@ -334,6 +334,7 @@ public actor LFM2Generator: ChatGenerator {
             try loadWeights(
                 into: composite,
                 resources: resources,
+                config: config,
                 groupSize: groupSize,
                 bits: bits,
                 quantized: quantized,
@@ -346,6 +347,7 @@ public actor LFM2Generator: ChatGenerator {
             try loadWeights(
                 into: language,
                 resources: resources,
+                config: config,
                 groupSize: groupSize,
                 bits: bits,
                 quantized: quantized,
@@ -431,12 +433,21 @@ public actor LFM2Generator: ChatGenerator {
     private func loadWeights(
         into model: Module,
         resources: LFM2Resources,
+        config: LFM2Config,
         groupSize: Int,
         bits: Int,
         quantized: Bool,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) throws {
         if !quantized {
+            if config.modelType == "lfm2_moe" {
+                let arrays = try FileManager.default.fileExists(atPath: resources.modelIndexURL.path)
+                    ? HFSafetensorsWeightsLoader.loadShardedArrays(indexURL: resources.modelIndexURL)
+                    : MLX.loadArrays(url: resources.modelWeightsURL)
+                let updates = try LFM2Resources.mapBF16MoEWeights(arrays, config: config)
+                try model.update(parameters: ModuleParameters.unflattened(updates), verify: .shapeMismatch)
+                return
+            }
             if FileManager.default.fileExists(atPath: resources.modelIndexURL.path) {
                 try HFSafetensorsWeightsLoader.applyShardedWeights(
                     indexURL: resources.modelIndexURL,

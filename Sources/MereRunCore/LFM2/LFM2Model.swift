@@ -525,7 +525,10 @@ final class LFM2FeedForward: Module {
 
     init(config: LFM2Config, layerIndex: Int) {
         self.usesDense = config.modelType == "lfm2" || layerIndex < config.numDenseLayers
+        // The official BF16 MoE checkpoint names its dense prefix w1/w2/w3;
+        // the quantized MLX export names the same projections gate/up/down.
         self.usesDenseWeightNames = config.modelType == "lfm2"
+            || (layerIndex < config.numDenseLayers && config.quantization == nil)
         self.topK = max(1, config.numExpertsPerTok)
         self.normTopKProb = config.normTopKProb
         if usesDenseWeightNames {

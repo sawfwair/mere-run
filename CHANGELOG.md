@@ -12,6 +12,13 @@ The format is based on Keep a Changelog.
   the planner files instead of requiring unrelated image model components.
 - Fixed the installed-model gate to verify TESSERA Teacher's 1024-dimensional
   embeddings and exercise the LTX text encoder through video generation.
+- Fixed BF16 LFM2.5 A1B loading by matching its dense `w1`/`w2`/`w3` names
+  and stacking the official checkpoint's per-expert MoE weights while retaining
+  the quantized MLX layout.
+- Added a managed manifest for the original Muse Glimmer assistant so its
+  downloaded checkpoint appears in inventory and can be gated with its parent.
+- Fixed Linux package checksum manifests so they hash distributable artifacts
+  without including the manifest itself.
 
 ## 0.60.0 - 2026-09-28
 

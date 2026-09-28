@@ -689,6 +689,9 @@ fi
 (
   cd "$output_root"
   rm -f SHA256SUMS
-  sha256sum ./* | sed 's#  \./#  #' >SHA256SUMS
+  find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 \
+    | sort -z \
+    | xargs -0 -r sha256sum \
+    | sed 's#  \./#  #' >SHA256SUMS
 )
 echo "[package-linux] wrote $output_dir/SHA256SUMS"

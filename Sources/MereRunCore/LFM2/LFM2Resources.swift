@@ -253,4 +253,39 @@ public struct LFM2Resources: Sendable, Hashable {
         }
         return [(key, value)]
     }
+
+    static func mapBF16MoEWeights(
+        _ arrays: [String: MLXArray],
+        config: LFM2Config
+    ) throws -> [(String, MLXArray)] {
+        var updates = arrays.flatMap { key, value -> [(String, MLXArray)] in
+            guard !key.contains(".feed_forward.experts.") else { return [] }
+            return mapWeight(key: key, value: value)
+        }
+        for layer in config.numDenseLayers..<config.numHiddenLayers {
+            let prefix = "model.layers.\(layer).feed_forward."
+            let expertPrefix = prefix + "experts."
+            guard arrays.keys.contains(where: { $0.hasPrefix(expertPrefix) }) else {
+                throw LFM2Error.generationFailed("Missing BF16 MoE experts in layer \(layer).")
+            }
+            for (source, destination) in [
+                ("w1", "gate_proj"),
+                ("w3", "up_proj"),
+                ("w2", "down_proj"),
+            ] {
+                let experts = try (0..<config.numExperts).map { expert -> MLXArray in
+                    let key = "\(expertPrefix)\(expert).\(source).weight"
+                    guard let weight = arrays[key] else {
+                        throw LFM2Error.generationFailed("Missing BF16 MoE weight \(key).")
+                    }
+                    return weight
+                }
+                updates.append((
+                    "\(prefix)switch_mlp.\(destination).weight",
+                    MLX.stacked(experts, axis: 0)
+                ))
+            }
+        }
+        return updates
+    }
 }
