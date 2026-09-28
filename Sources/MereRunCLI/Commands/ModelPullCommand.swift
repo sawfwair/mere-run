@@ -63,7 +63,7 @@ struct ModelPull: AsyncParsableCommand {
         }
 
         if all {
-            for spec in ManagedModelCatalog.allSpecs {
+            for spec in ManagedModelCatalog.allKnownSpecs {
                 let support = ManagedModelCapabilityCatalog.support(for: spec)
                 if !allowUnsupported, !support.isSupported {
                     if !quiet {

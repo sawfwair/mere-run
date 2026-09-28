@@ -232,6 +232,9 @@ mere.run model pull vision-face-buffalo-l --accept-model-license
 mere.run model pull --all --accept-model-license
 ```
 
+`--all` includes managed companion checkpoints as well as primary models.
+Preflight lists each catalog entry so a batch run can account for every model.
+
 Without that flag, a single-model pull and its preflight are blocked; `--all`
 skips restricted models. Restricted models never auto-download from an
 inference command. The macOS app presents the same explicit acceptance before a

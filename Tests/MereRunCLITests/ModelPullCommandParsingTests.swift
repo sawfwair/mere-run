@@ -420,7 +420,10 @@ final class ModelPullCommandParsingTests: XCTestCase {
         let envelope = cmd.makePreflightEnvelope(now: { Date(timeIntervalSince1970: 0) })
 
         XCTAssertEqual(envelope.result.mode, "all")
-        XCTAssertGreaterThan(envelope.result.models.count, 1)
+        XCTAssertEqual(envelope.result.models.count, ManagedModelCatalog.allKnownSpecs.count)
+        XCTAssertTrue(envelope.result.models.contains {
+            $0.id == MuseGlimmerResources.assistantModelId
+        })
         XCTAssertTrue(envelope.result.models.contains { $0.hasDownloadSource })
         XCTAssertTrue(envelope.actions.contains { $0.id == "pull-models" })
     }

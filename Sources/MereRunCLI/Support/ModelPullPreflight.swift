@@ -210,7 +210,7 @@ struct ModelPullPreflightAnalyzer {
     private func selectedSpecs(diagnostics: inout [PreflightDiagnostic]) -> [ManagedModelSpec] {
         if input.all {
             return specsIncludingCompanions(
-                ManagedModelCatalog.allSpecs,
+                ManagedModelCatalog.allKnownSpecs,
                 diagnostics: &diagnostics
             )
         }
