@@ -532,6 +532,43 @@ final class MediaIOTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: framesURL.path))
     }
 
+    func testVideoExtractionAdmitsOnlyRequestedFramesFromLongerVideo() throws {
+        guard isExecutableAvailable(MediaTool.ffmpegPath),
+              isExecutableAvailable(MediaTool.ffprobePath) else {
+            throw XCTSkip("ffmpeg and ffprobe are required")
+        }
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mediaio-bounded-video-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let videoURL = root.appendingPathComponent("input.mp4")
+        try FFmpegMediaIO.writeMP4(
+            rgb24: [UInt8](repeating: 127, count: 32 * 32 * 3 * 9),
+            width: 32,
+            height: 32,
+            frameCount: 9,
+            fps: 8,
+            to: videoURL
+        )
+
+        let decoded = try FFmpegMediaIO.extractFrames(
+            from: videoURL,
+            into: root.appendingPathComponent("frames", isDirectory: true),
+            endFrame: 4,
+            decodeLimits: MediaVideoDecodeLimits(
+                maximumPixelCountPerFrame: 32 * 32,
+                maximumAggregatePixelCount: 5 * 32 * 32
+            ),
+            validateDecodedSequence: { width, height, frameCount in
+                XCTAssertEqual(width, 32)
+                XCTAssertEqual(height, 32)
+                XCTAssertEqual(frameCount, 5)
+            }
+        )
+        XCTAssertEqual(decoded.frameURLs.count, 5)
+    }
+
     func testVideoSamplingCoversTimelineWithinFrameLimit() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("mediaio-video-sampling-\(UUID().uuidString)", isDirectory: true)

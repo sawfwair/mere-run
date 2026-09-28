@@ -117,8 +117,10 @@ The exhaustive gate runs DeepSeek V4 Flash last so its high-memory sidecar
 cannot leave less memory for later checks. For a failed model, rerun the
 exact packaged CLI with `--only-model <id>[,<id>...]` and retain both reports.
 The option accepts only installed IDs, cannot be combined with `--skip-model`,
-and rejects selections excluded by `--suite`. A targeted pass supplements the
-original full-matrix report; it does not replace release-wide coverage.
+and rejects selections excluded by `--suite`. A targeted check validates its
+selected model even if another installed model lacks a runnable companion.
+A targeted pass supplements the original full-matrix report; it does not
+replace release-wide coverage.
 
 A documented exceptional release quarantine can add
 `--skip-model <id>[,<id>...]`. The model remains in the JSON report as an
