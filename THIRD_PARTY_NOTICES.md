@@ -37,6 +37,35 @@ Their upstream `NOTICE.txt` files identify additional bundled components.
 
 ## Binary package runtime dependencies
 
+### Linux toolchain and math libraries
+
+The Linux package script copies linked shared libraries from the build host
+into `lib/`. The packaged license files are in
+[`licenses/linux-runtime/`](licenses/linux-runtime/).
+The Swift libraries come from the official Swift toolchain used to build each
+package. The package script also copies the host's OpenBLAS library when the
+executable links to it, so its exact version depends on that build host.
+
+| Bundled library | Source project | License file |
+| --- | --- | --- |
+| `libswiftCore.so`, `libswiftDispatch.so`, `libswiftGlibc.so`, `libswiftRegexBuilder.so`, `libswiftSwiftOnoneSupport.so`, `libswiftSynchronization.so`, `libswift_Builtin_float.so`, `libswift_Concurrency.so`, `libswift_Differentiation.so`, `libswift_RegexParser.so`, `libswift_StringProcessing.so` | [Swift](https://github.com/swiftlang/swift) | [Apache 2.0 with Runtime Library Exception](licenses/linux-runtime/Swift-LICENSE.txt) |
+| `libFoundationEssentials.so`, `libFoundationInternationalization.so` | [Swift Foundation](https://github.com/swiftlang/swift-foundation) | [Apache 2.0 with Runtime Library Exception](licenses/linux-runtime/Foundation-LICENSE.md) and [upstream component notices](licenses/linux-runtime/Foundation-NOTICE.txt) |
+| `libFoundation.so`, `libFoundationNetworking.so` | [Swift Corelibs Foundation](https://github.com/swiftlang/swift-corelibs-foundation) | [Apache 2.0 with Runtime Library Exception](licenses/linux-runtime/CorelibsFoundation-LICENSE) |
+| `lib_FoundationICU.so` | [Swift Foundation ICU](https://github.com/swiftlang/swift-foundation-icu) and [ICU](https://github.com/unicode-org/icu) | [Apache 2.0 with Runtime Library Exception](licenses/linux-runtime/FoundationICU-LICENSE.md) and [Unicode and bundled component notices](licenses/linux-runtime/ICU-LICENSE) |
+| `libdispatch.so` | [Swift Corelibs Libdispatch](https://github.com/swiftlang/swift-corelibs-libdispatch) | [Apache 2.0 with Runtime Library Exception](licenses/linux-runtime/Libdispatch-LICENSE) |
+| `libBlocksRuntime.so` | [Swift Corelibs BlocksRuntime](https://github.com/swiftlang/swift-corelibs-blocksruntime) | [Apache 2.0 with Runtime Library Exception](licenses/linux-runtime/BlocksRuntime-LICENSE) |
+| `libopenblas.so.0` | [OpenBLAS](https://github.com/OpenMathLib/OpenBLAS) | [BSD 3-Clause](licenses/linux-runtime/OpenBLAS-LICENSE) |
+
+The Swift license files come from the upstream `swift-6.1-RELEASE` tags, except
+BlocksRuntime, which uses commit `63319b62157ceb7642d91d42eac22b99555568f8`.
+The ICU license comes from `release-74-2`; the OpenBLAS license comes from
+commit `63d7f22e42577e413c2775d84daaa1da24c8cc46`. The supplemental Swift
+Foundation notice comes from commit `6669273aa38c2306cca8baf92560c92c7b447d1d`.
+These source references identify the notice texts; they do not assert that
+every build host supplied the same library revision. Check the packaged library
+versions and hashes for each release. The ICU license also describes build
+scripts; the Linux runtime package does not include those scripts.
+
 ### Sparkle for macOS updates
 
 - purpose: secure discovery, verification, and atomic installation of signed

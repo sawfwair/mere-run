@@ -111,6 +111,16 @@ tar -xzf "$tarball" -C "$fixture_root"
 payload_dir="$fixture_root/mere-run-symlink-fixture-linux-${platform_arch}"
 staged_lib="$payload_dir/lib/libopenblas.so.0"
 staged_guide="$payload_dir/MereRun_MereRunCLI.resources/Guides/text-chat.md"
+runtime_licenses="$payload_dir/licenses/linux-runtime"
+
+for license in Swift-LICENSE.txt Foundation-LICENSE.md FoundationICU-LICENSE.md \
+  CorelibsFoundation-LICENSE Libdispatch-LICENSE BlocksRuntime-LICENSE \
+  ICU-LICENSE OpenBLAS-LICENSE Foundation-NOTICE.txt; do
+  if [[ ! -s "$runtime_licenses/$license" ]]; then
+    echo "[test-package-linux] missing bundled runtime notice: $license" >&2
+    exit 1
+  fi
+done
 
 if [[ ! -f "$staged_guide" ]]; then
   echo "[test-package-linux] expected SwiftPM CLI resources to be bundled at $staged_guide" >&2

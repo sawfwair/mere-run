@@ -559,6 +559,8 @@ for doc in README.md LICENSE THIRD_PARTY_NOTICES.md CHANGELOG.md; do
     cp -a "$doc" "$payload_dir/"
   fi
 done
+mkdir -p "$payload_dir/licenses"
+cp -a licenses/linux-runtime "$payload_dir/licenses/"
 
 stage_asset() {
   local asset="$1"
