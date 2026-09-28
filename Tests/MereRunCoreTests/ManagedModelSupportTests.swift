@@ -48,6 +48,26 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(rejected.reasons, ["TerraMind Flood requires Apple Silicon macOS."])
     }
 
+    func testInsightFaceSupportRequiresMacOSONNXRuntime() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: FaceAnalysisResources.modelID))
+        let mac = MereRunMachineProfile(
+            physicalMemoryBytes: 32 * 1_073_741_824,
+            processorName: "M4 Pro",
+            isAppleSiliconMac: true
+        )
+        let linux = MereRunMachineProfile(
+            physicalMemoryBytes: 116 * 1_073_741_824,
+            processorName: "Linux",
+            isAppleSiliconMac: false,
+            isLinux: true
+        )
+
+        XCTAssertTrue(ManagedModelCapabilityCatalog.support(for: spec, on: mac).isSupported)
+        let rejected = ManagedModelCapabilityCatalog.support(for: spec, on: linux)
+        XCTAssertFalse(rejected.isSupported)
+        XCTAssertEqual(rejected.reasons, ["InsightFace Buffalo-L requires the macOS ONNX Runtime build."])
+    }
+
     func testLargeCoderModelIsRejectedBelowMemoryThreshold() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: CodeGenResources.defaultModelId))
         let machine = MereRunMachineProfile(

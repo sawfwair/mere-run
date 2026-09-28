@@ -109,6 +109,8 @@ mere.run status
 
 Use `mere.run model capabilities` before pulling large checkpoints. It gives a
 machine-local view of the recommended public model IDs for the host.
+InsightFace Buffalo-L face analysis requires the macOS ONNX Runtime build, so
+the capability check reports it as unsupported on Linux.
 
 ## Media commands
 
