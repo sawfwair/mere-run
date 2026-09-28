@@ -910,6 +910,8 @@ in Core. The command owns output formatting and the optional dashboard.
 `vendor/llama.xcframework` and the matching support code in `MereRunCore`. On
 packaged Linux installs, the command uses the colocated `llama-cli` subprocess
 so CUDA GGUF loads stay isolated from the MLX runtime in the Swift process.
+Code generation hides the model's reasoning by default; pass `--thinking` to
+show it before the code response.
 
 ### Embeddings
 

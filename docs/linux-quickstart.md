@@ -210,13 +210,15 @@ The arm64 CUDA smoke path was validated on NVIDIA GB10/DGX Spark after
 installing the package and pulling public managed models. MLX-backed image,
 speech, vision, music, SFX, video, embedding, anonymization, and dense Gemma
 chat paths ran with the packaged CUDA setup. This receipt does not make Spark
-an active release builder. The arm64 lane remains paused until a compatible
-host is available for a fresh build and smoke test. The packaged
-Linux CUDA build also carries the matching `llama-cli`; `mere.run text code`
-uses that subprocess on Linux so GGUF coding models do not share a process with
-MLX CUDA. If a later CUDA run fails inside an upstream MLX or llama.cpp kernel,
-keep that failure in the release notes or pull request description until the exact package
-has been rebuilt and rerun on matching hardware.
+an active release builder. The arm64 lane has no standing release builder;
+validate each candidate on a compatible host. Linux CUDA packages must
+include the matching `llama-cli` and its shared libraries. GGUF chat and code
+use that subprocess on Linux so they do not share a process with MLX CUDA.
+After installation, check that `/usr/lib/mere-run/llama-cli` exists and run a
+real GGUF chat request; package checksum and `--help` checks do not load a GGUF
+model. If a later CUDA run fails inside an upstream MLX or llama.cpp kernel,
+keep that failure in the release notes or pull request description until the
+exact package has been rebuilt and rerun on matching hardware.
 
 Quantized MLX paths default to `MERERUN_MLX_CUDA_NATIVE_QUANT=auto`: each
 process probes native `quantized_mm` and `GatherQMM` separately, reports the

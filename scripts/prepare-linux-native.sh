@@ -670,6 +670,26 @@ build_llama() {
 
   echo "[prepare-linux-native] installing llama.cpp into $llama_prefix"
   cmake --install "$llama_build"
+
+  # Linux GGUF chat uses llama-cli in a separate process. The pinned llama.cpp
+  # tree places its CLI under LLAMA_BUILD_SERVER, but building the server also
+  # requires web UI assets. Build only the CLI target after installing the
+  # shared libraries, then stage its additional shared libraries explicitly.
+  echo "[prepare-linux-native] building isolated llama.cpp CLI"
+  cmake -S "$llama_src" -B "$llama_build" \
+    "${cmake_args[@]}" \
+    -DLLAMA_BUILD_COMMON=ON \
+    -DLLAMA_BUILD_TOOLS=ON \
+    -DLLAMA_BUILD_SERVER=ON \
+    -DLLAMA_BUILD_UI=OFF \
+    -DLLAMA_USE_PREBUILT_UI=OFF
+  cmake --build "$llama_build" --config Release --target llama-cli --parallel "$build_jobs"
+  mkdir -p "$llama_prefix/bin" "$llama_prefix/lib"
+  cp -a "$llama_build/bin/llama-cli" "$llama_prefix/bin/"
+  cp -a "$llama_build/bin"/libllama-cli-impl.so* \
+    "$llama_build/bin"/libllama-common.so* \
+    "$llama_build/bin"/libmtmd.so* \
+    "$llama_prefix/lib/"
   write_llama_pc
 }
 
@@ -1106,6 +1126,11 @@ verify_llama() {
   require_tool pkg-config
   if [[ ! -f "$repo_root/Sources/llama/module.modulemap" ]]; then
     echo "[prepare-linux-native] error: Sources/llama/module.modulemap is missing." >&2
+    exit 67
+  fi
+
+  if [[ ! -x "$llama_prefix/bin/llama-cli" ]]; then
+    echo "[prepare-linux-native] error: isolated llama-cli is missing from $llama_prefix/bin." >&2
     exit 67
   fi
 

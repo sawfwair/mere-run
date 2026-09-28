@@ -3,6 +3,6 @@
 llama-gguf	composer.code	emitted	--max-tokens --min-p --model --prompt --stream --system --temperature --top-p
 llama-gguf	composer.code	shown	--max-tokens --min-p --model --system --temperature --top-p
 llama-gguf	composer.code	validated	--max-tokens --min-p --model --system --temperature --top-p
-llama-gguf	console.textCode	emitted	--max-tokens --min-p --model --prompt --quiet --stats --stream --system --temperature --top-p
-llama-gguf	console.textCode	shown	--max-tokens --min-p --model --prompt --quiet --stats --stream --system --temperature --top-p
-llama-gguf	console.textCode	validated	--max-tokens --min-p --model --prompt --quiet --stats --stream --system --temperature --top-p
+llama-gguf	console.textCode	emitted	--max-tokens --min-p --model --prompt --quiet --stats --stream --system --temperature --thinking --top-p
+llama-gguf	console.textCode	shown	--max-tokens --min-p --model --prompt --quiet --stats --stream --system --temperature --thinking --top-p
+llama-gguf	console.textCode	validated	--max-tokens --min-p --model --prompt --quiet --stats --stream --system --temperature --thinking --top-p

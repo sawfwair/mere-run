@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Linux CUDA packages include the pinned `llama-cli` and its shared libraries
+  for isolated GGUF chat. The package build rejects a missing CLI, and chat
+  forwards the requested reasoning mode to llama.cpp.
+- `text code` now returns the code response without the model's reasoning by
+  default. Pass `--thinking` to show the reasoning.
+
 ## 0.59.0 - 2026-09-26
 
 - Studio's composer recalls earlier prompts. ↑ on the prompt's first line

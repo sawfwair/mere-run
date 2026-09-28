@@ -1110,6 +1110,7 @@ Key options:
 - `--prompt`
 - `--model`: GGUF file or canonical code model id if your local setup resolves it
 - `--stream`
+- `--thinking`: show the model's reasoning before its code response (off by default)
 - `--stats`
 - `--temperature`
 - `--top-p`

@@ -146,6 +146,7 @@ struct LlamaCLIProcess {
             "--no-display-prompt",
             "--temp", String(request.temperature),
             "--top-p", String(request.topP),
+            "--reasoning", request.showThinking ? "on" : "off",
         ]
         if request.minP > 0 {
             arguments.append(contentsOf: ["--min-p", String(request.minP)])
