@@ -2362,9 +2362,11 @@ final class MiniMaxH3FusedKernelTests: MLXTestCase {
         return (numerator / denominator).item(Float.self)
     }
 
+    #if os(macOS)
     private func measure(_ body: () -> [MLXArray]) -> Double {
         let started = CFAbsoluteTimeGetCurrent()
         MLX.eval(body())
         return CFAbsoluteTimeGetCurrent() - started
     }
+    #endif
 }

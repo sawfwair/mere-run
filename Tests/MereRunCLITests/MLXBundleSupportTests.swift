@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 
+#if os(macOS)
 @testable import MereRunCLI
 
 final class MLXBundleSupportTests: XCTestCase {
@@ -177,3 +178,4 @@ private final class ConcurrentBundleInstallResults: @unchecked Sendable {
     lock.withLock { recordedFailures.append(String(describing: error)) }
   }
 }
+#endif

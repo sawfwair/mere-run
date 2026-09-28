@@ -11,6 +11,23 @@ import MereRunMLXTestSupport
 import MereRunDecode
 
 final class LagunaComputationTests: MLXTestCase {
+    private func withAutoreleasePool(_ body: () -> Void) {
+        #if os(macOS)
+        autoreleasepool { body() }
+        #else
+        body()
+        #endif
+    }
+
+    private func isM4MaxGPU() -> Bool {
+        #if os(macOS)
+        return Device.defaultDevice().deviceType == .gpu
+            && GPU.deviceInfo().architecture == "applegpu_g16s"
+        #else
+        return false
+        #endif
+    }
+
     private func makeConfig(
         quantizedSharedExperts: Bool = false,
         numHiddenLayers: Int = 2
@@ -1168,14 +1185,14 @@ final class LagunaComputationTests: MLXTestCase {
         XCTAssertTrue(output.asArray(Float.self).allSatisfy(\.isFinite))
 
         for _ in 0..<4 {
-            autoreleasepool {
+            withAutoreleasePool {
                 MLX.eval(attention(input, cache: nil))
             }
         }
         Memory.clearCache()
         let activeBefore = Memory.activeMemory
         for _ in 0..<32 {
-            autoreleasepool {
+            withAutoreleasePool {
                 MLX.eval(attention(input, cache: nil))
             }
         }
@@ -1331,7 +1348,7 @@ final class LagunaComputationTests: MLXTestCase {
         Memory.clearCache()
         let activeBefore = Memory.activeMemory
         for _ in 0..<8 {
-            autoreleasepool {
+            withAutoreleasePool {
                 MLX.eval(attention.callLastPrefillRow(
                     input,
                     cache: nil,
@@ -1502,8 +1519,7 @@ final class LagunaComputationTests: MLXTestCase {
     }
 
     func testFusedSortedNVFP4SwiGLUMatchesNativeGathers() throws {
-        guard Device.defaultDevice().deviceType == .gpu,
-              GPU.deviceInfo().architecture == "applegpu_g16s" else {
+        guard isM4MaxGPU() else {
             throw XCTSkip("The fused sorted kernel requires an M4 Max GPU.")
         }
         MLXRandom.seed(56)
@@ -1623,8 +1639,7 @@ final class LagunaComputationTests: MLXTestCase {
     }
 
     func testPairwiseScaleReuseMatchesStockSortedNVFP4SwiGLU() throws {
-        guard Device.defaultDevice().deviceType == .gpu,
-              GPU.deviceInfo().architecture == "applegpu_g16s" else {
+        guard isM4MaxGPU() else {
             throw XCTSkip("The pairwise prefill kernel requires an M4 Max GPU.")
         }
         MLXRandom.seed(61)
@@ -1751,7 +1766,7 @@ final class LagunaComputationTests: MLXTestCase {
         Memory.clearCache()
         let activeBefore = Memory.activeMemory
         for _ in 0..<8 {
-            autoreleasepool {
+            withAutoreleasePool {
                 let repeated = RoutedMoERouting.fusedSortedNVFP4SwiGLU(
                     input,
                     gateWeight: gate.wq,
@@ -1787,8 +1802,7 @@ final class LagunaComputationTests: MLXTestCase {
     }
 
     func testSortedNVFP4DownProjectionMatchesNativeGather() throws {
-        guard Device.defaultDevice().deviceType == .gpu,
-              GPU.deviceInfo().architecture == "applegpu_g16s" else {
+        guard isM4MaxGPU() else {
             throw XCTSkip("The expert-aligned sorted kernel requires an M4 Max GPU.")
         }
         MLXRandom.seed(58)
