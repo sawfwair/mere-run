@@ -58,11 +58,10 @@ public enum NemotronOmniExpertPack {
         let standardized = rootURL.standardizedFileURL
         let configURL = standardized.appendingPathComponent("config.json")
         if let destination = try? fileManager.destinationOfSymbolicLink(atPath: configURL.path) {
-            let destinationURL = URL(fileURLWithPath: destination)
-            let absolute = destinationURL.path.hasPrefix("/")
-                ? destinationURL
+            let destinationURL = destination.hasPrefix("/")
+                ? URL(fileURLWithPath: destination)
                 : configURL.deletingLastPathComponent().appendingPathComponent(destination)
-            return absolute.deletingLastPathComponent()
+            return destinationURL.standardizedFileURL.deletingLastPathComponent()
         }
         return standardized
     }

@@ -343,6 +343,27 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertTrue(report.errors.isEmpty)
     }
 
+    func testStandaloneACEStepPlannerUsesItsOwnLayout() throws {
+        let root = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try MereRunModelManifest.template(
+            for: .aceStepLM17B,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: root)
+        for name in [
+            "config.json", "model.safetensors", "tokenizer_config.json",
+            "tokenizer.json", "added_tokens.json",
+        ] {
+            try TestFileSystem.writeFile(root.appendingPathComponent(name))
+        }
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: ModelResolver.ModelID.aceStepLM17B.rawValue
+        )
+        XCTAssertTrue(report.isValid, "\(report.errors)")
+    }
+
     func testGeometryAndDepthManagedModelsRejectPlaceholderArtifacts() throws {
         let cases: [(ModelResolver.ModelID, String)] = [
             (.visionGeometryMoGe2Small, "model.onnx"),

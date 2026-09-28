@@ -41,6 +41,48 @@ final class NemotronOmniTests: MereRunCoreTestCase {
         )
     }
 
+    func testPublishedExpertPackResolvesManagedRelativeConfigSymlink() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "nemotron-managed-pack-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        defer { try? FileManager.default.removeItem(at: base) }
+        let install = base.appendingPathComponent("models/omni", isDirectory: true)
+        let snapshot = base.appendingPathComponent("hub/snapshot", isDirectory: true)
+        try FileManager.default.createDirectory(at: install, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: snapshot, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: snapshot.appendingPathComponent("config.json"))
+        try FileManager.default.createSymbolicLink(
+            atPath: install.appendingPathComponent("config.json").path,
+            withDestinationPath: "../../hub/snapshot/config.json"
+        )
+
+        let publishedURL = snapshot.appendingPathComponent(
+            NemotronOmniExpertPack.publishedFilename
+        )
+        let tensors = Dictionary(uniqueKeysWithValues: (0..<46).map {
+            ("tensor.\($0)", MLXArray([UInt8($0)]))
+        })
+        try MLX.save(
+            arrays: tensors,
+            metadata: [
+                "format": NemotronOmniExpertPack.format,
+                "source_revision": NemotronOmniResources.upstreamRevision,
+                "payload_bytes": String(NemotronOmniResources.packedExpertWeightBytes),
+            ],
+            url: publishedURL
+        )
+
+        XCTAssertEqual(
+            try NemotronOmniExpertPack.publishedURL(rootURL: install),
+            publishedURL
+        )
+        XCTAssertEqual(
+            NemotronOmniExpertPack.optimizedURLIfValid(rootURL: install),
+            publishedURL
+        )
+    }
+
     func testNativeRepositoryAndLocalRootAreRecognized() {
         XCTAssertTrue(NemotronOmniResources.handles(
             modelSpec: NemotronOmniResources.nativeRepoID

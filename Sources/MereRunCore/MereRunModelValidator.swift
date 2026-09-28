@@ -160,6 +160,7 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .gliner25Decide
             || spec?.validationKind == .qwenImage21
             || spec?.validationKind == .aceStep
+            || spec?.validationKind == .aceStepLM
             || spec?.validationKind == .miniMaxMusic3
             || spec?.validationKind == .yue2
             || spec?.validationKind == .roFormer

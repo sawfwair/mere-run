@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Fixed Nemotron Omni loading from managed installs that link
+  `config.json` and the published expert pack into the Hub cache.
+- Fixed standalone ACE-Step 5 Hz planner installation validation so it checks
+  the planner files instead of requiring unrelated image model components.
+
 ## 0.60.0 - 2026-09-28
 
 - Linux CUDA packages include the pinned `llama-cli` and its shared libraries
@@ -26,7 +31,6 @@ The format is based on Keep a Changelog.
   Package fixtures check that these files are present.
 - Refresh SwiftNIO, SwiftNIO Extras, and SwiftNIO HTTP/2 dependencies. Linux
   source builds require Swift 6.1 or later.
-
 
 ## 0.59.0 - 2026-09-26
 
