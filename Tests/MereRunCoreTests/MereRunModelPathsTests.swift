@@ -18,6 +18,7 @@ final class MereRunModelPathsTests: XCTestCase {
         unsetenv(MereRunModelPaths.modelsDirEnvironmentKey)
         unsetenv(legacyModelsDirEnvironmentKey)
         UserDefaults.standard.removeObject(forKey: MereRunModelPaths.modelStorageActivePathDefaultsKey)
+        UserDefaults.standard.removePersistentDomain(forName: "MereRunModelPathsTests")
         super.tearDown()
     }
 
@@ -187,12 +188,12 @@ final class MereRunModelPathsTests: XCTestCase {
         )
     }
 
-    /// Defaults holding `values` only in this process's registration domain, which is never
-    /// written to disk. A throwaway suite leaves an empty plist in ~/Library/Preferences even
-    /// after its persistent domain is removed. tearDown puts the registration domain back.
+    /// Give each test an explicit value so another suite's registration defaults cannot leak in.
     private func makeDefaults(_ values: [String: Any] = [:]) -> UserDefaults {
-        UserDefaults.standard.register(defaults: values)
-        return UserDefaults(suiteName: "MereRunModelPathsTests")!
+        let defaults = UserDefaults(suiteName: "MereRunModelPathsTests")!
+        defaults.set("", forKey: MereRunModelPaths.modelStorageActivePathDefaultsKey)
+        for (key, value) in values { defaults.set(value, forKey: key) }
+        return defaults
     }
 
     private func makeTemporaryDirectory(named prefix: String) throws -> URL {

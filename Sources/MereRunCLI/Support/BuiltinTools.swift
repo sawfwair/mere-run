@@ -88,7 +88,11 @@ enum BuiltinTools {
         }
 
         let process = Process()
+        #if os(Linux)
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        #else
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        #endif
         process.arguments = ["-c", command]
         process.currentDirectoryURL = policy.sandboxDir
 

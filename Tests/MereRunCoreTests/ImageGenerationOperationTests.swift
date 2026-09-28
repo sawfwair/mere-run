@@ -29,7 +29,7 @@ final class ImageGenerationOperationTests: XCTestCase {
         let root = try temporaryDirectory()
         let local = ImageGenerationModelSelection(root.path)
         guard case .local = local else { return XCTFail("Expected local selection") }
-        XCTAssertEqual(try local.resolveRoot().standardizedFileURL, root.standardizedFileURL)
+        XCTAssertEqual(try local.resolveRoot().standardizedFileURL.path, root.standardizedFileURL.path)
         guard case .managed(.kleinNano) = ImageGenerationModelSelection("image-klein-nano") else {
             return XCTFail("Expected managed selection")
         }

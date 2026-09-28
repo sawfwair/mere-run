@@ -110,6 +110,9 @@ final class PluginCommandTests: XCTestCase {
     }
 
     func testSignedBundleInstallRunsFixedSetupAfterVerifiedInstall() throws {
+        #if !os(macOS)
+        throw XCTSkip("Signed plugin bundles are available on macOS")
+        #endif
         let catalogURL = try writeCatalog(setupCatalogJSON(bundle: true))
         let command = try PluginInstall.parse(["mere-computer-use", "--catalog-url", catalogURL.path, "--yes"])
         var events: [String] = []
@@ -134,6 +137,9 @@ final class PluginCommandTests: XCTestCase {
     }
 
     func testSignedBundleSetupFailureAdvisesManagedRetry() throws {
+        #if !os(macOS)
+        throw XCTSkip("Signed plugin bundles are available on macOS")
+        #endif
         let catalogURL = try writeCatalog(setupCatalogJSON(bundle: true))
         let command = try PluginInstall.parse(["mere-computer-use", "--catalog-url", catalogURL.path, "--yes"])
         var actions = PluginInstallActions()
@@ -147,6 +153,17 @@ final class PluginCommandTests: XCTestCase {
             ))
         }
     }
+
+    #if os(Linux)
+    func testSignedBundleInstallRequiresExplicitSourceOnLinux() throws {
+        let catalogURL = try writeCatalog(setupCatalogJSON(bundle: true))
+        let command = try PluginInstall.parse(["mere-computer-use", "--catalog-url", catalogURL.path, "--yes"])
+
+        XCTAssertThrowsError(try command.run(actions: PluginInstallActions())) { error in
+            XCTAssertTrue(String(describing: error).contains("No signed bundle is available for this platform"))
+        }
+    }
+    #endif
 
     func testFailedSourceSetupKeepsGraphProviderRegistered() throws {
         let catalogURL = try writeCatalog(setupCatalogJSON(bundle: false))
@@ -211,7 +228,7 @@ final class PluginCommandTests: XCTestCase {
 
         XCTAssertEqual(
             command.confirmationCommand(channel: "review"),
-            "mere.run plugin install mere-doc-tools --catalog-url '/tmp/plugin review.json' --channel review --yes --force"
+            CLICommandDisplay.command("plugin install mere-doc-tools --catalog-url '/tmp/plugin review.json' --channel review --yes --force")
         )
     }
 

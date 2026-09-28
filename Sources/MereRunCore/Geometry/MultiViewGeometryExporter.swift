@@ -1,5 +1,14 @@
 import Foundation
 import MediaIO
+#if os(Linux)
+import Glibc
+
+@_silgen_name("renameat2")
+private func renameat2(
+    _ oldDirectory: Int32, _ oldPath: UnsafePointer<CChar>,
+    _ newDirectory: Int32, _ newPath: UnsafePointer<CChar>, _ flags: UInt32
+) -> Int32
+#endif
 
 public struct MultiViewGeometryView: Sendable {
     public let index: Int
@@ -497,7 +506,19 @@ public enum MultiViewGeometryExporter {
             withIntermediateDirectories: true
         )
         if fileManager.fileExists(atPath: destination.path) {
+            #if os(Linux)
+            // Foundation cannot replace a nonempty directory on Linux. Exchange the two
+            // directories atomically, then remove the old publication at the staging path.
+            let result = staging.path.withCString { oldPath in
+                destination.path.withCString { newPath in
+                    renameat2(-100, oldPath, -100, newPath, 2)
+                }
+            }
+            guard result == 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
+            try fileManager.removeItem(at: staging)
+            #else
             _ = try fileManager.replaceItemAt(destination, withItemAt: staging)
+            #endif
         } else {
             try fileManager.moveItem(at: staging, to: destination)
         }

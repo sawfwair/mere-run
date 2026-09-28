@@ -29,6 +29,7 @@ final class CLIModelStoreBootstrapTests: XCTestCase {
             unsetenv(MereRunModelPaths.modelsDirEnvironmentKey)
         }
         UserDefaults.standard.setVolatileDomain(registrationDomain, forName: UserDefaults.registrationDomain)
+        UserDefaults.standard.removePersistentDomain(forName: "CLIModelStoreBootstrapTests")
         super.tearDown()
     }
 
@@ -130,11 +131,11 @@ final class CLIModelStoreBootstrapTests: XCTestCase {
         XCTAssertEqual(MereRunCLI.configuration.version, MereRunCLIVersion.current)
     }
 
-    /// Defaults holding `values` only in this process's registration domain, which is never
-    /// written to disk. A throwaway suite leaves an empty plist in ~/Library/Preferences even
-    /// after its persistent domain is removed. tearDown puts the registration domain back.
+    /// Give each test an explicit value so another suite's registration defaults cannot leak in.
     private func makeDefaults(_ values: [String: Any] = [:]) -> UserDefaults {
-        UserDefaults.standard.register(defaults: values)
-        return UserDefaults(suiteName: "CLIModelStoreBootstrapTests")!
+        let defaults = UserDefaults(suiteName: "CLIModelStoreBootstrapTests")!
+        defaults.set("", forKey: MereRunModelPaths.modelStorageActivePathDefaultsKey)
+        for (key, value) in values { defaults.set(value, forKey: key) }
+        return defaults
     }
 }

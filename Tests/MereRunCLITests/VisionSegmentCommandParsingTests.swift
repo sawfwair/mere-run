@@ -391,11 +391,15 @@ final class VisionSegmentCommandParsingTests: XCTestCase {
         let ready = root.appendingPathComponent("capture.ready")
         let child = Process()
         child.executableURL = URL(fileURLWithPath: ProcessInfo.processInfo.arguments[0])
+        #if os(Linux)
+        child.arguments = ["MereRunCLITests.VisionSegmentCommandParsingTests/\(testName)"]
+        #else
         child.arguments = [
             "-XCTest",
             "MereRunCLITests.VisionSegmentCommandParsingTests/\(testName)",
             Bundle(for: Self.self).bundleURL.path,
         ]
+        #endif
         child.environment = ProcessInfo.processInfo.environment.merging([environmentKey: recording.path]) { _, value in value }
         try child.run()
         defer { if child.isRunning { kill(child.processIdentifier, SIGKILL); child.waitUntilExit() } }

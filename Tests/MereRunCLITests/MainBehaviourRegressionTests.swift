@@ -115,7 +115,11 @@ final class MainBehaviourRegressionTests: XCTestCase {
         let stores = try stores(table).path
         var checked = 0
         for row in table.rows where row.main == .passes && row.acceptedDifference == nil
-            && row.machineDefault.map({ $0 == TESSERAResources.defaultModelID() }) ?? true {
+            && row.machineDefault.map({ expected in
+                row.argv.starts(with: ["text", "chat"])
+                    ? expected == TextChat.defaultChatModelId
+                    : expected == TESSERAResources.defaultModelID()
+            }) ?? true {
             let environment = (row.env ?? [:]).mapValues { $0.replacingOccurrences(of: "$FIXTURE", with: stores) }
             for (key, value) in environment {
                 setenv(key, value, 1)

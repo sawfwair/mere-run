@@ -54,12 +54,12 @@ extension ModelFamilyIdentifier {
     /// The identifier's `text chat` probe. The Qwen fallthrough runs only a model with a Qwen
     /// profile, so any other id is unidentified and the command reports it.
     static func textChatProbe(model: String, invocation: MereRunCommandInvocation) -> MereRunModelIdentification? {
-        // The command reads its model id trimmed and lowercased.
-        let model = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let family = textChatFamily(matching: model)
+        let model = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedID = model.lowercased()
+        let family = textChatFamily(matching: normalizedID)
         switch family {
         case .q35, .q35VL, .q38:
-            return Q35Resources.profile(for: model) == nil ? nil : .family(family.rawValue)
+            return Q35Resources.profile(for: normalizedID) == nil ? nil : .family(family.rawValue)
         case .lfm2, .lfm2A1B, .lfm2VL:
             return lfm2Family(folder: model).map { .family($0.rawValue) }
         default:
