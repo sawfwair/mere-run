@@ -1038,9 +1038,8 @@ extension GateRunner {
     }
 
     func installedOCRCheck(model: String) async throws -> GateObservation {
-        #if canImport(CoreGraphics)
         let image = workDirectory.appendingPathComponent("installed-ocr-page.png")
-        _ = GateTextPageRenderer.render(to: image)
+        _ = try GateTextPageRenderer.render(to: image)
         let arguments: [String]
         if model.contains("infinity") {
             arguments = [
@@ -1061,9 +1060,6 @@ extension GateRunner {
         }
         let run = try await exec(arguments, timeout: 1_800)
         return stdoutObservation(run, label: "OCR output")
-        #else
-        throw GateError.unsupportedPlatform("OCR fixture rendering requires CoreGraphics")
-        #endif
     }
 
     func installedSegmentationCheck(model: String) async throws -> GateObservation {
