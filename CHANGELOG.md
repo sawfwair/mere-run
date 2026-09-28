@@ -10,6 +10,8 @@ The format is based on Keep a Changelog.
   `config.json` and the published expert pack into the Hub cache.
 - Fixed standalone ACE-Step 5 Hz planner installation validation so it checks
   the planner files instead of requiring unrelated image model components.
+- Fixed the installed-model gate to verify TESSERA Teacher's 1024-dimensional
+  embeddings and exercise the LTX text encoder through video generation.
 
 ## 0.60.0 - 2026-09-28
 

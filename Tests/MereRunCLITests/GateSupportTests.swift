@@ -219,6 +219,21 @@ final class GateSupportTests: XCTestCase {
         }
     }
 
+    func testLTXTextEncoderRequiresVideoInference() throws {
+        let encoder = ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue
+        let video = ModelResolver.ModelID.ltxVideo23AVMLX.rawValue
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: encoder))
+
+        XCTAssertNil(InstalledModelSmokePlans.plan(for: spec, installedIDs: [encoder]))
+
+        let plan = try XCTUnwrap(InstalledModelSmokePlans.plan(
+            for: spec,
+            installedIDs: [encoder, video]
+        ))
+        XCTAssertEqual(plan.check.requiredModels, [encoder, video])
+        XCTAssertTrue(plan.check.successDetail.contains("LTX 2.3 video generation"))
+    }
+
     func testDreamXRequiresWanAndUsesAWorldTransition() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "video-dreamx-world-5b-ar-mlx"))
 
