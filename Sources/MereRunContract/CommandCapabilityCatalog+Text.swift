@@ -219,6 +219,7 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "0.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.01)
             ),
             .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .file, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--thinking", label: "Show thinking", kind: .boolean, group: Group.sampling, tier: .standard),
             .init(flag: "--stats", label: "Stats", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--stream", label: "Stream", kind: .boolean, group: Group.output, tier: .standard)

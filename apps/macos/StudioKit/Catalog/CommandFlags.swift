@@ -84,6 +84,7 @@ extension CommandFlags {
         package static let topP = "--top-p"
         package static let minP = "--min-p"
         package static let model = "--model"
+        package static let thinking = "--thinking"
         package static let stats = "--stats"
         package static let quiet = "--quiet"
         package static let stream = "--stream"

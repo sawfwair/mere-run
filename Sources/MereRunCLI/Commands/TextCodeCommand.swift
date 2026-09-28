@@ -48,24 +48,31 @@ struct TextCode: AsyncParsableCommand {
     @Flag(name: [.customLong("stream")], help: "Stream tokens as they are generated.")
     var stream: Bool = false
 
-    func run() async throws {
-        // Use explicit model path if provided, otherwise use default model ID
-        let modelId = model ?? CodeGenResources.defaultModelId
-        let generator = CodeGenGenerator(modelId: modelId)
+    @Flag(name: [.customLong("thinking")], help: "Show the model's reasoning before its code response.")
+    var thinking: Bool = false
 
+    func makeRequest() -> ChatRequest {
         var messages: [ChatMessage] = []
         if !systemPrompt.isEmpty {
             messages.append(ChatMessage(role: .system, content: systemPrompt))
         }
         messages.append(ChatMessage(role: .user, content: prompt))
 
-        let request = ChatRequest(
+        return ChatRequest(
             messages: messages,
             maxTokens: maxTokens,
             temperature: temperature,
             topP: topP,
-            minP: minP
+            minP: minP,
+            showThinking: thinking
         )
+    }
+
+    func run() async throws {
+        // Use explicit model path if provided, otherwise use default model ID
+        let modelId = model ?? CodeGenResources.defaultModelId
+        let generator = CodeGenGenerator(modelId: modelId)
+        let request = makeRequest()
 
         let progressHandler: (@Sendable (ChatProgress) -> Void)?
         if quiet {
