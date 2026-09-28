@@ -213,3 +213,5 @@ rg -q '^mere\.run status$' <<<"$status_output"
 rg -q '^  server: ' <<<"$status_output"
 rg -q '^  model store: ' <<<"$status_output"
 rg -q '^  installed models: ' <<<"$status_output"
+
+bash ./scripts/test-package-linux.sh
