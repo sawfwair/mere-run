@@ -387,6 +387,12 @@ fi
 
 configure_swiftpm_cuda_bridge
 
+if [[ "$linux_accel" == "cuda" && ! -x "$llama_prefix/bin/llama-cli" ]]; then
+  echo "[package-linux] error: CUDA package requires the isolated llama-cli at $llama_prefix/bin/llama-cli." >&2
+  echo "[package-linux] run scripts/prepare-linux-native.sh before packaging." >&2
+  exit 66
+fi
+
 export MERERUN_PACKAGE_PLATFORM="linux"
 export PKG_CONFIG_PATH="$pkgconfig_dir:${PKG_CONFIG_PATH:-}"
 export LIBRARY_PATH="$llama_prefix/lib:${LIBRARY_PATH:-}"

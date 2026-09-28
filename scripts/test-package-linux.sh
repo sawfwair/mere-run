@@ -7,6 +7,9 @@ cd "$repo_root"
 fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/mere-run-package-test.XXXXXX")"
 cleanup() {
   rm -rf "$fixture_root"
+  if [[ -n "${created_llama_cli:-}" ]]; then
+    rm -f "$created_llama_cli"
+  fi
   if [[ -n "${output_dir:-}" ]]; then
     rm -rf "$output_dir"
   fi
@@ -164,6 +167,13 @@ fi
 echo "[test-package-linux] package runtime library symlink test passed."
 
 cuda_output_dir="$fixture_root/output-cuda"
+llama_cli="$repo_root/.build/native/linux-$platform_arch/llama/bin/llama-cli"
+if [[ ! -e "$llama_cli" ]]; then
+  mkdir -p "$(dirname "$llama_cli")"
+  printf '#!/bin/sh\nexit 0\n' >"$llama_cli"
+  chmod +x "$llama_cli"
+  created_llama_cli="$llama_cli"
+fi
 PATH="$fake_bin:$PATH" \
   FAKE_CUDA_MAJOR=13 \
   MERERUN_LINUX_ACCEL=cuda \
@@ -186,10 +196,12 @@ grep -q "/.mererun-linux-cuda$" "$cuda_tarball_listing"
 grep -q "/include/cute/numeric/numeric_types.hpp$" "$cuda_tarball_listing"
 grep -q "/include/cutlass/cutlass.h$" "$cuda_tarball_listing"
 grep -q "/include/CUTLASS-LICENSE.txt$" "$cuda_tarball_listing"
+grep -q "/llama-cli$" "$cuda_tarball_listing"
 cuda_payload_root="$fixture_root/cuda-payload"
 mkdir -p "$cuda_payload_root"
 tar -xzf "$cuda_tarball" -C "$cuda_payload_root"
 cuda_payload_dir="$cuda_payload_root/mere-run-0.0.0+cuda-deps-fixture-linux-${platform_arch}-cuda"
+[[ -x "$cuda_payload_dir/llama-cli" ]]
 cuda_wrapper_env_output="$(CUDA_HOME="$cuda_home_fixture" "$cuda_payload_dir/mere.run" __print-env)"
 if ! grep -q "^MERERUN_MLX_CUDA_JIT_INCLUDE_PATH=$cuda_payload_dir/include$" <<<"$cuda_wrapper_env_output"; then
   echo "[test-package-linux] launcher did not export the bundled MLX CUDA JIT header root:" >&2
