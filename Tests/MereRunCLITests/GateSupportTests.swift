@@ -106,7 +106,7 @@ final class GateSupportTests: XCTestCase {
     }
 
     func testEveryManagedCatalogEntryHasAnExplicitInstalledModelSmokePlan() {
-        let specs = ManagedModelCatalog.allSpecs
+        let specs = ManagedModelCatalog.allKnownSpecs
         let installedIDs = Set(specs.map(\.id))
         let missing = specs.filter {
             InstalledModelSmokePlans.plan(for: $0, installedIDs: installedIDs) == nil
@@ -144,6 +144,29 @@ final class GateSupportTests: XCTestCase {
         )
         XCTAssertTrue(plan.check.successDetail.contains("companion consumed by true inference"))
         XCTAssertTrue(plan.check.successDetail.contains("sfx video generate"))
+    }
+
+    func testLFM2VisionCompanionUsesVisionChatPrimary() throws {
+        let primaryID = LFM2Resources.visionBF16ModelId
+        let companionID = LFM2Resources.visionDSparkModelId
+        let primary = try XCTUnwrap(ManagedModelCatalog.spec(for: primaryID))
+        let companion = try XCTUnwrap(ManagedModelCatalog.spec(for: companionID))
+        let installedIDs: Set<String> = [primaryID, companionID]
+        let primaryPlan = try XCTUnwrap(InstalledModelSmokePlans.plan(for: primary, installedIDs: installedIDs))
+        let companionPlan = try XCTUnwrap(InstalledModelSmokePlans.plan(for: companion, installedIDs: installedIDs))
+
+        XCTAssertTrue(primaryPlan.check.successDetail.contains("text chat --image"))
+        XCTAssertEqual(companionPlan.check.requiredModels, [companionID, primaryID])
+        XCTAssertTrue(companionPlan.check.successDetail.contains("vision chat"))
+        XCTAssertEqual(
+            try Gate.selectInstalledChecks(
+                [primaryPlan.check, companionPlan.check],
+                installedModelIDs: installedIDs,
+                onlyModel: companionID,
+                suite: "all"
+            ).map(\.id),
+            ["installed-\(companionID)"]
+        )
     }
 
     func testTerraMindFloodHasDirectNativeInferenceSmokePlan() throws {

@@ -70,7 +70,7 @@ enum ModelInventory {
         let usesDefaultLocations = locations == nil
         let locations = locations ?? MereRunModelLocations.snapshot(fileManager: fileManager)
         let resolver = ModelResolver(fileManager: fileManager, locations: locations, access: access)
-        let specs = ManagedModelCatalog.allSpecs
+        let specs = ManagedModelCatalog.allKnownSpecs
         let knownSpecs = Dictionary(uniqueKeysWithValues: specs.map { ($0.id, $0) })
         let idsInOrder = specs.map(\.id)
         let locationIssues = resolver.locationIssues()

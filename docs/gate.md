@@ -57,6 +57,9 @@ model:
 - every Woosh/MMAudio generator, CLAP, and Synchformer
 - every installed LTX, Wan, Cosmos3, SCAIL-2, and DreamX video/world model
 
+The inventory includes managed companion checkpoints. Their checks run through
+an installed primary model that actually consumes the companion.
+
 The gate does not accept component-only entries as a family. Their report row
 names the true companion inference that consumes them. For example,
 Synchformer must be loaded by `sfx video generate`; DreamX must complete a

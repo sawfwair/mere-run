@@ -122,7 +122,7 @@ struct Gate: AsyncParsableCommand {
                 : Set(onlyModel.split(separator: ",").map {
                     $0.trimmingCharacters(in: .whitespacesAndNewlines)
                 })
-            let installedSpecs = ManagedModelCatalog.allSpecs.filter { selectedIDs.contains($0.id) }
+            let installedSpecs = ManagedModelCatalog.allKnownSpecs.filter { selectedIDs.contains($0.id) }
             let unmapped = installedSpecs.filter {
                 InstalledModelSmokePlans.plan(for: $0, installedIDs: installedModelIDs) == nil
             }
