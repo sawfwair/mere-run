@@ -243,9 +243,8 @@ enum GateChecks {
     private static var visionChecks: [GateCheck] {
         [
             GateCheck(id: "ocr-page", suite: "vision", requiredModels: ["vision-ocr-lighton"]) { runner in
-                #if canImport(CoreGraphics)
                 let page = runner.workDirectory.appendingPathComponent("gate-ocr.png")
-                let sourceText = GateTextPageRenderer.render(to: page)
+                let sourceText = try GateTextPageRenderer.render(to: page)
                 let first = try await runner.exec(
                     ["vision", "ocr", page.path, "-m", "vision-ocr-lighton"], timeout: 600
                 )
@@ -262,9 +261,6 @@ enum GateChecks {
                         ? nil
                         : String(format: "OCR lost the page (%.0f%% word overlap)", overlap * 100)
                 )
-                #else
-                throw GateError.unsupportedPlatform("OCR page rendering requires CoreGraphics")
-                #endif
             }
         ]
     }
@@ -666,7 +662,6 @@ struct GateRunner: Sendable {
 
 // MARK: - Deterministic OCR page
 
-#if canImport(CoreGraphics)
 enum GateTextPageRenderer {
     static let lines: [String] = [
         "Performance work rewards patience and measurement in equal parts.",
@@ -681,7 +676,8 @@ enum GateTextPageRenderer {
     /// Renders the fixed paragraph to a PNG and returns the source text used,
     /// so the OCR check can score word overlap against it.
     @discardableResult
-    static func render(to url: URL) -> String {
+    static func render(to url: URL) throws -> String {
+        #if canImport(CoreGraphics)
         let width = 1100
         let height = 460
         let colorSpace = CGColorSpaceCreateDeviceRGB()
@@ -691,7 +687,7 @@ enum GateTextPageRenderer {
             space: colorSpace,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else {
-            return lines.joined(separator: " ")
+            throw GateError.invalidArtifact("Could not create OCR page graphics context")
         }
         context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
@@ -711,11 +707,38 @@ enum GateTextPageRenderer {
               let destination = CGImageDestinationCreateWithURL(
                 url as CFURL, UTType.png.identifier as CFString, 1, nil
               ) else {
-            return lines.joined(separator: " ")
+            throw GateError.invalidArtifact("Could not create OCR page image")
         }
         CGImageDestinationAddImage(destination, image, nil)
-        CGImageDestinationFinalize(destination)
+        guard CGImageDestinationFinalize(destination) else {
+            throw GateError.invalidArtifact("Could not write OCR page PNG")
+        }
+        #elseif os(Linux)
+        let textURL = url.deletingPathExtension().appendingPathExtension("txt")
+        try lines.joined(separator: "\n").write(to: textURL, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: textURL) }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = [
+            "ffmpeg", "-hide_banner", "-loglevel", "error",
+            "-f", "lavfi", "-i", "color=c=white:s=1100x460",
+            "-vf", "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:"
+                + "textfile=\(textURL.path):fontsize=24:fontcolor=black:x=40:y=40:line_spacing=24",
+            "-frames:v", "1", "-y", url.path,
+        ]
+        let stderr = Pipe()
+        process.standardError = stderr
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0,
+              FileManager.default.fileExists(atPath: url.path) else {
+            let detail = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            throw GateError.commandFailed("ffmpeg OCR page render", exitCode: process.terminationStatus, stderr: detail)
+        }
+        #else
+        throw GateError.unsupportedPlatform("OCR page rendering is unavailable")
+        #endif
         return lines.joined(separator: " ")
     }
 }
-#endif

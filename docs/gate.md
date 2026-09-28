@@ -57,6 +57,9 @@ model:
 - every Woosh/MMAudio generator, CLAP, and Synchformer
 - every installed LTX, Wan, Cosmos3, SCAIL-2, and DreamX video/world model
 
+The inventory includes managed companion checkpoints. Their checks run through
+an installed primary model that actually consumes the companion.
+
 The gate does not accept component-only entries as a family. Their report row
 names the true companion inference that consumes them. For example,
 Synchformer must be loaded by `sfx video generate`; DreamX must complete a
@@ -69,6 +72,9 @@ The semantic checks validate the promised artifact rather than comparing a
 golden hash: images and audio must decode, JSON must parse, geometry and mesh
 directories must contain artifacts, MP4s must decode, and audio-bearing video
 must contain non-silent decoded audio.
+
+On Linux, install FFmpeg with the `drawtext` filter and the DejaVu Sans font.
+The OCR checks use them to render a text page before running inference.
 
 ## Usage
 
@@ -114,8 +120,10 @@ The exhaustive gate runs DeepSeek V4 Flash last so its high-memory sidecar
 cannot leave less memory for later checks. For a failed model, rerun the
 exact packaged CLI with `--only-model <id>[,<id>...]` and retain both reports.
 The option accepts only installed IDs, cannot be combined with `--skip-model`,
-and rejects selections excluded by `--suite`. A targeted pass supplements the
-original full-matrix report; it does not replace release-wide coverage.
+and rejects selections excluded by `--suite`. A targeted check validates its
+selected model even if another installed model lacks a runnable companion.
+A targeted pass supplements the original full-matrix report; it does not
+replace release-wide coverage.
 
 A documented exceptional release quarantine can add
 `--skip-model <id>[,<id>...]`. The model remains in the JSON report as an

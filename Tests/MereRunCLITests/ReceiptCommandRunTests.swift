@@ -63,7 +63,7 @@ final class ReceiptCommandRunTests: XCTestCase {
 
     /// Captures everything the body prints to file descriptor 1.
     private func capturingStandardOutput(_ body: () async throws -> Void) async throws -> String {
-        fflush(stdout)
+        fflush(nil)
         let pipe = Pipe()
         let saved = dup(STDOUT_FILENO)
         XCTAssertNotEqual(dup2(pipe.fileHandleForWriting.fileDescriptor, STDOUT_FILENO), -1)
@@ -73,7 +73,7 @@ final class ReceiptCommandRunTests: XCTestCase {
         } catch {
             failure = error
         }
-        fflush(stdout)
+        fflush(nil)
         dup2(saved, STDOUT_FILENO)
         close(saved)
         try pipe.fileHandleForWriting.close()

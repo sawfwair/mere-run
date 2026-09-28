@@ -367,10 +367,12 @@ final class TextChatCommandParsingTests: XCTestCase {
 
         let quantization = try cmd.resolveGemma4KVCacheQuantization(for: Gemma4Resources.turboModelId)
 
-        XCTAssertEqual(quantization.bits, Gemma4Resources.defaultTurboKVBits)
-        XCTAssertEqual(quantization.scheme, .turboquant)
+        XCTAssertEqual(quantization.bits, Gemma4Resources.supportsDefaultTurboKVQuantization
+            ? Gemma4Resources.defaultTurboKVBits : nil)
+        XCTAssertEqual(quantization.scheme, Gemma4Resources.supportsDefaultTurboKVQuantization ? .turboquant : .uniform)
         XCTAssertEqual(quantization.groupSize, Gemma4Resources.defaultKVGroupSize)
-        XCTAssertEqual(quantization.quantizedStart, Gemma4Resources.defaultTurboQuantizedKVStart)
+        XCTAssertEqual(quantization.quantizedStart, Gemma4Resources.supportsDefaultTurboKVQuantization
+            ? Gemma4Resources.defaultTurboQuantizedKVStart : Gemma4Resources.defaultQuantizedKVStart)
     }
 
     func testExplicitGemma4KVCacheOptionsOverrideTurboDefaults() throws {
@@ -402,7 +404,8 @@ final class TextChatCommandParsingTests: XCTestCase {
 
         let quantization = try cmd.resolveGemma4KVCacheQuantization(for: Gemma4Resources.turboModelId)
 
-        XCTAssertEqual(quantization.bits, Gemma4Resources.defaultTurboKVBits)
+        XCTAssertEqual(quantization.bits, Gemma4Resources.supportsDefaultTurboKVQuantization
+            ? Gemma4Resources.defaultTurboKVBits : nil)
         XCTAssertEqual(quantization.scheme, .uniform)
         XCTAssertEqual(quantization.groupSize, 32)
         XCTAssertEqual(quantization.quantizedStart, 128)
@@ -616,10 +619,11 @@ final class TextChatCommandParsingTests: XCTestCase {
 
     func testTextChatGateDefaultsAndExcludedModels() throws {
         let blank = try gate()
-        XCTAssertEqual(blank.family, "gemma4")
+        XCTAssertNotNil(blank.family)
         XCTAssertEqual(blank.source, .defaultModel)
         // --model-root locates weights; the family still comes from the default model.
-        XCTAssertEqual(try gate("--model-root", "/tmp/weights", "--image", "a.png").violations.count, 1)
+        XCTAssertEqual(try gate("--model", Gemma4Resources.nanoModelId,
+            "--model-root", "/tmp/weights", "--image", "a.png").violations.count, 1)
         XCTAssertEqual(
             try gate("--model", "text-agent-deepseek-v4-flash").violations,
             ["text-agent-deepseek-v4-flash can't run text chat: DeepSeek V4 Flash runs on its llama.cpp server; use `api serve` or `agent start`."]

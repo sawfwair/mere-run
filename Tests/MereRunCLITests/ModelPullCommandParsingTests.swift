@@ -420,7 +420,10 @@ final class ModelPullCommandParsingTests: XCTestCase {
         let envelope = cmd.makePreflightEnvelope(now: { Date(timeIntervalSince1970: 0) })
 
         XCTAssertEqual(envelope.result.mode, "all")
-        XCTAssertGreaterThan(envelope.result.models.count, 1)
+        XCTAssertEqual(envelope.result.models.count, ManagedModelCatalog.allKnownSpecs.count)
+        XCTAssertTrue(envelope.result.models.contains {
+            $0.id == MuseGlimmerResources.assistantModelId
+        })
         XCTAssertTrue(envelope.result.models.contains { $0.hasDownloadSource })
         XCTAssertTrue(envelope.actions.contains { $0.id == "pull-models" })
     }
@@ -510,7 +513,7 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertTrue(message.contains("Model image-klein-max was not installed cleanly."))
         XCTAssertTrue(message.contains("- No *.safetensors weights found in transformer/"))
         XCTAssertTrue(message.contains("Model store: /tmp/mere.run/models/image-klein-max"))
-        XCTAssertTrue(message.contains("Retry with: mere.run model pull image-klein-max"))
+        XCTAssertTrue(message.contains("Retry with: \(CLICommandDisplay.command("model pull image-klein-max"))"))
         XCTAssertTrue(message.contains("Use --force only if you intentionally want to replace a complete install."))
         XCTAssertFalse(message.contains("Usage:"))
     }

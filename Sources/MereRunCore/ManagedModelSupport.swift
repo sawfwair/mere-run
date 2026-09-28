@@ -1377,6 +1377,10 @@ public enum ManagedModelCapabilityCatalog {
             reasons.append("Magenta RT2 requires Apple Silicon macOS.")
         }
 
+        if spec.validationKind == .insightFaceBuffaloL && !machine.isAppleSiliconMac {
+            reasons.append("InsightFace Buffalo-L requires the macOS ONNX Runtime build.")
+        }
+
         if spec.validationKind == .terramindFlood && !machine.isAppleSiliconMac {
             reasons.append("TerraMind Flood requires Apple Silicon macOS.")
         }

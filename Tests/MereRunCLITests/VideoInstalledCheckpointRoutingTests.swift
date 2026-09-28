@@ -81,7 +81,7 @@ final class VideoInstalledCheckpointRoutingTests: XCTestCase {
     func testTheMergedIdRunsASuggestedLTX23FullFolderForAudioVideo() async throws {
         let full = try install(.ltxVideo23FullMLX, vocoder: true)
         let resolved = try await resolvedRoot("video-ltx-av", variant: .unifiedAV)
-        XCTAssertEqual(resolved.standardizedFileURL, full.standardizedFileURL)
+        XCTAssertEqual(resolved.standardizedFileURL.path, full.standardizedFileURL.path)
         for extra in [["--audio", "song.wav"], ["--output-mode", "audio-video"], ["--variant", "unified-av"]] {
             let result = try report(["video", "generate", "a", "--model", "video-ltx-av"] + extra)
             XCTAssertEqual(result.family, "ltx23-full", "\(extra)")
@@ -95,7 +95,7 @@ final class VideoInstalledCheckpointRoutingTests: XCTestCase {
     func testTheFullIdRunsAnInstalledA2VidFolder() async throws {
         let a2vid = try install(.ltxVideo23A2VMLX, vocoder: false)
         let resolved = try await resolvedRoot("video-ltx23-full-mlx", variant: .unifiedAV)
-        XCTAssertEqual(resolved.standardizedFileURL, a2vid.standardizedFileURL)
+        XCTAssertEqual(resolved.standardizedFileURL.path, a2vid.standardizedFileURL.path)
         let generate = try report(["video", "generate", "a", "--model", "video-ltx23-full-mlx"])
         XCTAssertEqual(generate.family, "ltx23-a2vid")
         XCTAssertEqual(generate.source, .identified)

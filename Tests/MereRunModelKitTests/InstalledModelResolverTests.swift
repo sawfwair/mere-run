@@ -39,12 +39,12 @@ final class InstalledModelResolverTests: XCTestCase {
             let result = try resolver.resolve(id, descriptor: { InstalledModelDescriptor(id: $0) }) { modelID, url in
                 XCTAssertEqual(modelID, self.id)
                 visited.append(url)
-                return url == accepted
+                return url.standardizedFileURL.path == accepted.standardizedFileURL.path
             }
-            XCTAssertEqual(result.candidate.rootURL, accepted)
+            XCTAssertEqual(result.candidate.rootURL.standardizedFileURL.path, accepted.standardizedFileURL.path)
             XCTAssertEqual(result.candidate.kind, expectedKind)
-            XCTAssertEqual(visited, Array([primary, binding, search].prefix(visited.count)))
-            XCTAssertEqual(visited.last, accepted)
+            XCTAssertEqual(visited.map(\.path), Array([primary, binding, search].prefix(visited.count)).map(\.path))
+            XCTAssertEqual(visited.last?.path, accepted.path)
         }
     }
 
@@ -56,7 +56,7 @@ final class InstalledModelResolverTests: XCTestCase {
             InstalledModelDescriptor(id: $0, fallbackIDs: $0 == self.id ? [fallback] : [])
         }) { validatedID, url in
             XCTAssertEqual(validatedID, fallback)
-            XCTAssertEqual(url, fallbackRoot)
+            XCTAssertEqual(url.standardizedFileURL.path, fallbackRoot.standardizedFileURL.path)
             return true
         }
         XCTAssertEqual(result.requestedModelID, id)
@@ -101,7 +101,7 @@ final class InstalledModelResolverTests: XCTestCase {
             primaryRoot: root, bindings: [.init(modelID: id.rawValue, path: external.path)]
         ))
         let result = try bound.resolve(id, descriptor: { InstalledModelDescriptor(id: $0) }, validateRuntime: { _, _ in true })
-        XCTAssertEqual(result.candidate.rootURL, external)
+        XCTAssertEqual(result.candidate.rootURL.standardizedFileURL.path, external.standardizedFileURL.path)
     }
 
     func testRestrictedBindingRequiresRegistryOrManifestAcknowledgement() throws {

@@ -833,7 +833,7 @@ enum FFmpegMediaIO {
                 "-max_pixels", "\(maximumDecodedPixels)",
                 "-i", url.path,
                 "-map", "0:v:0",
-                "-vf", "showinfo",
+                "-vf", "select=lt(n\\,\(maximumFrameCount)),showinfo",
                 "-frames:v", "\(maximumFrameCount)",
                 "-an", "-sn", "-dn",
                 "-f", "null",

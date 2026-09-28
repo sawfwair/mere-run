@@ -38,7 +38,5 @@ public enum ManagedModelCatalog {
         "Model \(modelId) does not have a Hugging Face Hub source in this public build. Install it from a local path or choose a model listed by `mere.run model capabilities --recommended`."
     }
 
-    private static var allKnownSpecs: [ManagedModelSpec] {
-        allSpecs + companionSpecs
-    }
+    public static let allKnownSpecs: [ManagedModelSpec] = allSpecs + companionSpecs
 }

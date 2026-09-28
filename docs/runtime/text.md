@@ -546,6 +546,7 @@ directory — and each call asks for interactive `[y/N]` approval by default.
 targets absolute paths outside the sandbox with `--allow-absolute-tool-paths`.
 `--auto-approve-tools` skips confirmation for `write_file` only; `shell_exec`
 always requires interactive approval even when that flag is set.
+Approved shell commands run through `/bin/zsh` on macOS and `/bin/sh` on Linux.
 
 Each approved shell call has a five-minute deadline. The tool drains stdout and
 stderr while the command runs and retains the first 256 KiB of their combined

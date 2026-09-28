@@ -3,6 +3,26 @@ import MereRunCore
 @testable import MereRunCLI
 
 final class ModelInventoryTests: XCTestCase {
+    func testFastInventoryIncludesInstalledCompanion() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-companion-inventory-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let modelID = ModelResolver.ModelID.lfm25VL3BDSpark
+        let modelRoot = root.appendingPathComponent(modelID.rawValue, isDirectory: true)
+        try FileManager.default.createDirectory(at: modelRoot, withIntermediateDirectories: true)
+        try MereRunModelManifest.template(for: modelID, createdAt: Date(timeIntervalSince1970: 0))
+            .write(to: modelRoot)
+
+        let snapshot = ModelInventory.snapshot(
+            mode: .fast,
+            locations: ModelLocationSnapshot(primaryRoot: root)
+        )
+        let row = try XCTUnwrap(snapshot.rows.first { $0.id == modelID.rawValue })
+        XCTAssertEqual(row.status, "installed")
+        XCTAssertTrue(snapshot.installedModelIDs.contains(modelID.rawValue))
+    }
+
     func testFastInventoryDoesNotMeasureReferencedPayloads() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-fast-inventory-\(UUID().uuidString)", isDirectory: true)

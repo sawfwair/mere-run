@@ -223,7 +223,17 @@ enum InstalledModelSmokePlans {
                 try await runner.installedTextCheck(model: spec.id)
             }
 
-        case .diffusionGemma, .laguna, .lfm2, .inkling, .nemotronH, .codegenGGUF, .hfTextChat:
+        case .lfm2:
+            if spec.category == .visionChat {
+                return direct(spec, route: "text chat --image") { runner in
+                    try await runner.installedVisionChatCheck(model: spec.id)
+                }
+            }
+            return direct(spec, route: "text chat") { runner in
+                try await runner.installedTextCheck(model: spec.id)
+            }
+
+        case .diffusionGemma, .laguna, .inkling, .nemotronH, .codegenGGUF, .hfTextChat:
             return direct(spec, route: "text chat") { runner in
                 try await runner.installedTextCheck(model: spec.id)
             }
@@ -303,8 +313,20 @@ enum InstalledModelSmokePlans {
                 targetID = LFM2Resources.smallModelId
             case LFM2Resources.denseDSparkModelId:
                 targetID = LFM2Resources.denseBF16ModelId
+            case LFM2Resources.visionDSparkModelId:
+                targetID = LFM2Resources.visionBF16ModelId
             default:
                 targetID = LFM2Resources.a1bBF16ModelId
+            }
+            if spec.id == LFM2Resources.visionDSparkModelId {
+                return companion(
+                    spec,
+                    installedIDs: installedIDs,
+                    candidates: [targetID],
+                    route: "consumed by LFM2.5 vision chat"
+                ) { runner, primary in
+                    try await runner.installedVisionChatCheck(model: primary)
+                }
             }
             return companion(
                 spec,
@@ -1038,9 +1060,8 @@ extension GateRunner {
     }
 
     func installedOCRCheck(model: String) async throws -> GateObservation {
-        #if canImport(CoreGraphics)
         let image = workDirectory.appendingPathComponent("installed-ocr-page.png")
-        _ = GateTextPageRenderer.render(to: image)
+        _ = try GateTextPageRenderer.render(to: image)
         let arguments: [String]
         if model.contains("infinity") {
             arguments = [
@@ -1061,9 +1082,6 @@ extension GateRunner {
         }
         let run = try await exec(arguments, timeout: 1_800)
         return stdoutObservation(run, label: "OCR output")
-        #else
-        throw GateError.unsupportedPlatform("OCR fixture rendering requires CoreGraphics")
-        #endif
     }
 
     func installedSegmentationCheck(model: String) async throws -> GateObservation {
