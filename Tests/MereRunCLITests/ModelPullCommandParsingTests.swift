@@ -857,7 +857,7 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertEqual(ModelResolver(locations: locations).resolveIfPresent(fullID)?.rootURL.path, a2vidRoot.path)
 
         let envelope = try ModelPull.parse([
-            fullID.rawValue, "--accept-model-license", "--preflight", "--json",
+            fullID.rawValue, "--accept-model-license", "--allow-unsupported", "--preflight", "--json",
         ]).makePreflightEnvelope(
             hubCacheURL: root.appendingPathComponent("hub", isDirectory: true),
             modelStoreURL: modelStore,
