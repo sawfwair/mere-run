@@ -1119,6 +1119,8 @@ limitations under the License.
 - bundled Iris image decoders: MIT, copyright (c) 2026 Salvatore Sanfilippo;
   full notice: [`vendor/ds4/IRIS-LICENSE`](./vendor/ds4/IRIS-LICENSE)
 - rebuild note: regenerated with [`scripts/rebuild_ds4.sh`](./scripts/rebuild_ds4.sh)
+- Linux packaging: native executables staged through `MERERUN_DS4_LINUX_BIN_DIR`
+  use the same upstream pin and include both `LICENSE` and `IRIS-LICENSE`.
 - license: MIT
 
 ```

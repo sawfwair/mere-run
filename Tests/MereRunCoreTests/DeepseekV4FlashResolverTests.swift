@@ -127,6 +127,35 @@ final class DeepseekV4FlashResolverTests: XCTestCase {
         XCTAssertEqual(resolved.standardizedFileURL, flatServer.standardizedFileURL)
     }
 
+    func testLinuxVendoredLookupExcludesMacOSRootBinaries() {
+        let root = URL(fileURLWithPath: "/package/vendor/ds4", isDirectory: true)
+        let candidates = DeepseekV4FlashBinary.ds4CandidateURLs(
+            root: root,
+            kind: .server,
+            platformDirectory: "linux-arm64",
+            preferPlatformDirectory: true
+        )
+        XCTAssertEqual(candidates.map(\.path), ["/package/vendor/ds4/linux-arm64/ds4-server"])
+    }
+
+    func testServerCleanupTerminatesAChildThatIgnoresSIGTERM() async throws {
+        let child = Process()
+        child.executableURL = URL(fileURLWithPath: "/bin/sh")
+        child.arguments = ["-c", "trap '' TERM; printf ready; exec /bin/sleep 30"]
+        let output = Pipe()
+        child.standardOutput = output
+        child.standardError = FileHandle.nullDevice
+        try child.run()
+        defer { if child.isRunning { child.terminate() } }
+        XCTAssertEqual(output.fileHandleForReading.readData(ofLength: 5), Data("ready".utf8))
+        let start = ProcessInfo.processInfo.systemUptime
+        await DeepseekV4FlashGenerator.stopServer(child, graceSeconds: 0.1)
+        XCTAssertFalse(child.isRunning)
+        XCTAssertEqual(child.terminationReason, .uncaughtSignal)
+        XCTAssertEqual(child.terminationStatus, 9)
+        XCTAssertLessThan(ProcessInfo.processInfo.systemUptime - start, 5)
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let root = try TestFileSystem.makeTempDir(prefix: "mererun-ds4-resolver-tests")
         temporaryRoots.append(root)

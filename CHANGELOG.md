@@ -6,6 +6,35 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Keep single-step LTX audio-to-video diffusion finite by using its direct
+  noise-to-clean schedule instead of stretching a zero-length interval.
+- Honor the requested LTX Gemma runtime precision for quantized checkpoint
+  scales and biases, avoiding unintended FP16 text-encoder activations.
+- Exclude padded LTX text states with selection so unused non-finite values
+  cannot enter the connector. Reject non-finite decoded video before converting
+  it to integer pixels.
+- Linux packages include only staged native DS4 executables and their notices;
+  Linux runtime lookup no longer falls back to the macOS vendored binaries.
+- Bound DS4 server cleanup so a child that blocks its termination signal cannot
+  leave a completed benchmark waiting indefinitely.
+- Fixed Qwen3.8 packaged PLE validation to check Hub symlink targets and
+  DeepSeek V4 GGUF installation validation to use checkpoint files.
+- Report MiniMax-H3 FastH3 VSA as unsupported on Linux because its sparse
+  attention implementation requires Metal kernels.
+- Fixed Nemotron Omni loading from managed installs that link
+  `config.json` and the published expert pack into the Hub cache.
+- Fixed standalone ACE-Step 5 Hz planner installation validation so it checks
+  the planner files instead of requiring unrelated image model components.
+- Fixed the installed-model gate to verify TESSERA Teacher's 1024-dimensional
+  embeddings and exercise the LTX text encoder through video generation.
+- Fixed BF16 LFM2.5 A1B loading by matching its dense `w1`/`w2`/`w3` names
+  and stacking the official checkpoint's per-expert MoE weights while retaining
+  the quantized MLX layout.
+- Added a managed manifest for the original Muse Glimmer assistant so its
+  downloaded checkpoint appears in inventory and can be gated with its parent.
+- Fixed Linux package checksum manifests so they hash distributable artifacts
+  without including the manifest itself.
+
 ## 0.60.1 - 2026-09-28
 
 - Prevent the packaged release gate from hanging while cleaning up the DreamX
@@ -32,7 +61,6 @@ The format is based on Keep a Changelog.
   Package fixtures check that these files are present.
 - Refresh SwiftNIO, SwiftNIO Extras, and SwiftNIO HTTP/2 dependencies. Linux
   source builds require Swift 6.1 or later.
-
 
 ## 0.59.0 - 2026-09-26
 

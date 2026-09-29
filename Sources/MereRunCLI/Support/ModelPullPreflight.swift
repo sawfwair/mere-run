@@ -309,7 +309,9 @@ struct ModelPullPreflightAnalyzer {
             nil
         }
         let unifiedResolution = spec.modelID.flatMap { resolver?.resolveIfPresent($0) }
-        let installed = installedInPrimary || unifiedResolution != nil
+        let installed = installedInPrimary || (unifiedResolution.map {
+            spec.isManagedRuntimeReady($0.rootURL, fileManager: fileManager)
+        } ?? false)
         let runtimeURL = unifiedResolution?.rootURL
             ?? runtimeURL(for: spec, installPath: installPath, installed: installedInPrimary)
         let runtimeReady = runtimeURL != nil

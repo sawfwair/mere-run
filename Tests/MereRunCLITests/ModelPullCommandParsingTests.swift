@@ -836,6 +836,40 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertEqual(envelope.result.models.first?.willDownload, false)
     }
 
+    func testLTXFullPullDoesNotTreatA2VidFallbackAsInstalled() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let modelStore = root.appendingPathComponent("models", isDirectory: true)
+        let a2vidID = ModelResolver.ModelID.ltxVideo23A2VMLX
+        let fullID = ModelResolver.ModelID.ltxVideo23FullMLX
+        let a2vidRoot = modelStore.appendingPathComponent(a2vidID.rawValue, isDirectory: true)
+        try FileManager.default.createDirectory(at: a2vidRoot, withIntermediateDirectories: true)
+        for file in [
+            "config.json", "embedded_config.json", "split_model.json", "connector.safetensors",
+            "transformer-dev.safetensors", "ltx-2.3-22b-distilled-lora-384-1.1.safetensors",
+            "vae_decoder.safetensors", "vae_encoder.safetensors", "audio_vae.safetensors",
+            "spatial_upscaler_x2_v1_1.safetensors", "spatial_upscaler_x2_v1_1_config.json",
+        ] {
+            try Data().write(to: a2vidRoot.appendingPathComponent(file))
+        }
+        try MereRunModelManifest(id: a2vidID.rawValue, usageTermsAcknowledged: true).write(to: a2vidRoot)
+        let locations = ModelLocationSnapshot(primaryRoot: modelStore)
+        XCTAssertEqual(ModelResolver(locations: locations).resolveIfPresent(fullID)?.rootURL.path, a2vidRoot.path)
+
+        let envelope = try ModelPull.parse([
+            fullID.rawValue, "--accept-model-license", "--allow-unsupported", "--preflight", "--json",
+        ]).makePreflightEnvelope(
+            hubCacheURL: root.appendingPathComponent("hub", isDirectory: true),
+            modelStoreURL: modelStore,
+            modelLocations: locations,
+            diskAvailableBytes: { _ in 200 * ModelPullDiskPreflight.bytesPerGiB }
+        )
+
+        XCTAssertEqual(envelope.result.models.first?.id, fullID.rawValue)
+        XCTAssertEqual(envelope.result.models.first?.installed, false)
+        XCTAssertEqual(envelope.result.models.first?.willDownload, true)
+    }
+
     func testExternalBindingAndRevisionDeltaOverrideCompose() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

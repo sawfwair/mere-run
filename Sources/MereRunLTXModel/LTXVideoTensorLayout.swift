@@ -76,7 +76,18 @@ package func pixelNormChannels(_ x: MLXArray, eps: Float = 1e-8) -> MLXArray {
     return x / denom
 }
 
-package func postprocessDecodedVideo(_ decoded: MLXArray) -> MLXArray {
+package enum LTXVideoTensorError: LocalizedError {
+    case nonFiniteDecodedVideo
+
+    package var errorDescription: String? {
+        "LTX video decoder produced a non-finite value."
+    }
+}
+
+package func postprocessDecodedVideo(_ decoded: MLXArray) throws -> MLXArray {
+    guard MLX.all(MLX.isFinite(decoded)).item(Bool.self) else {
+        throw LTXVideoTensorError.nonFiniteDecodedVideo
+    }
     var video = decoded[0, 0..., 0..., 0..., 0...]
     video = video.transposed(1, 2, 3, 0)
     video = MLX.clip((video + MLXArray(1.0)) / MLXArray(2.0), min: MLXArray(0.0), max: MLXArray(1.0))

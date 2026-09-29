@@ -343,6 +343,27 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertTrue(report.errors.isEmpty)
     }
 
+    func testStandaloneACEStepPlannerUsesItsOwnLayout() throws {
+        let root = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try MereRunModelManifest.template(
+            for: .aceStepLM17B,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: root)
+        for name in [
+            "config.json", "model.safetensors", "tokenizer_config.json",
+            "tokenizer.json", "added_tokens.json",
+        ] {
+            try TestFileSystem.writeFile(root.appendingPathComponent(name))
+        }
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: ModelResolver.ModelID.aceStepLM17B.rawValue
+        )
+        XCTAssertTrue(report.isValid, "\(report.errors)")
+    }
+
     func testGeometryAndDepthManagedModelsRejectPlaceholderArtifacts() throws {
         let cases: [(ModelResolver.ModelID, String)] = [
             (.visionGeometryMoGe2Small, "model.onnx"),
@@ -1070,5 +1091,23 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertTrue(report.isValid)
         XCTAssertTrue(report.errors.isEmpty)
         XCTAssertFalse(report.warnings.contains("Missing model root marker (expected model_index.json)."))
+    }
+
+    func testDeepseekGGUFValidationUsesCheckpointFilesWithoutImageComponents() throws {
+        let root = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let modelID = ModelResolver.ModelID.deepseekV4Flash
+        try MereRunModelManifest.template(for: modelID).write(to: root)
+        let checkpoint = root.appendingPathComponent("deepseek-v4-flash-imatrix.gguf")
+        try Data().write(to: checkpoint)
+
+        let valid = MereRunModelValidator.validate(modelRoot: root, expectedModelID: modelID.rawValue)
+        XCTAssertTrue(valid.isValid, valid.errors.joined(separator: "\n"))
+        XCTAssertFalse(valid.warnings.contains("Missing model root marker (expected model_index.json)."))
+
+        try FileManager.default.removeItem(at: checkpoint)
+        let missing = MereRunModelValidator.validate(modelRoot: root, expectedModelID: modelID.rawValue)
+        XCTAssertFalse(missing.isValid)
+        XCTAssertTrue(missing.errors.contains { $0.contains("imatrix") })
     }
 }

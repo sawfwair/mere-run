@@ -233,7 +233,43 @@ enum InstalledModelSmokePlans {
                 try await runner.installedTextCheck(model: spec.id)
             }
 
-        case .diffusionGemma, .laguna, .inkling, .nemotronH, .codegenGGUF, .hfTextChat:
+        case .diffusionGemma, .laguna, .inkling, .nemotronH, .codegenGGUF:
+            return direct(spec, route: "text chat") { runner in
+                try await runner.installedTextCheck(model: spec.id)
+            }
+
+        case .hfTextChat:
+            if spec.id == ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue {
+                return companion(
+                    spec,
+                    installedIDs: installedIDs,
+                    candidates: [
+                        ModelResolver.ModelID.ltxVideo23AVMLX.rawValue,
+                        ModelResolver.ModelID.ltxVideo23FullMLX.rawValue,
+                        ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue,
+                    ],
+                    route: "consumed by LTX 2.3 video generation"
+                ) { runner, primary in
+                    switch primary {
+                    case ModelResolver.ModelID.ltxVideo23AVMLX.rawValue:
+                        return try await runner.installedLTXCheck(
+                            model: primary,
+                            id: primary,
+                            arguments: ["--quality", "draft", "--output-mode", "video-only"],
+                            requireAudio: false
+                        )
+                    case ModelResolver.ModelID.ltxVideo23FullMLX.rawValue:
+                        return try await runner.installedLTXCheck(
+                            model: primary,
+                            id: primary,
+                            arguments: ["--quality", "final", "--output-mode", "audio-video", "--a2v-steps", "4"],
+                            requireAudio: true
+                        )
+                    default:
+                        return try await runner.installedA2VidCheck(model: primary)
+                    }
+                }
+            }
             return direct(spec, route: "text chat") { runner in
                 try await runner.installedTextCheck(model: spec.id)
             }
@@ -1211,11 +1247,12 @@ extension GateRunner {
             metadata: ["format": "mere.run/tessera-v2-smoke-v1"],
             url: input
         )
+        let dimensions = model.hasSuffix("-teacher") ? 1024 : 128
         let run = try await exec(
             [
                 "geo", "tessera", input.path,
                 "--model", model,
-                "--dimensions", model.hasSuffix("-teacher") ? "1024" : "128",
+                "--dimensions", String(dimensions),
                 "--output", output.path,
                 "--json",
             ],
@@ -1227,7 +1264,7 @@ extension GateRunner {
             throw GateError.invalidArtifact("TESSERA output did not contain embeddings")
         }
         let values = embeddings.asArray(Float.self)
-        let valid = embeddings.shape == [1, 128]
+        let valid = embeddings.shape == [1, dimensions]
             && values.allSatisfy(\.isFinite)
             && values.contains { abs($0) > 0.000_001 }
         return GateObservation(

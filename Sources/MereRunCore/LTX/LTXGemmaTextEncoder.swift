@@ -99,6 +99,7 @@ public actor LTXGemmaTextEncoder {
             return
         }
         let usesLTX23SplitConnector = isLTX23SplitModelRoot(root)
+            || isLTX23AudioToVideoModelRoot(root)
         let textRoot = (overrideTextEncoderRoot ?? root.appendingPathComponent("text_encoder", isDirectory: true))
             .standardizedFileURL
 
@@ -160,15 +161,10 @@ public actor LTXGemmaTextEncoder {
         )
 
         if gemmaIndexContainsQuantizedWeights(indexURL: indexURL) {
-            try HFSafetensorsWeightsLoader.applyQuantizedWeights(
+            try loadLTXGemmaQuantizedWeights(
                 indexURL: indexURL,
                 to: languageModel,
-                groupSize: 64,
-                bits: 4,
-                keyMapper: mapGemmaLanguageWeightKey,
-                mapper: { key, value in
-                    mapGemmaLanguageWeight(key: key, value: value, dtype: dtype)
-                }
+                dtype: dtype
             )
         } else {
             try HFSafetensorsWeightsLoader.applyShardedWeights(
@@ -471,10 +467,13 @@ public actor LTXGemmaTextEncoder {
             throw LTXGemmaTextEncoderError.modelNotLoaded
         }
         if let featureExtractorV2 {
+            saveLTXAVDebugArray(lastHiddenState, suffix: "text_last_hidden")
+            saveLTXAVDebugArray(maskArray, suffix: "text_attention_mask")
             let normalized = normalizeAndConcatHiddenStatesV2(
                 hiddenStates: hiddenStates,
                 attentionMask: maskArray
             )
+            saveLTXAVDebugArray(normalized[0..., 0..., 0..<8], suffix: "text_normalized_preview")
             let extraction = featureExtractorV2(normalized, attentionMask: maskArray)
             return LTXGemmaTextEncoding(
                 lastHiddenState: lastHiddenState,
@@ -1498,10 +1497,25 @@ func normalizeAndConcatHiddenStatesV2(
     let stacked = MLX.stacked(hiddenStates.map { $0.asType(.float32) }, axis: -1)
     let variance = MLX.mean(stacked * stacked, axis: 2, keepDims: true)
     let normalized = stacked * rsqrt(variance + MLXArray(eps))
-    var flattened = normalized.reshaped(batch, seqLen, hidden * layerCount)
-    let mask = attentionMask.asType(flattened.dtype).reshaped(batch, seqLen, 1)
-    flattened = flattened * mask
-    return flattened.asType(dtype)
+    let flattened = normalized.reshaped(batch, seqLen, hidden * layerCount)
+    let mask = attentionMask.reshaped(batch, seqLen, 1) .> MLXArray(0)
+    let masked = MLX.where(mask, flattened, MLX.zeros(flattened.shape, dtype: flattened.dtype))
+    return masked.asType(dtype)
+}
+
+func loadLTXGemmaQuantizedWeights(indexURL: URL, to model: Module, dtype: DType) throws {
+    let weights = try HFSafetensorsWeightsLoader.loadShardedArrays(indexURL: indexURL)
+        .mapValues { HFSafetensorsWeightsLoader.castIfNeeded($0, dtype: dtype) }
+    try HFSafetensorsWeightsLoader.applyQuantizedWeightsFromArrays(
+        weights,
+        to: model,
+        groupSize: 64,
+        bits: 4,
+        keyMapper: mapGemmaLanguageWeightKey,
+        mapper: { key, value in
+            mapGemmaLanguageWeight(key: key, value: value, dtype: dtype)
+        }
+    )
 }
 
 func mapGemmaLanguageWeight(

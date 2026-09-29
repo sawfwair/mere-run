@@ -1381,6 +1381,10 @@ public enum ManagedModelCapabilityCatalog {
             reasons.append("InsightFace Buffalo-L requires the macOS ONNX Runtime build.")
         }
 
+        if spec.id == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue && !machine.isAppleSiliconMac {
+            reasons.append("MiniMax-H3 FastH3 VSA requires the Metal sparse-attention kernels on Apple Silicon macOS.")
+        }
+
         if spec.validationKind == .terramindFlood && !machine.isAppleSiliconMac {
             reasons.append("TerraMind Flood requires Apple Silicon macOS.")
         }

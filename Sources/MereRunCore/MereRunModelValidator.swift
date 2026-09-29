@@ -139,7 +139,8 @@ public enum MereRunModelValidator {
         let vaeDir: URL?
         let tokenizerDir: URL?
 
-        if spec?.validationKind == .codegenGGUF {
+        if spec?.validationKind == .codegenGGUF
+            || spec?.validationKind == .deepseekV4FlashIMatrixGGUF {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
             transformerDir = nil
             textEncoderDir = nil
@@ -160,6 +161,7 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .gliner25Decide
             || spec?.validationKind == .qwenImage21
             || spec?.validationKind == .aceStep
+            || spec?.validationKind == .aceStepLM
             || spec?.validationKind == .miniMaxMusic3
             || spec?.validationKind == .yue2
             || spec?.validationKind == .roFormer
@@ -588,7 +590,7 @@ public enum MereRunModelValidator {
                 return true
             }
             switch manifest.engine {
-            case .qwen3Coder?, .northMiniCode?, .inkling?, .aceStep?, .miniMaxMusic3?, .yue2?, .magentaRT2?, .muScriptor?, .roFormer?, .auk?, .apBWE?, .univerSR?, .woosh?, .mmaudio?, .ltxVideo?,
+            case .qwen3Coder?, .northMiniCode?, .inkling?, .deepseekV4Flash?, .aceStep?, .miniMaxMusic3?, .yue2?, .magentaRT2?, .muScriptor?, .roFormer?, .auk?, .apBWE?, .univerSR?, .woosh?, .mmaudio?, .ltxVideo?,
                  .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .marigoldV2?, .tripoSR?, .instantMesh?, .trellis2?,
                  .insightFace?, .sortformer?, .terramindFlood?, .terramindFire?, .tessera?, .olmoEarth?:
                 return true

@@ -75,6 +75,33 @@ final class Q38PLEPlacementIntegrationTests: MereRunCoreTestCase {
         XCTAssertEqual(manifestURL.lastPathComponent, Q38PLEPlacement.manifestFilename)
     }
 
+    func testPlacementAcceptsManagedHubSymlinksAndRejectsTruncatedTargets() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        try fixture.writePlacementManifest()
+        let blobs = fixture.root.appendingPathComponent("blobs", isDirectory: true)
+        try FileManager.default.createDirectory(at: blobs, withIntermediateDirectories: true)
+        for name in ["weights.safetensors", "parameters.safetensors"] {
+            let link = fixture.root.appendingPathComponent(name)
+            try FileManager.default.moveItem(at: link, to: blobs.appendingPathComponent(name))
+            try FileManager.default.createSymbolicLink(atPath: link.path, withDestinationPath: "blobs/\(name)")
+        }
+        let resolution = try XCTUnwrap(Q38PLEPlacement.resolve(
+            rootURL: fixture.root,
+            cacheBase: fixture.root.appendingPathComponent("cache")
+        ))
+        XCTAssertEqual(resolution.indexURL, fixture.root.appendingPathComponent("model.safetensors.index.json"))
+        XCTAssertFalse(resolution.usedInternalCache)
+
+        try Data().write(to: blobs.appendingPathComponent("weights.safetensors"))
+        XCTAssertThrowsError(try Q38PLEPlacement.resolve(rootURL: fixture.root)) { error in
+            guard case Q38PLEPlacement.PlacementError.truncatedFile(let url) = error else {
+                return XCTFail("Expected truncated target failure, received \(error)")
+            }
+            XCTAssertEqual(url.lastPathComponent, "weights.safetensors")
+        }
+    }
+
     private struct Fixture {
         let root: URL
         let embeddings: [PreQuantizedEmbedding]

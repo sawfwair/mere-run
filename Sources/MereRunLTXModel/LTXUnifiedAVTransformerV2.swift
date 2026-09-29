@@ -249,6 +249,8 @@ package final class LTXUnifiedAVTransformerV2: Module, LTXUnifiedAVTransformerRu
         paritySave(avCaV2AGateParams, "v2a_gate_adaln")
         paritySave(videoPromptParams, "video_prompt_adaln")
         paritySave(audioPromptParams, "audio_prompt_adaln")
+        paritySave(videoContext, "video_context")
+        paritySave(audioContext, "audio_context")
         paritySave(videoRope.cos, "video_rope_cos")
         paritySave(videoRope.sin, "video_rope_sin")
         paritySave(audioRope.cos, "audio_rope_cos")

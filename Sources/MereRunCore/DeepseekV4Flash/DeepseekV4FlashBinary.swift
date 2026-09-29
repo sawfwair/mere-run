@@ -7,7 +7,7 @@ import Foundation
 /// 2. `$MERERUN_DS4_BIN_DIR/<platform>/ds4-server` when an override points at
 ///    a platform-rooted DS4 directory.
 /// 3. `vendor/ds4/ds4-server` alongside the running executable on macOS, or
-///    `vendor/ds4/<platform>/ds4-server` first on Linux.
+///    `vendor/ds4/<platform>/ds4-server` on Linux.
 ///    (installed layout produced by `scripts/install.sh`).
 /// 4. `vendor/ds4/ds4-server` under the SwiftPM build, walking upward from
 ///    the executable path until we find a directory containing `Package.swift`.
@@ -112,7 +112,7 @@ public enum DeepseekV4FlashBinary {
         throw DeepseekV4FlashError.binaryNotFound(searched: searched)
     }
 
-    private static func ds4CandidateURLs(
+    static func ds4CandidateURLs(
         root: URL,
         kind: Kind,
         platformDirectory: String?,
@@ -128,7 +128,7 @@ public enum DeepseekV4FlashBinary {
             .appendingPathComponent(kind.rawValue)
 
         if preferPlatformDirectory {
-            return [platformCandidate, rootCandidate]
+            return [platformCandidate]
         } else {
             return [rootCandidate, platformCandidate]
         }

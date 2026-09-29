@@ -567,6 +567,21 @@ extension MereRunModelManifest {
                     "\(MuseGlimmerResources.dflash2UpstreamRepoId)@\(MuseGlimmerResources.dflash2UpstreamRevision)",
                 createdAt: createdAt
             )
+        case .museGlimmer30BAssistant:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .museGlimmer,
+                family: .muse,
+                tier: .small,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [],
+                components: nil,
+                upstreamRepoId:
+                    "\(MuseGlimmerResources.assistantUpstreamRepoId)@\(MuseGlimmerResources.assistantUpstreamRevision)",
+                createdAt: createdAt
+            )
         case .nemotron35Lightning:
             return MereRunModelManifest(
                 id: modelID.rawValue,

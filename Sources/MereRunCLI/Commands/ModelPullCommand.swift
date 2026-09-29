@@ -266,7 +266,8 @@ struct ModelPull: AsyncParsableCommand {
         guard let resolution = ModelResolver().resolveIfPresent(modelID) else {
             return false
         }
-        if resolution.isExternallyManaged {
+        if resolution.isExternallyManaged,
+           spec.isManagedRuntimeReady(resolution.rootURL) {
             return true
         }
         return ManagedModelResolver.isManagedInstallComplete(

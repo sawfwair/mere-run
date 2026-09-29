@@ -39,7 +39,11 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
 
     deinit {
         if let process, process.isRunning {
+            #if os(Linux)
+            _ = kill(process.processIdentifier, SIGKILL)
+            #else
             process.terminate()
+            #endif
         }
     }
 
@@ -120,15 +124,25 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
         return url
     }
 
-    public func shutdown() {
-        if let process, process.isRunning {
-            process.terminate()
-            process.waitUntilExit()
-        }
+    public func shutdown() async {
+        if let process { await Self.stopServer(process) }
         stderrTask?.cancel()
         stderrTask = nil
         process = nil
         port = nil
+    }
+
+    static func stopServer(_ process: Process, graceSeconds: TimeInterval = 2) async {
+        guard process.isRunning else { return }
+        process.terminate()
+        let deadline = ProcessInfo.processInfo.systemUptime + graceSeconds
+        while process.isRunning, ProcessInfo.processInfo.systemUptime < deadline {
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        if process.isRunning {
+            _ = kill(process.processIdentifier, SIGKILL)
+        }
+        process.waitUntilExit()
     }
 
     // MARK: - Lifecycle

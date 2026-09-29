@@ -111,6 +111,9 @@ public enum LTX2DiffusionScheduler {
         terminal: Double = 0.1
     ) -> [Float] {
         precondition(steps > 0, "LTX-2 diffusion requires at least one step.")
+        if steps == 1 {
+            return [1, 0]
+        }
         let baseAnchor = 1_024.0
         let maxAnchor = 4_096.0
         let slope = (maxShift - baseShift) / (maxAnchor - baseAnchor)

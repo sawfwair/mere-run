@@ -1,9 +1,43 @@
 import MLX
+import MLXNN
 @testable import MereRunCore
 @testable import MereRunLTXModel
 import XCTest
 
 final class LTXGemmaTextEncoderV2Tests: XCTestCase {
+    func testQuantizedGemmaLoadUsesRequestedPrecisionForPackedParameters() throws {
+        final class Backbone: Module {
+            @ModuleInfo(key: "embed_tokens") var embedding = Embedding(embeddingCount: 4, dimensions: 64)
+        }
+        final class Model: Module {
+            @ModuleInfo(key: "model") var backbone = Backbone()
+        }
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let dense = MLXArray((0..<256).map(Float.init), [4, 64]).asType(.float16)
+        let (weight, scales, biases) = MLX.quantized(dense, groupSize: 64, bits: 4)
+        let tensors = [
+            "language_model.model.embed_tokens.weight": weight,
+            "language_model.model.embed_tokens.scales": scales,
+            "language_model.model.embed_tokens.biases": try XCTUnwrap(biases),
+        ]
+        try MLX.save(arrays: tensors, url: root.appendingPathComponent("model.safetensors"))
+        let indexURL = root.appendingPathComponent("model.safetensors.index.json")
+        try JSONEncoder().encode(HFSafetensorsIndex(
+            metadata: nil, weightMap: tensors.mapValues { _ in "model.safetensors" }
+        )).write(to: indexURL)
+
+        let model = Model()
+        try loadLTXGemmaQuantizedWeights(indexURL: indexURL, to: model, dtype: .bfloat16)
+        let restored = model.backbone.embedding(MLXArray([Int32(3)]))
+        XCTAssertEqual(restored.dtype, .bfloat16)
+        XCTAssertEqual(model.parameters().flattened().first { $0.0.hasSuffix(".weight") }?.1.dtype, .uint32)
+        let expanded = restored * MLXArray(Float(2_000)).asType(restored.dtype)
+        XCTAssertTrue(expanded.asArray(Float.self).allSatisfy(\.isFinite))
+        XCTAssertGreaterThan(MLX.max(expanded).item(Float.self), 65_504)
+    }
+
     func testGemma3PartialTextConfigUsesLTX23Defaults() throws {
         let data = Data("""
         {
@@ -143,5 +177,24 @@ final class LTXGemmaTextEncoderV2Tests: XCTestCase {
         XCTAssertEqual(values[5], 0.848528, accuracy: 1e-5)
         XCTAssertEqual(values[6], 1.131370, accuracy: 1e-5)
         XCTAssertEqual(values[7], 1.131370, accuracy: 1e-5)
+    }
+
+    func testNormalizeAndConcatHiddenStatesV2ExcludesNonFinitePadding() {
+        let hidden = MLXArray([Float.nan, Float.infinity, 3, 4], [1, 2, 2])
+        let mask = MLXArray([Int32(0), Int32(1)], [1, 2])
+        let output = normalizeAndConcatHiddenStatesV2(
+            hiddenStates: [hidden], attentionMask: mask, dtype: .float32
+        ).asArray(Float.self)
+
+        XCTAssertEqual(Array(output.prefix(2)), [0, 0])
+        XCTAssertEqual(output[2], 0.848528, accuracy: 1e-5)
+        XCTAssertEqual(output[3], 1.131370, accuracy: 1e-5)
+
+        let validMask = MLXArray([Int32(1), Int32(1)], [1, 2])
+        let unmasked = normalizeAndConcatHiddenStatesV2(
+            hiddenStates: [hidden], attentionMask: validMask, dtype: .float32
+        ).asArray(Float.self)
+        XCTAssertFalse(unmasked[0].isFinite)
+        XCTAssertFalse(unmasked[1].isFinite)
     }
 }

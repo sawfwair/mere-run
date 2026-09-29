@@ -6,6 +6,22 @@ import MereRunMLXTestSupport
 import XCTest
 
 final class LTXComputationBoundaryTests: MLXTestCase {
+    func testVideoPostprocessingRejectsNonFiniteValuesBeforeIntegerConversion() throws {
+        for value in [Float.nan, .infinity, -.infinity] {
+            let decoded = MLXArray([value, 0, 1], [1, 3, 1, 1, 1])
+            XCTAssertThrowsError(try postprocessDecodedVideo(decoded)) { error in
+                guard case LTXVideoTensorError.nonFiniteDecodedVideo = error else {
+                    return XCTFail("Expected a non-finite video error, got \(error)")
+                }
+            }
+        }
+
+        let finite = MLXArray([Float(-2), 0, 2], [1, 3, 1, 1, 1])
+        let pixels = try postprocessDecodedVideo(finite)
+        XCTAssertEqual(pixels.shape, [1, 1, 1, 3])
+        XCTAssertEqual(pixels.asArray(UInt8.self), [0, 127, 255])
+    }
+
     func testCachedContextMatchesDirectGatedCrossAttentionWithDifferentQueryLengths() {
         MLXRandom.seed(117)
         let attention = LTXDistilledAttention(

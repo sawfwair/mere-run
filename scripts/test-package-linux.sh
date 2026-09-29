@@ -20,6 +20,13 @@ fake_bin="$fixture_root/bin"
 fake_build="$fixture_root/build"
 fake_libs="$fixture_root/libs"
 mkdir -p "$fake_bin" "$fake_build" "$fake_libs/real" "$fake_libs/alternatives"
+ds4_fixture="$fixture_root/ds4"
+mkdir -p "$ds4_fixture"
+printf 'int main(void) { return 0; }\n' >"$fixture_root/ds4-fixture.c"
+cc "$fixture_root/ds4-fixture.c" -o "$ds4_fixture/ds4"
+cp "$ds4_fixture/ds4" "$ds4_fixture/ds4-server"
+cp "$ds4_fixture/ds4" "$ds4_fixture/ds4-bench"
+export MERERUN_DS4_LINUX_BIN_DIR="$ds4_fixture"
 mkdir -p "$fake_build/MereRun_MereRunCLI.resources/Guides"
 mlx_cuda_jit_fixture="$fixture_root/cutlass/include"
 mkdir -p "$mlx_cuda_jit_fixture/cute/numeric" "$mlx_cuda_jit_fixture/cutlass"
@@ -115,6 +122,36 @@ payload_dir="$fixture_root/mere-run-symlink-fixture-linux-${platform_arch}"
 staged_lib="$payload_dir/lib/libopenblas.so.0"
 staged_guide="$payload_dir/MereRun_MereRunCLI.resources/Guides/text-chat.md"
 runtime_licenses="$payload_dir/licenses/linux-runtime"
+for ds4_binary in ds4 ds4-server ds4-bench; do
+  [[ -x "$payload_dir/vendor/ds4/linux-$platform_arch/$ds4_binary" ]]
+  [[ ! -e "$payload_dir/vendor/ds4/$ds4_binary" ]]
+  cmp "$ds4_fixture/$ds4_binary" "$payload_dir/vendor/ds4/linux-$platform_arch/$ds4_binary"
+done
+for ds4_notice in LICENSE IRIS-LICENSE VERSION README.md; do
+  [[ -s "$payload_dir/vendor/ds4/$ds4_notice" ]]
+done
+
+invalid_ds4_fixture="$fixture_root/ds4-invalid"
+mkdir -p "$invalid_ds4_fixture"
+printf '#!/bin/sh\nexit 0\n' >"$invalid_ds4_fixture/ds4"
+chmod +x "$invalid_ds4_fixture/ds4"
+set +e
+invalid_ds4_error="$(
+  PATH="$fake_bin:$PATH" \
+    MERERUN_DS4_LINUX_BIN_DIR="$invalid_ds4_fixture" \
+    MERERUN_LINUX_ALLOW_ARM64_CPU_PACKAGE=1 \
+    bash scripts/package-linux.sh \
+      --version invalid-ds4-fixture \
+      --skip-build --skip-native --skip-deb \
+      --output-dir "$fixture_root/invalid-ds4-output" 2>&1
+)"
+invalid_ds4_status=$?
+set -e
+if [[ "$invalid_ds4_status" -ne 70 ]] || ! grep -q 'DS4 requires executable Linux ELF binaries' <<<"$invalid_ds4_error"; then
+  echo "[test-package-linux] expected non-ELF DS4 packaging to fail:" >&2
+  printf '%s\n' "$invalid_ds4_error" >&2
+  exit 1
+fi
 
 for license in Swift-LICENSE.txt Foundation-LICENSE.md FoundationICU-LICENSE.md \
   CorelibsFoundation-LICENSE Libdispatch-LICENSE BlocksRuntime-LICENSE \

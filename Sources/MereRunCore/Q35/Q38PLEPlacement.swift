@@ -199,7 +199,7 @@ enum Q38PLEPlacement {
         at url: URL,
         fileManager: FileManager
     ) throws {
-        let attributes = try fileManager.attributesOfItem(atPath: url.path)
+        let attributes = try fileManager.attributesOfItem(atPath: url.resolvingSymlinksInPath().path)
         guard (attributes[.size] as? NSNumber)?.intValue == file.byteCount else {
             throw PlacementError.truncatedFile(url)
         }
@@ -221,7 +221,7 @@ enum Q38PLEPlacement {
         }
         return manifest.files.allSatisfy { file in
             let url = root.appendingPathComponent(file.path)
-            guard let attributes = try? fileManager.attributesOfItem(atPath: url.path) else {
+            guard let attributes = try? fileManager.attributesOfItem(atPath: url.resolvingSymlinksInPath().path) else {
                 return false
             }
             return (attributes[.size] as? NSNumber)?.intValue == file.byteCount

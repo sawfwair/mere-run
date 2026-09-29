@@ -68,6 +68,29 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(rejected.reasons, ["InsightFace Buffalo-L requires the macOS ONNX Runtime build."])
     }
 
+    func testFastH3VSARequiresMetalWhileFL2VARemainsAvailableOnLinux() throws {
+        let linux = MereRunMachineProfile(
+            physicalMemoryBytes: 128 * 1_073_741_824,
+            processorName: "GB10",
+            isAppleSiliconMac: false,
+            isLinux: true
+        )
+        let mac = MereRunMachineProfile(
+            physicalMemoryBytes: 128 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+        let fast = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue))
+        XCTAssertTrue(ManagedModelCapabilityCatalog.support(for: fast, on: mac).isSupported)
+        let rejected = ManagedModelCapabilityCatalog.support(for: fast, on: linux)
+        XCTAssertFalse(rejected.isSupported)
+        XCTAssertEqual(rejected.reasons, [
+            "MiniMax-H3 FastH3 VSA requires the Metal sparse-attention kernels on Apple Silicon macOS.",
+        ])
+        let fl2va = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue))
+        XCTAssertTrue(ManagedModelCapabilityCatalog.support(for: fl2va, on: linux).isSupported)
+    }
+
     func testLargeCoderModelIsRejectedBelowMemoryThreshold() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: CodeGenResources.defaultModelId))
         let machine = MereRunMachineProfile(

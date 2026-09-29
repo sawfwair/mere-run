@@ -1579,7 +1579,7 @@ extension LTXUnifiedAVGenerator {
                 frames = (output.working * MLXArray(Float(255))).asType(.uint8)
             } else {
                 hdrOutput = nil
-                frames = postprocessDecodedVideo(fullDecoded)
+                frames = try postprocessDecodedVideo(fullDecoded)
             }
         } else if let tiling = selectDecodeTilingConfig(
             width: generationWidth,
@@ -1638,7 +1638,7 @@ extension LTXUnifiedAVGenerator {
                 frames = (output.working * MLXArray(Float(255))).asType(.uint8)
             } else {
                 hdrOutput = nil
-                frames = postprocessDecodedVideo(fullDecoded)
+                frames = try postprocessDecodedVideo(fullDecoded)
             }
         }
         if options.hdrICLoRA?.highQuality == true {

@@ -168,8 +168,8 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         return config
     }
 
-    private func makeTinyConfig() throws -> LFM2Config {
-        var config = makeBaseConfig(includeQuantization: false)
+    private func makeTinyConfig(quantized: Bool = false) throws -> LFM2Config {
+        var config = makeBaseConfig(includeQuantization: quantized)
         config["vocab_size"] = 32
         config["hidden_size"] = 16
         config["intermediate_size"] = 32
@@ -666,6 +666,44 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
 
         XCTAssertEqual(logits.shape, [1, 3, config.vocabSize])
         XCTAssertTrue(MLX.max(MLX.abs(logits.asType(.float32))).item(Float.self).isFinite)
+    }
+
+    func testA1BDensePrefixUsesCheckpointSpecificWeightNames() throws {
+        let bf16 = LFM2Model(config: try makeTinyConfig())
+        let bf16Paths = Set(bf16.leafModules().flattened().map(\.0))
+        XCTAssertTrue(bf16Paths.contains("model.layers.0.feed_forward.w2"))
+        XCTAssertTrue(bf16Paths.contains("model.layers.1.feed_forward.w2"))
+        XCTAssertFalse(bf16Paths.contains("model.layers.0.feed_forward.down_proj"))
+        XCTAssertFalse(bf16Paths.contains("model.layers.2.feed_forward.w2"))
+
+        let quantized = LFM2Model(config: try makeTinyConfig(quantized: true))
+        let quantizedPaths = Set(quantized.leafModules().flattened().map(\.0))
+        XCTAssertTrue(quantizedPaths.contains("model.layers.0.feed_forward.down_proj"))
+        XCTAssertFalse(quantizedPaths.contains("model.layers.0.feed_forward.w2"))
+    }
+
+    func testA1BBF16ExpertsMapIntoStackedSwitchWeights() throws {
+        let config = try makeTinyConfig()
+        var arrays: [String: MLXArray] = [:]
+        for layer in config.numDenseLayers..<config.numHiddenLayers {
+            for expert in 0..<config.numExperts {
+                for projection in ["w1", "w2", "w3"] {
+                    arrays["model.layers.\(layer).feed_forward.experts.\(expert).\(projection).weight"] =
+                        MLXArray(Float(expert + 1))
+                }
+            }
+        }
+        let updates = try Dictionary(uniqueKeysWithValues: LFM2Resources.mapBF16MoEWeights(arrays, config: config))
+        let prefix = "model.layers.2.feed_forward.switch_mlp."
+        for projection in ["gate_proj", "up_proj", "down_proj"] {
+            let weights = try XCTUnwrap(updates["\(prefix)\(projection).weight"])
+            MLX.eval(weights)
+            XCTAssertEqual(weights.shape, [config.numExperts])
+            XCTAssertEqual(weights[0].item(Float.self), 1)
+            XCTAssertEqual(weights[config.numExperts - 1].item(Float.self), Float(config.numExperts))
+        }
+        arrays.removeValue(forKey: "model.layers.3.feed_forward.experts.0.w1.weight")
+        XCTAssertThrowsError(try LFM2Resources.mapBF16MoEWeights(arrays, config: config))
     }
 
     func testLFM2ForwardCapturesConfiguredTargetLayerOutputs() throws {
