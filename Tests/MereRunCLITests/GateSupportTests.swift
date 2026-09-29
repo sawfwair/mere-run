@@ -105,6 +105,23 @@ final class GateSupportTests: XCTestCase {
         }
     }
 
+    func testWorldServerCleanupDoesNotWaitForProcessExit() async throws {
+        let server = Process()
+        server.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        server.arguments = ["30"]
+        try server.run()
+
+        let startedAt = Date()
+        GateRunner.terminateWorldServer(server)
+        XCTAssertLessThan(Date().timeIntervalSince(startedAt), 1)
+
+        for _ in 0..<100 where server.isRunning {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertFalse(server.isRunning)
+        GateRunner.terminateWorldServer(server)
+    }
+
     func testEveryManagedCatalogEntryHasAnExplicitInstalledModelSmokePlan() {
         let specs = ManagedModelCatalog.allKnownSpecs
         let installedIDs = Set(specs.map(\.id))

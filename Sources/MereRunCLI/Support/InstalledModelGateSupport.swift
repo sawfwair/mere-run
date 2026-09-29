@@ -1897,10 +1897,7 @@ extension GateRunner {
         let startedAt = Date()
         try server.run()
         defer {
-            if server.isRunning {
-                server.terminate()
-                server.waitUntilExit()
-            }
+            Self.terminateWorldServer(server)
         }
 
         let baseURL = URL(string: "http://127.0.0.1:\(port)")!
@@ -1957,6 +1954,12 @@ extension GateRunner {
             }
         }
         throw GateError.timedOut("DreamX world transition")
+    }
+
+    static func terminateWorldServer(_ server: Process) {
+        if server.isRunning {
+            server.terminate()
+        }
     }
 
     private func stdoutObservation(_ run: ExecResult, label: String) -> GateObservation {

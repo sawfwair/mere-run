@@ -20,6 +20,12 @@ The format is based on Keep a Changelog.
 - Fixed Linux package checksum manifests so they hash distributable artifacts
   without including the manifest itself.
 
+## 0.60.1 - 2026-09-28
+
+- Prevent the packaged release gate from hanging while cleaning up the DreamX
+  world server after a successful transition. The gate now sends the server a
+  termination signal without blocking on a synchronous process wait.
+
 ## 0.60.0 - 2026-09-28
 
 - Linux CUDA packages include the pinned `llama-cli` and its shared libraries
