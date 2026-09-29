@@ -7,6 +7,12 @@ import MLXNN
 import XCTest
 
 final class LTXAudioToVideoSupportTests: MereRunCoreTestCase {
+    func testSingleStepDiffusionRunsFromNoiseToCleanWithoutTerminalStretch() {
+        let sigmas = LTX2DiffusionScheduler.sigmas(steps: 1)
+        XCTAssertEqual(sigmas, [1, 0])
+        XCTAssertTrue(sigmas.allSatisfy(\.isFinite))
+    }
+
     func testMultimodalGuidanceSkipStepMatchesUpstreamCadence() {
         let guidance = LTXMultiModalGuidance(classifierFreeScale: 3, skipStep: 2)
         XCTAssertFalse(guidance.shouldSkip(step: 0))

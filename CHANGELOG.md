@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Keep single-step LTX audio-to-video diffusion finite by using its direct
+  noise-to-clean schedule instead of stretching a zero-length interval.
 - Honor the requested LTX Gemma runtime precision for quantized checkpoint
   scales and biases, avoiding unintended FP16 text-encoder activations.
 - Exclude padded LTX text states with selection so unused non-finite values
