@@ -296,7 +296,7 @@ extension LTXDistilledLatentGenerator {
         } else {
             let fullDecoded = decoder.decode(sample: latentResult.latents, timestep: nil)
             decoded = fullDecoded
-            frames = postprocessDecodedVideo(fullDecoded)
+            frames = try postprocessDecodedVideo(fullDecoded)
         }
         MLX.eval(frames)
         ltxTraceMemory("video-decode-ready")

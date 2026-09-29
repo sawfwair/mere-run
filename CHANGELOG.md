@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Honor the requested LTX Gemma runtime precision for quantized checkpoint
+  scales and biases, avoiding unintended FP16 text-encoder activations.
+- Exclude padded LTX text states with selection so unused non-finite values
+  cannot enter the connector. Reject non-finite decoded video before converting
+  it to integer pixels.
 - Linux packages include only staged native DS4 executables and their notices;
   Linux runtime lookup no longer falls back to the macOS vendored binaries.
 - Bound DS4 server cleanup so a child that blocks its termination signal cannot
