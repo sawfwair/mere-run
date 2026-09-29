@@ -99,6 +99,7 @@ public actor LTXGemmaTextEncoder {
             return
         }
         let usesLTX23SplitConnector = isLTX23SplitModelRoot(root)
+            || isLTX23AudioToVideoModelRoot(root)
         let textRoot = (overrideTextEncoderRoot ?? root.appendingPathComponent("text_encoder", isDirectory: true))
             .standardizedFileURL
 
