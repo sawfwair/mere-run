@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Linux packages include only staged native DS4 executables and their notices;
+  Linux runtime lookup no longer falls back to the macOS vendored binaries.
+- Bound DS4 server cleanup so a child that blocks its termination signal cannot
+  leave a completed benchmark waiting indefinitely.
+- Fixed Qwen3.8 packaged PLE validation to check Hub symlink targets and
+  DeepSeek V4 GGUF installation validation to use checkpoint files.
+- Report MiniMax-H3 FastH3 VSA as unsupported on Linux because its sparse
+  attention implementation requires Metal kernels.
 - Fixed Nemotron Omni loading from managed installs that link
   `config.json` and the published expert pack into the Hub cache.
 - Fixed standalone ACE-Step 5 Hz planner installation validation so it checks

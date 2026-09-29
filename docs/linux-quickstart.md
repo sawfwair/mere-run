@@ -112,7 +112,18 @@ machine-local view of the recommended public model IDs for the host.
 InsightFace Buffalo-L face analysis requires the macOS ONNX Runtime build, so
 the capability check reports it as unsupported on Linux.
 
+DeepSeek V4 Flash requires native Linux DS4 executables built from the pinned
+upstream commit in `vendor/ds4/README.md`. Set `MERERUN_DS4_LINUX_BIN_DIR` to
+their directory when packaging. Packages include those executables under
+`vendor/ds4/linux-<arch>` with the DS4 and Iris notices. If native DS4 binaries
+are absent, install `ds4-server` on `PATH` or set `MERERUN_DS4_BIN_DIR` when
+running the CLI.
+
 ## Media commands
+
+MiniMax-H3 FastH3 VSA requires the Metal sparse-attention kernels and is
+unsupported on Linux. The separate MiniMax-H3 FL2VA model remains available
+on Linux when the capability check reports sufficient memory.
 
 Linux media paths expect `ffmpeg` and `ffprobe`:
 

@@ -49,7 +49,7 @@ Environment:
                                 defaults are detected when unset.
   MERERUN_LINUX_ALLOW_ARM64_CPU_PACKAGE=1
                                 Allow an arm64 CPU package for local smoke tests.
-  MERERUN_DS4_LINUX_BIN_DIR     Passed through to prepare-linux-native.sh for DS4 staging.
+  MERERUN_DS4_LINUX_BIN_DIR     Native Linux DS4 binaries to stage and package.
 USAGE
 }
 
@@ -618,9 +618,23 @@ if [[ "${MERERUN_BUNDLE_SWIFT_LIBS:-1}" == "1" ]]; then
   done < <(ldd "$payload_dir/mere.run-bin" 2>/dev/null | awk '/=> \/|^\// { for (i=1; i<=NF; i++) if ($i ~ /^\//) print $i }' | sort -u)
 fi
 
-if [[ -d vendor/ds4 ]]; then
-  mkdir -p "$payload_dir/vendor"
-  cp -a vendor/ds4 "$payload_dir/vendor/ds4"
+ds4_platform_source="${MERERUN_DS4_LINUX_BIN_DIR:-$repo_root/vendor/ds4/linux-$platform_arch}"
+if [[ -d "$ds4_platform_source" ]]; then
+  ds4_payload="$payload_dir/vendor/ds4"
+  mkdir -p "$ds4_payload/linux-$platform_arch"
+  for ds4_binary in ds4 ds4-server ds4-bench; do
+    ds4_source="$ds4_platform_source/$ds4_binary"
+    if [[ ! -x "$ds4_source" ]] || ! readelf -h "$ds4_source" >/dev/null 2>&1; then
+      echo "[package-linux] error: DS4 requires executable Linux ELF binaries: $ds4_source" >&2
+      exit 70
+    fi
+    cp -a "$ds4_source" "$ds4_payload/linux-$platform_arch/$ds4_binary"
+  done
+  for ds4_notice in LICENSE IRIS-LICENSE VERSION README.md; do
+    cp -a "vendor/ds4/$ds4_notice" "$ds4_payload/$ds4_notice"
+  done
+else
+  echo "[package-linux] DS4 native binaries are not staged; runtime lookup will use PATH." >&2
 fi
 
 (
