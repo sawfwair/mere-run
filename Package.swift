@@ -637,6 +637,7 @@ targets.append(
       "FalconPerception/README.md",
       "Flux1/README.md",
       "Flux2Klein/README.md",
+      "FourDAnyone/README.md",
       "Gemma4/README.md",
       "Geometry/README.md",
       "HiDreamO1/README.md",

@@ -1,0 +1,668 @@
+{
+  "device": "cpu",
+  "dimensions": {
+    "FFN_DIM": 40,
+    "FREQUENCY_DIM": 8,
+    "LATENT_CHANNELS": 4,
+    "MODEL_DIM": 24,
+    "NUM_HEADS": 2,
+    "NUM_LAYERS": 2,
+    "TEXT_DIM": 16
+  },
+  "dtype": "float32",
+  "files": {
+    "checkpoint-schema.json": "32fce4e8a0937d64f83cfdb2e36cfe30cf651dfdb281d40dde9023768b2ea9e7",
+    "reference.safetensors": "37ad57f10acc1a7b640a106e6dfa2f022717d175ffa89d5eeb8abd7ec8236820",
+    "transformer.safetensors": "bf16430b755ea7a1b00f57a5a53222efa784a5b3fae1bd86fad0bb9f2b1a8948"
+  },
+  "modelRevision": "4c80e87b805a5f8461cf339cdbe2fb4249e585aa",
+  "plans": [
+    {
+      "order": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "pitches": [
+        15
+      ],
+      "routes": [
+        [
+          [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        ],
+        [
+          [
+            1,
+            2,
+            3,
+            4,
+            5,
+            0
+          ]
+        ],
+        [
+          [
+            2,
+            3,
+            4,
+            5,
+            0,
+            1
+          ]
+        ],
+        [
+          [
+            3,
+            4,
+            5,
+            0,
+            1,
+            2
+          ]
+        ],
+        [
+          [
+            4,
+            5,
+            0,
+            1,
+            2,
+            3
+          ]
+        ]
+      ],
+      "routing": true,
+      "viewsPerLayer": 6
+    },
+    {
+      "order": [
+        8,
+        16,
+        0,
+        1,
+        17,
+        18,
+        2,
+        3,
+        19,
+        20,
+        4,
+        5,
+        21,
+        22,
+        6,
+        7,
+        23,
+        15,
+        14,
+        13,
+        12,
+        11,
+        10,
+        9
+      ],
+      "pitches": [
+        30,
+        -15,
+        15
+      ],
+      "routes": [
+        [
+          [
+            8,
+            16,
+            0,
+            1
+          ],
+          [
+            17,
+            18,
+            2,
+            3
+          ],
+          [
+            19,
+            20,
+            4,
+            5
+          ],
+          [
+            21,
+            22,
+            6,
+            7
+          ],
+          [
+            23,
+            15,
+            14,
+            13
+          ],
+          [
+            12,
+            11,
+            10,
+            9
+          ]
+        ],
+        [
+          [
+            16,
+            0,
+            1,
+            17
+          ],
+          [
+            18,
+            2,
+            3,
+            19
+          ],
+          [
+            20,
+            4,
+            5,
+            21
+          ],
+          [
+            22,
+            6,
+            7,
+            23
+          ],
+          [
+            15,
+            14,
+            13,
+            12
+          ],
+          [
+            11,
+            10,
+            9,
+            8
+          ]
+        ],
+        [
+          [
+            0,
+            1,
+            17,
+            18
+          ],
+          [
+            2,
+            3,
+            19,
+            20
+          ],
+          [
+            4,
+            5,
+            21,
+            22
+          ],
+          [
+            6,
+            7,
+            23,
+            15
+          ],
+          [
+            14,
+            13,
+            12,
+            11
+          ],
+          [
+            10,
+            9,
+            8,
+            16
+          ]
+        ],
+        [
+          [
+            1,
+            17,
+            18,
+            2
+          ],
+          [
+            3,
+            19,
+            20,
+            4
+          ],
+          [
+            5,
+            21,
+            22,
+            6
+          ],
+          [
+            7,
+            23,
+            15,
+            14
+          ],
+          [
+            13,
+            12,
+            11,
+            10
+          ],
+          [
+            9,
+            8,
+            16,
+            0
+          ]
+        ],
+        [
+          [
+            17,
+            18,
+            2,
+            3
+          ],
+          [
+            19,
+            20,
+            4,
+            5
+          ],
+          [
+            21,
+            22,
+            6,
+            7
+          ],
+          [
+            23,
+            15,
+            14,
+            13
+          ],
+          [
+            12,
+            11,
+            10,
+            9
+          ],
+          [
+            8,
+            16,
+            0,
+            1
+          ]
+        ]
+      ],
+      "routing": true,
+      "viewsPerLayer": 8
+    },
+    {
+      "order": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "pitches": [
+        15
+      ],
+      "routes": [
+        [
+          [
+            0,
+            1,
+            2,
+            3
+          ],
+          [
+            4,
+            5,
+            6,
+            7
+          ]
+        ],
+        [
+          [
+            0,
+            1,
+            2,
+            3
+          ],
+          [
+            4,
+            5,
+            6,
+            7
+          ]
+        ],
+        [
+          [
+            0,
+            1,
+            2,
+            3
+          ],
+          [
+            4,
+            5,
+            6,
+            7
+          ]
+        ],
+        [
+          [
+            0,
+            1,
+            2,
+            3
+          ],
+          [
+            4,
+            5,
+            6,
+            7
+          ]
+        ],
+        [
+          [
+            0,
+            1,
+            2,
+            3
+          ],
+          [
+            4,
+            5,
+            6,
+            7
+          ]
+        ]
+      ],
+      "routing": false,
+      "viewsPerLayer": 8
+    }
+  ],
+  "poseWeights": [
+    {
+      "amplitude": 0.01,
+      "index": 0,
+      "key": "conv_layers.0.bias",
+      "offset": 0.02,
+      "shape": [
+        3
+      ]
+    },
+    {
+      "amplitude": 0.2721655269759087,
+      "index": 1,
+      "key": "conv_layers.0.weight",
+      "offset": 0.0,
+      "shape": [
+        3,
+        3,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "amplitude": 0.01,
+      "index": 2,
+      "key": "conv_layers.10.bias",
+      "offset": 0.02,
+      "shape": [
+        64
+      ]
+    },
+    {
+      "amplitude": 0.0625,
+      "index": 3,
+      "key": "conv_layers.10.weight",
+      "offset": 0.0,
+      "shape": [
+        64,
+        32,
+        3,
+        4,
+        4
+      ]
+    },
+    {
+      "amplitude": 0.01,
+      "index": 4,
+      "key": "conv_layers.12.bias",
+      "offset": 0.02,
+      "shape": [
+        64
+      ]
+    },
+    {
+      "amplitude": 0.05892556509887896,
+      "index": 5,
+      "key": "conv_layers.12.weight",
+      "offset": 0.0,
+      "shape": [
+        64,
+        64,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "amplitude": 0.01,
+      "index": 6,
+      "key": "conv_layers.14.bias",
+      "offset": 0.02,
+      "shape": [
+        128
+      ]
+    },
+    {
+      "amplitude": 0.04419417382415922,
+      "index": 7,
+      "key": "conv_layers.14.weight",
+      "offset": 0.0,
+      "shape": [
+        128,
+        64,
+        3,
+        4,
+        4
+      ]
+    },
+    {
+      "amplitude": 0.01,
+      "index": 8,
+      "key": "conv_layers.16.bias",
+      "offset": 0.02,
+      "shape": [
+        128
+      ]
+    },
+    {
+      "amplitude": 0.041666666666666664,
+      "index": 9,
+      "key": "conv_layers.16.weight",
+      "offset": 0.0,
+      "shape": [
+        128,
+        128,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "amplitude": 0.01,
+      "index": 10,
+      "key": "conv_layers.18.bias",
+      "offset": 0.02,
+      "shape": [
+        256
+      ]
+    },
+    {
+      "amplitude": 0.03125,
+      "index": 11,
+      "key": "conv_layers.18.weight",
+      "offset": 0.0,
+      "shape": [
+        256,
+        128,
+        3,
+        4,
+        4
+      ]
+    },
+    {
+      "amplitude": 0.01,
+      "index": 12,
+      "key": "conv_layers.2.bias",
+      "offset": 0.02,
+      "shape": [
+        16
+      ]
+    },
+    {
+      "amplitude": 0.2041241452319315,
+      "index": 13,
+      "key": "conv_layers.2.weight",
+      "offset": 0.0,
+      "shape": [
+        16,
+        3,
+        3,
+        4,
+        4
+      ]
+    },
+    {
+      "amplitude": 0.01,
+      "index": 14,
+      "key": "conv_layers.4.bias",
+      "offset": 0.02,
+      "shape": [
+        16
+      ]
+    },
+    {
+      "amplitude": 0.11785113019775792,
+      "index": 15,
+      "key": "conv_layers.4.weight",
+      "offset": 0.0,
+      "shape": [
+        16,
+        16,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "amplitude": 0.01,
+      "index": 16,
+      "key": "conv_layers.6.bias",
+      "offset": 0.02,
+      "shape": [
+        32
+      ]
+    },
+    {
+      "amplitude": 0.08838834764831845,
+      "index": 17,
+      "key": "conv_layers.6.weight",
+      "offset": 0.0,
+      "shape": [
+        32,
+        16,
+        3,
+        4,
+        4
+      ]
+    },
+    {
+      "amplitude": 0.01,
+      "index": 18,
+      "key": "conv_layers.8.bias",
+      "offset": 0.02,
+      "shape": [
+        32
+      ]
+    },
+    {
+      "amplitude": 0.08333333333333333,
+      "index": 19,
+      "key": "conv_layers.8.weight",
+      "offset": 0.0,
+      "shape": [
+        32,
+        32,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "amplitude": 0.01,
+      "index": 20,
+      "key": "final_proj.bias",
+      "offset": 0.02,
+      "shape": [
+        3072
+      ]
+    },
+    {
+      "amplitude": 0.15309310892394862,
+      "index": 21,
+      "key": "final_proj.weight",
+      "offset": 0.0,
+      "shape": [
+        3072,
+        256,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "amplitude": 0.0,
+      "index": 22,
+      "key": "scale",
+      "offset": 2.0,
+      "shape": [
+        1
+      ]
+    }
+  ],
+  "scope": "Synthetic weights and prepared tensors; not trained-checkpoint or CUDA/BF16 parity.",
+  "sourceHashes": {
+    "fdanyone/model/denoise.py": "b4c60e77c930739f2a0c1af52b707fa0ea4bacaf0e7e1453e3c2f03a0511de5c",
+    "fdanyone/model/routing.py": "0f0100a3b029bfa5557a3d777b6ba8bed801aeb9b74f00c99e819ada3a715975",
+    "fdanyone/vendor/diffsynth/models/wan_video_dit.py": "ce684262db42458c51518d680f33bf28c55b39ba3c91d72a3f3a09d37ccaa13d",
+    "fdanyone/vendor/diffsynth/models/wan_video_pose_encoder.py": "83f8487628471b75b93fc152ceaf0414883fbeede125e8b0aa1960815629a68e",
+    "fdanyone/vendor/diffsynth/schedulers/flow_match.py": "565550f751dc81e668ad12c200193275346318f481df7d103f9355f560844341",
+    "fdanyone/views.py": "f33659095b40324fc422a301898b82c0f501b6e3b4fe88fc1690f063cff4b31f"
+  },
+  "torchVersion": "2.8.0",
+  "upstreamRevision": "8cd60c40d90882de07645cc435dcf24bc9b4fbd1"
+}

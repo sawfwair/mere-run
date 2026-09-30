@@ -1,0 +1,1122 @@
+{
+  "verification_date": "2026-09-15",
+  "base_revision": "99becddba5f73ddfbde8dfb740d8ff75c60bcbee",
+  "branch": "codex/4danyone",
+  "implementation_committed": false,
+  "upstream_revision": "8cd60c40d90882de07645cc435dcf24bc9b4fbd1",
+  "scope": "Native Base runtime using FP32 computation with BF16 weight storage; full trained reference checks and historical BF16 arithmetic diagnostics.",
+  "native_reference_tests": {
+    "passed": 9,
+    "failed": 0,
+    "dtype": "float32",
+    "reference_runtime": "PyTorch 2.8.0 CPU",
+    "transformer_dimensions": {
+      "layers": 2,
+      "hidden": 24,
+      "heads": 2,
+      "latent_channels": 4
+    },
+    "pose_encoder_output_channels": 3072,
+    "production_schema_keys": 1182,
+    "maximum_absolute_error_tolerances": {
+      "transformer_stages": 3e-05,
+      "four_step_routed_denoising": 5e-05,
+      "pose_encoder": 0.0002,
+      "schedule": 1e-07
+    },
+    "fixture_manifest": "Tests/MereRunCoreTests/Fixtures/FourDAnyone/manifest.json",
+    "fixture_and_source_hashes_verified": true,
+    "devices": [
+      "MLX CPU",
+      "MLX Metal GPU"
+    ]
+  },
+  "not_validated": [
+    "Pure BF16 arithmetic failed the 3% normalized-error check; CUDA/BF16 parity remains unverified. Default FP32 computation passes independently.",
+    "Complete 24-step 121-frame 1280x704 generation with canonical conditioning",
+    "Production-size Wan2.2 VAE encoding and decoding at the intended precision",
+    "Proposal JPEG preparation and synchronized novel-view video quality",
+    "Automatic human motion recovery or dynamic Gaussian reconstruction",
+    "Hosted CI, deployment, or release readiness"
+  ],
+  "hardware": {
+    "chip": "Apple M4 Max",
+    "unified_memory_bytes": 137438953472,
+    "isolated_benchmark": false
+  },
+  "model_asset_revision": "4c80e87b805a5f8461cf339cdbe2fb4249e585aa",
+  "trained_checks": {
+    "pose-float32": {
+      "device": "gpu",
+      "forwardSeconds": [],
+      "loadSeconds": 0,
+      "metrics": [
+        {
+          "cosineSimilarity": 1,
+          "maximumAbsoluteError": 9.685755e-08,
+          "name": "pose",
+          "normalizedRootMeanSquareError": 5.721515e-07,
+          "referenceRootMeanSquare": 0.012259677,
+          "rootMeanSquareError": 7.014393e-09,
+          "shape": [
+            4,
+            3072,
+            2,
+            2,
+            3
+          ]
+        },
+        {
+          "cosineSimilarity": 1,
+          "maximumAbsoluteError": 6.854534e-07,
+          "name": "nullPose",
+          "normalizedRootMeanSquareError": 7.869843e-07,
+          "referenceRootMeanSquare": 0.07769181,
+          "rootMeanSquareError": 6.114223e-08,
+          "shape": [
+            1,
+            3072,
+            2,
+            2,
+            3
+          ]
+        }
+      ],
+      "peakAllocatedBytes": 13403419000,
+      "threshold_normalized_rmse": 0.0001,
+      "passed": true,
+      "memory_scope": "Process MLX peak; transformer resets before load, pose/VAE may include earlier tests.",
+      "local_log": ".build/4danyone-fp32-policy-focused.log"
+    },
+    "pose-bfloat16": {
+      "device": "gpu",
+      "forwardSeconds": [],
+      "loadSeconds": 0,
+      "metrics": [
+        {
+          "cosineSimilarity": 0.99999666,
+          "maximumAbsoluteError": 0.0006494224,
+          "name": "pose",
+          "normalizedRootMeanSquareError": 0.003925277,
+          "referenceRootMeanSquare": 0.012259677,
+          "rootMeanSquareError": 4.8122627e-05,
+          "shape": [
+            4,
+            3072,
+            2,
+            2,
+            3
+          ]
+        },
+        {
+          "cosineSimilarity": 0.9999819,
+          "maximumAbsoluteError": 0.005987942,
+          "name": "nullPose",
+          "normalizedRootMeanSquareError": 0.0067015057,
+          "referenceRootMeanSquare": 0.07769181,
+          "rootMeanSquareError": 0.0005206521,
+          "shape": [
+            1,
+            3072,
+            2,
+            2,
+            3
+          ]
+        }
+      ],
+      "peakAllocatedBytes": 46546092,
+      "threshold_normalized_rmse": 0.03,
+      "passed": true,
+      "memory_scope": "Process MLX peak; transformer resets before load, pose/VAE may include earlier tests.",
+      "local_log": ".build/4danyone-fp32-policy-focused.log"
+    },
+    "transformer-float32": {
+      "device": "gpu",
+      "forwardSeconds": [
+        0.44673407077789307,
+        0.7247130870819092,
+        1.5374549627304077,
+        1.2034000158309937
+      ],
+      "loadSeconds": 2.845452070236206,
+      "metrics": [
+        {
+          "cosineSimilarity": 1,
+          "maximumAbsoluteError": 0.00031483173,
+          "name": "direct.prediction",
+          "normalizedRootMeanSquareError": 1.7523056e-05,
+          "referenceRootMeanSquare": 1.112557,
+          "rootMeanSquareError": 1.94954e-05,
+          "shape": [
+            4,
+            48,
+            2,
+            4,
+            6
+          ]
+        },
+        {
+          "cosineSimilarity": 1,
+          "maximumAbsoluteError": 0.0002207756,
+          "name": "packed.prediction",
+          "normalizedRootMeanSquareError": 1.5014373e-05,
+          "referenceRootMeanSquare": 1.1178529,
+          "rootMeanSquareError": 1.678386e-05,
+          "shape": [
+            4,
+            48,
+            2,
+            4,
+            6
+          ]
+        },
+        {
+          "cosineSimilarity": 1,
+          "maximumAbsoluteError": 0.0002207756,
+          "name": "packed.repeat1.prediction",
+          "normalizedRootMeanSquareError": 1.5014373e-05,
+          "referenceRootMeanSquare": 1.1178529,
+          "rootMeanSquareError": 1.678386e-05,
+          "shape": [
+            4,
+            48,
+            2,
+            4,
+            6
+          ]
+        },
+        {
+          "cosineSimilarity": 1,
+          "maximumAbsoluteError": 0.0002207756,
+          "name": "packed.repeat2.prediction",
+          "normalizedRootMeanSquareError": 1.5014373e-05,
+          "referenceRootMeanSquare": 1.1178529,
+          "rootMeanSquareError": 1.678386e-05,
+          "shape": [
+            4,
+            48,
+            2,
+            4,
+            6
+          ]
+        }
+      ],
+      "peakAllocatedBytes": 25310654394,
+      "threshold_normalized_rmse": 0.0001,
+      "passed": true,
+      "memory_scope": "Process MLX peak; transformer resets before load, pose/VAE may include earlier tests.",
+      "computePrecision": "model",
+      "storedParameterBytes": 24579527424,
+      "local_log": ".build/4danyone-fp32-policy-focused.log"
+    },
+    "transformer-bfloat16": {
+      "device": "gpu",
+      "forwardSeconds": [
+        0.43652498722076416,
+        0.5514620542526245,
+        0.85105299949646,
+        1.5994709730148315
+      ],
+      "loadSeconds": 2.2394330501556396,
+      "metrics": [
+        {
+          "cosineSimilarity": 0.998984,
+          "maximumAbsoluteError": 0.53272516,
+          "name": "direct.prediction",
+          "normalizedRootMeanSquareError": 0.04506684,
+          "referenceRootMeanSquare": 1.1118404,
+          "rootMeanSquareError": 0.050107133,
+          "shape": [
+            4,
+            48,
+            2,
+            4,
+            6
+          ]
+        },
+        {
+          "cosineSimilarity": 0.99877083,
+          "maximumAbsoluteError": 0.71056926,
+          "name": "packed.prediction",
+          "normalizedRootMeanSquareError": 0.049569298,
+          "referenceRootMeanSquare": 1.1173633,
+          "rootMeanSquareError": 0.055386916,
+          "shape": [
+            4,
+            48,
+            2,
+            4,
+            6
+          ]
+        },
+        {
+          "cosineSimilarity": 0.99877083,
+          "maximumAbsoluteError": 0.71056926,
+          "name": "packed.repeat1.prediction",
+          "normalizedRootMeanSquareError": 0.049569298,
+          "referenceRootMeanSquare": 1.1173633,
+          "rootMeanSquareError": 0.055386916,
+          "shape": [
+            4,
+            48,
+            2,
+            4,
+            6
+          ]
+        },
+        {
+          "cosineSimilarity": 0.99877083,
+          "maximumAbsoluteError": 0.71056926,
+          "name": "packed.repeat2.prediction",
+          "normalizedRootMeanSquareError": 0.049569298,
+          "referenceRootMeanSquare": 1.1173633,
+          "rootMeanSquareError": 0.055386916,
+          "shape": [
+            4,
+            48,
+            2,
+            4,
+            6
+          ]
+        }
+      ],
+      "peakAllocatedBytes": 12586279518,
+      "threshold_normalized_rmse": 0.03,
+      "passed": false,
+      "memory_scope": "Process MLX peak; transformer resets before load, pose/VAE may include earlier tests.",
+      "computePrecision": "model",
+      "storedParameterBytes": 12289763712,
+      "local_log": ".build/4danyone-fp32-policy-focused.log"
+    },
+    "vae-fp32": {
+      "device": "gpu",
+      "forwardSeconds": [],
+      "loadSeconds": 0,
+      "metrics": [
+        {
+          "cosineSimilarity": 0.99999994,
+          "maximumAbsoluteError": 3.2186508e-06,
+          "name": "encode1",
+          "normalizedRootMeanSquareError": 9.4482635e-07,
+          "referenceRootMeanSquare": 0.8054914,
+          "rootMeanSquareError": 7.610495e-07,
+          "shape": [
+            1,
+            48,
+            1,
+            4,
+            6
+          ]
+        },
+        {
+          "cosineSimilarity": 0.9999999,
+          "maximumAbsoluteError": 6.4969063e-06,
+          "name": "decode1",
+          "normalizedRootMeanSquareError": 1.5331808e-06,
+          "referenceRootMeanSquare": 0.50854295,
+          "rootMeanSquareError": 7.796883e-07,
+          "shape": [
+            1,
+            3,
+            1,
+            64,
+            96
+          ]
+        },
+        {
+          "cosineSimilarity": 1,
+          "maximumAbsoluteError": 5.4836273e-06,
+          "name": "encode5",
+          "normalizedRootMeanSquareError": 1.2854642e-06,
+          "referenceRootMeanSquare": 0.94391924,
+          "rootMeanSquareError": 1.2133744e-06,
+          "shape": [
+            1,
+            48,
+            2,
+            4,
+            6
+          ]
+        },
+        {
+          "cosineSimilarity": 0.99999994,
+          "maximumAbsoluteError": 3.3408403e-05,
+          "name": "decode5",
+          "normalizedRootMeanSquareError": 2.944103e-06,
+          "referenceRootMeanSquare": 0.5077209,
+          "rootMeanSquareError": 1.4947826e-06,
+          "shape": [
+            1,
+            3,
+            5,
+            64,
+            96
+          ]
+        }
+      ],
+      "peakAllocatedBytes": 25310654394,
+      "threshold_normalized_rmse": 0.0001,
+      "passed": true,
+      "memory_scope": "Process MLX peak; transformer resets before load, pose/VAE may include earlier tests.",
+      "local_log": ".build/4danyone-fp32-policy-focused.log"
+    },
+    "transformer-float32-compute-bfloat16-storage": {
+      "computePrecision": "float32",
+      "device": "gpu",
+      "forwardSeconds": [
+        0.8463940620422363,
+        2.036529064178467,
+        1.5502610206604004,
+        1.510301947593689
+      ],
+      "loadSeconds": 2.325732946395874,
+      "metrics": [
+        {
+          "cosineSimilarity": 1,
+          "maximumAbsoluteError": 0.00031483173,
+          "name": "direct.prediction",
+          "normalizedRootMeanSquareError": 1.7523056e-05,
+          "referenceRootMeanSquare": 1.112557,
+          "rootMeanSquareError": 1.94954e-05,
+          "shape": [
+            4,
+            48,
+            2,
+            4,
+            6
+          ]
+        },
+        {
+          "cosineSimilarity": 1,
+          "maximumAbsoluteError": 0.0002207756,
+          "name": "packed.prediction",
+          "normalizedRootMeanSquareError": 1.5014373e-05,
+          "referenceRootMeanSquare": 1.1178529,
+          "rootMeanSquareError": 1.678386e-05,
+          "shape": [
+            4,
+            48,
+            2,
+            4,
+            6
+          ]
+        },
+        {
+          "cosineSimilarity": 1,
+          "maximumAbsoluteError": 0.0002207756,
+          "name": "packed.repeat1.prediction",
+          "normalizedRootMeanSquareError": 1.5014373e-05,
+          "referenceRootMeanSquare": 1.1178529,
+          "rootMeanSquareError": 1.678386e-05,
+          "shape": [
+            4,
+            48,
+            2,
+            4,
+            6
+          ]
+        },
+        {
+          "cosineSimilarity": 1,
+          "maximumAbsoluteError": 0.0002207756,
+          "name": "packed.repeat2.prediction",
+          "normalizedRootMeanSquareError": 1.5014373e-05,
+          "referenceRootMeanSquare": 1.1178529,
+          "rootMeanSquareError": 1.678386e-05,
+          "shape": [
+            4,
+            48,
+            2,
+            4,
+            6
+          ]
+        }
+      ],
+      "peakAllocatedBytes": 13403419000,
+      "storedParameterBytes": 12289763712,
+      "passed": true,
+      "threshold_normalized_rmse": 0.0001,
+      "byte_identical_to_fp32_parameter_storage": true,
+      "local_log": ".build/4danyone-fp32-policy-focused.log"
+    }
+  },
+  "trained_test_suite": {
+    "tests": 6,
+    "passed": 5,
+    "failed": 1,
+    "failed_assertions": 4,
+    "exit_code": 1,
+    "local_log": ".build/4danyone-fp32-policy-focused.log",
+    "scope": "Pure BF16 arithmetic remains the only failing trained test; default FP32 computation passes."
+  },
+  "reference_receipts": {
+    "vae": {
+      "upstreamRevision": "8cd60c40d90882de07645cc435dcf24bc9b4fbd1",
+      "torchVersion": "2.8.0",
+      "device": "cpu",
+      "dtype": "float32",
+      "stage": "vae",
+      "conditioning": "Diagnostic inputs; no recovered human motion or visual-quality claim.",
+      "checkpointSHA256": "20eb789667fa5e60e7516bf509512f6cb61f01b0aa0695eadaea930c13892b36",
+      "sourceSHA256": "f2cbff741f0f58e489fe52d2fba0d35bc14d7fb4110f32499f890d8ae3777f91",
+      "elapsedSeconds": 5.273831667029299,
+      "tensors": 5,
+      "referenceSHA256": "394e97ce1372f0bea4a8c08c21939c125ccb5f84245c2c08c9c65985abe4dd8f"
+    },
+    "transformer": {
+      "upstreamRevision": "8cd60c40d90882de07645cc435dcf24bc9b4fbd1",
+      "torchVersion": "2.8.0",
+      "device": "cpu",
+      "dtype": "float32",
+      "stage": "transformer",
+      "conditioning": "Diagnostic inputs; no recovered human motion or visual-quality claim.",
+      "bf16Control": "FP32 graph with BF16-rounded inputs, including timestep 625 -> 624.",
+      "checkpointSHA256": "aff60b0db2d333bd9e960a9cf3333cc8dd40fe76614a22f75a0da72be4e8289f",
+      "elapsedSeconds": 37.814084792044014,
+      "tensors": 16,
+      "referenceSHA256": "98a06f60677fd96216073d7329b478d4050f6cb1aa41e6256f7d2f8e89cbf9d5"
+    }
+  },
+  "bf16_diagnostics": {
+    "direct": {
+      "cpuBF16VsFP32": 0.05556168779730797,
+      "nativeBF16VsCPUBF16": 0.051653556525707245
+    },
+    "packed": {
+      "cpuBF16VsFP32": 0.040712885558605194,
+      "nativeBF16VsCPUBF16": 0.05116860568523407
+    },
+    "elapsedSeconds": 77.83581737498753,
+    "scope": "Unmodified upstream graph under PyTorch CPU BF16 autocast; not CUDA execution.",
+    "stages_native_vs_cpu": {
+      "direct": {
+        "block0": 0.004332346376031637,
+        "block14": 0.01801592856645584,
+        "block29": 0.06604988873004913
+      },
+      "packed": {
+        "block0": 0.004217757377773523,
+        "block14": 0.01646588370203972,
+        "block29": 0.05667353421449661
+      }
+    },
+    "packed_repeats_identical_sha256": "2dc42ad6462420abbbd225805a7f3fadccff97a32ff13f21fa5eecb14886b579",
+    "fp32_packed_repeats_identical_sha256": "5a3cc2894f3322d304e68ba4c427d73314d0995aa829f43d0fec5e0c0d22a2f1",
+    "validation_phase": "Before the activation correction; historical full-model CPU-autocast comparison."
+  },
+  "small_asset_hashes": [
+    {
+      "file": "4danyone/prompt_context.safetensors",
+      "sha256": "50a71c4447c2121837f09619946a8190e2bddd76ed1baffac0a5f1b3b430a669",
+      "size": 4194840
+    },
+    {
+      "file": "LICENSE.md",
+      "sha256": "44d01721d4e45d913609fb52f3210a8267eeddaca6410fcd2c9f03f5633b07e1",
+      "size": 3139
+    },
+    {
+      "file": "data/source/pexels/7017803-hd_1080_1920_30fps.mp4",
+      "sha256": "f2cbff741f0f58e489fe52d2fba0d35bc14d7fb4110f32499f890d8ae3777f91",
+      "size": 4120271
+    }
+  ],
+  "production_smoke": {
+    "forwardSeconds": 605.3058640956879,
+    "loadSeconds": 2.7202869653701782,
+    "outputShape": [
+      4,
+      48,
+      31,
+      80,
+      44
+    ],
+    "outputStandardDeviation": 1.062994,
+    "peakAllocatedBytes": 34325064108,
+    "poseSeconds": 2.6273759603500366,
+    "scope": "One trained BF16 forward at production resolution with diagnostic conditioning; no video-quality claim.",
+    "passed": true,
+    "exit_code": 0,
+    "dtype": "bfloat16",
+    "target_views": 4,
+    "source_views": 1,
+    "frames": 121,
+    "height": 1280,
+    "width": 704,
+    "blocks": 30,
+    "all_outputs_finite": true,
+    "local_log": ".build/4danyone-production-smoke.log",
+    "validation_phase": "Before the activation correction; historical full-size result, not a complete current-runtime rerun.",
+    "runtime_source_sha256": {
+      "Sources/MereRunCore/FourDAnyone/FourDAnyoneGenerator.swift": "86a703d2861a813cd83da21edc16e40acc81f2bd9be46fa5d41443daea595435",
+      "Sources/MereRunCore/FourDAnyone/FourDAnyoneLayers.swift": "d7e0b1bcf888725c0dca83da4d3f8ce15313d0c99f074850213e7c56ab360aa4",
+      "Sources/MereRunCore/FourDAnyone/FourDAnyoneModelLoader.swift": "322e3e2740c047d52e0a33e88f88e689fe10956382f4aeeec5ed67dc8967ff15",
+      "Sources/MereRunCore/FourDAnyone/FourDAnyonePlan.swift": "601169bdfa82f7b1cfd84b4541e2a6237da7a44c6418733020e7264da84555a8",
+      "Sources/MereRunCore/FourDAnyone/FourDAnyonePoseEncoder.swift": "4f79a83a46dc3b10ad22c326378643c9a2a7655675b65213d401fdb554143146",
+      "Sources/MereRunCore/FourDAnyone/FourDAnyoneTransformer.swift": "2436175fcc7bb34f32cd49a2ccb55e7a3eba986c3366a9927b95f9532bc15920",
+      "Tests/MereRunCoreTests/FourDAnyoneContractTests.swift": "69deec5f6eb5e3711a9fb78e5a046b6c5dc395f2165afd3d5f0276fa768d1c91",
+      "Tests/MereRunCoreTests/FourDAnyoneFixture.swift": "56753e1a8aa1518171bc64c701a366bd422c6963774414421ea26eeb4e9a06f2",
+      "Tests/MereRunCoreTests/FourDAnyonePoseTests.swift": "506d804c3384bf269570df04d5c202972dee953cf6c7961fbc9364f3408dadaf",
+      "Tests/MereRunCoreTests/FourDAnyoneProductionSmokeTests.swift": "d0df411cac8f1f957e5a963d0b6bfcf0b02a6fa88fccfc3cb669c9efc10ac17d",
+      "Tests/MereRunCoreTests/FourDAnyoneRealModelTests.swift": "f02ae287921066757639d477bf59c6029875c469e6c0e1af139d91f0d533ad74",
+      "Tests/MereRunCoreTests/FourDAnyoneTransformerTests.swift": "e33a29aed0e00c8b4a77a29697e2970009cfc2e1f16f6cdf31fb3b5d40a67808",
+      "scripts/reference-parity/export_4danyone_fixture.py": "290c3a6cbe821bbe06e7a8aaaa76346992113a2b8cd7ea9f0d93933d03e8f80a",
+      "scripts/reference-parity/export_4danyone_trace.py": "0ae3077ee33b01411a8669773367b3222d7b48f5aa8114cbf1af51f6c0ef96a6"
+    }
+  },
+  "toolchain": {
+    "swift": "Apple Swift 6.3 (swiftlang-6.3.0.123.5)",
+    "mlx_swift_revision": "001d1aa3e5655d7efc073fb9632f952f57cdf528",
+    "mlx_core": "0.32.1",
+    "pytorch": "2.8.0",
+    "reference_device": "CPU",
+    "native_device": "Metal GPU"
+  },
+  "native_source_sha256": {
+    "Sources/MereRunCore/FourDAnyone/FourDAnyoneGenerator.swift": "574539bb122b183e2b1afde7284a14abffc118fcc9d9a2749e528d43e1ecf79c",
+    "Sources/MereRunCore/FourDAnyone/FourDAnyoneLayers.swift": "379d1967661dd64516e8a8721dc0f9a84c64583e63a1a3d9fe6c890ebcb87b17",
+    "Sources/MereRunCore/FourDAnyone/FourDAnyoneModelLoader.swift": "4fd727d64ee2fcf8e25db3ac4a5bcb4aa54666a754d16dbc0a215493e3f9032d",
+    "Sources/MereRunCore/FourDAnyone/FourDAnyonePlan.swift": "601169bdfa82f7b1cfd84b4541e2a6237da7a44c6418733020e7264da84555a8",
+    "Sources/MereRunCore/FourDAnyone/FourDAnyonePoseEncoder.swift": "37adae83cdc6ca66462876664887571289903329d65db13f39abaa33676a74ac",
+    "Sources/MereRunCore/FourDAnyone/FourDAnyoneTransformer.swift": "0817581c771e5a6ab50b362ae91304025478c2aabfb2368b673d41e7cfb6bb34",
+    "Tests/MereRunCoreTests/FourDAnyoneContractTests.swift": "69deec5f6eb5e3711a9fb78e5a046b6c5dc395f2165afd3d5f0276fa768d1c91",
+    "Tests/MereRunCoreTests/FourDAnyoneFixture.swift": "56753e1a8aa1518171bc64c701a366bd422c6963774414421ea26eeb4e9a06f2",
+    "Tests/MereRunCoreTests/FourDAnyonePoseTests.swift": "506d804c3384bf269570df04d5c202972dee953cf6c7961fbc9364f3408dadaf",
+    "Tests/MereRunCoreTests/FourDAnyoneProductionSmokeTests.swift": "3c724d8644bd9483eab88a16ce66df9394dd527e8bb951b9c05d28ca7096498d",
+    "Tests/MereRunCoreTests/FourDAnyoneRealModelTests.swift": "bc80b34eba9756ff0c8d4f1241ffc4a9b8f2ae9a8a5c2a224247f024bc2cf9f8",
+    "Tests/MereRunCoreTests/FourDAnyoneTransformerTests.swift": "0365e45e97c6fd72130d47ef90a66c8c1f3370e28c0860c855202bb7fc6fa3f7",
+    "scripts/reference-parity/export_4danyone_fixture.py": "290c3a6cbe821bbe06e7a8aaaa76346992113a2b8cd7ea9f0d93933d03e8f80a",
+    "scripts/reference-parity/export_4danyone_trace.py": "0ae3077ee33b01411a8669773367b3222d7b48f5aa8114cbf1af51f6c0ef96a6",
+    "Tests/MereRunCoreTests/FourDAnyoneOperationTests.swift": "cdffeb81285ebab2c79e3111b6f70b594aaf79eddf859186eab51a7c0dba8181",
+    "Tests/MereRunCoreTests/FourDAnyoneProfilingTests.swift": "d214db548f426cc831b3f98651ab49d6f79dd713798554547c5c8fffcca1c607",
+    "scripts/reference-parity/export_4danyone_operations.py": "54ce56cbd90680d46ba4bb82491d6aabc40d3b322bd17a16fd886c6a4f5633de",
+    "scripts/reference-parity/prepare_4danyone_source.py": "1d5000367942c75453a7231134ffb601b218928798f68b898db7a3624e056176",
+    "scripts/reference-parity/replay_4danyone_bf16.py": "84a6d8c795b1750c1cbe484209806f1ce1dd850addfa91f169848de5fc8e8dce",
+    "Tests/MereRunCoreTests/FourDAnyonePrecisionTests.swift": "576e6961e59898bfcf08001c3814fcdc6252c1bffe5eb310487a56030fffa2b1",
+    "Tests/MereRunCoreTests/FourDAnyoneTrajectoryTests.swift": "df67e2f72955e85f483ea4c6a22cb10932b2cbda286f8c28a06ecdc3d8b2d7b4",
+    "scripts/reference-parity/export_4danyone_trajectory.py": "71b90f11f371ef87fbf0da93a6dfdda08bf556fe24089814cc6dc6d45c44a955"
+  },
+  "focused_suite": {
+    "total_tests": 22,
+    "skipped": 3,
+    "passed_test_cases": 18,
+    "failed_test_cases": 1,
+    "failed_assertions": 4,
+    "exit_code": 1,
+    "local_log": ".build/4danyone-fp32-policy-focused.log"
+  },
+  "activation_correction": {
+    "method": "FP32 GELU/SiLU arithmetic followed by cast to the input dtype; limited to FourDAnyone.",
+    "fixture": "Tests/MereRunCoreTests/Fixtures/FourDAnyone/activations.safetensors",
+    "fixture_receipt": {
+      "torchVersion": "2.8.0",
+      "device": "cpu",
+      "dtype": "bfloat16",
+      "casesSHA256": "44a3c6dd2549a7a61dc21397648db53f2283930ba8b651e01ee65c80e4a449a9",
+      "referenceSHA256": "81da62a13ddecde94f211ef04d1ec0180cb12ee20a8224f88d84f443ce875b4c",
+      "elapsedSeconds": 0.006666583998594433,
+      "scope": "Primitive replay on identical frozen inputs; not full-model or CUDA-autocast graph parity.",
+      "fixtureSHA256": "f57318ac2725797dbed1eac455bf56b1c62a43a531af933f2c41d8481245fff5"
+    },
+    "regression_maximum_absolute_tolerance": 2e-05,
+    "regression_cpu_passed": true,
+    "regression_gpu_passed": true,
+    "cpu_local_log": ".build/4danyone-activation-cpu.log",
+    "operations_receipt": {
+      "torchVersion": "2.8.0",
+      "device": "cpu",
+      "dtype": "bfloat16",
+      "casesSHA256": "44a3c6dd2549a7a61dc21397648db53f2283930ba8b651e01ee65c80e4a449a9",
+      "referenceSHA256": "81da62a13ddecde94f211ef04d1ec0180cb12ee20a8224f88d84f443ce875b4c",
+      "elapsedSeconds": 0.006666583998594433,
+      "scope": "Primitive replay on identical frozen inputs; not full-model or CUDA-autocast graph parity."
+    },
+    "operation_metrics": [
+      {
+        "exactFraction": 0.6827149,
+        "maximumError": 0.0078125,
+        "name": "attention.native",
+        "normalizedRMSE": 0.0020025275
+      },
+      {
+        "exactFraction": 0.79785156,
+        "maximumError": 0.015625,
+        "name": "gelu.native",
+        "normalizedRMSE": 0.00023972052
+      },
+      {
+        "exactFraction": 0.98236084,
+        "maximumError": 1.5258789e-05,
+        "name": "gelu.promoted",
+        "normalizedRMSE": 8.151905e-08
+      },
+      {
+        "exactFraction": 0.7402398,
+        "maximumError": 0.03125,
+        "name": "layer.bf16.native",
+        "normalizedRMSE": 0.0028462454
+      },
+      {
+        "exactFraction": 0.68516713,
+        "maximumError": 9.536743e-07,
+        "name": "layer.fp32.native",
+        "normalizedRMSE": 5.294995e-08
+      },
+      {
+        "exactFraction": 0.99977756,
+        "maximumError": 0.015625,
+        "name": "linear.native",
+        "normalizedRMSE": 4.573258e-05
+      },
+      {
+        "exactFraction": 1,
+        "maximumError": 0,
+        "name": "rms.native",
+        "normalizedRMSE": 0
+      },
+      {
+        "exactFraction": 0.75390625,
+        "maximumError": 0.03125,
+        "name": "silu.native",
+        "normalizedRMSE": 0.00084338227
+      },
+      {
+        "exactFraction": 1,
+        "maximumError": 0,
+        "name": "silu.promoted",
+        "normalizedRMSE": 0
+      }
+    ],
+    "cuda_executed": false,
+    "bf16_model_qualified": false
+  },
+  "production_block_profile": {
+    "scope": "Four resident runs of trained first block at full grid after activation correction; diagnostic inputs and null pose reused from historical production smoke.",
+    "query_chunk_default": 512,
+    "default_changed": false,
+    "chunk_outputs_exactly_equal": true,
+    "runs": [
+      {
+        "normalizedError": 0,
+        "peakAllocatedBytes": 45214394794,
+        "queryChunk": 512,
+        "repetition": 0,
+        "seconds": 10.822708010673523,
+        "stages": [
+          {
+            "name": "video_attention",
+            "seconds": 5.823287010192871
+          },
+          {
+            "name": "multiview_attention",
+            "seconds": 1.9949840307235718
+          },
+          {
+            "name": "text_attention",
+            "seconds": 0.6512939929962158
+          },
+          {
+            "name": "feed_forward",
+            "seconds": 2.3530900478363037
+          }
+        ]
+      },
+      {
+        "normalizedError": 0,
+        "peakAllocatedBytes": 46052436394,
+        "queryChunk": 512,
+        "repetition": 1,
+        "seconds": 23.117635011672974,
+        "stages": [
+          {
+            "name": "video_attention",
+            "seconds": 10.25317895412445
+          },
+          {
+            "name": "multiview_attention",
+            "seconds": 7.400487065315247
+          },
+          {
+            "name": "text_attention",
+            "seconds": 0.9518699645996094
+          },
+          {
+            "name": "feed_forward",
+            "seconds": 4.512066960334778
+          }
+        ]
+      },
+      {
+        "normalizedError": 0,
+        "peakAllocatedBytes": 46052436394,
+        "queryChunk": 1024,
+        "repetition": 0,
+        "seconds": 26.008033990859985,
+        "stages": [
+          {
+            "name": "video_attention",
+            "seconds": 13.827170968055725
+          },
+          {
+            "name": "multiview_attention",
+            "seconds": 4.962979078292847
+          },
+          {
+            "name": "text_attention",
+            "seconds": 1.581583023071289
+          },
+          {
+            "name": "feed_forward",
+            "seconds": 5.636259913444519
+          }
+        ]
+      },
+      {
+        "normalizedError": 0,
+        "peakAllocatedBytes": 46052436394,
+        "queryChunk": 1024,
+        "repetition": 1,
+        "seconds": 19.42156195640564,
+        "stages": [
+          {
+            "name": "video_attention",
+            "seconds": 12.404196977615356
+          },
+          {
+            "name": "multiview_attention",
+            "seconds": 2.7019180059432983
+          },
+          {
+            "name": "text_attention",
+            "seconds": 0.9166039228439331
+          },
+          {
+            "name": "feed_forward",
+            "seconds": 3.3988159894943237
+          }
+        ]
+      }
+    ],
+    "isolated_benchmark": false,
+    "speed_claim": null,
+    "passed": true,
+    "exit_code": 0,
+    "local_log": ".build/4danyone-block-profile.log",
+    "null_pose_sha256": "3b26748b62a26974982d98809a3b32797faa0ec824d43bf7a04a81c92016755c",
+    "compute_precision": "model (BF16 arithmetic)"
+  },
+  "source_package": {
+    "format": "mere.run.4danyone.source-package",
+    "version": 1,
+    "status": "awaiting_motion_conditioning",
+    "upstreamRevision": "8cd60c40d90882de07645cc435dcf24bc9b4fbd1",
+    "seed": 4196,
+    "source": "7017803-hd_1080_1920_30fps.mp4",
+    "viewPlan": {
+      "views_per_layer": 4,
+      "layer_pitches": [
+        15
+      ],
+      "start_yaw": 0,
+      "yaw_span": 360,
+      "views_per_group": 4,
+      "enable_rcp": false,
+      "enable_tcr": true
+    },
+    "frames": 121,
+    "fpsNumerator": 30,
+    "fpsDenominator": 1,
+    "originalWidth": 1088,
+    "originalHeight": 1920,
+    "canonicalPixelsVerified": true,
+    "files": {
+      "7017803-hd_1080_1920_30fps.mp4": {
+        "sha256": "f2cbff741f0f58e489fe52d2fba0d35bc14d7fb4110f32499f890d8ae3777f91",
+        "bytes": 4120271
+      },
+      "initial-inputs.safetensors": {
+        "sha256": "6c396f025e5318a51e52ff146409439c3f2e5fe044087bd54163437c904de222",
+        "bytes": 46096576
+      },
+      "prompt_context.safetensors": {
+        "sha256": "50a71c4447c2121837f09619946a8190e2bddd76ed1baffac0a5f1b3b430a669",
+        "bytes": 4194840
+      },
+      "source-canonical.mkv": {
+        "sha256": "c42f169b61eb24818f1d0b629f9987e0037e99392be2da3f71e32cf7f984a866",
+        "bytes": 126192749
+      },
+      "source-gvhmr.mp4": {
+        "sha256": "986533d8349f42196da75e80a81f50f2bf8a507f075ee0e88cb904fa403939e8",
+        "bytes": 143157378
+      },
+      "source-timeline.json": {
+        "sha256": "8dacac3f8b9046feabde1b0bf85167e25696336962522b8222f4f9d5e75a7ead",
+        "bytes": 23079
+      }
+    },
+    "missing": [
+      "Recovered motion",
+      "Source foreground crop",
+      "Four target skeleton videos",
+      "Solved cameras",
+      "VAE source latents and encoded pose features"
+    ],
+    "scope": "Frozen source timeline and initial noise; incomplete motion conditioning; no generated novel-view video."
+  },
+  "bf16_full_model_replay": {
+    "cpu_receipt": {
+      "upstreamRevision": "8cd60c40d90882de07645cc435dcf24bc9b4fbd1",
+      "checkpointSHA256": "aff60b0db2d333bd9e960a9cf3333cc8dd40fe76614a22f75a0da72be4e8289f",
+      "inputReferenceSHA256": "98a06f60677fd96216073d7329b478d4050f6cb1aa41e6256f7d2f8e89cbf9d5",
+      "traceSHA256": "4f0478ee3e8fd2d00da06209a60ceaf04fe92a7ba0042d78ce95f5d114d9f00a",
+      "torchVersion": "2.8.0",
+      "device": "cpu",
+      "weightDtype": "bfloat16",
+      "autocastDtype": "bfloat16",
+      "attentionBackend": "sdpa",
+      "elapsedSeconds": 27.741614374972414,
+      "metricsAgainstAlignedFP32": {
+        "direct": {
+          "normalizedRMSE": 0.05556168779730797,
+          "maximumError": 0.6090284585952759
+        },
+        "packed": {
+          "normalizedRMSE": 0.040712885558605194,
+          "maximumError": 0.6871317625045776
+        }
+      },
+      "scope": "Two trained 30-block forwards on frozen small-grid inputs; not a generation trajectory or visual qualification."
+    },
+    "native_comparison": {
+      "device": "cpu",
+      "scope": "Updated native BF16 compared with unmodified PyTorch CPU BF16; does not establish CUDA parity.",
+      "metrics": {
+        "direct": {
+          "block14": 0.016489215195178986,
+          "context": 0.000287029892206192,
+          "time": 1.6572235836065374e-05,
+          "block29": 0.07269002497196198,
+          "assembly": 6.423146260203794e-06,
+          "block0": 0.0030089085921645164,
+          "prediction": 0.0584598071873188
+        },
+        "packed": {
+          "block29": 0.058890558779239655,
+          "time": 1.4317202840175014e-05,
+          "context": 0.000287029892206192,
+          "block14": 0.01506003551185131,
+          "assembly": 5.96126847085543e-06,
+          "block0": 0.0024473071098327637,
+          "prediction": 0.0487542487680912
+        }
+      }
+    },
+    "native_stage_local_log": ".build/4danyone-current-bf16-stages.log",
+    "native_stage_test_exit_code": 1,
+    "cuda_executed": false,
+    "cuda_unavailable_rejection_verified": true
+  },
+  "current_packed_repeat_sha256": {
+    "bfloat16": "1992bfacd1ca305e857a22eb48b2c5c22dae06be1e63b6adf2a39f9c4563c11d",
+    "float32": "5a3cc2894f3322d304e68ba4c427d73314d0995aa829f43d0fec5e0c0d22a2f1",
+    "float32-compute-bfloat16-storage": "5a3cc2894f3322d304e68ba4c427d73314d0995aa829f43d0fec5e0c0d22a2f1"
+  },
+  "default_compute_precision": "float32",
+  "default_parameter_storage": "bfloat16",
+  "precision_policy_qualification": "Default FP32 computation with BF16 storage passes trained forward parity, the complete 24-step small-grid trajectory, and a full-size 30-block forward. Complete visual generation remains unverified.",
+  "gates_before_fp32_compute": [
+    {
+      "command": "MERERUN_SWIFT_DISABLE_INDEX_STORE=1 ./scripts/check.sh",
+      "exit_code": 0,
+      "swiftlint_files": 2085,
+      "swiftlint_violations": 0,
+      "xctest_total": 4358,
+      "xctest_skipped": 322,
+      "xctest_failures": 0,
+      "swift_testing_total": 51,
+      "swift_testing_failures": 0,
+      "build_passed": true,
+      "cli_help_and_hygiene_passed": true,
+      "local_log": ".build/4danyone-validation-check.log",
+      "asset_tests_in_standard_gate": "Five trained tests and one production test skip without their opt-in environment variables; their separately observed outcomes are recorded below."
+    },
+    {
+      "command": "MERERUN_SWIFT_DISABLE_INDEX_STORE=1 ./scripts/check.sh",
+      "exit_code": 0,
+      "swiftlint_files": 2087,
+      "swiftlint_violations": 0,
+      "xctest_total": 4361,
+      "xctest_skipped": 324,
+      "xctest_failures": 0,
+      "swift_testing_total": 51,
+      "swift_testing_failures": 0,
+      "build_passed": true,
+      "cli_help_and_hygiene_passed": true,
+      "local_log": ".build/4danyone-followup-check.log",
+      "asset_tests_in_standard_gate": "Five trained tests, one production test, one profile, and one operation replay skip without their opt-in variables. Separately observed BF16 transformer failures remain qualification blockers."
+    }
+  ],
+  "gate": {
+    "command": "MERERUN_SWIFT_DISABLE_INDEX_STORE=1 ./scripts/check.sh",
+    "exit_code": 0,
+    "swiftlint_files": 2089,
+    "swiftlint_violations": 0,
+    "xctest_total": 4365,
+    "xctest_skipped": 327,
+    "xctest_failures": 0,
+    "swift_testing_total": 51,
+    "swift_testing_failures": 0,
+    "build_passed": true,
+    "cli_help_and_hygiene_passed": true,
+    "local_log": ".build/4danyone-fp32-policy-check.log",
+    "asset_tests_in_standard_gate": "Six trained forward/pose/VAE checks, one trained trajectory, one production test, one profile, one conditioning experiment, and one operation replay skip without opt-in variables."
+  },
+  "conditioning_precision_experiments": [
+    {
+      "mode": "baseline",
+      "normalizedRMSE": 0.045066837,
+      "passesOriginalLimit": false,
+      "seconds": 0.5182299613952637,
+      "source": "direct"
+    },
+    {
+      "mode": "baseline",
+      "normalizedRMSE": 0.0495693,
+      "passesOriginalLimit": false,
+      "seconds": 0.5786030292510986,
+      "source": "packed"
+    },
+    {
+      "mode": "float32_time",
+      "normalizedRMSE": 0.03895018,
+      "passesOriginalLimit": false,
+      "seconds": 0.4637420177459717,
+      "source": "direct"
+    },
+    {
+      "mode": "float32_time",
+      "normalizedRMSE": 0.03813872,
+      "passesOriginalLimit": false,
+      "seconds": 0.5074290037155151,
+      "source": "packed"
+    },
+    {
+      "mode": "float32_conditioning",
+      "normalizedRMSE": 0.033166688,
+      "passesOriginalLimit": false,
+      "seconds": 0.41854190826416016,
+      "source": "direct"
+    },
+    {
+      "mode": "float32_conditioning",
+      "normalizedRMSE": 0.04627588,
+      "passesOriginalLimit": false,
+      "seconds": 0.5242129564285278,
+      "source": "packed"
+    }
+  ],
+  "production_fp32_compute": {
+    "computePrecision": "float32",
+    "forwardSeconds": 817.3778249025345,
+    "loadSeconds": 1.6538219451904297,
+    "outputShape": [
+      4,
+      48,
+      31,
+      80,
+      44
+    ],
+    "outputStandardDeviation": 1.0655571,
+    "peakAllocatedBytes": 40191302056,
+    "poseSeconds": 0.9611339569091797,
+    "scope": "One trained FP32-compute forward with BF16 storage and diagnostic conditioning; no video-quality claim.",
+    "storageDtype": "bfloat16",
+    "passed": true,
+    "exit_code": 0,
+    "blocks": 30,
+    "target_views": 4,
+    "source_views": 1,
+    "frames": 121,
+    "height": 1280,
+    "width": 704,
+    "all_outputs_finite": true,
+    "parameters_remained_bfloat16": true,
+    "local_log": ".build/4danyone-production-float32-compute.log",
+    "source_sha256": {
+      "Sources/MereRunCore/FourDAnyone/FourDAnyonePlan.swift": "601169bdfa82f7b1cfd84b4541e2a6237da7a44c6418733020e7264da84555a8",
+      "Sources/MereRunCore/FourDAnyone/FourDAnyoneTransformer.swift": "0817581c771e5a6ab50b362ae91304025478c2aabfb2368b673d41e7cfb6bb34",
+      "Sources/MereRunCore/FourDAnyone/FourDAnyoneLayers.swift": "379d1967661dd64516e8a8721dc0f9a84c64583e63a1a3d9fe6c890ebcb87b17",
+      "Sources/MereRunCore/FourDAnyone/FourDAnyonePoseEncoder.swift": "37adae83cdc6ca66462876664887571289903329d65db13f39abaa33676a74ac",
+      "Sources/MereRunCore/FourDAnyone/FourDAnyoneModelLoader.swift": "4fd727d64ee2fcf8e25db3ac4a5bcb4aa54666a754d16dbc0a215493e3f9032d",
+      "Tests/MereRunCoreTests/FourDAnyoneProductionSmokeTests.swift": "309abc12dcfb7a55ab877ba6e996d13e7ea2929098e9930a222c801e6aa5b84e"
+    },
+    "test_harness_followup": "Only progress-counter reporting was corrected after the run. Runtime arithmetic and assertions were unchanged; exact tested harness hash is retained."
+  },
+  "trajectory_reference": {
+    "upstreamRevision": "8cd60c40d90882de07645cc435dcf24bc9b4fbd1",
+    "checkpointSHA256": "aff60b0db2d333bd9e960a9cf3333cc8dd40fe76614a22f75a0da72be4e8289f",
+    "inputReferenceSHA256": "98a06f60677fd96216073d7329b478d4050f6cb1aa41e6256f7d2f8e89cbf9d5",
+    "outputSHA256": "4748b240c58a8218495b0077f0ac76dc1ed3e46178d5e33e0a4ece7cd5d667c3",
+    "torchVersion": "2.8.0",
+    "device": "cpu",
+    "dtype": "float32",
+    "steps": 24,
+    "views": 4,
+    "sourceViews": 1,
+    "initialShape": [
+      4,
+      48,
+      2,
+      4,
+      6
+    ],
+    "elapsedSeconds": 60.96702666697092,
+    "scope": "Full Base trajectory on a small diagnostic grid; not full-resolution video or recovered motion."
+  },
+  "trained_trajectory": {
+    "completedSteps": 24,
+    "normalizedRMSE": 1.2517155e-06,
+    "peakAllocatedBytes": 13725415636,
+    "seconds": 27.688638925552368,
+    "passed": true,
+    "threshold_normalized_rmse": 0.0001,
+    "scope": "Four targets, one source, all 24 Base steps and all 30 trained blocks at the small diagnostic grid.",
+    "parameters_remained_bfloat16": true,
+    "state_dtype": "float32",
+    "reference_receipt": {
+      "upstreamRevision": "8cd60c40d90882de07645cc435dcf24bc9b4fbd1",
+      "checkpointSHA256": "aff60b0db2d333bd9e960a9cf3333cc8dd40fe76614a22f75a0da72be4e8289f",
+      "inputReferenceSHA256": "98a06f60677fd96216073d7329b478d4050f6cb1aa41e6256f7d2f8e89cbf9d5",
+      "outputSHA256": "4748b240c58a8218495b0077f0ac76dc1ed3e46178d5e33e0a4ece7cd5d667c3",
+      "torchVersion": "2.8.0",
+      "device": "cpu",
+      "dtype": "float32",
+      "steps": 24,
+      "views": 4,
+      "sourceViews": 1,
+      "initialShape": [
+        4,
+        48,
+        2,
+        4,
+        6
+      ],
+      "elapsedSeconds": 60.96702666697092,
+      "scope": "Full Base trajectory on a small diagnostic grid; not full-resolution video or recovered motion."
+    },
+    "native_sha256": "567339ad56cee7eab96dad6c18a3b684f3bb8f10854a0682cf33188e25d08eaf",
+    "local_log": ".build/4danyone-fp32-policy-focused.log"
+  },
+  "routed_storage_regression": {
+    "passed": true,
+    "devices": [
+      "CPU",
+      "Metal GPU"
+    ],
+    "steps": 4,
+    "views": 8,
+    "scope": "BF16 stored parameters compared with an FP32 stored copy of the same values; input and state remain FP32.",
+    "maximum_absolute_tolerance": 1e-06
+  }
+}

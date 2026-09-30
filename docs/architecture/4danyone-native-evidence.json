@@ -1,0 +1,75 @@
+{
+  "review_date": "2026-09-15",
+  "scope": "Initial source and checkpoint-header assessment. Subsequent synthetic CPU inference checks are recorded in 4danyone-native-verification.json.",
+  "mere_run_revision": "99becddba5f73ddfbde8dfb740d8ff75c60bcbee",
+  "upstream_repository": "https://github.com/ant-research/4DAnyone",
+  "upstream_revision": "8cd60c40d90882de07645cc435dcf24bc9b4fbd1",
+  "model_repository": "AntResearch/4DAnyone",
+  "model_revision": "4c80e87b805a5f8461cf339cdbe2fb4249e585aa",
+  "model_file": "4danyone/model.safetensors",
+  "method": "Read only the first eight bytes and JSON header with HTTP Range requests; derive counts from tensor shapes and byte offsets.",
+  "full_tensor_payload_downloaded": false,
+  "tensor_values_verified": false,
+  "swift_or_gpu_inference_performed": false,
+  "header_bytes": 123048,
+  "tensor_count": 1182,
+  "tensor_dtypes": {
+    "BF16": 1182
+  },
+  "partitions": {
+    "base_wan": {
+      "tensors": 825,
+      "parameters": 4999787712,
+      "bytes": 9999575424
+    },
+    "multiview": {
+      "tensors": 330,
+      "parameters": 1133291520,
+      "bytes": 2266583040
+    },
+    "pose_encoder": {
+      "tensors": 23,
+      "parameters": 3469271,
+      "bytes": 6938542
+    },
+    "viewpack": {
+      "tensors": 4,
+      "parameters": 11802624,
+      "bytes": 23605248
+    }
+  },
+  "total_parameters": 6148351127,
+  "total_tensor_payload_bytes": 12296702254,
+  "vae_normalization_constant_comparison": {
+    "mean_count": 48,
+    "standard_deviation_count": 48,
+    "all_equal": true,
+    "method": "Parsed upstream Python literals and Swift literals; compared their decimal values. No VAE tensor inference."
+  },
+  "shape_and_schedule_arithmetic": {
+    "tokens_per_view": 27280,
+    "bf16_pose_bytes_per_view": 167608320,
+    "bf16_pose_bytes_24_views": 4022599680,
+    "bf16_pose_bytes_33_views_including_proposal_and_null": 5531074560,
+    "bf16_dense_token_bytes_8_views": 1340866560,
+    "bf16_ffn_hidden_bytes_8_views": 6257377280,
+    "bf16_full_attention_score_bytes_8_views": 285772185600,
+    "bf16_latent_bytes_24_views": 251412480,
+    "turbo_sigmas": [
+      1.0,
+      0.9375,
+      0.8333333333333334,
+      0.625,
+      0.0
+    ],
+    "legacy_wan_four_step_sigmas": [
+      1.0,
+      0.90970715835141,
+      0.7173174872665535,
+      0.024414062500000513,
+      0
+    ]
+  },
+  "memory_estimate_limit": "Individual logical tensor sizes, not simultaneous resident peaks or measured Apple Silicon requirements.",
+  "schedule_estimate_limit": "Python scalar arithmetic from inspected formulas, not execution of either framework scheduler."
+}

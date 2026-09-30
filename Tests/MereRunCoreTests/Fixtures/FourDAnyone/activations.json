@@ -1,0 +1,10 @@
+{
+  "torchVersion": "2.8.0",
+  "device": "cpu",
+  "dtype": "bfloat16",
+  "casesSHA256": "44a3c6dd2549a7a61dc21397648db53f2283930ba8b651e01ee65c80e4a449a9",
+  "referenceSHA256": "81da62a13ddecde94f211ef04d1ec0180cb12ee20a8224f88d84f443ce875b4c",
+  "elapsedSeconds": 0.006666583998594433,
+  "scope": "Primitive replay on identical frozen inputs; not full-model or CUDA-autocast graph parity.",
+  "fixtureSHA256": "f57318ac2725797dbed1eac455bf56b1c62a43a531af933f2c41d8481245fff5"
+}
