@@ -223,32 +223,62 @@ public struct ToolDefinition: Sendable, Hashable, Codable {
     public let description: String
     public let parameters: [String: ToolParameterProperty]
     public let required: [String]
+    /// The complete schema supplied by an API client, including nested constraints.
+    public let parameterSchema: [String: OpenAIJSONValue]?
 
     public init(name: String, description: String, parameters: [String: ToolParameterProperty], required: [String]? = nil) {
         self.name = name
         self.description = description
         self.parameters = parameters
         self.required = required ?? Array(parameters.keys)
+        self.parameterSchema = nil
+    }
+
+    public init(name: String, description: String, parameterSchema: [String: OpenAIJSONValue]) {
+        self.name = name
+        self.description = description
+        self.parameterSchema = parameterSchema
+        self.parameters = (parameterSchema["properties"]?.objectValue ?? [:]).mapValues { schema in
+            let property = schema.objectValue ?? [:]
+            return ToolParameterProperty(
+                type: property["type"]?.stringValue ?? "string",
+                description: property["description"]?.stringValue ?? ""
+            )
+        }
+        self.required = parameterSchema["required"]?.arrayValue?.compactMap(\.stringValue) ?? []
+    }
+
+    public var parametersJSONSchema: [String: OpenAIJSONValue] {
+        parameterSchema ?? [
+            "type": .string("object"),
+            "properties": .object(parameters.mapValues { property in
+                .object(["type": .string(property.type), "description": .string(property.description)])
+            }),
+            "required": .array(required.map(OpenAIJSONValue.string)),
+        ]
     }
 
     /// Convert to the ToolSpec format expected by swift-transformers applyChatTemplate.
     public func toToolSpec() -> [String: any Sendable] {
-        var properties: [String: any Sendable] = [:]
-        for (key, prop) in parameters {
-            properties[key] = ["type": prop.type, "description": prop.description] as [String: String]
-        }
         return [
             "type": "function",
             "function": [
                 "name": name,
                 "description": description,
-                "parameters": [
-                    "type": "object",
-                    "properties": properties,
-                    "required": required,
-                ] as [String: any Sendable],
+                "parameters": parametersJSONSchema.mapValues(Self.templateValue),
             ] as [String: any Sendable],
         ] as [String: any Sendable]
+    }
+
+    private static func templateValue(_ value: OpenAIJSONValue) -> any Sendable {
+        switch value {
+        case .string(let value): value
+        case .number(let value): value
+        case .bool(let value): value
+        case .object(let value): value.mapValues(templateValue)
+        case .array(let value): value.map(templateValue)
+        case .null: Optional<String>.none
+        }
     }
 
     public func promptSchemaJSONString() throws -> String {
@@ -271,22 +301,13 @@ private struct ToolPromptSchema: Encodable {
 private struct ToolFunctionSchema: Encodable {
     let name: String
     let description: String
-    let parameters: ToolParametersSchema
+    let parameters: [String: OpenAIJSONValue]
 
     init(definition: ToolDefinition) {
         self.name = definition.name
         self.description = definition.description
-        self.parameters = ToolParametersSchema(
-            properties: definition.parameters,
-            required: definition.required
-        )
+        self.parameters = definition.parametersJSONSchema
     }
-}
-
-private struct ToolParametersSchema: Encodable {
-    let type = "object"
-    let properties: [String: ToolParameterProperty]
-    let required: [String]
 }
 
 public struct ToolCall: Sendable, Hashable {

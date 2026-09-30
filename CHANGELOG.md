@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Preserve complete function parameter schemas in native API prompts, including
+  nested properties, array items, enums, and constraints. Reject non-null, non-object
+  parameter schemas instead of replacing them with an empty schema.
+- Update the chat-template interpreter to preserve adjacent tool-result groups
+  in official templates that use `loop.previtem` and `loop.nextitem`.
+
 - Refresh the bundled DwarfStar runtime to upstream `b6af0adf8ca9`, including
   session snapshot and native tool handling fixes. Preserve the DeepSeek V4
   Flash 0731 Q2 imatrix model pin and bundle the Iris decoder license.

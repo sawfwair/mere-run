@@ -3012,22 +3012,20 @@ enum APIServerContract {
             throw APIRequestValidationError.invalidField("tools", "only function tools are supported")
         }
 
-        let schema = function.parameters?.objectValue ?? [:]
-        let properties = schema["properties"]?.objectValue ?? [:]
-        var converted: [String: ToolParameterProperty] = [:]
-        for (name, rawProperty) in properties {
-            guard let property = rawProperty.objectValue else { continue }
-            let type = property["type"]?.stringValue ?? "string"
-            let description = property["description"]?.stringValue ?? ""
-            converted[name] = ToolParameterProperty(type: type, description: description)
+        let schema: [String: OpenAIJSONValue]
+        if let parameters = function.parameters, parameters != .null {
+            guard let object = parameters.objectValue else {
+                throw APIRequestValidationError.invalidField("tools", "function parameters must be a JSON object")
+            }
+            schema = object
+        } else {
+            schema = ["type": .string("object"), "properties": .object([:]), "required": .array([])]
         }
-        let required = schema["required"]?.arrayValue?.compactMap(\.stringValue) ?? []
 
         return ToolDefinition(
             name: function.name,
             description: function.description ?? "",
-            parameters: converted,
-            required: required
+            parameterSchema: schema
         )
     }
 
