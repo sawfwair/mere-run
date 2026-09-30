@@ -22,6 +22,32 @@ public struct MiniMaxMusic3FlowModels {
     public let transformer: MiniMaxMusic3Transformer
 }
 
+private final class MiniMaxMusic3PrepackedModelContainer: Module {
+    @ModuleInfo(key: "language_model") var languageModel: MiniMaxMusic3LanguageModel
+    @ModuleInfo(key: "rvq_depth_decoder") var depthDecoder: MiniMaxMusic3DepthDecoder
+    @ModuleInfo(key: "condition_encoder") var conditionEncoder: MiniMaxMusic3ConditionEncoder
+    @ModuleInfo(key: "transformer") var transformer: MiniMaxMusic3Transformer
+    @ModuleInfo(key: "vocoder") var vocoder: MiniMaxMusic3Vocoder
+
+    init(resources: MiniMaxMusic3Resources) throws {
+        self._languageModel.wrappedValue = MiniMaxMusic3LanguageModel(
+            configuration: try resources.loadLanguageConfiguration()
+        )
+        self._depthDecoder.wrappedValue = MiniMaxMusic3DepthDecoder(
+            configuration: try resources.loadDepthConfiguration()
+        )
+        self._conditionEncoder.wrappedValue = MiniMaxMusic3ConditionEncoder(
+            configuration: try resources.loadConditionConfiguration()
+        )
+        self._transformer.wrappedValue = MiniMaxMusic3Transformer(
+            configuration: try resources.loadTransformerConfiguration()
+        )
+        self._vocoder.wrappedValue = MiniMaxMusic3Vocoder(
+            configuration: try resources.loadVocoderConfiguration()
+        )
+    }
+}
+
 public enum MiniMaxMusic3LoadingStrategy: String, CaseIterable, Codable, Sendable {
     case staged
     case resident
@@ -36,10 +62,12 @@ public enum MiniMaxMusic3PerformanceMode: String, CaseIterable, Codable, Sendabl
     case q8
     /// Optimized graph with affine 4-bit autoregressive weights.
     case q4
+    /// Experimental optimized graph with MXFP8 transformer weights.
+    case mxfp8
 
-    var quantizationBits: Int? {
+    var affineQuantizationBits: Int? {
         switch self {
-        case .reference, .optimized:
+        case .reference, .optimized, .mxfp8:
             nil
         case .q8:
             8
@@ -51,6 +79,10 @@ public enum MiniMaxMusic3PerformanceMode: String, CaseIterable, Codable, Sendabl
     var usesOptimizedGraph: Bool {
         self != .reference
     }
+
+    var usesMXFP8: Bool {
+        self == .mxfp8
+    }
 }
 
 public enum MiniMaxMusic3ModelLoader {
@@ -59,6 +91,9 @@ public enum MiniMaxMusic3ModelLoader {
         performanceMode: MiniMaxMusic3PerformanceMode = .optimized
     ) throws -> MiniMaxMusic3Models {
         try validate(resources)
+        if performanceMode.usesMXFP8 {
+            return try loadPrepackedMXFP8(from: resources)
+        }
         let autoregressive = try loadAutoregressive(
             from: resources,
             performanceMode: performanceMode
@@ -86,6 +121,9 @@ public enum MiniMaxMusic3ModelLoader {
         from resources: MiniMaxMusic3Resources,
         performanceMode: MiniMaxMusic3PerformanceMode = .optimized
     ) throws -> MiniMaxMusic3AutoregressiveModels {
+        guard !performanceMode.usesMXFP8 else {
+            throw MiniMaxMusic3Error.prepackedMXFP8RequiresResident
+        }
         try validate(resources)
         let languageModel = MiniMaxMusic3LanguageModel(
             configuration: try resources.loadLanguageConfiguration()
@@ -108,7 +146,7 @@ public enum MiniMaxMusic3ModelLoader {
             languageModel.prepareFusedProjections()
             depthDecoder.prepareFusedProjections()
         }
-        if let bits = performanceMode.quantizationBits {
+        if let bits = performanceMode.affineQuantizationBits {
             quantizeAutoregressive(
                 languageModel: languageModel,
                 depthDecoder: depthDecoder,
@@ -131,6 +169,9 @@ public enum MiniMaxMusic3ModelLoader {
         from resources: MiniMaxMusic3Resources,
         performanceMode: MiniMaxMusic3PerformanceMode = .optimized
     ) throws -> MiniMaxMusic3FlowModels {
+        guard !performanceMode.usesMXFP8 else {
+            throw MiniMaxMusic3Error.prepackedMXFP8RequiresResident
+        }
         try validate(resources)
         let conditionEncoder = MiniMaxMusic3ConditionEncoder(
             configuration: try resources.loadConditionConfiguration()
@@ -198,6 +239,82 @@ public enum MiniMaxMusic3ModelLoader {
         return vocoder
     }
 
+    private static func loadPrepackedMXFP8(
+        from resources: MiniMaxMusic3Resources
+    ) throws -> MiniMaxMusic3Models {
+        let rootURL = resources.prepackedMXFP8RootURL()
+        let indexURL = rootURL.appendingPathComponent("model.safetensors.index.json")
+        let missing = resources.validatePrepackedMXFP8(at: rootURL)
+        guard missing.isEmpty else {
+            throw MiniMaxMusic3Error.missingResources(missing)
+        }
+
+        let container = try MiniMaxMusic3PrepackedModelContainer(resources: resources)
+        try HFSafetensorsWeightsLoader.applyQuantizedWeights(
+            indexURL: indexURL,
+            to: container,
+            groupSize: 32,
+            bits: 8,
+            applySVDResiduals: false,
+            quantizedModuleResolver: { _, _, _, _, _, _, _ in
+                (groupSize: 32, bits: 8, mode: .mxfp8)
+            },
+            mapper: mapPrepackedMXFP8Weight
+        )
+        container.languageModel.prepareCompactSemanticHead()
+        container.languageModel.prepareFusedProjections()
+        container.depthDecoder.prepareFusedProjections()
+        container.transformer.prepareFusedBlockProjections()
+        MLX.eval(container.parameters())
+
+        let tokenizer = try ACEStep5HzLMTokenizer.load(
+            from: rootURL.appendingPathComponent("tokenizer", isDirectory: true),
+            requireAudioCodeTokens: false
+        )
+        return MiniMaxMusic3Models(
+            languageModel: container.languageModel,
+            depthDecoder: container.depthDecoder,
+            conditionEncoder: container.conditionEncoder,
+            transformer: container.transformer,
+            vocoder: container.vocoder,
+            tokenizer: tokenizer
+        )
+    }
+
+    static func mapPrepackedMXFP8Weight(
+        key: String,
+        value: MLXArray
+    ) -> [(String, MLXArray)] {
+        guard key.hasPrefix("vocoder.") else {
+            return [(key, value)]
+        }
+        if key.hasSuffix(".alpha") {
+            return [(key, value.transposed(0, 2, 1))]
+        }
+        guard key.hasSuffix(".weight"), key != "vocoder.dec_in_proj.weight" else {
+            return [(key, value)]
+        }
+
+        let base = String(key.dropLast("weight".count))
+        let floatValue = value.asType(.float32)
+        let norm: MLXArray
+        if key.contains(".conv_t1.") {
+            norm = MLX.sqrt(
+                MLX.sum(floatValue * floatValue, axes: [0, 1], keepDims: true) + 1e-12
+            ).reshaped(-1, 1, 1)
+        } else {
+            norm = MLX.sqrt(
+                MLX.sum(floatValue * floatValue, axes: [1, 2], keepDims: true) + 1e-12
+            )
+        }
+        return [
+            ("\(base)weight_v", value),
+            // Keeping the matching norm in float32 makes weight_g / norm
+            // exactly one when the WN layer reconstructs this fused weight.
+            ("\(base)weight_g", norm),
+        ]
+    }
+
     private static func validate(_ resources: MiniMaxMusic3Resources) throws {
         let missing = resources.validate()
         guard missing.isEmpty else {
@@ -228,6 +345,7 @@ public enum MiniMaxMusic3Error: LocalizedError {
     case invalidPrompt(String)
     case invalidAudio(String)
     case generatedNoFrames
+    case prepackedMXFP8RequiresResident
 
     public var errorDescription: String? {
         switch self {
@@ -239,6 +357,8 @@ public enum MiniMaxMusic3Error: LocalizedError {
             return "Invalid MiniMax Music 3 audio: \(reason)"
         case .generatedNoFrames:
             return "MiniMax Music 3 ended before generating an audio frame."
+        case .prepackedMXFP8RequiresResident:
+            return "MiniMax Music 3 MXFP8 uses a consolidated checkpoint and requires resident memory mode."
         }
     }
 }

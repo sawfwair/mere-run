@@ -144,6 +144,21 @@ final class MiniMaxMusic3FlowAttention: Module {
 
     func prepareFusedProjections() {
         guard !usesFusedProjections else { return }
+        if let fused = concatenatedPortableQuantizedLinear([query, key, value]) {
+            update(modules: ModuleChildren.unflattened([
+                ("to_q", fused),
+                (
+                    "to_k",
+                    Linear(weight: MLXArray.zeros([1, 1], dtype: fused.weight.dtype), bias: nil)
+                ),
+                (
+                    "to_v",
+                    Linear(weight: MLXArray.zeros([1, 1], dtype: fused.weight.dtype), bias: nil)
+                ),
+            ]))
+            usesFusedProjections = true
+            return
+        }
         let fused = MLX.concatenated([query.weight, key.weight, value.weight], axis: 0)
         MLX.eval(fused)
         update(modules: ModuleChildren.unflattened([
@@ -322,6 +337,10 @@ public final class MiniMaxMusic3Transformer: Module {
 
     public func prepareFusedProjections() {
         prepareFusedInputProjection()
+        prepareFusedBlockProjections()
+    }
+
+    func prepareFusedBlockProjections() {
         for block in blocks {
             block.prepareFusedProjections()
         }

@@ -128,6 +128,17 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         }
     }
 
+    func testMusicGenerateParsesExperimentalMXFP8Mode() throws {
+        let command = try MusicGenerate.parse([
+            "deep house",
+            "--model", MiniMaxMusic3Resources.modelID,
+            "--instrumental",
+            "--performance-mode", "mxfp8",
+        ])
+
+        XCTAssertEqual(command.miniMaxPerformanceMode, .mxfp8)
+    }
+
     func testMiniMaxValidatesDurationFloorAgainstUpperBound() throws {
         let valid = try MusicGenerate.parse([
             "deep house",

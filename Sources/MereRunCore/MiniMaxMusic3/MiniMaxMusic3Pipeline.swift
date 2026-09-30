@@ -85,6 +85,9 @@ public final class MiniMaxMusic3Pipeline {
         guard missing.isEmpty else {
             throw MiniMaxMusic3Error.missingResources(missing)
         }
+        guard !performanceMode.usesMXFP8 || loadingStrategy == .resident else {
+            throw MiniMaxMusic3Error.prepackedMXFP8RequiresResident
+        }
         self.resources = resources
         self.loadingStrategy = loadingStrategy
         self.performanceMode = performanceMode

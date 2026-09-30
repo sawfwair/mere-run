@@ -253,6 +253,55 @@ public final class PortableQuantizedLinear: QuantizedLinear {
     }
 }
 
+func concatenatedPortableQuantizedLinear(_ linears: [Linear]) -> PortableQuantizedLinear? {
+    guard let first = linears.first as? QuantizedLinear else { return nil }
+    let quantized = linears.compactMap { $0 as? QuantizedLinear }
+    guard quantized.count == linears.count,
+          quantized.allSatisfy({
+              $0.groupSize == first.groupSize
+                  && $0.bits == first.bits
+                  && $0.mode == first.mode
+                  && $0.globalScale == nil
+          })
+    else {
+        return nil
+    }
+
+    let denseBias: MLXArray?
+    if quantized.allSatisfy({ $0.bias == nil }) {
+        denseBias = nil
+    } else if quantized.allSatisfy({ $0.bias != nil }) {
+        denseBias = MLX.concatenated(quantized.compactMap(\.bias), axis: 0)
+    } else {
+        return nil
+    }
+
+    let quantizationBiases: MLXArray?
+    if quantized.allSatisfy({ $0.biases == nil }) {
+        quantizationBiases = nil
+    } else if quantized.allSatisfy({ $0.biases != nil }) {
+        quantizationBiases = MLX.concatenated(quantized.compactMap(\.biases), axis: 0)
+    } else {
+        return nil
+    }
+
+    let weight = MLX.concatenated(quantized.map(\.weight), axis: 0)
+    let scales = MLX.concatenated(quantized.map(\.scales), axis: 0)
+    var arrays = [weight, scales]
+    if let denseBias { arrays.append(denseBias) }
+    if let quantizationBiases { arrays.append(quantizationBiases) }
+    MLX.eval(arrays)
+    return PortableQuantizedLinear(
+        weight: weight,
+        bias: denseBias,
+        scales: scales,
+        biases: quantizationBiases,
+        groupSize: first.groupSize,
+        bits: first.bits,
+        mode: first.mode
+    )
+}
+
 func portableGatherQuantizedMM(
     _ x: MLXArray,
     _ weight: MLXArray,

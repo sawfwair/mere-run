@@ -212,6 +212,15 @@ public final class QwenAttention: Module {
 
   func prepareFusedProjections() {
     guard !usesFusedProjections else { return }
+    if let fused = concatenatedPortableQuantizedLinear([qProj, kProj, vProj]) {
+      update(modules: ModuleChildren.unflattened([
+        ("q_proj", fused),
+        ("k_proj", Linear(weight: MLXArray.zeros([1, 1], dtype: fused.weight.dtype), bias: nil)),
+        ("v_proj", Linear(weight: MLXArray.zeros([1, 1], dtype: fused.weight.dtype), bias: nil)),
+      ]))
+      usesFusedProjections = true
+      return
+    }
     let fused = MLX.concatenated([qProj.weight, kProj.weight, vProj.weight], axis: 0)
     MLX.eval(fused)
     update(modules: ModuleChildren.unflattened([
@@ -278,6 +287,14 @@ public final class QwenMLP: Module {
 
   func prepareFusedProjections() {
     guard !usesFusedProjections else { return }
+    if let fused = concatenatedPortableQuantizedLinear([gateProj, upProj]) {
+      update(modules: ModuleChildren.unflattened([
+        ("gate_proj", fused),
+        ("up_proj", Linear(weight: MLXArray.zeros([1, 1], dtype: fused.weight.dtype), bias: nil)),
+      ]))
+      usesFusedProjections = true
+      return
+    }
     let fused = MLX.concatenated([gateProj.weight, upProj.weight], axis: 0)
     MLX.eval(fused)
     update(modules: ModuleChildren.unflattened([

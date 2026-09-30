@@ -117,11 +117,44 @@ public struct MiniMaxMusic3Resources: Sendable, Hashable {
     public static let repository = "MiniMaxAI/MiniMax-Music3"
     public static let revision = "bd348f9c49ea3c1b39f33ace3436f8fad435f24e"
     public static let estimatedDownloadBytes: Int64 = 28_517_620_807
+    public static let prepackedMXFP8ModelID = "music-minimax-music3-mxfp8-mlx-community"
+    public static let prepackedMXFP8Repository = "mlx-community/MiniMax-Music3-mxfp8"
+    public static let prepackedMXFP8Revision = "02f9db1c6574f7d060ee4cfea3c3794e17b13c29"
+    public static let prepackedMXFP8DownloadBytes: Int64 = 13_856_906_196
 
     public let rootURL: URL
 
     public init(rootURL: URL) {
         self.rootURL = rootURL
+    }
+
+    public func prepackedMXFP8RootURL(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> URL {
+        if let path = environment["MERERUN_MINIMAX_MUSIC3_MXFP8_ROOT"], !path.isEmpty {
+            return URL(fileURLWithPath: path, isDirectory: true)
+        }
+        return rootURL.deletingLastPathComponent().appendingPathComponent(
+            Self.prepackedMXFP8ModelID,
+            isDirectory: true
+        )
+    }
+
+    public func validatePrepackedMXFP8(
+        at rootURL: URL,
+        fileManager: FileManager = .default
+    ) -> [URL] {
+        let required = [
+            "config.json",
+            "model.safetensors.index.json",
+            "model-00001-of-00003.safetensors",
+            "model-00002-of-00003.safetensors",
+            "model-00003-of-00003.safetensors",
+            "tokenizer/tokenizer.json",
+            "tokenizer/tokenizer_config.json",
+        ]
+        return required.map { rootURL.appendingPathComponent($0) }
+            .filter { !fileManager.fileExists(atPath: $0.path) }
     }
 
     public var tokenizerURL: URL { rootURL.appendingPathComponent("tokenizer", isDirectory: true) }

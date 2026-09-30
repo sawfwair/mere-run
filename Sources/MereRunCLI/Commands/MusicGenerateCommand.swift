@@ -188,7 +188,7 @@ struct MusicGenerate: AsyncParsableCommand {
 
     @Option(
         name: [.customLong("performance-mode")],
-        help: "MiniMax Music 3 execution: reference, optimized (default), q8, or q4."
+        help: "MiniMax Music 3 execution: reference, optimized (default), q8, q4, or experimental mxfp8."
     )
     var miniMaxPerformanceMode: MiniMaxMusic3PerformanceMode?
 
@@ -1204,13 +1204,16 @@ struct MusicGenerate: AsyncParsableCommand {
         if !quiet {
             CLIStderr.write("Loading MiniMax Music 3 from \(rootURL.path)\n")
         }
-        let loadingStrategy = miniMaxLoadingStrategy ?? .staged
-        if !quiet {
-            CLIStderr.write("MiniMax memory mode: \(loadingStrategy.rawValue)\n")
-        }
         let performanceMode = miniMaxPerformanceMode ?? .optimized
         if !quiet {
             CLIStderr.write("MiniMax performance mode: \(performanceMode.rawValue)\n")
+        }
+        let loadingStrategy = miniMaxLoadingStrategy ?? (performanceMode == .mxfp8 ? .resident : .staged)
+        guard performanceMode != .mxfp8 || loadingStrategy == .resident else {
+            throw ValidationError("MiniMax Music 3 MXFP8 requires --memory-mode resident.")
+        }
+        if !quiet {
+            CLIStderr.write("MiniMax memory mode: \(loadingStrategy.rawValue)\n")
         }
         let inferenceSteps = resolvedMiniMaxInferenceSteps
         let flowStrategy = miniMaxFlowStrategy ?? .sequential

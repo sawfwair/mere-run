@@ -3,6 +3,43 @@ import XCTest
 @testable import MereRunCore
 
 final class MiniMaxMusic3Tests: MereRunCoreTestCase {
+    func testPrepackedMXFP8VocoderMapperPreservesFusedWeights() throws {
+        let weightValues: [Float] = (0..<(4 * 3 * 2)).map { Float($0 + 1) / Float(32) }
+        let weight = MLXArray(
+            weightValues,
+            [4, 3, 2]
+        ).asType(.bfloat16)
+        let updates = MiniMaxMusic3ModelLoader.mapPrepackedMXFP8Weight(
+            key: "vocoder.blocks.0.res_unit1.conv1.weight",
+            value: weight
+        )
+        let mapped: [String: MLXArray] = Dictionary(uniqueKeysWithValues: updates)
+        let weightV = try XCTUnwrap(mapped["vocoder.blocks.0.res_unit1.conv1.weight_v"])
+        let weightG = try XCTUnwrap(mapped["vocoder.blocks.0.res_unit1.conv1.weight_g"])
+        let value = weightV.asType(DType.float32)
+        let norm = MLX.sqrt(MLX.sum(value * value, axes: [1, 2], keepDims: true) + 1e-12)
+        let reconstructed = (value * weightG.asType(DType.float32) / norm).asType(.bfloat16)
+        MLX.eval(reconstructed)
+
+        XCTAssertEqual(weightG.dtype, DType.float32)
+        XCTAssertTrue(MLX.allClose(weight, reconstructed, rtol: 0, atol: 0).item(Bool.self))
+    }
+
+    func testPrepackedMXFP8RootPrefersExplicitEnvironment() {
+        let resources = MiniMaxMusic3Resources(rootURL: URL(fileURLWithPath: "/models/bf16"))
+
+        XCTAssertEqual(
+            resources.prepackedMXFP8RootURL(environment: [:]).path,
+            "/models/\(MiniMaxMusic3Resources.prepackedMXFP8ModelID)"
+        )
+        XCTAssertEqual(
+            resources.prepackedMXFP8RootURL(
+                environment: ["MERERUN_MINIMAX_MUSIC3_MXFP8_ROOT": "/weights/mxfp8"]
+            ).path,
+            "/weights/mxfp8"
+        )
+    }
+
     func testAutoregressiveCacheClearingUsesBoundedIntervals() {
         XCTAssertFalse(MiniMaxMusic3Pipeline.shouldClearAutoregressiveCache(generatedFrameCount: 0))
         XCTAssertFalse(MiniMaxMusic3Pipeline.shouldClearAutoregressiveCache(generatedFrameCount: 63))
@@ -84,6 +121,152 @@ final class MiniMaxMusic3Tests: MereRunCoreTestCase {
         XCTAssertGreaterThanOrEqual(q8Overlap, 80)
         XCTAssertGreaterThan(q4Cosine, 0.80)
         XCTAssertGreaterThanOrEqual(q4Overlap, 50)
+    }
+
+    func testInstalledPrepackedMXFP8SemanticLogitQuality() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["MERERUN_MINIMAX_MUSIC3_MXFP8_E2E"] == "1",
+              let root = environment["MERERUN_MINIMAX_MUSIC3_MODEL_ROOT"]
+        else {
+            throw XCTSkip("set the MiniMax Music 3 model root and prepacked MXFP8 E2E flag")
+        }
+        let resources = MiniMaxMusic3Resources(rootURL: URL(fileURLWithPath: root))
+        let prompt = MiniMaxMusic3Prompt.assemble(
+            caption: "128 BPM progressive deep house, rubbery sub bass, shuffled hats, glassy minor-seventh stabs.",
+            lyrics: "[Instrumental]"
+        )
+
+        func logits(
+            languageModel: MiniMaxMusic3LanguageModel,
+            tokenizer: ACEStep5HzLMTokenizer
+        ) -> [Float] {
+            let conditional = tokenizer.encode(prompt, addSpecialTokens: false)
+            var unconditional = conditional
+            for index in 1..<(unconditional.count - 2) {
+                unconditional[index] = MiniMaxMusic3Prompt.audioCFGTokenID
+            }
+            let ids = MLXArray((conditional + unconditional).map(Int32.init))
+                .reshaped(2, conditional.count)
+            let hidden = languageModel.hidden(
+                embeddings: languageModel.embed(tokenIDs: ids),
+                cache: languageModel.makeCache(),
+                lastPositionOnly: true
+            ).squeezed(axis: 1)
+            let result = languageModel.logits(hidden).asType(.float32)
+            MLX.eval(result)
+            return result.asArray(Float.self)
+        }
+
+        let referenceModels = try MiniMaxMusic3ModelLoader.loadAutoregressive(
+            from: resources,
+            performanceMode: .optimized
+        )
+        let reference = logits(
+            languageModel: referenceModels.languageModel,
+            tokenizer: referenceModels.tokenizer
+        )
+        MLX.Memory.clearCache()
+
+        let quantizedModels = try MiniMaxMusic3ModelLoader.load(
+            from: resources,
+            performanceMode: .mxfp8
+        )
+        let quantized = logits(
+            languageModel: quantizedModels.languageModel,
+            tokenizer: quantizedModels.tokenizer
+        )
+        MLX.Memory.clearCache()
+
+        var dot = 0.0
+        var referenceSquared = 0.0
+        var quantizedSquared = 0.0
+        for (referenceValue, quantizedValue) in zip(reference, quantized) {
+            let referenceValue = Double(referenceValue)
+            let quantizedValue = Double(quantizedValue)
+            dot += referenceValue * quantizedValue
+            referenceSquared += referenceValue * referenceValue
+            quantizedSquared += quantizedValue * quantizedValue
+        }
+        let cosine = dot / (referenceSquared.squareRoot() * quantizedSquared.squareRoot())
+        let referenceTop = Set(reference.indices.sorted { reference[$0] > reference[$1] }.prefix(100))
+        let quantizedTop = Set(quantized.indices.sorted { quantized[$0] > quantized[$1] }.prefix(100))
+        let overlap = referenceTop.intersection(quantizedTop).count
+        print("[minimax-music3-mxfp8] cosine=\(cosine) top100=\(overlap)")
+
+        XCTAssertGreaterThan(cosine, 0.95)
+        XCTAssertGreaterThanOrEqual(overlap, 80)
+    }
+
+    func testInstalledPrepackedMXFP8FlowQuality() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["MERERUN_MINIMAX_MUSIC3_MXFP8_E2E"] == "1",
+              let root = environment["MERERUN_MINIMAX_MUSIC3_MODEL_ROOT"]
+        else {
+            throw XCTSkip("set the MiniMax Music 3 model root and prepacked MXFP8 E2E flag")
+        }
+        let resources = MiniMaxMusic3Resources(rootURL: URL(fileURLWithPath: root))
+        let configuration = try resources.loadTransformerConfiguration()
+        let length = 4
+        let latentValues: [Float] = (0..<(2 * configuration.inChannels * length)).map {
+            Float(($0 % 31) - 15) / Float(64)
+        }
+        let conditionValues: [Float] = (0..<(2 * length * configuration.conditionDim)).map {
+            Float(($0 % 37) - 18) / Float(96)
+        }
+        let latents = MLXArray(
+            latentValues,
+            [2, configuration.inChannels, length]
+        ).asType(.bfloat16)
+        let condition = MLXArray(
+            conditionValues,
+            [2, length, configuration.conditionDim]
+        ).asType(.bfloat16)
+        let timestep = MLXArray([Float(0.25), Float(0.25)]).asType(.bfloat16)
+
+        let referenceModels = try MiniMaxMusic3ModelLoader.loadFlow(
+            from: resources,
+            performanceMode: .reference
+        )
+        let reference = referenceModels.transformer(
+            latents: latents,
+            timestep: timestep,
+            condition: condition
+        ).asType(.float32)
+        MLX.eval(reference)
+
+        let quantizedModels = try MiniMaxMusic3ModelLoader.load(
+            from: resources,
+            performanceMode: .mxfp8
+        )
+        let quantized = quantizedModels.transformer(
+            latents: latents,
+            timestep: timestep,
+            condition: condition
+        ).asType(.float32)
+        MLX.eval(quantized)
+
+        let referenceValues = reference.asArray(Float.self)
+        let quantizedValues = quantized.asArray(Float.self)
+        var dot = 0.0
+        var referenceSquared = 0.0
+        var quantizedSquared = 0.0
+        var errorSquared = 0.0
+        for (referenceValue, quantizedValue) in zip(referenceValues, quantizedValues) {
+            let referenceValue = Double(referenceValue)
+            let quantizedValue = Double(quantizedValue)
+            dot += referenceValue * quantizedValue
+            referenceSquared += referenceValue * referenceValue
+            quantizedSquared += quantizedValue * quantizedValue
+            let error = referenceValue - quantizedValue
+            errorSquared += error * error
+        }
+        let cosine = dot / (referenceSquared.squareRoot() * quantizedSquared.squareRoot())
+        let relativeRMSE = (errorSquared / referenceSquared).squareRoot()
+        print("[minimax-music3-mxfp8-flow] cosine=\(cosine) relative_rmse=\(relativeRMSE)")
+
+        XCTAssertEqual(quantized.shape, reference.shape)
+        XCTAssertGreaterThan(cosine, 0.99)
+        XCTAssertLessThan(relativeRMSE, 0.15)
     }
 
     func testInstalledStagedAndResidentGenerationAreSeedEquivalent() throws {

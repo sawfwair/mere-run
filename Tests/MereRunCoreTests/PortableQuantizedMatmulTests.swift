@@ -4,6 +4,43 @@ import XCTest
 @testable import MereRunCore
 
 final class PortableQuantizedMatmulTests: MereRunCoreTestCase {
+    func testConcatenatedMXFP8LinearsMatchSeparateProjections() throws {
+        let firstValues: [Float] = (0..<(48 * 64)).map {
+            Float(($0 % 31) - 15) / Float(32)
+        }
+        let secondValues: [Float] = (0..<(16 * 64)).map {
+            Float(($0 % 23) - 11) / Float(24)
+        }
+        let inputValues: [Float] = (0..<(3 * 64)).map {
+            Float(($0 % 17) - 8) / Float(16)
+        }
+        let first = PortableQuantizedLinear(
+            weight: MLXArray(firstValues, [48, 64]),
+            bias: nil,
+            groupSize: 32,
+            bits: 8,
+            mode: .mxfp8
+        )
+        let second = PortableQuantizedLinear(
+            weight: MLXArray(secondValues, [16, 64]),
+            bias: nil,
+            groupSize: 32,
+            bits: 8,
+            mode: .mxfp8
+        )
+        let input = MLXArray(inputValues, [3, 64])
+
+        let fused = try XCTUnwrap(concatenatedPortableQuantizedLinear([first, second]))
+        let expected = MLX.concatenated([first(input), second(input)], axis: -1)
+        let actual = fused(input)
+        MLX.eval(expected, actual)
+
+        XCTAssertEqual(fused.mode, QuantizationMode.mxfp8)
+        XCTAssertEqual(fused.groupSize, 32)
+        XCTAssertEqual(fused.bits, 8)
+        XCTAssertTrue(MLX.allClose(expected, actual, rtol: 0, atol: 0).item(Bool.self))
+    }
+
     func testCUDAQuantModeParsingDefaultsToAutomatic() {
         XCTAssertEqual(MLXCUDAQuant.parseMode(nil), .automatic)
         XCTAssertEqual(MLXCUDAQuant.parseMode(""), .automatic)

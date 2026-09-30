@@ -78,6 +78,19 @@ final class MiniMaxMusic3DepthAttention: Module {
 
     func prepareFusedProjections() {
         guard !usesFusedProjections else { return }
+        if let fused = concatenatedPortableQuantizedLinear([query, key, value]) {
+            let placeholder = Linear(
+                weight: MLXArray.zeros([1, 1], dtype: fused.weight.dtype),
+                bias: nil
+            )
+            update(modules: ModuleChildren.unflattened([
+                ("to_q", fused),
+                ("to_k", placeholder),
+                ("to_v", Linear(weight: placeholder.weight, bias: nil)),
+            ]))
+            usesFusedProjections = true
+            return
+        }
         let fused = MLX.concatenated([query.weight, key.weight, value.weight], axis: 0)
         MLX.eval(fused)
         let placeholder = Linear(weight: MLXArray.zeros([1, 1], dtype: fused.dtype), bias: nil)
@@ -135,6 +148,17 @@ final class MiniMaxMusic3DepthBlock: Module {
     func prepareFusedProjections() {
         attention.prepareFusedProjections()
         guard !usesFusedFeedForward else { return }
+        if let fused = concatenatedPortableQuantizedLinear([gateProjection, upProjection]) {
+            update(modules: ModuleChildren.unflattened([
+                ("gate_proj", fused),
+                (
+                    "up_proj",
+                    Linear(weight: MLXArray.zeros([1, 1], dtype: fused.weight.dtype), bias: nil)
+                ),
+            ]))
+            usesFusedFeedForward = true
+            return
+        }
         let fused = MLX.concatenated([gateProjection.weight, upProjection.weight], axis: 0)
         MLX.eval(fused)
         update(modules: ModuleChildren.unflattened([
