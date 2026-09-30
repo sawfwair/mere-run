@@ -108,19 +108,27 @@ final class Q35FullAttention: Module {
         let b = x.dim(0)
         let s = x.dim(1)
         let offsets = cache?.rowOffsets ?? Array(repeating: cache?.offset ?? 0, count: b)
+        let packedBranchVerification = targetVerify && b > 1 && b * s <= 8
+        let projectionInput = packedBranchVerification
+            ? x.reshaped(1, b * s, x.dim(-1))
+            : x
+        func branched(_ value: MLXArray) -> MLXArray {
+            guard packedBranchVerification else { return value }
+            return value.reshaped(b, s, value.dim(-1))
+        }
 
         let qFlat: MLXArray
         let kFlat: MLXArray
         let vFlat: MLXArray
         if let fused = resolvedFusedQKV() {
-            let parts = fused.callSplit(x)
-            qFlat = parts[0]
-            kFlat = parts[1]
-            vFlat = parts[2]
+            let parts = fused.callSplit(projectionInput)
+            qFlat = branched(parts[0])
+            kFlat = branched(parts[1])
+            vFlat = branched(parts[2])
         } else {
-            qFlat = qProj(x)
-            kFlat = kProj(x)
-            vFlat = vProj(x)
+            qFlat = branched(qProj(projectionInput))
+            kFlat = branched(kProj(projectionInput))
+            vFlat = branched(vProj(projectionInput))
         }
 
         let qProjection = qFlat.reshaped(b, s, numHeads, hasOutputGate ? headDim * 2 : headDim)
@@ -162,7 +170,7 @@ final class Q35FullAttention: Module {
         let queryCount = q.dim(2)
         let keyCount = k.dim(2)
         let attn: MLXArray
-        if let indexer, targetVerify, b == 1, (2...32).contains(queryCount),
+        if let indexer, targetVerify, b * queryCount <= 32, (2...32).contains(queryCount),
            (queryCount <= 9 || Q38WideVerificationPolicy.exactSparseAttention),
            keyCount >= queryCount, case .causal = mask {
             // Flash-Next's BF16 dense attention and sparse reductions can
@@ -217,7 +225,10 @@ final class Q35FullAttention: Module {
         if let gate {
             out = out * MLX.sigmoid(gate)
         }
-        return oProj(out)
+        let projected = oProj(
+            packedBranchVerification ? out.reshaped(1, b * s, out.dim(-1)) : out
+        )
+        return branched(projected)
     }
 
     private func q38VerificationAttention(
@@ -226,22 +237,42 @@ final class Q35FullAttention: Module {
     ) -> MLXArray {
         let count = queries.dim(2)
         let prefix = keys.dim(2) - count
-        let rows = (0..<count).map { row in
-            let query = queries[0..., 0..., row..<(row + 1), 0...]
-            let rowKeys = keys[0..., 0..., 0..<(prefix + row + 1), 0...]
-            let rowValues = values[0..., 0..., 0..<(prefix + row + 1), 0...]
-            let positions = positionIds.map {
-                $0.ndim == 3 ? $0[0..., 0..., row..<(row + 1)] : $0[0..., row..<(row + 1)]
+        let batch = queries.dim(0)
+        let splitCaches = cache?.unbatchedRows(count: batch)
+        let branchCaches = splitCaches?.compactMap { $0 as? Q38QSACache }
+        let branches = (0..<batch).map { branch in
+            let rows = (0..<count).map { row in
+                let query = queries[branch..<(branch + 1), 0..., row..<(row + 1), 0...]
+                let rowKeys = keys[branch..<(branch + 1), 0..., 0..<(prefix + row + 1), 0...]
+                let rowValues = values[branch..<(branch + 1), 0..., 0..<(prefix + row + 1), 0...]
+                let positions = positionIds.map {
+                    if $0.ndim == 3 {
+                        return $0[branch..<(branch + 1), 0..., row..<(row + 1)]
+                    }
+                    return $0[branch..<(branch + 1), row..<(row + 1)]
+                }
+                return indexer.attention(
+                    hidden: hidden[branch..<(branch + 1), row..<(row + 1), 0...],
+                    queries: query,
+                    keys: rowKeys,
+                    values: rowValues,
+                    offsets: [offsets[branch] + row],
+                    positionIds: positions,
+                    cache: branchCaches?[branch],
+                    scale: scale
+                ) ?? MLXFast.scaledDotProductAttention(
+                    queries: query, keys: rowKeys, values: rowValues, scale: scale, mask: .none
+                )
             }
-            return indexer.attention(
-                hidden: hidden[0..., row..<(row + 1), 0...],
-                queries: query, keys: rowKeys, values: rowValues, offsets: [offsets[0] + row],
-                positionIds: positions, cache: cache, scale: scale
-            ) ?? MLXFast.scaledDotProductAttention(
-                queries: query, keys: rowKeys, values: rowValues, scale: scale, mask: .none
+            return MLX.concatenated(rows, axis: 2)
+        }
+        if let cache, let branchCaches {
+            precondition(
+                branchCaches.count == batch && cache.adoptIndexerRows(branchCaches),
+                "QSA branch verification must preserve one indexer history per branch"
             )
         }
-        return MLX.concatenated(rows, axis: 2)
+        return MLX.concatenated(branches, axis: 0)
     }
 
     private func applyMRoPE(

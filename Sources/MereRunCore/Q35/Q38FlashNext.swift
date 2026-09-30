@@ -514,11 +514,23 @@ final class Q38PLELayer: Module {
                 : nil
             embeddings = pleEmbedding(inputIds, cache: cache)
         }
+        let branchBatch = hiddenStates.dim(0)
+        let branchSequence = hiddenStates.dim(1)
+        let packedBranchVerification = targetVerify
+            && branchBatch > 1
+            && branchBatch * branchSequence <= 8
+        let projectedEmbeddings = packedBranchVerification
+            ? embeddings.reshaped(1, branchBatch * branchSequence, embeddings.dim(-1))
+            : embeddings
+        let projectedHidden = packedBranchVerification
+            ? hiddenStates.reshaped(1, branchBatch * branchSequence, hiddenStates.dim(-1))
+            : hiddenStates
         let shapePrefix = Array(hiddenStates.shape.dropLast())
-        let keys = keyNorm(q38SmallBatchProjection(keyProjection, embeddings))
+        let keys = keyNorm(q38SmallBatchProjection(keyProjection, projectedEmbeddings))
             .reshaped(shapePrefix + [streamCount, hiddenSize])
-        let values = q38SmallBatchProjection(valueProjection, embeddings)
-        let queries = queryNorm(hiddenStates)
+        let values = q38SmallBatchProjection(valueProjection, projectedEmbeddings)
+            .reshaped(shapePrefix + [hiddenSize])
+        let queries = queryNorm(projectedHidden)
             .reshaped(shapePrefix + [streamCount, hiddenSize])
         var gate = (keys * queries).sum(axis: -1, keepDims: true)
             / MLXArray(sqrt(Float(hiddenSize))).asType(hiddenStates.dtype)
@@ -528,7 +540,14 @@ final class Q38PLELayer: Module {
         let gatedValues = MLX.sigmoid(gate) * MLX.expandedDimensions(values, axis: -2)
         let flattened = gatedValues.reshaped(shapePrefix + [streamCount * hiddenSize])
         let normalized = convolutionNorm(flattened)
-        return flattened + shortConvolution(normalized, cache: cache, verificationTokens: verificationTokens)
+        let convolved = packedBranchVerification
+            ? shortConvolutionByBranch(
+                normalized,
+                cache: cache,
+                verificationTokens: verificationTokens
+            )
+            : shortConvolution(normalized, cache: cache, verificationTokens: verificationTokens)
+        return flattened + convolved
     }
 
     func prefetch(
@@ -564,5 +583,35 @@ final class Q38PLELayer: Module {
             0...
         ]
         return MLXNN.silu(convolution(convolutionInput))
+    }
+
+    private func shortConvolutionByBranch(
+        _ hiddenStates: MLXArray,
+        cache: Q35LinearCache?,
+        verificationTokens: MLXArray?
+    ) -> MLXArray {
+        let batch = hiddenStates.dim(0)
+        let previous = cache?.pleConvState
+            ?? MLXArray.zeros(
+                [batch, convolutionStateLength, streamCount * hiddenSize],
+                dtype: hiddenStates.dtype
+            )
+        let convolutionInput = MLX.concatenated([previous, hiddenStates], axis: 1)
+        cache?.pleVerificationReplay = verificationTokens.map {
+            Q38PLEVerificationReplay(
+                convolutionInput: convolutionInput,
+                tokenHistory: $0,
+                tokenCount: hiddenStates.dim(1)
+            )
+        }
+        cache?.pleConvState = convolutionInput[
+            0...,
+            (convolutionInput.dim(1) - convolutionStateLength)...,
+            0...
+        ]
+        let rows = (0..<batch).map { row in
+            MLXNN.silu(convolution(convolutionInput[row..<(row + 1), 0..., 0...]))
+        }
+        return MLX.concatenated(rows, axis: 0)
     }
 }

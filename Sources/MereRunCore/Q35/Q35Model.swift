@@ -159,6 +159,9 @@ final class Q35DecoderLayer: Module {
         targetVerify: Bool = false,
         preparedPLEInput: Q38PLELayer.PreparedInput? = nil
     ) -> MLXArray {
+        let packedBranchVerification = targetVerify && x.dim(0) > 1 && x.dim(0) * x.dim(1) <= 8
+        let branchBatch = x.dim(0)
+
         if let attentionHyperConnection, let mlpHyperConnection {
             var hyper = x
             if let ple, let inputIds {
@@ -177,7 +180,23 @@ final class Q35DecoderLayer: Module {
                 )
             }
 
-            let attentionMix = attentionHyperConnection.mix(hyper)
+            let attentionMix: (
+                mixed: MLXArray,
+                residual: MLXArray,
+                injectionWeights: MLXArray
+            )
+            if packedBranchVerification {
+                let rows = (0..<branchBatch).map { row in
+                    attentionHyperConnection.mix(hyper[row..<(row + 1), 0..., 0...])
+                }
+                attentionMix = (
+                    MLX.concatenated(rows.map(\.mixed), axis: 0),
+                    MLX.concatenated(rows.map(\.residual), axis: 0),
+                    MLX.concatenated(rows.map(\.injectionWeights), axis: 0)
+                )
+            } else {
+                attentionMix = attentionHyperConnection.mix(hyper)
+            }
             let attentionOut: MLXArray
             switch layerType {
             case .linear:
@@ -207,12 +226,35 @@ final class Q35DecoderLayer: Module {
                     targetVerify: targetVerify
                 )
             }
-            hyper = attentionHyperConnection.inject(
-                blockOutput: attentionOut,
-                residual: attentionMix.residual,
-                injectionWeights: attentionMix.injectionWeights
-            )
+            if packedBranchVerification {
+                let rows = (0..<branchBatch).map { row in
+                    attentionHyperConnection.inject(
+                        blockOutput: attentionOut[row..<(row + 1), 0..., 0...],
+                        residual: attentionMix.residual[row..<(row + 1), 0..., 0...],
+                        injectionWeights: attentionMix.injectionWeights[row..<(row + 1), 0..., 0...]
+                    )
+                }
+                hyper = MLX.concatenated(rows, axis: 0)
+            } else {
+                hyper = attentionHyperConnection.inject(
+                    blockOutput: attentionOut,
+                    residual: attentionMix.residual,
+                    injectionWeights: attentionMix.injectionWeights
+                )
+            }
 
+            if packedBranchVerification {
+                let rows = (0..<branchBatch).map { row -> MLXArray in
+                    let mix = mlpHyperConnection.mix(hyper[row..<(row + 1), 0..., 0...])
+                    let output = mlp(mix.mixed, targetVerify: targetVerify)
+                    return mlpHyperConnection.inject(
+                        blockOutput: output,
+                        residual: mix.residual,
+                        injectionWeights: mix.injectionWeights
+                    )
+                }
+                return MLX.concatenated(rows, axis: 0)
+            }
             let mlpMix = mlpHyperConnection.mix(hyper)
             let mlpOut = mlp(mlpMix.mixed, targetVerify: targetVerify)
             return mlpHyperConnection.inject(
@@ -644,6 +686,35 @@ public final class Q35Model: Module, @unchecked Sendable {
             return Self.compactTokenIDToVocabulary(compactID)
         }
         return Self.compactDraftTokenID(from: head(hidden))
+    }
+
+    /// Ranked proposal roots for experimental branch speculation. These ids
+    /// are proposals only; target verification remains authoritative.
+    func topDraftTokens(from hidden: MLXArray, count requestedCount: Int) -> MLXArray {
+        let count = min(max(1, requestedCount), config.textConfig.vocabSize)
+        guard count > 1 else { return greedyDraftToken(from: hidden) }
+
+        let proposalLogits: MLXArray
+        let usesCompactVocabulary: Bool
+        if let head = resolvedCompactDraftHead() {
+            proposalLogits = head(hidden)[0..., 0..., 0..<Self.compactDraftRealCount]
+            usesCompactVocabulary = true
+        } else {
+            proposalLogits = logits(from: hidden)
+            usesCompactVocabulary = false
+        }
+
+        let shortlist = argPartition(-proposalLogits, kth: count - 1, axis: -1)[
+            0..., 0..., 0..<count
+        ]
+        let scores = takeAlong(proposalLogits, shortlist, axis: -1)
+        let order = argSort(-scores, axis: -1)
+        var tokens = takeAlong(shortlist, order, axis: -1).asType(.int32)
+            .reshaped(1, count)
+        if usesCompactVocabulary {
+            tokens = Self.compactTokenIDToVocabulary(tokens)
+        }
+        return tokens
     }
 
     func installCoarseDraftHead(

@@ -1156,6 +1156,22 @@ public actor Q35Generator: ChatGenerator {
         return min(maximum, value)
     }
 
+    static func mtpTreeBranches(
+        modelId: String,
+        environment env: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Int {
+        let supportsTree = modelId == Q35Resources.q38FlashNextMixedModelId
+            || modelId == Q35Resources.q38FlashNext3BitModelId
+            || modelId == Q35Resources.q38FlashNext3BitNativePLEModelId
+            || modelId == Q35Resources.q38FlashNext4BitModelId
+        guard supportsTree,
+              let raw = env["MERERUN_Q38_MTP_TREE_BRANCHES"],
+              let requested = Int(raw) else {
+            return 1
+        }
+        return min(2, max(1, requested))
+    }
+
     private func decodeTokens(
         model: Q35Model,
         tokenizerAndTemplate: Q35TokenizerAndTemplate,
@@ -1311,6 +1327,7 @@ public actor Q35Generator: ChatGenerator {
         var mtpReplacementPasses = 0
         var mtpNonDraftingRounds = 0
         let mtpBlockSize = Self.mtpBlockSize(modelId: modelId)
+        let mtpTreeBranches = Self.mtpTreeBranches(modelId: modelId)
         var mtpAdaptivePolicy = Q35MTPAdaptivePolicy(maxDraftDepth: mtpBlockSize - 1)
         let mtpDraftSession = prefillMTPSession ?? Q35MTPDraftSession(
             promptTokens: promptTokens,
@@ -1412,30 +1429,106 @@ public actor Q35Generator: ChatGenerator {
                     )
                     let draftDepth = mtpAdaptivePolicy.draftDepth(offeredDepth: offeredDepth)
                     if draftDepth > 0 {
-                        let draftBlock = mtpModel.draftBlock(
-                            lastToken: next,
-                            hidden: hidden,
-                            blockSize: draftDepth + 1,
-                            session: mtpDraftSession,
-                            baseModel: model
-                        )
-                        mtpDraftedTokens += draftBlock.count
+                        let candidate: Q35ForwardOutput
+                        let candidateCaches: [Q35LayerCache?]
+                        let candidateMTPHidden: MLXArray
+                        let draftTokens: [Int]
 
-                        let candidateCaches = forkLayerCaches(layerCaches)
-                        let nextToken = MLXArray([Int32(next)]).reshaped(1, 1)
-                        let candidateInput = MLX.concatenated(
-                            [nextToken, draftBlock.tokenIDs],
-                            axis: 1
-                        )
-                        let candidate = model.forward(
-                            candidateInput,
-                            cache: candidateCaches,
-                            targetVerify: true
-                        )
-                        let candidateMTPHidden = candidate.mtpHidden ?? candidate.hidden
-                        MLX.eval(candidate.logits, candidateMTPHidden, draftBlock.tokenIDs)
+                        if mtpTreeBranches > 1 {
+                            let exactTreeDepth = min(draftDepth, 3)
+                            let branches = mtpModel.draftBranches(
+                                lastToken: next,
+                                hidden: hidden,
+                                depth: exactTreeDepth,
+                                branches: mtpTreeBranches,
+                                session: mtpDraftSession,
+                                baseModel: model
+                            )
+                            mtpDraftedTokens += branches.nodeCount
+                            let rowCaches = (0..<branches.branchCount).map { _ in
+                                forkLayerCaches(layerCaches)
+                            }
+                            guard let batchedCaches = makeBatchedLayerCaches(rowCaches) else {
+                                preconditionFailure("Flash-Next tree verification requires batchable caches")
+                            }
+                            let nextTokens = MLXArray(
+                                Array(repeating: Int32(next), count: branches.branchCount)
+                            ).reshaped(branches.branchCount, 1)
+                            let candidateInput = MLX.concatenated(
+                                [nextTokens, branches.tokenIDs],
+                                axis: 1
+                            )
+                            let batchedCandidate = model.forward(
+                                candidateInput,
+                                cache: batchedCaches,
+                                targetVerify: true
+                            )
+                            let batchedMTPHidden = batchedCandidate.mtpHidden
+                                ?? batchedCandidate.hidden
+                            MLX.eval(
+                                batchedCandidate.logits,
+                                batchedMTPHidden,
+                                branches.tokenIDs
+                            )
+                            guard let splitCaches = splitBatchedLayerCaches(
+                                batchedCaches,
+                                rowCount: branches.branchCount
+                            ) else {
+                                preconditionFailure("Flash-Next tree verification must split target caches")
+                            }
+
+                            let branchTokens = branches.tokensByBranch
+                            let authoritativeRoot = sampleToken(
+                                logits: batchedCandidate.logits[0, 0, 0...],
+                                config: generationConfig,
+                                previousTokens: repetitionHistory
+                            )
+                            let selectedBranch = branchTokens.firstIndex {
+                                $0.first == authoritativeRoot
+                            } ?? 0
+                            candidate = Q35ForwardOutput(
+                                hidden: batchedCandidate.hidden[
+                                    selectedBranch..<(selectedBranch + 1), 0..., 0...
+                                ],
+                                logits: batchedCandidate.logits[
+                                    selectedBranch..<(selectedBranch + 1), 0..., 0...
+                                ],
+                                mtpHidden: batchedCandidate.mtpHidden.map {
+                                    $0[selectedBranch..<(selectedBranch + 1), 0..., 0...]
+                                }
+                            )
+                            candidateCaches = splitCaches[selectedBranch]
+                            candidateMTPHidden = candidate.mtpHidden ?? candidate.hidden
+                            draftTokens = branchTokens[selectedBranch]
+                        } else {
+                            let draftBlock = mtpModel.draftBlock(
+                                lastToken: next,
+                                hidden: hidden,
+                                blockSize: draftDepth + 1,
+                                session: mtpDraftSession,
+                                baseModel: model
+                            )
+                            mtpDraftedTokens += draftBlock.count
+                            candidateCaches = forkLayerCaches(layerCaches)
+                            let nextToken = MLXArray([Int32(next)]).reshaped(1, 1)
+                            let candidateInput = MLX.concatenated(
+                                [nextToken, draftBlock.tokenIDs],
+                                axis: 1
+                            )
+                            candidate = model.forward(
+                                candidateInput,
+                                cache: candidateCaches,
+                                targetVerify: true
+                            )
+                            candidateMTPHidden = candidate.mtpHidden ?? candidate.hidden
+                            MLX.eval(
+                                candidate.logits,
+                                candidateMTPHidden,
+                                draftBlock.tokenIDs
+                            )
+                            draftTokens = draftBlock.tokens
+                        }
                         mtpVerificationPasses += 1
-                        let draftTokens = draftBlock.tokens
 
                         var accepted = 0
                         var verificationHistory = repetitionHistory
@@ -1649,7 +1742,8 @@ public actor Q35Generator: ChatGenerator {
                 ? Double(mtpAcceptedTokens) / Double(mtpDraftedTokens) * 100
                 : 0
             Gemma4DecodeTrace.emit(String(
-                format: "[q35-decode-trace] mode=mtp tokens=%d drafted=%d accepted=%d acceptance=%.1f%% verify=%d replacement=%d serial=%d wall=%.2fms/tok",
+                format: "[q35-decode-trace] mode=%@ tokens=%d drafted=%d accepted=%d acceptance=%.1f%% verify=%d replacement=%d serial=%d wall=%.2fms/tok",
+                mtpTreeBranches > 1 ? "mtp-tree-batched" : "mtp",
                 generated.count,
                 mtpDraftedTokens,
                 mtpAcceptedTokens,
@@ -1666,7 +1760,9 @@ public actor Q35Generator: ChatGenerator {
             firstTokenSeconds: firstTokenSeconds,
             acceleration: mtpModel.map { _ in
                 ChatAccelerationDiagnostics(
-                    route: "mtp-speculative",
+                    route: mtpTreeBranches > 1
+                        ? "mtp-tree-batched"
+                        : "mtp-speculative",
                     draftModel: mtpModel?.diagnosticsID ?? "qwen-mtp",
                     rounds: mtpVerificationPasses,
                     draftedTokens: mtpDraftedTokens,

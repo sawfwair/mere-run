@@ -166,6 +166,83 @@ final class Q38LayerVerificationParityTests: MereRunCoreTestCase {
         try qualifyDecoder(layerType: .full, prefixCount: 2_053, widths: [16, 32])
     }
 
+    func testBatchedBranchDecoderBlocksMatchSerialRowsAndRollback() throws {
+        try requireGPU()
+        MLXRandom.seed(126)
+        for layerType in [Q35AttentionLayerType.linear, .full] {
+            let layer = Q35DecoderLayer(
+                config: try configuration(),
+                layerIndex: 0,
+                layerTypeOverride: layerType
+            )
+            installMixedWeights(layer)
+            let base: Q35LayerCache
+            if layerType == .full {
+                let cache = Q38QSACache()
+                let prefixCount = 2_053
+                let keys = MLXRandom.normal([1, 2, prefixCount, 256]).asType(.bfloat16)
+                let values = MLXRandom.normal(keys.shape).asType(.bfloat16)
+                let indexKeys = MLXRandom.normal([1, 1, prefixCount, 128]).asType(.bfloat16)
+                let positions = Q38QSAIndexer.positionRows(
+                    batch: 1,
+                    count: prefixCount,
+                    offsets: [0],
+                    positionIds: nil
+                )
+                _ = cache.update(keys: keys, values: values)
+                _ = cache.updateIndexer(keys: indexKeys, positions: positions)
+                MLX.eval(keys, values, indexKeys, positions)
+                base = .full(cache)
+            } else {
+                base = .linear(Q35LinearCache())
+                let prefix = MLXRandom.normal([1, 31, 10_240]).asType(.bfloat16)
+                MLX.eval(layer(prefix, fullMask: .causal, cache: base))
+            }
+
+            let branchCaches = [base.fork(), base.fork()]
+            let batched = try XCTUnwrap(branchCaches[0].batched(with: branchCaches))
+            let input = MLXRandom.normal([2, 4, 10_240]).asType(.bfloat16)
+            let actual = layer(input, fullMask: .causal, cache: batched, targetVerify: true)
+            MLX.eval(actual)
+
+            var serialRows: [MLXArray] = []
+            for branch in 0..<2 {
+                let reference = base.fork()
+                let outputs = (0..<4).map { row in
+                    let output = layer(
+                        input[branch..<(branch + 1), row..<(row + 1), 0...],
+                        fullMask: .none,
+                        cache: reference
+                    )
+                    MLX.eval(output)
+                    return output
+                }
+                serialRows.append(MLX.concatenated(outputs, axis: 1))
+            }
+            assertExact(
+                actual,
+                MLX.concatenated(serialRows, axis: 0),
+                "\(layerType.rawValue) batched branches"
+            )
+
+            let split = try XCTUnwrap(batched.unbatchedRows(count: 2))
+            for branch in 0..<2 {
+                XCTAssertTrue(split[branch].restoreVerificationPrefix(totalTokens: 4, tokenCount: 2))
+                let next = MLXRandom.normal([1, 1, 10_240]).asType(.bfloat16)
+                let restored = layer(next, fullMask: .none, cache: split[branch])
+                let reference = base.fork()
+                _ = layer(
+                    input[branch..<(branch + 1), 0..<2, 0...],
+                    fullMask: .causal,
+                    cache: reference
+                )
+                let expected = layer(next, fullMask: .none, cache: reference)
+                MLX.eval(restored, expected)
+                assertExact(restored, expected, "\(layerType.rawValue) branch rollback")
+            }
+        }
+    }
+
     private func qualifyDecoder(
         layerType: Q35AttentionLayerType,
         prefixCount: Int,

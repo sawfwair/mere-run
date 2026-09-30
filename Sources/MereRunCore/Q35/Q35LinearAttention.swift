@@ -675,10 +675,14 @@ public final class Q35LinearCache: @unchecked Sendable {
         let recurrentRows = Self.unbatchedRows(recurrentState, count: count)
         let pleConvRows = Self.unbatchedRows(pleConvState, count: count)
         let pleTokenRows = Self.unbatchedRows(pleTokenContext, count: count)
+        let replayRows = Self.unbatchedVerificationReplay(verificationReplay, count: count)
+        let pleReplayRows = Self.unbatchedPLEVerificationReplay(pleVerificationReplay, count: count)
         guard convRows.isValid,
               recurrentRows.isValid,
               pleConvRows.isValid,
-              pleTokenRows.isValid else {
+              pleTokenRows.isValid,
+              replayRows.isValid,
+              pleReplayRows.isValid else {
             return nil
         }
         return (0..<count).map { index in
@@ -687,8 +691,82 @@ public final class Q35LinearCache: @unchecked Sendable {
             copy.recurrentState = recurrentRows.values?[index]
             copy.pleConvState = pleConvRows.values?[index]
             copy.pleTokenContext = pleTokenRows.values?[index]
+            copy.verificationReplay = replayRows.values?[index]
+            copy.pleVerificationReplay = pleReplayRows.values?[index]
             return copy
         }
+    }
+
+    private static func unbatchedVerificationReplay(
+        _ replay: Q35LinearVerificationReplay?,
+        count: Int
+    ) -> (isValid: Bool, values: [Q35LinearVerificationReplay]?) {
+        guard let replay else { return (true, nil) }
+        let baseConv = unbatchedRows(replay.baseConvState, count: count)
+        let baseRecurrent = unbatchedRows(replay.baseRecurrentState, count: count)
+        let qkv = unbatchedRows(replay.qkv, count: count)
+        let q = unbatchedRows(replay.q, count: count)
+        let k = unbatchedRows(replay.k, count: count)
+        let v = unbatchedRows(replay.v, count: count)
+        let a = unbatchedRows(replay.a, count: count)
+        let b = unbatchedRows(replay.b, count: count)
+        guard baseConv.isValid,
+              baseRecurrent.isValid,
+              qkv.isValid,
+              q.isValid,
+              k.isValid,
+              v.isValid,
+              a.isValid,
+              b.isValid,
+              let baseConvValues = baseConv.values,
+              let qkvValues = qkv.values,
+              let qValues = q.values,
+              let kValues = k.values,
+              let vValues = v.values,
+              let aValues = a.values,
+              let bValues = b.values else {
+            return (false, nil)
+        }
+        return (true, (0..<count).map { index in
+            Q35LinearVerificationReplay(
+                baseConvState: baseConvValues[index],
+                baseRecurrentState: baseRecurrent.values?[index],
+                qkv: qkvValues[index],
+                q: qValues[index],
+                k: kValues[index],
+                v: vValues[index],
+                a: aValues[index],
+                b: bValues[index],
+                aLog: replay.aLog,
+                dtBias: replay.dtBias,
+                numKeyHeads: replay.numKeyHeads,
+                numValueHeads: replay.numValueHeads,
+                valueHeadDim: replay.valueHeadDim,
+                convKeep: replay.convKeep
+            )
+        })
+    }
+
+    private static func unbatchedPLEVerificationReplay(
+        _ replay: Q38PLEVerificationReplay?,
+        count: Int
+    ) -> (isValid: Bool, values: [Q38PLEVerificationReplay]?) {
+        guard let replay else { return (true, nil) }
+        let convolutionInputs = unbatchedRows(replay.convolutionInput, count: count)
+        let tokenHistories = unbatchedRows(replay.tokenHistory, count: count)
+        guard convolutionInputs.isValid,
+              tokenHistories.isValid,
+              let convolutionValues = convolutionInputs.values,
+              let tokenValues = tokenHistories.values else {
+            return (false, nil)
+        }
+        return (true, (0..<count).map { index in
+            Q38PLEVerificationReplay(
+                convolutionInput: convolutionValues[index],
+                tokenHistory: tokenValues[index],
+                tokenCount: replay.tokenCount
+            )
+        })
     }
 
     private static func batchedState(_ states: [MLXArray?]) -> (isValid: Bool, value: MLXArray?) {
@@ -805,6 +883,18 @@ final class Q35LinearAttention: Module {
         let batch = x.dim(0)
         let sequence = x.dim(1)
         let keep = max(0, convKernelSize - 1)
+        let packedBranchVerification = targetVerify && batch > 1 && batch * sequence <= 8
+        let projectionInput = packedBranchVerification
+            ? x.reshaped(1, batch * sequence, x.dim(-1))
+            : x
+        func branched(_ value: MLXArray) -> MLXArray {
+            guard packedBranchVerification else { return value }
+            return value.reshaped(batch, sequence, value.dim(-1))
+        }
+        func packed(_ value: MLXArray) -> MLXArray {
+            guard packedBranchVerification else { return value }
+            return value.reshaped(1, batch * sequence, value.dim(-1))
+        }
 
         let qkv: MLXArray
         let z: MLXArray
@@ -812,12 +902,14 @@ final class Q35LinearAttention: Module {
             fusedInProjQKVZ = q35FusedPortableQuantizedLinear(inProjQKV, inProjZ)
         }
         if let fusedInProjQKVZ {
-            let qkvz = fusedInProjQKVZ(x)
-            qkv = qkvz[.ellipsis, 0..<convDim]
-            z = qkvz[.ellipsis, convDim...].reshaped(batch, sequence, numValueHeads, valueHeadDim)
+            let qkvz = fusedInProjQKVZ(projectionInput)
+            qkv = branched(qkvz[.ellipsis, 0..<convDim])
+            z = branched(qkvz[.ellipsis, convDim...])
+                .reshaped(batch, sequence, numValueHeads, valueHeadDim)
         } else {
-            qkv = inProjQKV(x)
-            z = inProjZ(x).reshaped(batch, sequence, numValueHeads, valueHeadDim)
+            qkv = branched(inProjQKV(projectionInput))
+            z = branched(inProjZ(projectionInput))
+                .reshaped(batch, sequence, numValueHeads, valueHeadDim)
         }
 
         let b: MLXArray
@@ -826,12 +918,12 @@ final class Q35LinearAttention: Module {
             fusedInProjBA = q35FusedPortableQuantizedLinear(inProjB, inProjA)
         }
         if let fusedInProjBA {
-            let ba = fusedInProjBA(x)
+            let ba = branched(fusedInProjBA(projectionInput))
             b = ba[.ellipsis, 0..<numValueHeads]
             a = ba[.ellipsis, numValueHeads...]
         } else {
-            b = inProjB(x)
-            a = inProjA(x)
+            b = branched(inProjB(projectionInput))
+            a = branched(inProjA(projectionInput))
         }
 
         let convState = cache?.convState
@@ -839,6 +931,27 @@ final class Q35LinearAttention: Module {
         let recurrentState = cache?.recurrentState
         let rmsNormWeight = qkv.dtype == .bfloat16 ? qkNormWeightBF16 : nil
         let prework: Q35GDNPreworkOutput
+        if packedBranchVerification {
+            let rows = (0..<batch).map { row in
+                q35GDNPreworkOps(
+                    qkv: qkv[row..<(row + 1), 0..., 0...],
+                    convState: convState[row..<(row + 1), 0..., 0...],
+                    convWeight: conv1d.weight,
+                    numKeyHeads: numKeyHeads,
+                    numValueHeads: numValueHeads,
+                    keyHeadDim: keyHeadDim,
+                    valueHeadDim: valueHeadDim,
+                    rmsNormWeight: rmsNormWeight,
+                    normalizeInFloat32: isQwen4Exp
+                )
+            }
+            prework = Q35GDNPreworkOutput(
+                q: MLX.concatenated(rows.map(\.q), axis: 0),
+                k: MLX.concatenated(rows.map(\.k), axis: 0),
+                v: MLX.concatenated(rows.map(\.v), axis: 0),
+                convState: MLX.concatenated(rows.map(\.convState), axis: 0)
+            )
+        } else {
         #if os(macOS)
         if !isQwen4Exp, cache != nil,
            let fused = q35GDNPreworkMetal(
@@ -877,21 +990,44 @@ final class Q35LinearAttention: Module {
             normalizeInFloat32: isQwen4Exp
         )
         #endif
+        }
         cache?.convState = prework.convState
 
-        let (updated, state) = q35GatedDeltaUpdate(
-            q: prework.q,
-            k: prework.k,
-            v: prework.v,
-            a: a,
-            b: b,
-            aLog: aLog,
-            dtBias: dtBias,
-            state: recurrentState,
-            numKeyHeads: numKeyHeads,
-            numValueHeads: numValueHeads,
-            valueHeadDim: valueHeadDim
-        )
+        let updated: MLXArray
+        let state: MLXArray
+        if packedBranchVerification {
+            let rows = (0..<batch).map { row in
+                q35GatedDeltaUpdate(
+                    q: prework.q[row..<(row + 1), 0..., 0..., 0...],
+                    k: prework.k[row..<(row + 1), 0..., 0..., 0...],
+                    v: prework.v[row..<(row + 1), 0..., 0..., 0...],
+                    a: a[row..<(row + 1), 0..., 0...],
+                    b: b[row..<(row + 1), 0..., 0...],
+                    aLog: aLog,
+                    dtBias: dtBias,
+                    state: recurrentState?[row..<(row + 1), 0..., 0..., 0...],
+                    numKeyHeads: numKeyHeads,
+                    numValueHeads: numValueHeads,
+                    valueHeadDim: valueHeadDim
+                )
+            }
+            updated = MLX.concatenated(rows.map(\.0), axis: 0)
+            state = MLX.concatenated(rows.map(\.1), axis: 0)
+        } else {
+            (updated, state) = q35GatedDeltaUpdate(
+                q: prework.q,
+                k: prework.k,
+                v: prework.v,
+                a: a,
+                b: b,
+                aLog: aLog,
+                dtBias: dtBias,
+                state: recurrentState,
+                numKeyHeads: numKeyHeads,
+                numValueHeads: numValueHeads,
+                valueHeadDim: valueHeadDim
+            )
+        }
         cache?.recurrentState = state
         if targetVerify, let cache {
             cache.verificationReplay = Q35LinearVerificationReplay(
@@ -915,6 +1051,7 @@ final class Q35LinearAttention: Module {
         }
 
         let normalized = norm(updated.asType(qkv.dtype), gate: z)
-        return outProj(normalized.reshaped(batch, sequence, valueDim))
+        let projected = outProj(packed(normalized.reshaped(batch, sequence, valueDim)))
+        return branched(projected)
     }
 }

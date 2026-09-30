@@ -5,7 +5,7 @@ import MLXFast
 /// request snapshot as the target KV. Never keep them on the shared model.
 final class Q38QSACache: KVCache {
     let attention: KVCache
-    private let indexer: KVCache
+    private var indexer: KVCache
     private var pooledKeys: MLXArray?
     private var poolingRatio: Int?
 
@@ -81,5 +81,16 @@ final class Q38QSACache: KVCache {
         guard let main = attention.unbatchedRows(count: count),
               let side = indexer.unbatchedRows(count: count) else { return nil }
         return zip(main, side).map { Q38QSACache(attention: $0, indexer: $1) }
+    }
+
+    func adoptIndexerRows(_ caches: [Q38QSACache]) -> Bool {
+        guard !caches.isEmpty,
+              let batched = caches[0].indexer.batched(with: caches.map(\.indexer)) else {
+            return false
+        }
+        indexer = batched
+        pooledKeys = nil
+        poolingRatio = nil
+        return true
     }
 }

@@ -260,11 +260,12 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
             optionName: "--decode-token-values"
         )
         let temperatures = try parsedTemperatures()
-        let variants = [
-            Q36MTPBenchmarkVariant.baseline,
-            Q36MTPBenchmarkVariant.adaptive,
-            Q36MTPBenchmarkVariant.forced,
-        ]
+        let variants: [Q36MTPBenchmarkVariant]
+        if Q36MTPBenchmarkVariant.flashNextModels.contains(model) {
+            variants = [.baseline, .forced, .tree]
+        } else {
+            variants = [.baseline, .adaptive, .forced]
+        }
 
         var scenarios: [Q36MTPBenchmarkScenarioResult] = []
         scenarios.reserveCapacity(promptRepeats.count * decodeTokenCounts.count * temperatures.count)
@@ -439,6 +440,12 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
 
 private struct Q36MTPBenchmarkVariant {
     static let adaptiveThreshold = 6_144
+    static let flashNextModels: Set<String> = [
+        Q35Resources.q38FlashNextMixedModelId,
+        Q35Resources.q38FlashNext3BitModelId,
+        Q35Resources.q38FlashNext3BitNativePLEModelId,
+        Q35Resources.q38FlashNext4BitModelId,
+    ]
 
     let name: String
     let policy: String
@@ -446,12 +453,14 @@ private struct Q36MTPBenchmarkVariant {
     static let baseline = Self(name: "baseline", policy: "disabled")
     static let adaptive = Self(name: "adaptive", policy: "adaptive")
     static let forced = Self(name: "forced", policy: "forced")
+    static let tree = Self(name: "tree", policy: "tree")
 
     func environmentOverrides(_ command: ModelBenchmarkQ36MTP) -> [String: String?] {
         var overrides: [String: String?] = [
             "MERERUN_Q35_MTP_SPECULATION": nil,
             "MERERUN_Q35_MTP_MIN_PROMPT_TOKENS": nil,
             "MERERUN_Q35_MTP_BLOCK_SIZE": nil,
+            "MERERUN_Q38_MTP_TREE_BRANCHES": nil,
         ]
         switch self.name {
         case Self.baseline.name:
@@ -459,6 +468,10 @@ private struct Q36MTPBenchmarkVariant {
         case Self.forced.name:
             overrides["MERERUN_Q35_MTP_SPECULATION"] = "1"
             overrides["MERERUN_Q35_MTP_MIN_PROMPT_TOKENS"] = String(command.forcedMTPMinPromptTokens)
+        case Self.tree.name:
+            overrides["MERERUN_Q35_MTP_SPECULATION"] = "1"
+            overrides["MERERUN_Q35_MTP_MIN_PROMPT_TOKENS"] = String(command.forcedMTPMinPromptTokens)
+            overrides["MERERUN_Q38_MTP_TREE_BRANCHES"] = "2"
         default:
             break
         }
@@ -477,7 +490,7 @@ private struct Q36MTPBenchmarkVariant {
         switch name {
         case Self.baseline.name:
             return false
-        case Self.forced.name:
+        case Self.forced.name, Self.tree.name:
             return contextSize >= forcedThreshold
         default:
             if modelID == Q35Resources.q38TwentySevenB4BitModelId {

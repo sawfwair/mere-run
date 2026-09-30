@@ -207,6 +207,26 @@ protocol Q35MTPDraftModel: AnyObject {
     ) -> Q35MTPDraftBlock
 }
 
+extension Q35MTPDraftModel {
+    func draftBranches(
+        lastToken: Int,
+        hidden: MLXArray,
+        depth: Int,
+        branches: Int,
+        session: Q35MTPDraftSession,
+        baseModel: Q35Model
+    ) -> Q35MTPDraftBranches {
+        session.draftBranches(
+            lastToken: lastToken,
+            hidden: hidden,
+            depth: depth,
+            branches: branches,
+            mtpModel: self,
+            baseModel: baseModel
+        )
+    }
+}
+
 final class Q35MTPModel: Module, Q35MTPDraftModel {
     @ModuleInfo(key: "pre_fc_norm_embedding") var preFCNormEmbedding: Q35RMSNorm
     @ModuleInfo(key: "pre_fc_norm_hidden") var preFCNormHidden: Q35RMSNorm
@@ -304,6 +324,24 @@ struct Q35MTPDraftBlock {
 
     var tokens: [Int] {
         tokenIDs.asArray(Int32.self).map(Int.init)
+    }
+}
+
+/// Independent proposal continuations sharing one committed target prefix.
+/// The target evaluates every row in one batched verification pass.
+struct Q35MTPDraftBranches {
+    let tokenIDs: MLXArray
+
+    var branchCount: Int { tokenIDs.dim(0) }
+    var depth: Int { tokenIDs.dim(1) }
+    var nodeCount: Int { branchCount * depth }
+
+    var tokensByBranch: [[Int]] {
+        let values = tokenIDs.asArray(Int32.self).map(Int.init)
+        return (0..<branchCount).map { branch in
+            let start = branch * depth
+            return Array(values[start..<(start + depth)])
+        }
     }
 }
 
@@ -565,6 +603,69 @@ final class Q35MTPDraftSession {
         let draftTokens = MLX.concatenated(tokenArrays, axis: 1)
         MLX.asyncEval(draftTokens)
         return Q35MTPDraftBlock(tokenIDs: draftTokens)
+    }
+
+    func draftBranches(
+        lastToken: Int,
+        hidden: MLXArray,
+        depth: Int,
+        branches: Int,
+        mtpModel: any Q35MTPDraftModel,
+        baseModel: Q35Model
+    ) -> Q35MTPDraftBranches {
+        let resolvedDepth = max(0, depth)
+        let resolvedBranches = max(1, branches)
+        guard resolvedDepth > 0 else {
+            return Q35MTPDraftBranches(
+                tokenIDs: MLXArray.zeros([resolvedBranches, 0], dtype: .int32)
+            )
+        }
+
+        backlogHidden.append(hidden)
+        backlogTokens.append(lastToken)
+        let flushed = flushCommittedHistory(
+            count: backlogTokens.count,
+            mtpModel: mtpModel,
+            baseModel: baseModel
+        )
+        let previousHidden = flushed.recurrentHidden[
+            0...,
+            (flushed.recurrentHidden.dim(1) - 1)...,
+            0...
+        ]
+        let lastLogitsHidden = flushed.logitsHidden[
+            0...,
+            (flushed.logitsHidden.dim(1) - 1)...,
+            0...
+        ]
+        let roots = baseModel.topDraftTokens(
+            from: lastLogitsHidden,
+            count: resolvedBranches
+        )
+
+        let rows = (0..<resolvedBranches).map { branch in
+            var branchHidden = previousHidden
+            var token = roots[0..., branch..<(branch + 1)]
+            var tokens = [token]
+            tokens.reserveCapacity(resolvedDepth)
+            if resolvedDepth > 1 {
+                let speculativeCache = historyCache.fork()
+                for _ in 1..<resolvedDepth {
+                    let output = mtpModel.forwardDraft(
+                        inputEmbeddings: baseModel.embeddings(for: token),
+                        hiddenStates: branchHidden,
+                        cache: speculativeCache
+                    )
+                    branchHidden = output.recurrentHidden
+                    token = baseModel.greedyDraftToken(from: output.logitsHidden)
+                    tokens.append(token)
+                }
+            }
+            return MLX.concatenated(tokens, axis: 1)
+        }
+        let branchTokens = MLX.concatenated(rows, axis: 0)
+        MLX.asyncEval(branchTokens)
+        return Q35MTPDraftBranches(tokenIDs: branchTokens)
     }
 
     private func flushCommittedHistory(

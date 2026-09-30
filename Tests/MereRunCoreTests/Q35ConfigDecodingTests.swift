@@ -1410,6 +1410,38 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         )
     }
 
+    func testQ38MTPTreeBranchesAreExplicitAndFlashNextOnly() {
+        let treeEnvironment = ["MERERUN_Q38_MTP_TREE_BRANCHES": "2"]
+        XCTAssertEqual(
+            Q35Generator.mtpTreeBranches(
+                modelId: Q35Resources.q38FlashNext3BitNativePLEModelId,
+                environment: [:]
+            ),
+            1
+        )
+        XCTAssertEqual(
+            Q35Generator.mtpTreeBranches(
+                modelId: Q35Resources.q38FlashNext3BitNativePLEModelId,
+                environment: treeEnvironment
+            ),
+            2
+        )
+        XCTAssertEqual(
+            Q35Generator.mtpTreeBranches(
+                modelId: Q35Resources.q36NanoModelId,
+                environment: treeEnvironment
+            ),
+            1
+        )
+        XCTAssertEqual(
+            Q35Generator.mtpTreeBranches(
+                modelId: Q35Resources.q38FlashNext3BitNativePLEModelId,
+                environment: ["MERERUN_Q38_MTP_TREE_BRANCHES": "8"]
+            ),
+            2
+        )
+    }
+
     func testQ35JSONModeAlwaysSelectsConstrainedSerialDecode() {
         XCTAssertEqual(
             Q35Generator.decodePath(
