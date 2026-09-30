@@ -402,7 +402,7 @@ public struct Q35Resources: Sendable, Hashable {
     }
 
     public static func visionPixelBounds(forModelId modelId: String) -> (minimum: Int, maximum: Int) {
-        if modelId == ornith35BMLX4BitModelId || modelId == ornith35BVisionModelId {
+        if isOrnith35BModelId(modelId) {
             return (q38TwentySevenBVisionMinPixels, ornith35BVisionMaxPixels)
         }
         if isQ38ModelId(modelId) {
@@ -505,6 +505,23 @@ public struct Q35Resources: Sendable, Hashable {
             Self.ornith35BVisionComponentPath,
             isDirectory: true
         ))
+    }
+
+    /// Q4 requires its bundled tower. Q6 and Q8 can attach the same tower
+    /// without changing the official text-only checkpoint installation.
+    public func ornithVisionComponent(
+        forModelId modelId: String,
+        fileManager: FileManager = .default
+    ) -> Q35Resources? {
+        let component = ornithVisionComponentResources
+        switch modelId {
+        case Self.ornith35BMLX4BitModelId:
+            return component
+        case Self.ornith35BMLX6BitModelId, Self.ornith35BMLX8BitModelId:
+            return fileManager.fileExists(atPath: component.rootURL.path) ? component : nil
+        default:
+            return nil
+        }
     }
 
     public func validateOrnithVisionComponent(fileManager: FileManager = .default) -> [URL] {

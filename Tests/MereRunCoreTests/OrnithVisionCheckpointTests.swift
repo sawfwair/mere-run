@@ -9,16 +9,25 @@ import UniformTypeIdentifiers
 
 final class OrnithVisionCheckpointTests: MereRunCoreTestCase {
     func testInstalledFourBitCompositeLoadsEveryVisionTensorAndAnswersImage() async throws {
-        guard let root = ProcessInfo.processInfo.environment[
-            "MERERUN_TEST_ORNITH_VISION_4BIT_MODEL_ROOT"
-        ] else {
-            throw XCTSkip(
-                "Set MERERUN_TEST_ORNITH_VISION_4BIT_MODEL_ROOT for installed Ornith 4-bit vision qualification."
-            )
+        try await qualifyComposite(modelID: Q35Resources.ornith35BMLX4BitModelId, bits: 4)
+    }
+
+    func testInstalledSixBitCompositeLoadsEveryVisionTensorAndAnswersImage() async throws {
+        try await qualifyComposite(modelID: Q35Resources.ornith35BMLX6BitModelId, bits: 6)
+    }
+
+    func testInstalledEightBitCompositeLoadsEveryVisionTensorAndAnswersImage() async throws {
+        try await qualifyComposite(modelID: Q35Resources.ornith35BMLX8BitModelId, bits: 8)
+    }
+
+    private func qualifyComposite(modelID: String, bits: Int) async throws {
+        let variable = "MERERUN_TEST_ORNITH_VISION_\(bits)BIT_MODEL_ROOT"
+        guard let root = ProcessInfo.processInfo.environment[variable] else {
+            throw XCTSkip("Set \(variable) for installed Ornith \(bits)-bit vision qualification.")
         }
         let rootURL = URL(fileURLWithPath: root, isDirectory: true)
-        Self.report("validating bundled 4-bit target, MTP head, and vision tensors")
-        try validatePublishedConfigurationAndVisionWeights(primaryRootURL: rootURL)
+        Self.report("validating bundled \(bits)-bit target, MTP head, and vision tensors")
+        try validatePublishedConfigurationAndVisionWeights(primaryRootURL: rootURL, bits: bits)
         Self.report("vision tensor validation complete")
         Memory.clearCache()
 
@@ -27,7 +36,7 @@ final class OrnithVisionCheckpointTests: MereRunCoreTestCase {
         defer { try? FileManager.default.removeItem(at: fixtureDirectory) }
         let fixture = try Self.makeFixture(in: fixtureDirectory)
         let generator = Q35Generator(
-            modelId: Q35Resources.ornith35BMLX4BitModelId,
+            modelId: modelID,
             prefixKVCacheEnabled: true,
             continuousBatchingEnabled: false
         )
@@ -56,7 +65,9 @@ final class OrnithVisionCheckpointTests: MereRunCoreTestCase {
             let output = response.response.lowercased()
             XCTAssertTrue(output.contains("red") && output.contains("circle"), output)
             XCTAssertTrue(output.contains("blue") && output.contains("square"), output)
-            XCTAssertEqual(response.acceleration?.route, "final-target-pipelined")
+            if bits == 4 {
+                XCTAssertEqual(response.acceleration?.route, "final-target-pipelined")
+            }
             XCTAssertNil(response.acceleration?.acceptedDraftTokens)
             print("[ornith-vision] elapsed_seconds=\(Date().timeIntervalSince(started)) "
                 + "prompt_tokens=\(response.promptTokens ?? 0) output_tokens=\(response.tokensGenerated) "
@@ -72,20 +83,22 @@ final class OrnithVisionCheckpointTests: MereRunCoreTestCase {
         FileHandle.standardError.write(Data("[ornith-vision] \(message)\n".utf8))
     }
 
-    private func validatePublishedConfigurationAndVisionWeights(primaryRootURL: URL) throws {
+    private func validatePublishedConfigurationAndVisionWeights(primaryRootURL: URL, bits: Int) throws {
         let primaryConfig = try JSONDecoder().decode(
             Q35Config.self,
             from: Data(contentsOf: primaryRootURL.appendingPathComponent("config.json"))
         )
         XCTAssertEqual(primaryConfig.modelType, "qwen3_5_moe")
-        XCTAssertEqual(primaryConfig.quantization?.bits, 4)
+        XCTAssertEqual(primaryConfig.quantization?.bits, bits)
         XCTAssertNil(primaryConfig.visionConfig)
 
         let mtpRoot = primaryRootURL.appendingPathComponent(
             Q35Resources.ornith35BMTPComponentPath,
             isDirectory: true
         )
-        XCTAssertTrue(Q35Resources(rootURL: mtpRoot).validateOrnith35BMTPCompanion().isEmpty)
+        if bits == 4 || FileManager.default.fileExists(atPath: mtpRoot.path) {
+            XCTAssertTrue(Q35Resources(rootURL: mtpRoot).validateOrnith35BMTPCompanion().isEmpty)
+        }
 
         let resources = Q35Resources(rootURL: primaryRootURL).ornithVisionComponentResources
         let config = try JSONDecoder().decode(

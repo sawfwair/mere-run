@@ -663,12 +663,14 @@ public actor Q35Generator: ChatGenerator {
                 throw Q35Error.generationFailed("Qwen3.8 4-bit vision companion does not include a vision config.")
             }
             visionConfigAndResources = (companionConfig, companionResources)
-        } else if modelId == Q35Resources.ornith35BMLX4BitModelId {
-            let companionResources = primaryResources.ornithVisionComponentResources
+        } else if let companionResources = primaryResources.ornithVisionComponent(forModelId: modelId) {
             let companionConfigData = try Data(contentsOf: companionResources.configURL)
             let companionConfig = try JSONDecoder().decode(Q35Config.self, from: companionConfigData)
-            guard companionConfig.visionConfig != nil else {
-                throw Q35Error.generationFailed("Ornith 4-bit vision companion does not include a vision config.")
+            guard let visionConfig = companionConfig.visionConfig else {
+                throw Q35Error.generationFailed("Ornith vision companion does not include a vision config.")
+            }
+            guard visionConfig.outHiddenSize == config.textConfig.hiddenSize else {
+                throw Q35Error.generationFailed("Ornith vision companion output size does not match the text model.")
             }
             visionConfigAndResources = (companionConfig, companionResources)
         } else {

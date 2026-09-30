@@ -108,6 +108,23 @@ sum-of-squares epsilon and avoiding an intermediate BF16 rounding. The recurrent
 output returns to the model dtype before gated output normalization. Other Qwen
 architectures retain their existing path.
 
+Ornith Q6 and Q8 text checkpoints can load the same optional `vision/` companion
+as the Q4 bundle. Keep the language weights, tokenizer, and chat template at the
+bundle root, and place the matching BF16 vision config, processor metadata,
+index, and indexed vision shard under `vision/`. The loader decodes the vision
+config separately and checks that its output width matches the language model.
+The shared 65,536-pixel cap and target-only image decoding apply to all Ornith
+35B vision requests. Text-only Q6/Q8 roots remain supported; a present but
+incomplete companion fails model validation. Managed Q6/Q8 downloads remain
+the official text-only exports.
+
+`OrnithVisionCheckpointTests` accepts
+`MERERUN_TEST_ORNITH_VISION_4BIT_MODEL_ROOT`,
+`MERERUN_TEST_ORNITH_VISION_6BIT_MODEL_ROOT`, and
+`MERERUN_TEST_ORNITH_VISION_8BIT_MODEL_ROOT` for separate installed bundle checks.
+Each check loads every indexed vision tensor and tests an image answer. Run one
+checkpoint at a time; fixture tests skip these checks when the variables are unset.
+
 The streaming tool-call parser walks the Qwen XML structure rather than using
 delimiter search. A closing tag is accepted only at its structural position,
 so strings containing tag-like text remain parameter data. Streaming reparses

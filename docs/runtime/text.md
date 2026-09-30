@@ -481,6 +481,34 @@ verified MTP companion. `vision-chat-ornith-35b` remains the explicit-pull full
 BF16 quality reference for systems with at least 96 GB. The recommended memory
 for this reference lane is 128 GB.
 
+For a local Q6 or Q8 vision bundle, retain the official language checkpoint at
+the bundle root and add the same `vision/` component used by the Q4 bundle.
+You don't need to quantize the language weights again. The vision component
+uses the matching BF16 base checkpoint at revision
+`10fbf86fed7ecee4a061f8b499a618f46001cac1` and contains:
+
+```text
+vision/
+  config.json
+  model.safetensors.index.json
+  model-00001-of-00016.safetensors
+  preprocessor_config.json
+  video_preprocessor_config.json
+```
+
+Keep the language tokenizer and chat template at the root. Preserve component
+source revisions in the bundle manifest. An optional `mtp/` component can reuse
+the Q4 bundle's shared MTP head. The loader checks the vision output width against
+the language model and applies the same image-size limit as Q4. Use a separate
+bundle directory to preserve your text-only installation, then pass that
+directory to `text chat --model` or `api serve --model`.
+
+Managed Q6/Q8 downloads contain only the official text exports. A Q6/Q8 root
+without `vision/` continues to support text requests; an incomplete `vision/`
+component fails preflight. A successful text-only tool call doesn't establish
+screenshot understanding. Validate image answers before using the bundle for
+browser-agent work.
+
 The Ornith lanes are R1-style reasoning tunes and generate with thinking
 enabled by default in `text chat` and `api serve` — without it the models
 degenerate into repetition loops or signature echo on constrained prompts.

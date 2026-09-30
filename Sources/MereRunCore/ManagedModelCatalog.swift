@@ -4285,8 +4285,10 @@ public extension ManagedModelSpec {
                     }
                 }
             }
-            if id == Q35Resources.ornith35BMLX4BitModelId {
+            if resources.ornithVisionComponent(forModelId: id, fileManager: fileManager) != nil {
                 missing.append(contentsOf: resources.validateOrnithVisionComponent(fileManager: fileManager))
+            }
+            if id == Q35Resources.ornith35BMLX4BitModelId {
                 missing.append(contentsOf: resources.validateOrnithMTPComponent(fileManager: fileManager))
             }
             return missing
