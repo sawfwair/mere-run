@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Reuse cached text before the first image in Qwen-family vision requests when
+  its position IDs match ordinary text positions. Keep image embeddings and
+  all later tokens outside the text-prefix cache.
+- Support optional BF16 vision companions in local Ornith Q6 and Q8 bundles.
+  Preserve text-only installations, validate attached companion files, and apply
+  Ornith's image-size limit without changing the language checkpoint precision.
+
 - Add the `MereRunModelKit` library for model metadata, storage locations, artifact
   verification, and installed lookup without inference dependencies. Existing
   Core imports and model-resolution APIs remain source-compatible; Core supplies

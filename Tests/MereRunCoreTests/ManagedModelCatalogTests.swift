@@ -1079,6 +1079,39 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
     }
 
+    func testOrnithSixAndEightBitVisionCompanionsAreOptionalButValidatedWhenPresent() throws {
+        for id in [Q35Resources.ornith35BMLX6BitModelId, Q35Resources.ornith35BMLX8BitModelId] {
+            let root = try makeTemporaryDirectory()
+            defer { try? FileManager.default.removeItem(at: root) }
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
+            let resources = Q35Resources(rootURL: root)
+            for name in ["config.json", "model.safetensors", "tokenizer.json", "tokenizer_config.json"] {
+                try Data().write(to: root.appendingPathComponent(name))
+            }
+            XCTAssertNil(resources.ornithVisionComponent(forModelId: id))
+            XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
+
+            let vision = resources.ornithVisionComponentResources.rootURL
+            try FileManager.default.createDirectory(at: vision, withIntermediateDirectories: true)
+            XCTAssertEqual(resources.ornithVisionComponent(forModelId: id)?.rootURL, vision)
+            let expected = Q35Resources.ornith35BVisionComponentSnapshotPatterns.map {
+                vision.appendingPathComponent($0)
+            }
+            XCTAssertEqual(Set(spec.missingPaths(in: root)), Set(expected))
+            for path in expected {
+                try Data().write(to: path)
+            }
+            XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
+            try FileManager.default.removeItem(at: resources.ornithVisionComponentResources.configURL)
+            XCTAssertEqual(spec.missingPaths(in: root), [resources.ornithVisionComponentResources.configURL])
+
+            let bounds = Q35Resources.visionPixelBounds(forModelId: id)
+            XCTAssertEqual(bounds.minimum, 65_536)
+            XCTAssertEqual(bounds.maximum, 65_536)
+            XCTAssertNil(resources.ornithVisionComponent(forModelId: Q35Resources.q36NanoModelId))
+        }
+    }
+
     func testOrnithMTPValidationUsesOnlyIndexedMTPShards() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

@@ -663,12 +663,14 @@ public actor Q35Generator: ChatGenerator {
                 throw Q35Error.generationFailed("Qwen3.8 4-bit vision companion does not include a vision config.")
             }
             visionConfigAndResources = (companionConfig, companionResources)
-        } else if modelId == Q35Resources.ornith35BMLX4BitModelId {
-            let companionResources = primaryResources.ornithVisionComponentResources
+        } else if let companionResources = primaryResources.ornithVisionComponent(forModelId: modelId) {
             let companionConfigData = try Data(contentsOf: companionResources.configURL)
             let companionConfig = try JSONDecoder().decode(Q35Config.self, from: companionConfigData)
-            guard companionConfig.visionConfig != nil else {
-                throw Q35Error.generationFailed("Ornith 4-bit vision companion does not include a vision config.")
+            guard let visionConfig = companionConfig.visionConfig else {
+                throw Q35Error.generationFailed("Ornith vision companion does not include a vision config.")
+            }
+            guard visionConfig.outHiddenSize == config.textConfig.hiddenSize else {
+                throw Q35Error.generationFailed("Ornith vision companion output size does not match the text model.")
             }
             visionConfigAndResources = (companionConfig, companionResources)
         } else {
@@ -982,12 +984,24 @@ public actor Q35Generator: ChatGenerator {
                     }
                     prefillLength = promptEmbeddings.dim(1)
                     mropeRopeDelta = positionData?.ropeDelta
+                    let textPrefix = try await prefillVisionTextPrefix(
+                        model: model,
+                        promptTokens: promptTokens,
+                        imageTokenId: imageTokenId,
+                        positionIds: positionIds,
+                        modelPath: loadedModelPath ?? "",
+                        cacheMode: effectiveKVCacheMode,
+                        cache: layerCaches,
+                        progressHandler: progressHandler
+                    )
+                    layerCaches = textPrefix.caches
                     prefillOutput = try await chunkedPrefillEmbeddings(
                         model: model,
                         inputIds: promptInput,
                         inputEmbeddings: promptEmbeddings,
                         cache: layerCaches,
                         positionIds: positionIds,
+                        startIndex: textPrefix.tokenCount,
                         retainHidden: retainPrefillHidden,
                         progressHandler: progressHandler
                     )
@@ -2310,12 +2324,68 @@ public actor Q35Generator: ChatGenerator {
         )
     }
 
+    /// Only image-free tokens with ordinary text positions may use the token-only cache key.
+    static func visionTextPrefixTokenCount(
+        promptTokens: [Int],
+        imageTokenId: Int,
+        positionIds: MLXArray?
+    ) -> Int {
+        guard let firstImage = promptTokens.firstIndex(of: imageTokenId), firstImage > 0,
+              let positionIds, positionIds.shape == [3, 1, promptTokens.count] else {
+            return 0
+        }
+        let prefixPositions = positionIds[0..., 0, 0..<firstImage].asArray(Int32.self)
+        guard prefixPositions.enumerated().allSatisfy({ index, value in
+            value == Int32(index % firstImage)
+        }) else {
+            return 0
+        }
+        return firstImage
+    }
+
+    func prefillVisionTextPrefix(
+        model: Q35Model,
+        promptTokens: [Int],
+        imageTokenId: Int,
+        positionIds: MLXArray?,
+        modelPath: String,
+        cacheMode: RuntimeKVCacheMode,
+        cache: [Q35LayerCache?],
+        progressHandler: (@Sendable (ChatProgress) -> Void)?
+    ) async throws -> (tokenCount: Int, caches: [Q35LayerCache?]) {
+        let tokenCount = prefixKVCacheEnabled ? Self.visionTextPrefixTokenCount(
+            promptTokens: promptTokens, imageTokenId: imageTokenId, positionIds: positionIds
+        ) : 0
+        guard tokenCount > 0 else { return (0, cache) }
+        let textTokens = Array(promptTokens.prefix(tokenCount))
+        let seed = prefixKVCacheSeed(
+            modelPath: modelPath, promptTokens: textTokens, cacheMode: cacheMode
+        )
+        let textCache = seed?.caches ?? cache
+        if let seed {
+            progressHandler?(ChatProgress(
+                stage: .encoding, message: "Reusing \(seed.tokenCount) text-prefix KV tokens before first image"
+            ))
+        }
+        // Store the boundary from the normal text forward path. No image embedding,
+        // image position, or generated token enters this token-only cache entry.
+        _ = try await chunkedPrefill(
+            model: model, promptTokens: textTokens, cache: textCache,
+            startIndex: seed?.tokenCount ?? 0,
+            existingLogits: seed?.logits, existingHidden: seed?.hidden,
+            modelPath: modelPath, checkpointTokenCounts: [tokenCount],
+            progressHandler: progressHandler
+        )
+        return (tokenCount, textCache)
+    }
+
     func chunkedPrefillEmbeddings(
         model: Q35Model,
         inputIds: MLXArray,
         inputEmbeddings: MLXArray,
         cache: [Q35LayerCache?],
         positionIds: MLXArray? = nil,
+        startIndex: Int = 0,
         retainHidden: Bool = true,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35PrefillOutput {
@@ -2323,8 +2393,11 @@ public actor Q35Generator: ChatGenerator {
         guard tokenCount > 0 else {
             throw Q35Error.generationFailed("Prompt embeddings are empty after tokenization.")
         }
+        guard startIndex >= 0, startIndex < tokenCount else {
+            throw Q35Error.generationFailed("Embedding prefill requires an uncached suffix.")
+        }
 
-        var processed = 0
+        var processed = startIndex
         var logits: MLXArray?
         var hidden: MLXArray?
         while processed < tokenCount {
