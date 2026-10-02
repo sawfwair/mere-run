@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.61.1 - 2026-10-02
+
 - Match NeMo's FP32 execution for Nemotron 3 diarization, preserving returning-
   speaker identity on the long A-B-A Spark regression recording.
 
