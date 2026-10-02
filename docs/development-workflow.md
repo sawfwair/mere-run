@@ -186,10 +186,9 @@ An explicit `MERERUN_PACKAGE_LINUX_DEPS` value bypasses the automatic CUDA
 major gate and is written verbatim, making dependency compatibility the
 packager's responsibility.
 
-Active release builds cover macOS and the configured `tensor.local` x86_64 CUDA
-builder. The arm64 CUDA release lane is paused while no matching build host is
-available. Do not publish an arm64 CUDA artifact until it has been rebuilt and
-smoke-tested on matching hardware.
+Release builds cover macOS Apple Silicon, Linux arm64 CUDA on Spark, and Linux
+x86_64 CUDA on RunPod. Publish each Linux artifact only after rebuilding and
+smoke-testing it on matching GPU hardware.
 
 ## Model-store expectations
 
