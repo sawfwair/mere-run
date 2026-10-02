@@ -8,6 +8,44 @@ import XCTest
 @testable import MereRunCore
 
 final class SortformerDiarizationTests: XCTestCase {
+    func testNemotron3CheckpointLoaderUsesReferenceExecutionPrecision() throws {
+        let fixture = Bundle.module.resourceURL!.appending(path: "Fixtures/Nemotron3/checkpoint-precision.pt")
+        let archive = try PyTorchStateDictArchive(url: fixture)
+        let weights = try Nemotron3Diarizer.checkpointWeights(from: archive)
+        let projection = try XCTUnwrap(weights["encoder.pre_encode.proj.weight"])
+        let head = try XCTUnwrap(weights["sortformer_modules.single_hidden_to_spks.weight"])
+        eval(projection, head)
+
+        XCTAssertEqual(projection.dtype, .float32)
+        XCTAssertEqual(projection.asArray(Float.self), [1.001, 1.003, -1.001, -1.003])
+        XCTAssertEqual(head.dtype, .float32)
+        XCTAssertEqual(head.asArray(Float.self), [0.5, 0.50390625])
+        XCTAssertNil(weights["preprocessor.featurizer.window"])
+        XCTAssertNil(weights["sortformer_modules.activity_head.weight"])
+    }
+
+    func testNemotron3ReturningSpeakerSurvivesChunkBoundaryWhenConfigured() throws {
+        guard let modelPath = ProcessInfo.processInfo.environment["MERERUN_NEMOTRON3_MODEL_DIR"] else {
+            throw XCTSkip("Set MERERUN_NEMOTRON3_MODEL_DIR for the real A-B-A checkpoint regression")
+        }
+        let fixture = Bundle.module.resourceURL!.appending(path: "Fixtures/Nemotron3/returning-speaker.wav")
+        let audio = try AudioReader.readAudioBuffer(from: fixture, sampleRate: 16_000, channels: 1)
+        let diarizer = try Nemotron3Diarizer(modelDirectory: URL(fileURLWithPath: modelPath))
+        let result = try diarizer.diarize(samples: audio.samples)
+
+        func speakerDuration(_ speaker: Int, from start: Float, to end: Float) -> Float {
+            result.segments.filter { $0.speaker == speaker }.reduce(0) {
+                $0 + max(0, min($1.end, end) - max($1.start, start))
+            }
+        }
+        let first = try XCTUnwrap(result.segments.first).speaker
+        let second = try XCTUnwrap(result.segments.first { $0.start >= 16.27 && $0.start < 30.74 }).speaker
+        XCTAssertNotEqual(first, second)
+        XCTAssertGreaterThan(speakerDuration(first, from: 0, to: 15.77), 10)
+        XCTAssertGreaterThan(speakerDuration(second, from: 16.27, to: 30.74), 10)
+        XCTAssertGreaterThan(speakerDuration(first, from: 31.24, to: 46.57), 10)
+    }
+
     func testManagedSortformerRootDoesNotRequireASRTextComponents() throws {
         let root = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: root) }

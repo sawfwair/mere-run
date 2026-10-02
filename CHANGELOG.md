@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Match NeMo's FP32 execution for Nemotron 3 diarization, preserving returning-
+  speaker identity on the long A-B-A Spark regression recording.
+
 ## 0.61.0 - 2026-10-02
 
 - Add the pinned 9B Clef Flash 4-bit checkpoint to `text decide`, reusing the
