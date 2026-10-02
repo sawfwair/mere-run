@@ -672,6 +672,15 @@
     "resourceName": "handbook-laya.md"
   },
   {
+    "topic": "handbook-clef",
+    "title": "Clef structured decisions (Cloudflare)",
+    "category": "Text",
+    "models": [
+      "text-decide-clef-4bit"
+    ],
+    "resourceName": "handbook-clef.md"
+  },
+  {
     "topic": "handbook-gliner25-decide",
     "title": "GLiNER2.5 Decide",
     "category": "Text",

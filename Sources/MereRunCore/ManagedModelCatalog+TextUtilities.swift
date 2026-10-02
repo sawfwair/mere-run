@@ -82,5 +82,14 @@ extension ManagedModelCatalog {
                 : modelID == LayaCatalog.typedDecisionsID ? 846_195_716 : 846_195_574,
             defaultCLICommands: ["text decide"]
         )
-    }
+    } + [
+        ManagedModelSpec(
+            id: ClefCatalog.modelID, category: .textDecide, installShape: .directoryRoot,
+            hubFallback: ClefCatalog.hubFallback,
+            upstreamRepoId: ClefCatalog.repository, upstreamRevision: ClefCatalog.revision,
+            validationKind: .clef, runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 16_310_666_373,
+            defaultCLICommands: ["text decide"], apiAvailability: .cliOnly
+        )
+    ]
 }

@@ -17,8 +17,9 @@ The MediaImage preprocessing path used by CLI file inputs and batched grounding
 uses RGB bicubic resampling at both resize stages. The separable filter,
 anti-aliasing support, fixed-point coefficients, intermediate byte rounding,
 and clipping follow Pillow 12.3.0. RGB values ignore alpha, matching conversion
-to RGB before the reference resizes. Other model families keep their existing
-shared resize behavior.
+to RGB before the reference resizes. The implementation lives in
+`MediaImageIO.bicubicResizedRGB`, shared with Clef. Other model families keep
+their existing resize behavior.
 
 Eight generated fixtures compare RGB bytes for downscaling, upscaling,
 single-axis changes, and unchanged dimensions. Regenerate them with the pinned

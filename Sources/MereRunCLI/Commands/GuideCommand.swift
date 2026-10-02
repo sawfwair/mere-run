@@ -267,7 +267,7 @@ enum GuideRegistry {
         ),
         GuideTopic(
             topic: "text-decide", title: "Text Decide", commandPaths: [["text", "decide"]],
-            models: LayaCatalog.modelIDs, resourceName: "text-decide.md"
+            models: LayaCatalog.modelIDs + [ClefCatalog.modelID], resourceName: "text-decide.md"
         ),
         GuideTopic(
             topic: "text-classify", title: "Text Classify", commandPaths: [["text", "classify"]],

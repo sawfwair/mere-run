@@ -71,6 +71,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case qwen3VLEmbedding
     case privacyFilter
     case laya
+    case clef
     case gliner25Decide
     case codegenGGUF
     case deepseekV4FlashIMatrixGGUF

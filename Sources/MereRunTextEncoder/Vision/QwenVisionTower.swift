@@ -43,6 +43,12 @@ package struct QwenVisionTowerOutput {
 package final class QwenVisionTower: Module {
   package let configuration: QwenVisionConfiguration
 
+  package enum PositionEmbeddingArithmetic {
+    case float32
+    case embeddingDType
+  }
+  package var positionEmbeddingArithmetic: PositionEmbeddingArithmetic = .float32
+
   @ModuleInfo(key: "patch_embed") private var patchEmbed: QwenVisionPatchEmbed
   @ModuleInfo(key: "patch_merger") private var patchMerger: QwenVisionPatchMerger
   @ModuleInfo(key: "blocks") private var blocks: [QwenVisionBlock]
@@ -368,7 +374,7 @@ package final class QwenVisionTower: Module {
   }
 
   /// Fast position embedding interpolation (Qwen3-VL style)
-  private func fastPosEmbedInterpolate(gridThw: [(t: Int, h: Int, w: Int)], posEmbed: Embedding) -> MLXArray {
+  package func fastPosEmbedInterpolate(gridThw: [(t: Int, h: Int, w: Int)], posEmbed: Embedding) -> MLXArray {
     var idxList: [[Int32]] = [[], [], [], []]
     var weightList: [[Float32]] = [[], [], [], []]
 
@@ -409,8 +415,9 @@ package final class QwenVisionTower: Module {
     var result: MLXArray? = nil
     for i in 0..<4 {
       let indices = MLXArray(idxList[i].map(Float32.init), [maxLen]).asType(.int32)
-      let weights = MLXArray(weightList[i], [maxLen, 1])
       let embeds = posEmbed(indices)  // [maxLen, embedDim]
+      let weights = MLXArray(weightList[i], [maxLen, 1])
+        .asType(positionEmbeddingArithmetic == .embeddingDType ? embeds.dtype : .float32)
       let weighted = embeds * weights
       if result == nil {
         result = weighted

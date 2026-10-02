@@ -158,6 +158,7 @@ public enum MereRunModelValidator {
             vaeDir = nil
             tokenizerDir = nil
         } else if spec?.validationKind == .laya
+            || spec?.validationKind == .clef
             || spec?.validationKind == .gliner25Decide
             || spec?.validationKind == .qwenImage21
             || spec?.validationKind == .aceStep

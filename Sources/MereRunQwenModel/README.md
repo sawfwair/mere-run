@@ -10,6 +10,14 @@ tokenizers, prompts, generation scheduling, and request cleanup. It re-exports
 this library's public API. The vision loader in Core selects checkpoint shards
 and passes mapped arrays to the model for installation.
 
+`ClefJointHead` and `ClefJointLayers` own Clef's evidence routing, joint schema
+decoder, and lexical-prior computation over Qwen3.5 states. Core's `Clef`
+operation owns request encoding, media, loading, and answer decoding. The head
+has no tokenizer, checkpoint I/O, model-download, or command dependency.
+Clef opts into checkpoint-dtype learned-position interpolation in the vision
+tower; independently exported BF16 fixtures cover the arithmetic. Existing
+vision callers retain their FP32 interpolation policy.
+
 Preserve serial/verification arithmetic, hybrid-cache rollback, independent
 fork wrappers, QSA pooling state, PLE token history, and request-scoped compiled
 graph ownership. MTP proposals never authorize output: target verification

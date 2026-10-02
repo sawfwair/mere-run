@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add native Clef 4-bit structured decisions to `text decide`, including a
+  pinned managed checkpoint, joint schema head, JSON state, local images and
+  video frame arrays, token-budget preflight, and reference parity fixtures.
 - Keep single-step LTX audio-to-video diffusion finite by using its direct
   noise-to-clean schedule instead of stretching a zero-length interval.
 - Honor the requested LTX Gemma runtime precision for quantized checkpoint

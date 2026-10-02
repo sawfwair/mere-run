@@ -701,6 +701,7 @@ targets.append(
       "YuE2/README.md",
       "PrivacyFilter/README.md",
       "Laya/README.md",
+      "Clef/README.md",
       "RoFormer/README.md",
       "UniverSR/README.md",
       "Pose/README.md",

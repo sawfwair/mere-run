@@ -10,3 +10,6 @@ Shared Qwen text encoder and vision tower model layers.
 This library depends on MLX and the shared attention-cache library. Core owns
 tokenizers, generation loops, checkpoint loading, and model resolution.
 Preserve cached/full-pass parity and the selected intermediate hidden states.
+Learned vision-position interpolation defaults to FP32. Clef selects
+checkpoint-dtype arithmetic through its Qwen vision wrapper; BF16 fixtures
+cover that policy independently of full checkpoint inference.

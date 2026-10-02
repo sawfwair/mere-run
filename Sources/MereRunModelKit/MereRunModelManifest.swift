@@ -15,6 +15,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
 
     public enum Engine: String, Codable, CaseIterable, Hashable, Sendable {
         case laya
+        case clef
         case gliner25Decide = "gliner25-decide"
         /// FLUX.1 Diffusers family.
         case flux1 = "flux1"
@@ -133,6 +134,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
 
     public enum Family: String, Codable, CaseIterable, Hashable, Sendable {
         case laya
+        case clef
         case gliner
         case flux1
         case klein

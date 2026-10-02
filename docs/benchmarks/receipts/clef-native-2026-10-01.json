@@ -1,0 +1,372 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-01",
+  "repository": "mlx-community/clef-4bit",
+  "revision": "e0a23bd4406c15075b7473616429c46f3fd130a9",
+  "reference_sha256": "f1abbe542ee3e98764d71fd5fc8489e794db5619abe50c32160ec863e1e0e7a2",
+  "reference_packages": {
+    "mlx": "0.32.3",
+    "mlx-vlm": "0.7.4",
+    "mlx-lm": "0.32.0",
+    "transformers": "5.18.0",
+    "pillow": "12.3.0",
+    "tokenizers": "0.23.2"
+  },
+  "tested_binary_sha256": "02f0ff387f07fc2c98812b7f208cb09ca414831cc837694c14c2fa588238a269",
+  "native_build": "debug",
+  "reference_load_seconds": 7.208572958006698,
+  "reference_video_processor_adjustment": "mlx-vlm 0.7.4 ignores nested processor_config.json video settings; explicitly instantiate its video processor with checkpoint-declared settings. Neural model and pinned loader are unchanged.",
+  "cases": {
+    "text": {
+      "request_without_media": {
+        "state": "Checkout is returning HTTP 500 errors. Customers cannot place orders. There are no invoice or payment questions.",
+        "questions": {
+          "team": {
+            "type": "choice",
+            "instructions": "Which team should handle this incident?",
+            "criteria": {
+              "billing": "Invoices and payment questions",
+              "technical": "Software bugs and service outages"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgently should we respond?",
+            "criteria": [
+              "Can wait",
+              "This week",
+              "Today",
+              "Immediately"
+            ]
+          },
+          "outage": {
+            "type": "noul",
+            "instructions": "Are customers currently unable to place orders?"
+          }
+        }
+      },
+      "input_tokens": 339,
+      "native_end_to_end_seconds": 7.383268750003481,
+      "native_max_rss_bytes": 9484517376,
+      "native_peak_footprint_bytes": 19271906936,
+      "reference_inference_seconds": 2.619843332999153,
+      "reference_peak_mlx_bytes": 16793359096,
+      "native_answers": {
+        "outage": {
+          "noul": 0.9909,
+          "type": "noul"
+        },
+        "team": {
+          "choice": "technical",
+          "confidence": 0.9765,
+          "probabilities": {
+            "billing": 0.0235,
+            "technical": 0.9765
+          },
+          "type": "choice"
+        },
+        "urgency": {
+          "confidence": 0.9716,
+          "legend": {
+            "0": "Can wait",
+            "1": "This week",
+            "2": "Today",
+            "3": "Immediately"
+          },
+          "probabilities": {
+            "0": 0.0053,
+            "1": 0.0062,
+            "2": 0.017,
+            "3": 0.9716
+          },
+          "score": 2.9549,
+          "type": "score"
+        }
+      },
+      "reference_answers": {
+        "team": {
+          "type": "choice",
+          "choice": "technical",
+          "confidence": 0.9756,
+          "probabilities": {
+            "billing": 0.0244,
+            "technical": 0.9756
+          }
+        },
+        "urgency": {
+          "type": "score",
+          "score": 2.9542,
+          "confidence": 0.9712,
+          "legend": {
+            "0": "Can wait",
+            "1": "This week",
+            "2": "Today",
+            "3": "Immediately"
+          },
+          "probabilities": {
+            "0": 0.0054,
+            "1": 0.0061,
+            "2": 0.0172,
+            "3": 0.9712
+          }
+        },
+        "outage": {
+          "type": "noul",
+          "noul": 0.9906
+        }
+      },
+      "reference_raw_probabilities": {
+        "team": {
+          "billing": 0.02442309446632862,
+          "technical": 0.9755768775939941
+        },
+        "urgency": {
+          "0": 0.005425006151199341,
+          "1": 0.006147337146103382,
+          "2": 0.01724063791334629,
+          "3": 0.9711869955062866
+        },
+        "outage": {
+          "true": 0.9906418919563293,
+          "false": 0.009358113631606102
+        }
+      },
+      "max_rounded_probability_difference": 0.0009,
+      "choices_match": true
+    },
+    "image": {
+      "request_without_media": {
+        "state": "Inspect the supplied media.",
+        "questions": {
+          "color": {
+            "type": "choice",
+            "instructions": "What is the dominant color?",
+            "criteria": {
+              "blue": "Blue",
+              "green": "Green",
+              "red": "Red"
+            }
+          },
+          "red": {
+            "type": "noul",
+            "instructions": "Is the media predominantly red?"
+          }
+        }
+      },
+      "input_tokens": 294,
+      "native_end_to_end_seconds": 7.84851604099822,
+      "native_max_rss_bytes": 10677616640,
+      "native_peak_footprint_bytes": 21066824608,
+      "reference_inference_seconds": 3.083476375002647,
+      "reference_peak_mlx_bytes": 16797193644,
+      "native_answers": {
+        "color": {
+          "choice": "red",
+          "confidence": 0.9941,
+          "probabilities": {
+            "blue": 0.0029,
+            "green": 0.003,
+            "red": 0.9941
+          },
+          "type": "choice"
+        },
+        "red": {
+          "noul": 0.9936,
+          "type": "noul"
+        }
+      },
+      "reference_answers": {
+        "color": {
+          "type": "choice",
+          "choice": "red",
+          "confidence": 0.994,
+          "probabilities": {
+            "blue": 0.003,
+            "green": 0.0031,
+            "red": 0.994
+          }
+        },
+        "red": {
+          "type": "noul",
+          "noul": 0.9935
+        }
+      },
+      "reference_raw_probabilities": {
+        "color": {
+          "blue": 0.0029718922451138496,
+          "green": 0.0030662298668175936,
+          "red": 0.9939618706703186
+        },
+        "red": {
+          "true": 0.9934611320495605,
+          "false": 0.006538825575262308
+        }
+      },
+      "max_rounded_probability_difference": 0.0001,
+      "choices_match": true
+    },
+    "video": {
+      "request_without_media": {
+        "state": "Inspect the supplied media.",
+        "questions": {
+          "color": {
+            "type": "choice",
+            "instructions": "What is the dominant color?",
+            "criteria": {
+              "blue": "Blue",
+              "green": "Green",
+              "red": "Red"
+            }
+          },
+          "red": {
+            "type": "noul",
+            "instructions": "Is the media predominantly red?"
+          }
+        }
+      },
+      "input_tokens": 254,
+      "native_end_to_end_seconds": 6.442732707997493,
+      "native_max_rss_bytes": 13460553728,
+      "native_peak_footprint_bytes": 20922612568,
+      "reference_inference_seconds": 3.03291737499967,
+      "reference_peak_mlx_bytes": 16797193644,
+      "native_answers": {
+        "color": {
+          "choice": "red",
+          "confidence": 0.9926,
+          "probabilities": {
+            "blue": 0.0036,
+            "green": 0.0038,
+            "red": 0.9926
+          },
+          "type": "choice"
+        },
+        "red": {
+          "noul": 0.993,
+          "type": "noul"
+        }
+      },
+      "reference_answers": {
+        "color": {
+          "type": "choice",
+          "choice": "red",
+          "confidence": 0.9926,
+          "probabilities": {
+            "blue": 0.0036,
+            "green": 0.0038,
+            "red": 0.9926
+          }
+        },
+        "red": {
+          "type": "noul",
+          "noul": 0.9931
+        }
+      },
+      "reference_raw_probabilities": {
+        "color": {
+          "blue": 0.0036362947430461645,
+          "green": 0.0037517226301133633,
+          "red": 0.9926120638847351
+        },
+        "red": {
+          "true": 0.9930693507194519,
+          "false": 0.006930672097951174
+        }
+      },
+      "max_rounded_probability_difference": 0.0001,
+      "choices_match": true
+    },
+    "resize": {
+      "request_without_media": {
+        "state": "Inspect the supplied media.",
+        "questions": {
+          "color": {
+            "type": "choice",
+            "instructions": "What is the dominant color?",
+            "criteria": {
+              "blue": "Blue",
+              "green": "Green",
+              "red": "Red"
+            }
+          },
+          "red": {
+            "type": "noul",
+            "instructions": "Is the media predominantly red?"
+          }
+        }
+      },
+      "input_tokens": 300,
+      "native_end_to_end_seconds": 6.719182708999142,
+      "native_max_rss_bytes": 13499613184,
+      "native_peak_footprint_bytes": 21280816248,
+      "reference_inference_seconds": 1.9820933340015472,
+      "reference_peak_mlx_bytes": 16797914564,
+      "native_answers": {
+        "color": {
+          "choice": "blue",
+          "confidence": 0.9109,
+          "probabilities": {
+            "blue": 0.9109,
+            "green": 0.0064,
+            "red": 0.0828
+          },
+          "type": "choice"
+        },
+        "red": {
+          "noul": 0.0893,
+          "type": "noul"
+        }
+      },
+      "reference_answers": {
+        "color": {
+          "type": "choice",
+          "choice": "blue",
+          "confidence": 0.914,
+          "probabilities": {
+            "blue": 0.914,
+            "green": 0.0062,
+            "red": 0.0799
+          }
+        },
+        "red": {
+          "type": "noul",
+          "noul": 0.0899
+        }
+      },
+      "reference_raw_probabilities": {
+        "color": {
+          "blue": 0.9139791131019592,
+          "green": 0.0061583430506289005,
+          "red": 0.07986260950565338
+        },
+        "red": {
+          "true": 0.08993301540613174,
+          "false": 0.9100669622421265
+        }
+      },
+      "max_rounded_probability_difference": 0.0031,
+      "choices_match": true
+    }
+  },
+  "limits": [
+    "Four short synthetic probes, not an accuracy benchmark or maximum-context test.",
+    "Full-model probabilities retain up to 0.0031 rounded numerical difference; exact full-model parity is not established."
+  ],
+  "media_probes": {
+    "image": "256x256 RGB (235,35,30) PNG; no resize.",
+    "video": "Four identical 64x64 RGB (235,35,30) PNG frames, 24-fps source.",
+    "resize": "301x197 white RGB image; for x in range(0,301,7), blue (20,60,220) inclusive rectangle (x,0,x+3,196); red (235,35,30) ellipse (75,30,220,175). Pillow ImageDraw generates source PNG."
+  },
+  "platform": "Apple Silicon / macOS",
+  "native_admission_check": "enabled",
+  "preprocessing_qualification": {
+    "rgb_resize": "Pillow 12.3.0 antialiased RGB bicubic; image and distinct video frame buffers match independent fixtures byte-for-byte.",
+    "normalization": "FP32 multiplication by checkpoint rescale factor, then mean/std; exact independent numpy LUT for all 256 byte values.",
+    "video_geometry": "Independent odd-frame min/max pixel-budget cases include padded temporal pairs.",
+    "learned_positions": "BF16 interpolation matches independent mlx-vlm outputs exactly on three image/video grids. Other callers retain FP32 arithmetic.",
+    "fixture_sha256": {
+      "Tests/MereRunCoreTests/Fixtures/Clef/media-reference.json": "5d44337c045d14ebea86ba6bafb09aaa21a233f6c536d15a19c005d6660ba2ca",
+      "Tests/MereRunCoreTests/Fixtures/Clef/vision-interpolation.safetensors": "5bf03e2ae21303c33e979aa038f69f133d8d19eca07f1311bc84480875a7f5ad"
+    }
+  }
+}

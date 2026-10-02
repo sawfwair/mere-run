@@ -133,6 +133,23 @@ public enum MediaImageIO {
         return values
     }
 
+    /// Uses a processor's explicit FP32 rescale factor before normalization.
+    /// Multiplication preserves reference rounding at later BF16 cast boundaries.
+    public static func rescaledRGBCHWFloat(
+        _ image: MediaImage, rescaleFactor: Float, normalizedToMinusOneToOne: Bool
+    ) -> [Float] {
+        let pixelCount = image.width * image.height
+        var values = [Float](repeating: 0, count: pixelCount * 3)
+        for channel in 0..<3 {
+            for pixel in 0..<pixelCount {
+                var value = Float(image.rgba8[pixel * 4 + channel]) * rescaleFactor
+                if normalizedToMinusOneToOne { value = (value - 0.5) / 0.5 }
+                values[channel * pixelCount + pixel] = value
+            }
+        }
+        return values
+    }
+
     /// PyTorch-compatible bilinear resize (`align_corners=false`) that fills
     /// the target while preserving aspect ratio, then takes a centered crop.
     /// The float result avoids an extra 8-bit quantization after resizing.
