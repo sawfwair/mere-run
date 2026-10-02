@@ -15,6 +15,9 @@ file decoding. `AudioSTT` re-exports its public types for existing callers.
   NVIDIA's released eight-speaker RoPE Transformer, 10 ms output head, NeMo
   features, and cache-aware chunk inference. `AudioSTT/Nemotron3Diarizer.swift`
   loads the pinned NeMo initializer through the non-executing state-dict reader.
+  Restore the BF16 initializer into FP32 model weights, matching NeMo's execution
+  precision. Native BF16 execution loses returning-speaker identity on the long
+  A-B-A regression fixture.
 - `Nemotron3DiarizationStreaming.swift`: bounded PCM history with persistent
   speaker cache and FIFO state; emits nonoverlapping 10 ms speaker-activity
   chunks before end of input.

@@ -493,6 +493,24 @@ execution, export, and model lifetime ownership.
    produce time segments.
 5. The CLI emits versioned JSON or standard RTTM text.
 
+Nemotron 3 uses eight speaker channels and a cache across chunks. Its pinned
+BF16 initializer is restored into FP32 model weights, matching NeMo's execution
+precision.
+The Spark CUDA regression checks a 46.57-second real A-B-A recording with a
+returning speaker across the default chunk boundary. NVIDIA's pinned NeMo
+implementation and native FP32 inference both preserve the returning speaker;
+forced native BF16 inference failed that recording. This is a bounded regression
+check, not a general diarization accuracy score.
+
+Run the checkpoint regression with `MERERUN_NEMOTRON3_MODEL_DIR` set to the
+installed model directory:
+
+```sh
+swift test --filter SortformerDiarizationTests/testNemotron3ReturningSpeakerSurvivesChunkBoundaryWhenConfigured
+```
+Fixture attribution and exact turn boundaries are in
+`Tests/MereRunCoreTests/Fixtures/Nemotron3/README.md`.
+
 ## Notes for contributors
 
 - Speech code spans both `AudioTTS` and `AudioSTT`. Do not assume it all lives

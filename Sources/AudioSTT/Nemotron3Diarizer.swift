@@ -51,16 +51,10 @@ public final class Nemotron3Diarizer {
             throw Nemotron3DiarizationLoadError.unexpectedTensorCount(source.tensors.count)
         }
         let model = Nemotron3DiarizationModel()
-        var weights: [String: MLXArray] = [:]
-        for descriptor in source.tensors {
-            let name = descriptor.name
-            guard name.hasPrefix("encoder.") || name.hasPrefix("sortformer_modules.") else { continue }
-            guard !name.hasPrefix("sortformer_modules.activity_head.")
-                    && !name.hasPrefix("sortformer_modules.hidden_to_spks.") else { continue }
-            weights[name] = try source.loadArray(for: descriptor, dtype: .bfloat16)
-        }
         try model.update(
-            parameters: ModuleParameters.unflattened(Nemotron3DiarizationModel.compatibleWeights(weights)),
+            parameters: ModuleParameters.unflattened(Nemotron3DiarizationModel.compatibleWeights(
+                Self.checkpointWeights(from: source)
+            )),
             verify: .all
         )
         eval(model.parameters())
@@ -69,6 +63,20 @@ public final class Nemotron3Diarizer {
         let filterbank = try source.loadArray(named: "preprocessor.featurizer.fb", dtype: .float32)
         eval(window, filterbank)
         runtime = Nemotron3DiarizationRuntime(model: model, window: window, filterbank: filterbank)
+    }
+
+    static func checkpointWeights(from source: PyTorchStateDictArchive) throws -> [String: MLXArray] {
+        var weights: [String: MLXArray] = [:]
+        for descriptor in source.tensors {
+            let name = descriptor.name
+            guard name.hasPrefix("encoder.") || name.hasPrefix("sortformer_modules.") else { continue }
+            guard !name.hasPrefix("sortformer_modules.activity_head.")
+                    && !name.hasPrefix("sortformer_modules.hidden_to_spks.") else { continue }
+            // NeMo restores the BF16 initializer into an FP32 model. Match its
+            // execution precision to retain speaker identity across chunks.
+            weights[name] = try source.loadArray(for: descriptor, dtype: .float32)
+        }
+        return weights
     }
 
     public func diarize(
