@@ -21,8 +21,9 @@ treat a cross-build as runtime proof.
   installer UI, or the DMG layout.
 - Published Linux package builds must use `MERERUN_LINUX_ACCEL=cuda`. CPU
   builds are test fixtures, not release artifacts.
-- Active release builds use the configured `tensor.local` x86_64 CUDA builder.
-  The arm64 CUDA lane is paused while no matching build host is available.
+- Release builds cover macOS Apple Silicon, Linux arm64 CUDA on Spark, and
+  Linux x86_64 CUDA on RunPod. Each Linux package must pass validation on
+  matching GPU hardware.
 - CUDA validation applies only to hosts that
   have run the CUDA package and smoke path.
 

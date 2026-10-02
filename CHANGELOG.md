@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.61.0 - 2026-10-02
+
 - Add the pinned 9B Clef Flash 4-bit checkpoint to `text decide`, reusing the
   native Clef runtime, media preprocessing, preflight, and installed-model smoke.
 
