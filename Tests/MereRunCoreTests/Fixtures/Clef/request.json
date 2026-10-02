@@ -1,0 +1,35 @@
+{
+  "state": {
+    "z": "Checkout outage café",
+    "a": [
+      true,
+      2,
+      null
+    ]
+  },
+  "questions": {
+    "z_route": {
+      "type": "choice",
+      "instructions": "Select the team",
+      "criteria": {
+        "technical": "An outage",
+        "billing": "An invoice",
+        "other": null
+      }
+    },
+    "urgency": {
+      "type": "score",
+      "criteria": [
+        "Low",
+        "Medium",
+        "High",
+        "Critical"
+      ]
+    },
+    "a_outage": {
+      "type": "noul",
+      "instructions": "Is the system down?"
+    }
+  },
+  "max_tokens": 2048
+}

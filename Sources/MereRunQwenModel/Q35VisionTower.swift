@@ -84,6 +84,11 @@ public final class Q35VisionTower: Module {
         isLoaded = true
     }
 
+    /// Clef's reference interpolates learned positions in their checkpoint dtype.
+    package func useCheckpointPositionInterpolation() {
+        visionTower.positionEmbeddingArithmetic = .embeddingDType
+    }
+
     public func encodeImage(
         pixelValues: MLXArray,
         gridTHW: (Int, Int, Int)
@@ -94,6 +99,26 @@ public final class Q35VisionTower: Module {
             temporalPatchSize: temporalPatchSize,
             mergeSize: spatialMergeSize
         )
+        return try encodePatches(patchInputs, gridTHW: gridTHW)
+    }
+
+    /// Temporal patch pairs contain distinct frames; image preparation repeats a single frame.
+    package func encodeVideoFrames(_ frames: MLXArray, gridTHW: (Int, Int, Int)) throws -> MLXArray {
+        guard frames.ndim == 4, frames.dim(0) == gridTHW.0 * temporalPatchSize,
+              frames.dim(1) == 3, frames.dim(2) == gridTHW.1 * patchSize,
+              frames.dim(3) == gridTHW.2 * patchSize,
+              gridTHW.1.isMultiple(of: spatialMergeSize), gridTHW.2.isMultiple(of: spatialMergeSize) else {
+            throw ClefError.invalidInput("Video frames do not match the temporal patch grid.")
+        }
+        let patches = frames.reshaped([
+            gridTHW.0, temporalPatchSize, 3, gridTHW.1 / spatialMergeSize, spatialMergeSize,
+            patchSize, gridTHW.2 / spatialMergeSize, spatialMergeSize, patchSize
+        ]).transposed(0, 3, 6, 4, 7, 2, 1, 5, 8).reshaped(
+            1, gridTHW.0 * gridTHW.1 * gridTHW.2, 3 * temporalPatchSize * patchSize * patchSize)
+        return try encodePatches(patches, gridTHW: gridTHW)
+    }
+
+    private func encodePatches(_ patchInputs: MLXArray, gridTHW: (Int, Int, Int)) throws -> MLXArray {
         let grid = [QwenVisionGrid(
             temporal: max(1, gridTHW.0),
             height: max(1, gridTHW.1),

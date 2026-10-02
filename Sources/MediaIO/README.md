@@ -9,5 +9,16 @@ The target exposes small value types (`MediaImage`, `MediaAudioBuffer`, and
 model code should depend on these facades instead of importing AVFoundation,
 CoreGraphics, ImageIO, or CoreVideo directly.
 
+`MediaImageIO.bicubicResizedRGB` owns Pillow-compatible RGB bicubic resampling
+for Clef and FalconPerception preprocessing. Its separable antialiasing filter,
+fixed-point coefficients, intermediate byte rounding, and clipping are checked
+against independently generated Pillow fixtures. The ordinary `resized` helper
+retains its existing nearest-neighbor behavior.
+
+`rescaledRGBCHWFloat` applies an explicit FP32 rescale factor before optional
+minus-one-to-one normalization. Clef uses multiplication by its processor's
+factor to retain reference rounding at BF16 boundaries; `rgbCHWFloat` keeps
+its existing division arithmetic for other callers.
+
 Linux users can override executable discovery with `MERERUN_FFMPEG` and
 `MERERUN_FFPROBE`.

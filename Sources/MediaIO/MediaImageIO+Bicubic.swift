@@ -1,9 +1,8 @@
 import Foundation
-import MediaIO
 
 // RGB resampling follows Pillow 12.3.0's separable bicubic, 8-bit path.
 // See THIRD_PARTY_NOTICES.md for the Pillow MIT-CMU license and provenance.
-enum FalconPerceptionRGBResize {
+private enum PillowRGBResize {
     private struct Coefficients {
         let start: Int
         let weights: [Int]
@@ -86,5 +85,15 @@ enum FalconPerceptionRGBResize {
             }
         }
         return try MediaImage(width: width, height: height, rgba8: rgba)
+    }
+}
+
+
+extension MediaImageIO {
+    /// Pillow-compatible separable RGB bicubic resampling with antialiasing,
+    /// 22-bit fixed-point coefficients, and intermediate 8-bit rounding.
+    /// Resampling ignores alpha, matching RGB conversion before resize.
+    public static func bicubicResizedRGB(_ image: MediaImage, width: Int, height: Int) throws -> MediaImage {
+        try PillowRGBResize.resized(image, width: width, height: height)
     }
 }

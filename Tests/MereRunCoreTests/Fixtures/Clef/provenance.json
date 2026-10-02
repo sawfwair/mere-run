@@ -1,0 +1,9 @@
+{
+  "repository": "mlx-community/clef-4bit",
+  "revision": "e0a23bd4406c15075b7473616429c46f3fd130a9",
+  "reference_sha256": "f1abbe542ee3e98764d71fd5fc8489e794db5619abe50c32160ec863e1e0e7a2",
+  "seed": 231,
+  "mlx_version": "0.32.3",
+  "dtype": "float32",
+  "learned_weights": false
+}

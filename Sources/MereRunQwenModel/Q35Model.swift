@@ -545,6 +545,27 @@ public final class Q35Model: Module, @unchecked Sendable {
         model.embeddings(for: inputIds)
     }
 
+    /// Classification consumes all final states without allocating vocabulary logits.
+    package func decisionHiddenStates(
+        _ inputIds: MLXArray, cache: [Q35LayerCache?]?,
+        inputEmbeddings: MLXArray? = nil, positionIds: MLXArray? = nil
+    ) -> MLXArray {
+        model.forward(inputIds, cache: cache, inputEmbeddings: inputEmbeddings, positionIds: positionIds).hidden
+    }
+
+    /// Clef's lexical prior uses output embedding rows, rather than input embeddings.
+    package func decisionLexicalEmbeddings(_ ids: MLXArray) -> MLXArray {
+        if let output = lmHead {
+            if let quantized = output as? QuantizedLinear {
+                return dequantized(quantized.weight[ids], scales: quantized.scales[ids],
+                                   biases: quantized.biases?[ids], groupSize: quantized.groupSize,
+                                   bits: quantized.bits, mode: quantized.mode)
+            }
+            return output.weight[ids]
+        }
+        return embeddings(for: ids)
+    }
+
     /// Bound fused expert preparation to one decoder layer's gate/up pair at a
     /// time. Each completed stack owns its evaluated storage before the source
     /// arrays are released and the MLX cache is cleared for the next layer.

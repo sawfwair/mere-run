@@ -53,7 +53,7 @@ extension Q35Generator {
         return replacements
     }
 
-    func buildMRoPEPositionData(
+    nonisolated func buildMRoPEPositionData(
         inputIds: MLXArray,
         imageTokenId: Int,
         replacements: [Q35VisionReplacement],
@@ -152,7 +152,7 @@ extension Q35Generator {
         )
     }
 
-    func insertVisionEmbeddings(
+    nonisolated func insertVisionEmbeddings(
         hiddenStates: MLXArray,
         inputIds: MLXArray,
         imageTokenId: Int,

@@ -15,6 +15,7 @@ extension MereRunCapabilityCatalog {
 
     enum TextDecideFamily: String, MereRunFamilyID {
         case laya
+        case clef
     }
 
     enum TextGLiNERFamily: String, MereRunFamilyID {
@@ -238,7 +239,8 @@ extension MereRunCapabilityCatalog {
                 TextDecideFamily.laya,
                 title: "Laya",
                 models: ["text-decide-laya", "text-decide-laya-multilingual", "text-decide-laya-typed-decisions"]
-            )
+            ),
+            .init(TextDecideFamily.clef, title: "Clef", models: ["text-decide-clef-4bit"])
         ]
     )
 }

@@ -121,6 +121,7 @@ export default defineConfig({
           { text: 'Text runtime', link: '/runtime/text' },
           { text: 'GLiNER2.5 classification', link: '/runtime/gliner25-decide' },
           { text: 'Laya decisions', link: '/runtime/laya' },
+          { text: 'Clef decisions', link: '/runtime/clef' },
           { text: 'Speech runtime', link: '/runtime/speech' },
           { text: 'Vision runtime', link: '/runtime/vision' },
           { text: 'Geospatial runtime', link: '/runtime/geo' },
