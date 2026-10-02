@@ -1,9 +1,11 @@
 # Clef structured decisions (Cloudflare)
 
-`text-decide-clef-4bit` evaluates a complete state and schema using the native
+`text-decide-clef-4bit` and the smaller 9B `text-decide-clef-flash-4bit` evaluate a complete state and schema using the native
 Swift/MLX Qwen3.5 backbone and joint schema head. State can be text or JSON;
 local images and video frame arrays are optional. The managed checkpoint pins
 `mlx-community/clef-4bit` at `e0a23bd4406c15075b7473616429c46f3fd130a9`.
+Flash pins `mlx-community/clef-flash-4bit` at
+`6822f0f244ee9e19df76908ba3302f7fe40ceea6` and uses the same request format.
 
 ## Example to adapt
 
@@ -28,12 +30,15 @@ Save this as `clef-request.json`:
 mere.run model pull text-decide-clef-4bit
 mere.run text decide --model text-decide-clef-4bit --input clef-request.json --preflight --pretty
 mere.run text decide --model text-decide-clef-4bit --input clef-request.json --output decisions.json --pretty
+mere.run model pull text-decide-clef-flash-4bit
+mere.run text decide --model text-decide-clef-flash-4bit --input clef-request.json --pretty
 ```
 
 The result reports each field's choice, expected ordinal score, or probability
 of truth in the upstream SystemOne format. Probabilities round to four decimal
-places; no text tokens are generated. The checkpoint occupies about 16.3 GB
-before runtime memory. Pull it explicitly before inference.
+places; no text tokens are generated. Clef occupies about 16.3 GB and Flash
+about 6.2 GB before runtime memory. Pull the selected checkpoint explicitly
+before inference.
 
 ## Controls and variants
 
@@ -50,19 +55,29 @@ before runtime memory. Pull it explicitly before inference.
   `media_kwargs` overrides are rejected.
 
 Laya uses a different request format and remains the command's default.
-This Clef checkpoint is available through the CLI; it has no local API route.
+Both Clef checkpoints are available through the CLI; they have no local API route.
+Text inference also requires 16 GiB of available admission headroom. Meeting a
+checkpoint's physical-memory minimum alone does not guarantee admission.
 
 ## Sources and validation
 
 - [Clef checkpoint and model card](https://huggingface.co/mlx-community/clef-4bit/tree/e0a23bd4406c15075b7473616429c46f3fd130a9)
 - [Pinned reference loader](https://huggingface.co/mlx-community/clef-4bit/blob/e0a23bd4406c15075b7473616429c46f3fd130a9/clef_mlx.py)
+- [Clef Flash checkpoint](https://huggingface.co/mlx-community/clef-flash-4bit/tree/6822f0f244ee9e19df76908ba3302f7fe40ceea6)
 - [Cloudflare Clef](https://huggingface.co/Cloudflare/clef)
 
 The complete tiny FP32 head, schema encoding, and real-tokenizer preflight
 match the pinned reference fixtures. Independent image/video fixtures also
 verify Pillow bicubic pixels, FP32 normalization, odd-frame resize geometry,
-and BF16 learned-position interpolation. Four full-checkpoint text/image/video
+and BF16 learned-position interpolation. Four 27B full-checkpoint text/image/video
 probes completed with matching choices and probability differences within
 0.0031 of the checkpoint-configured reference. These short probes do not
 establish exact full-model parity, general accuracy, or capacity
 at the maximum context length. See docs/benchmarks/clef-native-qualification-2026-10-01.md.
+
+Flash completed the same four probes through the opt-in native GPU runtime test,
+with exact token IDs and spans, matching choices, and rounded probability
+differences within 0.0011. Normal Flash CLI inference was refused by available
+memory admission on the test machine. See
+docs/benchmarks/clef-flash-native-qualification-2026-10-02.md for the runtime
+results and the remaining CLI validation gap.

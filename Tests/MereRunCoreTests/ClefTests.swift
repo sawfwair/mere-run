@@ -163,18 +163,52 @@ final class ClefTests: MereRunCoreTestCase {
         XCTAssertEqual(size.height, 1088)
     }
 
+    func testFlashConfigurationUsesSharedRuntimeAndMediaSettings() throws {
+        let root = Bundle.module.resourceURL!.appending(path: "Fixtures/ClefFlash")
+        let config = try ClefResources(root: root).configuration()
+        XCTAssertEqual(config.backbone.textConfig.hiddenSize, 4096)
+        XCTAssertEqual(config.backbone.textConfig.numHiddenLayers, 32)
+        XCTAssertEqual(config.backbone.textConfig.linearNumValueHeads, 32)
+        XCTAssertEqual(config.backbone.visionConfig?.outHiddenSize, 4096)
+        XCTAssertEqual(config.head.hiddenSize, 4096)
+        XCTAssertEqual(config.head.width, 1024)
+        XCTAssertEqual(config.head.routingLayers, 2)
+        XCTAssertEqual(config.head.layers, 4)
+        XCTAssertEqual(config.backbone.quantization?.bits, 4)
+        XCTAssertEqual(config.backbone.quantization?.groupSize, 64)
+        XCTAssertEqual(try Data(contentsOf: root.appending(path: "processor_config.json")),
+                       try Data(contentsOf: fixture.appending(path: "processor_config.json")))
+        let plan = try byteTokenizer.sequence(request(), modelID: ClefCatalog.flashModelID).plan
+        XCTAssertEqual(plan.model, ClefCatalog.flashModelID)
+    }
+
     func testPinnedCatalogManifestAndDiscovery() throws {
-        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ClefCatalog.repository))
-        XCTAssertEqual(spec.id, ClefCatalog.modelID)
-        XCTAssertEqual(spec.validationKind, .clef)
-        XCTAssertEqual(spec.upstreamRevision, ClefCatalog.revision)
-        XCTAssertEqual(spec.defaultCLICommands, ["text decide"])
-        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
-        XCTAssertEqual(spec.apiAvailability, .cliOnly)
-        XCTAssertNil(spec.apiProfile)
-        XCTAssertFalse(try XCTUnwrap(spec.hubFallback).patterns.contains("clef_mlx.py"))
-        let manifest = MereRunModelManifest.template(for: .clef4Bit)
-        XCTAssertEqual(manifest.engine, .clef)
-        XCTAssertEqual(manifest.supports, [.textDecision])
+        let variants: [(ModelResolver.ModelID, String, String, String, Int64)] = [
+            (.clef4Bit, ClefCatalog.modelID, ClefCatalog.repository, ClefCatalog.revision, 16_310_666_373),
+            (.clefFlash4Bit, ClefCatalog.flashModelID, ClefCatalog.flashRepository, ClefCatalog.flashRevision, 6_213_894_567)
+        ]
+        for (modelID, id, repository, revision, bytes) in variants {
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: repository))
+            XCTAssertEqual(spec, ManagedModelCatalog.spec(for: id))
+            XCTAssertEqual(spec.id, id)
+            XCTAssertEqual(spec.validationKind, .clef)
+            XCTAssertEqual(spec.upstreamRevision, revision)
+            XCTAssertEqual(spec.defaultCLICommands, ["text decide"])
+            XCTAssertEqual(spec.estimatedDownloadBytes, bytes)
+            XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+            XCTAssertEqual(spec.apiAvailability, .cliOnly)
+            XCTAssertNil(spec.apiProfile)
+            let fallback = try XCTUnwrap(spec.hubFallback)
+            XCTAssertEqual(fallback.repoId, repository)
+            XCTAssertEqual(fallback.revision, revision)
+            XCTAssertFalse(fallback.patterns.contains("clef_mlx.py"))
+            let manifest = MereRunModelManifest.template(for: modelID)
+            XCTAssertEqual(manifest.id, id)
+            XCTAssertEqual(manifest.engine, .clef)
+            XCTAssertEqual(manifest.supports, [.textDecision])
+            XCTAssertEqual(manifest.upstreamRepoId, repository)
+            let descriptor = ManagedModelCapabilityCatalog.descriptor(for: spec)
+            XCTAssertEqual(descriptor.minimumUnifiedMemoryGB, modelID == .clefFlash4Bit ? 16 : 32)
+        }
     }
 }

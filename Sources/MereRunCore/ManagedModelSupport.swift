@@ -849,6 +849,8 @@ public enum ManagedModelCapabilityCatalog {
                        "Native mmBERT decisions for multilingual text.", minimum: 8, recommended: 16),
             descriptor(LayaCatalog.typedDecisionsID, "Laya typed decisions",
                        "Native English checkpoint fine-tuned on typed-decision workflows.", minimum: 8, recommended: 16),
+            descriptor(ClefCatalog.flashModelID, "Clef Flash structured decisions",
+                       "Native 9B Qwen3.5 joint schema decisions from text, JSON, images, or video frames.", minimum: 16, recommended: 32),
             descriptor(ClefCatalog.modelID, "Clef structured decisions",
                        "Native Qwen3.5 joint schema decisions from text, JSON, images, or video frames.", minimum: 32, recommended: 64),
             descriptor(

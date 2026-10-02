@@ -90,6 +90,14 @@ extension ManagedModelCatalog {
             validationKind: .clef, runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 16_310_666_373,
             defaultCLICommands: ["text decide"], apiAvailability: .cliOnly
+        ),
+        ManagedModelSpec(
+            id: ClefCatalog.flashModelID, category: .textDecide, installShape: .directoryRoot,
+            hubFallback: ClefCatalog.flashHubFallback,
+            upstreamRepoId: ClefCatalog.flashRepository, upstreamRevision: ClefCatalog.flashRevision,
+            validationKind: .clef, runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 6_213_894_567,
+            defaultCLICommands: ["text decide"], apiAvailability: .cliOnly
         )
     ]
 }
