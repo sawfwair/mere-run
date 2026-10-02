@@ -1502,6 +1502,7 @@ are bundled here.
 - source: [mlx-community/clef-4bit reference loader](https://huggingface.co/mlx-community/clef-4bit/blob/e0a23bd4406c15075b7473616429c46f3fd130a9/clef_mlx.py), publisher-declared Apache-2.0
 - base model: [Cloudflare/Clef](https://huggingface.co/Cloudflare/clef)
 - model artifacts: `mlx-community/clef-4bit`, revision `e0a23bd4406c15075b7473616429c46f3fd130a9`
+- Flash model artifacts: [mlx-community/clef-flash-4bit](https://huggingface.co/mlx-community/clef-flash-4bit/tree/6822f0f244ee9e19df76908ba3302f7fe40ceea6), based on [Cloudflare/clef-flash](https://huggingface.co/Cloudflare/clef-flash), publisher-declared Apache-2.0
 - local code: `Sources/MereRunQwenModel/ClefJointHead.swift`, `ClefJointLayers.swift`, and `Sources/MereRunCore/Clef`
 
 The native port follows the reference schema layout, packed attention,

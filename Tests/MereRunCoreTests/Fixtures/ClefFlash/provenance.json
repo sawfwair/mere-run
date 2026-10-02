@@ -1,0 +1,10 @@
+{
+  "repository": "mlx-community/clef-flash-4bit",
+  "revision": "6822f0f244ee9e19df76908ba3302f7fe40ceea6",
+  "file_sha256": {
+    "config.json": "c323f36eb35fb9349b2bde60b3e16ee3d86316e20a5166c91f4a0585286f0ec1",
+    "joint_head_config.json": "77efe959a38b5b17b241543e129e695f3c77465ece55a25985279bd8176279a0",
+    "processor_config.json": "d89ef49ce9cd37fbf510158e13c1ef063d9286411c1ec9049932dbe0487143b1"
+  },
+  "learned_weights": false
+}

@@ -19,7 +19,7 @@ mere.run guide --model text-decide-laya
 Use the model handbook for a complete request example, checkpoint selection,
 API behavior, token budgets, and calibration limits. Output is always JSON.
 
-For `text-decide-clef-4bit`, `state` may be text or structured JSON and `questions`
+For `text-decide-clef-4bit` or `text-decide-clef-flash-4bit`, `state` may be text or structured JSON and `questions`
 is an object keyed by question ID. Choice criteria are an object of option IDs
 to descriptions; score criteria are an ordered array. Clef also accepts local
 image paths and video frame-path arrays, and evaluates all fields jointly.
@@ -28,6 +28,8 @@ image paths and video frame-path arrays, and evaluates all fields jointly.
 mere.run model pull text-decide-clef-4bit
 mere.run text decide --model text-decide-clef-4bit --input clef-request.json --preflight --pretty
 mere.run guide --model text-decide-clef-4bit
+mere.run model pull text-decide-clef-flash-4bit
+mere.run text decide --model text-decide-clef-flash-4bit --input clef-request.json --pretty
 ```
 
 ## Sources

@@ -5,10 +5,16 @@ public enum ClefCatalog {
     public static let modelID = "text-decide-clef-4bit"
     public static let repository = "mlx-community/clef-4bit"
     public static let revision = "e0a23bd4406c15075b7473616429c46f3fd130a9"
+    public static let flashModelID = "text-decide-clef-flash-4bit"
+    public static let flashRepository = "mlx-community/clef-flash-4bit"
+    public static let flashRevision = "6822f0f244ee9e19df76908ba3302f7fe40ceea6"
+    public static let modelIDs = [modelID, flashModelID]
     public static let files = ["config.json", "tokenizer.json", "tokenizer_config.json", "processor_config.json",
                                "joint_head_config.json", "joint_head.safetensors", "model.safetensors.index.json",
                                "model-*.safetensors", "LICENSE", "README.md"]
     public static let hubFallback = HubFallbackConfig(repoId: repository, revision: revision, patterns: files)
+
+    public static let flashHubFallback = HubFallbackConfig(repoId: flashRepository, revision: flashRevision, patterns: files)
 
     public static func validate(root: URL, fileManager: FileManager = .default) -> [URL] {
         var missing = Q35Resources(rootURL: root).validate(fileManager: fileManager)

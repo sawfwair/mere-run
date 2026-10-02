@@ -3,19 +3,33 @@
 Clef evaluates a state plus a schema of typed questions and returns probabilities
 for their allowed answers. `text decide` runs the native Swift/MLX Qwen3.5
 backbone and joint schema head. It accepts text, structured JSON, local images,
-and video frame arrays. Select `text-decide-clef-4bit` explicitly; Laya remains
+and video frame arrays. Select `text-decide-clef-4bit` or
+`text-decide-clef-flash-4bit` explicitly; Laya remains
 the default for this command and uses its own request format.
 
-The managed checkpoint is
+The 27B managed checkpoint is
 [`mlx-community/clef-4bit`](https://huggingface.co/mlx-community/clef-4bit/tree/e0a23bd4406c15075b7473616429c46f3fd130a9),
 pinned at `e0a23bd4406c15075b7473616429c46f3fd130a9`. The backbone is affine
 4-bit/group-64; the vision tower and joint head retain BF16 weights. Weights
-occupy about 16.3 GB before runtime memory. The checkpoint is CLI-only.
+occupy about 16.3 GB before runtime memory.
+
+The smaller 9B `text-decide-clef-flash-4bit` checkpoint pins
+[`mlx-community/clef-flash-4bit`](https://huggingface.co/mlx-community/clef-flash-4bit/tree/6822f0f244ee9e19df76908ba3302f7fe40ceea6)
+at `6822f0f244ee9e19df76908ba3302f7fe40ceea6` and occupies about 6.2 GB.
+It uses the same native runtime, question format, and media preprocessing;
+backbone and head dimensions come from the checkpoint configuration.
+Both checkpoints are CLI-only. Model discovery recommends at least 16 GB of
+unified memory for Flash and 32 GB for Clef; actual demand depends on the request.
+The CLI also requires 16 GiB of available admission headroom for text inference,
+so a busy machine can refuse a run even when it meets the model's physical-memory minimum.
 
 ```sh
 mere.run model pull text-decide-clef-4bit
 mere.run text decide --model text-decide-clef-4bit --input request.json --preflight --pretty
 mere.run text decide --model text-decide-clef-4bit --input request.json --output decisions.json --pretty
+# Use the same request with the smaller Flash checkpoint:
+mere.run model pull text-decide-clef-flash-4bit
+mere.run text decide --model text-decide-clef-flash-4bit --input request.json --pretty
 ```
 
 The model can also be selected by its repository ID or a local checkpoint
@@ -87,12 +101,19 @@ the reference token IDs and spans. Set `MERERUN_CLEF_TOKENIZER` to its tokenizer
 directory to rerun the optional tokenizer parity test.
 Independent image/video fixtures match Pillow bicubic RGB pixels, exact FP32
 normalization, odd-frame resize geometry, and BF16 learned-position interpolation.
-The full pinned checkpoint has also completed four short text/image/video
+The full pinned 27B checkpoint has also completed four short text/image/video
 probes on Apple Silicon, with matching choices and probability differences
 within `0.0031` of the checkpoint-configured reference. See the
 [full-checkpoint report](../benchmarks/clef-native-qualification-2026-10-01.md)
 for results, memory measurements, and limits. These short probes do not establish
 exact full-model parity, general accuracy, or maximum-context capacity.
+
+Flash also completed these four probes in an opt-in native GPU runtime test,
+with exact token IDs and spans, matching choices, and rounded probability
+differences within `0.0011`. Normal Flash CLI inference was refused by available
+memory admission on the test machine. See the
+[Flash checkpoint report](../benchmarks/clef-flash-native-qualification-2026-10-02.md)
+for the runtime results, reproduction steps, and CLI validation gap.
 
 Implementation: `Sources/MereRunCore/Clef` and
 `Sources/MereRunQwenModel/ClefJointHead.swift`. Reference source:

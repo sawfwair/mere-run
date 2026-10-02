@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add the pinned 9B Clef Flash 4-bit checkpoint to `text decide`, reusing the
+  native Clef runtime, media preprocessing, preflight, and installed-model smoke.
+
 - Add native Clef 4-bit structured decisions to `text decide`, including a
   pinned managed checkpoint, joint schema head, JSON state, local images and
   video frame arrays, token-budget preflight, and reference parity fixtures.

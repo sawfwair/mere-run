@@ -4,7 +4,10 @@
 preparation, schema token spans, and SystemOne-style answer decoding. The
 `ClefJointHead` and its evidence/decoder layers live in `MereRunQwenModel`, next
 to the Qwen3.5 backbone and vision tower they consume. Inference uses Swift/MLX;
-Python is used only by the independent fixture exporter.
+Python is used only by the independent fixture exporter. Both the 27B
+`text-decide-clef-4bit` and 9B `text-decide-clef-flash-4bit` checkpoints use this
+operation; backbone and head dimensions come from their pinned configurations.
+Flash configuration provenance lives in `Fixtures/ClefFlash`.
 
 The request uses a questions object whose source order is retained by a typed
 JSON parser. Choice option IDs sort lexically; score levels retain array order;
@@ -41,3 +44,11 @@ reference. These probes do not establish general accuracy or exact full-model
 parity. See
 `docs/benchmarks/clef-native-qualification-2026-10-01.md` and its receipt for the
 bounded results and remaining numerical difference.
+
+Flash full-checkpoint parity is covered by the opt-in
+`ClefFlashCheckpointParityTests`. Generate independent inputs with
+`scripts/fixtures/export-clef-flash-parity.py`, then set
+`MERERUN_TEST_MLX_DEVICE=gpu`, `MERERUN_TEST_CLEF_FLASH_ROOT`, and
+`MERERUN_TEST_CLEF_PARITY_DIR`. This test calls the runtime directly and writes
+`native-runtime.json` in the parity directory; it does not exercise CLI admission.
+See `docs/benchmarks/clef-flash-native-qualification-2026-10-02.md` for results.
