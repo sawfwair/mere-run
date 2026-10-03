@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.61.2 - 2026-10-02
+
 - Materialize Nemotron 3 query and key heads before rotary position encoding,
   preventing CUDA out-of-bounds writes, unstable speaker labels, and later
   inference crashes from strided packed-projection views.
