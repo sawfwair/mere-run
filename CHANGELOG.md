@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Materialize Nemotron 3 query and key heads before rotary position encoding,
+  preventing CUDA out-of-bounds writes, unstable speaker labels, and later
+  inference crashes from strided packed-projection views.
+
 ## 0.61.1 - 2026-10-02
 
 - Match NeMo's FP32 execution for Nemotron 3 diarization, preserving returning-

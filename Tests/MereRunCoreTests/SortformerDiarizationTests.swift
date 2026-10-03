@@ -8,6 +8,28 @@ import XCTest
 @testable import MereRunCore
 
 final class SortformerDiarizationTests: XCTestCase {
+    func testNemotron3RotaryHeadsCompactStridedQKVViewsWithoutChangingValues() {
+        Device.withDefaultDevice(.cpu) {
+            let frames = 3
+            let packed = MLXArray((0..<(frames * 1_536)).map(Float.init)).reshaped(1, frames, 1_536)
+            let projections = MLX.split(packed, parts: 3, axis: -1)
+            for (index, projection) in projections.prefix(2).enumerated() {
+                let heads = Nemotron3Attention.heads(projection, batch: 1, frames: frames)
+                eval(heads)
+                XCTAssertEqual(heads.shape, [1, 8, frames, 64])
+                XCTAssertEqual(heads.asData(access: .noCopy).strides, [8 * frames * 64, frames * 64, 64, 1])
+                let expected = (0..<8).flatMap { head in
+                    (0..<frames).flatMap { frame in
+                        (0..<64).map { channel in
+                            Float(frame * 1_536 + index * 512 + head * 64 + channel)
+                        }
+                    }
+                }
+                XCTAssertEqual(heads.asArray(Float.self), expected)
+            }
+        }
+    }
+
     func testNemotron3CheckpointLoaderUsesReferenceExecutionPrecision() throws {
         let fixture = Bundle.module.resourceURL!.appending(path: "Fixtures/Nemotron3/checkpoint-precision.pt")
         let archive = try PyTorchStateDictArchive(url: fixture)
