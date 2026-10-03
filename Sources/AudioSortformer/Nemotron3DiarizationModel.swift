@@ -27,7 +27,7 @@ private final class Nemotron3FeatureStacking: Module {
     }
 }
 
-private final class Nemotron3Attention: Module {
+final class Nemotron3Attention: Module {
     @ModuleInfo(key: "w_qkv") var wQKV: Linear
     @ModuleInfo(key: "out_proj") var outProj: Linear
     private let rope = RoPE(dimensions: 64, traditional: false, base: 10_000)
@@ -41,12 +41,18 @@ private final class Nemotron3Attention: Module {
         let batch = value.dim(0)
         let frames = value.dim(1)
         let qkv = MLX.split(wQKV(value), parts: 3, axis: -1)
-        let query = rope(qkv[0].reshaped(batch, frames, 8, 64).transposed(0, 2, 1, 3), offset: 0)
-        let key = rope(qkv[1].reshaped(batch, frames, 8, 64).transposed(0, 2, 1, 3), offset: 0)
+        let query = rope(Self.heads(qkv[0], batch: batch, frames: frames), offset: 0)
+        let key = rope(Self.heads(qkv[1], batch: batch, frames: frames), offset: 0)
         let values = qkv[2].reshaped(batch, frames, 8, 64).transposed(0, 2, 1, 3)
         let scores = MLX.matmul(query * Float(0.125), key.transposed(0, 1, 3, 2))
         let attended = MLX.matmul(softmax(scores.asType(.float32), axis: -1).asType(values.dtype), values)
         return outProj(attended.transposed(0, 2, 1, 3).reshaped(batch, frames, 512))
+    }
+
+    static func heads(_ projection: MLXArray, batch: Int, frames: Int) -> MLXArray {
+        // CUDA RoPE can donate a strided QKV view and write past its logical allocation.
+        // Give each rotary input its own compact [batch, head, frame, channel] layout.
+        projection.reshaped(batch, frames, 8, 64).transposed(0, 2, 1, 3).contiguous()
     }
 }
 
