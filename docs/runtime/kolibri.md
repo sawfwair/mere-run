@@ -11,6 +11,27 @@ mixed quantization policies. Mixed 2-bit keeps routed experts at 2-bit with
 norms, routers, and output-head weights at their original precision. Routing
 and the output head compute in FP32.
 
+## Download a measured artifact
+
+The selected [mixed 2-bit artifact](https://huggingface.co/Sawfwair/Kolibri-1-MLX-Mixed-2bit)
+and [Q8 control](https://huggingface.co/Sawfwair/Kolibri-1-MLX-8bit) are public.
+Both require a development build containing the native Kolibri runtime.
+Use the immutable release revisions to reproduce the measured weights:
+
+```bash
+hf download Sawfwair/Kolibri-1-MLX-Mixed-2bit \
+  --revision 73be205486dd71273a30ab9ce3441e548f0a33f4 \
+  --local-dir ./Kolibri-1-MLX-Mixed-2bit
+
+hf download Sawfwair/Kolibri-1-MLX-8bit \
+  --revision 792bfb73b9ab915724ccfd58916587330a642c16 \
+  --local-dir ./Kolibri-1-MLX-8bit
+```
+
+The [publication receipt](../benchmarks/receipts/kolibri-publication-2026-10-04.json)
+records all 64 bundle file hashes and sizes for each release. Managed download
+registration remains separate; pass the explicit checkpoint directory today.
+
 ## Run a converted checkpoint
 
 ```bash
@@ -26,8 +47,6 @@ swift run mere.run api serve \
 
 Use the converted checkpoint directory itself. The upstream FP8 and BF16
 repositories use a different tensor layout and must be converted first.
-Managed downloads will require a published, pinned artifact; this runtime
-addition alone does not register an unqualified model download.
 
 The runtime uses the checkpoint's chat template and tokenizer, supports text,
 reasoning, tool messages, seeded sampling, stop sequences, and opt-in token

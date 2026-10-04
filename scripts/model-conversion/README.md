@@ -607,3 +607,26 @@ logit integrity, target identity, and independent language gates.
 
 See [native Kolibri workflows](../../docs/runtime/kolibri.md) for fixed-token
 logit comparisons and the separate calibration/heldout protocol.
+
+`publish_kolibri_mlx.py` stages the selected baseline Q2 or measured Q8 release
+with its model card, pinned upstream license/card, modifications, diagnostic
+receipt, and checksums. It uploads directly from the remote artifact folder to
+a private Sawfwair repository using the resumable Hub SDK. Every published file
+is checked against its expected SHA-256 and size before the repository becomes
+public; an anonymous verification then checks the immutable release revision.
+Only the explicit bundle closure is uploaded, excluding SDK caches and credentials.
+
+```bash
+python scripts/model-conversion/publish_kolibri_mlx.py \
+  --profile mixed2 --artifact /workspace/kolibri/artifacts/Kolibri-1-MLX-mixed2 \
+  --evidence docs/benchmarks/receipts/kolibri-native-2026-10-04.json \
+  --upstream-license /workspace/kolibri/source/LICENSE \
+  --upstream-card /workspace/kolibri/source/README.md \
+  --source-commit 8bfa3f5d6d9f23097cd1446935acc4589ce6fa72 \
+  --receipt /workspace/kolibri/mixed2-publication.json
+```
+
+Use a write credential through standard Hub authentication or `--token-file`.
+`--prepare-only` stages the bundle without uploading. `--verify-only` checks an
+existing public release. Publication preserves the conversion manifest's
+`quality_qualified: false` and does not certify broad accuracy or Apple memory fit.

@@ -13,6 +13,14 @@ sequences, scoring receipts, binary and source hashes, fitting statistics, and
 per-case comparisons. These measurements cover a small diagnostic suite;
 they do not establish general model accuracy or Apple Silicon memory fit.
 
+The selected [mixed 2-bit weights](https://huggingface.co/Sawfwair/Kolibri-1-MLX-Mixed-2bit)
+and [Q8 control](https://huggingface.co/Sawfwair/Kolibri-1-MLX-8bit) are now public.
+Their [publication receipt](./receipts/kolibri-publication-2026-10-04.json)
+records immutable release revisions and 64 verified bundle files per variant.
+Every remote SHA-256 and size matched before publication; anonymous access to
+those release revisions was also verified. Publication does not broaden the
+diagnostic scope below or establish full-checkpoint Apple memory fit.
+
 ## Weight policies and results
 
 Mixed 2-bit uses 2-bit affine routed expert weights with group size 128.
