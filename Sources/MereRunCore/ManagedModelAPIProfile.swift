@@ -357,6 +357,10 @@ public extension ManagedModelAPIProfile {
             return .gemma4()
         case .textChatDiffusionGemma:
             return .diffusionGemma()
+        case .textChatKolibri:
+            return .chat(servingEngine: .textChatKolibri, contextWindow: 262_144, maximumOutputTokens: 16_384,
+                         thinkingLevels: [.off, .high], toolCall: true, supportsStopSequences: true,
+                         supportsSeed: true, supportsPenalties: true, supportsLogprobs: true)
         case .textChatLaguna:
             return .laguna()
         case .textChatQ36, .textChatQ35:

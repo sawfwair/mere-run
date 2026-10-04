@@ -1194,7 +1194,7 @@ actor RuntimeModelPool {
             prefixCache = lfm2PrefixKVCacheEnabled
             batching = lfm2ContinuousBatchingEnabled
         case .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatDeepseekV4Flash,
-             .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronOmni:
+             .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronOmni, .textChatKolibri:
             prefixCache = nil
             batching = nil
         }
@@ -1433,6 +1433,7 @@ actor RuntimeModelPool {
              .textChatGemma4,
              .textChatDiffusionGemma,
              .textChatLaguna,
+             .textChatKolibri,
              .textChatQ36,
              .textChatQ35,
              .textChatLFM2,

@@ -77,7 +77,7 @@ final class TextChatCommandParsingTests: XCTestCase {
     func testTextChatGateRejectsDiffusionOptionsForOtherModels() throws {
         let report = try gate("--model", Gemma4Resources.nanoModelId, "--seed", "123", "--show-unmasking")
         XCTAssertEqual(report.violations, [
-            "--seed is not supported by Gemma 4. It applies to DiffusionGemma, Qwen3.6 text, Qwen3.6 vision and Qwen3.8.",
+            "--seed is not supported by Gemma 4. It applies to DiffusionGemma, Kolibri 1, Qwen3.6 text, Qwen3.6 vision and Qwen3.8.",
             "--show-unmasking is not supported by Gemma 4. It applies to DiffusionGemma."
         ])
     }

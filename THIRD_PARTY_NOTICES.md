@@ -1567,3 +1567,16 @@ LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
 OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
+
+### Aleph Alpha Kolibri-1 native runtime
+
+- The Kolibri attention, sigmoid MoE routing, and decoder arithmetic are derived
+  from [`Aleph-Alpha/aleph-alpha-inference`](https://github.com/Aleph-Alpha/aleph-alpha-inference)
+  at commit `049a6a7bd2405b27d6d280d256bd3d585191c7ae`, licensed under
+  [Apache 2.0](https://github.com/Aleph-Alpha/aleph-alpha-inference/blob/049a6a7bd2405b27d6d280d256bd3d585191c7ae/LICENSE).
+- Conversion tooling pins `Aleph-Alpha/Kolibri-1-BF16` revision
+  `7a8f290e7858825c3cf5e4c447ba68345de9f1d3`. Large pretrained weights are
+  downloaded separately and are not part of this repository.
+- `Tests/KolibriRuntimeTests/Fixtures` contains independently generated,
+  deterministic tiny synthetic weights and PyTorch reference outputs. It
+  contains no pretrained Kolibri weights.

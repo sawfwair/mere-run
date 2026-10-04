@@ -27,6 +27,11 @@ extension CommandCatalog {
             defaultModel: "text-chat-q36-nano"
         ),
         CommandTemplate(
+            id: .modelBenchmarkKolibriLogprobs, category: .models,
+            title: "Kolibri logprobs", subtitle: "Compare quantization with fixed token sequences",
+            systemImage: "chart.bar.xaxis"
+        ),
+        CommandTemplate(
             id: .modelBenchmarkLagunaDFlash,
             category: .models,
             title: "Laguna benchmark",
@@ -251,6 +256,15 @@ extension CommandArguments {
             args.option(F.mtpBlockSize, draft.benchmarkMTPBlockSize)
         }
         if draft.json { args.flag(F.json) }
+        return args.arguments
+    }
+
+    package static func modelBenchmarkKolibriLogprobs(_ draft: CommandDraft) -> [String] {
+        typealias F = CommandFlags.ModelBenchmarkKolibriLogprobs
+        var args = ArgumentBuilder(F.self)
+        args.option(F.modelRoot, draft.modelRoot)
+        args.option(F.suite, draft.inputPath)
+        args.option(F.output, draft.outputPath)
         return args.arguments
     }
 
@@ -489,6 +503,10 @@ extension CommandCatalog {
     /// every template shares; nil for a draft that can, and for every other template.
     package static func modelsValidationMessage(for id: CommandTemplateID, draft: CommandDraft) -> String? {
         switch id {
+        case .modelBenchmarkKolibriLogprobs:
+            if draft.modelRoot.isBlank { return "Converted Kolibri checkpoint directory is required." }
+            if draft.inputPath.isBlank { return "Fixed-token suite JSON is required." }
+            if draft.outputPath.isBlank { return "A fresh results directory is required." }
         case .modelBenchmarkLagunaDFlash:
             if draft.modelRoot.isBlank {
                 return "Laguna model path is required."

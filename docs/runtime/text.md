@@ -39,6 +39,8 @@ gate.
 
 ### Chat
 
+[Native Kolibri-1](./kolibri.md) accepts converted BF16, 8-bit, and mixed 2-bit checkpoint directories, with paired-logprob qualification tooling.
+
 - `text-chat-gemma4`
 - `text-chat-gemma4-12b` (managed dense Google Gemma 4 12B-it snapshot)
 - `text-chat-gemma4-12b-4bit` (managed MLX 4-bit Gemma 4 12B-it snapshot)

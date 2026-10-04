@@ -32,6 +32,8 @@ extension NativeChatRuntime {
             )
         case .textChatDiffusionGemma:
             return .textChatDiffusionGemma(DiffusionGemmaGenerator(modelID: modelID), modelPath: modelPath)
+        case .textChatKolibri:
+            return .textChatKolibri(KolibriGenerator(), modelPath: modelPath ?? KolibriResources.localModelRoot(for: modelID))
         case .textChatLaguna:
             return .textChatLaguna(
                 LagunaGenerator(
@@ -89,6 +91,8 @@ extension NativeChatRuntime {
             engine = .textChatDiffusionGemma
         case .gemma4, .gemma4Unified:
             engine = .textChatGemma4
+        case .kolibri:
+            engine = .textChatKolibri
         case .laguna:
             guard modelPath != nil else {
                 let id = LagunaResources.managedModelID(for: modelID) ?? modelID

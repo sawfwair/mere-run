@@ -17,7 +17,7 @@ extension MereRunCapabilityCatalog {
             ).scoped(Chat.only(.nemotronOmni, ignoredBy: Chat.allCases.filter { ![.nemotronOmni, .diffusionGemma].contains($0) })),
             .init(
                 flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .expert
-            ).scoped(Chat.only(.diffusionGemma, .q35, .q35VL, .q38)),
+            ).scoped(Chat.only(.kolibri, .diffusionGemma, .q35, .q35VL, .q38)),
             .init(
                 flag: "--show-unmasking", label: "Show canvas drafts", kind: .boolean, group: Group.run, tier: .expert
             ).scoped(Chat.only(.diffusionGemma)),
@@ -103,7 +103,7 @@ extension MereRunCapabilityCatalog {
                 choices: TextResponseFormat.allCases.map(\.rawValue),
                 defaultValue: TextResponseFormat.text.rawValue, group: Group.output, tier: .standard
             ).scoped(
-                Chat.rule(.diffusionGemma, values: ["text"]), .rule(.laguna, values: ["text"]),
+                Chat.rule(.kolibri, values: ["text"]), Chat.rule(.diffusionGemma, values: ["text"]), .rule(.laguna, values: ["text"]),
                 .rule(.inkling, values: ["text"]), .rule(.museGlimmer, values: ["text"]),
                 .rule(.nemotronH, values: ["text"]), .rule(.nemotronOmni, values: ["text"]),
                 .rule(.lfm2, values: ["text"]), .rule(.lfm2A1B, values: ["text"]), .rule(.lfm2VL, values: ["text"]),
@@ -187,7 +187,7 @@ extension MereRunCapabilityCatalog {
 
     /// Families whose runtime keeps its own KV cache whatever the KV options say.
     private static let kvCacheIgnoring: [Chat] = [
-        .diffusionGemma, .laguna, .museGlimmer, .nemotronH, .nemotronOmni, .gguf, .psi
+        .kolibri, .diffusionGemma, .laguna, .museGlimmer, .nemotronH, .nemotronOmni, .gguf, .psi
     ]
 
     public static let textCode = MereRunCommandCapability(

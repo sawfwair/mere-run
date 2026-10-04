@@ -581,3 +581,29 @@ interprets the upstream Lightning/Pickle archive. The reconstruction weights
 and pinned source are Apache-2.0. NVIDIA's separately licensed FlexiCubes and
 renderer implementation are not ported; mere.run uses native marching
 tetrahedra and makes no upstream topology-parity claim.
+
+## Kolibri-1 BF16, Q8, and mixed Q2
+
+`convert_kolibri_mlx.py` verifies the pinned original BF16 checkpoint and writes
+51 native shards per profile without loading the entire model. Expert banks
+are stacked in numeric order. The default candidates are `reference`, `q8`,
+`mixed2`, `mixed2-refit`, and `mixed2-down3`; `--profiles` limits output.
+`--resume` reuses complete shards after verifying their keys, shapes, and
+dtypes, and recalculates checksums. Use the existing output only from this
+pinned converter. Serialization uses the container disk before streaming
+completed shards to the target filesystem. Budget disk for the source and all
+selected profiles; this is remote tooling.
+
+`refit_kolibri_mixed2.py` uses input second moments exported only from native
+reference calibration cases. It fits BF16 affine levels, accepts groups only
+when weighted reconstruction error improves, and leaves the baseline layout
+and non-Q2 tensors intact. It verifies reference, baseline, and calibration
+provenance. It does not mark itself quality-qualified.
+
+On the MLX conversion worker, `python scripts/model-conversion/test_kolibri_refit.py`
+checks signed affine levels, constant groups, and groupwise reconstruction-error
+acceptance. `python scripts/reference-parity/test_kolibri_logprobs.py` checks
+logit integrity, target identity, and independent language gates.
+
+See [native Kolibri workflows](../../docs/runtime/kolibri.md) for fixed-token
+logit comparisons and the separate calibration/heldout protocol.

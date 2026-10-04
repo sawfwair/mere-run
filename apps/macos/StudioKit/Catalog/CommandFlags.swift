@@ -2165,6 +2165,24 @@ extension CommandFlags {
     }
 }
 
+// MARK: - model benchmark kolibri-logprobs
+
+extension CommandFlags {
+    /// `mere.run model benchmark kolibri-logprobs` — Kolibri fixed-sequence logprobs
+    package enum ModelBenchmarkKolibriLogprobs: CommandFlagNamespace {
+        package static let command = ["model", "benchmark", "kolibri-logprobs"]
+        package static let defaultValues = [
+            "--chunk-size": "32"
+        ]
+
+        package static let modelRoot = "--model-root"
+        package static let suite = "--suite"
+        package static let output = "--output"
+        package static let calibrationOutput = "--calibration-output"
+        package static let chunkSize = "--chunk-size"
+    }
+}
+
 // MARK: - model benchmark laguna-dflash
 
 extension CommandFlags {

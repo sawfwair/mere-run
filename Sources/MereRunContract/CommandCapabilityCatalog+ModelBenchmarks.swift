@@ -1,6 +1,18 @@
 import Foundation
 
 extension MereRunCapabilityCatalog {
+    public static let modelBenchmarkKolibriLogprobs = MereRunCommandCapability(
+        id: "model.benchmark.kolibri-logprobs", command: ["model", "benchmark", "kolibri-logprobs"],
+        title: "Kolibri fixed-sequence logprobs", summary: "Export native raw logits for quantization qualification.",
+        options: [
+            .init(flag: "--model-root", label: "Model root", kind: .directory, required: true),
+            .init(flag: "--suite", label: "Fixed sequence suite", kind: .file, required: true),
+            .init(flag: "--output", label: "Receipt directory", kind: .directory, required: true),
+            .init(flag: "--calibration-output", label: "Calibration output", kind: .file),
+            .init(flag: "--chunk-size", label: "Chunk size", kind: .integer, defaultValue: "32")
+        ], output: .init(kind: .text)
+    )
+
     public static let modelBenchmarkQ36MTP = MereRunCommandCapability(
         id: "model.benchmark.q36-mtp",
         command: ["model", "benchmark", "q36-mtp"],

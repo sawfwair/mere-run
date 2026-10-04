@@ -193,6 +193,7 @@ Public tree:
     - `mere.run model benchmark gemma4-mtp` — Compare Gemma4 serial decode against verified MTP speculative decode.
     - `mere.run model benchmark q36-mtp` — Compare Qwen-family serial decode against adaptive and forced MTP speculative decode.
     - `mere.run model benchmark q38-verification` — Measure the Qwen-family target-only verification frontier.
+    - `mere.run model benchmark kolibri-logprobs` — Score fixed token sequences with native Kolibri and export raw logits.
     - `mere.run model benchmark laguna-dflash` — Measure Laguna target-only and DFlash decode in one resident process.
     - `mere.run model benchmark parakeet-coreml` — Benchmark the prepared Parakeet Core ML pipeline in one resident process.
     - `mere.run model benchmark api-workload` — Replay a chat workload against a running API server and measure runtime cache counters.

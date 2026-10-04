@@ -68,6 +68,7 @@ enum StudioBenchmarkSuite: String, CaseIterable, Identifiable {
     case parakeetCoreML
     case q36MTP
     case lagunaDFlash
+    case kolibriLogprobs
     case apiWorkload
     case fusedFixture
 
@@ -85,6 +86,7 @@ enum StudioBenchmarkSuite: String, CaseIterable, Identifiable {
         case .gemma4MTP: "Gemma4 MTP"
         case .parakeetCoreML: "Parakeet Core ML"
         case .q36MTP: "Qwen3.6 MTP"
+        case .kolibriLogprobs: "Kolibri logprobs"
         case .lagunaDFlash: "Laguna DFlash"
         case .apiWorkload: "API workload"
         case .fusedFixture: "Fixture hashes"
@@ -113,6 +115,8 @@ enum StudioBenchmarkSuite: String, CaseIterable, Identifiable {
             return "Resident Parakeet Core ML speech timings with transcript consistency."
         case .q36MTP:
             return "Qwen-family serial decode against adaptive and forced MTP speculative decode."
+        case .kolibriLogprobs:
+            return "Scores identical token sequences for paired quantization comparisons."
         case .lagunaDFlash:
             return "Laguna target-only, fixed DFlash, and adaptive routing in one resident process."
         case .apiWorkload:
@@ -134,6 +138,7 @@ enum StudioBenchmarkSuite: String, CaseIterable, Identifiable {
         case .gemma4MTP: .modelBenchmarkGemma4MTP
         case .parakeetCoreML: .modelBenchmarkParakeetCoreML
         case .q36MTP: .modelBenchmark
+        case .kolibriLogprobs: .modelBenchmarkKolibriLogprobs
         case .lagunaDFlash: .modelBenchmarkLagunaDFlash
         case .apiWorkload: .modelBenchmarkAPIWorkload
         case .fusedFixture: .modelBenchmarkFusedFixture
@@ -500,6 +505,14 @@ struct StudioModelHealthView: View {
                 Toggle("Verify existing hashes", isOn: $benchmarkDraft.benchmarkFixtureCheck)
                     .help("Exit unsuccessfully when a stored fixture hash does not match")
             }
+            if benchmark == .kolibriLogprobs {
+                ContractFormPathRow(label: "Converted checkpoint", path: $benchmarkDraft.modelRoot,
+                                    isDirectory: true, placeholder: "Native Kolibri checkpoint directory")
+                ContractFormPathRow(label: "Fixed-token suite", path: $benchmarkDraft.inputPath,
+                                    placeholder: "Suite JSON file")
+                ContractFormPathRow(label: "Fresh results directory", path: $benchmarkDraft.outputPath,
+                                    isDirectory: true, placeholder: "New output directory")
+            }
             if benchmark == .parakeetCoreML {
                 ContractFormPathRow(
                     label: "Audio file",
@@ -529,6 +542,8 @@ struct StudioModelHealthView: View {
                 .disabled(
                     benchmarkItem?.status == .running
                         || (benchmark == .fusedFixture && benchmarkDraft.inputPath.isBlank)
+                        || (benchmark == .kolibriLogprobs
+                            && (benchmarkDraft.inputPath.isBlank || benchmarkDraft.modelRoot.isBlank || benchmarkDraft.outputPath.isBlank))
                         || (benchmark == .parakeetCoreML
                             && (benchmarkDraft.inputPath.isBlank || benchmarkDraft.modelRoot.isBlank))
                 )
@@ -565,6 +580,11 @@ struct StudioModelHealthView: View {
         if benchmark == .fusedFixture {
             draft.inputPath = benchmarkDraft.inputPath.trimmingCharacters(in: .whitespacesAndNewlines)
             draft.benchmarkFixtureCheck = benchmarkDraft.benchmarkFixtureCheck
+        }
+        if benchmark == .kolibriLogprobs {
+            draft.inputPath = benchmarkDraft.inputPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            draft.modelRoot = benchmarkDraft.modelRoot.trimmingCharacters(in: .whitespacesAndNewlines)
+            draft.outputPath = benchmarkDraft.outputPath.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         if benchmark == .parakeetCoreML {
             draft.inputPath = benchmarkDraft.inputPath.trimmingCharacters(in: .whitespacesAndNewlines)

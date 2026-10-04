@@ -324,6 +324,8 @@ struct ModelBenchmarkVLM: AsyncParsableCommand {
             throw ValidationError("External VLM datasets require an API-servable managed model; '\(modelID)' is not one.")
         }
         switch engine.canonical {
+        case .textChatKolibri:
+            throw ValidationError("Kolibri is a text model; use model benchmark kolibri-logprobs.")
         case .textChatGemma4:
             return .textChatGemma4
         case .textChatDiffusionGemma:

@@ -161,7 +161,7 @@ package enum StudioDomain: String, CaseIterable, Codable, Identifiable {
         case .adapterList, .adapterPull, .modelList, .modelCapabilities, .modelPull, .modelInfo, .modelRemove, .modelRepairManifests,
              .modelOptimize, .modelStorage, .modelGarbageCollect, .modelRuntimeGet, .modelRuntimeSet,
              .modelLocationList, .modelLocationAdd, .modelLocationRemove, .modelLocationBind,
-             .modelLocationUnbind, .qualityGate, .modelBenchmark, .modelBenchmarkLagunaDFlash,
+             .modelLocationUnbind, .qualityGate, .modelBenchmark, .modelBenchmarkLagunaDFlash, .modelBenchmarkKolibriLogprobs,
              .modelBenchmarkChat, .modelBenchmarkCode, .modelBenchmarkFused, .modelBenchmarkFusedFixture,
              .modelBenchmarkVLM, .modelBenchmarkToolCalls, .modelBenchmarkToolContinuations,
              .modelBenchmarkGemma4KV, .modelBenchmarkGemma4MTP, .modelBenchmarkParakeetCoreML,

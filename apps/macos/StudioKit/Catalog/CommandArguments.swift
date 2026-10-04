@@ -108,6 +108,7 @@ package enum CommandArguments {
         case .sfxClapScore: return sfxClapScore(draft)
         case .sfxConditionText: return sfxConditionText(draft)
         case .modelBenchmark: return modelBenchmark(draft)
+        case .modelBenchmarkKolibriLogprobs: return modelBenchmarkKolibriLogprobs(draft)
         case .modelBenchmarkLagunaDFlash: return modelBenchmarkLagunaDFlash(draft)
         case .pluginList: return pluginList(draft)
         case .pluginInstall: return pluginInstall(draft)
