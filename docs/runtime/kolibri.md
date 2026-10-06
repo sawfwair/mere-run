@@ -64,6 +64,12 @@ The remote conversion tools pin `Aleph-Alpha/Kolibri-1-BF16` at
 banks in numeric order, and record every output shard's checksum. Keep the
 156 GB source and BF16 reference on a sufficiently large remote worker.
 
+On October 6, 2026, Hugging Face returns HTTP 404 (`Invalid rev id`) for that
+recorded upstream revision. The public converted release revisions above still
+resolve. Reproducing conversion requires a preserved original source snapshot
+with the recorded checksums; a replacement upstream revision needs separate
+validation.
+
 ```bash
 python scripts/model-conversion/convert_kolibri_mlx.py \
   --source /workspace/kolibri/source --output /workspace/kolibri/artifacts \
