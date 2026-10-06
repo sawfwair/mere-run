@@ -137,6 +137,7 @@ an effective overlay; they are not a second capability catalog.
 | `speech-asr` | `speech-asr-parakeet` |
 | `speech-diarization` | `speech-diarization-sortformer` |
 | `speech-diarization` | `speech-diarization-nemotron3` |
+| `text-embed` | `text-embed-embeddinggemma2` |
 | `text-code` | `text-code-qwen3` |
 | `text-embed` | `text-embed-qwen3-0.6b` |
 | `vision-embed` | `vision-embed-qwen3-vl-2b` |

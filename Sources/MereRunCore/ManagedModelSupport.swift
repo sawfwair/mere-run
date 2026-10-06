@@ -834,6 +834,11 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                EmbeddingGemma2Catalog.modelID, "EmbeddingGemma 2 text and code embeddings",
+                "Native bidirectional Gemma encoder with task prefixes and normalized 128/256/512/768-dimensional vectors.",
+                minimum: 8, recommended: 16
+            ),
+            descriptor(
                 Qwen3VLEmbeddingCatalog.modelID,
                 "Multimodal embeddings",
                 "Creates shared Qwen3-VL text and image vectors for local retrieval and ranking.",

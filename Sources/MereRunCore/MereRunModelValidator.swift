@@ -492,8 +492,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=tts expects qwen3-tts or breeze-tts.")
             case .asr where engine != .qwen3ASR && engine != .parakeetASR && engine != .sortformer:
                 warnings.append("Manifest engine mismatch: family=asr expects qwen3-asr, parakeet-asr, or sortformer.")
-            case .embed where engine != .qwen3Embedding:
-                warnings.append("Manifest engine mismatch: family=embed expects qwen3-embedding.")
+            case .embed where engine != .qwen3Embedding && engine != .embeddingGemma2:
+                warnings.append("Manifest engine mismatch: family=embed expects qwen3-embedding or embeddinggemma2.")
             case .privacy where engine != .openAIPrivacyFilter:
                 warnings.append("Manifest engine mismatch: family=privacy expects openai-privacy-filter.")
             case .code where engine != .qwen3Coder && engine != .northMiniCode && engine != .qwen35HybridMoE:

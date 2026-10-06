@@ -1,5 +1,24 @@
 import Foundation
 
+public enum MediaVideoSamplingStrategy: Sendable {
+    case fullTimeline
+    /// Sample at the requested rate, then uniformly subsample that sequence if capped.
+    case frameRate
+}
+
+enum MediaVideoSamplingIndices {
+    static func frameRate(sourceCount: Int, sourceFPS: Double, duration: Double,
+                          targetFPS: Double, maximumFrames: Int) -> [Int] {
+        let sampledCount = max(1, Int(duration * targetFPS))
+        let count = min(sampledCount, maximumFrames)
+        return (0..<count).map { index in
+            let sample = sampledCount <= maximumFrames ? index
+                : Int(Double(index) * Double(sampledCount - 1) / Double(max(count - 1, 1)))
+            return min(sourceCount - 1, Int(Double(sample) * sourceFPS / targetFPS))
+        }
+    }
+}
+
 struct ResolvedMediaVideoFrameRate: Sendable, Equatable {
     let framesPerSecond: Double
     let frameDurationValue: Int64
@@ -251,7 +270,8 @@ public enum MediaVideoIO {
         from videoURL: URL,
         into outputDirectoryURL: URL,
         framesPerSecond: Double,
-        maximumFrames: Int
+        maximumFrames: Int,
+        strategy: MediaVideoSamplingStrategy = .fullTimeline
     ) throws -> VideoFrameSequence {
         guard framesPerSecond.isFinite,
               framesPerSecond > 0,
@@ -265,14 +285,16 @@ public enum MediaVideoIO {
             from: videoURL,
             into: outputDirectoryURL,
             framesPerSecond: framesPerSecond,
-            maximumFrames: maximumFrames
+            maximumFrames: maximumFrames,
+            strategy: strategy
         )
         #else
         return try FFmpegMediaIO.sampleFrames(
             from: videoURL,
             into: outputDirectoryURL,
             framesPerSecond: framesPerSecond,
-            maximumFrames: maximumFrames
+            maximumFrames: maximumFrames,
+            strategy: strategy
         )
         #endif
     }

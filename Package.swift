@@ -697,6 +697,7 @@ targets.append(
       "Flux1/README.md",
       "Flux2Klein/README.md",
       "Gemma4/README.md",
+      "Embeddings/README.md",
       "GLiNER/README.md",
       "Geometry/README.md",
       "HiDreamO1/README.md",

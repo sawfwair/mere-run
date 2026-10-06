@@ -97,9 +97,19 @@ extension CommandFlags {
     /// `mere.run text embed` — Embeddings
     package enum TextEmbed: CommandFlagNamespace {
         package static let command = ["text", "embed"]
+        package static let defaultValues = [
+            "--task": "raw"
+        ]
 
         package static let model = "--model"
         package static let maxTokens = "--max-tokens"
+        package static let image = "--image"
+        package static let audio = "--audio"
+        package static let video = "--video"
+        package static let inputJSON = "--input-json"
+        package static let task = "--task"
+        package static let title = "--title"
+        package static let dimensions = "--dimensions"
         package static let output = "--output"
         package static let pretty = "--pretty"
     }

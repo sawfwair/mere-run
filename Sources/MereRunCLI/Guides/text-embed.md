@@ -1,5 +1,12 @@
 # Text Embed
 
+For native EmbeddingGemma 2 text, code, image, audio, and video vectors, select
+`--model text-embed-embeddinggemma2`. Use `--task query` for retrieval queries,
+`--task document` for corpus text, or `--task code-retrieval` for code queries.
+`--dimensions` accepts 128, 256, 512, or 768 and normalizes after truncation.
+Read `mere.run guide --model text-embed-embeddinggemma2` for full controls and
+ordered mixed-input examples and media limits.
+
 ## Purpose
 
 Generate JSON embeddings for semantic search, clustering, retrieval, or similarity experiments.
@@ -17,7 +24,9 @@ mere.run text embed --help
 
 ## Parameters
 
-- positional text arguments: one or more strings to embed.
+- positional text arguments: independent strings to embed.
+- `--image`, `--audio`, `--video`: independent local media inputs for EmbeddingGemma 2.
+- `--input-json`: ordered mixed records; exclusive with direct inputs. Relative paths resolve beside the JSON file.
 - `--model`, `-m`: managed id or local model path.
 - `--max-tokens`: clamp input length.
 - `--output`, `-o`: JSON output path.

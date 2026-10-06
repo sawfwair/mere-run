@@ -698,14 +698,18 @@ enum FFmpegMediaIO {
         from videoURL: URL,
         into directoryURL: URL,
         framesPerSecond: Double,
-        maximumFrames: Int
+        maximumFrames: Int,
+        strategy: MediaVideoSamplingStrategy
     ) throws -> VideoFrameSequence {
         let sourceFPS = try videoFPS(videoURL)
         let duration = try videoDurationSeconds(videoURL)
         let sourceCount = max(1, Int((duration * sourceFPS).rounded()))
         let requestedCount = max(1, min(maximumFrames, Int(duration * framesPerSecond)))
         let indices: [Int]
-        if requestedCount >= sourceCount {
+        if strategy == .frameRate {
+            indices = MediaVideoSamplingIndices.frameRate(sourceCount: sourceCount, sourceFPS: sourceFPS,
+                duration: duration, targetFPS: framesPerSecond, maximumFrames: maximumFrames)
+        } else if requestedCount >= sourceCount {
             indices = Array(0..<sourceCount)
         } else if requestedCount == 1 {
             indices = [0]

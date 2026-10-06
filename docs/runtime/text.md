@@ -12,7 +12,7 @@ redaction.
 | --- | --- |
 | `mere.run text chat` | Run local chat with text chat models. |
 | `mere.run text code` | Run local code generation with GGUF models via llama.cpp. |
-| `mere.run text embed` | Generate text embeddings using native Qwen3-Embedding-0.6B. |
+| `mere.run text embed` | Generate native Qwen3 or [EmbeddingGemma 2](./embeddinggemma2.md) text, code, image, audio, and video embeddings. |
 | `mere.run text decide` | Evaluate ordered choice, score, and boolean questions with [native Laya](./laya.md). |
 | `mere.run text classify` | Classify text using caller supplied labels with [native GLiNER2.5 Decide](./gliner25-decide.md). |
 | `mere.run text extract` | Extract entities, relations, and structured records with [native GLiNER2.5 Decide](./gliner25-decide.md). |
@@ -28,7 +28,9 @@ context and sampling controls, key-value (KV) quantization, a catalog adapter ID
 or local LoRA file, tool permissions, preflight, and installed-model
 enforcement, rendered from the contract's own option metadata.
 **Text ▸ Embeddings** is a vector explorer with dimensions, norms, previews, and
-cosine similarity; **Text ▸ Anonymize** shows original and protected text with
+cosine similarity. Select EmbeddingGemma 2 to add image, audio, video, or mixed
+JSON inputs. Sending media from another Studio page to Embeddings selects a
+compatible managed model; **Text ▸ Anonymize** shows original and protected text with
 labeled PII spans. **Chat ▸ Train** opens a text-dataset preview, preflight,
 live metrics, artifacts, history, and run comparison for native LoRA. The
 Command view and the Command Console keep the raw command surface; every
@@ -84,6 +86,9 @@ gate.
 ### Embeddings
 
 - `text-embed-qwen3-0.6b`
+- `text-embed-embeddinggemma2` — native text, code, image, audio, and video embeddings with task prefixes
+  and normalized 128/256/512/768-dimensional output. See the
+  [EmbeddingGemma 2 guide](./embeddinggemma2.md) for scope and examples.
 
 ### Anonymization
 

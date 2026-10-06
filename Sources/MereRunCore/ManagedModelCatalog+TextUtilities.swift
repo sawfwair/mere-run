@@ -3,6 +3,13 @@ import Foundation
 extension ManagedModelCatalog {
     static let textUtilitySpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
+            id: EmbeddingGemma2Catalog.modelID, category: .textEmbed, installShape: .directoryRoot,
+            hubFallback: EmbeddingGemma2Catalog.hubFallback,
+            upstreamRepoId: EmbeddingGemma2Catalog.repository, upstreamRevision: EmbeddingGemma2Catalog.revision,
+            validationKind: .embeddingGemma2, estimatedDownloadBytes: 1_488_915_288,
+            defaultCLICommands: ["text embed"], apiAvailability: .cliOnly
+        ),
+        ManagedModelSpec(
             id: "text-code-qwen3",
             category: .textCode,
             installShape: .singleFile(relativePath: CodeGenResources.managedRelativePath),

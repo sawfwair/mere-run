@@ -7,6 +7,7 @@ extension MereRunCapabilityCatalog {
 
     enum TextEmbedFamily: String, MereRunFamilyID {
         case qwen3Embedding = "qwen3-embedding"
+        case embeddingGemma2 = "embeddinggemma2"
     }
 
     enum TextAnonymizeFamily: String, MereRunFamilyID {
@@ -213,7 +214,10 @@ extension MereRunCapabilityCatalog {
     static let textEmbedRouting = MereRunCapabilityRouting(
         modelFlags: ["--model"],
         defaultModels: [.always("text-embed-qwen3-0.6b")],
-        families: [.init(TextEmbedFamily.qwen3Embedding, title: "Qwen3 Embedding", models: ["text-embed-qwen3-0.6b"])]
+        families: [
+            .init(TextEmbedFamily.qwen3Embedding, title: "Qwen3 Embedding", models: ["text-embed-qwen3-0.6b"]),
+            .init(TextEmbedFamily.embeddingGemma2, title: "EmbeddingGemma 2", models: ["text-embed-embeddinggemma2"])
+        ]
     )
 
     static let textAnonymizeRouting = MereRunCapabilityRouting(

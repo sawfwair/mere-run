@@ -12,6 +12,25 @@ final class MediaIOTests: XCTestCase {
         case rejected
     }
 
+    func testAudioDecodeConsumesShortReadsAndSegmentTail() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let url = root.appending(path: "short-read.wav")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let samples = (0..<16_337).map { Float($0 % 101) / 101 - 0.5 }
+        try MediaAudioIO.writeFloatWAV(samples: samples, sampleRate: 16_000, channels: 1, to: url)
+        let decoded = try MediaAudioIO.decode(url, targetSampleRate: 16_000, channels: 1)
+        XCTAssertEqual(decoded.samples, samples)
+        let segment = try MediaAudioIO.decodeSegment(url, startTime: 0, duration: Double(samples.count) / 16_000,
+                                                    targetSampleRate: 16_000, channels: 1)
+        XCTAssertEqual(segment.samples, samples)
+    }
+
+    func testFrameRateSamplingMatchesOneFPSBeforeUniformFrameCap() {
+        XCTAssertEqual(MediaVideoSamplingIndices.frameRate(sourceCount: 4, sourceFPS: 2, duration: 2, targetFPS: 1, maximumFrames: 32), [0, 2])
+        XCTAssertEqual(MediaVideoSamplingIndices.frameRate(sourceCount: 120, sourceFPS: 30, duration: 4, targetFPS: 1, maximumFrames: 2), [0, 90])
+        XCTAssertEqual(MediaVideoSamplingIndices.frameRate(sourceCount: 3, sourceFPS: 30, duration: 0.1, targetFPS: 1, maximumFrames: 32), [0])
+    }
+
     func testVideoFrameRateResolverRejectsNonFiniteValues() {
         for fps in [Double.nan, .infinity, -.infinity] {
             XCTAssertThrowsError(

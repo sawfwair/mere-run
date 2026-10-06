@@ -68,6 +68,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case parakeet
     case sortformer
     case qwen3Embedding
+    case embeddingGemma2
     case qwen3VLEmbedding
     case privacyFilter
     case laya
