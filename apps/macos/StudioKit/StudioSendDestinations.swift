@@ -38,11 +38,24 @@ package struct StudioSendDestination: Identifiable, Equatable {
             $0.label == slot.label && $0.accepts(url)
         }
         if let current {
+            selectEmbeddingFamily(for: current, draft: &draft)
             current.attach([url], to: &draft)
             return
         }
         if let templateID { draft.switchTemplate(to: templateID) }
+        selectEmbeddingFamily(for: slot, draft: &draft)
         slot.attach([url], to: &draft)
+    }
+
+    /// Media sent to Embeddings must select a family that runs that input slot.
+    /// Preserve an already compatible model, including unidentified local folders.
+    private func selectEmbeddingFamily(for slot: StudioAttachmentSlot, draft: inout StudioTaskDraft) {
+        guard draft.templateID == .textEmbed, let capability = draft.capability,
+              let scope = StudioScopeSource.contract.scope(for: draft), !scope.allows(slot.id),
+              let family = capability.routing?.families.first(where: { family in
+                  capability.options(forFamily: family.id).contains { $0.flag == slot.id }
+              }), let model = family.models.first else { return }
+        draft.model = model
     }
 }
 

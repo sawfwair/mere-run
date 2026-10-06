@@ -400,7 +400,7 @@ enum InstalledModelSmokePlans {
                 try await runner.installedDiarizationCheck(model: spec.id)
             }
 
-        case .qwen3Embedding:
+        case .qwen3Embedding, .embeddingGemma2:
             return direct(spec, route: "text embed") { runner in
                 try await runner.installedEmbeddingCheck(model: spec.id)
             }

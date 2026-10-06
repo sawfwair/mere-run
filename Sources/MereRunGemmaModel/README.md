@@ -5,6 +5,19 @@ checkpoint mapping, tokenizer templates, request scheduling, and LoRA training.
 The library depends on `MereRunTensor`, `MereRunDecode`, and MLX. Core re-exports
 its public types through `GemmaRuntimeExports.swift`.
 
+`EmbeddingGemma2Config.swift` and `EmbeddingGemma2TextModel.swift` own the
+EmbeddingGemma 2 bidirectional text encoder. It uses projection-only per-layer
+inputs, independent local/global attention, and the trained 512-to-768 projection.
+It does not use causal masks, generation KV caches, or token-identity PLE tables.
+Core's `Embeddings/` directory owns task formatting, tokenization, loading, and
+bounded batching. `EmbeddingGemma2VisionModel.swift` owns the full bidirectional
+Gemma 4 vision encoder with axial RoPE and spatial pooling;
+`EmbeddingGemma2AudioModel.swift` owns the clipped conformer, relative chunked
+attention, stride-four subsampling, and causal convolution. Their typed media
+configs and original tensor shape validation live in this target. These towers
+use the EmbeddingGemma 2 projections and are separate from the chat patch
+embedder. See [the user guide](../../docs/runtime/embeddinggemma2.md).
+
 ## Reading order
 
 - `Gemma4Config.swift`: typed text and unified-model configuration.

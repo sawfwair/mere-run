@@ -90,6 +90,7 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case nemotron3Diarization = "speech-diarization-nemotron3"
     case qwen3Code = "text-code-qwen3"
     case qwen3Embedding = "text-embed-qwen3-0.6b"
+    case embeddingGemma2 = "text-embed-embeddinggemma2"
     case privacyFilter = "text-anonymize-privacy-filter"
     case laya = "text-decide-laya"
     case layaMultilingual = "text-decide-laya-multilingual"
