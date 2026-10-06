@@ -6,9 +6,17 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.62.1 - 2026-10-06
+
+- Make EmbeddingGemma 2 audio relative-position frequencies explicitly typed,
+  fixing the Linux x86_64 Swift compiler failure while preserving the arithmetic.
+
+This release includes the changes recorded under 0.61.0–0.62.0 below; those
+versions were not published.
+
 ## 0.62.0 - 2026-10-06
 
-This release includes the changes recorded under 0.61.0–0.61.2 below; those
+This candidate includes the changes recorded under 0.61.0–0.61.2 below; those
 versions were not published. The previous published release was 0.60.1.
 
 - Add native EmbeddingGemma 2 text, code, image, audio, and video embeddings through `text embed`, with

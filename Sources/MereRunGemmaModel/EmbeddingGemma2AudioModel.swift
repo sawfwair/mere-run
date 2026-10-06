@@ -107,7 +107,12 @@ public final class EmbeddingGemma2AudioModel {
     private func relativePositions(dtype: DType) -> MLXArray {
         let half = config.hiddenSize / 2
         let context = config.attentionChunkSize + config.attentionContextLeft - 1
-        let inverse = MLXArray((0..<half).map { Float(exp(-Double($0) * log(10_000) / Double(max(half - 1, 1)))) })
+        let logBase = Foundation.log(Double(10_000))
+        let denominator = Double(max(half - 1, 1))
+        let frequencies: [Float] = (0..<half).map { index in
+            Float(Foundation.exp(-Double(index) * logBase / denominator))
+        }
+        let inverse = MLXArray(frequencies)
         let positions = MLXArray((0...(context / 2)).reversed().map(Float.init)).expandedDimensions(axis: -1) * inverse
         return concatenated([sin(positions), cos(positions)], axis: -1).expandedDimensions(axis: 0).asType(dtype)
     }
