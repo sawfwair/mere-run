@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.62.0 - 2026-10-06
+
+This release includes the changes recorded under 0.61.0–0.61.2 below; those
+versions were not published. The previous published release was 0.60.1.
+
 - Add native EmbeddingGemma 2 text, code, image, audio, and video embeddings through `text embed`, with
   a pinned Google checkpoint, bidirectional local/global attention, task prefixes,
   an 8K context limit, and normalized 128/256/512/768-dimensional output.
@@ -16,6 +21,22 @@ The format is based on Keep a Changelog.
   memory class (6 GiB headroom); unknown local folders retain the 16 GiB floor.
 - Read Apple audio files through EOF rather than dropping a final short-read
   tail; full-file and segment decoding preserve all requested samples.
+
+- Add native Kolibri-1 Swift/MLX text chat and API serving from explicit local
+  checkpoint directories, with reasoning and tool messages, seeded sampling,
+  stop sequences, token logprobs, and an 8,192-token default chat context.
+  The owned runtime implements sliding/global attention, routed and shared
+  experts, mixed quantization, and checkpoint weight verification.
+- Add `model benchmark kolibri-logprobs`, pinned conversion and calibration
+  tools, independent PyTorch fixtures, and English/German diagnostic receipts.
+  Publish SHA-256-verified mixed 2-bit and Q8 artifacts on Hugging Face. The
+  small diagnostic suite does not establish general accuracy or full-checkpoint
+  Apple Silicon memory fit; managed Kolibri downloads remain unregistered.
+  The recorded upstream BF16 revision is unavailable, so conversion reproduction
+  requires a preserved source snapshot with the recorded checksums.
+- Expose Kolibri chat and benchmark capabilities in Studio and the public
+  capability catalog; add EmbeddingGemma 2 media inputs and compatible result
+  destinations to Studio's embedding workflow.
 
 ## 0.61.2 - 2026-10-02
 
