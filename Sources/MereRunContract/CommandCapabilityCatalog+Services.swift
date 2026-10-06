@@ -15,7 +15,7 @@ extension MereRunCapabilityCatalog {
                 kind: .choice,
                 choices: [
                     "text-chat-q36", "text-code", "text-chat-klein", "text-chat-gemma4",
-                    "text-chat-laguna", "text-chat-lfm2", "text-chat-deepseek-v4-flash"
+                    "text-chat-laguna", "text-chat-kolibri", "text-chat-lfm2", "text-chat-deepseek-v4-flash"
                 ]
             ),
             .init(flag: "--webui-host", label: "WebUI host", kind: .string),
@@ -69,7 +69,7 @@ extension MereRunCapabilityCatalog {
                 kind: .choice,
                 choices: [
                     "text-chat-q36", "text-code", "text-chat-klein", "text-chat-gemma4",
-                    "text-chat-laguna", "text-chat-lfm2", "text-chat-deepseek-v4-flash"
+                    "text-chat-laguna", "text-chat-kolibri", "text-chat-lfm2", "text-chat-deepseek-v4-flash"
                 ]
             ),
             .init(flag: "--lora", label: "Adapter", kind: .string),

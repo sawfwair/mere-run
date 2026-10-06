@@ -124,6 +124,7 @@ public enum MereRunCapabilityCatalog {
             modelRepairManifests,
             modelOptimize,
             modelBenchmarkQ36MTP,
+            modelBenchmarkKolibriLogprobs,
             modelBenchmarkLagunaDFlash,
             modelBenchmarkParakeetCoreML,
             modelBenchmarkChat,

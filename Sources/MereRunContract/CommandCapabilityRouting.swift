@@ -140,10 +140,14 @@ public struct MereRunRuntimeFamily: Codable, Equatable, Sendable {
     /// The option that carries this family's model when it is not one of `routing.modelFlags`
     /// (vision.ocr Infinity takes `--infinity-model`). `nil`: `routing.modelFlags`.
     public let modelFlag: String?
+    /// The runtime currently loads explicit local checkpoint folders and has no managed
+    /// download. The caller's identifier inspects the folder's config to select this family.
+    public let localCheckpointOnly: Bool
 
     enum CodingKeys: String, CodingKey {
         case id, title, models, selectors
         case modelFlag = "model_flag"
+        case localCheckpointOnly = "local_checkpoint_only"
     }
 
     public init(
@@ -151,13 +155,15 @@ public struct MereRunRuntimeFamily: Codable, Equatable, Sendable {
         title: String,
         models: [String],
         selectors: [MereRunFlagCondition] = [],
-        modelFlag: String? = nil
+        modelFlag: String? = nil,
+        localCheckpointOnly: Bool = false
     ) {
         self.id = id
         self.title = title
         self.models = models
         self.selectors = selectors
         self.modelFlag = modelFlag
+        self.localCheckpointOnly = localCheckpointOnly
     }
 
     public init(from decoder: Decoder) throws {
@@ -167,6 +173,7 @@ public struct MereRunRuntimeFamily: Codable, Equatable, Sendable {
         models = try container.decode([String].self, forKey: .models)
         selectors = try container.decodeIfPresent([MereRunFlagCondition].self, forKey: .selectors) ?? []
         modelFlag = try container.decodeIfPresent(String.self, forKey: .modelFlag)
+        localCheckpointOnly = try container.decodeIfPresent(Bool.self, forKey: .localCheckpointOnly) ?? false
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -176,6 +183,7 @@ public struct MereRunRuntimeFamily: Codable, Equatable, Sendable {
         try container.encode(models, forKey: .models)
         if !selectors.isEmpty { try container.encode(selectors, forKey: .selectors) }
         try container.encodeIfPresent(modelFlag, forKey: .modelFlag)
+        if localCheckpointOnly { try container.encode(true, forKey: .localCheckpointOnly) }
     }
 }
 
@@ -467,9 +475,11 @@ extension MereRunRuntimeFamily {
         title: String,
         models: [String],
         selectors: [MereRunFlagCondition] = [],
-        modelFlag: String? = nil
+        modelFlag: String? = nil,
+        localCheckpointOnly: Bool = false
     ) {
-        self.init(id: id.rawValue, title: title, models: models, selectors: selectors, modelFlag: modelFlag)
+        self.init(id: id.rawValue, title: title, models: models, selectors: selectors,
+                  modelFlag: modelFlag, localCheckpointOnly: localCheckpointOnly)
     }
 }
 

@@ -21,6 +21,10 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
                 "\(id): family ids are kebab-case")
         #expect(Set(routing.modelFlags).isSubset(of: flags), "\(id): model flags must be declared options")
         for family in routing.families {
+            if family.localCheckpointOnly {
+                #expect(family.models.isEmpty && !routing.modelFlags.isEmpty,
+                        "\(id) \(family.id): local checkpoint families need a model flag and no managed ids")
+            }
             if let modelFlag = family.modelFlag {
                 #expect(flags.contains(modelFlag), "\(id) \(family.id): model flag \(modelFlag) is not declared")
             }
@@ -68,7 +72,7 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
     for (capability, routing) in routed {
         // A family reached only through an identified model is checked by the CLI's identifier
         // tests, which know which checkpoints each identified model can land on.
-        for family in routing.families where family.models.isEmpty && !routing.routesBySelectors
+        for family in routing.families where family.models.isEmpty && !family.localCheckpointOnly && !routing.routesBySelectors
             && routing.identifiedModels.isEmpty {
             #expect(
                 routing.defaultModels.contains { $0.family == family.id },

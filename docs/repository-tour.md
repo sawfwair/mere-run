@@ -123,6 +123,13 @@ owns Laguna target and draft computation. `Sources/MereRunAudioModels` owns
 BigVGAN layers shared by H3 and MMAudio. Core retains their runtime adapters.
 See [H3 and Laguna runtime boundaries](./internals/h3-laguna-runtime-boundaries.md).
 
+### Kolibri model library
+
+`Sources/MereRunKolibriModel` owns Kolibri attention, sigmoid expert routing,
+stacked projections, and decoder arithmetic. `Sources/MereRunCore/Kolibri` owns
+loading, tokenizer integration, generation, and paired-logprob export. See
+[Native Kolibri-1](./runtime/kolibri.md) for checkpoint and qualification workflows.
+
 ### Image model libraries
 
 `Sources/MereRunTensor` owns checkpoint loading and shared tensor kernels.

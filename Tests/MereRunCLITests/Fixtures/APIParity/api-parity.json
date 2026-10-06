@@ -344,8 +344,8 @@
       "evidence": "The route accepts them for DiffusionGemma, whose generator reads neither.",
       "branch": "warns",
       "warnings": [
-        "--top-p has no effect with DiffusionGemma. It applies to Gemma 4, Gemma 4 12B vision, Laguna, Inkling-Small, Muse Glimmer, Nemotron 3.5 Lightning, Nemotron 3 Nano Omni, LFM2.5, LFM2.5 A1B 8-bit, LFM2.5-VL, Qwen3.6 text, Qwen3.6 vision, Qwen3.8, llama.cpp GGUF and Psi.",
-        "--top-k has no effect with DiffusionGemma. It applies to Laguna, Inkling-Small, Muse Glimmer, Nemotron 3.5 Lightning, Nemotron 3 Nano Omni, LFM2.5, LFM2.5 A1B 8-bit, LFM2.5-VL, Qwen3.6 text, Qwen3.6 vision and Qwen3.8."
+        "--top-p has no effect with DiffusionGemma. It applies to Gemma 4, Gemma 4 12B vision, Kolibri 1, Laguna, Inkling-Small, Muse Glimmer, Nemotron 3.5 Lightning, Nemotron 3 Nano Omni, LFM2.5, LFM2.5 A1B 8-bit, LFM2.5-VL, Qwen3.6 text, Qwen3.6 vision, Qwen3.8, llama.cpp GGUF and Psi.",
+        "--top-k has no effect with DiffusionGemma. It applies to Kolibri 1, Laguna, Inkling-Small, Muse Glimmer, Nemotron 3.5 Lightning, Nemotron 3 Nano Omni, LFM2.5, LFM2.5 A1B 8-bit, LFM2.5-VL, Qwen3.6 text, Qwen3.6 vision and Qwen3.8."
       ]
     },
     {

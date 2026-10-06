@@ -109,7 +109,7 @@ private func minimalArguments(
     } else if !routing.routesBySelectors {
         if let rule = routing.defaultModels.first(where: { $0.family == family.id }) {
             arguments += rule.whenAny.first.map(capability.arguments(satisfying:)) ?? []
-        } else if !routing.identifiedModels.isEmpty, let flag = routing.modelFlags.last {
+        } else if family.localCheckpointOnly || !routing.identifiedModels.isEmpty, let flag = routing.modelFlags.last {
             arguments += [flag, identifiedPlaceholder + family.id]
         } else {
             return nil

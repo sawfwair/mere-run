@@ -581,3 +581,52 @@ interprets the upstream Lightning/Pickle archive. The reconstruction weights
 and pinned source are Apache-2.0. NVIDIA's separately licensed FlexiCubes and
 renderer implementation are not ported; mere.run uses native marching
 tetrahedra and makes no upstream topology-parity claim.
+
+## Kolibri-1 BF16, Q8, and mixed Q2
+
+`convert_kolibri_mlx.py` verifies the pinned original BF16 checkpoint and writes
+51 native shards per profile without loading the entire model. Expert banks
+are stacked in numeric order. The default candidates are `reference`, `q8`,
+`mixed2`, `mixed2-refit`, and `mixed2-down3`; `--profiles` limits output.
+`--resume` reuses complete shards after verifying their keys, shapes, and
+dtypes, and recalculates checksums. Use the existing output only from this
+pinned converter. Serialization uses the container disk before streaming
+completed shards to the target filesystem. Budget disk for the source and all
+selected profiles; this is remote tooling.
+
+`refit_kolibri_mixed2.py` uses input second moments exported only from native
+reference calibration cases. It fits BF16 affine levels, accepts groups only
+when weighted reconstruction error improves, and leaves the baseline layout
+and non-Q2 tensors intact. It verifies reference, baseline, and calibration
+provenance. It does not mark itself quality-qualified.
+
+On the MLX conversion worker, `python scripts/model-conversion/test_kolibri_refit.py`
+checks signed affine levels, constant groups, and groupwise reconstruction-error
+acceptance. `python scripts/reference-parity/test_kolibri_logprobs.py` checks
+logit integrity, target identity, and independent language gates.
+
+See [native Kolibri workflows](../../docs/runtime/kolibri.md) for fixed-token
+logit comparisons and the separate calibration/heldout protocol.
+
+`publish_kolibri_mlx.py` stages the selected baseline Q2 or measured Q8 release
+with its model card, pinned upstream license/card, modifications, diagnostic
+receipt, and checksums. It uploads directly from the remote artifact folder to
+a private Sawfwair repository using the resumable Hub SDK. Every published file
+is checked against its expected SHA-256 and size before the repository becomes
+public; an anonymous verification then checks the immutable release revision.
+Only the explicit bundle closure is uploaded, excluding SDK caches and credentials.
+
+```bash
+python scripts/model-conversion/publish_kolibri_mlx.py \
+  --profile mixed2 --artifact /workspace/kolibri/artifacts/Kolibri-1-MLX-mixed2 \
+  --evidence docs/benchmarks/receipts/kolibri-native-2026-10-04.json \
+  --upstream-license /workspace/kolibri/source/LICENSE \
+  --upstream-card /workspace/kolibri/source/README.md \
+  --source-commit 8bfa3f5d6d9f23097cd1446935acc4589ce6fa72 \
+  --receipt /workspace/kolibri/mixed2-publication.json
+```
+
+Use a write credential through standard Hub authentication or `--token-file`.
+`--prepare-only` stages the bundle without uploading. `--verify-only` checks an
+existing public release. Publication preserves the conversion manifest's
+`quality_qualified: false` and does not certify broad accuracy or Apple memory fit.

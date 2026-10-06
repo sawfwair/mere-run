@@ -158,3 +158,29 @@ private func routing(_ capability: MereRunCommandCapability) throws -> MereRunCa
     )
     #expect(report.family != nil && report.source == .defaultModel, "\(report)")
 }
+
+@Test func kolibriConvertedRootsRouteToTheNativeRuntime() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try Data(#"{"model_type":"kolibri1"}"#.utf8).write(to: root.appendingPathComponent("config.json"))
+    #expect(ModelFamilyIdentifier.textChatFamily(matching: root.path) == .kolibri)
+    #expect(NativeChatRuntime.commandFamily(modelID: root.path) == .kolibri)
+    #expect(NativeChatRuntime.commandFamily(modelID: KolibriResources.mixedModelID) == .kolibri)
+    let runtime = try NativeChatRuntime.command(modelID: root.path, modelPath: nil)
+    guard case .textChatKolibri(_, let selectedRoot) = runtime else {
+        Issue.record("A local Kolibri directory must select its native runtime")
+        return
+    }
+    #expect(selectedRoot == root.path)
+    let invocation = MereRunCommandInvocation(capability: MereRunCapabilityCatalog.textChat, arguments: ["--model", root.path])
+    #expect(ModelFamilyIdentifier.identify(capabilityID: "text.chat", model: root.path, invocation: invocation) == .family("kolibri"))
+    let report = MereRunCapabilityCatalog.textChat.resolutionReport(invocation) { model in
+        ModelFamilyIdentifier.identify(capabilityID: "text.chat", model: model, invocation: invocation)
+    }
+    #expect(report.family == "kolibri" && report.violations.isEmpty)
+    let family = try #require(MereRunCapabilityCatalog.textChat.routing?.family(id: "kolibri"))
+    #expect(family.localCheckpointOnly && family.models.isEmpty)
+    #expect(try JSONDecoder().decode(MereRunRuntimeFamily.self, from: JSONEncoder().encode(family)) == family)
+    #expect(ManagedModelAPIProfile.runtimeFallback(for: .textChatKolibri).supportsLogprobs)
+}

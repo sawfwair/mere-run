@@ -263,3 +263,35 @@ CUDA and Swift/MLX do not share a seeded random-number implementation, so
 pixel identity is neither expected nor mislabeled as the parity criterion. The
 checked-in 249-frame camera fixture separately gates the full composed
 trajectory against upstream.
+
+## Kolibri-1
+
+`export_kolibri_fixture.py` freezes independently generated tiny PyTorch
+weights and arithmetic outputs, including the sliding-window crossing.
+`kolibri_torch_reference.py` streams the original BF16 checkpoint through
+independent PyTorch operators for an additional full-model cross-check. Neither
+claims official vLLM fused-kernel parity.
+
+`prepare_kolibri_suite.py` tokenizes English/German calibration and heldout
+cases once with the pinned tokenizer/template. Native `model benchmark
+kolibri-logprobs` exports FP32 full-vocabulary logits on the exact same target
+rows and verifies conversion shard hashes when a manifest is present.
+`compare_kolibri_logprobs.py` refuses mismatched suites or token boundaries and
+reports per-case KL, top-1 agreement, target logprob changes, and perplexity
+ratios. Its fixed thresholds are diagnostic project gates, not general quality
+guarantees. See [native Kolibri workflows](../../docs/runtime/kolibri.md).
+
+`prepare_kolibri_chat_fixture.py` combines synthetic mixed-quantized weights
+with the real pinned tokenizer/template for a small chat integration test.
+It exercises tool history and generated-token logprobs, without implying model
+quality. Prepare it on the worker, then copy only the approximately 40 MB
+output to the test machine:
+
+```bash
+python scripts/reference-parity/prepare_kolibri_chat_fixture.py \
+  --fixture Tests/KolibriRuntimeTests/Fixtures \
+  --tokenizer-source /workspace/kolibri/source --output /tmp/kolibri-chat-fixture
+
+MERERUN_KOLIBRI_CHAT_FIXTURE=/tmp/kolibri-chat-fixture \
+  swift test --filter KolibriQualificationTests
+```

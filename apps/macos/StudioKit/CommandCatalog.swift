@@ -124,6 +124,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
     case sfxConditionText
     case modelBenchmark
     case modelBenchmarkLagunaDFlash
+    case modelBenchmarkKolibriLogprobs
     case pluginList
     case pluginInstall
     case pluginDoctor
@@ -256,6 +257,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
         case .sfxClapScore: return "sfx.clap.score"
         case .sfxConditionText: return "sfx.condition.text"
         case .modelBenchmark: return "model.benchmark.q36-mtp"
+        case .modelBenchmarkKolibriLogprobs: return "model.benchmark.kolibri-logprobs"
         case .modelBenchmarkLagunaDFlash: return "model.benchmark.laguna-dflash"
         case .pluginList: return "plugin.list"
         case .pluginInstall: return "plugin.install"
@@ -1305,7 +1307,7 @@ extension CommandTemplate {
              .graphStudio,
              .nodeConsole,
              .modelBenchmark,
-             .modelBenchmarkLagunaDFlash,
+             .modelBenchmarkLagunaDFlash, .modelBenchmarkKolibriLogprobs,
              .modelBenchmarkChat,
              .modelBenchmarkCode,
              .modelBenchmarkFused,

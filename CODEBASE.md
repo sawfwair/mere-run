@@ -30,7 +30,7 @@ lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 - `Sources/MereRunCore/*Generation*.swift` and `Sources/AudioCore/Speech*Operation.swift`: shared plans, validation, execution, and outcomes
 - `Sources/MereRunLTXModel/`: LTX transformers, VAEs, upsamplers, and model caches
 - `Sources/MereRunCore/LTX/`: video loading, conditioning, generation, and output
-- `Sources/MereRunH3Model/`, `Sources/MereRunLagunaModel/`, and `Sources/MereRunAudioModels/`: H3, Laguna, and shared vocoder computation
+- `Sources/MereRunH3Model/`, `Sources/MereRunLagunaModel/`, `Sources/MereRunKolibriModel/`, and `Sources/MereRunAudioModels/`: H3, Laguna, Kolibri, and vocoder computation
 - `Sources/MereRunCore/SCAIL2/`: native SCAIL-2 transformer, OpenCLIP, masks,
   Wan 2.1 VAE loading, segmented generation, and MP4 orchestration
 - `Sources/MereRunCore/LoRA/`: LoRA checkpoint, artifact, and compatibility logic

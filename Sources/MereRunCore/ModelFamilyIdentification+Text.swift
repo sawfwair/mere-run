@@ -17,6 +17,7 @@ extension ModelFamilyIdentifier {
         if Gemma4Resources.handles(modelSpec: model) {
             return .gemma4Unified
         }
+        if KolibriResources.handles(modelSpec: model) { return .kolibri }
         if LagunaResources.handles(modelSpec: model) {
             return .laguna
         }
@@ -55,6 +56,7 @@ extension ModelFamilyIdentifier {
     /// profile, so any other id is unidentified and the command reports it.
     static func textChatProbe(model: String, invocation: MereRunCommandInvocation) -> MereRunModelIdentification? {
         let model = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        if KolibriResources.localModelRoot(for: model) != nil { return .family("kolibri") }
         let normalizedID = model.lowercased()
         let family = textChatFamily(matching: normalizedID)
         switch family {

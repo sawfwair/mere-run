@@ -96,6 +96,7 @@ import Testing
         "model.repair-manifests",
         "model.optimize",
         "model.benchmark.q36-mtp",
+        "model.benchmark.kolibri-logprobs",
         "model.benchmark.laguna-dflash",
         "model.benchmark.parakeet-coreml",
         "model.benchmark.chat",
@@ -142,7 +143,7 @@ import Testing
         "geo.tessera",
         "geo.olmoearth"
     ])
-    #expect(document.commands.count == 135)
+    #expect(document.commands.count == 136)
 
     let data = try JSONEncoder().encode(document)
     let decoded = try JSONDecoder().decode(MereRunCapabilityDocument.self, from: data)

@@ -185,6 +185,7 @@ mereRunCoreDependencies.append("MereRunImageModels")
 mereRunCoreDependencies.append("MereRunKVCache")
 mereRunCoreDependencies.append("MereRunDecode")
 mereRunCoreDependencies.append("MereRunQwenModel")
+mereRunCoreDependencies.append("MereRunKolibriModel")
 mereRunCoreDependencies.append("MereRunGemmaModel")
 mereRunCoreDependencies.append("MereRunLTXModel")
 mereRunCoreDependencies.append("AudioCodecs")
@@ -449,6 +450,26 @@ targets.append(
     dependencies: mereRunQwenModelDependencies,
     path: "Sources/MereRunQwenModel",
     exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "MereRunKolibriModel",
+    dependencies: ["MereRunTensor"] + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/MereRunKolibriModel",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+targets.append(
+  .testTarget(
+    name: "KolibriRuntimeTests",
+    dependencies: ["MereRunKolibriModel", "MereRunTensor", "MereRunMLXTestSupport"]
+      + mlxDependency("MLX") + mlxDependency("MLXNN"),
+    path: "Tests/KolibriRuntimeTests",
+    exclude: ["Fixtures"],
     swiftSettings: commonSwiftSettings
   )
 )

@@ -29,6 +29,7 @@ extension MereRunCapabilityCatalog {
         case gemma4
         case gemma4Unified = "gemma4-unified"
         case diffusionGemma = "diffusion-gemma"
+        case kolibri
         case laguna
         case inkling
         case museGlimmer = "muse-glimmer"
@@ -88,6 +89,7 @@ extension MereRunCapabilityCatalog {
             ),
             .init(TextChatFamily.gemma4Unified, title: "Gemma 4 12B vision", models: ["vision-chat-gemma4-12b"]),
             .init(TextChatFamily.diffusionGemma, title: "DiffusionGemma", models: ["text-chat-diffusiongemma-26b-optiq-4bit"]),
+            .init(TextChatFamily.kolibri, title: "Kolibri 1", models: [], localCheckpointOnly: true),
             .init(TextChatFamily.laguna, title: "Laguna", models: ["text-chat-laguna-s-2-1", "text-chat-laguna-xs-2-1"]),
             .init(TextChatFamily.inkling, title: "Inkling-Small", models: ["text-chat-inkling-small"]),
             .init(TextChatFamily.museGlimmer, title: "Muse Glimmer", models: ["vision-chat-muse-glimmer-30b"]),

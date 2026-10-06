@@ -56,7 +56,7 @@ extension CommandTemplateID {
         case .modelLocationList, .modelLocationAdd, .modelLocationRemove, .modelLocationBind,
              .modelLocationUnbind: return .modelsLocations
         case .modelRepairManifests, .modelOptimize, .modelGarbageCollect, .qualityGate: return .modelsHealth
-        case .modelBenchmark, .modelBenchmarkLagunaDFlash, .modelBenchmarkChat, .modelBenchmarkCode,
+        case .modelBenchmark, .modelBenchmarkLagunaDFlash, .modelBenchmarkKolibriLogprobs, .modelBenchmarkChat, .modelBenchmarkCode,
              .modelBenchmarkFused, .modelBenchmarkFusedFixture, .modelBenchmarkVLM, .modelBenchmarkToolCalls,
              .modelBenchmarkToolContinuations, .modelBenchmarkGemma4KV, .modelBenchmarkGemma4MTP,
              .modelBenchmarkParakeetCoreML, .modelBenchmarkAPIWorkload: return .modelsBenchmarks
