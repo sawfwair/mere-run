@@ -15,7 +15,7 @@ and the output head compute in FP32.
 
 The selected [mixed 2-bit artifact](https://huggingface.co/Sawfwair/Kolibri-1-MLX-Mixed-2bit)
 and [Q8 control](https://huggingface.co/Sawfwair/Kolibri-1-MLX-8bit) are public.
-Both require a development build containing the native Kolibri runtime.
+Both require mere.run v0.62.0 or later with the native Kolibri runtime.
 Use the immutable release revisions to reproduce the measured weights:
 
 ```bash
