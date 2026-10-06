@@ -5,6 +5,33 @@ import XCTest
 final class MachineInferenceAdmissionTests: XCTestCase {
     private let gibibyte = UInt64(1_073_741_824)
 
+    func testManagedEmbeddingGemmaUsesSmallAdmissionWithoutRelaxingUnknownModels() async throws {
+        for selector in [["--model", EmbeddingGemma2Catalog.modelID], ["-m", EmbeddingGemma2Catalog.modelID],
+                         ["--model=" + EmbeddingGemma2Catalog.modelID]] {
+            XCTAssertEqual(CLIInferenceAdmissionClassifier.request(arguments: ["mere.run", "text", "embed", "--image", "photo.png"] + selector),
+                           MachineInferenceRequest(label: "text embed", resourceClass: .small))
+        }
+        for selector in [[], ["--model", "/tmp/unknown-checkpoint"], ["--model", "text-embed-qwen3-0.6b"]] {
+            XCTAssertEqual(CLIInferenceAdmissionClassifier.request(arguments: ["mere.run", "text", "embed", "hello"] + selector),
+                           MachineInferenceRequest(label: "text embed", resourceClass: .standard))
+        }
+        let request = MachineInferenceRequest(label: "text embed", resourceClass: .small)
+        let coordinator = makeCoordinator(directory: try temporaryDirectory(), processID: 301,
+                                          physicalMemoryBytes: 36 * gibibyte, availableMemoryBytes: 14 * gibibyte)
+        let lease = try await coordinator.acquire(request)
+        XCTAssertEqual(try coordinator.snapshot().activePermits, 1)
+        lease.release()
+        let low = makeCoordinator(directory: try temporaryDirectory(), processID: 302,
+                                  physicalMemoryBytes: 36 * gibibyte, availableMemoryBytes: 5 * gibibyte)
+        do {
+            let lease = try await low.acquire(request)
+            lease.release()
+            XCTFail("Low memory must still block the managed encoder")
+        } catch let error as MachineInferenceAdmissionError {
+            XCTAssertEqual(error, .insufficientMemory(available: 5 * gibibyte, required: 6 * gibibyte))
+        }
+    }
+
     /// Marigold's download sits under the 48 GiB estimate threshold, but the catalog
     /// declares a 64 GB minimum because the BF16 base is loaded before quantization.
     /// The declaration, not a command list, makes every `vision depth` run large.

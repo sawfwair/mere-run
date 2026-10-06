@@ -81,6 +81,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case sortformer = "sortformer"
         /// Qwen3 embeddings family.
         case qwen3Embedding = "qwen3-embedding"
+        case embeddingGemma2 = "embeddinggemma2"
         /// OpenAI Privacy Filter token-classification family.
         case openAIPrivacyFilter = "openai-privacy-filter"
         /// GGUF code generation family.

@@ -1746,6 +1746,13 @@ extension MereRunModelManifest {
                 upstreamRepoId: Qwen3EmbeddingCatalog.defaultRepoId,
                 createdAt: createdAt
             )
+        case .embeddingGemma2:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .embeddingGemma2, family: .embed,
+                tier: .small, variant: .standard, precision: .bf16,
+                defaults: nil, supports: [.textEmbedding, .multimodalEmbedding], components: genericTextComponents,
+                upstreamRepoId: EmbeddingGemma2Catalog.repository, createdAt: createdAt
+            )
         case .visionEmbedQwen3VL2B:
             return MereRunModelManifest(
                 id: modelID.rawValue,

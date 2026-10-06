@@ -98,7 +98,7 @@ final class StudioSendDestinationsTests: XCTestCase {
         XCTAssertFalse(song.contains { $0.hasPrefix("vision.") || $0.hasPrefix("image.") || $0.hasPrefix("threeD.") })
 
         let clip = offered("take.mp4")
-        XCTAssertEqual(clip, ["vision.track · Video", "vision.depth · Video", "sound.foley · Video or features"])
+        XCTAssertEqual(clip, ["vision.track · Video", "vision.depth · Video", "sound.foley · Video or features", "text.embeddings · Videos"])
     }
 
     /// The page the output is shown on is its "Use as input", never a Send to item.
@@ -165,5 +165,18 @@ final class StudioSendDestinationsTests: XCTestCase {
         candidate.attach(picture, to: &compare)
         XCTAssertEqual(compare.templateID, .visionFaceCompare)
         XCTAssertEqual(candidate.slot.paths(in: compare), [picture.path])
+    }
+
+    func testSendingMediaToEmbeddingsSelectsTheSupportingFamily() throws {
+        for name in ["photo.png", "clip.wav", "take.mp4"] {
+            let url = URL(fileURLWithPath: "/Outputs/" + name)
+            let destination = try XCTUnwrap(StudioSendDestinations.destinations(for: url).first { $0.task == .textEmbeddings })
+            var draft = StudioTaskDraft(templateID: .textEmbed)
+            XCTAssertEqual(draft.model, "text-embed-qwen3-0.6b")
+            destination.attach(url, to: &draft)
+            XCTAssertEqual(draft.model, "text-embed-embeddinggemma2")
+            XCTAssertEqual(destination.slot.paths(in: draft), [url.path])
+            XCTAssertTrue(draft.arguments(source: .contract).contains(destination.slot.id))
+        }
     }
 }

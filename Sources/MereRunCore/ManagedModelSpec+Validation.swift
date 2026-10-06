@@ -272,6 +272,8 @@ public extension ManagedModelSpec {
                 : Self.missingSortformerPaths(in: rootURL, fileManager: fileManager)
         case .qwen3Embedding:
             return Qwen3EmbeddingResources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .embeddingGemma2:
+            return EmbeddingGemma2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .qwen3VLEmbedding:
             return Qwen3VLEmbeddingResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .laya:

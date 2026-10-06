@@ -232,13 +232,29 @@ extension MereRunCapabilityCatalog {
         id: "text.embed",
         command: ["text", "embed"],
         title: "Embeddings",
-        summary: "Generate native Qwen3 text embeddings.",
+        summary: "Generate native text or EmbeddingGemma 2 multimodal embeddings.",
         arguments: [
-            .init(name: "texts", label: "Texts", kind: .string, required: true, repeatable: true)
+            .init(name: "texts", label: "Texts", kind: .string, required: false, repeatable: true)
         ],
         options: [
             .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
+            .init(flag: "--image", label: "Images", kind: .file, repeatable: true)
+                .scoped(TextEmbedFamily.only(.embeddingGemma2)),
+            .init(flag: "--audio", label: "Audio", kind: .file, repeatable: true)
+                .scoped(TextEmbedFamily.only(.embeddingGemma2)),
+            .init(flag: "--video", label: "Videos", kind: .file, repeatable: true)
+                .scoped(TextEmbedFamily.only(.embeddingGemma2)),
+            .init(flag: "--input-json", label: "Mixed inputs", kind: .file)
+                .scoped(TextEmbedFamily.only(.embeddingGemma2)),
+            .init(flag: "--task", label: "Embedding task", kind: .choice,
+                  choices: ["raw", "query", "document", "code-retrieval", "question-answering", "fact-checking",
+                            "classification", "clustering", "similarity"], defaultValue: "raw")
+                .scoped(TextEmbedFamily.only(.embeddingGemma2)),
+            .init(flag: "--title", label: "Document title", kind: .string)
+                .scoped(TextEmbedFamily.only(.embeddingGemma2)),
+            .init(flag: "--dimensions", label: "Embedding dimensions", kind: .integer)
+                .scoped(TextEmbedFamily.only(.embeddingGemma2), .rule(.embeddingGemma2, values: ["128", "256", "512", "768"])),
             .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file),
             .init(flag: "--pretty", label: "Pretty JSON", kind: .boolean)
         ],

@@ -29,14 +29,7 @@ enum AppleMediaAudioIO {
         guard frameCount > 0 else {
             throw MediaIOError.audioDecodeFailed(url, "Audio file is empty.")
         }
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: frameCount) else {
-            throw MediaIOError.audioDecodeFailed(url, "Failed to allocate audio buffer.")
-        }
-        do {
-            try file.read(into: buffer)
-        } catch {
-            throw MediaIOError.audioDecodeFailed(url, error.localizedDescription)
-        }
+        let buffer = try read(file, frameCount: frameCount, url: url)
 
         return try convert(
             buffer,
@@ -68,14 +61,7 @@ enum AppleMediaAudioIO {
         }
 
         file.framePosition = startFrame
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: frameCount) else {
-            throw MediaIOError.audioDecodeFailed(url, "Failed to allocate audio segment buffer.")
-        }
-        do {
-            try file.read(into: buffer, frameCount: frameCount)
-        } catch {
-            throw MediaIOError.audioDecodeFailed(url, error.localizedDescription)
-        }
+        let buffer = try read(file, frameCount: frameCount, url: url)
         return try convert(
             buffer,
             sourceFormat: sourceFormat,
@@ -85,9 +71,31 @@ enum AppleMediaAudioIO {
         )
     }
 
+    // AVAudioFile may return a short read before EOF, including uncompressed WAVs.
+    private static func read(_ file: AVAudioFile, frameCount: AVAudioFrameCount, url: URL) throws -> AVAudioPCMBuffer {
+        guard let output = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: frameCount),
+              let chunk = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: min(frameCount, 65_536)),
+              let destination = output.floatChannelData, let source = chunk.floatChannelData else {
+            throw MediaIOError.audioDecodeFailed(url, "Failed to allocate audio buffer.")
+        }
+        do {
+            while output.frameLength < frameCount {
+                try file.read(into: chunk, frameCount: min(chunk.frameCapacity, frameCount - output.frameLength))
+                if chunk.frameLength == 0 { break }
+                for channel in 0..<Int(file.processingFormat.channelCount) {
+                    destination[channel].advanced(by: Int(output.frameLength)).update(from: source[channel], count: Int(chunk.frameLength))
+                }
+                output.frameLength += chunk.frameLength
+            }
+        } catch {
+            throw MediaIOError.audioDecodeFailed(url, error.localizedDescription)
+        }
+        return output
+    }
+
     private static func open(_ url: URL) throws -> AVAudioFile {
         do {
-            return try AVAudioFile(forReading: url)
+            return try AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: false)
         } catch {
             throw MediaIOError.audioDecodeFailed(url, error.localizedDescription)
         }

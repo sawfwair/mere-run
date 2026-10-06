@@ -6,6 +6,17 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add native EmbeddingGemma 2 text, code, image, audio, and video embeddings through `text embed`, with
+  a pinned Google checkpoint, bidirectional local/global attention, task prefixes,
+  an 8K context limit, and normalized 128/256/512/768-dimensional output.
+  Ordered mixed records use `--input-json`; direct `--image`, `--audio`, and
+  `--video` flags produce independent vectors. Media towers load lazily, audio
+  segments accept up to 30 seconds, and video samples 1 fps with a 32-frame cap.
+- Admit the pinned managed EmbeddingGemma 2 encoder through the existing small
+  memory class (6 GiB headroom); unknown local folders retain the 16 GiB floor.
+- Read Apple audio files through EOF rather than dropping a final short-read
+  tail; full-file and segment decoding preserve all requested samples.
+
 ## 0.61.2 - 2026-10-02
 
 - Materialize Nemotron 3 query and key heads before rotary position encoding,

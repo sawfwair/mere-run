@@ -314,7 +314,8 @@ enum AppleMediaVideoIO {
         from videoURL: URL,
         into outputDirectoryURL: URL,
         framesPerSecond: Double,
-        maximumFrames: Int
+        maximumFrames: Int,
+        strategy: MediaVideoSamplingStrategy
     ) throws -> VideoFrameSequence {
         let asset = AVURLAsset(url: videoURL)
         guard let track = asset.tracks(withMediaType: .video).first else {
@@ -330,12 +331,16 @@ enum AppleMediaVideoIO {
         }
         let estimatedSourceCount = max(1, Int((duration * sourceRate.framesPerSecond).rounded()))
         let requestedCount = max(1, min(maximumFrames, Int(duration * framesPerSecond)))
-        let indices = evenlySpacedIndices(
-            sourceCount: estimatedSourceCount,
-            requestedCount: requestedCount
-        )
+        let indices = strategy == .frameRate
+            ? MediaVideoSamplingIndices.frameRate(sourceCount: estimatedSourceCount, sourceFPS: sourceRate.framesPerSecond,
+                                                 duration: duration, targetFPS: framesPerSecond, maximumFrames: maximumFrames)
+            : evenlySpacedIndices(sourceCount: estimatedSourceCount, requestedCount: requestedCount)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
+        if strategy == .frameRate {
+            generator.requestedTimeToleranceBefore = .zero
+            generator.requestedTimeToleranceAfter = .zero
+        }
         try FileManager.default.createDirectory(
             at: outputDirectoryURL,
             withIntermediateDirectories: true

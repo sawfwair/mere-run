@@ -80,7 +80,7 @@ public enum QuantizedModelManifestWriter {
             case .qwen3TTS, .breezeTTS: return .tts
             case .qwen3ASR, .parakeetASR: return .asr
             case .sortformer: return .asr
-            case .qwen3Embedding: return .embed
+            case .qwen3Embedding, .embeddingGemma2: return .embed
             case .laya: return .laya
             case .clef: return .clef
             case .gliner25Decide: return .gliner
@@ -193,7 +193,7 @@ public enum QuantizedModelManifestWriter {
                     return [.speechRecognition]
                 case .sortformer:
                     return [.speakerDiarization]
-                case .qwen3Embedding:
+                case .qwen3Embedding, .embeddingGemma2:
                     return [.textEmbedding]
                 case .openAIPrivacyFilter:
                     return [.textAnonymization]
@@ -312,7 +312,7 @@ public enum QuantizedModelManifestWriter {
                  .videoDepthAnything, .depthAnything3, .marigoldV2,
                  .tripoSR, .instantMesh, .trellis2:
                 break
-            case .laya, .clef, .gliner25Decide, .qwen3TTS, .breezeTTS, .qwen3ASR, .parakeetASR, .sortformer, .qwen3Embedding, .openAIPrivacyFilter,
+            case .laya, .clef, .gliner25Decide, .qwen3TTS, .breezeTTS, .qwen3ASR, .parakeetASR, .sortformer, .qwen3Embedding, .embeddingGemma2, .openAIPrivacyFilter,
                  .qwen3Coder, .northMiniCode, .lightOnOCR, .woosh, .mmaudio, .psiChat, .deepseekV4Flash,
                  .muScriptor, .roFormer, .apBWE, .univerSR, .auk, .inkling:
                 break

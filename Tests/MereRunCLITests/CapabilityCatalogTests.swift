@@ -155,7 +155,6 @@ private func parserCommands() throws -> [String: ParserHelp.Command] {
 /// Array positionals can be empty at the parser boundary yet be required by the
 /// command's validation. Keep these semantic requirements explicit and narrow.
 private let requiredPositionalOverrides: [String: String] = [
-    "text.embed.texts": "Requires text unless --list-models is set.",
     "vision.caption.images": "Requires at least one image.",
     "vision.ocr.images": "Requires at least one image.",
     "vision.geometry-multiview.images": "Requires multiple images for geometry reconstruction."
