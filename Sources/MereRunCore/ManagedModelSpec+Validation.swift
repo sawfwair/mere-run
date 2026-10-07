@@ -278,6 +278,8 @@ public extension ManagedModelSpec {
             return Qwen3VLEmbeddingResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .laya:
             return LayaCatalog.validate(root: rootURL, modelID: id, fileManager: fileManager)
+        case .d1:
+            return D1Catalog.validate(root: rootURL, modelID: id, fileManager: fileManager)
         case .clef:
             return ClefCatalog.validate(root: rootURL, fileManager: fileManager)
         case .gliner25Decide:

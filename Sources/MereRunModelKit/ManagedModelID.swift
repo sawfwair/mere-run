@@ -95,6 +95,8 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case laya = "text-decide-laya"
     case layaMultilingual = "text-decide-laya-multilingual"
     case layaTypedDecisions = "text-decide-laya-typed-decisions"
+    case d1BF16 = "text-decide-d1-3b-bf16"
+    case d1OmniFP32 = "text-decide-d1-omni-600m-fp32"
     case clef4Bit = "text-decide-clef-4bit"
     case clefFlash4Bit = "text-decide-clef-flash-4bit"
     case gliner25Decide = "text-classify-gliner25-decide"

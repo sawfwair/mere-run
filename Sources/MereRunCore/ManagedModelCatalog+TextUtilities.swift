@@ -89,6 +89,23 @@ extension ManagedModelCatalog {
                 : modelID == LayaCatalog.typedDecisionsID ? 846_195_716 : 846_195_574,
             defaultCLICommands: ["text decide"]
         )
+    } + D1Catalog.modelIDs.map { modelID in
+        ManagedModelSpec(
+            id: modelID, category: .textDecide, installShape: .directoryRoot,
+            hubFallback: D1Catalog.hubFallback(modelID: modelID),
+            upstreamRepoId: modelID == D1Catalog.omniModelID ? D1Catalog.omniRepository : D1Catalog.repository,
+            upstreamRevision: modelID == D1Catalog.omniModelID ? D1Catalog.omniRevision : D1Catalog.revision,
+            usageRestriction: usageRestriction(
+                summary: "D1 uses the custom LFM Open License v1.0; review its terms before use.",
+                license: "LFM Open License v1.0",
+                sourceRepoId: modelID == D1Catalog.omniModelID ? D1Catalog.omniRepository : D1Catalog.repository,
+                sourceRevision: modelID == D1Catalog.omniModelID ? D1Catalog.omniRevision : D1Catalog.revision,
+                licenseURL: "https://huggingface.co/\(modelID == D1Catalog.omniModelID ? D1Catalog.omniRepository : D1Catalog.repository)/blob/\(modelID == D1Catalog.omniModelID ? D1Catalog.omniRevision : D1Catalog.revision)/LICENSE"
+            ),
+            validationKind: .d1, runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: modelID == D1Catalog.omniModelID ? 2_400_000_000 : 6_300_000_000,
+            defaultCLICommands: ["text decide"], apiAvailability: .cliOnly
+        )
     } + [
         ManagedModelSpec(
             id: ClefCatalog.modelID, category: .textDecide, installShape: .directoryRoot,

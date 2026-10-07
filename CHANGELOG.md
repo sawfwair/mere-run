@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add native Swift/MLX D1-3B and D1 omni 600M decision models to `text decide`,
+  with ordered choice/score/yes-no questions, image inputs, omni audio inputs,
+  token-budget preflight, and pinned original safetensors downloads.
+
 ## 0.62.1 - 2026-10-06
 
 - Make EmbeddingGemma 2 audio relative-position frequencies explicitly typed,
