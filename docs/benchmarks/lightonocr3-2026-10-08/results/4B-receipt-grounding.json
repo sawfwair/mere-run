@@ -1,0 +1,65 @@
+{
+  "activeMemoryBytes" : 9078890600,
+  "boxes" : [
+    {
+      "label" : "header_image",
+      "x1" : 195,
+      "x2" : 865,
+      "y1" : 0,
+      "y2" : 105
+    },
+    {
+      "label" : "text",
+      "x1" : 105,
+      "x2" : 599,
+      "y1" : 140,
+      "y2" : 180
+    },
+    {
+      "label" : "text",
+      "x1" : 105,
+      "x2" : 740,
+      "y1" : 206,
+      "y2" : 246
+    },
+    {
+      "label" : "text",
+      "x1" : 105,
+      "x2" : 385,
+      "y1" : 267,
+      "y2" : 307
+    },
+    {
+      "label" : "text",
+      "x1" : 105,
+      "x2" : 264,
+      "y1" : 326,
+      "y2" : 362
+    },
+    {
+      "label" : "title",
+      "x1" : 405,
+      "x2" : 647,
+      "y1" : 392,
+      "y2" : 434
+    },
+    {
+      "label" : "table",
+      "x1" : 38,
+      "x2" : 972,
+      "y1" : 482,
+      "y2" : 974
+    }
+  ],
+  "caseID" : "receipt",
+  "invalidBoxCount" : 0,
+  "missingAnchors" : [
+
+  ],
+  "mode" : "grounding",
+  "peakMemoryBytes" : 9406702552,
+  "seconds" : 37.54923903942108,
+  "size" : "4B",
+  "text" : "![header_image](195,0,865,105) barcode\n\n![text](105,140,599,180) Document No : TD01167104\n\n![text](105,206,740,246) Date : 25\/12\/2018 8:13:39 PM\n\n![text](105,267,385,307) Cashier : MANIS\n\n![text](105,326,264,362) Member :\n\n![title](405,392,647,434) ## CASH BILL\n\n![table](38,482,972,974) <table>\n  <thead>\n    <tr>\n      <th>CODE\/DESC<\/th>\n      <th>PRICE<\/th>\n      <th>Disc<\/th>\n      <th>AMOUNT<\/th>\n    <\/tr>\n    <tr>\n      <th>QTY<\/th>\n      <th>RM<\/th>\n      <th><\/th>\n      <th>RM<\/th>\n    <\/tr>\n  <\/thead>\n  <tbody>\n    <tr>\n      <td>9556939040118<\/td>\n      <td>RF MODELLING CLAY KIDDY FISH<\/td>\n      <td><\/td>\n      <td><\/td>\n    <\/tr>\n    <tr>\n      <td>1 PC *<\/td>\n      <td>9.000<\/td>\n      <td>0.00<\/td>\n      <td>9.00<\/td>\n    <\/tr>\n    <tr>\n      <td colspan=\"3\">Total :<\/td>\n      <td>9.00<\/td>\n    <\/tr>\n    <tr>\n      <td colspan=\"3\">Rour ding Adjustment :<\/td>\n      <td>0.00<\/td>\n    <\/tr>\n    <tr>\n      <td colspan=\"3\">Round ed Total (RM):<\/td>\n      <td>9.00<\/td>\n    <\/tr>\n  <\/tbody>\n<\/table>",
+  "tokensGenerated" : 535
+}

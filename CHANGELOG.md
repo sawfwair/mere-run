@@ -10,6 +10,10 @@ The format is based on Keep a Changelog.
   Qwen3.5 0.8B and 4B OCR variants and `--lighton-mode grounding` for labeled
   document regions, image descriptions, and chart data. Fix the released 1B
   text-weight prefix mapping and reject missing or mismatched weights.
+- Qualify all three released OCR checkpoints on a bounded 30-case image matrix:
+  1B and 4B pass their ten cases each; 0.8B misses a handwritten word in both
+  modes. Preserve raw outputs and reproduction tools. Use the measured small
+  admission class for managed 1B/0.8B single-backend OCR.
 
 ## 0.62.1 - 2026-10-06
 

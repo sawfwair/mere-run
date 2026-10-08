@@ -684,7 +684,11 @@ LightOnOCR 2. To intentionally replace an existing install with 3-1B, back it up
 and run `mere.run model pull vision-ocr-lighton --force`, or download 3-1B to a
 separate directory and pass that directory with `--model`.
 
-The implementation and offline contracts are locally tested. Released-checkpoint
-transcription, grounding accuracy, and comparative throughput remain unqualified.
+All three released BF16 checkpoints completed the [bounded native qualification](../benchmarks/lightonocr3-native-qualification-2026-10-08.md).
+1B and 4B passed all ten checked output cases each; 0.8B passed eight and failed
+the handwritten-word crop in both modes. The generated invoice rows, chart values,
+and table/chart grounding regions passed for every variant. This is a small
+image-input qualification; full transcription accuracy, upstream numerical parity,
+and comparative throughput remain unqualified.
 See the [LightOnOCR 3 release](https://huggingface.co/blog/lightonai/lightonocr-3)
 and [1B model card](https://huggingface.co/lightonai/LightOnOCR-3-1B).

@@ -32,6 +32,44 @@ final class MachineInferenceAdmissionTests: XCTestCase {
         }
     }
 
+    func testSmallLightOnOCRAdmissionUsesTheActualSingleBackendPlan() async throws {
+        let small = MachineInferenceRequest(label: "vision ocr", resourceClass: .small)
+        let standard = MachineInferenceRequest(label: "vision ocr", resourceClass: .standard)
+        let command = ["mere.run", "vision", "ocr", "photo.png"]
+        XCTAssertEqual(CLIInferenceAdmissionClassifier.request(arguments: command), small)
+        for model in ["vision-ocr-lighton", "vision-ocr-lighton-3-0.8b"] {
+            for selector in [["--model", model], ["-m", model], ["--model=" + model], ["-qm", model]] {
+                XCTAssertEqual(CLIInferenceAdmissionClassifier.request(arguments: command + selector), small)
+                for backend in [["--backend", "lighton"], ["-b", "lighton"], ["--backend=lighton"]] {
+                    XCTAssertEqual(CLIInferenceAdmissionClassifier.request(arguments: command + selector + backend), small)
+                }
+                for backend in [["--compare"], ["--backend", "glm"], ["-b", "infinity"], ["--backend=glm"]] {
+                    XCTAssertEqual(CLIInferenceAdmissionClassifier.request(arguments: command + selector + backend), standard)
+                }
+            }
+        }
+        for model in ["vision-ocr-lighton-3-4b", "/tmp/unknown-ocr"] {
+            XCTAssertEqual(CLIInferenceAdmissionClassifier.request(arguments: command + ["--model", model]), standard)
+        }
+        XCTAssertEqual(CLIInferenceAdmissionClassifier.request(
+            arguments: ["mere.run", "--models-root=/tmp/ocr", "vision", "ocr", "photo.png"]
+        ), small)
+        let coordinator = makeCoordinator(directory: try temporaryDirectory(), processID: 303,
+                                          physicalMemoryBytes: 36 * gibibyte, availableMemoryBytes: 12 * gibibyte)
+        let lease = try await coordinator.acquire(small)
+        XCTAssertEqual(try coordinator.snapshot().activePermits, 1)
+        lease.release()
+        let low = makeCoordinator(directory: try temporaryDirectory(), processID: 304,
+                                  physicalMemoryBytes: 36 * gibibyte, availableMemoryBytes: 5 * gibibyte)
+        do {
+            let lease = try await low.acquire(small)
+            lease.release()
+            XCTFail("Small OCR still requires six GiB headroom")
+        } catch let error as MachineInferenceAdmissionError {
+            XCTAssertEqual(error, .insufficientMemory(available: 5 * gibibyte, required: 6 * gibibyte))
+        }
+    }
+
     /// Marigold's download sits under the 48 GiB estimate threshold, but the catalog
     /// declares a 64 GB minimum because the BF16 base is loaded before quantization.
     /// The declaration, not a command list, makes every `vision depth` run large.

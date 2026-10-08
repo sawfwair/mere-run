@@ -1,0 +1,125 @@
+{
+  "public_source": {
+    "repo": "hf-internal-testing/fixtures_ocr",
+    "revision": "28fe12cdf7816b5dde94e22051b2ec8dc74267b7"
+  },
+  "cases": [
+    {
+      "id": "receipt",
+      "image": "receipt.jpeg",
+      "anchors": [
+        "CASH BILL",
+        "25/12/2018",
+        "MANIS",
+        "MODELLING CLAY",
+        "KIDDY FISH",
+        "9.00"
+      ],
+      "source": "public receipt scan",
+      "sha256": "d66a3287c847823c6ddab9f8b2080582b96a66b7816d178472f697ea84e227b3"
+    },
+    {
+      "id": "handwriting",
+      "image": "handwriting.jpeg",
+      "anchors": [
+        "industrie"
+      ],
+      "source": "public handwriting crop; manual transcription industrie",
+      "sha256": "b1b7bd2279ed653191e5861d273cf5cbe0a8b81e34c4c92debb6581a980d8d3b"
+    },
+    {
+      "id": "document",
+      "image": "document.png",
+      "anchors": [
+        "MERE RUN DOCUMENT CHECK",
+        "OCR-3-TEST-008",
+        "17 samples",
+        "23 samples",
+        "Montr\u00e9al",
+        "Zo\u00e9",
+        "Harbour sensor",
+        "42.00",
+        "18.50",
+        "60.50",
+        "MERE-1024"
+      ],
+      "source": "generated known-text multicolumn and invoice fixture",
+      "sha256": "7c61546579c53707933e3c374547f4f7bfc4201d079211e266ef96c76e27733b",
+      "table_rows": [
+        [
+          "Harbour sensor",
+          "3",
+          "$42.00"
+        ],
+        [
+          "Calibration kit",
+          "2",
+          "$18.50"
+        ],
+        [
+          "Total",
+          "5",
+          "$60.50"
+        ]
+      ],
+      "grounding_regions": [
+        {
+          "label": "table",
+          "box": [
+            66.667,
+            453.125,
+            916.667,
+            640.625
+          ]
+        }
+      ]
+    },
+    {
+      "id": "chart",
+      "image": "chart.png",
+      "anchors": [
+        "MONTHLY SAMPLE COUNTS",
+        "Jan",
+        "Feb",
+        "Mar",
+        "10",
+        "25",
+        "40"
+      ],
+      "source": "generated known-value chart fixture",
+      "sha256": "178d89632592727572ec35c670f3d804ad4d246c859d652ea050a0f6b3f21372",
+      "table_rows": [
+        [
+          "Jan",
+          "10"
+        ],
+        [
+          "Feb",
+          "25"
+        ],
+        [
+          "Mar",
+          "40"
+        ]
+      ],
+      "grounding_regions": [
+        {
+          "label": "chart",
+          "box": [
+            83.333,
+            250,
+            900,
+            837.5
+          ]
+        }
+      ]
+    },
+    {
+      "id": "blank",
+      "image": "blank.png",
+      "anchors": [],
+      "source": "generated blank-page termination fixture",
+      "sha256": "a633f5748f39f0fd222c26030c411193b438c9b23275cee185f520268196985c"
+    }
+  ]
+}

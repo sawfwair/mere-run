@@ -1,0 +1,17 @@
+{
+  "activeMemoryBytes" : 1706101112,
+  "boxes" : [
+
+  ],
+  "caseID" : "receipt",
+  "invalidBoxCount" : 0,
+  "missingAnchors" : [
+
+  ],
+  "mode" : "plain",
+  "peakMemoryBytes" : 2008783184,
+  "seconds" : 14.864727973937988,
+  "size" : "0.8B",
+  "text" : "Document No : TD01167104\n\nDate : 25\/12\/2018 8:13:39 PM\n\nCashier : MANIS\n\nMember :\n\n# CASH BILL\n\n<table>\n  <thead>\n    <tr>\n      <th>CODE\/DESC<\/th>\n      <th>QTY<\/th>\n      <th>PRICE<\/th>\n      <th>Disc<\/th>\n      <th>AMOUNT<\/th>\n    <\/tr>\n    <tr>\n      <th colspan=\"2\">RM<\/th>\n      <th colspan=\"2\">RM<\/th>\n    <\/tr>\n  <\/thead>\n  <tbody>\n    <tr>\n      <td>9556939040118<\/td>\n      <td>1 PC *<\/td>\n      <td>RF MODELLING CLAY KIDDY FISH<\/td>\n      <td>9.000<\/td>\n      <td>0.00<\/td>\n      <td>9.00<\/td>\n    <\/tr>\n    <tr>\n      <td colspan=\"4\">Total :<\/td>\n      <td>9.00<\/td>\n    <\/tr>\n    <tr>\n      <td colspan=\"4\">Rour ding Adjustment :<\/td>\n      <td>0.00<\/td>\n    <\/tr>\n    <tr>\n      <td colspan=\"4\">Round d Total (RM):<\/td>\n      <td>9.00<\/td>\n    <\/tr>\n  <\/tbody>\n<\/table>",
+  "tokensGenerated" : 376
+}

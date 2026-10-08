@@ -1,0 +1,54 @@
+{
+  "repo": "lightonai/LightOnOCR-3-1B",
+  "revision": "b9a2b4c17f1eee9f29058d716b66b5f8e7d8db86",
+  "files": [
+    {
+      "name": "chat_template.jinja",
+      "bytes": 720,
+      "sha256": "0942a43ee0ba48a608814e0b40ac9cb70bcc29ea72f19c84b1bf2597f05aa2bd",
+      "lfs_sha256_verified": false
+    },
+    {
+      "name": "config.json",
+      "bytes": 2363,
+      "sha256": "43b62f9ec0a7207f67fd032f7ef9719fa8b6b44d7b3cf20fbc2346329493ff3a",
+      "lfs_sha256_verified": false
+    },
+    {
+      "name": "generation_config.json",
+      "bytes": 219,
+      "sha256": "7d2566b271454af41e9ebc28851888e1ec7ca33a53fe644dac207856df952981",
+      "lfs_sha256_verified": false
+    },
+    {
+      "name": "model.safetensors",
+      "bytes": 2011367464,
+      "sha256": "32879861d5cdc3b2c3909d3f9a47dc8f7338685d13113c8c98c144f68b358dbb",
+      "lfs_sha256_verified": true
+    },
+    {
+      "name": "processor_config.json",
+      "bytes": 1023,
+      "sha256": "5292a61a089835ec6884836e3896bba1fc571c60df872e3ca9eb45bd3288910d",
+      "lfs_sha256_verified": false
+    },
+    {
+      "name": "special_tokens_map.json",
+      "bytes": 613,
+      "sha256": "76862e765266b85aa9459767e33cbaf13970f327a0e88d1c65846c2ddd3a1ecd",
+      "lfs_sha256_verified": false
+    },
+    {
+      "name": "tokenizer.json",
+      "bytes": 11422822,
+      "sha256": "f54b55fa0c3aba0c91ce09ea79ae4e62da24e2a1a630f96c4bae34aba25e234a",
+      "lfs_sha256_verified": true
+    },
+    {
+      "name": "tokenizer_config.json",
+      "bytes": 5591,
+      "sha256": "76d82c8010d0e0d5431aa5e3658c69e11a2a7250e789799d2be4ab75dc3fafed",
+      "lfs_sha256_verified": false
+    }
+  ]
+}

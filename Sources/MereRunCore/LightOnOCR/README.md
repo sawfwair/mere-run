@@ -20,3 +20,9 @@ OCR decoding reclaims unused MLX buffers when the reusable pool reaches 1 GiB.
 Growing sequence lengths can leave buffers that later tokens cannot reuse. The
 check follows prefill and each decode step. It does not discard live model or KV
 state, change global allocator limits, or change sampling and token limits.
+
+Released BF16 checkpoints have a [bounded native qualification](../../../docs/benchmarks/lightonocr3-native-qualification-2026-10-08.md).
+1B and 4B passed ten checked output cases each; 0.8B passed eight, with a
+handwritten-word transcription and grounding failure. The opt-in
+`LightOnOCR3CheckpointTests` records external-assets runs on Metal; ordinary
+unit tests skip it. See the report for saved outputs and reproduction commands.

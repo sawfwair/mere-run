@@ -1,0 +1,17 @@
+{
+  "activeMemoryBytes" : 1706101208,
+  "boxes" : [
+
+  ],
+  "caseID" : "blank",
+  "invalidBoxCount" : 0,
+  "missingAnchors" : [
+
+  ],
+  "mode" : "grounding",
+  "peakMemoryBytes" : 2414284602,
+  "seconds" : 0.4168480634689331,
+  "size" : "0.8B",
+  "text" : "",
+  "tokensGenerated" : 0
+}
