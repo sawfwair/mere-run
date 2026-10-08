@@ -1,0 +1,66 @@
+{
+  "repo": "lightonai/LightOnOCR-3-0.8B",
+  "revision": "be8cee5d200b80218cb2865a5deeec1fe6e25f52",
+  "files": [
+    {
+      "name": "chat_template.jinja",
+      "bytes": 7755,
+      "sha256": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80",
+      "lfs_sha256_verified": false
+    },
+    {
+      "name": "config.json",
+      "bytes": 2692,
+      "sha256": "842fafd8f06807269960515fa6f0e4b5dd27f9e645b67a2b3e84f1699ee8d60c",
+      "lfs_sha256_verified": false
+    },
+    {
+      "name": "generation_config.json",
+      "bytes": 205,
+      "sha256": "b1cfebea5837fc69aa89c3e2210dbe6494bb29a04e1e88beb227ddad53b9dfc1",
+      "lfs_sha256_verified": false
+    },
+    {
+      "name": "merges.txt",
+      "bytes": 3353259,
+      "sha256": "a9d356d7bdf1ef4949e3e748e95b8e10ad9d4e2e838eddc38a0a7b6b94d1db8d",
+      "lfs_sha256_verified": false
+    },
+    {
+      "name": "model.safetensors",
+      "bytes": 1706030528,
+      "sha256": "ae46aa6fd7136d57297ac006ed9ec345b7a2083feb2e99501bedcb014ca3efdf",
+      "lfs_sha256_verified": true
+    },
+    {
+      "name": "preprocessor_config.json",
+      "bytes": 390,
+      "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+      "lfs_sha256_verified": false
+    },
+    {
+      "name": "processor_config.json",
+      "bytes": 1191,
+      "sha256": "d89ef49ce9cd37fbf510158e13c1ef063d9286411c1ec9049932dbe0487143b1",
+      "lfs_sha256_verified": false
+    },
+    {
+      "name": "tokenizer.json",
+      "bytes": 19989325,
+      "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+      "lfs_sha256_verified": true
+    },
+    {
+      "name": "tokenizer_config.json",
+      "bytes": 1168,
+      "sha256": "c908cd42c5e6eac721445fb70841e45845a6a269c6ef2c595e97a578a9724671",
+      "lfs_sha256_verified": false
+    },
+    {
+      "name": "vocab.json",
+      "bytes": 6722759,
+      "sha256": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003",
+      "lfs_sha256_verified": false
+    }
+  ]
+}

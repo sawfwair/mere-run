@@ -1,0 +1,42 @@
+[
+  {
+    "model": "lightonai/LightOnOCR-3-0.8B",
+    "revision": "be8cee5d200b80218cb2865a5deeec1fe6e25f52",
+    "mode": "plain",
+    "device": "cpu",
+    "dtype": "float32",
+    "attention": "eager",
+    "torch": "2.14.1",
+    "transformers": "5.5.4",
+    "seconds": 24.392342500010272,
+    "tokensGenerated": 5,
+    "imageGridTHW": [
+      [
+        1,
+        10,
+        30
+      ]
+    ],
+    "text": "indus trie"
+  },
+  {
+    "model": "lightonai/LightOnOCR-3-0.8B",
+    "revision": "be8cee5d200b80218cb2865a5deeec1fe6e25f52",
+    "mode": "grounding",
+    "device": "cpu",
+    "dtype": "float32",
+    "attention": "eager",
+    "torch": "2.14.1",
+    "transformers": "5.5.4",
+    "seconds": 22.73297654199996,
+    "tokensGenerated": 5,
+    "imageGridTHW": [
+      [
+        1,
+        10,
+        30
+      ]
+    ],
+    "text": "indus trie"
+  }
+]

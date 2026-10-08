@@ -1,0 +1,44 @@
+{
+  "activeMemoryBytes" : 2042759568,
+  "boxes" : [
+    {
+      "label" : "title",
+      "x1" : 72,
+      "x2" : 615,
+      "y1" : 55,
+      "y2" : 98
+    },
+    {
+      "label" : "text",
+      "x1" : 75,
+      "x2" : 493,
+      "y1" : 133,
+      "y2" : 162
+    },
+    {
+      "label" : "chart",
+      "x1" : 75,
+      "x2" : 905,
+      "y1" : 238,
+      "y2" : 840
+    },
+    {
+      "label" : "text",
+      "x1" : 75,
+      "x2" : 463,
+      "y1" : 918,
+      "y2" : 940
+    }
+  ],
+  "caseID" : "chart",
+  "invalidBoxCount" : 0,
+  "missingAnchors" : [
+
+  ],
+  "mode" : "grounding",
+  "peakMemoryBytes" : 3593703812,
+  "seconds" : 9.66336703300476,
+  "size" : "1B",
+  "text" : "![title](72,55,615,98) # MONTHLY SAMPLE COUNTS\n\n![text](75,133,493,162) Samples collected in the first quarter\n\n![chart](75,238,905,840) <table>\n  <thead>\n    <tr>\n      <th>Month<\/th>\n      <th>Sample Counts<\/th>\n    <\/tr>\n  <\/thead>\n  <tbody>\n    <tr>\n      <td>Jan<\/td>\n      <td>10<\/td>\n    <\/tr>\n    <tr>\n      <td>Feb<\/td>\n      <td>25<\/td>\n    <\/tr>\n    <tr>\n      <td>Mar<\/td>\n      <td>40<\/td>\n    <\/tr>\n  <\/tbody>\n<\/table>\n\n![text](75,918,463,940) Source: deterministic qualification fixture\n",
+  "tokensGenerated" : 212
+}

@@ -1,0 +1,58 @@
+{
+  "activeMemoryBytes" : 2047070624,
+  "boxes" : [
+    {
+      "label" : "text",
+      "x1" : 98,
+      "x2" : 608,
+      "y1" : 138,
+      "y2" : 188
+    },
+    {
+      "label" : "text",
+      "x1" : 96,
+      "x2" : 740,
+      "y1" : 209,
+      "y2" : 261
+    },
+    {
+      "label" : "text",
+      "x1" : 96,
+      "x2" : 476,
+      "y1" : 269,
+      "y2" : 320
+    },
+    {
+      "label" : "text",
+      "x1" : 96,
+      "x2" : 265,
+      "y1" : 328,
+      "y2" : 388
+    },
+    {
+      "label" : "title",
+      "x1" : 401,
+      "x2" : 656,
+      "y1" : 409,
+      "y2" : 468
+    },
+    {
+      "label" : "table",
+      "x1" : 31,
+      "x2" : 968,
+      "y1" : 499,
+      "y2" : 996
+    }
+  ],
+  "caseID" : "receipt",
+  "invalidBoxCount" : 0,
+  "missingAnchors" : [
+
+  ],
+  "mode" : "grounding",
+  "peakMemoryBytes" : 3597781380,
+  "seconds" : 12.580706000328064,
+  "size" : "1B",
+  "text" : "![text](98,138,608,188) Document No : TD01167104\n\n![text](96,209,740,261) Date : 25\/12\/2018 8:13:39 PM\n\n![text](96,269,476,320) Cashier : MANIS\n\n![text](96,328,265,388) Member :\n\n![title](401,409,656,468) # CASH BILL\n\n![table](31,499,968,996) <table>\n  <thead>\n    <tr>\n      <th>CODE\/DESC<\/th>\n      <th>PRICE<\/th>\n      <th>Disc<\/th>\n      <th>AMOUNT<\/th>\n    <\/tr>\n    <tr>\n      <th>QTY<\/th>\n      <th>RM<\/th>\n      <th><\/th>\n      <th>RM<\/th>\n    <\/tr>\n  <\/thead>\n  <tbody>\n    <tr>\n      <td>9556939040118<\/td>\n      <td>KF MODELLING CLAY KIDDY FISH<\/td>\n      <td><\/td>\n      <td><\/td>\n    <\/tr>\n    <tr>\n      <td>1 PC *<\/td>\n      <td>9.000<\/td>\n      <td>0.00<\/td>\n      <td>9.00<\/td>\n    <\/tr>\n    <tr>\n      <td colspan=\"3\">Total :<\/td>\n      <td>9.00<\/td>\n    <\/tr>\n    <tr>\n      <td colspan=\"3\">Rounding Adjustment :<\/td>\n      <td>0.00<\/td>\n    <\/tr>\n    <tr>\n      <td colspan=\"3\">Rounded Total (RM):<\/td>\n      <td>9.00<\/td>\n    <\/tr>\n  <\/tbody>\n<\/table>\n",
+  "tokensGenerated" : 468
+}

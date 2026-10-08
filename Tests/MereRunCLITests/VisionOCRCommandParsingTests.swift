@@ -101,4 +101,18 @@ final class VisionOCRCommandParsingTests: XCTestCase {
         ])
         XCTAssertEqual(cmd.infinityPrompt, "Extract the table as Markdown.")
     }
+
+    func testLightOnOCR3ModesAndManagedVariants() throws {
+        XCTAssertEqual(try VisionOCR.parse(["/tmp/page.png"]).lightonMode, .plain)
+        for model in ["vision-ocr-lighton", "vision-ocr-lighton-3-0.8b", "vision-ocr-lighton-3-4b"] {
+            let command = try VisionOCR.parse([
+                "/tmp/page.png", "--model", model, "--lighton-mode", "grounding", "--compare"
+            ])
+            XCTAssertEqual(command.lightonMode.runtimeMode, .grounding)
+            XCTAssertEqual(command.model, model)
+            XCTAssertTrue(command.plan.runsLightOn)
+        }
+        XCTAssertThrowsError(try VisionOCR.parse(["/tmp/page.png", "--lighton-mode", "custom"]))
+    }
+
 }

@@ -106,8 +106,9 @@ extension LightOnOCRGenerator {
             if key.hasPrefix("vision_encoder.") {
                 visionWeights[String(key.dropFirst("vision_encoder.".count))] = value
             } else if key.hasPrefix("language_model.") {
-                let mappedKey = "encoder." + key.dropFirst("language_model.".count)
-                textWeights[String(mappedKey)] = value
+                if let mappedKey = Self.textWeightKey(key) {
+                    textWeights[mappedKey] = value
+                }
             } else if key.hasPrefix("vision_projection.") {
                 projWeights[String(key.dropFirst("vision_projection.".count))] = value
             }
@@ -130,28 +131,25 @@ extension LightOnOCRGenerator {
         }
 
         log("[OCR] Applying vision weights...")
-        do {
-            try visionEncoder.update(parameters: ModuleParameters.unflattened(visionWeights), verify: .noUnusedKeys)
-        } catch {
-            log("[OCR] Vision weight error: \(error)")
-            try visionEncoder.update(parameters: ModuleParameters.unflattened(visionWeights), verify: .none)
-        }
+        try visionEncoder.update(parameters: ModuleParameters.unflattened(visionWeights), verify: .all)
         visionWeights.removeAll()
         log("[OCR] After vision update: \(Memory.activeMemory / 1024 / 1024) MB")
 
         log("[OCR] Applying text weights...")
-        do {
-            try textDecoder.update(parameters: ModuleParameters.unflattened(textWeights), verify: .noUnusedKeys)
-        } catch {
-            log("[OCR] Text weight error: \(error)")
-            try textDecoder.update(parameters: ModuleParameters.unflattened(textWeights), verify: .none)
-        }
+        try textDecoder.update(parameters: ModuleParameters.unflattened(textWeights), verify: .all)
         textWeights.removeAll()
         log("[OCR] After text update: \(Memory.activeMemory / 1024 / 1024) MB")
 
         log("[OCR] Applying projection weights...")
-        try visionProjection.update(parameters: ModuleParameters.unflattened(projWeights), verify: .none)
+        try visionProjection.update(parameters: ModuleParameters.unflattened(projWeights), verify: .all)
         projWeights.removeAll()
         log("[OCR] After projection update: \(Memory.activeMemory / 1024 / 1024) MB")
     }
+
+    static func textWeightKey(_ key: String) -> String? {
+        let prefix = key.hasPrefix("language_model.model.") ? "language_model.model." : "language_model."
+        guard key.hasPrefix(prefix) else { return nil }
+        return "encoder." + key.dropFirst(prefix.count)
+    }
+
 }

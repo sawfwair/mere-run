@@ -86,6 +86,18 @@ enum CLIInferenceAdmissionClassifier {
             let large = subcommand == "train-lora"
             return MachineInferenceRequest(label: label, resourceClass: large ? .large : .standard)
         case "vision":
+            // Released 1B/0.8B OCR qualification peaks below 4 GiB on the bounded
+            // document matrix. Comparisons and unknown roots retain the standard floor.
+            if subcommand == "ocr",
+               let (_, invocation) = CLICapabilityGate.invocation(commandLine: tokens),
+               !invocation.contains("--compare"),
+               (invocation.value("--backend") ?? "lighton") == "lighton",
+               let spec = ManagedModelCatalog.spec(
+                   for: invocation.value("--model") ?? ModelResolver.ModelID.lightOnOCR.rawValue
+               ),
+               [ModelResolver.ModelID.lightOnOCR.rawValue, ModelResolver.ModelID.lightOnOCR3Small.rawValue].contains(spec.id) {
+                return MachineInferenceRequest(label: label, resourceClass: .small)
+            }
             if subcommand == "depth" {
                 // Every `vision depth` run loads Marigold, including a local model
                 // root, so the managed catalog's declared minimum memory classifies

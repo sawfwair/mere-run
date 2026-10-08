@@ -1,0 +1,263 @@
+{
+  "cases": 30,
+  "passed": 28,
+  "checks": [
+    {
+      "id": "1B-receipt-plain",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 0,
+      "region_scores": []
+    },
+    {
+      "id": "1B-receipt-grounding",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 0,
+      "region_scores": []
+    },
+    {
+      "id": "1B-handwriting-plain",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 0,
+      "region_scores": []
+    },
+    {
+      "id": "1B-handwriting-grounding",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 0,
+      "region_scores": []
+    },
+    {
+      "id": "1B-document-plain",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 3,
+      "region_scores": []
+    },
+    {
+      "id": "1B-document-grounding",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 3,
+      "region_scores": [
+        {
+          "label": "table",
+          "iou": 0.9473186794897704
+        }
+      ]
+    },
+    {
+      "id": "1B-chart-plain",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 3,
+      "region_scores": []
+    },
+    {
+      "id": "1B-chart-grounding",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 3,
+      "region_scores": [
+        {
+          "label": "chart",
+          "iou": 0.9602366859464436
+        }
+      ]
+    },
+    {
+      "id": "1B-blank-plain",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 0,
+      "region_scores": []
+    },
+    {
+      "id": "1B-blank-grounding",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 0,
+      "region_scores": []
+    },
+    {
+      "id": "0.8B-receipt-plain",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 0,
+      "region_scores": []
+    },
+    {
+      "id": "0.8B-receipt-grounding",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 0,
+      "region_scores": []
+    },
+    {
+      "id": "0.8B-handwriting-plain",
+      "passed": false,
+      "failures": [
+        {
+          "check": "text_anchors",
+          "missing": [
+            "industrie"
+          ]
+        }
+      ],
+      "table_rows_checked": 0,
+      "region_scores": []
+    },
+    {
+      "id": "0.8B-handwriting-grounding",
+      "passed": false,
+      "failures": [
+        {
+          "check": "text_anchors",
+          "missing": [
+            "industrie"
+          ]
+        },
+        {
+          "check": "grounding_boxes_missing"
+        }
+      ],
+      "table_rows_checked": 0,
+      "region_scores": []
+    },
+    {
+      "id": "0.8B-document-plain",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 3,
+      "region_scores": []
+    },
+    {
+      "id": "0.8B-document-grounding",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 3,
+      "region_scores": [
+        {
+          "label": "table",
+          "iou": 0.9820430823826533
+        }
+      ]
+    },
+    {
+      "id": "0.8B-chart-plain",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 3,
+      "region_scores": []
+    },
+    {
+      "id": "0.8B-chart-grounding",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 3,
+      "region_scores": [
+        {
+          "label": "chart",
+          "iou": 0.97369845784492
+        }
+      ]
+    },
+    {
+      "id": "0.8B-blank-plain",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 0,
+      "region_scores": []
+    },
+    {
+      "id": "0.8B-blank-grounding",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 0,
+      "region_scores": []
+    },
+    {
+      "id": "4B-receipt-plain",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 0,
+      "region_scores": []
+    },
+    {
+      "id": "4B-receipt-grounding",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 0,
+      "region_scores": []
+    },
+    {
+      "id": "4B-handwriting-plain",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 0,
+      "region_scores": []
+    },
+    {
+      "id": "4B-handwriting-grounding",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 0,
+      "region_scores": []
+    },
+    {
+      "id": "4B-document-plain",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 3,
+      "region_scores": []
+    },
+    {
+      "id": "4B-document-grounding",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 3,
+      "region_scores": [
+        {
+          "label": "table",
+          "iou": 0.9731279308323564
+        }
+      ]
+    },
+    {
+      "id": "4B-chart-plain",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 3,
+      "region_scores": []
+    },
+    {
+      "id": "4B-chart-grounding",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 3,
+      "region_scores": [
+        {
+          "label": "chart",
+          "iou": 0.9713408344603076
+        }
+      ]
+    },
+    {
+      "id": "4B-blank-plain",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 0,
+      "region_scores": []
+    },
+    {
+      "id": "4B-blank-grounding",
+      "passed": true,
+      "failures": [],
+      "table_rows_checked": 0,
+      "region_scores": []
+    }
+  ]
+}

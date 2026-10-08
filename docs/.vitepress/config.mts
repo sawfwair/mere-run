@@ -29,11 +29,13 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
   async buildEnd(config) {
-    await cp(
-      join(config.srcDir, 'benchmarks/receipts'),
-      join(config.outDir, 'benchmarks/receipts'),
-      { recursive: true }
-    )
+    for (const directory of ['benchmarks/receipts', 'benchmarks/lightonocr3-2026-10-08']) {
+      await cp(
+        join(config.srcDir, directory),
+        join(config.outDir, directory),
+        { recursive: true }
+      )
+    }
   },
   srcExclude: [
     'README.md',

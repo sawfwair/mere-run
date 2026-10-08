@@ -1,0 +1,17 @@
+{
+  "activeMemoryBytes" : 1706101100,
+  "boxes" : [
+
+  ],
+  "caseID" : "document",
+  "invalidBoxCount" : 0,
+  "missingAnchors" : [
+
+  ],
+  "mode" : "plain",
+  "peakMemoryBytes" : 2773018408,
+  "seconds" : 10.49557101726532,
+  "size" : "0.8B",
+  "text" : "# MERE RUN DOCUMENT CHECK\n\nReference: OCR-3-TEST-008\n\n## Project summary\n\nThree sensors monitor the harbour.  \nThe trial begins on 8 October 2026.  \nStation Alpha recorded 17 samples.  \nStation Beta recorded 23 samples.\n\n## Notes françaises\n\nTempérature: 18,5 degrés.  \nLe café est ouvert à Montréal.  \nÉquipe: Zoé, André et Émile.  \nAucun incident pendant le test.\n\n## INVOICE SUMMARY\n\n<table>\n  <tr>\n    <th>Item<\/th>\n    <th>Quantity<\/th>\n    <th>Amount<\/th>\n  <\/tr>\n  <tr>\n    <td>Harbour sensor<\/td>\n    <td>3<\/td>\n    <td>$42.00<\/td>\n  <\/tr>\n  <tr>\n    <td>Calibration kit<\/td>\n    <td>2<\/td>\n    <td>$18.50<\/td>\n  <\/tr>\n  <tr>\n    <td>Total<\/td>\n    <td>5<\/td>\n    <td>$60.50<\/td>\n  <\/tr>\n<\/table>\n\nConclusion: all five units passed inspection.\n\nPage 1 \/ 1   Verification code: MERE-1024",
+  "tokensGenerated" : 307
+}

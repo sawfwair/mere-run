@@ -1,0 +1,86 @@
+{
+  "activeMemoryBytes" : 1706101136,
+  "boxes" : [
+    {
+      "label" : "title",
+      "x1" : 63,
+      "x2" : 703,
+      "y1" : 44,
+      "y2" : 75
+    },
+    {
+      "label" : "text",
+      "x1" : 64,
+      "x2" : 396,
+      "y1" : 100,
+      "y2" : 118
+    },
+    {
+      "label" : "title",
+      "x1" : 62,
+      "x2" : 297,
+      "y1" : 139,
+      "y2" : 166
+    },
+    {
+      "label" : "text",
+      "x1" : 64,
+      "x2" : 441,
+      "y1" : 188,
+      "y2" : 309
+    },
+    {
+      "label" : "title",
+      "x1" : 554,
+      "x2" : 786,
+      "y1" : 139,
+      "y2" : 164
+    },
+    {
+      "label" : "text",
+      "x1" : 555,
+      "x2" : 867,
+      "y1" : 187,
+      "y2" : 308
+    },
+    {
+      "label" : "title",
+      "x1" : 64,
+      "x2" : 337,
+      "y1" : 406,
+      "y2" : 427
+    },
+    {
+      "label" : "table",
+      "x1" : 65,
+      "x2" : 918,
+      "y1" : 451,
+      "y2" : 640
+    },
+    {
+      "label" : "text",
+      "x1" : 64,
+      "x2" : 551,
+      "y1" : 744,
+      "y2" : 764
+    },
+    {
+      "label" : "footer",
+      "x1" : 64,
+      "x2" : 445,
+      "y1" : 918,
+      "y2" : 935
+    }
+  ],
+  "caseID" : "document",
+  "invalidBoxCount" : 0,
+  "missingAnchors" : [
+
+  ],
+  "mode" : "grounding",
+  "peakMemoryBytes" : 2770773752,
+  "seconds" : 18.69313395023346,
+  "size" : "0.8B",
+  "text" : "![title](63,44,703,75) # MERE RUN DOCUMENT CHECK\n\n![text](64,100,396,118) Reference: OCR-3-TEST-008\n\n![title](62,139,297,166) ## Project summary\n\n![text](64,188,441,309) Three sensors monitor the harbour. The trial begins on 8 October 2026. Station Alpha recorded 17 samples. Station Beta recorded 23 samples.\n\n![title](554,139,786,164) ## Notes françaises\n\n![text](555,187,867,308) Température: 18,5 degrés. Le café est ouvert à Montréal. Équipe: Zoé, André et Émile. Aucun incident pendant le test.\n\n![title](64,406,337,427) ## INVOICE SUMMARY\n\n![table](65,451,918,640) <table>\n  <tr>\n    <th>Item<\/th>\n    <th>Quantity<\/th>\n    <th>Amount<\/th>\n  <\/tr>\n  <tr>\n    <td>Harbour sensor<\/td>\n    <td>3<\/td>\n    <td>&dollar;42.00<\/td>\n  <\/tr>\n  <tr>\n    <td>Calibration kit<\/td>\n    <td>2<\/td>\n    <td>&dollar;18.50<\/td>\n  <\/tr>\n  <tr>\n    <td>Total<\/td>\n    <td>5<\/td>\n    <td>&dollar;60.50<\/td>\n  <\/tr>\n<\/table>\n\n![text](64,744,551,764) Conclusion: all five units passed inspection.\n\n![footer](64,918,445,935) Page 1 \/ 1 Verification code: MERE-1024",
+  "tokensGenerated" : 488
+}

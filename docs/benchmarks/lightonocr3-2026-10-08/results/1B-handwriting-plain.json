@@ -1,0 +1,17 @@
+{
+  "activeMemoryBytes" : 2016719248,
+  "boxes" : [
+
+  ],
+  "caseID" : "handwriting",
+  "invalidBoxCount" : 0,
+  "missingAnchors" : [
+
+  ],
+  "mode" : "plain",
+  "peakMemoryBytes" : 3120531844,
+  "seconds" : 0.5588440895080566,
+  "size" : "1B",
+  "text" : "industrie\n",
+  "tokensGenerated" : 4
+}
