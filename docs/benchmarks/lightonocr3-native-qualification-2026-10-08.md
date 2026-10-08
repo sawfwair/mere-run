@@ -20,7 +20,7 @@ returned empty text in both modes for every model.
 | 0.8B | 8 / 10 | 2.58 GiB | 14.86 / 14.44 s | 10.50 / 18.69 s |
 | 4B | 10 / 10 | 9.41 GiB | 37.48 / 37.55 s | 25.29 / 24.96 s |
 
-Timings are one sequential debug-build run on a 36 GiB Apple Silicon Mac.
+Timings are one sequential native debug-build run.
 The first receipt/plain run includes model initialization; later runs reuse the
 loaded model. Disk and Metal caches were already warm. These are bounded smoke
 measurements, not a comparative throughput benchmark. MLX peak memory resets
@@ -126,8 +126,8 @@ this also exercised auto-download. The original installed OCR model was preserve
 [CLI records](lightonocr3-2026-10-08/cli-checks.json) include output hashes and
 available process measurements. These CLI timings include resolution, and first
 runs include downloads; they are separate from the native timings above.
-The 4B CLI peaked at 10.47 GiB RSS and 18.96 GiB process footprint. The test host
-had 36 GiB; minimum-memory configurations were not qualified.
+The 4B CLI peaked at 10.47 GiB RSS and 18.96 GiB process footprint.
+Minimum-memory configurations were not qualified.
 
 ## Local repository gate
 
