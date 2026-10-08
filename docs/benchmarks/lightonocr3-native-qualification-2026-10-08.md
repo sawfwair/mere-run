@@ -26,7 +26,7 @@ loaded model. Disk and Metal caches were already warm. These are bounded smoke
 measurements, not a comparative throughput benchmark. MLX peak memory resets
 before each call and measures MLX allocations, not total system memory or RSS.
 
-The independent [output verifier](lightonocr3-2026-10-08/verify-results.py) checks
+The independent [output verifier source](https://github.com/sawfwair/mere-run/blob/main/docs/benchmarks/lightonocr3-2026-10-08/verify-results.py) checks
 selected text anchors, exact invoice/chart cell rows, empty blank-page output,
 termination, normalized box bounds, and known table/chart region overlap.
 The full [summary](lightonocr3-2026-10-08/summary.json) and all thirty
