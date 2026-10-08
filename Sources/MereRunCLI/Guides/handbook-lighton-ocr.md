@@ -1,10 +1,10 @@
-# LightOnOCR 2 (LightOn)
+# LightOnOCR 3 (LightOn)
 
 ## Purpose
 
 This guide is for mere.run Studio and command-line users.
 
-Prepare readable pages for LightOnOCR 2.
+Prepare readable pages for LightOnOCR 3.
 
 ## Start here
 
@@ -71,21 +71,29 @@ save the prompt or input, model ID, parameters, and output together.
 
 ## Covered models
 
-This guide covers the `vision-ocr-lighton` model.
+This guide covers `vision-ocr-lighton` (3-1B), `vision-ocr-lighton-3-0.8b`,
+and `vision-ocr-lighton-3-4b`. The 1B model uses Pixtral; the other sizes use
+native Qwen3.5. Use `--lighton-mode plain` for Markdown transcription, or
+`--lighton-mode grounding` for labeled document regions, image descriptions,
+and chart data. Boxes use page coordinates normalized to 0–1000.
+
+The runtime sends an empty prompt or the exact word `grounding`, as trained.
+For Qwen variants it disables thinking and caps image processing at 5 MP.
+Review chart estimates and layout boxes against the page.
 
 ## Sources and validation
 
 This original mere.run recipe draws on provider material and local command
 documentation. Check the local controls before applying provider examples.
 
-Editorial review date: September 4, 2026.
+Editorial review date: October 8, 2026.
 
 These recipes have not been validated with model inference. Review generated
 results before relying on a recipe.
 
 For model and runtime details, see the following sources:
 
-- [LightOnOCR model card](https://huggingface.co/lightonai/LightOnOCR-2-1B)
+- [LightOnOCR model card](https://huggingface.co/lightonai/LightOnOCR-3-1B)
 - [Vision runtime documentation](https://github.com/sawfwair/mere-run/blob/main/docs/runtime/vision.md)
 
 Source links require a network connection. The complete recipe and examples are

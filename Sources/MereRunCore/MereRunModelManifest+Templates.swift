@@ -1806,6 +1806,21 @@ extension MereRunModelManifest {
                 upstreamRepoId: OpenAIPrivacyFilterCatalog.defaultRepoId,
                 createdAt: createdAt
             )
+        case .lightOnOCR3Small, .lightOnOCR3FourB:
+            let profile = Q35Resources.profile(for: modelID.rawValue)!
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen35HybridMoE,
+                family: .ocr,
+                tier: modelID == .lightOnOCR3Small ? .nano : .max,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.visionOCR],
+                components: q35TextComponents,
+                upstreamRepoId: "\(profile.upstreamRepoId)@\(profile.upstreamRevision)",
+                createdAt: createdAt
+            )
         case .lightOnOCR:
             return MereRunModelManifest(
                 id: modelID.rawValue,
@@ -1823,7 +1838,7 @@ extension MereRunModelManifest {
                     vae: nil,
                     scheduler: nil
                 ),
-                upstreamRepoId: "lightonai/LightOnOCR-2-1B",
+                upstreamRepoId: "lightonai/LightOnOCR-3-1B@\(LightOnOCRResources.oneBRevision)",
                 createdAt: createdAt
             )
         case .aceStep, .aceStepXLBase, .aceStepXLSFT, .aceStepXLTurbo, .aceStepXLTurboLM4B:

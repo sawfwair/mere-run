@@ -7,7 +7,15 @@ or external comparison CLIs, with optional backend comparison.
 
 ## Required Models
 
-Default managed LightOn id: `vision-ocr-lighton`.
+Default managed LightOn id: `vision-ocr-lighton` (LightOnOCR 3-1B).
+
+LightOnOCR 3 uses `--lighton-mode plain` by default. Use
+`--lighton-mode grounding` for labeled boxes in 0–1000 page coordinates,
+image descriptions, and extracted chart tables. Select the 1B default with
+`--model vision-ocr-lighton`, or choose `vision-ocr-lighton-3-0.8b` or
+`vision-ocr-lighton-3-4b`. Existing 1B installations stay installed until you
+intentionally replace them; see the LightOn model handbook for upgrade steps.
+
 
 Default native Infinity id: `vision-ocr-infinity-pro-int8`. The full BF16
 leaderboard Pro model remains
@@ -34,6 +42,7 @@ mere.run vision ocr --help
 - `--compare`: compare LightOn against the selected secondary backend; defaults
   to GLM when `--backend lighton`.
 - `--model`, `-m`: LightOn managed id or local model directory.
+- `--lighton-mode`: `plain` (default) or `grounding` for labeled regions.
 - `--glmocr-cli`: path to the `glmocr` executable.
 - `--glm-config`: GLM-OCR config YAML.
 - `--infinity-runtime`: `native` or `external`.
@@ -48,7 +57,7 @@ mere.run vision ocr --help
 - `--infinity-task`: `doc2json`, `doc2md`, or `custom`.
 - `--infinity-prompt`: custom prompt for `--infinity-task custom`.
 - `--infinity-output-format`: `md` or `json`.
-- `--output`, `-o`: output directory for `.txt` files.
+- `--output-dir`, `-o`: output directory for `.txt` files.
 - `--max-tokens`: generated token cap.
 - `--temperature`: lower is more deterministic.
 - `--quiet`, `-q`: output only OCR text.
@@ -88,7 +97,7 @@ mere.run vision ocr ./receipt.jpg --quiet
 ```bash
 mere.run vision ocr ./pages/*.png \
   --backend lighton \
-  --output ./ocr-text \
+  --output-dir ./ocr-text \
   --temperature 0.1
 ```
 
@@ -131,7 +140,7 @@ mere.run vision ocr ./page.png \
 ## Sources
 
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Commands/VisionOCRCommand.swift
-- https://huggingface.co/lightonai/LightOnOCR-2-1B
+- https://huggingface.co/lightonai/LightOnOCR-3-1B
 - https://github.com/zai-org/GLM-OCR
 - https://huggingface.co/infly/Infinity-Parser2-Pro
 - https://github.com/infly-ai/INF-MLLM/tree/main/Infinity-Parser2

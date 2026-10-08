@@ -8,6 +8,7 @@ import MLXFast
 /// follow the actor flow before dropping into vision/text details.
 public actor LightOnOCRGenerator {
     public struct Config: Sendable {
+        public let mode: LightOnOCRMode
         public let maxNewTokens: Int
         public let temperature: Float
         public let logProgress: Bool
@@ -15,8 +16,10 @@ public actor LightOnOCRGenerator {
         public init(
             maxNewTokens: Int = 4096,
             temperature: Float = 0.2,
-            logProgress: Bool = false
+            logProgress: Bool = false,
+            mode: LightOnOCRMode = .plain
         ) {
+            self.mode = mode
             self.maxNewTokens = maxNewTokens
             self.temperature = temperature
             self.logProgress = logProgress
@@ -28,6 +31,7 @@ public actor LightOnOCRGenerator {
         public let tokensGenerated: Int
     }
 
+    var qwenGenerator: Q35Generator?
     var visionEncoder: PixtralVisionEncoder?
     var textDecoder: QwenTextEncoder?
     var visionProjection: VisionProjection?
@@ -51,6 +55,15 @@ public actor LightOnOCRGenerator {
         config: Config = Config()
     ) async throws -> Result {
         logProgress = config.logProgress
+        let rootURL = URL(fileURLWithPath: modelPath)
+        let architecture = try JSONDecoder().decode(
+            LightOnOCRResources.Architecture.self,
+            from: Data(contentsOf: rootURL.appendingPathComponent("config.json"))
+        )
+        if architecture.modelType == .qwen35 {
+            return try await ocrQwen(imageURL: imageURL, rootURL: rootURL, config: config)
+        }
+        if qwenGenerator != nil { await unload() }
 
         if loadedModelPath != modelPath {
             try await loadModels(from: modelPath)
@@ -93,7 +106,7 @@ public actor LightOnOCRGenerator {
         MLX.eval(visionFeatures)
         log("[OCR] Projected features: \(visionFeatures.shape), memory: \(Memory.activeMemory / 1024 / 1024) MB")
 
-        let (preTokens, postTokens) = buildOCRPromptParts(tokenizer: tokenizer)
+        let (preTokens, postTokens) = try buildOCRPromptParts(tokenizer: tokenizer, mode: config.mode)
         let preIds = MLXArray(preTokens.map { Int32($0) }).reshaped(1, preTokens.count)
         let postIds = MLXArray(postTokens.map { Int32($0) }).reshaped(1, postTokens.count)
         let preEmbeds = textDecoder.encoder.embed(inputIds: preIds)
@@ -174,7 +187,9 @@ public actor LightOnOCRGenerator {
         )
     }
 
-    public func unload() {
+    public func unload() async {
+        await qwenGenerator?.unload()
+        qwenGenerator = nil
         visionEncoder = nil
         textDecoder = nil
         visionProjection = nil

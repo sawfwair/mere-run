@@ -527,6 +527,7 @@ extension CommandFlags {
         package static let defaultValues = [
             "--backend": "lighton",
             "--model": "vision-ocr-lighton",
+            "--lighton-mode": "plain",
             "--glmocr-cli": "glmocr",
             "--infinity-runtime": "native",
             "--infinity-parser-cli": "parser",
@@ -546,6 +547,7 @@ extension CommandFlags {
         package static let backend = "--backend"
         package static let compare = "--compare"
         package static let model = "--model"
+        package static let lightonMode = "--lighton-mode"
         package static let glmocrCli = "--glmocr-cli"
         package static let glmConfig = "--glm-config"
         package static let infinityRuntime = "--infinity-runtime"

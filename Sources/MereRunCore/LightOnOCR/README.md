@@ -1,6 +1,10 @@
 # LightOnOCR
 
-OCR runtime built around Pixtral-style vision encoding and text generation.
+LightOnOCR 3 runtime: the 1B checkpoint uses Pixtral-style vision encoding and
+Qwen3 text generation. The 0.8B and 4B checkpoints reuse the native Qwen3.5 runtime
+through `LightOnOCRGenerator+Qwen.swift`. The typed architecture discriminator
+selects the runtime for managed IDs and local paths. Plain mode sends no text;
+grounding sends the exact trained prompt and preserves the model's raw output.
 
 - `LightOnOCRGenerator*.swift`: loading and inference.
 - `LightOnOCRSupport.swift`: shared decoding/model helpers.
