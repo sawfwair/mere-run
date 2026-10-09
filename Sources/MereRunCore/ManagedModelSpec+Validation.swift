@@ -272,12 +272,16 @@ public extension ManagedModelSpec {
                 : Self.missingSortformerPaths(in: rootURL, fileManager: fileManager)
         case .qwen3Embedding:
             return Qwen3EmbeddingResources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .pplxEmbedV2:
+            return PPLXEmbedV2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .embeddingGemma2:
             return EmbeddingGemma2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .qwen3VLEmbedding:
             return Qwen3VLEmbeddingResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .laya:
             return LayaCatalog.validate(root: rootURL, modelID: id, fileManager: fileManager)
+        case .d1:
+            return D1Catalog.validate(root: rootURL, modelID: id, fileManager: fileManager)
         case .clef:
             return ClefCatalog.validate(root: rootURL, fileManager: fileManager)
         case .gliner25Decide:

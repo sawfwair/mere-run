@@ -1,3 +1,4 @@
+#if !os(iOS)
 import Foundation
 import MereRunLayaModel
 @preconcurrency import Hub
@@ -99,3 +100,4 @@ public final class LayaTokenizer {
         return LayaTokenSequence(ids: ids, markers: markers, details: details)
     }
 }
+#endif

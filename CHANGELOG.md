@@ -7,6 +7,21 @@ The format is based on Keep a Changelog.
 ## Unreleased
 
 - Add native Clef Omni BF16 structured decisions with the Qwen3-Omni MoE thinker, mixed local image/audio/video input, deep-stack vision, timestamp-interleaved video soundtracks, and 64,000-token preflight. Add streaming MLX Q4/group-64 expert conversion for smaller-memory machines; eight short real-checkpoint text/media probes pass on a 36 GB Mac with 22.06 GB peak MLX allocation. Larger contexts and media budgets remain unqualified.
+
+- Strip local symbols from the iOS Release executable while preserving its dSYM
+  and exported symbols for hosted tests, keeping the existing CI size budget.
+
+- Add native PPLX Embed v2 late 0.6B/9B text and image token embeddings, MaxSim
+  scoring, and contextual 9B preview chunk embeddings through `text embed`, with
+  pinned FP32 checkpoints, 1024/2048-dimensional int8 output, and optional normalization.
+- Add native packed PPLX 9B support and pinned Sawfwair late mixed Q4/Q8 and
+  context Q8 artifacts, with reproducible RunPod conversion, paired FP32
+  diagnostics, native Apple validation, and NFC-aware Unicode chunk offsets.
+
+- Add native Swift/MLX D1-3B and D1 omni 600M decision models to `text decide`,
+  with ordered choice/score/yes-no questions, image inputs, omni audio inputs,
+  token-budget preflight, and pinned original safetensors downloads.
+
 - Upgrade the default LightOn OCR download to pinned LightOnOCR 3-1B; add native
   Qwen3.5 0.8B and 4B OCR variants and `--lighton-mode grounding` for labeled
   document regions, image descriptions, and chart data. Fix the released 1B

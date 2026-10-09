@@ -1,3 +1,4 @@
+#if !os(iOS)
 import Foundation
 import MLX
 import MereRunLayaModel
@@ -115,3 +116,4 @@ public final class LayaDecisionOperation {
             temperatureClamped: temperature.raw != temperature.applied)
     }
 }
+#endif

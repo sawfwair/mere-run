@@ -67,3 +67,15 @@ RMS weights, without Qwen3.5's zero-centered offset or attention output gates.
 visual positions after its first decoder layers. Core owns checkpoint mapping,
 local media, request spans, and the shared Clef joint head. The option lexical
 prior uses the untied thinker output embedding, never its input embedding.
+
+`PPLXEmbedV2Encoder` reuses the Qwen3.5 attention, gated delta, MLP, and norm
+modules for noncausal full-attention embedding passes. Each layer registers
+only its active attention family. Rows have no padding or generation caches.
+Core owns tokenization, checkpoint loading, projection selection, chunk spans,
+and image processing. Transformers 5.4 FP32 fixtures exercise the hybrid path.
+
+`PPLXEmbedV2QuantizationConfig` owns explicit per-module affine Q4/Q8 packing.
+It installs packed embeddings/linear layers with strict key coverage, geometry,
+and dtype checks. Recurrent gates, convolution, norms and output heads stay
+FP32. CPU and Metal fixtures compare packed execution with independently
+dequantized tensors; full 9B native proofs are linked from the runtime guide.

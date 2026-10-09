@@ -1,3 +1,4 @@
+#if !os(iOS)
 import MLX
 import MLXNN
 import MereRunTextEncoder
@@ -25,3 +26,4 @@ package final class Qwen3OmniVision: Module {
         return Qwen3OmniVisualFeatures(embeddings: output.hiddenStates, deepstack: output.deepstackFeatures)
     }
 }
+#endif

@@ -1746,6 +1746,14 @@ extension MereRunModelManifest {
                 upstreamRepoId: Qwen3EmbeddingCatalog.defaultRepoId,
                 createdAt: createdAt
             )
+        case .pplxEmbedV2LateSmall, .pplxEmbedV2LateLarge, .pplxEmbedV2Context, .pplxEmbedV2LateLargeMixed4Bit, .pplxEmbedV2Context8Bit:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .pplxEmbedV2, family: .embed,
+                tier: .latest, variant: .standard,
+                precision: modelID == .pplxEmbedV2LateLargeMixed4Bit ? .int4 : modelID == .pplxEmbedV2Context8Bit ? .int8 : .fp32,
+                defaults: nil, supports: PPLXEmbedV2Catalog.isContextual(modelID.rawValue) ? [.textEmbedding] : [.textEmbedding, .multimodalEmbedding],
+                components: genericTextComponents, upstreamRepoId: PPLXEmbedV2Catalog.repository(modelID.rawValue), createdAt: createdAt
+            )
         case .embeddingGemma2:
             return MereRunModelManifest(
                 id: modelID.rawValue, engine: .embeddingGemma2, family: .embed,
@@ -1791,6 +1799,13 @@ extension MereRunModelManifest {
                 variant: .standard, precision: .bf16, defaults: nil,
                 supports: [.textDecision], components: genericTextComponents,
                 upstreamRepoId: ClefOmniCatalog.repository, createdAt: createdAt
+            )
+        case .d1BF16, .d1OmniFP32:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .d1, family: .d1, tier: .base,
+                variant: .standard, precision: modelID == .d1OmniFP32 ? .fp32 : .bf16, defaults: nil,
+                supports: [.textDecision], components: genericTextComponents,
+                upstreamRepoId: modelID == .d1OmniFP32 ? D1Catalog.omniRepository : D1Catalog.repository, createdAt: createdAt
             )
         case .clef4Bit, .clefFlash4Bit:
             return MereRunModelManifest(

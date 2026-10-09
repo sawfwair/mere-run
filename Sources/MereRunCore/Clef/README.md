@@ -89,3 +89,6 @@ index, while ordinary thinker parameters remain BF16. A disk-loading regression
 compares the packed thinker against its reconstructed dense counterpart.
 The streaming converter omits speech-output tensors and preserves source/output
 hashes; local memory and decision-quality qualification are separate steps.
+
+Inference is built for macOS and Linux. iOS retains the typed configuration and
+managed-model catalog metadata without linking the decision execution path.

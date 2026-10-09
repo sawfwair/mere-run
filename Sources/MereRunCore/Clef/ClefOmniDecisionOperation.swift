@@ -1,3 +1,4 @@
+#if !os(iOS)
 import Foundation
 import MLX
 import AudioCodecs
@@ -143,3 +144,4 @@ struct ClefOmniLayout {
         self.indices = indices
     }
 }
+#endif

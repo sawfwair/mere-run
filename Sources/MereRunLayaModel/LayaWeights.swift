@@ -1,3 +1,4 @@
+#if !os(iOS)
 import MLX
 
 /// Consumes the original PyTorch safetensors names without conversion or transposition.
@@ -43,3 +44,4 @@ struct LayaNorm {
         MLXFast.layerNorm(input, weight: weight, bias: bias, eps: epsilon)
     }
 }
+#endif

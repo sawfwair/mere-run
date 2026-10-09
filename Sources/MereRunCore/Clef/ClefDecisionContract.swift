@@ -1,3 +1,4 @@
+#if !os(iOS)
 import Foundation
 import MereRunQwenModel
 
@@ -189,3 +190,4 @@ private extension ClefJSON {
         }
     }
 }
+#endif

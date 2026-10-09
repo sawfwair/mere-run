@@ -194,6 +194,8 @@ final class ManagedModelCatalogTests: XCTestCase {
 
     func testRestrictedModelInventoryIsCompleteAndCannotAutoDownload() throws {
         let expected = Set([
+            D1Catalog.modelID,
+            D1Catalog.omniModelID,
             "speech-tts-breeze-2",
             "image-qwen-21",
             "image-flux1-dev",

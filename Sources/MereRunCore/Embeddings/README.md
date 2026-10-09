@@ -19,3 +19,12 @@ at 32 frames. Media records run sequentially and refuse partial-block truncation
 The vision/audio towers load lazily; text-only requests never instantiate them. Model installation downloads the original
 complete safetensors artifact. No checkpoint conversion or external inference
 process is required.
+
+PPLX Embed v2 uses the owned Qwen runtime's `PPLXEmbedV2Encoder`. Its full
+attention is bidirectional while convolution and gated delta recurrence retain
+Qwen3.5's causal arithmetic. Core loads FP32 originals or explicit per-module
+MLX affine Q4/Q8 checkpoints; the Qwen target owns packed module installation
+and strict coverage/geometry checks. Core handles
+query/document tokenization with optional NFC normalization, punctuation masks, shared document chunk spans,
+projection, int8 quantization, and image preparation. Each row runs unpadded.
+Late token vectors use MaxSim; contextual chunk vectors use cosine similarity.

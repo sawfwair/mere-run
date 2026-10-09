@@ -1,7 +1,9 @@
 import Foundation
+#if !os(iOS)
 import MLX
 import MLXNN
 import AudioQwen3ASRModel
+#endif
 import MereRunQwenModel
 
 public enum ClefOmniCatalog {
@@ -64,6 +66,7 @@ struct ClefOmniResources {
         } catch { return [root.appending(path: "config.json")] }
     }
 
+    #if !os(iOS)
     /// Read only shards needed by a thinker component; talker/code2wav arrays never enter the parameter tree.
     func arrays(prefix: String) throws -> [String: MLXArray] {
         let index = try JSONDecoder().decode(HFSafetensorsIndex.self,
@@ -137,4 +140,5 @@ struct ClefOmniResources {
         }
         try model.update(parameters: ModuleParameters.unflattened(arrays), verify: [.all])
     }
+    #endif
 }

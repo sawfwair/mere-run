@@ -40,9 +40,9 @@ Public tree:
 - [`mere.run text`](/runtime/text) — Run local chat, code, embedding, anonymization, classification, and decision workflows.
   - `mere.run text chat` — Run local chat with text chat models.
   - `mere.run text code` — Run local code generation with GGUF models via llama.cpp.
-  - `mere.run text embed` — Generate native text or EmbeddingGemma 2 multimodal embeddings.
+  - `mere.run text embed` — Generate native text, multimodal, or PPLX multi-vector embeddings.
   - `mere.run text anonymize` — Detect and redact PII using OpenAI Privacy Filter.
-  - `mere.run text decide` — Evaluate typed questions with native Laya or Clef decision models.
+  - `mere.run text decide` — Evaluate typed questions with native Laya, Clef, or D1 decision models.
   - `mere.run text classify` — Classify text with native GLiNER2.5 Decide.
   - `mere.run text extract` — Extract entities, relations, and structures with native GLiNER2.5 Decide.
   - `mere.run text train-lora` — Train a native text or image-conditioned LoRA adapter from chat-style SFT JSONL.

@@ -1,0 +1,246 @@
+{
+  "date": "2026-10-09",
+  "runtime_source_commit": "b7a4bde5",
+  "reference_device": "cpu",
+  "cases": [
+    {
+      "family": "causal",
+      "media": "text",
+      "maximum_absolute_probability_error": 0.001278478484932788,
+      "choices_agree": true,
+      "usage_agrees": true,
+      "native": {
+        "answers": {
+          "arrived": {
+            "noul": 0.9875683188438416,
+            "type": "noul"
+          },
+          "quality": {
+            "confidence": 0.9914383888244629,
+            "legend": {
+              "0": "broken",
+              "1": "intact",
+              "2": "perfect"
+            },
+            "probabilities": {
+              "0": 0.9914383888244629,
+              "1": 0.005202592816203833,
+              "2": 0.0033590456005185843
+            },
+            "score": 0.011920684017241001,
+            "type": "score"
+          },
+          "route": {
+            "choice": "damage",
+            "confidence": 0.9902915358543396,
+            "probabilities": {
+              "damage": 0.9902915358543396,
+              "shipping": 0.00970847811549902
+            },
+            "type": "choice"
+          }
+        },
+        "model": "causal",
+        "usage": {
+          "input_tokens": 136,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "family": "causal",
+      "media": "image",
+      "maximum_absolute_probability_error": 0.0006426970499354701,
+      "choices_agree": true,
+      "usage_agrees": true,
+      "native": {
+        "answers": {
+          "arrived": {
+            "noul": 0.9820137619972229,
+            "type": "noul"
+          },
+          "quality": {
+            "confidence": 0.9937216639518738,
+            "legend": {
+              "0": "none",
+              "1": "some",
+              "2": "all"
+            },
+            "probabilities": {
+              "0": 0.002463190583512187,
+              "1": 0.003815063275396824,
+              "2": 0.9937216639518738
+            },
+            "score": 1.9912583911791444,
+            "type": "score"
+          },
+          "route": {
+            "choice": "red",
+            "confidence": 0.9892827272415161,
+            "probabilities": {
+              "blue": 0.005526087712496519,
+              "green": 0.005191280506551266,
+              "red": 0.9892827272415161
+            },
+            "type": "choice"
+          }
+        },
+        "model": "causal",
+        "usage": {
+          "input_tokens": 293,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "family": "omni",
+      "media": "text",
+      "maximum_absolute_probability_error": 1.2516975402832031e-06,
+      "choices_agree": true,
+      "usage_agrees": true,
+      "native": {
+        "answers": {
+          "arrived": {
+            "noul": 0.9024261832237244,
+            "type": "noul"
+          },
+          "quality": {
+            "confidence": 0.8968836069107056,
+            "legend": {
+              "0": "broken",
+              "1": "intact",
+              "2": "perfect"
+            },
+            "probabilities": {
+              "0": 0.8968836069107056,
+              "1": 0.07078678905963898,
+              "2": 0.03232964873313904
+            },
+            "score": 0.13544608652591705,
+            "type": "score"
+          },
+          "route": {
+            "choice": "damage",
+            "confidence": 0.8893688321113586,
+            "probabilities": {
+              "damage": 0.8893688321113586,
+              "shipping": 0.11063116788864136
+            },
+            "type": "choice"
+          }
+        },
+        "model": "omni",
+        "usage": {
+          "input_tokens": 131,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "family": "omni",
+      "media": "image",
+      "maximum_absolute_probability_error": 8.881092071533203e-06,
+      "choices_agree": true,
+      "usage_agrees": true,
+      "native": {
+        "answers": {
+          "arrived": {
+            "noul": 0.9997159838676453,
+            "type": "noul"
+          },
+          "quality": {
+            "confidence": 0.8443126678466797,
+            "legend": {
+              "0": "none",
+              "1": "some",
+              "2": "all"
+            },
+            "probabilities": {
+              "0": 0.027334116399288177,
+              "1": 0.12835314869880676,
+              "2": 0.8443126678466797
+            },
+            "score": 1.8169784843921661,
+            "type": "score"
+          },
+          "route": {
+            "choice": "red",
+            "confidence": 0.5317142605781555,
+            "probabilities": {
+              "blue": 0.41852161288261414,
+              "green": 0.04976412281394005,
+              "red": 0.5317142605781555
+            },
+            "type": "choice"
+          }
+        },
+        "model": "omni",
+        "usage": {
+          "input_tokens": 281,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "family": "omni",
+      "media": "audio",
+      "maximum_absolute_probability_error": 2.0265579223632812e-06,
+      "choices_agree": true,
+      "usage_agrees": true,
+      "native": {
+        "answers": {
+          "arrived": {
+            "noul": 0.3083173334598541,
+            "type": "noul"
+          },
+          "quality": {
+            "confidence": 0.992637038230896,
+            "legend": {
+              "0": "broken",
+              "1": "intact",
+              "2": "perfect"
+            },
+            "probabilities": {
+              "0": 0.992637038230896,
+              "1": 0.004701606929302216,
+              "2": 0.002661350416019559
+            },
+            "score": 0.010024307761341333,
+            "type": "score"
+          },
+          "route": {
+            "choice": "book",
+            "confidence": 0.4722287356853485,
+            "probabilities": {
+              "book": 0.4722287356853485,
+              "glass": 0.25032374262809753,
+              "shirt": 0.27744752168655396
+            },
+            "type": "choice"
+          }
+        },
+        "model": "omni",
+        "usage": {
+          "input_tokens": 233,
+          "output_tokens": 0
+        }
+      }
+    }
+  ],
+  "validation": {
+    "d1_gpu": {
+      "tests": 13,
+      "skipped": 0,
+      "failures": 0
+    },
+    "repository_gate": {
+      "command": "./scripts/check.sh",
+      "exit_code": 0,
+      "xctest_cases": 5349,
+      "xctest_skipped": 443,
+      "xctest_failures": 0,
+      "swift_testing_cases": 191,
+      "swift_testing_failures": 0
+    }
+  }
+}

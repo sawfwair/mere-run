@@ -1,3 +1,4 @@
+#if !os(iOS)
 import Foundation
 import AudioCodecs
 import MediaIO
@@ -166,3 +167,4 @@ struct ClefOmniMedia {
                      kinds: kinds, positions: positions, bosCount: markers, eosCount: markers, visual: visual, audio: audio)
     }
 }
+#endif

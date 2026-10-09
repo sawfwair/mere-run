@@ -790,7 +790,8 @@ final class Q35LinearAttention: Module {
     func callAsFunction(
         _ x: MLXArray,
         cache: Q35LinearCache?,
-        targetVerify: Bool = false
+        targetVerify: Bool = false,
+        normalizeQKInFloat32: Bool = false
     ) -> MLXArray {
         let batch = x.dim(0)
         let sequence = x.dim(1)
@@ -854,7 +855,7 @@ final class Q35LinearAttention: Module {
                 keyHeadDim: keyHeadDim,
                 valueHeadDim: valueHeadDim,
                 rmsNormWeight: rmsNormWeight,
-                normalizeInFloat32: isQwen4Exp
+                normalizeInFloat32: isQwen4Exp || normalizeQKInFloat32
             )
         }
         #else
@@ -867,7 +868,7 @@ final class Q35LinearAttention: Module {
             keyHeadDim: keyHeadDim,
             valueHeadDim: valueHeadDim,
             rmsNormWeight: rmsNormWeight,
-            normalizeInFloat32: isQwen4Exp
+            normalizeInFloat32: isQwen4Exp || normalizeQKInFloat32
         )
         #endif
         cache?.convState = prework.convState

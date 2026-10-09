@@ -1,3 +1,4 @@
+#if !os(iOS)
 import MLX
 import MLXNN
 
@@ -77,3 +78,4 @@ public final class LayaNetwork {
         return (logits, actionOutput(gelu(actionInput(pooled))))
     }
 }
+#endif

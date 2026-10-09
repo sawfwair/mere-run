@@ -1,3 +1,4 @@
+#if !os(iOS)
 import MLX
 
 extension LightOnOCRGenerator {
@@ -9,3 +10,4 @@ extension LightOnOCRGenerator {
         }
     }
 }
+#endif

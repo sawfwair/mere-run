@@ -1,3 +1,4 @@
+#if !os(iOS)
 import Foundation
 import MLX
 import MLXFast
@@ -141,3 +142,4 @@ final class Qwen3OmniExperts: Module {
         return concatenated(outputs, axis: 0).reshaped(x.shape)
     }
 }
+#endif

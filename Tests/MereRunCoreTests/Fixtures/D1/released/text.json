@@ -1,0 +1,26 @@
+{
+  "state": "The parcel arrived on time, but the glass inside was broken.",
+  "questions": {
+    "arrived": {
+      "type": "noul",
+      "instructions": "Did the parcel arrive?"
+    },
+    "route": {
+      "type": "choice",
+      "instructions": "Which team should handle the claim?",
+      "criteria": {
+        "shipping": "Late delivery",
+        "damage": "Damaged goods"
+      }
+    },
+    "quality": {
+      "type": "score",
+      "instructions": "Rate the condition of the glass.",
+      "criteria": [
+        "broken",
+        "intact",
+        "perfect"
+      ]
+    }
+  }
+}

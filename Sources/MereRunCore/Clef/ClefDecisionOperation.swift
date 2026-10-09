@@ -1,3 +1,4 @@
+#if !os(iOS)
 import Foundation
 import MLX
 import MereRunQwenModel
@@ -95,3 +96,4 @@ final class ClefDenseDecisionOperation {
         tower = nil
     }
 }
+#endif

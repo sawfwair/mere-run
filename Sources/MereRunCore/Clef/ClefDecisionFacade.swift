@@ -1,3 +1,4 @@
+#if !os(iOS)
 import Foundation
 
 /// Select the checkpoint's native thinker; dense Clef and Omni retain distinct media/attention policies.
@@ -37,3 +38,4 @@ public final class ClefDecisionOperation {
         }
     }
 }
+#endif

@@ -232,7 +232,7 @@ extension MereRunCapabilityCatalog {
         id: "text.embed",
         command: ["text", "embed"],
         title: "Embeddings",
-        summary: "Generate native text or EmbeddingGemma 2 multimodal embeddings.",
+        summary: "Generate native text, multimodal, or PPLX multi-vector embeddings.",
         arguments: [
             .init(name: "texts", label: "Texts", kind: .string, required: false, repeatable: true)
         ],
@@ -240,7 +240,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
             .init(flag: "--image", label: "Images", kind: .file, repeatable: true)
-                .scoped(TextEmbedFamily.only(.embeddingGemma2)),
+                .scoped(TextEmbedFamily.only(.embeddingGemma2, .pplxLate)),
             .init(flag: "--audio", label: "Audio", kind: .file, repeatable: true)
                 .scoped(TextEmbedFamily.only(.embeddingGemma2)),
             .init(flag: "--video", label: "Videos", kind: .file, repeatable: true)
@@ -249,12 +249,19 @@ extension MereRunCapabilityCatalog {
                 .scoped(TextEmbedFamily.only(.embeddingGemma2)),
             .init(flag: "--task", label: "Embedding task", kind: .choice,
                   choices: ["raw", "query", "document", "code-retrieval", "question-answering", "fact-checking",
-                            "classification", "clustering", "similarity"], defaultValue: "raw")
-                .scoped(TextEmbedFamily.only(.embeddingGemma2)),
+                            "classification", "clustering", "similarity"], defaultValue: "raw", choiceSpellings: .exact)
+                .scoped(TextEmbedFamily.only(.embeddingGemma2, .pplxLate, .pplxContext),
+                        .rule(.pplxLate, values: ["query", "document"], defaultValue: "document"), .rule(.pplxContext, values: ["query", "document"], defaultValue: "document")),
             .init(flag: "--title", label: "Document title", kind: .string)
                 .scoped(TextEmbedFamily.only(.embeddingGemma2)),
             .init(flag: "--dimensions", label: "Embedding dimensions", kind: .integer)
-                .scoped(TextEmbedFamily.only(.embeddingGemma2), .rule(.embeddingGemma2, values: ["128", "256", "512", "768"])),
+                .scoped(TextEmbedFamily.only(.embeddingGemma2, .pplxLate, .pplxContext),
+                        .rule(.embeddingGemma2, values: ["128", "256", "512", "768"]),
+                        .rule(.pplxLate, values: ["128"]), .rule(.pplxContext, values: ["1024", "2048"])),
+            .init(flag: "--chunks-json", label: "Document chunks", kind: .file)
+                .scoped(TextEmbedFamily.only(.pplxContext)),
+            .init(flag: "--normalize", label: "Normalize chunk vectors", kind: .boolean)
+                .scoped(TextEmbedFamily.only(.pplxContext)),
             .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file),
             .init(flag: "--pretty", label: "Pretty JSON", kind: .boolean)
         ],
@@ -284,7 +291,7 @@ extension MereRunCapabilityCatalog {
 
     public static let textDecide = MereRunCommandCapability(
         id: "text.decide", command: ["text", "decide"], title: "Decisions",
-        summary: "Evaluate choice, score, and boolean questions with native Laya or Clef.",
+        summary: "Evaluate choice, score, and boolean questions with native Laya, Clef, or D1.",
         options: [
             .init(flag: "--input", aliases: ["-i"], label: "JSON request", kind: .file),
             .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, defaultValue: "text-decide-laya"),
