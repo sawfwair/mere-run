@@ -40,8 +40,7 @@ Tensor closure, packed dtype/shapes and shard ownership were checked separately
 from checksum integrity.
 
 The temporary RunPod pod and its attached temporary disk were terminated after
-local preservation; the provider inventory confirmed the pod absent. Its elapsed
-compute estimate was about US$0.058, excluding storage and provider billing rounding.
+local preservation; the provider inventory confirmed the pod absent.
 
 Inference uses native Swift/MLX. Packed weights stay UInt32 and execute with
 quantized matrix multiplication; no full-precision model expansion or Python
@@ -55,45 +54,45 @@ inputs and rejects malformed packed weights, scales, biases and unsupported
 packing. The loader test verifies preservation of UInt32 values through disk
 loading. These checks use small fixtures rather than trained-checkpoint images.
 
-The repository gate passed 5,363 XCTest cases (440 opt-in skips) plus 192 Swift
+The repository gate passed 5,351 XCTest cases (441 opt-in skips) plus 193 Swift
 Testing cases, strict lint, CLI help and hygiene checks. The documentation site
 also built successfully. Hosted CI and a released application are separate gates.
 
 ## Trained-checkpoint local execution
 
-The native Swift/MLX CLI completed all five cases. Each used the public
-checkpoint revision above,
-eight steps and CFG 1. Earlier admission checks were blocked while other workloads
-held memory; the successful runs passed the standard memory-admission guard.
+The isolated PR implementation completed all five native Swift/MLX CLI cases at
+source commit `6a10257e64fb754ca5e75b7226a2a04fc18a61ef`, based on current main at
+`0f0f7b9f2a0d9801ca0098ca0d6d6dd020b6efab`. The source was committed before these runs.
+Each used the public checkpoint revision above, eight steps and CFG 1, with the
+standard memory-admission guard. The receipt records the tested binary hash.
 
 | Case | Seconds | Peak process footprint (GiB) |
 | --- | ---: | ---: |
-| smoke-512 | 21.5 | 9.11 |
-| replay-512 | 18.7 | 9.11 |
-| quality-1024 | 81.5 | 20.63 |
-| text-1024 | 86.6 | 20.60 |
-| edit-512 | 44.4 | 10.42 |
+| smoke-512 | 27.7 | 9.14 |
+| replay-512 | 22.8 | 9.12 |
+| quality-1024 | 97.0 | 20.58 |
+| text-1024 | 141.7 | 20.63 |
+| edit-512 | 53.8 | 10.35 |
 
-The 512-pixel replay produced identical pixel and PNG SHA-256 hashes. Direct visual
-inspection found coherent blue teapots, a legible MERE poster heading, and a
-successful blue-to-red reference edit retaining overall shape, composition, table
-and lighting with small texture changes. All outputs are correctly sized RGBA PNGs.
+Elapsed times are single observations during concurrent validation work, rather
+than throughput guarantees. The 512-pixel replay produced identical pixel and
+PNG SHA-256 hashes. Every revalidated image matched the earlier inspected output
+pixel-for-pixel. Visual checks found coherent blue teapots, a legible MERE poster
+heading, and a blue-to-red reference edit retaining overall shape, composition,
+table and lighting with small texture changes. All outputs are correctly sized
+RGBA PNGs.
 
 The highest observed OS process footprint was 20.63 GiB. This includes GPU
 allocations and caches; it is not whole-machine usage or a minimum-memory
-guarantee. These cases demonstrate 512/1024 generation and one-reference editing
-with sufficient admission headroom. They do not qualify
-2048-pixel generation, multiple references, transparent output, broad prompt
-quality, or equivalence to BF16 Turbo. `quality_qualified` remains false.
+guarantee. These cases qualify bounded 512/1024 generation and one-reference
+editing with sufficient admission headroom. They do not qualify 2048-pixel
+output, multiple references, transparent output, broad prompt quality, or
+BF16 Turbo equivalence. `quality_qualified` remains false.
 
-The earlier full repository gate used binary SHA-256
-`366f2ca6ec636ec81db1468cb6f1824ceb8ba2d343fc80f90db6eb9496f8c88e`.
-These local checkpoint cases all used the later unreleased binary
-`59ce312e3041652484a41661185055e791746190a2478cf152e36bb475e108e1`.
-The source base is unchanged and the checkout contains uncommitted work; neither
-set of results is a released-app or hosted-CI claim. Raw case receipts, logs and
-progress events are retained locally; the public-site receipt records case
-prompts, seeds, checkpoint/binary hashes, image hashes and memory/timing results.
+The full repository gate passed against the isolated source implementation.
+Raw case receipts, logs and progress events are retained locally; the downloadable
+receipt records prompts, seeds, checkpoint/source/binary hashes, image hashes and
+memory/timing observations. Released-app qualification and hosted CI are separate.
 
 ### Inspected samples
 

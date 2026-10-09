@@ -44,16 +44,18 @@
     },
     "scope": "Tensor closure, packed dtype/shapes, unchanged dense precision and shard ownership; no image-quality claim."
   },
-  "native_source_base": "d95c1bcbe1eb2fa0b30a991d343e233decbd1bc9",
-  "source_dirty_during_qualification": true,
-  "native_binary_sha256": "59ce312e3041652484a41661185055e791746190a2478cf152e36bb475e108e1",
+  "native_source_base": "0f0f7b9f2a0d9801ca0098ca0d6d6dd020b6efab",
+  "source_dirty_during_qualification": false,
+  "native_binary_sha256": "0bc8a738c83d577deea6c478ee0690e32223e028d7b282a5f1acbf7c7915a6e0",
   "local_gate": {
     "passed": true,
-    "xctest_cases": 5363,
-    "skipped": 440,
+    "command": "./scripts/check.sh",
+    "source_commit": "6a10257e64fb754ca5e75b7226a2a04fc18a61ef",
+    "native_binary_sha256": "0bc8a738c83d577deea6c478ee0690e32223e028d7b282a5f1acbf7c7915a6e0",
+    "xctest_cases": 5351,
+    "skipped": 441,
     "failures": 0,
-    "swift_testing_cases": 192,
-    "native_binary_sha256": "366f2ca6ec636ec81db1468cb6f1824ceb8ba2d343fc80f90db6eb9496f8c88e"
+    "swift_testing_cases": 193
   },
   "local_inference": {
     "date": "2026-10-09",
@@ -61,9 +63,9 @@
     "scope": "Five native Swift/MLX CLI cases; no broad quality or BF16-equivalence claim.",
     "tested_repository": "Sawfwair/Qwen-Image-2.1-Turbo-MLX-Mixed-4bit",
     "tested_checkpoint_revision": "d8276b786f94a4e8944189cc181e839e31759ab5",
-    "native_binary_sha256": "59ce312e3041652484a41661185055e791746190a2478cf152e36bb475e108e1",
-    "native_source_base": "d95c1bcbe1eb2fa0b30a991d343e233decbd1bc9",
-    "source_dirty": true,
+    "native_binary_sha256": "0bc8a738c83d577deea6c478ee0690e32223e028d7b282a5f1acbf7c7915a6e0",
+    "native_source_base": "0f0f7b9f2a0d9801ca0098ca0d6d6dd020b6efab",
+    "source_dirty": false,
     "replay_pixel_identical": true,
     "memory_note": "OS peak process footprint from /usr/bin/time -l; not whole-machine memory or a minimum hardware requirement.",
     "limits": [
@@ -81,14 +83,14 @@
           "steps": 8,
           "seed": 4242
         },
-        "binary_sha256": "59ce312e3041652484a41661185055e791746190a2478cf152e36bb475e108e1",
+        "binary_sha256": "0bc8a738c83d577deea6c478ee0690e32223e028d7b282a5f1acbf7c7915a6e0",
         "checkpoint_revision": "d8276b786f94a4e8944189cc181e839e31759ab5",
         "input_sha256": {},
         "preflight_status": "ok",
         "exit_code": 0,
-        "elapsed_seconds": 21.507118999999875,
-        "maximum_resident_bytes": 9592356864,
-        "peak_memory_footprint_bytes": 9785318984,
+        "elapsed_seconds": 27.651363541001047,
+        "maximum_resident_bytes": 9609510912,
+        "peak_memory_footprint_bytes": 9811025504,
         "format": "PNG",
         "mode": "RGBA",
         "size": [
@@ -102,7 +104,7 @@
         "transparent_fraction": 0.0,
         "opaque_fraction": 1.0,
         "rgb_standard_deviation": 56.907295314278265,
-        "visual_inspection": "Passed: coherent blue ceramic teapot on wooden table, realistic lighting; inspected directly."
+        "visual_inspection": "Passed: coherent blue ceramic teapot on wooden table, realistic lighting; inspected directly. Isolated-binary revalidation matches inspected pixels exactly."
       },
       {
         "case": {
@@ -113,14 +115,14 @@
           "steps": 8,
           "seed": 4242
         },
-        "binary_sha256": "59ce312e3041652484a41661185055e791746190a2478cf152e36bb475e108e1",
+        "binary_sha256": "0bc8a738c83d577deea6c478ee0690e32223e028d7b282a5f1acbf7c7915a6e0",
         "checkpoint_revision": "d8276b786f94a4e8944189cc181e839e31759ab5",
         "input_sha256": {},
         "preflight_status": "ok",
         "exit_code": 0,
-        "elapsed_seconds": 18.731013334000636,
-        "maximum_resident_bytes": 9583951872,
-        "peak_memory_footprint_bytes": 9776897560,
+        "elapsed_seconds": 22.842908750000788,
+        "maximum_resident_bytes": 8781660160,
+        "peak_memory_footprint_bytes": 9788268128,
         "format": "PNG",
         "mode": "RGBA",
         "size": [
@@ -134,7 +136,7 @@
         "transparent_fraction": 0.0,
         "opaque_fraction": 1.0,
         "rgb_standard_deviation": 56.907295314278265,
-        "visual_inspection": "Passed: exact pixel and PNG SHA-256 match to the inspected smoke case."
+        "visual_inspection": "Passed: exact pixel and PNG SHA-256 match to the inspected smoke case. Isolated-binary revalidation matches inspected pixels exactly."
       },
       {
         "case": {
@@ -145,14 +147,14 @@
           "steps": 8,
           "seed": 4242
         },
-        "binary_sha256": "59ce312e3041652484a41661185055e791746190a2478cf152e36bb475e108e1",
+        "binary_sha256": "0bc8a738c83d577deea6c478ee0690e32223e028d7b282a5f1acbf7c7915a6e0",
         "checkpoint_revision": "d8276b786f94a4e8944189cc181e839e31759ab5",
         "input_sha256": {},
         "preflight_status": "ok",
         "exit_code": 0,
-        "elapsed_seconds": 81.49851025000044,
-        "maximum_resident_bytes": 9583624192,
-        "peak_memory_footprint_bytes": 22148630472,
+        "elapsed_seconds": 97.01137920899964,
+        "maximum_resident_bytes": 9586704384,
+        "peak_memory_footprint_bytes": 22092990312,
         "format": "PNG",
         "mode": "RGBA",
         "size": [
@@ -166,7 +168,7 @@
         "transparent_fraction": 0.0,
         "opaque_fraction": 1.0,
         "rgb_standard_deviation": 62.978457521830016,
-        "visual_inspection": "Passed: coherent blue ceramic teapot, wooden surface and studio background; inspected directly."
+        "visual_inspection": "Passed: coherent blue ceramic teapot, wooden surface and studio background; inspected directly. Isolated-binary revalidation matches inspected pixels exactly."
       },
       {
         "case": {
@@ -177,14 +179,14 @@
           "steps": 8,
           "seed": 7
         },
-        "binary_sha256": "59ce312e3041652484a41661185055e791746190a2478cf152e36bb475e108e1",
+        "binary_sha256": "0bc8a738c83d577deea6c478ee0690e32223e028d7b282a5f1acbf7c7915a6e0",
         "checkpoint_revision": "d8276b786f94a4e8944189cc181e839e31759ab5",
         "input_sha256": {},
         "preflight_status": "ok",
         "exit_code": 0,
-        "elapsed_seconds": 86.5725983329994,
-        "maximum_resident_bytes": 9585016832,
-        "peak_memory_footprint_bytes": 22123628440,
+        "elapsed_seconds": 141.74410508299843,
+        "maximum_resident_bytes": 9586786304,
+        "peak_memory_footprint_bytes": 22149040072,
         "format": "PNG",
         "mode": "RGBA",
         "size": [
@@ -198,7 +200,7 @@
         "transparent_fraction": 0.0,
         "opaque_fraction": 0.9999608993530273,
         "rgb_standard_deviation": 85.17509287250878,
-        "visual_inspection": "Passed: clearly legible MERE heading above a coherent lighthouse/sunrise poster; inspected directly."
+        "visual_inspection": "Passed: clearly legible MERE heading above a coherent lighthouse/sunrise poster; inspected directly. Isolated-binary revalidation matches inspected pixels exactly."
       },
       {
         "case": {
@@ -212,16 +214,16 @@
             "smoke-512.png"
           ]
         },
-        "binary_sha256": "59ce312e3041652484a41661185055e791746190a2478cf152e36bb475e108e1",
+        "binary_sha256": "0bc8a738c83d577deea6c478ee0690e32223e028d7b282a5f1acbf7c7915a6e0",
         "checkpoint_revision": "d8276b786f94a4e8944189cc181e839e31759ab5",
         "input_sha256": {
           "smoke-512.png": "823f74d9239c9b8a7ca79b7a29dd63d70cd1a6388bbbb29424f8362ea65c121c"
         },
         "preflight_status": "ok",
         "exit_code": 0,
-        "elapsed_seconds": 44.405380917,
-        "maximum_resident_bytes": 9618341888,
-        "peak_memory_footprint_bytes": 11188363280,
+        "elapsed_seconds": 53.837648959000944,
+        "maximum_resident_bytes": 9621749760,
+        "peak_memory_footprint_bytes": 11116404584,
         "format": "PNG",
         "mode": "RGBA",
         "size": [
@@ -235,10 +237,13 @@
         "transparent_fraction": 0.0,
         "opaque_fraction": 1.0,
         "rgb_standard_deviation": 65.28999917112525,
-        "visual_inspection": "Passed: teapot changed from blue to red; overall shape, composition, table and lighting retained, with small texture changes; inspected directly."
+        "visual_inspection": "Passed: teapot changed from blue to red; overall shape, composition, table and lighting retained, with small texture changes; inspected directly. Isolated-binary revalidation matches inspected pixels exactly."
       }
     ],
-    "quality_qualified": false
+    "quality_qualified": false,
+    "source_commit": "6a10257e64fb754ca5e75b7226a2a04fc18a61ef",
+    "revalidation_matches_prior_inspected_pixels": true,
+    "timing_note": "Single observations during concurrent validation work; no throughput guarantee."
   },
   "publication": {
     "status": "verified_public",
@@ -246,14 +251,12 @@
     "revision": "d8276b786f94a4e8944189cc181e839e31759ab5",
     "files_verified": 25,
     "bytes_verified": 14252544800,
-    "anonymous_verification": true,
-    "renamed_from": "Sawfwair/Mere-Image-Turbo-Mixed-4bit"
+    "anonymous_verification": true
   },
   "runpod": {
     "terminated": true,
-    "verified_absent": true,
-    "compute_cost_estimate_usd": 0.05782811965942383,
-    "cost_scope": "Elapsed estimate excluding storage and provider billing rounding."
+    "verified_absent": true
   },
-  "quality_qualified": false
+  "quality_qualified": false,
+  "native_source_commit": "6a10257e64fb754ca5e75b7226a2a04fc18a61ef"
 }
