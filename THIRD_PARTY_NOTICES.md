@@ -1466,6 +1466,13 @@ files are `transformer_qwenimage21.py` and `autoencoder_kl_qwenimage21.py` from
 [huggingface/diffusers](https://github.com/huggingface/diffusers/tree/8d3c30bfda9b511c00992f40cff4170a5502814d),
 commit `8d3c30bfda9b511c00992f40cff4170a5502814d`.
 
+Turbo pipeline-configured sampling and static flow scheduling follow
+`pipeline_qwenimage21.py` and `scheduling_flow_match_euler_discrete.py` at
+Diffusers commit `da1d3829cf08d4f329b526d89e17cc035c049d8d` (PR #14950), also
+under Apache-2.0. The separately downloaded Turbo weights retain the Qwen
+Research License and require explicit acceptance. Checked-in Turbo fixtures
+contain public configurations and tensor header schemas, not weight payloads.
+
 Copyright 2026 Qwen-Image Team, The HuggingFace Team. All rights reserved.
 The upstream reference code is licensed under the Apache License, Version 2.0.
 A copy is bundled at

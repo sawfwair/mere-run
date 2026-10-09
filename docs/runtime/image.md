@@ -111,9 +111,33 @@ The public image families are:
 - `image-sensenova-u1-5-8b-mot`: SenseNova U1.5 raw-pixel generation and editing family
 - `image-krea2-raw`: Krea 2 Raw base checkpoint for LoRA training; `image generate` also runs it
 - `image-krea2-turbo`: Krea 2 Turbo text-to-image and LoRA inference family
+- `image-qwen-21`: native Qwen Image 2.1 generation, reference editing, and RGBA output
+- `image-qwen-21-turbo`: official eight-step Qwen Image 2.1 Turbo checkpoint
 - `image-qwen-edit-2511`: Qwen Image Edit 2511 40-step quality lane
 - `image-qwen-edit-2511-lightning`: pinned four-step Qwen Edit Lightning lane
 - `image-ideogram4-sdnq-uint4`: Ideogram 4 SDNQ uint4 text-to-image family
+
+Qwen Image 2.1 also accepts local mixed-precision checkpoints. The
+[Qwen Image 2.1 Turbo mixed-Q4/Q8 artifact](https://huggingface.co/Sawfwair/Qwen-Image-2.1-Turbo-MLX-Mixed-4bit)
+uses Q4 transformer blocks, Q8 encoder linear weights, and BF16 VAE, embeddings,
+modulation and input/output layers. It requires a build containing the native
+mixed-weight loader; older released binaries may not support it. It is separate
+from the managed BF16 installs above. The public bundle is pinned below; see the
+[qualification report](../benchmarks/qwen-image-21-turbo-mixed-qualification-2026-10-09.md)
+for publication evidence and the bounded local generation/editing results:
+
+```sh
+hf download Sawfwair/Qwen-Image-2.1-Turbo-MLX-Mixed-4bit \
+  --revision d8276b786f94a4e8944189cc181e839e31759ab5 --local-dir ./qwen21-turbo-mixed
+mere.run image generate --model ./qwen21-turbo-mixed \
+  --prompt "A blue ceramic teapot" --width 1024 --height 1024 \
+  --steps 8 --output ./teapot.png
+```
+
+The Qwen Research License still applies. Weight quantization reduces checkpoint
+storage and weight residency; resolution and reference images still affect
+activation memory. Conversion checks and local numerical tests do not establish
+general image quality or a minimum supported memory capacity.
 
 Common managed IDs:
 
@@ -182,6 +206,24 @@ relocates the output image and optional structured-prompt sidecar into that
 directory; executing it appends `run_started`, `run_finished`, or `run_failed`
 events to the same stream. Hard blockers exit nonzero after the report is
 printed.
+
+### Qwen Image 2.1 and Turbo
+
+Both models run through the shared native Swift/MLX runtime and load original
+BF16 safetensors without conversion. `image-qwen-21` keeps its pinned base
+checkpoint and 40-step default. `image-qwen-21-turbo` installs a separate pinned
+Turbo checkpoint and defaults to eight steps and CFG 1. It reads the checkpoint's
+saved sampling grid and static scheduler; it rejects other step counts and
+`--sigma-shift`. Choosing eight steps on the base checkpoint does not turn it
+into Turbo.
+
+Both support up to ten ordered reference images and preserve RGBA output in
+PNG. The mixed Q4/Q8 Turbo checkpoint passed bounded 512/1024 generation,
+replay, text-rendering and one-reference editing cases; see the
+[mixed-checkpoint report](../benchmarks/qwen-image-21-turbo-mixed-qualification-2026-10-09.md).
+The managed BF16 Turbo checkpoint and broader Turbo quality remain unqualified. See
+[Qwen Image 2.1 model sources](../model-sources.md#qwen-image-21) for installation,
+license terms, checkpoint revisions, and the Turbo validation boundary.
 
 ### Qwen Image Edit 2511
 

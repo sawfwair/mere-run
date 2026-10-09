@@ -16,7 +16,7 @@ public final class QwenImage21Transformer {
     public let config: QwenImage21TransformerConfig
     private let weights: QwenImage21Weights
 
-    public init(config: QwenImage21TransformerConfig, arrays: [String: MLXArray]) throws {
+    public init(config: QwenImage21TransformerConfig, arrays: [String: MLXArray], quantization: QwenImage21Quantization? = nil) throws {
         guard config.patchSize == 1, config.numLayers > 0, config.numAttentionHeads > 0,
               config.inChannels > 0, config.outChannels > 0, config.contextInDim > 0, config.mlpRatio > 0,
               config.axesDimsRope.count == 3, config.axesDimsRope.allSatisfy({ $0 > 0 && $0.isMultiple(of: 2) }),
@@ -24,7 +24,7 @@ public final class QwenImage21Transformer {
             throw QwenImage21Error.invalidConfiguration("Unsupported transformer dimensions.")
         }
         self.config = config
-        weights = try QwenImage21Weights(arrays, shapes: Self.weightShapes(config))
+        weights = try QwenImage21Weights(arrays, shapes: Self.weightShapes(config), quantization: quantization)
     }
 
     public static func weightShapes(_ c: QwenImage21TransformerConfig) -> [String: [Int]] {

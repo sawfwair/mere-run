@@ -13,6 +13,7 @@ extension MereRunCapabilityCatalog {
         case sensenova
         case krea
         case qwen21 = "qwen-21"
+        case qwen21Turbo = "qwen-21-turbo"
         case qwenEdit = "qwen-edit"
         case qwenEditLightning = "qwen-edit-lightning"
         case ideogram
@@ -65,6 +66,7 @@ extension MereRunCapabilityCatalog {
             .init(ImageGenerateFamily.sensenova, title: "SenseNova U1.5", models: ["image-sensenova-u1-5-8b-mot"]),
             .init(ImageGenerateFamily.krea, title: "Krea 2", models: ["image-krea2-turbo", "image-krea2-raw"]),
             .init(ImageGenerateFamily.qwen21, title: "Qwen-Image 2.1", models: ["image-qwen-21"]),
+            .init(ImageGenerateFamily.qwen21Turbo, title: "Qwen-Image 2.1 Turbo", models: ["image-qwen-21-turbo"]),
             .init(ImageGenerateFamily.qwenEdit, title: "Qwen-Image-Edit", models: ["image-qwen-edit-2511"]),
             .init(
                 ImageGenerateFamily.qwenEditLightning,

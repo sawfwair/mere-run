@@ -40,7 +40,7 @@ extension ModelFamilyIdentifier {
         case .senseNovaU15: "sensenova"
         case .krea2: "krea"
         case .ideogram4: "ideogram"
-        case .qwenImage21: "qwen-21"
+        case .qwenImage21: manifest.tier == .turbo ? "qwen-21-turbo" : "qwen-21"
         case .qwenImageEdit: manifest.id == QwenImageEditRepository.lightning2511Id ? "qwen-edit-lightning" : "qwen-edit"
         case nil: nil
         }

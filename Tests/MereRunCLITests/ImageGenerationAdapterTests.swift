@@ -4,6 +4,22 @@ import XCTest
 @testable import MereRunCore
 
 final class ImageGenerationAdapterTests: XCTestCase {
+    func testQwenTurboDefaultsAgreeAcrossCLIAndAPI() throws {
+        let root = try temporaryDirectory()
+        let output = root.appendingPathComponent("result.png")
+        let manifest = MereRunModelManifest.template(for: .qwenImage21Turbo)
+        let api = try apiPlan().operationPlan(modelRoot: root, outputURL: output, manifest: manifest)
+        let command = try ImageGenerate.parse(["--prompt", "A brass camera", "--model", "image-qwen-21-turbo"])
+        let cli = try MereRunCore.ImageGenerationPlan.resolve(command.operationOptions(outputURL: output), modelRoot: root, manifest: manifest)
+        for plan in [api, cli] {
+            XCTAssertEqual(plan.backend, .qwenImage21)
+            XCTAssertEqual(plan.request.steps, 8)
+            XCTAssertEqual(plan.request.guidanceScale, 1)
+            XCTAssertNil(plan.request.sigmaShift)
+        }
+        XCTAssertThrowsError(try apiPlan(steps: 40).operationPlan(modelRoot: root, outputURL: output, manifest: manifest))
+    }
+
     func testCLIAndAPIResolveEquivalentExplicitSettingsAcrossImageBackends() throws {
         let root = try temporaryDirectory()
         let input = root.appendingPathComponent("input.png")
