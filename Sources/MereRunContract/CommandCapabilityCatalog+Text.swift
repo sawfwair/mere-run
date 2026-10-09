@@ -291,7 +291,7 @@ extension MereRunCapabilityCatalog {
 
     public static let textDecide = MereRunCommandCapability(
         id: "text.decide", command: ["text", "decide"], title: "Decisions",
-        summary: "Evaluate choice, score, and boolean questions with native Laya or Clef.",
+        summary: "Evaluate choice, score, and boolean questions with native Laya, Clef, or D1.",
         options: [
             .init(flag: "--input", aliases: ["-i"], label: "JSON request", kind: .file),
             .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, defaultValue: "text-decide-laya"),

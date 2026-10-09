@@ -52,3 +52,6 @@ Flash full-checkpoint parity is covered by the opt-in
 `MERERUN_TEST_CLEF_PARITY_DIR`. This test calls the runtime directly and writes
 `native-runtime.json` in the parity directory; it does not exercise CLI admission.
 See `docs/benchmarks/clef-flash-native-qualification-2026-10-02.md` for results.
+
+Inference is built for macOS and Linux. iOS retains the typed configuration and
+managed-model catalog metadata without linking the decision execution path.

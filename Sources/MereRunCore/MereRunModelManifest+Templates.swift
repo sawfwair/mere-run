@@ -1793,6 +1793,13 @@ extension MereRunModelManifest {
                 supports: [.textClassification, .textExtraction], components: genericTextComponents,
                 upstreamRepoId: GLiNERCatalog.repository, createdAt: createdAt
             )
+        case .d1BF16, .d1OmniFP32:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .d1, family: .d1, tier: .base,
+                variant: .standard, precision: modelID == .d1OmniFP32 ? .fp32 : .bf16, defaults: nil,
+                supports: [.textDecision], components: genericTextComponents,
+                upstreamRepoId: modelID == .d1OmniFP32 ? D1Catalog.omniRepository : D1Catalog.repository, createdAt: createdAt
+            )
         case .clef4Bit, .clefFlash4Bit:
             return MereRunModelManifest(
                 id: modelID.rawValue, engine: .clef, family: .clef, tier: .base,

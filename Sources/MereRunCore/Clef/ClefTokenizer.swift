@@ -1,3 +1,4 @@
+#if !os(iOS)
 import Foundation
 import Hub
 import Tokenizers
@@ -79,3 +80,4 @@ struct ClefTokenizer {
         return ClefTokenSequence(ids: ids, fields: shifted, plan: plan)
     }
 }
+#endif

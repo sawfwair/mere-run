@@ -1,3 +1,4 @@
+#if !os(iOS)
 import Foundation
 import MediaIO
 import MLX
@@ -226,3 +227,4 @@ extension LightOnOCRGenerator {
         return probsArray.count - 1
     }
 }
+#endif

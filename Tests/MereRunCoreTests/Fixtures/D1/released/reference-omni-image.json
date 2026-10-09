@@ -1,0 +1,43 @@
+{
+  "family": "omni",
+  "media": "image",
+  "dtype": "torch.float32",
+  "device": "cpu",
+  "torch": "2.14.1",
+  "transformers": "5.19.0",
+  "answers": {
+    "arrived": {
+      "type": "noul",
+      "noul": 0.9997159838676453
+    },
+    "route": {
+      "type": "choice",
+      "choice": "red",
+      "confidence": 0.5317195653915405,
+      "probabilities": {
+        "red": 0.5317195653915405,
+        "blue": 0.41851428151130676,
+        "green": 0.04976615682244301
+      }
+    },
+    "quality": {
+      "type": "score",
+      "score": 1.8169682025909424,
+      "confidence": 0.8443037867546082,
+      "probabilities": {
+        "0": 0.027335628867149353,
+        "1": 0.12836062908172607,
+        "2": 0.8443037867546082
+      },
+      "legend": {
+        "0": "none",
+        "1": "some",
+        "2": "all"
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 281,
+    "output_tokens": 0
+  }
+}

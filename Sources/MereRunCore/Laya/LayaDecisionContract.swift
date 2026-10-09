@@ -1,3 +1,4 @@
+#if !os(iOS)
 import Foundation
 import MereRunLayaModel
 
@@ -161,3 +162,4 @@ public struct LayaDecisionResponse: Codable, Sendable {
     public let inputTokens: Int
     public let outputTokens: Int
 }
+#endif

@@ -99,6 +99,7 @@ in the generated dSYM. Exported symbols remain available for hosted unit tests.
 The executable budget still measures the shipped code, runtime metadata, and
 exports; inference optimization settings remain unchanged.
 
-The 2026-10-09 Release-simulator audit measured 84,564,600 bytes before stripping
-and 41,743,704 bytes afterward (39.81 MiB), with matching executable/dSYM UUIDs.
+The 2026-10-09 Release-simulator audit at `2955b88a` measured 84,564,600 bytes
+before stripping and 41,743,704 bytes afterward (39.81 MiB), with matching
+executable/dSYM UUIDs.
 This measures the executable, not an App Store download.

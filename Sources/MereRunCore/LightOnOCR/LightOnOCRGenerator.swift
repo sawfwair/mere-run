@@ -1,3 +1,4 @@
+#if !os(iOS)
 import Foundation
 import MLX
 import MLXNN
@@ -202,3 +203,4 @@ public actor LightOnOCRGenerator {
         MereRunRuntimeDebug.write(message(), enabled: logProgress)
     }
 }
+#endif

@@ -26,3 +26,6 @@ Released BF16 checkpoints have a [bounded native qualification](../../../docs/be
 handwritten-word transcription and grounding failure. The opt-in
 `LightOnOCR3CheckpointTests` records external-assets runs on Metal; ordinary
 unit tests skip it. See the report for saved outputs and reproduction commands.
+
+OCR inference is built for macOS and Linux. iOS retains the shared catalog
+resources and mode metadata, without linking this CLI-only generator.

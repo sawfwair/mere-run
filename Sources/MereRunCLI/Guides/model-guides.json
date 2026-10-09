@@ -320,7 +320,9 @@
     "topic": "handbook-embeddinggemma2",
     "title": "EmbeddingGemma 2 multimodal embeddings (Google)",
     "category": "Text and multimodal",
-    "models": ["text-embed-embeddinggemma2"],
+    "models": [
+      "text-embed-embeddinggemma2"
+    ],
     "resourceName": "handbook-embeddinggemma2.md"
   },
   {
@@ -686,6 +688,16 @@
       "text-decide-laya-typed-decisions"
     ],
     "resourceName": "handbook-laya.md"
+  },
+  {
+    "topic": "handbook-d1",
+    "title": "D1 multimodal decisions (LiquidAI)",
+    "category": "Text",
+    "models": [
+      "text-decide-d1-3b-bf16",
+      "text-decide-d1-omni-600m-fp32"
+    ],
+    "resourceName": "handbook-d1.md"
   },
   {
     "topic": "handbook-clef",

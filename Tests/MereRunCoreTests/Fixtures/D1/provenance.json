@@ -1,0 +1,23 @@
+{
+  "causal_repository": "LiquidAI/d1-3B",
+  "causal_revision": "da1fe36a861f24690f27f622dca1d8688503d113",
+  "omni_repository": "LiquidAI/d1-omni-600M",
+  "omni_revision": "414f8d6438174f5b2133a9c21a478fc42625e308",
+  "torch": "2.14.1",
+  "transformers": "5.19.0",
+  "torchvision": "0.29.1",
+  "seed": 20261007,
+  "source_sha256": {
+    "d1-reference/api.py": "94e9f82eabfdf92c4abe1153e9a6dc4dd9821f9cc2fec3221e79e70723d8ada0",
+    "d1-reference/hybrid.py": "ce579827b952a6978a3560f70e74be9e228f9029de46048996b0c5f58d7f1f39",
+    "d1-reference/lfm2_vl.py": "f9e8d3354572a169237865283594b0364209fdb858901121b9f99147328b5d95",
+    "d1-reference/modeling_d1.py": "7fc6a001f80fc2d146f2a51128478f3b3bd4f1423a3ac129bc10f3fd0caf1d98",
+    "d1-reference/prompt.py": "a20b5f52e41a6d29e694bb8c861a5a4803ce3eb69364edad79511ccf8edb5c31",
+    "d1-reference/runner.py": "24d3ae718e9f9717771c0df39c93d324d00aa27bf3e12bab085c0922096cb0dd",
+    "d1-omni-reference/audio.py": "c5ff09d52d6a079e79d0505c89dbd0582ba2bc9abf2b26595d8d5b1d0c347bdf",
+    "d1-omni-reference/encoder.py": "5f2e20319ee42a7367febf06c7653d7b3f9b28ef99a64cb9ec7739563dcfcffe",
+    "d1-omni-reference/modeling_d1.py": "2b71a5c909ec5d3aa6307378a41a0fd24af1e17d5c1c1f8d510582147051a686",
+    "d1-omni-reference/prompt.py": "a6b29a55ec8345f1fc1fdbfcc4b64d80d473dc4316f095a62c51cb6cce1194cf",
+    "d1-omni-reference/vision.py": "43ad71029f82e20fd26b97574627773d47639d7a3742c8b04fe5bf55f41c4c28"
+  }
+}

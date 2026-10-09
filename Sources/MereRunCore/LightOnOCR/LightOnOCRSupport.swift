@@ -1,3 +1,4 @@
+#if !os(iOS)
 import Foundation
 import MLX
 import MLXNN
@@ -192,3 +193,4 @@ extension QwenEncoder {
         return embedTokens.asLinear(h)
     }
 }
+#endif
