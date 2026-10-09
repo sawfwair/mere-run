@@ -1,0 +1,603 @@
+{
+  "date": "2026-10-09",
+  "quality_qualified": false,
+  "profile_selection": "Late mixed Q4/Q8 retained. Context Q8 selected over a Q4 candidate using the same bounded diagnostic suite; this is not an independent broad benchmark.",
+  "context_q4_candidate": {
+    "mean_vector_cosine": 0.98056727151076,
+    "minimum_vector_cosine": 0.9707605838775635,
+    "retrieval_top1_agreement": 1.0,
+    "conversion_sha256": "1cf9dbe834030683256accf50abba12629d319ffe43509c1950f889e9f06348c",
+    "report_sha256": "aca64c01aa94932319347c5cd13f0377eb2db8fc45a339ec24e94ca40b155cef",
+    "scope_note": "20 text/chunk cases, no image. The original candidate report used a generic image scope label."
+  },
+  "models": [
+    {
+      "managed_id": "text-embed-pplx-v2-late-9b-mixed-4bit",
+      "repository": "Sawfwair/pplx-embed-v2-late-9b-MLX-Mixed-4bit",
+      "revision": "7309bd8d28fd8e0a9a27033f3d13cc2d7a5cf219",
+      "source_repository": "perplexity-ai/pplx-embed-v2-late-9b",
+      "source_revision": "77e936a1b18ed2ac00b7c76fccd70dc6a1bb1c18",
+      "weight_bytes": 7320079883,
+      "diagnostic": {
+        "config_sha256": "f690adb5cc0710b6f0db5fc8b7ac4f8f1b401eb5bc450a002da0e9776b0c3dea",
+        "conversion_sha256": "f11d32129cea94e21fd6d223385e8ed1e3b40458fe2d433774bc085f8766f3ab",
+        "gates": {
+          "finite": true,
+          "mean_vector_cosine": true,
+          "minimum_vector_cosine": true,
+          "retrieval_top1_agreement": true
+        },
+        "index_sha256": "af34cbcaf9927c77cdfa9e5251b472801f2d01795cdff1e76a985b41c8f9d45f",
+        "kind": "late",
+        "max_score_absolute_error": 0.053305625915527344,
+        "mean_vector_cosine": 0.9990646999457787,
+        "minimum_vector_cosine": 0.9919236302375793,
+        "passes_heldout_gates": true,
+        "quantized_top1": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "retrieval_top1_agreement": 1.0,
+        "schema_version": 1,
+        "scope": "Small paired text/chunk retrieval diagnostic and one synthetic image parity case. Broad benchmark, image retrieval quality and maximum context unqualified.",
+        "source_revision": "77e936a1b18ed2ac00b7c76fccd70dc6a1bb1c18",
+        "source_top1": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "torch_version": "2.8.0+cu128",
+        "transformers_version": "5.4.0"
+      },
+      "apple": {
+        "cli_sha256": "a950b641fd6a243307d64793282e687081e93aeb443af06a2312a206ed551983",
+        "kind": "late",
+        "passes": true,
+        "reference_sha256": "2fa5a78f7da260b1298572c95d62e50317313881a167b8c562a7e13635c4064f",
+        "results": [
+          {
+            "cases": 9,
+            "elapsed_seconds": 9.043918125000346,
+            "max_absolute_error": 4.344917106657853e-07,
+            "mean_vector_cosine": 0.9999999999998682,
+            "minimum_vector_cosine": 0.9999999999980264,
+            "passes": true,
+            "task": "query"
+          },
+          {
+            "cases": 9,
+            "elapsed_seconds": 5.87330799999927,
+            "max_absolute_error": 4.096036434180633e-07,
+            "mean_vector_cosine": 0.9999999999998951,
+            "minimum_vector_cosine": 0.9999999999990792,
+            "passes": true,
+            "task": "document"
+          },
+          {
+            "cases": 1,
+            "elapsed_seconds": 6.2658885419996295,
+            "max_absolute_error": 3.988975108659308e-06,
+            "mean_vector_cosine": 0.999999999995117,
+            "minimum_vector_cosine": 0.9999999998900128,
+            "passes": true,
+            "task": "image"
+          }
+        ],
+        "schema_version": 1,
+        "scope": "Real full-checkpoint CLI text/chunk parity and synthetic image smoke on this Mac. Maximum context and image retrieval quality unqualified."
+      },
+      "publication": {
+        "public": true,
+        "repository": "Sawfwair/pplx-embed-v2-late-9b-MLX-Mixed-4bit",
+        "revision": "7309bd8d28fd8e0a9a27033f3d13cc2d7a5cf219",
+        "verified_files": {
+          "1_Dense/config.json": {
+            "bytes": 238,
+            "sha256": "a4e4de6f0b971aef6b0332300af01856cd1c88ea4dc658e5c29fc5eff1cd1167"
+          },
+          "1_Dense/model.safetensors": {
+            "bytes": 2097240,
+            "sha256": "5e1106abb8169f64742e1b37ce27a63bfcf1772bd26413bdaa58fd26675418bb"
+          },
+          "2_MultiVectorMask/config.json": {
+            "bytes": 391,
+            "sha256": "98a33321fed690efcf10dff2db3b4e17a435adf8ac3fda67f675633c03b41d2a"
+          },
+          "3_Normalize/config.json": {
+            "bytes": 89,
+            "sha256": "51f74e99b3040bed9ddee1f39b0ca2aad0f28f605e932803517e5f574aac7eb4"
+          },
+          "MODIFICATIONS.md": {
+            "bytes": 490,
+            "sha256": "eb469412eaa619bb89b24d43108fe202451205bad64420fb4690add088b4e800"
+          },
+          "PPLX_APPLE_QUALIFICATION.json": {
+            "bytes": 1535,
+            "sha256": "bc53a06739f5d61e2740dd01b8c71126ba1f6b42154d3cc27b087020bbc9827e"
+          },
+          "PPLX_CONVERSION.json": {
+            "bytes": 783573,
+            "sha256": "f11d32129cea94e21fd6d223385e8ed1e3b40458fe2d433774bc085f8766f3ab"
+          },
+          "PPLX_QUALIFICATION.json": {
+            "bytes": 1169,
+            "sha256": "1d01a6a20856b7e00a45181414682fd91a6ec2ebbd4cc87220cac4cf3028c55f"
+          },
+          "PPLX_REFERENCE_VECTORS.json": {
+            "bytes": 2377447,
+            "sha256": "2fa5a78f7da260b1298572c95d62e50317313881a167b8c562a7e13635c4064f"
+          },
+          "README.md": {
+            "bytes": 1346,
+            "sha256": "b6e47fa722e4d4925aaf98d541444cee89a7c95795f7d5a92373499f1d941050"
+          },
+          "SHA256SUMS": {
+            "bytes": 2390,
+            "sha256": "1a355a3946f33054ee98325fc19edfa0490428282bd6f5d097c3e05afe285c8b"
+          },
+          "UPSTREAM_MODEL_CARD.md": {
+            "bytes": 2766,
+            "sha256": "23d32324910ebc480c402a08fa3a359c1a3474818743ccd311ab8138e8061342"
+          },
+          "chat_template.jinja": {
+            "bytes": 479,
+            "sha256": "00a123eb8e945cf6bf0246abed96fcc0ff577f9c12f3af1aac246f3d32b5c4cf"
+          },
+          "config.json": {
+            "bytes": 26524,
+            "sha256": "f690adb5cc0710b6f0db5fc8b7ac4f8f1b401eb5bc450a002da0e9776b0c3dea"
+          },
+          "config_sentence_transformers.json": {
+            "bytes": 264,
+            "sha256": "1c1abaf5dfd78bba1d3dce93704ce8d9877687e54eaed6f4a441cf4efa3a3078"
+          },
+          "convert_pplx_embed_v2_mlx.py": {
+            "bytes": 8346,
+            "sha256": "5505c3511dc028ed1ba67e12d6d2b328198ff94cef5ffdea7f0106dbd06dde3e"
+          },
+          "diagnostic-image.png": {
+            "bytes": 834,
+            "sha256": "3b392e17b72530c2ae9d514a2f9b262a61d123ace8d3c5e06372f80fd88d1316"
+          },
+          "mererun_model.json": {
+            "bytes": 560,
+            "sha256": "cd67cb9da06ceee0b0579795c3b2b786c9a9548739930cc274d34f0b1a639272"
+          },
+          "model.safetensors": {
+            "bytes": 7317982643,
+            "sha256": "5c09c90a0591478e132bafbbbb7d9224abdc0f7ff8652502fcd5ffc0520fffb2"
+          },
+          "model.safetensors.index.json": {
+            "bytes": 84085,
+            "sha256": "af34cbcaf9927c77cdfa9e5251b472801f2d01795cdff1e76a985b41c8f9d45f"
+          },
+          "modules.json": {
+            "bytes": 535,
+            "sha256": "35d6f7421d1df0148c58255c1d7a61e16abc8eb929c37ca898308a963eb693a6"
+          },
+          "processor_config.json": {
+            "bytes": 1351,
+            "sha256": "9bfa7f59801e8680077ebd09a1308cf89125538c5e19b901328ba0066750c504"
+          },
+          "publish_pplx_embed_v2_mlx.py": {
+            "bytes": 6308,
+            "sha256": "1d5a72df67caadcb4f476bfc0c166fa84af7367b91ab7dfcede706aa1954dc5e"
+          },
+          "qualify_pplx_embed_v2_mlx.py": {
+            "bytes": 11309,
+            "sha256": "821db05217137f0b6311e1be7b2c1cc18eb6d816a6a70682571a26d8d54977d9"
+          },
+          "requirements.txt": {
+            "bytes": 63,
+            "sha256": "b92fbd9b613248745c1f6805e027d3da68fb2e328e3eda94e9be1eba30f21d91"
+          },
+          "sentence_bert_config.json": {
+            "bytes": 664,
+            "sha256": "002ad0a38c521862a54a2ab61a08b66f5d139a791200a38bbb9f256118d53ba4"
+          },
+          "tokenizer.json": {
+            "bytes": 19989705,
+            "sha256": "a171436d73b1d30b9ba99ff6b7f15efcf45cf428b6ff908842286a8057030b1c"
+          },
+          "tokenizer_config.json": {
+            "bytes": 1195,
+            "sha256": "85d5045a11205796e6ec9615f104437813b9d1810debb2669219fe32901eb922"
+          }
+        }
+      }
+    },
+    {
+      "managed_id": "text-embed-pplx-v2-context-9b-preview-8bit",
+      "repository": "Sawfwair/pplx-embed-v2-context-9b-preview-MLX-8bit",
+      "revision": "abf77a86a7b84aee72640c736a92f3c5b471e6db",
+      "source_repository": "perplexity-ai/pplx-embed-v2-context-9b-preview",
+      "source_revision": "b667039ee8b438a6350fbc91bbcecd86f9d363ba",
+      "weight_bytes": 10807643248,
+      "diagnostic": {
+        "config_sha256": "adc2bc46a38fb23c6d5962df5d2f9817981cc0ec52c92108139789f093a9b581",
+        "conversion_sha256": "1abde4d12809dfc0320dacd3539a96afa17c519877573605518226e1857d4a42",
+        "gates": {
+          "finite": true,
+          "mean_vector_cosine": true,
+          "minimum_vector_cosine": true,
+          "retrieval_top1_agreement": true
+        },
+        "index_sha256": "f6267507373d339fc9997856a7143349ca144d7c670dd682a9d2003bcc294fc5",
+        "kind": "context",
+        "max_score_absolute_error": 0.0020607560873031616,
+        "mean_vector_cosine": 0.9998729924360911,
+        "minimum_vector_cosine": 0.9998128414154053,
+        "passes_diagnostic_gates": true,
+        "quantized_top1": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "retrieval_top1_agreement": 1.0,
+        "schema_version": 1,
+        "scope": "Small paired text/chunk retrieval diagnostic. Broad benchmark, image retrieval quality and maximum context unqualified.",
+        "source_revision": "b667039ee8b438a6350fbc91bbcecd86f9d363ba",
+        "source_top1": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "torch_version": "2.8.0+cu128",
+        "transformers_version": "5.4.0"
+      },
+      "apple": {
+        "cli_sha256": "abcf0f65b908049a88c969809141495dd024ca3c3a0e8e0ec20631cc2d2d1186",
+        "kind": "context",
+        "passes": true,
+        "reference_sha256": "0db641e71bdaf5de45d474fa0742601a0545dc62e8b016ad99dae64ce4c9abf7",
+        "results": [
+          {
+            "cases": 9,
+            "elapsed_seconds": 5.9427880000002915,
+            "max_absolute_error": 1.0,
+            "mean_vector_cosine": 0.9999999730055887,
+            "minimum_vector_cosine": 0.999999867085392,
+            "passes": true,
+            "task": "query"
+          },
+          {
+            "cases": 11,
+            "elapsed_seconds": 6.025662540999292,
+            "max_absolute_error": 1.0,
+            "mean_vector_cosine": 0.9999999793812168,
+            "minimum_vector_cosine": 0.9999998242578876,
+            "passes": true,
+            "task": "document"
+          }
+        ],
+        "schema_version": 1,
+        "scope": "Full-checkpoint native query/chunk parity. Maximum context and general retrieval quality unqualified."
+      },
+      "publication": {
+        "public": true,
+        "repository": "Sawfwair/pplx-embed-v2-context-9b-preview-MLX-8bit",
+        "revision": "abf77a86a7b84aee72640c736a92f3c5b471e6db",
+        "verified_files": {
+          "MODIFICATIONS.md": {
+            "bytes": 501,
+            "sha256": "a56ddb10fdf233d04bd837b4046b7f96a3b14f182453847f2de17ecb85b4eb4a"
+          },
+          "PPLX_APPLE_QUALIFICATION.json": {
+            "bytes": 1107,
+            "sha256": "0efa0b70fc8c5beeb06d2e29bd8b995f9a325ad29c22d7957457f313225020ee"
+          },
+          "PPLX_CONVERSION.json": {
+            "bytes": 822786,
+            "sha256": "1abde4d12809dfc0320dacd3539a96afa17c519877573605518226e1857d4a42"
+          },
+          "PPLX_QUALIFICATION.json": {
+            "bytes": 1140,
+            "sha256": "e8128ff167c43c94acba9a2845afc7e4ac1bced47afe315bc7e2fd7787b828ca"
+          },
+          "PPLX_REFERENCE_VECTORS.json": {
+            "bytes": 1680594,
+            "sha256": "0db641e71bdaf5de45d474fa0742601a0545dc62e8b016ad99dae64ce4c9abf7"
+          },
+          "README.md": {
+            "bytes": 1367,
+            "sha256": "1d5b48a4409b3a77270798f8162b471fdfbd6c044929688c268de9642700fc18"
+          },
+          "SHA256SUMS": {
+            "bytes": 2481,
+            "sha256": "c59e155686629df2caa705996f1536a912c41b763ab11cefc20a2345a1d4beaa"
+          },
+          "UPSTREAM_MODEL_CARD.md": {
+            "bytes": 3636,
+            "sha256": "fe407e31224a983ac8f3ceae661ac9322ec65d4757ac380ad367297b1ac64c75"
+          },
+          "chat_template.jinja": {
+            "bytes": 7756,
+            "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+          },
+          "config.json": {
+            "bytes": 26872,
+            "sha256": "adc2bc46a38fb23c6d5962df5d2f9817981cc0ec52c92108139789f093a9b581"
+          },
+          "configuration_pplx_contextual.py": {
+            "bytes": 852,
+            "sha256": "fc05839ea7274b6d0c2c02aea7157a247df081bd31f647c8d612e7552ceba99a"
+          },
+          "contextual_head.safetensors": {
+            "bytes": 33554629,
+            "sha256": "97f12380331825a3ef9fc274b10d9dd2065359bb7e1eead2cc78db965352f4a3"
+          },
+          "convert_pplx_embed_v2_mlx.py": {
+            "bytes": 8756,
+            "sha256": "a04822d02826cdfceb4e984d455c9256544561c9e659146ba1dd7289e1cfca1c"
+          },
+          "mererun_model.json": {
+            "bytes": 548,
+            "sha256": "cdeb918f94ab13adb2a2e2d6916bf4196f3e6568aa974f4c6a9fd955ba5df79e"
+          },
+          "model-00001-of-00007.safetensors": {
+            "bytes": 1392039145,
+            "sha256": "b7d0b725d59ffe7d0e0c1ee1734a45b33397da575774b022ab11f14618df5fdf"
+          },
+          "model-00002-of-00007.safetensors": {
+            "bytes": 1354422816,
+            "sha256": "cb6052280bb9b3e4811e2751a798902ec9e6400b4f1f507eb4326261ac888cce"
+          },
+          "model-00003-of-00007.safetensors": {
+            "bytes": 1401644156,
+            "sha256": "b3feabf7df7869d21ec743cdb2aee123faf7a5ce42435b57edda6ec33c999ce7"
+          },
+          "model-00004-of-00007.safetensors": {
+            "bytes": 1393384180,
+            "sha256": "e6c1c8a61d199a850444e2a01722c853ae32c43ad31ae49918b83e6a890c1268"
+          },
+          "model-00005-of-00007.safetensors": {
+            "bytes": 1395726730,
+            "sha256": "57bba4029e8c4db9cef3cb2f5ead43de8f26bbbffde5f6ebb32a9ee850118538"
+          },
+          "model-00006-of-00007.safetensors": {
+            "bytes": 1360340464,
+            "sha256": "4f9e4024b5907306c620f41c4b22dbca0443768418ab98d596b3918f2f35ed60"
+          },
+          "model-00007-of-00007.safetensors": {
+            "bytes": 2476531128,
+            "sha256": "55ebf70a76656186550b1dc7694d0ef8104da8591a47b1fa7b4ae15fb4fff883"
+          },
+          "model.safetensors.index.json": {
+            "bytes": 101568,
+            "sha256": "f6267507373d339fc9997856a7143349ca144d7c670dd682a9d2003bcc294fc5"
+          },
+          "modeling_pplx_contextual.py": {
+            "bytes": 9318,
+            "sha256": "090f68c9907f2b055b3f41bd0dfc94ef8250e8a98e390e6d308b8fa34702bd45"
+          },
+          "processor_config.json": {
+            "bytes": 1300,
+            "sha256": "14932921ca485d458a04dafd8069fbb0a4505622a48208d19ed247115801385b"
+          },
+          "publish_pplx_embed_v2_mlx.py": {
+            "bytes": 6590,
+            "sha256": "a788eb5127bd64cbfa850871c13be02bb3dd7554de5661d379cc115db5cc0483"
+          },
+          "qualify_pplx_embed_v2_mlx.py": {
+            "bytes": 11346,
+            "sha256": "3fe84104ca6f8afde473c85f08f877299caae5ddb38d33dfa48c5c8e346838e0"
+          },
+          "tokenizer.json": {
+            "bytes": 19989896,
+            "sha256": "d76b678db762df7761041239ca8950fb190135c94bb66ce8aeff5a0ff2933cf5"
+          },
+          "tokenizer_config.json": {
+            "bytes": 1195,
+            "sha256": "85d5045a11205796e6ec9615f104437813b9d1810debb2669219fe32901eb922"
+          }
+        }
+      }
+    }
+  ],
+  "conversion_cleanup": {
+    "terminated": true,
+    "http_status": 204,
+    "created_epoch": 1791570365.4634938,
+    "terminated_epoch": 1791572891.8276842,
+    "rate_per_hour_usd": 1.79,
+    "estimated_compute_cost_usd": 1.2561644168635209,
+    "billing_note": "Estimate from elapsed allocation and listed hourly rate; not a provider billing receipt.",
+    "pod_absent_from_inventory": true
+  },
+  "context_1024_normalization": {
+    "dimensions": 1024,
+    "normalized": true,
+    "document_cases": 11,
+    "zero_chunk_vectors": 1,
+    "minimum_cosine_vs_truncated_reference": 0.9999999999999994,
+    "maximum_norm_error": 4.973926559515007e-08,
+    "passes": true
+  },
+  "anonymous_weight_range_checks": {
+    "anonymous": true,
+    "immutable_revisions": true,
+    "verified_ranges": [
+      {
+        "kind": "late",
+        "file": "1_Dense/model.safetensors",
+        "offset": 0,
+        "bytes": 64,
+        "sha256": "17fa8bab7d8794bf7e7cafbe1f2bec69aaf488ae2d384a41c09388079946536a"
+      },
+      {
+        "kind": "late",
+        "file": "1_Dense/model.safetensors",
+        "offset": 2097176,
+        "bytes": 64,
+        "sha256": "c8c22d4ce28d57780f5dcbe2f1ad8788789b1124de6e856ec614b2969115cfc7"
+      },
+      {
+        "kind": "late",
+        "file": "model.safetensors",
+        "offset": 0,
+        "bytes": 64,
+        "sha256": "1400ff8024acc0d1e7d92cad82fec2814e08e45c6ce253cb1ac160193a82b8fb"
+      },
+      {
+        "kind": "late",
+        "file": "model.safetensors",
+        "offset": 7317982579,
+        "bytes": 64,
+        "sha256": "df075defe39b7013e37306b40e96daace4487415959e2361a9820483826b5e7e"
+      },
+      {
+        "kind": "context",
+        "file": "contextual_head.safetensors",
+        "offset": 0,
+        "bytes": 64,
+        "sha256": "84873c4c2c049c0ab573ed7ba112db4dfc462132d246d9dda18ab83b00256c9e"
+      },
+      {
+        "kind": "context",
+        "file": "contextual_head.safetensors",
+        "offset": 33554565,
+        "bytes": 64,
+        "sha256": "b62db637a54a50985b103b6100bda5e81f0e32546e9f9e016603517f8d0dc836"
+      },
+      {
+        "kind": "context",
+        "file": "model-00001-of-00007.safetensors",
+        "offset": 0,
+        "bytes": 64,
+        "sha256": "364c6de1bca5f256ed2f836e138011e75e11d818125ad3d4d0dc0e18cf47d0a0"
+      },
+      {
+        "kind": "context",
+        "file": "model-00001-of-00007.safetensors",
+        "offset": 1392039081,
+        "bytes": 64,
+        "sha256": "3ff0c5dce7a95f4c5fbf16562fb3e8fa6052a57be1cc2256e5dbb204db873ad5"
+      },
+      {
+        "kind": "context",
+        "file": "model-00002-of-00007.safetensors",
+        "offset": 0,
+        "bytes": 64,
+        "sha256": "b067018e069bb5527626cedbf1e21b0dfad73830df57b6dd90432fc7ab9dfcdd"
+      },
+      {
+        "kind": "context",
+        "file": "model-00002-of-00007.safetensors",
+        "offset": 1354422752,
+        "bytes": 64,
+        "sha256": "698c7324252f96a469c9349ec15f65bba8a9925921c878b910010ce755ba14d8"
+      },
+      {
+        "kind": "context",
+        "file": "model-00003-of-00007.safetensors",
+        "offset": 0,
+        "bytes": 64,
+        "sha256": "c2fc7961405ef433bfb304d4b3020c4448147a80fc4320926fdf0f71077a905b"
+      },
+      {
+        "kind": "context",
+        "file": "model-00003-of-00007.safetensors",
+        "offset": 1401644092,
+        "bytes": 64,
+        "sha256": "ca97d924ed56aeec1575495b39e32f88d35fb09e1560dbbc7adc9ac82f9429be"
+      },
+      {
+        "kind": "context",
+        "file": "model-00004-of-00007.safetensors",
+        "offset": 0,
+        "bytes": 64,
+        "sha256": "195177edd147c61c21596e549c12b3ec402a749a0f618d6c7bb0ffe327a62ba8"
+      },
+      {
+        "kind": "context",
+        "file": "model-00004-of-00007.safetensors",
+        "offset": 1393384116,
+        "bytes": 64,
+        "sha256": "f343b5e0655d51de278a5c8f6ebf9619741a6d0b61466aacf9c3e60121ba02f1"
+      },
+      {
+        "kind": "context",
+        "file": "model-00005-of-00007.safetensors",
+        "offset": 0,
+        "bytes": 64,
+        "sha256": "6bde25074504743627f2b07377a8f267b87bcbd3f1ea62844754282e08266f6e"
+      },
+      {
+        "kind": "context",
+        "file": "model-00005-of-00007.safetensors",
+        "offset": 1395726666,
+        "bytes": 64,
+        "sha256": "27d96d5688d38c92ab0d9f14ab4302203d6ea5b8633f98169e0f1813425a1b1e"
+      },
+      {
+        "kind": "context",
+        "file": "model-00006-of-00007.safetensors",
+        "offset": 0,
+        "bytes": 64,
+        "sha256": "a871acbfdf172dea742bf77f52f58e809204d6432a33f8f2a4f05e4410586d75"
+      },
+      {
+        "kind": "context",
+        "file": "model-00006-of-00007.safetensors",
+        "offset": 1360340400,
+        "bytes": 64,
+        "sha256": "a548ec526d5bdafcf5b13639e44705b394f2917b4c992dc75d397c4bf11cd12d"
+      },
+      {
+        "kind": "context",
+        "file": "model-00007-of-00007.safetensors",
+        "offset": 0,
+        "bytes": 64,
+        "sha256": "4461921a6814935eeefba820d38762a030b3961c2e3f39394dd304b328e2c124"
+      },
+      {
+        "kind": "context",
+        "file": "model-00007-of-00007.safetensors",
+        "offset": 2476531064,
+        "bytes": 64,
+        "sha256": "c046b7468b85b59964c685db26ced6d3107fdbdc031e6f9d5d54fbebb1b3856e"
+      }
+    ],
+    "passes": true
+  },
+  "local_validation": {
+    "full_gate_exit_code": 0,
+    "xctest_executed": 5370,
+    "xctest_skipped": 442,
+    "xctest_failures": 0,
+    "swift_testing_passed": 192,
+    "pplx_tests": "All PPLX test suites passed; real-tokenizer fixtures separately passed for both 9B tokenizers.",
+    "build_lint_policy_checks_passed": true,
+    "docs_build_passed": true,
+    "managed_pull_passed": [
+      "text-embed-pplx-v2-late-9b-mixed-4bit",
+      "text-embed-pplx-v2-context-9b-preview-8bit"
+    ],
+    "managed_id_inference_retry": "Blocked by available-memory admission. Both full native checkpoint runs had already passed with normal admission.",
+    "cli_help_and_hygiene_checks_passed": true,
+    "validation_checkout": "Isolated PPLX PR branch against main",
+    "base_revision": "0f0f7b9f2a0d9801ca0098ca0d6d6dd020b6efab"
+  },
+  "record_note": "Derived qualification record with hardware and process-memory metadata omitted. Immutable linked artifacts preserve the original evidence."
+}

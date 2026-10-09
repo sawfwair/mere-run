@@ -8,6 +8,8 @@ extension MereRunCapabilityCatalog {
     enum TextEmbedFamily: String, MereRunFamilyID {
         case qwen3Embedding = "qwen3-embedding"
         case embeddingGemma2 = "embeddinggemma2"
+        case pplxLate = "pplx-late"
+        case pplxContext = "pplx-context"
     }
 
     enum TextAnonymizeFamily: String, MereRunFamilyID {
@@ -217,7 +219,9 @@ extension MereRunCapabilityCatalog {
         defaultModels: [.always("text-embed-qwen3-0.6b")],
         families: [
             .init(TextEmbedFamily.qwen3Embedding, title: "Qwen3 Embedding", models: ["text-embed-qwen3-0.6b"]),
-            .init(TextEmbedFamily.embeddingGemma2, title: "EmbeddingGemma 2", models: ["text-embed-embeddinggemma2"])
+            .init(TextEmbedFamily.embeddingGemma2, title: "EmbeddingGemma 2", models: ["text-embed-embeddinggemma2"]),
+            .init(TextEmbedFamily.pplxLate, title: "PPLX v2 Late", models: ["text-embed-pplx-v2-late-0.6b", "text-embed-pplx-v2-late-9b", "text-embed-pplx-v2-late-9b-mixed-4bit"]),
+            .init(TextEmbedFamily.pplxContext, title: "PPLX v2 Context", models: ["text-embed-pplx-v2-context-9b-preview", "text-embed-pplx-v2-context-9b-preview-8bit"])
         ]
     )
 

@@ -72,6 +72,16 @@ extension ManagedModelCatalog {
             estimatedDownloadBytes: 2_826_861_317,
             defaultCLICommands: ["text anonymize"]
         ),
+    ] + PPLXEmbedV2Catalog.modelIDs.map { modelID in
+        ManagedModelSpec(
+            id: modelID, category: .textEmbed, installShape: .directoryRoot,
+            hubFallback: PPLXEmbedV2Catalog.hubFallback(modelID),
+            upstreamRepoId: PPLXEmbedV2Catalog.repository(modelID), upstreamRevision: PPLXEmbedV2Catalog.revision(modelID),
+            validationKind: .pplxEmbedV2, runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: PPLXEmbedV2Catalog.estimatedDownloadBytes(modelID),
+            defaultCLICommands: ["text embed"], apiAvailability: .cliOnly
+        )
+    } + [
         ManagedModelSpec(
             id: GLiNERCatalog.modelID, category: .textClassify, installShape: .directoryRoot,
             hubFallback: GLiNERCatalog.hubFallback,

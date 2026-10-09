@@ -110,6 +110,8 @@ extension CommandFlags {
         package static let task = "--task"
         package static let title = "--title"
         package static let dimensions = "--dimensions"
+        package static let chunksJSON = "--chunks-json"
+        package static let normalize = "--normalize"
         package static let output = "--output"
         package static let pretty = "--pretty"
     }
