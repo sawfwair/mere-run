@@ -1,6 +1,26 @@
 # Qwen Image 2.1 execution
 
-This directory owns the image-generation adapter for `image-qwen-21`.
+This directory owns the shared image-generation adapter for `image-qwen-21`
+and `image-qwen-21-turbo`. Both load original BF16 safetensors directly; no MLX
+weight conversion or Python runtime is required. The managed installs have
+separate immutable checkpoint pins and retain their own weights and defaults.
+
+Local mixed-precision checkpoints can also declare component-local affine
+`quantization` in each component's `config.json`. The native loader supports
+Q4 and Q8 with group size 64, preserves packed UInt32 weights, and validates
+the original logical shapes plus scales and affine biases before inference.
+Encoder linear modules load directly from packed tensors. Transformer linear
+operations use MLX quantized matrix multiplication; dense layers remain BF16.
+
+`scripts/model-conversion/convert_qwen_image21_turbo_mlx.py` builds a pinned
+Turbo candidate with Q4 transformer blocks, Q8 encoder linear layers, and
+BF16 embeddings, VAE, modulation and transformer input/output layers. It records
+source hashes, weight reconstruction errors, modifications and checksums.
+`publish_qwen_image21_turbo_mlx.py` uploads from the local host, verifies a private
+staging repository, then verifies the public immutable revision. Conversion
+and publication do not establish image quality or smaller-host memory fit.
+See the [mixed-precision qualification report](../../../docs/benchmarks/qwen-image-21-turbo-mixed-qualification-2026-10-09.md)
+for artifact audits and the current local-execution boundary.
 
 - `QwenImage21Resources` pins the official checkpoint and loads indexed tensors.
 - `QwenImage21Conditioner` uses the native Qwen3-VL encoder, deepstack vision
@@ -8,7 +28,23 @@ This directory owns the image-generation adapter for `image-qwen-21`.
 - `QwenImage21ImageIO` preserves straight RGBA, resizes references with Lanczos,
   and composites a separate vision-encoder copy over white.
 - `QwenImage21Generator` stages encoder, VAE, and transformer loading, uses
-  dynamic flow shifting, and writes RGBA PNG output.
+  the checkpoint's flow schedule, and writes RGBA PNG output.
+
+The base model retains dynamic flow shifting and 40 steps. Turbo defaults to
+eight steps and CFG 1. Its typed pipeline configuration supplies `sample_sigmas`;
+the static scheduler uses shift 1, no terminal stretch, and appends zero.
+Schedule validation runs before loading large tensors. Turbo requires a saved
+grid, rejects step-count mismatches and `--sigma-shift`, and accepts the combined
+Transformers 5 `processor/processor_config.json` packaging. The base model's
+`processor/preprocessor_config.json` packaging remains supported.
+
+`scripts/validation/qwen-image-21-turbo-metadata.py` regenerates pinned config,
+BF16 header schemas, and source hashes without downloading weight payloads.
+The Turbo sampling reference is Diffusers commit
+`da1d3829cf08d4f329b526d89e17cc035c049d8d` (PR #14950). Local tests do not qualify
+dense BF16 Turbo checkpoint inference or numerical parity. The separate mixed
+Q4/Q8 checkpoint has bounded trained-checkpoint generation and editing results
+in the mixed-precision report above. Base-model checkpoint results below apply only to the base model.
 
 The existing image plan, API operation, managed catalog, and Studio model
 inventory expose this runtime. Reference images retain their order. Each image
@@ -20,7 +56,7 @@ and negative prefix caches. The seed controls MLX noise; identical seeds do not
 imply identical random arrays across MLX and PyTorch.
 
 See the [trained-checkpoint qualification report](../../../docs/benchmarks/qwen-image-21-native-qualification-2026-09-20.md)
-for bounded M4 Max results and numerical and visual limitations. The local gate
+for bounded base-model results and numerical and visual limitations. The local gate
 and small reference fixtures establish narrower code contracts.
 
 Regenerate numerical fixtures with `scripts/validation/qwen-image-21-reference.py`

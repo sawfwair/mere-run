@@ -47,6 +47,40 @@ final class QwenImage21Tests: MLXTestCase {
         assertClose(actual.asType(.float32), expected.asType(.float32), tolerance: 0.02)
     }
 
+    func testPackedTransformerMatchesExplicitDequantizationAndRejectsMalformedWeights() throws {
+        let config = try decode("transformer-config.json", as: QwenImage21TransformerConfig.self)
+        let source = try MLX.loadArrays(url: fixtures.appending(path: "transformer.safetensors"))
+        let data = try MLX.loadArrays(url: fixtures.appending(path: "transformer-results.safetensors"))
+        let layout = try QwenImage21Layout(imageSlots: [false, true, true, false, false, true], imageShapes: [(2, 2), (2, 2), (2, 2)])
+        let prefix = "time_text_embed.timestep_embedder.linear_1"
+        for bits in [4, 8] {
+            let quantization = QwenImage21Quantization(bits: bits)
+            let (weight, scales, biases) = quantized(source[prefix + ".weight"]!, groupSize: 64, bits: bits)
+            var packed = source
+            packed[prefix + ".weight"] = weight
+            packed[prefix + ".scales"] = scales
+            packed[prefix + ".biases"] = biases
+            let native = try QwenImage21Transformer(config: config, arrays: packed, quantization: quantization)
+            var unpacked = source
+            unpacked[prefix + ".weight"] = dequantized(weight, scales: scales, biases: biases, groupSize: 64, bits: bits)
+            let reference = try QwenImage21Transformer(config: config, arrays: unpacked)
+            let actual = try native(latents: data["latents"]!, text: data["text"]!, timestep: 0.75, layout: layout)
+            let expected = try reference(latents: data["latents"]!, text: data["text"]!, timestep: 0.75, layout: layout)
+            assertClose(actual, expected, tolerance: 2e-5)
+            XCTAssertThrowsError(try QwenImage21Transformer(config: config, arrays: packed))
+            var malformed = packed
+            malformed[prefix + ".scales"] = scales[0..<1]
+            XCTAssertThrowsError(try QwenImage21Transformer(config: config, arrays: malformed, quantization: quantization))
+            malformed = packed
+            malformed.removeValue(forKey: prefix + ".biases")
+            XCTAssertThrowsError(try QwenImage21Transformer(config: config, arrays: malformed, quantization: quantization))
+            malformed = packed
+            malformed[prefix + ".weight"] = weight.asType(.bfloat16)
+            XCTAssertThrowsError(try QwenImage21Transformer(config: config, arrays: malformed, quantization: quantization))
+            XCTAssertThrowsError(try QwenImage21Transformer(config: config, arrays: packed, quantization: .init(bits: 2)))
+        }
+    }
+
     func testBFloat16QueryKeyNormRoundsBeforeLearnedScale() throws {
         let weights = try QwenImage21Weights(
             ["norm.weight": MLXArray([Float(1.19), 0.53, 1.7, -0.9]).asType(.bfloat16)],

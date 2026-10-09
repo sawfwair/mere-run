@@ -1,0 +1,18 @@
+{
+  "repo": "Qwen/Qwen-Image-2.1-Turbo",
+  "revision": "d65dbc9a7e8f6b5479e33dee6030eaab2a906509",
+  "scope": "Configurations and safetensors headers only; no trained-weight inference.",
+  "sha256": {
+    "LICENSE": "8dc973f024ff95966bea25866efa443fd16776dcb1001e681e3d467ea572b28d",
+    "model_index.json": "97e2febeb19d93cb41fa44807cde8bd42757950b5dffeacdb0331fb2d390cf20",
+    "processor/processor_config.json": "14932921ca485d458a04dafd8069fbb0a4505622a48208d19ed247115801385b",
+    "scheduler/scheduler_config.json": "16c948c71f9152a34cce6e3a2f309e97ad2dca32beecbe5e2fd3a7925b7eb4bb",
+    "text_encoder/config.json": "89050cba6b66c4f68f52305b54fc37efe28d95232246b94aa8dc0cfa36f3b734",
+    "text_encoder/model.safetensors:header": "f219429040fa5b4bc6bdad525a3187dd398eabb41db29d00e4e6650430831866",
+    "transformer/config.json": "2c567038ca190824728844b8d06d94ae02360e668707afd9734e789a7eb58ce3",
+    "transformer/diffusion_pytorch_model-00001-of-00002.safetensors:header": "f74e521f55710f05c7f492cc1e54686923d25439e22241af107d1a11d20a6546",
+    "transformer/diffusion_pytorch_model-00002-of-00002.safetensors:header": "49cb9bb6a7774dd266f5b19a0a645ecd63d25ae4b580774aa88d0e47d1c67799",
+    "vae/config.json": "42bfdec412459bbb7bc38a0617ab70edcfc873f84ec47e0c7d01c53ba09885a5",
+    "vae/diffusion_pytorch_model.safetensors:header": "3084328b25f28c863b29b6464b6b8147b93df22ce27408dab0ca985f90ac5f52"
+  }
+}

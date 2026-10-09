@@ -81,6 +81,7 @@ an effective overlay; they are not a second capability catalog.
 | `image` | `image-krea2-raw` |
 | `image` | `image-krea2-turbo` |
 | `image` | `image-qwen-21` |
+| `image` | `image-qwen-21-turbo` |
 | `image` | `image-qwen-edit-2511` |
 | `image` | `image-qwen-edit-2511-lightning` |
 | `image` | `image-ideogram4-sdnq-uint4` |
@@ -1870,3 +1871,33 @@ records trained-checkpoint generation, editing, transparency, repeatability,
 and numerical limitations. Only the tested 128 GiB host is qualified; catalog
 memory estimates do not establish support on smaller machines. Run
 `mere.run guide --model image-qwen-21` for controls and source revisions.
+
+### Qwen Image 2.1 Turbo
+
+`image-qwen-21-turbo` pins `Qwen/Qwen-Image-2.1-Turbo` to
+`d65dbc9a7e8f6b5479e33dee6030eaab2a906509`. It installs approximately 32.45 GB
+of original BF16 safetensors and configuration files. The existing native
+Swift/MLX transformer, Qwen3-VL conditioner, and RGBA VAE load these weights
+directly. No MLX conversion or Python setup is required.
+
+```bash
+mere.run model pull image-qwen-21-turbo --accept-license-terms
+mere.run image generate --model image-qwen-21-turbo \
+  --prompt 'A ceramic teapot on a wooden table' \
+  --steps 8 --seed 42 --output teapot-turbo.png
+```
+
+Turbo has a separate managed install; the existing `image-qwen-21` checkpoint
+and 40-step recipe stay available. Turbo defaults to eight steps and CFG 1,
+using the saved `sample_sigmas` grid with static shift 1 and no terminal stretch.
+It rejects other step counts and `--sigma-shift`. Running the base checkpoint
+with eight steps does not select Turbo. References and RGBA output use the
+shared runtime. The loader also supports local mixed Q4/Q8 checkpoints; see
+the [mixed-precision qualification report](./benchmarks/qwen-image-21-turbo-mixed-qualification-2026-10-09.md)
+for the separately published artifact and bounded generation/editing results.
+
+Turbo carries the Qwen Research License and requires explicit acceptance.
+Local tests check pinned configs, BF16 tensor schemas, the upstream eight-step
+schedule, and CLI/API routing. Trained Turbo checkpoint inference, quality,
+numerical parity, speed, and memory use for dense BF16 remain unqualified; base-model results
+do not qualify Turbo. Run `mere.run guide --model image-qwen-21-turbo` for details.

@@ -344,6 +344,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 96
             ),
             descriptor(
+                QwenImage21Resources.turboModelID,
+                "Image, Qwen 2.1 Turbo RGBA",
+                "Experimental native eight-step generation and editing with original BF16 safetensors and the checkpoint's saved schedule. Trained Turbo checkpoint inference and smaller-host memory remain unqualified.",
+                minimum: 48,
+                recommended: 96
+            ),
+            descriptor(
                 QwenImageEditRepository.model2511Id,
                 "Image edit, Qwen 2511 quality",
                 "Runs the pinned BF16 Qwen Image Edit 2511 stack for one-to-three-image editing with the 40-step guided recipe.",

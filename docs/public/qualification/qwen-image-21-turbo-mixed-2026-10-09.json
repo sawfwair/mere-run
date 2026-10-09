@@ -1,0 +1,259 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-09",
+  "source_repository": "Qwen/Qwen-Image-2.1-Turbo",
+  "source_revision": "d65dbc9a7e8f6b5479e33dee6030eaab2a906509",
+  "artifact_repository": "Sawfwair/Qwen-Image-2.1-Turbo-MLX-Mixed-4bit",
+  "bundle_bytes": 14252544800,
+  "bundle_checksums_sha256": "fc9cbb9426fd1db79abefe7690189392a8fea09364e4defd7255d80387eb98ef",
+  "conversion_receipt_sha256": "3fe7e4cd725a048a1d6c4fae25a47ea23a3672838fa97ad988f8fc675e27227d",
+  "weights": {
+    "text_encoder/model.safetensors": {
+      "bytes": 9367829096,
+      "sha256": "0e00306c5f95874e0cc6f4e56361f7c9913fdd78656429e1d9e890abd5afb4ee"
+    },
+    "transformer/diffusion_pytorch_model-00001-of-00002.safetensors": {
+      "bytes": 2974367217,
+      "sha256": "7b0709f9fa479edc605016e823a0779df51ad61346bfd3f9f38f10415b532d74"
+    },
+    "transformer/diffusion_pytorch_model-00002-of-00002.safetensors": {
+      "bytes": 1223193916,
+      "sha256": "6b238c0913c4ab5ca57e0ec02ae18401719f58300838a613d81700d6fe62f303"
+    },
+    "vae/diffusion_pytorch_model.safetensors": {
+      "bytes": 675508656,
+      "sha256": "71879ffd5321e6d10c3c87513e2b474b1252efa7f3dec2969214a9bf06a6dd5c"
+    }
+  },
+  "header_audit": {
+    "source_revision": "d65dbc9a7e8f6b5479e33dee6030eaab2a906509",
+    "header_audit_passed": true,
+    "components": {
+      "text_encoder": {
+        "tensors": 1431,
+        "quantized_layers": 341
+      },
+      "transformer": {
+        "tensors": 745,
+        "quantized_layers": 224
+      },
+      "vae": {
+        "tensors": 238,
+        "quantized_layers": 0
+      }
+    },
+    "scope": "Tensor closure, packed dtype/shapes, unchanged dense precision and shard ownership; no image-quality claim."
+  },
+  "native_source_base": "d95c1bcbe1eb2fa0b30a991d343e233decbd1bc9",
+  "source_dirty_during_qualification": true,
+  "native_binary_sha256": "59ce312e3041652484a41661185055e791746190a2478cf152e36bb475e108e1",
+  "local_gate": {
+    "passed": true,
+    "xctest_cases": 5363,
+    "skipped": 440,
+    "failures": 0,
+    "swift_testing_cases": 192,
+    "native_binary_sha256": "366f2ca6ec636ec81db1468cb6f1824ceb8ba2d343fc80f90db6eb9496f8c88e"
+  },
+  "local_inference": {
+    "date": "2026-10-09",
+    "status": "passed_bounded_native_cases",
+    "scope": "Five native Swift/MLX CLI cases; no broad quality or BF16-equivalence claim.",
+    "tested_repository": "Sawfwair/Qwen-Image-2.1-Turbo-MLX-Mixed-4bit",
+    "tested_checkpoint_revision": "d8276b786f94a4e8944189cc181e839e31759ab5",
+    "native_binary_sha256": "59ce312e3041652484a41661185055e791746190a2478cf152e36bb475e108e1",
+    "native_source_base": "d95c1bcbe1eb2fa0b30a991d343e233decbd1bc9",
+    "source_dirty": true,
+    "replay_pixel_identical": true,
+    "memory_note": "OS peak process footprint from /usr/bin/time -l; not whole-machine memory or a minimum hardware requirement.",
+    "limits": [
+      "No BF16 Turbo baseline comparison or broad prompt suite.",
+      "No 2048-pixel, multiple-reference, or transparent-output qualification.",
+      "Released application and hosted CI are separate gates."
+    ],
+    "cases": [
+      {
+        "case": {
+          "id": "smoke-512",
+          "prompt": "A blue ceramic teapot on a wooden table, soft studio light, realistic product photograph.",
+          "width": 512,
+          "height": 512,
+          "steps": 8,
+          "seed": 4242
+        },
+        "binary_sha256": "59ce312e3041652484a41661185055e791746190a2478cf152e36bb475e108e1",
+        "checkpoint_revision": "d8276b786f94a4e8944189cc181e839e31759ab5",
+        "input_sha256": {},
+        "preflight_status": "ok",
+        "exit_code": 0,
+        "elapsed_seconds": 21.507118999999875,
+        "maximum_resident_bytes": 9592356864,
+        "peak_memory_footprint_bytes": 9785318984,
+        "format": "PNG",
+        "mode": "RGBA",
+        "size": [
+          512,
+          512
+        ],
+        "sha256": "823f74d9239c9b8a7ca79b7a29dd63d70cd1a6388bbbb29424f8362ea65c121c",
+        "pixel_sha256": "f88341452bca59b5ffa64f57507bc10d1d07c9e20968ed374d8433a491146f0b",
+        "alpha_min": 253,
+        "alpha_max": 255,
+        "transparent_fraction": 0.0,
+        "opaque_fraction": 1.0,
+        "rgb_standard_deviation": 56.907295314278265,
+        "visual_inspection": "Passed: coherent blue ceramic teapot on wooden table, realistic lighting; inspected directly."
+      },
+      {
+        "case": {
+          "id": "replay-512",
+          "prompt": "A blue ceramic teapot on a wooden table, soft studio light, realistic product photograph.",
+          "width": 512,
+          "height": 512,
+          "steps": 8,
+          "seed": 4242
+        },
+        "binary_sha256": "59ce312e3041652484a41661185055e791746190a2478cf152e36bb475e108e1",
+        "checkpoint_revision": "d8276b786f94a4e8944189cc181e839e31759ab5",
+        "input_sha256": {},
+        "preflight_status": "ok",
+        "exit_code": 0,
+        "elapsed_seconds": 18.731013334000636,
+        "maximum_resident_bytes": 9583951872,
+        "peak_memory_footprint_bytes": 9776897560,
+        "format": "PNG",
+        "mode": "RGBA",
+        "size": [
+          512,
+          512
+        ],
+        "sha256": "823f74d9239c9b8a7ca79b7a29dd63d70cd1a6388bbbb29424f8362ea65c121c",
+        "pixel_sha256": "f88341452bca59b5ffa64f57507bc10d1d07c9e20968ed374d8433a491146f0b",
+        "alpha_min": 253,
+        "alpha_max": 255,
+        "transparent_fraction": 0.0,
+        "opaque_fraction": 1.0,
+        "rgb_standard_deviation": 56.907295314278265,
+        "visual_inspection": "Passed: exact pixel and PNG SHA-256 match to the inspected smoke case."
+      },
+      {
+        "case": {
+          "id": "quality-1024",
+          "prompt": "A blue ceramic teapot on a wooden table, soft studio light, realistic product photograph.",
+          "width": 1024,
+          "height": 1024,
+          "steps": 8,
+          "seed": 4242
+        },
+        "binary_sha256": "59ce312e3041652484a41661185055e791746190a2478cf152e36bb475e108e1",
+        "checkpoint_revision": "d8276b786f94a4e8944189cc181e839e31759ab5",
+        "input_sha256": {},
+        "preflight_status": "ok",
+        "exit_code": 0,
+        "elapsed_seconds": 81.49851025000044,
+        "maximum_resident_bytes": 9583624192,
+        "peak_memory_footprint_bytes": 22148630472,
+        "format": "PNG",
+        "mode": "RGBA",
+        "size": [
+          1024,
+          1024
+        ],
+        "sha256": "a46b01c5a5ea81904603125a275d4f1bd953aab0a265358015b5466772a7b09c",
+        "pixel_sha256": "7647fe437e24c9bb6f4856c7ed3363b89e198813991ce2df288bfadad70af24d",
+        "alpha_min": 250,
+        "alpha_max": 255,
+        "transparent_fraction": 0.0,
+        "opaque_fraction": 1.0,
+        "rgb_standard_deviation": 62.978457521830016,
+        "visual_inspection": "Passed: coherent blue ceramic teapot, wooden surface and studio background; inspected directly."
+      },
+      {
+        "case": {
+          "id": "text-1024",
+          "prompt": "A clean vintage travel poster showing a lighthouse at sunrise. At the top, large perfectly legible lettering reads \"MERE\". Warm orange and navy blue ink, beautiful simple graphic design.",
+          "width": 1024,
+          "height": 1024,
+          "steps": 8,
+          "seed": 7
+        },
+        "binary_sha256": "59ce312e3041652484a41661185055e791746190a2478cf152e36bb475e108e1",
+        "checkpoint_revision": "d8276b786f94a4e8944189cc181e839e31759ab5",
+        "input_sha256": {},
+        "preflight_status": "ok",
+        "exit_code": 0,
+        "elapsed_seconds": 86.5725983329994,
+        "maximum_resident_bytes": 9585016832,
+        "peak_memory_footprint_bytes": 22123628440,
+        "format": "PNG",
+        "mode": "RGBA",
+        "size": [
+          1024,
+          1024
+        ],
+        "sha256": "02b7be616cb7a5d60e9a64495eae3f6bfb769d9be977258224bc817f3f7ce6ba",
+        "pixel_sha256": "d1a5f0e9bc806e6e7c450e95f19c7e38a3e27a545fcfcbcbf40df7374611dd26",
+        "alpha_min": 151,
+        "alpha_max": 255,
+        "transparent_fraction": 0.0,
+        "opaque_fraction": 0.9999608993530273,
+        "rgb_standard_deviation": 85.17509287250878,
+        "visual_inspection": "Passed: clearly legible MERE heading above a coherent lighthouse/sunrise poster; inspected directly."
+      },
+      {
+        "case": {
+          "id": "edit-512",
+          "prompt": "Change the blue ceramic teapot to red. Keep the same teapot shape, wooden table, background and lighting.",
+          "width": 512,
+          "height": 512,
+          "steps": 8,
+          "seed": 4242,
+          "inputs": [
+            "smoke-512.png"
+          ]
+        },
+        "binary_sha256": "59ce312e3041652484a41661185055e791746190a2478cf152e36bb475e108e1",
+        "checkpoint_revision": "d8276b786f94a4e8944189cc181e839e31759ab5",
+        "input_sha256": {
+          "smoke-512.png": "823f74d9239c9b8a7ca79b7a29dd63d70cd1a6388bbbb29424f8362ea65c121c"
+        },
+        "preflight_status": "ok",
+        "exit_code": 0,
+        "elapsed_seconds": 44.405380917,
+        "maximum_resident_bytes": 9618341888,
+        "peak_memory_footprint_bytes": 11188363280,
+        "format": "PNG",
+        "mode": "RGBA",
+        "size": [
+          512,
+          512
+        ],
+        "sha256": "6b5967cc540f36052a7699aac1f78bcbacdfc6778935bc3a6bc82a3f00d39714",
+        "pixel_sha256": "867077930f6c1c9441fe1ce2ae7c277ca45ca8ddc4996acee7713a5d19b65c55",
+        "alpha_min": 253,
+        "alpha_max": 255,
+        "transparent_fraction": 0.0,
+        "opaque_fraction": 1.0,
+        "rgb_standard_deviation": 65.28999917112525,
+        "visual_inspection": "Passed: teapot changed from blue to red; overall shape, composition, table and lighting retained, with small texture changes; inspected directly."
+      }
+    ],
+    "quality_qualified": false
+  },
+  "publication": {
+    "status": "verified_public",
+    "repository": "Sawfwair/Qwen-Image-2.1-Turbo-MLX-Mixed-4bit",
+    "revision": "d8276b786f94a4e8944189cc181e839e31759ab5",
+    "files_verified": 25,
+    "bytes_verified": 14252544800,
+    "anonymous_verification": true,
+    "renamed_from": "Sawfwair/Mere-Image-Turbo-Mixed-4bit"
+  },
+  "runpod": {
+    "terminated": true,
+    "verified_absent": true,
+    "compute_cost_estimate_usd": 0.05782811965942383,
+    "cost_scope": "Elapsed estimate excluding storage and provider billing rounding."
+  },
+  "quality_qualified": false
+}

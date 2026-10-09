@@ -94,7 +94,8 @@
     "title": "Qwen Image 2.1 (Qwen)",
     "category": "Image",
     "models": [
-      "image-qwen-21"
+      "image-qwen-21",
+      "image-qwen-21-turbo"
     ],
     "resourceName": "handbook-qwen-image-21.md"
   },

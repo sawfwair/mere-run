@@ -241,6 +241,10 @@ public struct ImageGenerationPlan: Sendable {
             "dimensions_invalid", "SenseNova image dimensions must be multiples of 32."
         )
         if manifest.engine == .qwenImage21 {
+            if manifest.tier == .turbo {
+                reject(sampling.steps != 8, "steps_invalid", "Qwen Image 2.1 Turbo uses its saved eight-step schedule; --steps must be 8.")
+                reject(options.sigmaShift != nil, "sigma_shift_unsupported", "Qwen Image 2.1 Turbo uses a fixed checkpoint schedule and does not accept --sigma-shift.")
+            }
             let count = [options.inputImage].compactMap { $0 }.count + options.referenceImages.count
             reject(count > 10, "reference_count_invalid", "Qwen Image 2.1 supports up to ten ordered reference images.")
             reject(!options.width.isMultiple(of: 32) || !options.height.isMultiple(of: 32),

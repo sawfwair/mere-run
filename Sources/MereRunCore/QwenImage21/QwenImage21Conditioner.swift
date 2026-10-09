@@ -1,6 +1,7 @@
 import Foundation
 import MLX
 import MLXNN
+import MereRunTensor
 
 final class QwenImage21Conditioner {
     static let systemPrompt = "Comprehend and analyze the provided prompt."
@@ -63,14 +64,20 @@ final class QwenImage21Conditioner {
         for (name, value) in arrays {
             if name == "lm_head.weight" { continue }
             for (key, tensor) in Qwen3VLEmbeddingWeights.mapWeight(name, value) {
-                guard expected[key] == tensor.shape, mapped[key] == nil else {
+                guard mapped[key] == nil else {
                     throw QwenImage21Error.invalidWeights("Text encoder tensor mismatch: \(name).")
                 }
                 mapped[key] = tensor
             }
         }
-        guard Set(mapped.keys) == Set(expected.keys) else {
-            throw QwenImage21Error.invalidWeights("Missing text encoder tensors: \(Set(expected.keys).subtracting(mapped.keys).sorted())")
+        if let quantization = try resources.quantization("text_encoder") {
+            try quantization.validate(arrays: mapped, shapes: expected)
+            try PreQuantizedModelLoader.applyQuantizedLeafModules(
+                arrays: mapped, quantConfig: QuantizationConfig(bits: quantization.bits, groupSize: quantization.groupSize), to: encoder)
+        } else {
+            guard Set(mapped.keys) == Set(expected.keys), expected.allSatisfy({ mapped[$0.key]?.shape == $0.value }) else {
+                throw QwenImage21Error.invalidWeights("Text encoder tensor names or shapes differ from the model.")
+            }
         }
         try encoder.update(parameters: ModuleParameters.unflattened(mapped), verify: [.all])
         self.encoder = encoder

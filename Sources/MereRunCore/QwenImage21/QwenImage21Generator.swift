@@ -20,6 +20,10 @@ public final class QwenImage21Generator: ImageGenerator {
         let resources = QwenImage21Resources(rootURL: root)
         let missing = resources.validate()
         guard missing.isEmpty else { throw QwenImage21Error.invalidWeights("Missing or invalid resources: \(missing.map(\.path).joined(separator: ", "))") }
+        let manifest = try MereRunModelManifest.loadRequired(from: root)
+        let height = request.height / 16, width = request.width / 16
+        let schedule = try resources.samplingSchedule(steps: request.steps, tokenCount: height * width,
+            shift: request.sigmaShift, requiresSavedSchedule: manifest.tier == .turbo)
         defer { Memory.clearCache() }
         func progress(_ stage: GenerationStage, _ step: Int = 0, _ total: Int = 1) {
             progressHandler?(GenerationProgress(stage: stage, stepIndex: step, totalSteps: total))
@@ -30,7 +34,6 @@ public final class QwenImage21Generator: ImageGenerator {
         progress(.loadingEncoder)
         var conditioner: QwenImage21Conditioner? = try QwenImage21Conditioner(resources: resources)
         progress(.encodingText)
-        let height = request.height / 16, width = request.width / 16
         let (text, layout) = try conditioner!.encode(prompt: request.prompt, images: images, targetHeight: height, targetWidth: width)
         var negative: (MLXArray, QwenImage21Layout)?
         if request.guidanceScale > 1, let prompt = request.negativePrompt {
@@ -52,9 +55,9 @@ public final class QwenImage21Generator: ImageGenerator {
         Memory.clearCache()
         progress(.loadingTransformer)
         let config = try resources.decode("transformer/config.json", as: QwenImage21TransformerConfig.self)
-        var transformer: QwenImage21Transformer? = try QwenImage21Transformer(config: config, arrays: resources.arrays("transformer", stem: "diffusion_pytorch_model"))
-        let schedule = try resources.decode("scheduler/scheduler_config.json", as: QwenImage21Scheduler.self)
-            .sigmas(steps: request.steps, tokenCount: height * width, shift: request.sigmaShift)
+        var transformer: QwenImage21Transformer? = try QwenImage21Transformer(
+            config: config, arrays: resources.arrays("transformer", stem: "diffusion_pytorch_model"),
+            quantization: resources.quantization("transformer"))
         let seed = ImageGenerationSeed.resolve(request.seed, prompt: request.prompt, backend: .qwenImage21)
         // Generate in channel-first order, then flatten spatial tokens like the reference pipeline.
         var latents = MLXRandom.normal([1, vaeConfig.zDim, height, width], key: MLXRandom.key(seed))

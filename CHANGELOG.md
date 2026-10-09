@@ -15,6 +15,15 @@ The format is based on Keep a Changelog.
   modes. Preserve raw outputs and reproduction tools. Use the measured small
   admission class for managed 1B/0.8B single-backend OCR.
 
+- Add native Qwen Image 2.1 Turbo through `image-qwen-21-turbo`, loading the
+  original BF16 safetensors with the checkpoint's saved eight-step schedule and
+  CFG 1 default. The existing base checkpoint and 40-step recipe remain available.
+  Dense BF16 Turbo checkpoint inference remains unqualified.
+- Support local Qwen Image 2.1 mixed-precision checkpoints with affine Q4/Q8
+  group-64 weights, direct packed loading, and quantized matrix multiplication.
+  Add pinned Turbo conversion and verified Sawfwair publication tooling, with
+  bounded native generation, replay, text-rendering, and reference-editing results.
+
 ## 0.62.1 - 2026-10-06
 
 - Make EmbeddingGemma 2 audio relative-position frequencies explicitly typed,

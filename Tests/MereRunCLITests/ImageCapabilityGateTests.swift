@@ -16,6 +16,18 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
     #expect(blank.family == "zimage" && blank.model == "image-zimage-nano" && blank.source == .defaultModel)
 }
 
+@Test func qwenImageTurboUsesItsSavedEightStepRecipe() throws {
+    let turbo = ["image", "generate", "-p", "A teapot", "--model", "image-qwen-21-turbo"]
+    #expect(try report(turbo).family == "qwen-21-turbo")
+    #expect(try report(turbo + ["--steps", "8", "--cfg", "1"]).violations.isEmpty)
+    for flags in [["--steps", "40"], ["--sigma-shift", "3"], ["--sigmas", "1,0.5"], ["--strength", "0.5"]] {
+        #expect(try report(turbo + flags).violations.count == 1)
+        #expect(throws: CLICapabilityGate.Rejection.self) {
+            try CLICapabilityGate.check(arguments: ["mere.run"] + turbo + flags)
+        }
+    }
+}
+
 @Test func theKleinRecipeChoosesTheKleinBaseWhenNoModelIsGiven() throws {
     let output = ["--output", "/tmp/style.safetensors"]
     let klein = try report(["image", "train-lora", "--data", "/tmp/data", "--recipe", "klein-fast-style"] + output)
@@ -58,16 +70,16 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
     #expect(krea.violations.isEmpty)
     #expect(krea.warnings == [
         "--negative-prompt has no effect with Krea 2. It applies to FLUX.2 Klein, Z-Image, HiDream-O1, SenseNova U1.5, "
-            + "Qwen-Image 2.1 and Qwen-Image-Edit.",
+            + "Qwen-Image 2.1, Qwen-Image 2.1 Turbo and Qwen-Image-Edit.",
         "--cfg has no effect with Krea 2. It applies to FLUX.1-dev, FLUX.2 Klein, FLUX.2-dev, Z-Image, HiDream-O1, "
-            + "SenseNova U1.5, Qwen-Image 2.1, Qwen-Image-Edit, Qwen-Image-Edit Lightning and Ideogram 4."
+            + "SenseNova U1.5, Qwen-Image 2.1, Qwen-Image 2.1 Turbo, Qwen-Image-Edit, Qwen-Image-Edit Lightning and Ideogram 4."
     ])
     let stacked = try report(["image", "generate", "-p", "a mug", "-m", "image-zimage-nano", "-l", "a.safetensors", "-l", "b.safetensors"])
     #expect(stacked.violations == ["Z-Image takes --lora at most 1 time; got 2."])
     let flux1 = try report(["image", "generate", "-p", "a mug", "-m", "image-flux1-dev", "-i", "/tmp/in.png"])
     #expect(flux1.violations == [
         "--input is not supported by FLUX.1-dev. It applies to FLUX.2 Klein, FLUX.2-dev, Z-Image, HiDream-O1, "
-            + "SenseNova U1.5, Qwen-Image 2.1, Qwen-Image-Edit and Qwen-Image-Edit Lightning."
+            + "SenseNova U1.5, Qwen-Image 2.1, Qwen-Image 2.1 Turbo, Qwen-Image-Edit and Qwen-Image-Edit Lightning."
     ])
 }
 
@@ -103,7 +115,7 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
     let flux1 = ["image", "generate", "-p", "a mug", "-m", "image-flux1-dev"]
     #expect(try report(flux1 + ["-n", ""]).warnings == [
         "--negative-prompt has no effect with FLUX.1-dev. It applies to FLUX.2 Klein, Z-Image, HiDream-O1, SenseNova U1.5, "
-            + "Qwen-Image 2.1 and Qwen-Image-Edit."
+            + "Qwen-Image 2.1, Qwen-Image 2.1 Turbo and Qwen-Image-Edit."
     ])
     #expect(try report(flux1 + ["-n", "blurry"]).violations.count == 1)
 }

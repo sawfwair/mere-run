@@ -4,8 +4,15 @@ import MLXNN
 /// Checkpoint tensors retain the official names. Shape admission happens before inference.
 struct QwenImage21Weights {
     let arrays: [String: MLXArray]
+    let quantization: QwenImage21Quantization?
 
-    init(_ arrays: [String: MLXArray], shapes: [String: [Int]]) throws {
+    init(_ arrays: [String: MLXArray], shapes: [String: [Int]], quantization: QwenImage21Quantization? = nil) throws {
+        if let quantization {
+            try quantization.validate(arrays: arrays, shapes: shapes)
+            self.arrays = arrays
+            self.quantization = quantization
+            return
+        }
         for (key, shape) in shapes {
             guard let value = arrays[key], value.shape == shape else {
                 throw QwenImage21Error.invalidWeights("\(key): expected \(shape), found \(arrays[key]?.shape ?? [])")
@@ -16,12 +23,19 @@ struct QwenImage21Weights {
             throw QwenImage21Error.invalidWeights("Unexpected tensors: \(unexpected.sorted().joined(separator: ", "))")
         }
         self.arrays = arrays
+        self.quantization = nil
     }
 
     subscript(_ key: String) -> MLXArray { arrays[key]! }
 
     func linear(_ x: MLXArray, _ name: String) -> MLXArray {
-        let y = matmul(x, self[name + ".weight"].T)
+        let y: MLXArray
+        if let quantization, let scales = arrays[name + ".scales"] {
+            y = quantizedMM(x, self[name + ".weight"], scales: scales, biases: arrays[name + ".biases"],
+                            groupSize: quantization.groupSize, bits: quantization.bits)
+        } else {
+            y = matmul(x, self[name + ".weight"].T)
+        }
         return arrays[name + ".bias"].map { y + $0 } ?? y
     }
 

@@ -31,7 +31,7 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--sigma-shift", label: "Sigma shift", kind: .number,
                 group: Group.sampling, tier: .expert, range: .init(min: 0, max: 16, step: 0.1)
-            ).scoped(ImageF.except(ignoredBy: [.flux1, .hidream, .qwenEdit, .qwenEditLightning, .ideogram])),
+            ).scoped(ImageF.except(.qwen21Turbo, ignoredBy: [.flux1, .hidream, .qwenEdit, .qwenEditLightning, .ideogram])),
             .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file, group: Group.output, tier: .standard),
             .init(
                 flag: "--width", aliases: ["-W"], label: "Width", kind: .integer,
@@ -44,7 +44,8 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--steps", aliases: ["-s"], label: "Steps", kind: .integer,
                 group: Group.sampling, tier: .essential, range: .init(min: 1, max: 100, step: 1)
-            ).scoped(ImageF.rule(.qwen21, range: .init(min: 2, step: 1)), .rule(.qwenEditLightning, values: ["4"])),
+            ).scoped(ImageF.rule(.qwen21, range: .init(min: 2, step: 1)),
+                     .rule(.qwen21Turbo, values: ["8"]), .rule(.qwenEditLightning, values: ["4"])),
             .init(flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .essential, range: .init(min: 0, step: 1)),
             .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             .init(flag: "--input", aliases: ["-i"], label: "Input image", kind: .file, group: Group.inputs, tier: .standard)
@@ -68,7 +69,7 @@ extension MereRunCapabilityCatalog {
                 .rule(.klein, maxCount: 4, severity: .warning),
                 .rule(.flux2Dev, maxCount: 4, severity: .warning),
                 // Qwen-Image-Edit's limit of three counts distinct files, so Core checks it.
-                .rule(.qwen21, maxCount: 10)
+                .rule(.qwen21, maxCount: 10), .rule(.qwen21Turbo, maxCount: 10)
             ),
             .init(
                 flag: "--keep-original-aspect", label: "Keep original aspect", kind: .boolean,
@@ -78,7 +79,7 @@ extension MereRunCapabilityCatalog {
                 flag: "--strength", aliases: ["--str"], label: "Edit strength", kind: .number,
                 group: Group.inputs, tier: .standard, range: .init(min: 0, max: 1, step: 0.05)
             ).scoped(ImageF.except(
-                .qwen21,
+                .qwen21, .qwen21Turbo,
                 ignoredBy: [.flux1, .hidream, .sensenova, .krea, .qwenEdit, .qwenEditLightning, .ideogram]
             )),
             .init(
@@ -87,7 +88,7 @@ extension MereRunCapabilityCatalog {
             ).scoped(
                 ImageF.only(
                     .flux1, .zimage, .krea, .ideogram,
-                    ignoredBy: [.klein, .flux2Dev, .hidream, .sensenova, .qwen21, .qwenEdit, .qwenEditLightning]
+                    ignoredBy: [.klein, .flux2Dev, .hidream, .sensenova, .qwen21, .qwen21Turbo, .qwenEdit, .qwenEditLightning]
                 ),
                 // Longer values are clamped to what the text encoder reads.
                 .rule(.flux1, range: .init(max: 512), severity: .warning),
