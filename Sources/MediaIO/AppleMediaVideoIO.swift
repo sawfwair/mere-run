@@ -3,6 +3,7 @@ import Foundation
 #if canImport(AVFoundation) && canImport(CoreGraphics)
 import AVFoundation
 import CoreGraphics
+import CoreImage
 import CoreVideo
 import ImageIO
 import UniformTypeIdentifiers
@@ -329,6 +330,10 @@ enum AppleMediaVideoIO {
         guard duration.isFinite, duration > 0 else {
             throw MediaIOError.videoOperationFailed("Video duration is not finite or positive.")
         }
+        if strategy == .timestampFirstAtOrAfter {
+            return try timestampFrames(asset: asset, track: track, into: outputDirectoryURL,
+                                       framesPerSecond: framesPerSecond, maximumFrames: maximumFrames)
+        }
         let estimatedSourceCount = max(1, Int((duration * sourceRate.framesPerSecond).rounded()))
         let requestedCount = max(1, min(maximumFrames, Int(duration * framesPerSecond)))
         let indices = strategy == .frameRate
@@ -369,6 +374,48 @@ enum AppleMediaVideoIO {
             frameHeight: height,
             sourceFrameIndices: indices
         )
+    }
+
+    private static func timestampFrames(
+        asset: AVAsset, track: AVAssetTrack, into directory: URL,
+        framesPerSecond: Double, maximumFrames: Int
+    ) throws -> VideoFrameSequence {
+        let reader = try AVAssetReader(asset: asset)
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
+            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA),
+        ])
+        reader.add(output)
+        guard reader.startReading() else {
+            throw MediaIOError.videoOperationFailed(reader.error?.localizedDescription ?? "Video reader could not start.")
+        }
+        defer { reader.cancelReading() }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let context = CIContext()
+        var urls: [URL] = [], indices: [Int] = []
+        var sourceIndex = 0, width = 0, height = 0
+        while urls.count < maximumFrames, let sample = output.copyNextSampleBuffer() {
+            try Task.checkCancellation()
+            defer { sourceIndex += 1 }
+            let timestamp = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sample))
+            guard timestamp.isFinite, timestamp + 1e-6 >= Double(urls.count) / framesPerSecond else { continue }
+            guard let buffer = CMSampleBufferGetImageBuffer(sample) else {
+                throw MediaIOError.videoOperationFailed("Decoded video sample has no pixel buffer.")
+            }
+            // Match the reference's decoded raster orientation; do not apply container display transforms.
+            let image = CIImage(cvPixelBuffer: buffer)
+            guard let raster = context.createCGImage(image, from: image.extent) else {
+                throw MediaIOError.videoOperationFailed("Could not create the sampled video raster.")
+            }
+            width = raster.width; height = raster.height
+            let url = directory.appendingPathComponent(String(format: "frame_%05d.png", urls.count))
+            try writeImage(raster, to: url)
+            urls.append(url); indices.append(sourceIndex)
+        }
+        guard reader.status != .failed, !urls.isEmpty else {
+            throw MediaIOError.videoOperationFailed(reader.error?.localizedDescription ?? "No frames sampled from video.")
+        }
+        return VideoFrameSequence(frameURLs: urls, fps: framesPerSecond, frameWidth: width,
+                                  frameHeight: height, sourceFrameIndices: indices)
     }
 
     private static func evenlySpacedIndices(

@@ -5,7 +5,7 @@ import MereRunCore
 
 final class ClefCommandTests: XCTestCase {
     func testDecideParsesClefAndPreflightWithExistingOutputOptions() throws {
-        for (id, repository) in [(ClefCatalog.modelID, ClefCatalog.repository), (ClefCatalog.flashModelID, ClefCatalog.flashRepository)] {
+        for (id, repository) in [(ClefCatalog.modelID, ClefCatalog.repository), (ClefCatalog.flashModelID, ClefCatalog.flashRepository), (ClefOmniCatalog.modelID, ClefOmniCatalog.repository)] {
             let command = try TextDecide.parse(["--model", id, "--input", "request.json", "--preflight", "--pretty"])
             XCTAssertEqual(command.model, id)
             XCTAssertTrue(command.preflight)

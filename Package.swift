@@ -189,6 +189,7 @@ mereRunCoreDependencies.append("MereRunKolibriModel")
 mereRunCoreDependencies.append("MereRunGemmaModel")
 mereRunCoreDependencies.append("MereRunLTXModel")
 mereRunCoreDependencies.append("AudioCodecs")
+mereRunCoreDependencies.append("AudioQwen3ASRModel")
 mereRunCoreDependencies.append(.product(name: "Crypto", package: "swift-crypto"))
 mereRunCoreDependencies.append(.product(name: "Transformers", package: "swift-transformers"))
 if !isLinuxPackage {

@@ -1,0 +1,9 @@
+{
+  "upstream": "Cloudflare/clef-omni",
+  "revision": "0db1cd2607d76a7bdb2a382f659e7b313079f84b",
+  "reference_sha256": "21d05ebb8cbea26a26af65eca3d16cf4b69bf80a320e2d5b203e86f0d632a670",
+  "transformers": "5.10.2",
+  "torch": "2.14.1",
+  "seed": 719,
+  "scope": "tiny independent untrained FP32 modules; not full-checkpoint qualification"
+}

@@ -3,7 +3,7 @@ import MLX
 import MereRunQwenModel
 
 /// Native single-pass structured decisions. The operation owns one checkpoint and is used serially.
-public final class ClefDecisionOperation {
+final class ClefDenseDecisionOperation {
     public let modelID: String
     private let root: URL
     private let config: Q35Config
@@ -25,6 +25,9 @@ public final class ClefDecisionOperation {
     }
 
     private func prepared(_ request: ClefDecisionRequest) throws -> (ClefTokenSequence, ClefPreparedMedia) {
+        guard request.audio.isEmpty, request.videoFiles.isEmpty, request.images.isEmpty || request.videos.isEmpty, request.maxTokens <= 16_384 else {
+            throw ClefError.invalidInput("Audio, mixed media, video files, and contexts above 16384 require Clef Omni.")
+        }
         let media = try ClefPreparedMedia.prepare(request, processor: processor)
         let sequence = try tokenizer.sequence(request, modelID: modelID, mediaText: media.text)
         guard sequence.ids.allSatisfy({ (0..<config.textConfig.vocabSize).contains($0) }) else {

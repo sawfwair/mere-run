@@ -8,7 +8,7 @@ public enum ClefCatalog {
     public static let flashModelID = "text-decide-clef-flash-4bit"
     public static let flashRepository = "mlx-community/clef-flash-4bit"
     public static let flashRevision = "6822f0f244ee9e19df76908ba3302f7fe40ceea6"
-    public static let modelIDs = [modelID, flashModelID]
+    public static let modelIDs = [modelID, flashModelID, ClefOmniCatalog.modelID]
     public static let files = ["config.json", "tokenizer.json", "tokenizer_config.json", "processor_config.json",
                                "joint_head_config.json", "joint_head.safetensors", "model.safetensors.index.json",
                                "model-*.safetensors", "LICENSE", "README.md"]
@@ -16,7 +16,13 @@ public enum ClefCatalog {
 
     public static let flashHubFallback = HubFallbackConfig(repoId: flashRepository, revision: flashRevision, patterns: files)
 
+    public static func isOmni(root: URL) throws -> Bool {
+        struct Identity: Decodable { let model_type: String }
+        return try JSONDecoder().decode(Identity.self, from: Data(contentsOf: root.appending(path: "config.json"))).model_type == "qwen3_omni_moe"
+    }
+
     public static func validate(root: URL, fileManager: FileManager = .default) -> [URL] {
+        if (try? isOmni(root: root)) == true { return ClefOmniResources(root: root).validate(fileManager: fileManager) }
         var missing = Q35Resources(rootURL: root).validate(fileManager: fileManager)
         missing += ["tokenizer_config.json", "processor_config.json", "joint_head_config.json", "joint_head.safetensors"]
             .map { root.appending(path: $0) }.filter { !fileManager.fileExists(atPath: $0.path) }

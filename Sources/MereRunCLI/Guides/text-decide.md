@@ -37,3 +37,8 @@ mere.run text decide --model text-decide-clef-flash-4bit --input clef-request.js
 - [Laya model repository](https://huggingface.co/convaiinnovations/laya/tree/1c5edc17a7acd8701df6fc341c0d179f1c62c982)
 - [Laya SDK reference](https://github.com/NandhaKishorM/laya/tree/573e5b62696ba441230cd6be71d593331b5d23af)
 - [Clef MLX checkpoint](https://huggingface.co/mlx-community/clef-4bit/tree/e0a23bd4406c15075b7473616429c46f3fd130a9)
+
+Clef Omni (`text-decide-clef-omni`) adds mixed local audio, image, and video
+inputs to Clef's question object, with a 64,000-token context. Its original BF16
+30B-A3B checkpoint recommends 96 GB or more unified memory. See
+`mere.run guide handbook-clef` for limits and checkpoint qualification status.

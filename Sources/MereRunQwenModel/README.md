@@ -59,3 +59,11 @@ comparisons in both directions and all supported floating-point dtypes.
 `MERERUN_BONSAI2_PROFILE` to the installed checkpoint directory and select the
 GPU test device. Its synchronized timings include launch overhead and are not
 full-model decode throughput.
+
+`Qwen3OmniThinker` owns Clef Omni's causal Q/K-normalized attention,
+interleaved multimodal RoPE, and top-k MoE computation. Its norms use ordinary
+RMS weights, without Qwen3.5's zero-centered offset or attention output gates.
+`Qwen3OmniVision` retains all deep-stack features; the thinker adds them at the
+visual positions after its first decoder layers. Core owns checkpoint mapping,
+local media, request spans, and the shared Clef joint head. The option lexical
+prior uses the untied thinker output embedding, never its input embedding.

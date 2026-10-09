@@ -1785,6 +1785,13 @@ extension MereRunModelManifest {
                 supports: [.textClassification, .textExtraction], components: genericTextComponents,
                 upstreamRepoId: GLiNERCatalog.repository, createdAt: createdAt
             )
+        case .clefOmni:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .clef, family: .clef, tier: .base,
+                variant: .standard, precision: .bf16, defaults: nil,
+                supports: [.textDecision], components: genericTextComponents,
+                upstreamRepoId: ClefOmniCatalog.repository, createdAt: createdAt
+            )
         case .clef4Bit, .clefFlash4Bit:
             return MereRunModelManifest(
                 id: modelID.rawValue, engine: .clef, family: .clef, tier: .base,

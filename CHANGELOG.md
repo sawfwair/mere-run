@@ -6,6 +6,7 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add native Clef Omni BF16 structured decisions with the Qwen3-Omni MoE thinker, mixed local image/audio/video input, deep-stack vision, timestamp-interleaved video soundtracks, and 64,000-token preflight. Full-checkpoint GPU qualification remains pending.
 - Upgrade the default LightOn OCR download to pinned LightOnOCR 3-1B; add native
   Qwen3.5 0.8B and 4B OCR variants and `--lighton-mode grounding` for labeled
   document regions, image descriptions, and chart data. Fix the released 1B

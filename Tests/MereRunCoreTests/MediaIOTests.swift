@@ -619,6 +619,26 @@ final class MediaIOTests: XCTestCase {
         XCTAssertTrue(sampled.frameURLs.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
     }
 
+    func testTimestampSamplingKeepsFirstFrameAfterEachTargetAndTail() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "timestamp-sampling-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = root.appending(path: "input.mp4")
+        try MediaVideoIO.writeMP4(rgb24: Array(repeating: 127, count: 32 * 32 * 3 * 8),
+                                  width: 32, height: 32, frameCount: 8, fps: 3, to: url)
+        let sampled = try MediaVideoIO.sampleFrames(from: url, into: root.appending(path: "native"),
+            framesPerSecond: 2, maximumFrames: 20, strategy: .timestampFirstAtOrAfter)
+        XCTAssertEqual(sampled.frameURLs.count, 5)
+        #if canImport(AVFoundation)
+        XCTAssertEqual(sampled.sourceFrameIndices, [0, 2, 3, 5, 6])
+        #endif
+        if isExecutableAvailable(MediaTool.ffmpegPath), isExecutableAvailable(MediaTool.ffprobePath) {
+            let linux = try FFmpegMediaIO.sampleFrames(from: url, into: root.appending(path: "ffmpeg"),
+                framesPerSecond: 2, maximumFrames: 20, strategy: .timestampFirstAtOrAfter)
+            XCTAssertEqual(linux.frameURLs.count, 5)
+        }
+    }
+
     func testFFmpegExtractionRunsFrameAdmissionBeforeCreatingOutputDirectory() throws {
         guard isExecutableAvailable(MediaTool.ffmpegPath),
               isExecutableAvailable(MediaTool.ffprobePath) else {

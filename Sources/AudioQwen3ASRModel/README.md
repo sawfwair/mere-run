@@ -12,3 +12,8 @@ Qwen3 ASR. It depends on MLX and `MereRunKVCache`; it does not import
 tokenizer loading, feature extraction, and transcription orchestration.
 Preserve parameter names, grouped-query head counts, cache offsets, and
 last-position projection semantics when editing the model layers.
+
+Clef Omni reuses the configurable convolution/transformer audio tower. Its
+`checkpointPositionArithmetic` opt-in casts sinusoidal positions to the audio
+activation dtype before addition, matching the Omni checkpoint. Existing ASR
+callers retain their current arithmetic.

@@ -106,5 +106,14 @@ extension ManagedModelCatalog {
             estimatedDownloadBytes: 6_213_894_567,
             defaultCLICommands: ["text decide"], apiAvailability: .cliOnly
         )
+    ] + [
+        ManagedModelSpec(
+            id: ClefOmniCatalog.modelID, category: .textDecide, installShape: .directoryRoot,
+            hubFallback: ClefOmniCatalog.hubFallback,
+            upstreamRepoId: ClefOmniCatalog.repository, upstreamRevision: ClefOmniCatalog.revision,
+            validationKind: .clef, runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 70_800_000_000,
+            defaultCLICommands: ["text decide"], apiAvailability: .cliOnly
+        )
     ]
 }

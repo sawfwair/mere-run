@@ -22,3 +22,8 @@ its existing division arithmetic for other callers.
 
 Linux users can override executable discovery with `MERERUN_FFMPEG` and
 `MERERUN_FFPROBE`.
+
+`MediaVideoSamplingStrategy.timestampFirstAtOrAfter` selects decoded presentation
+timestamps rather than estimating frame indices from nominal FPS. Clef Omni
+uses it for 2-fps sampling, including variable-rate video. Reaching the frame
+cap stops decoding rather than uniformly subsampling the timeline.
