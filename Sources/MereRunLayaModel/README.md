@@ -11,3 +11,6 @@ matching the upstream CPU/MPS evaluation path.
 
 Original safetensors names and shapes are checked before inference. No Python,
 ONNX, conversion, or remote model code runs in the native inference path.
+
+Inference is built for macOS and Linux. iOS retains the typed configuration and
+managed-model catalog metadata without linking the decision execution path.

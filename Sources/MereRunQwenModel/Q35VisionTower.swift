@@ -14,11 +14,11 @@ public final class Q35VisionTower: Module {
     public let spatialMergeSize: Int
     public private(set) var isLoaded: Bool = false
 
-    public init(config: Q35Config) {
+    public init(config: Q35Config, checkpointDType: DType? = nil) {
         guard let vision = config.visionConfig else {
             preconditionFailure("Q35VisionTower requires a Q35 vision config.")
         }
-        self.checkpointDType = config.modelType == "prism_hadamard_qwen35" ? .float16 : .bfloat16
+        self.checkpointDType = checkpointDType ?? (config.modelType == "prism_hadamard_qwen35" ? .float16 : .bfloat16)
         let activation: QwenVisionConfiguration.Activation
         switch vision.hiddenAct?.lowercased() {
         case "gelu_pytorch_tanh", "gelu_tanh", "gelu":

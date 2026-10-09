@@ -1,3 +1,4 @@
+#if !os(iOS)
 import Foundation
 import MereRunQwenModel
 
@@ -164,3 +165,4 @@ public struct ClefDecisionResponse: Encodable, Sendable {
         return answer
     }
 }
+#endif

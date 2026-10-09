@@ -1,3 +1,4 @@
+#if !os(iOS)
 import Foundation
 
 extension LightOnOCRGenerator {
@@ -28,3 +29,4 @@ extension LightOnOCRGenerator {
         return Result(text: response.response, tokensGenerated: response.tokensGenerated)
     }
 }
+#endif

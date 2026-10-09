@@ -595,7 +595,9 @@ jobs:
     needs: changes
     if: always()
     runs-on: ubuntu-22.04
-    container: swift:6.1-jammy
+    # Use the identical official image through its public mirror, avoiding
+    # Docker Hub anonymous pull limits before the job can check out the repo.
+    container: public.ecr.aws/docker/library/swift:6.1-jammy@sha256:19792fa7ef68fb0e0ca5763ec3dfd40d6461afca7c081eb689e2e374fa80c0be
     env:
       RUN_GATE: ${{ needs.changes.result == 'success' && needs.changes.outputs.code == 'true' && needs.changes.outputs.linux == 'true' }}
     steps:

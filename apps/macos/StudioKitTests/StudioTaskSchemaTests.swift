@@ -146,9 +146,10 @@ final class StudioTaskSchemaTests: XCTestCase {
         XCTAssertEqual(StudioTaskSchema.slots(for: .imageDatasetDiscover).first?.acceptedTypes, [.folder])
         XCTAssertEqual(StudioTaskSchema.slots(for: .audioEnhance).map(\.id), ["audio"], "--model-path is the model's, not an input")
         XCTAssertEqual(StudioTaskSchema.slots(for: .audioEnhance).first?.acceptedTypes, [.audio])
-        XCTAssertEqual(StudioTaskSchema.slots(for: .textEmbed).map(\.id), ["--image", "--audio", "--video", "--input-json"])
+        XCTAssertEqual(StudioTaskSchema.slots(for: .textEmbed).map(\.id), ["--image", "--audio", "--video", "--input-json", "--chunks-json"])
         XCTAssertEqual(StudioTaskSchema.slots(for: .textEmbed).prefix(3).map(\.storage),
                        [.flagList("--image"), .flagList("--audio"), .flagList("--video")])
+        XCTAssertEqual(StudioTaskSchema.slots(for: .textEmbed).suffix(2).map(\.acceptedTypes), [[.json], [.json]])
         XCTAssertEqual(StudioTaskSchema.slots(for: .sfxClapScore).map(\.id), ["audio"])
         XCTAssertEqual(StudioTaskSchema.slots(for: .imageReconstruct3DMultiview).map(\.id), ["--view"])
         XCTAssertEqual(StudioTaskSchema.slots(for: .imageReconstruct3DMultiview).first?.storage, .flagList("--view"))

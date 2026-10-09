@@ -6,6 +6,20 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Strip local symbols from the iOS Release executable while preserving its dSYM
+  and exported symbols for hosted tests, keeping the existing CI size budget.
+
+- Add native PPLX Embed v2 late 0.6B/9B text and image token embeddings, MaxSim
+  scoring, and contextual 9B preview chunk embeddings through `text embed`, with
+  pinned FP32 checkpoints, 1024/2048-dimensional int8 output, and optional normalization.
+- Add native packed PPLX 9B support and pinned Sawfwair late mixed Q4/Q8 and
+  context Q8 artifacts, with reproducible RunPod conversion, paired FP32
+  diagnostics, native Apple validation, and NFC-aware Unicode chunk offsets.
+
+- Add native Swift/MLX D1-3B and D1 omni 600M decision models to `text decide`,
+  with ordered choice/score/yes-no questions, image inputs, omni audio inputs,
+  token-budget preflight, and pinned original safetensors downloads.
+
 - Upgrade the default LightOn OCR download to pinned LightOnOCR 3-1B; add native
   Qwen3.5 0.8B and 4B OCR variants and `--lighton-mode grounding` for labeled
   document regions, image descriptions, and chart data. Fix the released 1B

@@ -1,0 +1,28 @@
+{
+  "state": null,
+  "audio": "speech.wav",
+  "questions": {
+    "arrived": {
+      "type": "noul",
+      "instructions": "Does the speaker say the parcel arrived?"
+    },
+    "route": {
+      "type": "choice",
+      "instructions": "What item was damaged?",
+      "criteria": {
+        "glass": "A glass",
+        "book": "A book",
+        "shirt": "A shirt"
+      }
+    },
+    "quality": {
+      "type": "score",
+      "instructions": "How damaged is the glass according to the speaker?",
+      "criteria": [
+        "broken",
+        "intact",
+        "perfect"
+      ]
+    }
+  }
+}

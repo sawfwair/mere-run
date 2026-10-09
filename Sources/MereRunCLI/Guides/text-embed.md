@@ -7,6 +7,14 @@ For native EmbeddingGemma 2 text, code, image, audio, and video vectors, select
 Read `mere.run guide --model text-embed-embeddinggemma2` for full controls and
 ordered mixed-input examples and media limits.
 
+For PPLX v2, select `text-embed-pplx-v2-late-0.6b` or
+`text-embed-pplx-v2-late-9b` for normalized token vectors scored with sum-MaxSim.
+The late models accept text queries and text or image documents.
+`text-embed-pplx-v2-context-9b-preview` accepts document chunks via
+`--chunks-json` and returns int8-valued chunk vectors. Read
+`mere.run guide --model text-embed-pplx-v2-late-0.6b` for the distinct
+multi-vector output schema and contextual controls.
+
 ## Purpose
 
 Generate JSON embeddings for semantic search, clustering, retrieval, or similarity experiments.
@@ -25,10 +33,13 @@ mere.run text embed --help
 ## Parameters
 
 - positional text arguments: independent strings to embed.
-- `--image`, `--audio`, `--video`: independent local media inputs for EmbeddingGemma 2.
+- `--image`: independent local images for EmbeddingGemma 2 or PPLX late documents.
+- `--audio`, `--video`: independent local media inputs for EmbeddingGemma 2.
 - `--input-json`: ordered mixed records; exclusive with direct inputs. Relative paths resolve beside the JSON file.
+- `--chunks-json`: PPLX contextual documents shaped as `{"documents":[["chunk", "chunk"]]}`; exclusive with direct inputs.
+- `--normalize`: normalize PPLX contextual vectors after dimension truncation.
 - `--model`, `-m`: managed id or local model path.
-- `--max-tokens`: clamp input length.
+- `--max-tokens`: lower the input limit; contextual inputs exceeding it are rejected.
 - `--output`, `-o`: JSON output path.
 - `--pretty`: pretty-print JSON.
 

@@ -262,7 +262,7 @@ enum GuideRegistry {
             topic: "text-embed",
             title: "Text Embed",
             commandPaths: [["text", "embed"]],
-            models: ["text-embed-qwen3-0.6b", EmbeddingGemma2Catalog.modelID],
+            models: ["text-embed-qwen3-0.6b", EmbeddingGemma2Catalog.modelID] + PPLXEmbedV2Catalog.modelIDs,
             resourceName: "text-embed.md"
         ),
         GuideTopic(

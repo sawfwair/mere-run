@@ -1,3 +1,4 @@
+#if !os(iOS)
 import MLX
 import MLXFast
 import MLXNN
@@ -90,3 +91,4 @@ final class ClefDecoderLayer: Module {
         return joint + linear2(gelu(linear1(norm3(joint))))
     }
 }
+#endif

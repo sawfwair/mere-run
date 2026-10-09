@@ -1,3 +1,4 @@
+#if !os(iOS)
 import Foundation
 import MLX
 import MLXFast
@@ -358,3 +359,4 @@ final class TransformerLayers: Module {
         return hiddenStates
     }
 }
+#endif

@@ -143,10 +143,17 @@ an effective overlay; they are not a second capability catalog.
 | `text-embed` | `text-embed-qwen3-0.6b` |
 | `vision-embed` | `vision-embed-qwen3-vl-2b` |
 | `text-anonymize` | `text-anonymize-privacy-filter` |
+| `text-embed` | `text-embed-pplx-v2-late-0.6b` |
+| `text-embed` | `text-embed-pplx-v2-late-9b` |
+| `text-embed` | `text-embed-pplx-v2-context-9b-preview` |
+| `text-embed` | `text-embed-pplx-v2-late-9b-mixed-4bit` |
+| `text-embed` | `text-embed-pplx-v2-context-9b-preview-8bit` |
 | `text-classify` | `text-classify-gliner25-decide` |
 | `text-decide` | `text-decide-laya` |
 | `text-decide` | `text-decide-laya-multilingual` |
 | `text-decide` | `text-decide-laya-typed-decisions` |
+| `text-decide` | `text-decide-d1-3b-bf16` |
+| `text-decide` | `text-decide-d1-omni-600m-fp32` |
 | `text-decide` | `text-decide-clef-4bit` |
 | `text-decide` | `text-decide-clef-flash-4bit` |
 | `vision-ocr` | `vision-ocr-infinity-pro` |
@@ -1901,3 +1908,17 @@ Local tests check pinned configs, BF16 tensor schemas, the upstream eight-step
 schedule, and CLI/API routing. Trained Turbo checkpoint inference, quality,
 numerical parity, speed, and memory use for dense BF16 remain unqualified; base-model results
 do not qualify Turbo. Run `mere.run guide --model image-qwen-21-turbo` for details.
+
+### PPLX Embed v2 packed 9B variants
+
+`text-embed-pplx-v2-late-9b-mixed-4bit` pins `Sawfwair/pplx-embed-v2-late-9b-MLX-Mixed-4bit` at
+`7309bd8d28fd8e0a9a27033f3d13cc2d7a5cf219`. `text-embed-pplx-v2-context-9b-preview-8bit`
+pins `Sawfwair/pplx-embed-v2-context-9b-preview-MLX-8bit` at
+`abf77a86a7b84aee72640c736a92f3c5b471e6db`. Pull these ready-to-load MLX artifacts directly;
+users do not convert weights. Late uses Q4 projections/Q8 embeddings; context
+uses Q8 for both, with recurrent gates, convolution, norms, vision, and final
+projections in FP32. Contextual int8 output remains a separate contract.
+
+Both passed bounded full-checkpoint native CLI checks. Read the
+[qualification report](./qualification/pplx-embed-v2-9b-2026-10-09.md) for paired FP32 drift and limitations. Broad retrieval quality and maximum
+context remain unqualified. See [native usage](./runtime/pplx-embed-v2.md).
