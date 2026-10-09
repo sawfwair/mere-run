@@ -1,0 +1,17 @@
+{
+  "activeMemoryBytes" : 1706101148,
+  "boxes" : [
+
+  ],
+  "caseID" : "handwriting",
+  "invalidBoxCount" : 0,
+  "missingAnchors" : [
+    "industrie"
+  ],
+  "mode" : "plain",
+  "peakMemoryBytes" : 1856110874,
+  "seconds" : 0.24289202690124512,
+  "size" : "0.8B",
+  "text" : "indus frie",
+  "tokensGenerated" : 4
+}

@@ -395,10 +395,12 @@
   },
   {
     "topic": "handbook-lighton-ocr",
-    "title": "LightOnOCR 2 (LightOn)",
+    "title": "LightOnOCR 3 (LightOn)",
     "category": "Vision and reconstruction",
     "models": [
-      "vision-ocr-lighton"
+      "vision-ocr-lighton",
+      "vision-ocr-lighton-3-0.8b",
+      "vision-ocr-lighton-3-4b"
     ],
     "resourceName": "handbook-lighton-ocr.md"
   },

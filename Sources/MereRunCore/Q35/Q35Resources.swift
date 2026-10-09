@@ -226,7 +226,22 @@ public struct Q35Resources: Sendable, Hashable {
     public static let infinityParser2ProInt8UpstreamRepoId = "Sawfwair/Infinity-Parser2-Pro-Int8"
     public static let infinityParser2ProInt8UpstreamRevision = "main"
 
+    public static let lightOnOCR3SmallModelId = "vision-ocr-lighton-3-0.8b"
+    public static let lightOnOCR3FourBModelId = "vision-ocr-lighton-3-4b"
+
     private static let profilesByModelId: [String: Profile] = [
+        lightOnOCR3SmallModelId: Profile(
+            modelId: lightOnOCR3SmallModelId,
+            upstreamRepoId: "lightonai/LightOnOCR-3-0.8B",
+            upstreamRevision: "be8cee5d200b80218cb2865a5deeec1fe6e25f52",
+            snapshotPatterns: snapshotPatterns + ["generation_config.json", "README.md"]
+        ),
+        lightOnOCR3FourBModelId: Profile(
+            modelId: lightOnOCR3FourBModelId,
+            upstreamRepoId: "lightonai/LightOnOCR-3-4B",
+            upstreamRevision: "22a24f41d5bf21e307a427c311dc90e30616e572",
+            snapshotPatterns: snapshotPatterns + ["generation_config.json", "README.md"]
+        ),
         q36NanoModelId: Profile(
             modelId: q36NanoModelId,
             upstreamRepoId: q36NanoUpstreamRepoId,
@@ -423,6 +438,9 @@ public struct Q35Resources: Sendable, Hashable {
         }
         if isQ38ModelId(modelId) {
             return (q38TwentySevenBVisionMinPixels, q38TwentySevenBVisionMaxPixels)
+        }
+        if modelId == lightOnOCR3SmallModelId || modelId == lightOnOCR3FourBModelId {
+            return (65_536, 5_000_000)
         }
         return (Q35Generator.qwen3VLMinPixels, Q35Generator.qwen3VLMaxPixels)
     }

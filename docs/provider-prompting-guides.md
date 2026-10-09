@@ -422,11 +422,11 @@ Table 5 lists provider sources and local recipes for vision and reconstruction m
       <td>2026-09-04</td>
     </tr>
     <tr>
-      <td>LightOnOCR 2 (LightOn)</td>
-      <td><code>vision-ocr-lighton</code></td>
-      <td>Reference. <a href="https://huggingface.co/lightonai/LightOnOCR-2-1B">LightOnOCR model card</a></td>
+      <td>LightOnOCR 3 (LightOn)</td>
+      <td><code>vision-ocr-lighton</code>, <code>vision-ocr-lighton-3-0.8b</code>, <code>vision-ocr-lighton-3-4b</code></td>
+      <td>Reference. <a href="https://huggingface.co/lightonai/LightOnOCR-3-1B">LightOnOCR model card</a></td>
       <td>Review fixed document-recognition input and template conventions before suggesting user-written prompts.</td>
-      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-lighton-ocr.md">LightOnOCR 2 (LightOn) guide (draft)</a></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-lighton-ocr.md">LightOnOCR 3 (LightOn) guide (draft)</a></td>
       <td>2026-09-04</td>
     </tr>
     <tr>

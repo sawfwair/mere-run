@@ -175,6 +175,7 @@ extension MereRunCapabilityCatalog {
     }
 
     private static let lightOnOCRModel = "vision-ocr-lighton"
+    private static let lightOnOCRModels = [lightOnOCRModel, "vision-ocr-lighton-3-0.8b", "vision-ocr-lighton-3-4b"]
     private static let infinityOCRModels = ["vision-ocr-infinity-pro-int8", "vision-ocr-infinity-pro"]
 
     /// LightOnOCR reads its model from `--model` and native Infinity-Parser2 from
@@ -191,19 +192,19 @@ extension MereRunCapabilityCatalog {
             defaultModels: F.lightOnRuns.map { MereRunDefaultModelRule(models: [lightOnOCRModel], family: $0.rawValue) }
                 + [MereRunDefaultModelRule(models: [infinityOCRModels[0]], family: F.infinityNative.rawValue)],
             families: [
-                .init(F.lightOn, title: "LightOnOCR", models: [lightOnOCRModel],
+                .init(F.lightOn, title: "LightOnOCR", models: lightOnOCRModels,
                       selectors: [single, .init(flag: "--backend", values: ["lighton"])], modelFlag: "--model"),
                 .init(F.glm, title: "GLM-OCR", models: [], selectors: [single, .init(flag: "--backend", values: ["glm"])]),
                 .init(F.infinityNative, title: "Infinity-Parser2 native", models: infinityOCRModels,
                       selectors: [single, infinity, native], modelFlag: "--infinity-model"),
                 .init(F.infinityExternal, title: "Infinity-Parser2 external", models: [],
                       selectors: [single, infinity, external]),
-                .init(F.compareGLM, title: "LightOnOCR vs GLM-OCR", models: [lightOnOCRModel],
+                .init(F.compareGLM, title: "LightOnOCR vs GLM-OCR", models: lightOnOCRModels,
                       selectors: [compare, .init(flag: "--backend", values: ["lighton", "glm"])], modelFlag: "--model"),
-                .init(F.compareInfinityNative, title: "LightOnOCR vs Infinity-Parser2 native", models: [lightOnOCRModel],
+                .init(F.compareInfinityNative, title: "LightOnOCR vs Infinity-Parser2 native", models: lightOnOCRModels,
                       selectors: [compare, infinity, native], modelFlag: "--model"),
                 .init(F.compareInfinityExternal, title: "LightOnOCR vs Infinity-Parser2 external",
-                      models: [lightOnOCRModel], selectors: [compare, infinity, external], modelFlag: "--model")
+                      models: lightOnOCRModels, selectors: [compare, infinity, external], modelFlag: "--model")
             ]
         )
     }()

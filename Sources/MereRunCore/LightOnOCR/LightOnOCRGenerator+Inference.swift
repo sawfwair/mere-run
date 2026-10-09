@@ -50,24 +50,21 @@ extension LightOnOCRGenerator {
         return ((pixelArray - mean) / std).asType(.float32)
     }
 
-    func buildOCRPromptParts(tokenizer: QwenTokenizer) -> (pre: [Int], post: [Int]) {
-        // The checkpoint's OCR example sends an image-only user message.
-        // Match chat_template.jinja rendered with Transformers' whitespace
-        // settings, including the empty system message for a user-first chat.
-        let prompt =
-            "<|im_start|>system<|im_end|>\n"
+    static func ocrPrompt(mode: LightOnOCRMode) -> String {
+        "<|im_start|>system<|im_end|>\n"
             + "<|im_start|>user\n"
-            + "<|image_pad|><|im_end|>\n"
+            + "<|image_pad|>" + (mode == .grounding ? "grounding\n" : "") + "<|im_end|>\n"
             + "<|im_start|>assistant\n"
+    }
 
-        let tokens = tokenizer.encodeText(prompt)
+    func buildOCRPromptParts(
+        tokenizer: QwenTokenizer, mode: LightOnOCRMode = .plain
+    ) throws -> (pre: [Int], post: [Int]) {
+        let tokens = tokenizer.encodeText(Self.ocrPrompt(mode: mode))
         let imageId = tokenizer.imageTokenId ?? imageTokenId
         guard let imagePos = tokens.firstIndex(of: imageId) else {
-            let preTokens = [151644, 8948, 151645, 198, 151644, 872, 198]
-            let postTokens = [151645, 198, 151644, 77091, 198]
-            return (preTokens, postTokens)
+            throw LightOnOCRError.generationFailed
         }
-
         return (Array(tokens[..<imagePos]), Array(tokens[(imagePos + 1)...]))
     }
 

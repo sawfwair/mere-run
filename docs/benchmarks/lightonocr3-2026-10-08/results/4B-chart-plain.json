@@ -1,0 +1,17 @@
+{
+  "activeMemoryBytes" : 9078890636,
+  "boxes" : [
+
+  ],
+  "caseID" : "chart",
+  "invalidBoxCount" : 0,
+  "missingAnchors" : [
+
+  ],
+  "mode" : "plain",
+  "peakMemoryBytes" : 10106899874,
+  "seconds" : 14.441796064376831,
+  "size" : "4B",
+  "text" : "# MONTHLY SAMPLE COUNTS\n\nSamples collected in the first quarter\n\n<table>\n  <thead>\n    <tr>\n      <th>Month<\/th>\n      <th>Sample Count<\/th>\n    <\/tr>\n  <\/thead>\n  <tbody>\n    <tr>\n      <td>Jan<\/td>\n      <td>10<\/td>\n    <\/tr>\n    <tr>\n      <td>Feb<\/td>\n      <td>25<\/td>\n    <\/tr>\n    <tr>\n      <td>Mar<\/td>\n      <td>40<\/td>\n    <\/tr>\n  <\/tbody>\n<\/table>\n\n\nSource: deterministic qualification fixture",
+  "tokensGenerated" : 162
+}

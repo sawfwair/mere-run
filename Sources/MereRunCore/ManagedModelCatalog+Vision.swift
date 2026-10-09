@@ -31,8 +31,8 @@ extension ManagedModelCatalog {
             category: .visionOCR,
             installShape: .structuredRoot,
             hubFallback: HubFallbackConfig(
-                repoId: "lightonai/LightOnOCR-2-1B",
-                revision: "main",
+                repoId: "lightonai/LightOnOCR-3-1B",
+                revision: LightOnOCRResources.oneBRevision,
                 patterns: [
                     "added_tokens.json",
                     "chat_template.jinja",
@@ -45,12 +45,14 @@ extension ManagedModelCatalog {
                     "tokenizer_config.json",
                 ]
             ),
-            upstreamRepoId: "lightonai/LightOnOCR-2-1B",
-            upstreamRevision: "main",
+            upstreamRepoId: "lightonai/LightOnOCR-3-1B",
+            upstreamRevision: LightOnOCRResources.oneBRevision,
             validationKind: .lightOnOCR,
             estimatedDownloadBytes: 2_022_801_518,
             defaultCLICommands: ["vision ocr"]
         ),
+        lightOnQwenSpec(id: .lightOnOCR3Small, downloadBytes: 1_705_971_840),
+        lightOnQwenSpec(id: .lightOnOCR3FourB, downloadBytes: 9_110_359_024),
         ManagedModelSpec(
             id: "vision-segment-sam31",
             category: .visionSegment,
@@ -394,4 +396,19 @@ extension ManagedModelCatalog {
     private static let sam31MLXRevision = "a992e302ea9b0f03f41dfd93414a4fd0e818f65b"
 
     private static let sam31TokenizerRevision = "694239a1479aab8fd1317c87c433c58acd7c6eab"
+}
+
+private func lightOnQwenSpec(id: ModelResolver.ModelID, downloadBytes: Int64) -> ManagedModelSpec {
+    let profile = Q35Resources.profile(for: id.rawValue)!
+    return ManagedModelSpec(
+        id: id.rawValue,
+        category: .visionOCR,
+        installShape: .directoryRoot,
+        hubFallback: profile.hubFallbackConfig,
+        upstreamRepoId: profile.upstreamRepoId,
+        upstreamRevision: profile.upstreamRevision,
+        validationKind: .q35,
+        estimatedDownloadBytes: downloadBytes,
+        defaultCLICommands: ["vision ocr"]
+    )
 }

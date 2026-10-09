@@ -1,0 +1,17 @@
+{
+  "activeMemoryBytes" : 2041172384,
+  "boxes" : [
+
+  ],
+  "caseID" : "receipt",
+  "invalidBoxCount" : 0,
+  "missingAnchors" : [
+
+  ],
+  "mode" : "plain",
+  "peakMemoryBytes" : 2322329880,
+  "seconds" : 11.391127109527588,
+  "size" : "1B",
+  "text" : "Document No : TD01167104  \nDate : 25\/12\/2018 8:13:39 PM  \nCashier : MANIS  \nMember :  \n\n# CASH BILL\n\n<table>\n  <thead>\n    <tr>\n      <th>CODE\/DESC<\/th>\n      <th>PRICE<\/th>\n      <th>Disc<\/th>\n      <th>AMOUNT<\/th>\n    <\/tr>\n    <tr>\n      <th>QTY<\/th>\n      <th>RM<\/th>\n      <th><\/th>\n      <th>RM<\/th>\n    <\/tr>\n  <\/thead>\n  <tbody>\n    <tr>\n      <td>9556939040118<\/td>\n      <td>KF MODELLING CLAY KIDDY FISH<\/td>\n      <td><\/td>\n      <td><\/td>\n    <\/tr>\n    <tr>\n      <td>1 PC *<\/td>\n      <td>9.000<\/td>\n      <td>0.00<\/td>\n      <td>9.00<\/td>\n    <\/tr>\n    <tr>\n      <td colspan=\"3\">Total :<\/td>\n      <td>9.00<\/td>\n    <\/tr>\n    <tr>\n      <td colspan=\"3\">Rounding Adjustment :<\/td>\n      <td>0.00<\/td>\n    <\/tr>\n    <tr>\n      <td colspan=\"3\">Round Total (RM):<\/td>\n      <td>9.00<\/td>\n    <\/tr>\n  <\/tbody>\n<\/table>\n",
+  "tokensGenerated" : 358
+}

@@ -101,6 +101,8 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case clefFlash4Bit = "text-decide-clef-flash-4bit"
     case gliner25Decide = "text-classify-gliner25-decide"
     case lightOnOCR = "vision-ocr-lighton"
+    case lightOnOCR3Small = "vision-ocr-lighton-3-0.8b"
+    case lightOnOCR3FourB = "vision-ocr-lighton-3-4b"
     case infinityParser2Pro = "vision-ocr-infinity-pro"
     case infinityParser2ProInt8 = "vision-ocr-infinity-pro-int8"
     case visionSegmentSAM31 = "vision-segment-sam31"

@@ -1,0 +1,76 @@
+{
+  "cases": 6,
+  "passed": 6,
+  "source": "Pinned Hub auto-download snapshots; temporary override roots lack managed source metadata.",
+  "checks": [
+    {
+      "size": "1B",
+      "model": "vision-ocr-lighton",
+      "mode": "plain",
+      "caseID": "document",
+      "exitStatus": 0,
+      "matchesNativeRecord": true,
+      "sha256": "73cf7ec618b0ac74b0297af2e2ea64e408365d91d242f57b340a700b780243e9"
+    },
+    {
+      "size": "1B",
+      "model": "vision-ocr-lighton",
+      "mode": "grounding",
+      "caseID": "document",
+      "exitStatus": 0,
+      "matchesNativeRecord": true,
+      "sha256": "3d30d32acc205cf5a05289ff8203739ae923bb1be054679eda282430ea886fe7",
+      "maximumRSSBytes": 2289565696,
+      "peakFootprintBytes": 5301882000,
+      "secondsIncludingResolutionAndDownload": 15.41
+    },
+    {
+      "size": "0.8B",
+      "model": "vision-ocr-lighton-3-0.8b",
+      "mode": "plain",
+      "caseID": "document",
+      "exitStatus": 0,
+      "matchesNativeRecord": true,
+      "sha256": "73cf7ec618b0ac74b0297af2e2ea64e408365d91d242f57b340a700b780243e9",
+      "maximumRSSBytes": 3781672960,
+      "peakFootprintBytes": 5487513416,
+      "secondsIncludingResolutionAndDownload": 45.49
+    },
+    {
+      "size": "0.8B",
+      "model": "vision-ocr-lighton-3-0.8b",
+      "mode": "grounding",
+      "caseID": "document",
+      "exitStatus": 0,
+      "matchesNativeRecord": true,
+      "sha256": "6631f78782ba229919d604732627ce0a9574d08ba59401aff1fe3c6357bb56b6",
+      "maximumRSSBytes": 3764617216,
+      "peakFootprintBytes": 5710106464,
+      "secondsIncludingResolutionAndDownload": 15.88
+    },
+    {
+      "size": "4B",
+      "model": "vision-ocr-lighton-3-4b",
+      "mode": "plain",
+      "caseID": "document",
+      "exitStatus": 0,
+      "matchesNativeRecord": true,
+      "sha256": "73cf7ec618b0ac74b0297af2e2ea64e408365d91d242f57b340a700b780243e9",
+      "maximumRSSBytes": 11239981056,
+      "peakFootprintBytes": 20288354680,
+      "secondsIncludingResolutionAndDownload": 31.94
+    },
+    {
+      "size": "4B",
+      "model": "vision-ocr-lighton-3-4b",
+      "mode": "grounding",
+      "caseID": "document",
+      "exitStatus": 0,
+      "matchesNativeRecord": true,
+      "sha256": "5f8d1ebca50ab746611d5ac7b21fe2de29117bb9046b1603ca711d61c73a5280",
+      "maximumRSSBytes": 10970890240,
+      "peakFootprintBytes": 20359559568,
+      "secondsIncludingResolutionAndDownload": 189.39
+    }
+  ]
+}

@@ -321,7 +321,8 @@ are:
 - Text anonymize: `text-anonymize-privacy-filter`
 - Speech TTS: `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice`
 - Speech ASR: `speech-asr-qwen3`, `speech-asr-parakeet`
-- Vision OCR: `vision-ocr-lighton`, `vision-ocr-infinity-pro-int8`,
+- Vision OCR: `vision-ocr-lighton`, `vision-ocr-lighton-3-0.8b`,
+  `vision-ocr-lighton-3-4b`, `vision-ocr-infinity-pro-int8`,
   `vision-ocr-infinity-pro`
 - Vision segmentation / tracking: `vision-segment-sam31`
 - Vision grounding: `vision-ground-falcon-perception`
@@ -1560,7 +1561,11 @@ Key options:
 - `--backend`: `lighton`, `glm`, or `infinity`
 - `--compare`: compare LightOn against the selected secondary backend; defaults
   to GLM when `--backend lighton`
-- `--model`: managed id or path to the LightOn OCR root when using the LightOn backend
+- `--model`: managed id or path to the LightOn OCR root when using the LightOn backend;
+  `vision-ocr-lighton` downloads LightOnOCR 3-1B, with optional
+  `vision-ocr-lighton-3-0.8b` and `vision-ocr-lighton-3-4b` native Qwen3.5 variants
+- `--lighton-mode`: `plain` (default) for Markdown transcription or `grounding`
+  for labeled boxes in normalized 0–1000 coordinates, descriptions, and chart data
 - `--glmocr-cli`, `--glm-config`
 - `--infinity-runtime`: `native` or `external`; native uses the Swift Q35 runtime
 - `--infinity-model`: native managed model id or local path; upstream model or

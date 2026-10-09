@@ -4,6 +4,13 @@ import MereRunCore
 
 // MARK: - Vision OCR Command
 
+enum LightOnOCRCommandMode: String, ExpressibleByArgument, CaseIterable {
+    case plain
+    case grounding
+
+    var runtimeMode: LightOnOCRMode { self == .plain ? .plain : .grounding }
+}
+
 enum OCRBackend: String, ExpressibleByArgument, CaseIterable {
     case lighton
     case glm
@@ -81,6 +88,9 @@ struct VisionOCR: AsyncParsableCommand {
 
     @Option(name: [.customShort("m"), .long], help: "Managed model id or local path to the LightOnOCR model directory.")
     var model: String = ModelResolver.ModelID.lightOnOCR.rawValue
+
+    @Option(name: [.long], help: "LightOnOCR mode: plain Markdown or grounding with labeled boxes (0–1000 coordinates).")
+    var lightonMode: LightOnOCRCommandMode = .plain
 
     @Option(name: [.long], help: "Path to `glmocr` CLI (default: glmocr, resolved via PATH).")
     var glmocrCLI: String = "glmocr"
@@ -202,7 +212,8 @@ struct VisionOCR: AsyncParsableCommand {
         let config = LightOnOCRGenerator.Config(
             maxNewTokens: maxTokens,
             temperature: temperature,
-            logProgress: MereRunRuntimeDebug.isEnabled(["MERERUN_OCR_DEBUG"])
+            logProgress: MereRunRuntimeDebug.isEnabled(["MERERUN_OCR_DEBUG"]),
+            mode: lightonMode.runtimeMode
         )
         let glm = GLMOCRCLI(executable: glmocrCLI, configPath: glmConfig)
         let infinity = InfinityParser2CLI(

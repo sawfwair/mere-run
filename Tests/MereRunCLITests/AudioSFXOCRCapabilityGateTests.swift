@@ -163,3 +163,17 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
     let renoise = try report("sfx", "generate", "door", "-m", "sfx-mmaudio-large-44k-v2", "--renoise", "")
     #expect(renoise.violations.isEmpty && renoise.warnings == ["--renoise has no effect with MMAudio. It applies to Woosh DFlow."])
 }
+
+
+@Test func lightOnOCR3VariantsAndModeRouteThroughTheLightOnFamily() throws {
+    for id in ["vision-ocr-lighton-3-0.8b", "vision-ocr-lighton-3-4b"] {
+        for options in [[], ["--compare", "--backend", "infinity"]] {
+            let result = try report(["vision", "ocr", "page.png", "--model", id,
+                                     "--lighton-mode", "grounding"] + options)
+            #expect(result.violations.isEmpty && result.warnings.isEmpty)
+        }
+    }
+    let glm = try report("vision", "ocr", "page.png", "--backend", "glm", "--lighton-mode", "grounding")
+    #expect(glm.violations.isEmpty && glm.warnings.count == 1)
+    #expect(glm.warnings[0].hasPrefix("--lighton-mode has no effect with GLM-OCR."))
+}

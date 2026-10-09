@@ -96,7 +96,7 @@ enum CLICapabilityGate {
         ["vision", "image-to-3d-multiview"]: ["image", "reconstruct-3d-multiview"]
     ]
 
-    private static func invocation(
+    static func invocation(
         commandLine: [String]
     ) -> (capability: MereRunCommandCapability, invocation: MereRunCommandInvocation)? {
         var commandLine = withoutRootOptions(commandLine)

@@ -103,6 +103,11 @@ extension MereRunCapabilityCatalog {
                     defaultValue: "vision-ocr-lighton", group: Group.modelAndAdapters, tier: .standard
                 ).scoped(lightOn),
                 .init(
+                    flag: "--lighton-mode", label: "LightOn mode", kind: .choice,
+                    choices: ["plain", "grounding"], defaultValue: "plain",
+                    group: Group.run, tier: .standard
+                ).scoped(lightOn),
+                .init(
                     flag: "--glmocr-cli", label: "GLM executable", kind: .file,
                     defaultValue: "glmocr", group: Group.modelAndAdapters, tier: .expert
                 ).scoped(glm),

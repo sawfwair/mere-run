@@ -153,6 +153,8 @@ an effective overlay; they are not a second capability catalog.
 | `vision-ocr` | `vision-ocr-infinity-pro` |
 | `vision-ocr` | `vision-ocr-infinity-pro-int8` |
 | `vision-ocr` | `vision-ocr-lighton` |
+| `vision-ocr` | `vision-ocr-lighton-3-0.8b` |
+| `vision-ocr` | `vision-ocr-lighton-3-4b` |
 | `vision-segment` | `vision-segment-sam31` |
 | `vision-ground` | `vision-ground-falcon-perception` |
 | `vision-flood` | `vision-flood-terramind-base` |

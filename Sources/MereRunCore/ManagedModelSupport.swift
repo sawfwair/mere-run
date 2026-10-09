@@ -879,6 +879,20 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                Q35Resources.lightOnOCR3SmallModelId,
+                "LightOnOCR 3 0.8B",
+                "Fast native Qwen3.5 OCR with optional document grounding.",
+                minimum: 8,
+                recommended: 16
+            ),
+            descriptor(
+                Q35Resources.lightOnOCR3FourBModelId,
+                "LightOnOCR 3 4B",
+                "Quality-focused native Qwen3.5 OCR with optional document grounding.",
+                minimum: 16,
+                recommended: 24
+            ),
+            descriptor(
                 Q35Resources.infinityParser2ProModelId,
                 "Infinity-Parser2 Pro OCR",
                 "Runs the heavyweight native Infinity-Parser2 Pro eval model for document parsing.",

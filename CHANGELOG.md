@@ -9,6 +9,14 @@ The format is based on Keep a Changelog.
 - Add native Swift/MLX D1-3B and D1 omni 600M decision models to `text decide`,
   with ordered choice/score/yes-no questions, image inputs, omni audio inputs,
   token-budget preflight, and pinned original safetensors downloads.
+- Upgrade the default LightOn OCR download to pinned LightOnOCR 3-1B; add native
+  Qwen3.5 0.8B and 4B OCR variants and `--lighton-mode grounding` for labeled
+  document regions, image descriptions, and chart data. Fix the released 1B
+  text-weight prefix mapping and reject missing or mismatched weights.
+- Qualify all three released OCR checkpoints on a bounded 30-case image matrix:
+  1B and 4B pass their ten cases each; 0.8B misses a handwritten word in both
+  modes. Preserve raw outputs and reproduction tools. Use the measured small
+  admission class for managed 1B/0.8B single-backend OCR.
 
 ## 0.62.1 - 2026-10-06
 

@@ -66,6 +66,8 @@ canonical reconstruction flow.
 ## Model families
 
 - `vision-ocr-lighton`
+- `vision-ocr-lighton-3-0.8b`
+- `vision-ocr-lighton-3-4b`
 - `vision-ground-falcon-perception`
 - `vision-face-buffalo-l`
 - `vision-segment-sam31`
@@ -650,3 +652,43 @@ target an upstream Transformers, vLLM engine, or vLLM server run.
 
 They share some of the same underlying vision support code, but they are
 presented as separate public tasks because your intent differs.
+
+## LightOnOCR 3
+
+`vision-ocr-lighton` now downloads the pinned official LightOnOCR-3-1B checkpoint.
+The 1B model uses the native Pixtral/Qwen runtime; `vision-ocr-lighton-3-0.8b`
+and `vision-ocr-lighton-3-4b` use the existing native Qwen3.5 vision runtime.
+The 4B variant is LightOn's quality recommendation; 0.8B is the smaller lane.
+The default stays 1B for compatibility with existing workflows.
+
+```bash
+mere.run model pull vision-ocr-lighton-3-0.8b
+mere.run vision ocr ./page.png --model vision-ocr-lighton-3-0.8b --lighton-mode grounding
+```
+
+`--lighton-mode plain` (default) sends an empty image-only prompt and returns
+Markdown transcription. `grounding` sends the exact trained instruction and
+preserves raw labels and boxes such as `![text](80,175,920,225)`, followed by
+content. Coordinates are normalized to 0–1000. Image regions can contain short
+descriptions; chart regions can contain HTML tables with estimated values.
+The runtime does not validate those estimates or convert the output to JSON.
+The flag applies to the LightOn side of `--compare` as well.
+
+Qwen variants disable thinking and process aspect-preserving images within
+65,536–5,000,000 pixels, with further resizing when required by the 16K context
+budget. Pixtral keeps the 1540px long-edge processor convention.
+Render PDF pages to upright images before calling the command.
+
+Existing `vision-ocr-lighton` installations are preserved and may still contain
+LightOnOCR 2. To intentionally replace an existing install with 3-1B, back it up
+and run `mere.run model pull vision-ocr-lighton --force`, or download 3-1B to a
+separate directory and pass that directory with `--model`.
+
+All three released BF16 checkpoints completed the [bounded native qualification](../benchmarks/lightonocr3-native-qualification-2026-10-08.md).
+1B and 4B passed all ten checked output cases each; 0.8B passed eight and failed
+the handwritten-word crop in both modes. The generated invoice rows, chart values,
+and table/chart grounding regions passed for every variant. This is a small
+image-input qualification; full transcription accuracy, upstream numerical parity,
+and comparative throughput remain unqualified.
+See the [LightOnOCR 3 release](https://huggingface.co/blog/lightonai/lightonocr-3)
+and [1B model card](https://huggingface.co/lightonai/LightOnOCR-3-1B).

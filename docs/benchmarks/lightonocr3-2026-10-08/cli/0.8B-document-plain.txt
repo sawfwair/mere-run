@@ -1,0 +1,46 @@
+# MERE RUN DOCUMENT CHECK
+
+Reference: OCR-3-TEST-008
+
+## Project summary
+
+Three sensors monitor the harbour.  
+The trial begins on 8 October 2026.  
+Station Alpha recorded 17 samples.  
+Station Beta recorded 23 samples.
+
+## Notes françaises
+
+Température: 18,5 degrés.  
+Le café est ouvert à Montréal.  
+Équipe: Zoé, André et Émile.  
+Aucun incident pendant le test.
+
+## INVOICE SUMMARY
+
+<table>
+  <tr>
+    <th>Item</th>
+    <th>Quantity</th>
+    <th>Amount</th>
+  </tr>
+  <tr>
+    <td>Harbour sensor</td>
+    <td>3</td>
+    <td>$42.00</td>
+  </tr>
+  <tr>
+    <td>Calibration kit</td>
+    <td>2</td>
+    <td>$18.50</td>
+  </tr>
+  <tr>
+    <td>Total</td>
+    <td>5</td>
+    <td>$60.50</td>
+  </tr>
+</table>
+
+Conclusion: all five units passed inspection.
+
+Page 1 / 1   Verification code: MERE-1024
