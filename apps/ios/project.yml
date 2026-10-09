@@ -55,6 +55,10 @@ targets:
           CODE_SIGN_ENTITLEMENTS: MereRunStudio/MereRunStudio.Debug.entitlements
         Release:
           CODE_SIGN_ENTITLEMENTS: MereRunStudio/MereRunStudio.entitlements
+          # Ship local symbols in the dSYM, keeping exports for hosted tests.
+          DEPLOYMENT_POSTPROCESSING: YES
+          STRIP_INSTALLED_PRODUCT: YES
+          STRIP_STYLE: non-global
   MereRunStudioTests:
     type: bundle.unit-test
     platform: iOS

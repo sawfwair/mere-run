@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Strip local symbols from the iOS Release executable while preserving its dSYM
+  and exported symbols for hosted tests, keeping the existing CI size budget.
+
 - Add native PPLX Embed v2 late 0.6B/9B text and image token embeddings, MaxSim
   scoring, and contextual 9B preview chunk embeddings through `text embed`, with
   pinned FP32 checkpoints, 1024/2048-dimensional int8 output, and optional normalization.
