@@ -1,3 +1,4 @@
+#if !os(iOS)
 // Native Swift/MLX reimplementation of the pinned LiquidAI D1 references.
 // Modified for mere.run; see THIRD_PARTY_NOTICES.md and licenses/d1-LFM-OPEN-LICENSE.txt.
 import Foundation
@@ -172,3 +173,4 @@ public struct D1Audio {
         } }
     }
 }
+#endif

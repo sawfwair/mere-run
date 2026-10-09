@@ -16,3 +16,6 @@ pin the Hugging Face revision independently of the reference SDK revision.
 Local checkpoint paths name the directory containing `rl_agent_config.json`.
 Preflight loads config/tokenizer files and reports token-budget truncation;
 weight shape checks occur when the native network is loaded.
+
+Inference is built for macOS and Linux. iOS retains the typed configuration and
+managed-model catalog metadata without linking the decision execution path.

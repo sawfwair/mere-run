@@ -1,3 +1,4 @@
+#if !os(iOS)
 import Foundation
 import MediaIO
 import MLX
@@ -135,3 +136,4 @@ struct ClefPreparedMedia {
         }
     }
 }
+#endif

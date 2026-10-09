@@ -28,6 +28,8 @@ the build process.
    vision-capable) targets 12 GB+ devices with the increased-memory
    entitlement. The app links the broad `MereRunCore` target; a
    narrower mobile runtime remains a build-time and binary-size optimization.
+   D1, Laya, and Clef decision inference and LightOnOCR inference code is
+   excluded from iOS; their shared catalog metadata remains available.
    CI builds only the selected simulator architecture so test coverage does not
    accidentally turn into a universal two-architecture product-size proxy.
 

@@ -1,3 +1,4 @@
+#if !os(iOS)
 // Native Swift/MLX reimplementation of the pinned LiquidAI D1 references.
 // Modified for mere.run; see THIRD_PARTY_NOTICES.md and licenses/d1-LFM-OPEN-LICENSE.txt.
 import Foundation
@@ -76,8 +77,11 @@ struct D1Tokenizer {
         let codes = letters ? labels : labels.count <= 26 ? (0..<labels.count).map { String(UnicodeScalar(65 + $0) ?? "A") }
             : (0..<labels.count).map { String(format: "%02d", $0) }
         let capitals = (65...90).map { String(UnicodeScalar($0) ?? "A") }
-        let pool = capitals + (0..<100).map { String(format: "%02d", $0) } + (97...122).map { String(UnicodeScalar($0) ?? "a") }
-            + (0..<200).map { "#\($0)" } + capitals.flatMap { a in capitals.map { a + $0 } }
+        var pool: [String] = capitals
+        pool.append(contentsOf: (0..<100).map { String(format: "%02d", $0) })
+        pool.append(contentsOf: (97...122).map { String(UnicodeScalar($0) ?? "a") })
+        pool.append(contentsOf: (0..<200).map { "#\($0)" })
+        pool.append(contentsOf: capitals.flatMap { first in capitals.map { first + $0 } })
         var used = Set<Int>()
         return try codes.map { code in
             for raw in [code] + pool {
@@ -206,3 +210,4 @@ enum D1JSON {
         }
     }
 }
+#endif

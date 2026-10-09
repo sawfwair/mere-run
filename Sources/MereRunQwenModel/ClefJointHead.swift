@@ -36,6 +36,7 @@ public struct ClefHeadConfiguration: Codable, Sendable {
     }
 }
 
+#if !os(iOS)
 package struct ClefHeadField {
     package let type: Int
     package let questionSpan: Range<Int>
@@ -174,3 +175,4 @@ package final class ClefJointHead: Module {
         }
     }
 }
+#endif

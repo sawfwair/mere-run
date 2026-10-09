@@ -1,7 +1,9 @@
 import Foundation
 
 extension ManagedModelCatalog {
-    static let textUtilitySpecs: [ManagedModelSpec] = [
+    static let textUtilitySpecs: [ManagedModelSpec] = baseTextUtilitySpecs + layaSpecs + d1Specs + clefSpecs
+
+    private static let baseTextUtilitySpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
             id: EmbeddingGemma2Catalog.modelID, category: .textEmbed, installShape: .directoryRoot,
             hubFallback: EmbeddingGemma2Catalog.hubFallback,
@@ -70,7 +72,6 @@ extension ManagedModelCatalog {
             estimatedDownloadBytes: 2_826_861_317,
             defaultCLICommands: ["text anonymize"]
         ),
-    ] + [
         ManagedModelSpec(
             id: GLiNERCatalog.modelID, category: .textClassify, installShape: .directoryRoot,
             hubFallback: GLiNERCatalog.hubFallback,
@@ -79,7 +80,9 @@ extension ManagedModelCatalog {
             estimatedDownloadBytes: 1_945_828_140,
             defaultCLICommands: ["text classify", "text extract"]
         )
-    ] + LayaCatalog.modelIDs.map { modelID in
+    ]
+
+    private static let layaSpecs: [ManagedModelSpec] = LayaCatalog.modelIDs.map { modelID in
         ManagedModelSpec(
             id: modelID, category: .textDecide, installShape: .structuredRoot,
             hubFallback: LayaCatalog.hubFallback(modelID: modelID),
@@ -89,24 +92,30 @@ extension ManagedModelCatalog {
                 : modelID == LayaCatalog.typedDecisionsID ? 846_195_716 : 846_195_574,
             defaultCLICommands: ["text decide"]
         )
-    } + D1Catalog.modelIDs.map { modelID in
-        ManagedModelSpec(
+    }
+
+    private static let d1Specs: [ManagedModelSpec] = D1Catalog.modelIDs.map { modelID in
+        let repository = modelID == D1Catalog.omniModelID ? D1Catalog.omniRepository : D1Catalog.repository
+        let revision = modelID == D1Catalog.omniModelID ? D1Catalog.omniRevision : D1Catalog.revision
+        return ManagedModelSpec(
             id: modelID, category: .textDecide, installShape: .directoryRoot,
             hubFallback: D1Catalog.hubFallback(modelID: modelID),
-            upstreamRepoId: modelID == D1Catalog.omniModelID ? D1Catalog.omniRepository : D1Catalog.repository,
-            upstreamRevision: modelID == D1Catalog.omniModelID ? D1Catalog.omniRevision : D1Catalog.revision,
+            upstreamRepoId: repository,
+            upstreamRevision: revision,
             usageRestriction: usageRestriction(
                 summary: "D1 uses the custom LFM Open License v1.0; review its terms before use.",
                 license: "LFM Open License v1.0",
-                sourceRepoId: modelID == D1Catalog.omniModelID ? D1Catalog.omniRepository : D1Catalog.repository,
-                sourceRevision: modelID == D1Catalog.omniModelID ? D1Catalog.omniRevision : D1Catalog.revision,
-                licenseURL: "https://huggingface.co/\(modelID == D1Catalog.omniModelID ? D1Catalog.omniRepository : D1Catalog.repository)/blob/\(modelID == D1Catalog.omniModelID ? D1Catalog.omniRevision : D1Catalog.revision)/LICENSE"
+                sourceRepoId: repository,
+                sourceRevision: revision,
+                licenseURL: "https://huggingface.co/\(repository)/blob/\(revision)/LICENSE"
             ),
             validationKind: .d1, runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: modelID == D1Catalog.omniModelID ? 2_400_000_000 : 6_300_000_000,
             defaultCLICommands: ["text decide"], apiAvailability: .cliOnly
         )
-    } + [
+    }
+
+    private static let clefSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
             id: ClefCatalog.modelID, category: .textDecide, installShape: .directoryRoot,
             hubFallback: ClefCatalog.hubFallback,
