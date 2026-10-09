@@ -163,6 +163,33 @@ clip or heard soundtrack. Oversized inputs fail explicitly. Omni defaults to
 Tiny independently exported PyTorch fixtures cover causal MoE states,
 interleaved positions, deep-stack injection, vision, chunked audio, and the
 joint head's untied output-embedding prior. These are component tests with
-untrained weights. Full 30B checkpoint probabilities and cross-platform GPU
-qualification remain unverified; do not treat component agreement as a
-published checkpoint qualification.
+untrained weights. Eight short real Q4 checkpoint probes also pass on a 36 GB Mac; see the
+[dated qualification](../benchmarks/clef-omni-q4-qualification-2026-10-09.md).
+Original BF16 native execution and cross-platform GPU qualification remain
+unverified.
+
+### A quantized checkpoint for 36 GB Macs
+
+`scripts/model-conversion/convert_clef_omni_mlx.py` streams the pinned original
+checkpoint on a CUDA MLX host. It packs only routed expert matrices with affine
+4-bit/group-64 quantization. Attention, routers, embeddings, vision, audio, and
+the joint decision head retain source BF16 precision. Speech-output weights are
+omitted. The native loader accepts the converter's explicit
+`quantization.scope: thinker_moe_experts` policy and rejects other policies.
+
+```sh
+python scripts/model-conversion/convert_clef_omni_mlx.py \
+  --source /workspace/clef-omni-source --output /workspace/clef-omni-mlx-q4
+mere.run text decide --model /path/to/clef-omni-mlx-q4 --input request.json --pretty
+```
+
+The converted bundle is 22.0 GB. A native Metal run on a 36 GB Mac passed eight
+151–294-token text/media probes at 22.06 GB peak MLX allocation. These short probes
+do not qualify an 8,192-token context. Set an explicit `max_tokens` budget and
+close other model workloads.
+Weight size alone does not establish memory fit: input length, media features,
+loading temporaries, and current memory pressure also matter. The conversion
+manifest records source hashes, output hashes, logical weights, and bounded
+reconstruction errors. Those errors are not decision-quality measurements.
+Real local execution and independent BF16 decision comparisons must qualify
+an artifact before treating it as tested on 36 GB hardware.

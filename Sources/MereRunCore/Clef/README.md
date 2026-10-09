@@ -79,5 +79,13 @@ full-checkpoint media qualification.
 audio, joint-head, and Whisper preprocessing fixtures exported by
 `scripts/fixtures/export-clef-omni-reference.py` with Transformers 5.10.2.
 These checks establish component comparisons, not qualification of the original
-BF16 checkpoint or general model quality. Full-checkpoint qualification remains
-pending.
+BF16 checkpoint or general model quality. Eight short Q4 checkpoint probes now
+pass on a 36 GB Mac; see `docs/benchmarks/clef-omni-q4-qualification-2026-10-09.md`
+for measured allocation, probability differences, and qualification limits.
+
+The optional Omni `quantization` descriptor permits only affine Q4/group-64
+routed experts. The loader stacks packed weights, scales, and biases by expert
+index, while ordinary thinker parameters remain BF16. A disk-loading regression
+compares the packed thinker against its reconstructed dense counterpart.
+The streaming converter omits speech-output tensors and preserves source/output
+hashes; local memory and decision-quality qualification are separate steps.

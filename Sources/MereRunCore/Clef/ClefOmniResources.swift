@@ -89,14 +89,16 @@ struct ClefOmniResources {
         arrays["lm_head.weight"] = weight
         for layer in 0..<model.config.numHiddenLayers {
             for projection in ["gate_proj", "up_proj", "down_proj"] {
-                let keys = (0..<model.config.numExperts).map { "layers.\(layer).mlp.experts.\($0).\(projection).weight" }
-                let experts = try keys.map { key -> MLXArray in
-                    guard let value = arrays.removeValue(forKey: key) else { throw ClefError.invalidWeights("Missing Omni expert \(key).") }
-                    return value
+                for suffix in model.quantization == nil ? ["weight"] : ["weight", "scales", "biases"] {
+                    let keys = (0..<model.config.numExperts).map { "layers.\(layer).mlp.experts.\($0).\(projection).\(suffix)" }
+                    let experts = try keys.map { key -> MLXArray in
+                        guard let value = arrays.removeValue(forKey: key) else { throw ClefError.invalidWeights("Missing Omni expert \(key).") }
+                        return value
+                    }
+                    let bank = MLX.stacked(experts, axis: 0)
+                    MLX.eval(bank)
+                    arrays["layers.\(layer).mlp.\(projection).\(suffix)"] = bank
                 }
-                let bank = MLX.stacked(experts, axis: 0)
-                MLX.eval(bank)
-                arrays["layers.\(layer).mlp.\(projection).weight"] = bank
             }
         }
         try install(arrays, into: model)
@@ -127,9 +129,11 @@ struct ClefOmniResources {
     }
 
     private func install(_ arrays: [String: MLXArray], into model: Module) throws {
-        guard Set(arrays.keys) == Set(model.parameters().flattened().map(\.0)),
-              arrays.values.allSatisfy({ $0.dtype == .bfloat16 || $0.dtype == .float32 }) else {
-            throw ClefError.invalidWeights("Clef Omni requires complete, unquantized thinker component parameters.")
+        let expected = Dictionary(uniqueKeysWithValues: model.parameters().flattened())
+        guard Set(arrays.keys) == Set(expected.keys), arrays.allSatisfy({ key, value in
+            expected[key]?.dtype == .uint32 ? value.dtype == .uint32 : value.dtype == .bfloat16 || value.dtype == .float32
+        }) else {
+            throw ClefError.invalidWeights("Clef Omni requires complete thinker parameters with the declared expert precision.")
         }
         try model.update(parameters: ModuleParameters.unflattened(arrays), verify: [.all])
     }

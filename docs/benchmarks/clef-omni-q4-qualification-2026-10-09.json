@@ -1,0 +1,655 @@
+{
+  "source_repository": "Cloudflare/clef-omni",
+  "source_revision": "0db1cd2607d76a7bdb2a382f659e7b313079f84b",
+  "quantization": {
+    "bits": 4,
+    "group_size": 64,
+    "mode": "affine",
+    "scope": "thinker_moe_experts"
+  },
+  "bundle_bytes": 22006481387,
+  "artifact_files": {
+    "model-00001-of-00015.safetensors": {
+      "bytes": 3614329519,
+      "sha256": "5ec6f13e7e28571a2e86faed075d1d46ecc5b598c83920063b03bf5b62ab1c91"
+    },
+    "model-00002-of-00015.safetensors": {
+      "bytes": 1516217388,
+      "sha256": "3ef4938ec990adeb38b7e9412f9aad8fa9b0f4fc4c71c5ecb5552863dea4732f"
+    },
+    "model-00003-of-00015.safetensors": {
+      "bytes": 1516217128,
+      "sha256": "10304bc29b84780659513fcd0f42d93140cdb19639e8a828377b5f8aaab18045"
+    },
+    "model-00004-of-00015.safetensors": {
+      "bytes": 1516221092,
+      "sha256": "70f3392225a5106531703c3dffbf06041a8023290d2011c6ac9b23206df5f41a"
+    },
+    "model-00005-of-00015.safetensors": {
+      "bytes": 1516221884,
+      "sha256": "00916a2d2af40ac26f9129cd9b0255f71fac638141b51ae7705ddb4af350929a"
+    },
+    "model-00006-of-00015.safetensors": {
+      "bytes": 1516222234,
+      "sha256": "d2ae8ada2f61758a91fdadfd704aacd7f715722415bae5eab93375e3a5cbb1d5"
+    },
+    "model-00007-of-00015.safetensors": {
+      "bytes": 1516221782,
+      "sha256": "174bc92c75634646d3461181dd8dae7ce64529ab12fbd91832ea3cb705411dc0"
+    },
+    "model-00008-of-00015.safetensors": {
+      "bytes": 1516221718,
+      "sha256": "2e54f1e6ca287b1190c3ccfeda8e5ee7bfa3a3a1e3e7b0c4299082e3b7aacf15"
+    },
+    "model-00009-of-00015.safetensors": {
+      "bytes": 1516222152,
+      "sha256": "f5e140be0da00190f6070be469a7dfc81b309bf879982379bb0140171b9cb482"
+    },
+    "model-00010-of-00015.safetensors": {
+      "bytes": 1516221972,
+      "sha256": "7a9dd62e0d1615eb07991547dd1f10a03a1b9d37efd0ba6db0dfe5752dd3181b"
+    },
+    "model-00011-of-00015.safetensors": {
+      "bytes": 1516221752,
+      "sha256": "c7c56d5586dd87446f31e27117a67b1e032c390e4df413b56ced1f8feb2a6ab1"
+    },
+    "model-00012-of-00015.safetensors": {
+      "bytes": 1516221698,
+      "sha256": "8b3f33e908a4056b467942af13928b6df0896eec8b0c667cf033ff028a2e1474"
+    },
+    "model-00013-of-00015.safetensors": {
+      "bytes": 1478342451,
+      "sha256": "a9c99521ba529f0cbc2d45a83edb6831ca91f41c5c3e81d3057a71a1ecfe6c96"
+    },
+    "processor_config.json": {
+      "bytes": 2356,
+      "sha256": "c72bd6e0a91b84eea5af48fee17b63a8e7f4a37fd5b8293dd5c32710cb1b98ad"
+    },
+    "tokenizer.json": {
+      "bytes": 11424262,
+      "sha256": "a7d41145c408f3062e824f965be1c29854cd809e111cdf8170aa8b0bcd5d1fab"
+    },
+    "tokenizer_config.json": {
+      "bytes": 907,
+      "sha256": "2602a7d7336bf7ad4cd3eb385ccf27040cc675081d4cd445b1aaa88b10b87ffb"
+    },
+    "joint_head_config.json": {
+      "bytes": 119,
+      "sha256": "96bc7dbf43ae9e42a34ce7bb3032d51769a29912c800df297b37300f41a69fe5"
+    },
+    "joint_head.safetensors": {
+      "bytes": 218364000,
+      "sha256": "d5ee8d7e75c9a503edce94400dda9074fc0f2f4d62729012bf0a827df947ba9c"
+    },
+    "LICENSE": {
+      "bytes": 11544,
+      "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a"
+    },
+    "config.json": {
+      "bytes": 13792,
+      "sha256": "b79979f0c1b396b1667836c5cffd6e69c0b084e69af61e6a5f6bf843e3abf80c"
+    },
+    "model.safetensors.index.json": {
+      "bytes": 5551218,
+      "sha256": "3102bdf07aa70cdfe4fc97ff481b1fae4b472a4120e813e9f1e3667a0da502f8"
+    },
+    "UPSTREAM_README.md": {
+      "bytes": 10419,
+      "sha256": "f85fa4cb9d7e2df8f25568faa9527b9657620c4da8098cd2ad24005780640bda"
+    }
+  },
+  "native": {
+    "cases": {
+      "audio": {
+        "answers": {
+          "speech": {
+            "noul": 0.0046,
+            "type": "noul"
+          }
+        },
+        "model": "clef-omni-mlx-q4",
+        "usage": {
+          "input_tokens": 159,
+          "output_tokens": 0
+        }
+      },
+      "image": {
+        "answers": {
+          "color": {
+            "choice": "red",
+            "confidence": 0.98,
+            "probabilities": {
+              "blue": 0.02,
+              "red": 0.98
+            },
+            "type": "choice"
+          }
+        },
+        "model": "clef-omni-mlx-q4",
+        "usage": {
+          "input_tokens": 193,
+          "output_tokens": 0
+        }
+      },
+      "json": {
+        "answers": {
+          "currency": {
+            "choice": "CAD",
+            "confidence": 0.9798,
+            "probabilities": {
+              "CAD": 0.9798,
+              "USD": 0.0202
+            },
+            "type": "choice"
+          },
+          "paid": {
+            "noul": 0.9888,
+            "type": "noul"
+          }
+        },
+        "model": "clef-omni-mlx-q4",
+        "usage": {
+          "input_tokens": 217,
+          "output_tokens": 0
+        }
+      },
+      "mixed": {
+        "answers": {
+          "color": {
+            "choice": "blue",
+            "confidence": 0.9849,
+            "probabilities": {
+              "blue": 0.9849,
+              "red": 0.0151
+            },
+            "type": "choice"
+          },
+          "speech": {
+            "noul": 0.0065,
+            "type": "noul"
+          }
+        },
+        "model": "clef-omni-mlx-q4",
+        "usage": {
+          "input_tokens": 294,
+          "output_tokens": 0
+        }
+      },
+      "multilingual": {
+        "answers": {
+          "category": {
+            "choice": "weather",
+            "confidence": 0.9723,
+            "probabilities": {
+              "animals": 0.0137,
+              "billing": 0.0141,
+              "weather": 0.9723
+            },
+            "type": "choice"
+          }
+        },
+        "model": "clef-omni-mlx-q4",
+        "usage": {
+          "input_tokens": 156,
+          "output_tokens": 0
+        }
+      },
+      "route": {
+        "answers": {
+          "category": {
+            "choice": "billing",
+            "confidence": 0.9873,
+            "probabilities": {
+              "animals": 0.0065,
+              "billing": 0.9873,
+              "weather": 0.0062
+            },
+            "type": "choice"
+          }
+        },
+        "model": "clef-omni-mlx-q4",
+        "usage": {
+          "input_tokens": 151,
+          "output_tokens": 0
+        }
+      },
+      "score": {
+        "answers": {
+          "urgency": {
+            "confidence": 0.9827,
+            "legend": {
+              "0": "Low",
+              "1": "Moderate",
+              "2": "Critical"
+            },
+            "probabilities": {
+              "0": 0.0072,
+              "1": 0.0101,
+              "2": 0.9827
+            },
+            "score": 1.9756,
+            "type": "score"
+          }
+        },
+        "model": "clef-omni-mlx-q4",
+        "usage": {
+          "input_tokens": 151,
+          "output_tokens": 0
+        }
+      },
+      "video": {
+        "answers": {
+          "last": {
+            "choice": "red",
+            "confidence": 0.9736,
+            "probabilities": {
+              "blue": 0.0264,
+              "red": 0.9736
+            },
+            "type": "choice"
+          }
+        },
+        "model": "clef-omni-mlx-q4",
+        "usage": {
+          "input_tokens": 276,
+          "output_tokens": 0
+        }
+      }
+    },
+    "elapsedSeconds": 45.91805803775787,
+    "maximumProbabilityDelta": 0.0036000000000000476,
+    "peakMLXBytes": 22063592210,
+    "physicalMemoryBytes": 38654705664
+  },
+  "comparison": {
+    "cases": 8,
+    "native": {
+      "elapsedSeconds": 45.91805803775787,
+      "maximumProbabilityDelta": 0.0036000000000000476,
+      "peakMLXBytes": 22063592210,
+      "physicalMemoryBytes": 38654705664
+    },
+    "comparisons": {
+      "original_bf16": {
+        "categorical_choices_equal": true,
+        "maximum_probability_delta": 0.0036000000000000476,
+        "maximum_score_delta": 0.00029999999999996696
+      },
+      "reconstructed_q4": {
+        "categorical_choices_equal": true,
+        "maximum_probability_delta": 0.0030999999999999986,
+        "maximum_score_delta": 0.00029999999999996696
+      }
+    },
+    "qualified_scope": "151-294 input tokens; eight synthetic text/image/audio/video/mixed-media probes; no broad quality claim."
+  },
+  "local_artifact_hashes_verified": true,
+  "cli_route_passed": true,
+  "cli_peak_memory_footprint_bytes": 20011421128,
+  "quality_qualified": false,
+  "local_36gb_qualified_scope": "Eight synthetic probes, 151-294 input tokens; all media towers loaded; larger contexts and media unqualified.",
+  "reference_bf16": {
+    "route": {
+      "result": {
+        "model": "clef-omni",
+        "answers": {
+          "category": {
+            "type": "choice",
+            "choice": "billing",
+            "confidence": 0.9863,
+            "probabilities": {
+              "animals": 0.0071,
+              "billing": 0.9863,
+              "weather": 0.0066
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 151,
+          "output_tokens": 0
+        }
+      },
+      "input_token_ids_sha256": "cda62aad8835521bfdce55e4b668de8b0f1e79f3e1ac91beda9009177e99820c"
+    },
+    "json": {
+      "result": {
+        "model": "clef-omni",
+        "answers": {
+          "paid": {
+            "type": "noul",
+            "noul": 0.9875
+          },
+          "currency": {
+            "type": "choice",
+            "choice": "CAD",
+            "confidence": 0.9774,
+            "probabilities": {
+              "CAD": 0.9774,
+              "USD": 0.0226
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 217,
+          "output_tokens": 0
+        }
+      },
+      "input_token_ids_sha256": "b8161e08c0809b3dbd003690850a2c26381d4167c081191aa1dc9b1a46673c38"
+    },
+    "multilingual": {
+      "result": {
+        "model": "clef-omni",
+        "answers": {
+          "category": {
+            "type": "choice",
+            "choice": "weather",
+            "confidence": 0.9687,
+            "probabilities": {
+              "animals": 0.0159,
+              "billing": 0.0154,
+              "weather": 0.9687
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 156,
+          "output_tokens": 0
+        }
+      },
+      "input_token_ids_sha256": "8b1067b0cdf4034aa21ddf5d4f818fbebb7d726b9d46fd26859c2b1e8530f24d"
+    },
+    "score": {
+      "result": {
+        "model": "clef-omni",
+        "answers": {
+          "urgency": {
+            "type": "score",
+            "score": 1.9759,
+            "confidence": 0.9831,
+            "legend": {
+              "0": "Low",
+              "1": "Moderate",
+              "2": "Critical"
+            },
+            "probabilities": {
+              "0": 0.0072,
+              "1": 0.0097,
+              "2": 0.9831
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 151,
+          "output_tokens": 0
+        }
+      },
+      "input_token_ids_sha256": "182f66f35763dd35a28ea1f628678a7028372259d8df57ae794a5d31a7d161b3"
+    },
+    "image": {
+      "result": {
+        "model": "clef-omni",
+        "answers": {
+          "color": {
+            "type": "choice",
+            "choice": "red",
+            "confidence": 0.9794,
+            "probabilities": {
+              "blue": 0.0206,
+              "red": 0.9794
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 193,
+          "output_tokens": 0
+        }
+      },
+      "input_token_ids_sha256": "f9fda2797684895f0fe58919dec5347b52f0090961e171659bedbc161ef602cf"
+    },
+    "audio": {
+      "result": {
+        "model": "clef-omni",
+        "answers": {
+          "speech": {
+            "type": "noul",
+            "noul": 0.0041
+          }
+        },
+        "usage": {
+          "input_tokens": 159,
+          "output_tokens": 0
+        }
+      },
+      "input_token_ids_sha256": "44d1f9e45956d5c18eec52c80654270f94589c7b5775412ec1babe14ad0eb886"
+    },
+    "video": {
+      "result": {
+        "model": "clef-omni",
+        "answers": {
+          "last": {
+            "type": "choice",
+            "choice": "red",
+            "confidence": 0.9716,
+            "probabilities": {
+              "blue": 0.0284,
+              "red": 0.9716
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 276,
+          "output_tokens": 0
+        }
+      },
+      "input_token_ids_sha256": "4ad56164f43352018aa811719b5f1f8d25fcb9f641fc6e082179bb4eba7fbf73"
+    },
+    "mixed": {
+      "result": {
+        "model": "clef-omni",
+        "answers": {
+          "color": {
+            "type": "choice",
+            "choice": "blue",
+            "confidence": 0.9838,
+            "probabilities": {
+              "blue": 0.9838,
+              "red": 0.0162
+            }
+          },
+          "speech": {
+            "type": "noul",
+            "noul": 0.0065
+          }
+        },
+        "usage": {
+          "input_tokens": 294,
+          "output_tokens": 0
+        }
+      },
+      "input_token_ids_sha256": "04b3f27d5884d6ff0d2fbcb4fe01f5773378a3c43dacbdee8249910f425ea5ef"
+    }
+  },
+  "reference_q4-reconstructed": {
+    "route": {
+      "result": {
+        "model": "clef-omni",
+        "answers": {
+          "category": {
+            "type": "choice",
+            "choice": "billing",
+            "confidence": 0.9875,
+            "probabilities": {
+              "animals": 0.0064,
+              "billing": 0.9875,
+              "weather": 0.0061
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 151,
+          "output_tokens": 0
+        }
+      },
+      "input_token_ids_sha256": "cda62aad8835521bfdce55e4b668de8b0f1e79f3e1ac91beda9009177e99820c"
+    },
+    "json": {
+      "result": {
+        "model": "clef-omni",
+        "answers": {
+          "paid": {
+            "type": "noul",
+            "noul": 0.9893
+          },
+          "currency": {
+            "type": "choice",
+            "choice": "CAD",
+            "confidence": 0.9809,
+            "probabilities": {
+              "CAD": 0.9809,
+              "USD": 0.0191
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 217,
+          "output_tokens": 0
+        }
+      },
+      "input_token_ids_sha256": "b8161e08c0809b3dbd003690850a2c26381d4167c081191aa1dc9b1a46673c38"
+    },
+    "multilingual": {
+      "result": {
+        "model": "clef-omni",
+        "answers": {
+          "category": {
+            "type": "choice",
+            "choice": "weather",
+            "confidence": 0.971,
+            "probabilities": {
+              "animals": 0.0144,
+              "billing": 0.0146,
+              "weather": 0.971
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 156,
+          "output_tokens": 0
+        }
+      },
+      "input_token_ids_sha256": "8b1067b0cdf4034aa21ddf5d4f818fbebb7d726b9d46fd26859c2b1e8530f24d"
+    },
+    "score": {
+      "result": {
+        "model": "clef-omni",
+        "answers": {
+          "urgency": {
+            "type": "score",
+            "score": 1.9759,
+            "confidence": 0.983,
+            "legend": {
+              "0": "Low",
+              "1": "Moderate",
+              "2": "Critical"
+            },
+            "probabilities": {
+              "0": 0.0072,
+              "1": 0.0098,
+              "2": 0.983
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 151,
+          "output_tokens": 0
+        }
+      },
+      "input_token_ids_sha256": "182f66f35763dd35a28ea1f628678a7028372259d8df57ae794a5d31a7d161b3"
+    },
+    "image": {
+      "result": {
+        "model": "clef-omni",
+        "answers": {
+          "color": {
+            "type": "choice",
+            "choice": "red",
+            "confidence": 0.9794,
+            "probabilities": {
+              "blue": 0.0206,
+              "red": 0.9794
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 193,
+          "output_tokens": 0
+        }
+      },
+      "input_token_ids_sha256": "f9fda2797684895f0fe58919dec5347b52f0090961e171659bedbc161ef602cf"
+    },
+    "audio": {
+      "result": {
+        "model": "clef-omni",
+        "answers": {
+          "speech": {
+            "type": "noul",
+            "noul": 0.0042
+          }
+        },
+        "usage": {
+          "input_tokens": 159,
+          "output_tokens": 0
+        }
+      },
+      "input_token_ids_sha256": "44d1f9e45956d5c18eec52c80654270f94589c7b5775412ec1babe14ad0eb886"
+    },
+    "video": {
+      "result": {
+        "model": "clef-omni",
+        "answers": {
+          "last": {
+            "type": "choice",
+            "choice": "red",
+            "confidence": 0.9705,
+            "probabilities": {
+              "blue": 0.0295,
+              "red": 0.9705
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 276,
+          "output_tokens": 0
+        }
+      },
+      "input_token_ids_sha256": "4ad56164f43352018aa811719b5f1f8d25fcb9f641fc6e082179bb4eba7fbf73"
+    },
+    "mixed": {
+      "result": {
+        "model": "clef-omni",
+        "answers": {
+          "color": {
+            "type": "choice",
+            "choice": "blue",
+            "confidence": 0.9857,
+            "probabilities": {
+              "blue": 0.9857,
+              "red": 0.0143
+            }
+          },
+          "speech": {
+            "type": "noul",
+            "noul": 0.0055
+          }
+        },
+        "usage": {
+          "input_tokens": 294,
+          "output_tokens": 0
+        }
+      },
+      "input_token_ids_sha256": "04b3f27d5884d6ff0d2fbcb4fe01f5773378a3c43dacbdee8249910f425ea5ef"
+    }
+  },
+  "conversion_mlx_version": "0.32.2",
+  "native_mlx_core_version": "0.32.1"
+}

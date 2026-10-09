@@ -37,7 +37,7 @@ final class ClefOmniDecisionOperation {
         let (sequence, media, layout) = try prepared(request)
         try Task.checkCancellation()
         if model == nil {
-            let model = Qwen3OmniThinker(config: config.thinkerConfig.textConfig)
+            let model = Qwen3OmniThinker(config: config.thinkerConfig.textConfig, quantization: config.quantization)
             try resources.loadText(model)
             self.model = model
             let head = try ClefJointHead(configuration: headConfig)

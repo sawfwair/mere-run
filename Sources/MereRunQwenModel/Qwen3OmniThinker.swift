@@ -11,11 +11,13 @@ package final class Qwen3OmniThinker: Module {
     @ModuleInfo var norm: RMSNorm
     @ModuleInfo(key: "lm_head") var outputEmbedding: Linear
     package let config: Qwen3OmniConfiguration.Text
+    package let quantization: Qwen3OmniConfiguration.ExpertQuantization?
 
-    package init(config: Qwen3OmniConfiguration.Text) {
+    package init(config: Qwen3OmniConfiguration.Text, quantization: Qwen3OmniConfiguration.ExpertQuantization? = nil) {
         self.config = config
+        self.quantization = quantization
         self._embedding.wrappedValue = Embedding(embeddingCount: config.vocabSize, dimensions: config.hiddenSize)
-        self._layers.wrappedValue = (0..<config.numHiddenLayers).map { _ in Qwen3OmniLayer(config) }
+        self._layers.wrappedValue = (0..<config.numHiddenLayers).map { _ in Qwen3OmniLayer(config, quantization: quantization) }
         self._norm.wrappedValue = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
         self._outputEmbedding.wrappedValue = Linear(config.hiddenSize, config.vocabSize, bias: false)
     }
@@ -49,9 +51,9 @@ final class Qwen3OmniLayer: Module {
     @ModuleInfo(key: "input_layernorm") var inputNorm: RMSNorm
     @ModuleInfo(key: "post_attention_layernorm") var postNorm: RMSNorm
 
-    init(_ config: Qwen3OmniConfiguration.Text) {
+    init(_ config: Qwen3OmniConfiguration.Text, quantization: Qwen3OmniConfiguration.ExpertQuantization?) {
         self._attention.wrappedValue = Qwen3OmniAttention(config)
-        self._mlp.wrappedValue = Qwen3OmniExperts(config)
+        self._mlp.wrappedValue = Qwen3OmniExperts(config, quantization: quantization)
         self._inputNorm.wrappedValue = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
         self._postNorm.wrappedValue = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
     }
@@ -97,7 +99,7 @@ final class Qwen3OmniAttention: Module {
     }
 }
 
-/// Dense BF16 expert banks. Bound routed-matrix temporaries by evaluating eight tokens at a time.
+/// BF16 or affine Q4 expert banks, with bounded routed-matrix temporaries.
 final class Qwen3OmniExperts: Module {
     @ModuleInfo var gate: Linear
     @ModuleInfo(key: "gate_proj") var gateProjection: Q35SwitchLinear
@@ -105,12 +107,12 @@ final class Qwen3OmniExperts: Module {
     @ModuleInfo(key: "down_proj") var downProjection: Q35SwitchLinear
     let config: Qwen3OmniConfiguration.Text
 
-    init(_ config: Qwen3OmniConfiguration.Text) {
+    init(_ config: Qwen3OmniConfiguration.Text, quantization: Qwen3OmniConfiguration.ExpertQuantization?) {
         self.config = config
         self._gate.wrappedValue = Linear(config.hiddenSize, config.numExperts, bias: false)
         func projection(_ input: Int, _ output: Int) -> Q35SwitchLinear {
             Q35SwitchLinear(inputDims: input, outputDims: output, numExperts: config.numExperts,
-                            groupSize: 64, bits: 4, quantized: false, bias: false)
+                            groupSize: quantization?.groupSize ?? 64, bits: quantization?.bits ?? 4, quantized: quantization != nil, bias: false)
         }
         self._gateProjection.wrappedValue = projection(config.hiddenSize, config.moeIntermediateSize)
         self._upProjection.wrappedValue = projection(config.hiddenSize, config.moeIntermediateSize)

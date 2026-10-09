@@ -149,6 +149,57 @@ final class ClefOmniTests: MereRunCoreTestCase {
                     try XCTUnwrap(reference["layout_positions"]), tolerance: 0)
     }
 
+    func testPackedQ4ExpertsMatchReconstructedDenseThinker() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "omni-q4-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        var json = try ClefJSON.parse(Data(contentsOf: fixture.appending(path: "config.json")))
+        // Use the typed JSON representation to create group-64-compatible synthetic geometry.
+        func replacing(_ object: ClefJSON, _ key: String, _ value: ClefJSON) -> ClefJSON {
+            .object((object.fields ?? []).filter { $0.key != key } + [.init(key: key, value: value)])
+        }
+        var thinker = try XCTUnwrap(json["thinker_config"])
+        var text = try XCTUnwrap(thinker["text_config"])
+        text = replacing(replacing(text, "hidden_size", .number("64")), "moe_intermediate_size", .number("64"))
+        thinker = replacing(thinker, "text_config", text)
+        thinker = replacing(thinker, "vision_config", replacing(try XCTUnwrap(thinker["vision_config"]), "out_hidden_size", .number("64")))
+        thinker = replacing(thinker, "audio_config", replacing(try XCTUnwrap(thinker["audio_config"]), "output_dim", .number("64")))
+        json = replacing(json, "thinker_config", thinker)
+        let denseConfig = try Qwen3OmniConfiguration.decode(Data(try json.canonical().utf8))
+        json = replacing(json, "quantization", try ClefJSON.parse(Data(#"{"bits":4,"group_size":64,"mode":"affine","scope":"thinker_moe_experts"}"#.utf8)))
+        let packedConfig = try Qwen3OmniConfiguration.decode(Data(try json.canonical().utf8))
+        let dense = Qwen3OmniThinker(config: denseConfig.thinkerConfig.textConfig)
+        let packed = Qwen3OmniThinker(config: packedConfig.thinkerConfig.textConfig, quantization: packedConfig.quantization)
+        var reconstructed: [String: MLXArray] = [:], disk: [String: MLXArray] = [:]
+        for (key, value) in dense.parameters().flattened() {
+            if key.contains(".mlp."), !key.contains(".mlp.gate.") {
+                let (weight, scales, optionalBiases) = MLX.quantized(value, groupSize: 64, bits: 4)
+                let biases = try XCTUnwrap(optionalBiases)
+                reconstructed[key] = dequantized(weight, scales: scales, biases: biases, groupSize: 64, bits: 4)
+                let components = key.split(separator: ".").map(String.init)
+                for expert in 0..<4 {
+                    let base = "thinker.model.layers.\(components[1]).mlp.experts.\(expert).\(components[3])"
+                    disk[base + ".weight"] = weight[expert]
+                    disk[base + ".scales"] = scales[expert]
+                    disk[base + ".biases"] = biases[expert]
+                }
+            } else {
+                reconstructed[key] = value
+                disk[key == "lm_head.weight" ? "thinker." + key : "thinker.model." + key] = value
+            }
+        }
+        try dense.update(parameters: ModuleParameters.unflattened(reconstructed), verify: [.all])
+        try MLX.save(arrays: disk, url: root.appending(path: "model.safetensors"))
+        // The disk index is deliberately written through the same public safetensor contract.
+        let entries = disk.keys.sorted().map { "\"\($0)\":\"model.safetensors\"" }.joined(separator: ",")
+        try Data("{\"weight_map\":{\(entries)}}".utf8).write(to: root.appending(path: "model.safetensors.index.json"))
+        try ClefOmniResources(root: root).loadText(packed)
+        let ids = MLXArray([Int32(1), 7, 11, 20], [1, 4])
+        let positions = MLX.broadcast(MLXArray([Float(0), 1, 2, 3], [1, 1, 4]), to: [3, 1, 4])
+        assertClose(try packed(ids: ids, positions: positions), try dense(ids: ids, positions: positions), tolerance: 0.0001)
+        XCTAssertEqual(packed.parameters().flattened().filter { $0.0.contains(".mlp.gate_proj.weight") }.map { $0.1.dtype }, [.uint32, .uint32, .uint32])
+    }
+
     func testOmniManagedCatalogPinsOriginalBF16Checkpoint() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ClefOmniCatalog.modelID))
         XCTAssertEqual(spec.upstreamRepoId, "Cloudflare/clef-omni")

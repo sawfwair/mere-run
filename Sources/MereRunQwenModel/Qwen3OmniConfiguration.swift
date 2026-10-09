@@ -64,6 +64,13 @@ public struct Qwen3OmniConfiguration: Decodable, Sendable {
         public let audioEndTokenId: Int
         public let positionIdPerSeconds: Int
     }
+    public struct ExpertQuantization: Decodable, Sendable {
+        public let bits: Int
+        public let groupSize: Int
+        public let mode: String
+        public let scope: String
+    }
+    public let quantization: ExpertQuantization?
     public let modelType: String
     public let thinkerConfig: Thinker
 
@@ -76,6 +83,14 @@ public struct Qwen3OmniConfiguration: Decodable, Sendable {
     }
 
     public func validate() throws {
+        if let quantization {
+            guard quantization.bits == 4, quantization.groupSize == 64, quantization.mode == "affine",
+                  quantization.scope == "thinker_moe_experts",
+                  thinkerConfig.textConfig.hiddenSize.isMultiple(of: quantization.groupSize),
+                  thinkerConfig.textConfig.moeIntermediateSize.isMultiple(of: quantization.groupSize) else {
+                throw ClefError.invalidConfiguration("Clef Omni quantization requires affine Q4/group-64 routed experts.")
+            }
+        }
         let text = thinkerConfig.textConfig
         let vision = thinkerConfig.visionConfig
         let audio = thinkerConfig.audioConfig
