@@ -839,6 +839,31 @@ public enum ManagedModelCapabilityCatalog {
                 minimum: 8, recommended: 16
             ),
             descriptor(
+                PPLXEmbedV2Catalog.lateSmallID, "PPLX Embed v2 Late 0.6B",
+                "Creates native 128-dimensional token vectors for text and image document retrieval with MaxSim.",
+                minimum: 16, recommended: 24
+            ),
+            descriptor(
+                PPLXEmbedV2Catalog.lateLargeID, "PPLX Embed v2 Late 9B",
+                "Creates native FP32 token vectors for text and image retrieval with the large late encoder.",
+                minimum: 64, recommended: 96
+            ),
+            descriptor(
+                PPLXEmbedV2Catalog.lateQuantizedID, "PPLX Embed v2 Late 9B Mixed Q4/Q8",
+                "Native packed token vectors; short text and synthetic image parity validated.",
+                minimum: 24, recommended: 36
+            ),
+            descriptor(
+                PPLXEmbedV2Catalog.contextQuantizedID, "PPLX Embed v2 Context 9B Preview Q8",
+                "Native Q8 weights with contextual int8 chunk output; short-input parity validated.",
+                minimum: 24, recommended: 36
+            ),
+            descriptor(
+                PPLXEmbedV2Catalog.contextID, "PPLX Embed v2 Context 9B Preview",
+                "Encodes document chunks together and returns contextual int8 vectors for retrieval.",
+                minimum: 64, recommended: 96
+            ),
+            descriptor(
                 Qwen3VLEmbeddingCatalog.modelID,
                 "Multimodal embeddings",
                 "Creates shared Qwen3-VL text and image vectors for local retrieval and ranking.",

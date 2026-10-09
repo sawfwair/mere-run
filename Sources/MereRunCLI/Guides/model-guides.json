@@ -310,6 +310,13 @@
     "resourceName": "handbook-qwen3-embedding.md"
   },
   {
+    "topic": "handbook-pplx-embed-v2",
+    "title": "PPLX Embed v2 (Perplexity)",
+    "category": "Text and multimodal",
+    "models": ["text-embed-pplx-v2-late-0.6b", "text-embed-pplx-v2-late-9b", "text-embed-pplx-v2-context-9b-preview", "text-embed-pplx-v2-late-9b-mixed-4bit", "text-embed-pplx-v2-context-9b-preview-8bit"],
+    "resourceName": "handbook-pplx-embed-v2.md"
+  },
+  {
     "topic": "handbook-embeddinggemma2",
     "title": "EmbeddingGemma 2 multimodal embeddings (Google)",
     "category": "Text and multimodal",

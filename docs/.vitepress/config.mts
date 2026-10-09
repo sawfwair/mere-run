@@ -122,6 +122,7 @@ export default defineConfig({
           { text: 'Image runtime', link: '/runtime/image' },
           { text: 'Text runtime', link: '/runtime/text' },
           { text: 'EmbeddingGemma 2', link: '/runtime/embeddinggemma2' },
+          { text: 'PPLX Embed v2', link: '/runtime/pplx-embed-v2' },
           { text: 'Native Kolibri-1', link: '/runtime/kolibri' },
           { text: 'GLiNER2.5 classification', link: '/runtime/gliner25-decide' },
           { text: 'Laya decisions', link: '/runtime/laya' },

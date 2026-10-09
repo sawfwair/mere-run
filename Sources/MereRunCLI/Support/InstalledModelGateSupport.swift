@@ -400,6 +400,10 @@ enum InstalledModelSmokePlans {
                 try await runner.installedDiarizationCheck(model: spec.id)
             }
 
+        case .pplxEmbedV2:
+            return direct(spec, route: "text embed PPLX multi-vector") { runner in
+                try await runner.installedPPLXEmbeddingCheck(model: spec.id)
+            }
         case .qwen3Embedding, .embeddingGemma2:
             return direct(spec, route: "text embed") { runner in
                 try await runner.installedEmbeddingCheck(model: spec.id)
@@ -1029,6 +1033,25 @@ extension GateRunner {
             decodeTps: nil,
             semanticFailure: nil
         )
+    }
+
+    func installedPPLXEmbeddingCheck(model: String) async throws -> GateObservation {
+        let output = artifactURL(model, extension: "json")
+        let run = try await exec(["text", "embed", "release smoke", "--model", model,
+                                  "--task", "query", "--max-tokens", "64", "--output", output.path], timeout: 900)
+        let hash = try Self.pplxEmbeddingVectorHash(Data(contentsOf: output))
+        return GateObservation(hash: hash, secondRunHash: nil, wallSeconds: run.wallSeconds,
+                               decodeTps: nil, semanticFailure: nil)
+    }
+
+    static func pplxEmbeddingVectorHash(_ data: Data) throws -> String {
+        let decoded = try JSONDecoder().decode(PPLXEmbedV2Result.self, from: data)
+        guard !decoded.data.isEmpty, decoded.data.allSatisfy({ row in
+            !row.embeddings.isEmpty && row.embeddings.allSatisfy { vector in
+                vector.count == decoded.dimensions && vector.allSatisfy(\.isFinite)
+            }
+        }) else { throw PPLXEmbedV2Error.invalidInput("PPLX smoke returned empty, nonfinite, or mismatched vectors.") }
+        return sha256(try JSONEncoder().encode(decoded.data.map(\.embeddings)))
     }
 
     func installedMultimodalEmbeddingCheck(model: String) async throws -> GateObservation {

@@ -1746,6 +1746,14 @@ extension MereRunModelManifest {
                 upstreamRepoId: Qwen3EmbeddingCatalog.defaultRepoId,
                 createdAt: createdAt
             )
+        case .pplxEmbedV2LateSmall, .pplxEmbedV2LateLarge, .pplxEmbedV2Context, .pplxEmbedV2LateLargeMixed4Bit, .pplxEmbedV2Context8Bit:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .pplxEmbedV2, family: .embed,
+                tier: .latest, variant: .standard,
+                precision: modelID == .pplxEmbedV2LateLargeMixed4Bit ? .int4 : modelID == .pplxEmbedV2Context8Bit ? .int8 : .fp32,
+                defaults: nil, supports: PPLXEmbedV2Catalog.isContextual(modelID.rawValue) ? [.textEmbedding] : [.textEmbedding, .multimodalEmbedding],
+                components: genericTextComponents, upstreamRepoId: PPLXEmbedV2Catalog.repository(modelID.rawValue), createdAt: createdAt
+            )
         case .embeddingGemma2:
             return MereRunModelManifest(
                 id: modelID.rawValue, engine: .embeddingGemma2, family: .embed,
