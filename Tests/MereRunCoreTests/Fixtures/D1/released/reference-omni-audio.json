@@ -1,0 +1,43 @@
+{
+  "family": "omni",
+  "media": "audio",
+  "dtype": "torch.float32",
+  "device": "cpu",
+  "torch": "2.14.1",
+  "transformers": "5.19.0",
+  "answers": {
+    "arrived": {
+      "type": "noul",
+      "noul": 0.3083193600177765
+    },
+    "route": {
+      "type": "choice",
+      "choice": "book",
+      "confidence": 0.4722292721271515,
+      "probabilities": {
+        "glass": 0.2503245174884796,
+        "book": 0.4722292721271515,
+        "shirt": 0.2774462401866913
+      }
+    },
+    "quality": {
+      "type": "score",
+      "score": 0.010024381801486015,
+      "confidence": 0.9926369190216064,
+      "probabilities": {
+        "0": 0.9926369190216064,
+        "1": 0.004701690748333931,
+        "2": 0.002661345526576042
+      },
+      "legend": {
+        "0": "broken",
+        "1": "intact",
+        "2": "perfect"
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 233,
+    "output_tokens": 0
+  }
+}

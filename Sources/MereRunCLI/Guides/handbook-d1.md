@@ -3,7 +3,8 @@
 `text-decide-d1-3b-bf16` and `text-decide-d1-omni-600m-fp32` evaluate named
 choice, score, and yes/no questions with native Swift/MLX computation. Both
 accept text, JSON, and local images. Omni also accepts one local audio clip.
-They score typed answers without generating text tokens.
+They score typed answers without generating text tokens. Original LiquidAI
+safetensors load directly; no checkpoint conversion or Python setup is required.
 
 ## Example to adapt
 
@@ -71,6 +72,11 @@ vision projection, audio features, and FastConformer output. Original tokenizer
 comparisons and exact bilinear/bicubic pixel fixtures pass. Synthetic checkpoint
 loading exercises text and images for both models and audio for omni.
 
-Full released-checkpoint execution and BF16 numerical parity remain unqualified.
-The upstream tree packing optimization is not implemented; fixture results do
-not establish model accuracy or latency. See docs/runtime/d1.md for details.
+Released-checkpoint CLI tests pass for text/images on BF16 D1-3B and
+text/images/audio on FP32 omni. Across 15 decisions, probabilities agree with
+the original reference within 0.00128 for D1-3B and 0.0000089 for omni, with
+matching selected options and token counts. These cases do not establish
+benchmark accuracy, all-input numerical equivalence, or latency. Omni gives
+the same two incorrect speech answers in the reference and native runtime.
+The upstream tree packing optimization is not implemented. See docs/runtime/d1.md
+and docs/benchmarks/d1-native-qualification-2026-10-09.md for details.
