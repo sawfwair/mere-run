@@ -3,6 +3,9 @@
 clef	console.textDecide	emitted	--input --model --output --preflight --pretty
 clef	console.textDecide	shown	--input --model --output --preflight --pretty
 clef	console.textDecide	validated	--input --model --output --preflight --pretty
+d1	console.textDecide	emitted	--input --model --output --preflight --pretty
+d1	console.textDecide	shown	--input --model --output --preflight --pretty
+d1	console.textDecide	validated	--input --model --output --preflight --pretty
 laya	console.textDecide	emitted	--input --model --output --preflight --pretty
 laya	console.textDecide	shown	--input --model --output --preflight --pretty
 laya	console.textDecide	validated	--input --model --output --preflight --pretty

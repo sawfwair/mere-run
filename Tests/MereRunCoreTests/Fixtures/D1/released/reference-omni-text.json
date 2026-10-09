@@ -1,0 +1,42 @@
+{
+  "family": "omni",
+  "media": "text",
+  "dtype": "torch.float32",
+  "device": "cpu",
+  "torch": "2.14.1",
+  "transformers": "5.19.0",
+  "answers": {
+    "arrived": {
+      "type": "noul",
+      "noul": 0.9024274349212646
+    },
+    "route": {
+      "type": "choice",
+      "choice": "damage",
+      "confidence": 0.8893686532974243,
+      "probabilities": {
+        "shipping": 0.11063133925199509,
+        "damage": 0.8893686532974243
+      }
+    },
+    "quality": {
+      "type": "score",
+      "score": 0.1354474350810051,
+      "confidence": 0.8968825340270996,
+      "probabilities": {
+        "0": 0.8968825340270996,
+        "1": 0.07078748196363449,
+        "2": 0.0323299765586853
+      },
+      "legend": {
+        "0": "broken",
+        "1": "intact",
+        "2": "perfect"
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 131,
+    "output_tokens": 0
+  }
+}

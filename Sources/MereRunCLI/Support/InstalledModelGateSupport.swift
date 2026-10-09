@@ -190,6 +190,10 @@ enum InstalledModelSmokePlans {
         installedIDs: Set<String>
     ) -> InstalledModelSmokePlan? {
         switch spec.validationKind {
+        case .d1:
+            return direct(spec, route: "text decide") { runner in
+                try await runner.installedD1Check(model: spec.id)
+            }
         case .clef:
             return direct(spec, route: "text decide") { runner in
                 try await runner.installedClefCheck(model: spec.id)
@@ -1053,6 +1057,14 @@ extension GateRunner {
             decodeTps: nil,
             semanticFailure: nil
         )
+    }
+
+    func installedD1Check(model: String) async throws -> GateObservation {
+        let input = workDirectory.appending(path: "d1-request.json")
+        let payload = #"{"state":"The parcel arrived on time.","questions":{"delivered":{"type":"noul","instructions":"Did the parcel arrive?"}}}"#
+        try Data(payload.utf8).write(to: input, options: .atomic)
+        let run = try await exec(["text", "decide", "--model", model, "--input", input.path], timeout: 900)
+        return jsonStdoutObservation(run, label: "D1 decision JSON")
     }
 
     func installedClefCheck(model: String) async throws -> GateObservation {

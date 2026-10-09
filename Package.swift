@@ -180,6 +180,7 @@ mereRunCoreDependencies.append("MereRunContract")
 mereRunCoreDependencies.append("MereRunTensor")
 mereRunCoreDependencies.append("MereRunTextEncoder")
 mereRunCoreDependencies.append("MereRunLayaModel")
+mereRunCoreDependencies.append("MereRunD1Model")
 mereRunCoreDependencies.append("MereRunGLiNERModel")
 mereRunCoreDependencies.append("MereRunImageModels")
 mereRunCoreDependencies.append("MereRunKVCache")
@@ -319,6 +320,7 @@ var mereRunCoreTestDependencies: [Target.Dependency] = [
   "MereRunTensor",
   "MereRunTextEncoder",
   "MereRunLayaModel",
+  "MereRunD1Model",
   "MereRunGLiNERModel",
   "MereRunImageModels",
   "MereRunCore",
@@ -490,6 +492,16 @@ targets.append(
     dependencies: [.target(name: "MereRunModelKit")]
       + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
     path: "Sources/MereRunTensor",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "MereRunD1Model",
+    dependencies: mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/MereRunD1Model",
     exclude: ["README.md"],
     swiftSettings: commonSwiftSettings
   )
@@ -724,6 +736,7 @@ targets.append(
       "PrivacyFilter/README.md",
       "Laya/README.md",
       "Clef/README.md",
+      "D1/README.md",
       "RoFormer/README.md",
       "UniverSR/README.md",
       "Pose/README.md",

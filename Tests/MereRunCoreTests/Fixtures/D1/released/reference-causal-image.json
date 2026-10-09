@@ -1,0 +1,43 @@
+{
+  "family": "causal",
+  "media": "image",
+  "dtype": "torch.bfloat16",
+  "device": "cpu",
+  "torch": "2.14.1",
+  "transformers": "5.19.0",
+  "answers": {
+    "arrived": {
+      "type": "noul",
+      "noul": 0.9820137900379085
+    },
+    "route": {
+      "type": "choice",
+      "choice": "red",
+      "confidence": 0.9899254242914516,
+      "probabilities": {
+        "red": 0.9899254242914516,
+        "blue": 0.005194651877786831,
+        "green": 0.0048799238307615
+      }
+    },
+    "quality": {
+      "type": "score",
+      "score": 1.9912585568990426,
+      "confidence": 0.993721746842028,
+      "probabilities": {
+        "0": 0.002463189942985373,
+        "1": 0.0038150632149866284,
+        "2": 0.993721746842028
+      },
+      "legend": {
+        "0": "none",
+        "1": "some",
+        "2": "all"
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 293,
+    "output_tokens": 0
+  }
+}

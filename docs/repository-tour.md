@@ -333,3 +333,8 @@ calibrated results. See [Laya decisions](./runtime/laya.md).
 count, and span heads. `Sources/MereRunCore/GLiNER` owns schema formatting,
 chunking, and result decoding. See
 [Classify and extract text with GLiNER2.5 Decide](./runtime/gliner25-decide.md).
+
+`Sources/MereRunD1Model` owns LiquidAI D1 causal and bidirectional trunks,
+SigLIP2 NaFlex vision, learned option heads, and FastConformer audio computation.
+`Sources/MereRunCore/D1` owns pinned checkpoint loading, ordered prompts, local
+media, preflight, and decision responses. See [Native D1 decisions](./runtime/d1.md).

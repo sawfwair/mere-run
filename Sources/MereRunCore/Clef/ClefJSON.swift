@@ -1,3 +1,4 @@
+#if !os(iOS)
 import Foundation
 import MereRunQwenModel
 
@@ -140,3 +141,4 @@ public indirect enum ClefJSON: Sendable, Encodable {
         }
     }
 }
+#endif

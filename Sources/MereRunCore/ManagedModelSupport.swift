@@ -845,6 +845,10 @@ public enum ManagedModelCapabilityCatalog {
                 minimum: 16,
                 recommended: 24
             ),
+            descriptor(D1Catalog.modelID, "D1-3B decisions",
+                       "Native LFM2 choice, score, and yes/no decisions from text, JSON, and images.", minimum: 12, recommended: 16),
+            descriptor(D1Catalog.omniModelID, "D1 omni decisions",
+                       "Native bidirectional decisions from text, JSON, images, or audio.", minimum: 8, recommended: 16),
             descriptor(LayaCatalog.modelID, "Laya English decisions",
                        "Native ModernBERT choice, score, and boolean decisions; English checkpoint.", minimum: 8, recommended: 16),
             descriptor(GLiNERCatalog.modelID, "GLiNER2.5 Decide classification and extraction",

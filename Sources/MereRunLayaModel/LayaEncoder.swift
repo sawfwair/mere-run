@@ -1,3 +1,4 @@
+#if !os(iOS)
 import MLX
 import MLXNN
 
@@ -80,3 +81,4 @@ struct LayaDecisionLayer {
         return hidden + linear2(relu(linear1(norm2(hidden))))
     }
 }
+#endif

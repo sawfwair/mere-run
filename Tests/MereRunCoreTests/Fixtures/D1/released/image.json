@@ -1,0 +1,30 @@
+{
+  "state": null,
+  "images": [
+    "red.png"
+  ],
+  "questions": {
+    "arrived": {
+      "type": "noul",
+      "instructions": "Is the image mostly red?"
+    },
+    "route": {
+      "type": "choice",
+      "instructions": "What is the dominant color in this image?",
+      "criteria": {
+        "red": "Red",
+        "blue": "Blue",
+        "green": "Green"
+      }
+    },
+    "quality": {
+      "type": "score",
+      "instructions": "How much of this image is red?",
+      "criteria": [
+        "none",
+        "some",
+        "all"
+      ]
+    }
+  }
+}
