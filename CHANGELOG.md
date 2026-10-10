@@ -6,15 +6,23 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.64.0 - 2026-10-10
+
+- Use portable MLX operations for packed Whistle inference on Linux, avoiding a
+  call to the Metal-only custom-kernel API. Apple platforms retain packed Metal
+  kernels; Linux expands projection rows and selected embedding rows on demand.
+  Linux Whistle requires `MLX_USE_CUDA_GRAPHS=0` to avoid the pinned backend's
+  graph-cache limit during beam decoding.
+
 - Add native Whistle transcription with packed CQ2/CQ4 weights, cached beam search,
   keyword biasing, decoder-depth selection, estimated word timestamps, and resident
   file/PCM/microphone streaming. `speech-asr-whistle` pins the compact upstream archive;
   `--whistle-weights fp32` supports a local original-checkpoint baseline. Automatic
   routing keeps Parakeet as the default. Native numerical and live-session tests cover
-  the new paths; upstream A8 numerics, accuracy, memory, and latency are not claimed.
+  the new paths (#583); upstream A8 numerics, accuracy, memory, and latency are not claimed.
 
 - Keep FastH3 model pulls and installed-model discovery free of MLX tensor
-  evaluation, avoiding a fatal runtime error during artifact validation (#576).
+  evaluation, avoiding a fatal runtime error during artifact validation (#582).
   Preserve pinned cache checksums, source identity, and tensor geometry checks.
 
 ## 0.63.0 - 2026-10-09

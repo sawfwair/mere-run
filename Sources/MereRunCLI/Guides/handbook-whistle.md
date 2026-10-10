@@ -2,13 +2,20 @@
 
 `speech-asr-whistle` runs the original Whistle checkpoint directly in Swift/MLX.
 The managed download pins Cactus-Compute/whistle revision
-`ca5287601bef25af26dcf2e1b2bdc0843a7c19e5` and totals about 238 MB.
+`ca5287601bef25af26dcf2e1b2bdc0843a7c19e5` and totals about 17 MB.
 
 ## Example to adapt
 
 ```bash
 mere.run model pull speech-asr-whistle
 mere.run speech transcribe ./recording.wav --model speech-asr-whistle
+```
+
+On Linux, use eager CUDA execution to avoid the pinned MLX backend's graph-cache
+limit during beam decoding. Set this before initializing MLX in an embedded process too:
+
+```bash
+MLX_USE_CUDA_GRAPHS=0 mere.run speech transcribe ./recording.wav --model speech-asr-whistle
 ```
 
 ## Controls and variants
@@ -32,7 +39,7 @@ mere.run speech transcribe ./recording.wav --model speech-asr-whistle
 
 The native encoder and cached decoder are checked against independent FP32 and
 independently dequantized CQ graph outputs. Metal kernels have asset-free numerical
-fixtures. Word timestamps are cross-attention estimates on an 80 ms grid. The
+fixtures, including the portable Linux projection and sparse-row operations. Word timestamps are cross-attention estimates on an 80 ms grid. The
 packed path retains FP32 activation and KV arithmetic, so the C++ engine's A8
 numerics, accuracy, noise rejection, total memory, and latency claims do not apply.
 Multilingual accuracy, long-form recognition, and microphone capture require broader

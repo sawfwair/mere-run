@@ -29,3 +29,6 @@ NumPy dequantization and graph outputs. Packed matmuls rotate activations into t
 embedding lookups expand only selected rows. FP32 activation/KV arithmetic is
 retained. The managed manifest labels the mixed archive `int4` for its widest CQ
 weight width; most matrix weights are CQ2.
+
+Linux uses portable MLX operations for CQ projection and selected-row lookup.
+The Metal kernels remain the Apple path; neither path expands the full Engram table.

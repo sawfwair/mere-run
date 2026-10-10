@@ -17,7 +17,9 @@ and downloads about 17 MB. A local model directory needs `config.json` and
 `whistle.cact`. The archive supplies CQ2/CQ4 neural weights, FP16 scales and
 small tensors, the exact tokenizer, and the audio filterbank. Native Metal
 matrix operations read packed indices directly; Engram tables expand only the
-requested rows. The runtime does not execute an upstream binary or use ONNX.
+requested rows. On Linux, portable MLX operations expand projection or requested
+embedding rows on the CUDA device; they do not expand the full Engram table.
+The runtime does not execute an upstream binary or use ONNX.
 
 For the original FP32 reference path, also place
 `checkpoints/whistle.safetensors` in that directory and select it explicitly:
@@ -26,6 +28,21 @@ For the original FP32 reference path, also place
 mere.run speech transcribe recording.wav --backend whistle --model /path/to/whistle \
   --whistle-weights fp32 --beam-size 1 --no-timestamps
 ```
+
+## Linux CUDA configuration
+
+Packed Whistle uses portable MLX operations on Linux. Run it with CUDA graph
+capture disabled because the pinned MLX backend's graph cache can exhaust its
+entry limit during beam decoding:
+
+```bash
+MLX_USE_CUDA_GRAPHS=0 mere.run speech transcribe recording.wav --backend whistle
+MLX_USE_CUDA_GRAPHS=0 mere.run speech listen --model speech-asr-whistle --jsonl
+```
+
+Set the same environment variable before initializing MLX when embedding the
+runtime in another process. This is eager CUDA execution; it retains GPU tensor
+operations. Linux performance and long-session behavior need broader qualification.
 
 ## Decoding controls
 

@@ -50,7 +50,8 @@ mere.run speech transcribe --help
 - Start with `--backend auto`.
 - Use `--backend parakeet` for normal transcription where speed matters.
 - Whistle is selected explicitly by backend or model ID. It rejects translation,
-  unsupported language hints and Core ML; see `guide --model speech-asr-whistle`.
+  unsupported language hints and Core ML. On Linux, set `MLX_USE_CUDA_GRAPHS=0`
+  before starting the process; see `guide --model speech-asr-whistle`.
 - Use `--provider coreml` with a verified Mere-built hybrid artifact. It uses
   Core ML for the encoder and TDT decoder, so the full managed MLX checkpoint
   is not required. Non-streaming files are processed in 15-second windows with
