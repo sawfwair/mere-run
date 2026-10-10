@@ -469,23 +469,24 @@ public struct MiniMaxH3Resources: Sendable {
                 byteCount: Self.fastH3PremergedGateByteCount,
                 sha256: Self.fastH3PremergedGateSHA256
             ).verify(in: rootURL, fileManager: fileManager)
-            _ = try ModelArtifactPin(
+            let cachePin = ModelArtifactPin(
                 filename: MiniMaxH3TurboAdapter.fastH3AdaLNCacheFilename,
                 byteCount: Self.fastH3AdaLNCacheByteCount,
                 sha256: Self.fastH3AdaLNCacheSHA256
-            ).verify(in: rootURL, fileManager: fileManager)
+            )
             let recipe = MiniMaxH3TurboAdapter.fastH3VSADataFreeRecipe
             guard let baseSigmas = recipe.baseDenoisingSigmas,
-                  let videoShift = recipe.videoFlowShift,
-                  let audioShift = recipe.audioFlowShift else {
+                  recipe.videoFlowShift != nil,
+                  recipe.audioFlowShift != nil else {
                 return ["FastH3 recipe is missing its pinned sampler schedule."]
             }
-            _ = try MiniMaxH3AdaLNCache.load(
-                from: fastH3AdaLNCacheURL,
+            try MiniMaxH3AdaLNCache.validatePinnedArtifact(
+                in: rootURL,
+                pin: cachePin,
                 configuration: MiniMaxH3TransformerConfiguration(try loadConfiguration()),
-                videoSchedule: MiniMaxH3Schedule(baseSigmas: baseSigmas, shift: videoShift),
-                audioSchedule: MiniMaxH3Schedule(baseSigmas: baseSigmas, shift: audioShift),
-                sourceIdentity: MiniMaxH3TurboAdapter.fastH3SourceIdentity
+                pointCount: baseSigmas.count,
+                sourceIdentity: MiniMaxH3TurboAdapter.fastH3SourceIdentity,
+                fileManager: fileManager
             )
         } catch {
             issues.append("Invalid pinned FastH3 artifact: \(error.localizedDescription)")

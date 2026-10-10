@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Keep FastH3 model pulls and installed-model discovery free of MLX tensor
+  evaluation, avoiding a fatal runtime error during artifact validation (#576).
+  Preserve pinned cache checksums, source identity, and tensor geometry checks.
+
 ## 0.63.0 - 2026-10-09
 
 - Add native Clef Omni BF16 structured decisions with the Qwen3-Omni MoE
