@@ -29,6 +29,21 @@ mere.run speech transcribe recording.wav --backend whistle --model /path/to/whis
   --whistle-weights fp32 --beam-size 1 --no-timestamps
 ```
 
+## Linux CUDA configuration
+
+Packed Whistle uses portable MLX operations on Linux. Run it with CUDA graph
+capture disabled because the pinned MLX backend's graph cache can exhaust its
+entry limit during beam decoding:
+
+```bash
+MLX_USE_CUDA_GRAPHS=0 mere.run speech transcribe recording.wav --backend whistle
+MLX_USE_CUDA_GRAPHS=0 mere.run speech listen --model speech-asr-whistle --jsonl
+```
+
+Set the same environment variable before initializing MLX when embedding the
+runtime in another process. This is eager CUDA execution; it retains GPU tensor
+operations. Linux performance and long-session behavior need broader qualification.
+
 ## Decoding controls
 
 - English, German, French, Spanish, Italian, Dutch, and Polish transcription,

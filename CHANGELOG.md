@@ -11,6 +11,8 @@ The format is based on Keep a Changelog.
 - Use portable MLX operations for packed Whistle inference on Linux, avoiding a
   call to the Metal-only custom-kernel API. Apple platforms retain packed Metal
   kernels; Linux expands projection rows and selected embedding rows on demand.
+  Linux Whistle requires `MLX_USE_CUDA_GRAPHS=0` to avoid the pinned backend's
+  graph-cache limit during beam decoding.
 
 - Add native Whistle transcription with packed CQ2/CQ4 weights, cached beam search,
   keyword biasing, decoder-depth selection, estimated word timestamps, and resident
