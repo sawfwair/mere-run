@@ -108,7 +108,7 @@ public final class Qwen3ASRAudioTower: Module {
     /// Forward pass
     /// - Parameter melSpec: Mel spectrogram [B, nMels, T] (e.g., [1, 128, T])
     /// - Returns: Encoded features [B, T, outputDim] (e.g., [1, T, 1024])
-    public func callAsFunction(_ melSpec: MLXArray) -> MLXArray {
+    public func callAsFunction(_ melSpec: MLXArray, checkpointPositionArithmetic: Bool = false) -> MLXArray {
         // Input: [B, nMels=128, T]
         let batch = melSpec.dim(0)
         let melBins = melSpec.dim(1)
@@ -181,7 +181,8 @@ public final class Qwen3ASRAudioTower: Module {
         x = convOut(x)  // [B, T, 896]
 
         // Add sinusoidal positional embeddings
-        let posEmb = positionalEmbedding(T)
+        let rawPositions = positionalEmbedding(T)
+        let posEmb = checkpointPositionArithmetic ? rawPositions.asType(x.dtype) : rawPositions
         x = x + posEmb.reshaped(1, T, posEmb.dim(1))
 
         // Trim padding per chunk

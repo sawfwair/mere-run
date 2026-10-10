@@ -14,13 +14,13 @@ public struct ClefQuestion: Sendable {
         public let description: ClefJSON
     }
 
-    init(id: String, value: ClefJSON) throws {
+    init(id: String, value: ClefJSON, omni: Bool = false) throws {
         guard value.fields != nil, let rawType = value["type"]?.string, let type = Kind(rawValue: rawType) else {
             throw ClefError.invalidInput("\(id): type must be noul, choice, or score.")
         }
         self.id = id
         self.type = type
-        if let instructions = value["instructions"], instructions.isTruthy { self.instructions = instructions }
+        if let instructions = value["instructions"], omni ? instructions.isOmniInstruction : instructions.isTruthy { self.instructions = instructions }
         else { self.instructions = .string(id) }
         let criteria = value["criteria"]
         switch type {
@@ -51,23 +51,27 @@ public struct ClefQuestion: Sendable {
 public struct ClefDecisionRequest: Sendable {
     public let state: ClefJSON
     public let questions: [ClefQuestion]
+    public let audio: [String]
+    public let videoFiles: [String]
+    public let isOmni: Bool
     public let images: [String]
     /// Each video is an ordered array of local frame paths, matching the reference's frame-array input.
     public let videos: [[String]]
     public let maxTokens: Int
     public let maxStateTokens: Int?
 
-    public static func decode(_ data: Data) throws -> ClefDecisionRequest {
+    public static func decode(_ data: Data, omni: Bool = false) throws -> ClefDecisionRequest {
         guard data.count <= 2 * 1_024 * 1_024 else { throw ClefError.invalidInput("The Clef request must not exceed 2 MiB.") }
-        return try ClefDecisionRequest(json: ClefJSON.parse(data))
+        return try ClefDecisionRequest(json: ClefJSON.parse(data), omni: omni)
     }
 
-    init(json: ClefJSON) throws {
+    init(json: ClefJSON, omni: Bool = false) throws {
+        isOmni = omni
         guard let state = json["state"], let fields = json["questions"]?.fields, !fields.isEmpty, fields.count <= 128 else {
             throw ClefError.invalidInput("Clef requires state and a questions object with 1–128 fields.")
         }
         self.state = state
-        questions = try fields.map { try ClefQuestion(id: $0.key, value: $0.value) }
+        questions = try fields.map { try ClefQuestion(id: $0.key, value: $0.value, omni: omni) }
         func paths(_ value: ClefJSON?) throws -> [String] {
             guard let value else { return [] }
             guard let entries = value.array else { throw ClefError.invalidInput("Clef media must be arrays of local paths.") }
@@ -77,13 +81,23 @@ public struct ClefDecisionRequest: Sendable {
             }
         }
         images = try paths(json["images"])
+        audio = try paths(json["audio"])
+        guard omni || audio.isEmpty else { throw ClefError.invalidInput("Audio requires Clef Omni.") }
         if let value = json["videos"] {
             guard let entries = value.array else { throw ClefError.invalidInput("Clef videos must be arrays of frame-path arrays.") }
-            videos = try entries.map { try paths($0) }
-        } else { videos = [] }
-        guard images.isEmpty || videos.isEmpty, images.count <= 16, videos.count <= 4,
+            if omni, entries.allSatisfy({ $0.string != nil }) {
+                videoFiles = try paths(value)
+                videos = []
+            } else {
+                videos = try entries.map { try paths($0) }
+                videoFiles = []
+            }
+        } else { videos = []; videoFiles = [] }
+        guard omni || images.isEmpty || videos.isEmpty, images.count <= 16, audio.count <= 16, videos.count + videoFiles.count <= 4,
               videos.allSatisfy({ !$0.isEmpty && $0.count <= 768 }) else {
-            throw ClefError.invalidInput("Use up to 16 images or 4 videos with 1–768 frames each; mixed images and videos are unsupported.")
+            throw ClefError.invalidInput(omni
+                ? "Use up to 16 images, 16 audio clips, and 4 videos with 1–768 frames each."
+                : "Use up to 16 images or 4 videos with 1–768 frames each; mixed images and videos are unsupported.")
         }
         guard json["media_kwargs"] == nil else {
             throw ClefError.invalidInput("Clef uses checkpoint processor settings; media_kwargs overrides are unsupported.")
@@ -95,10 +109,11 @@ public struct ClefDecisionRequest: Sendable {
             }
             return number
         }
-        maxTokens = try integer("max_tokens") ?? 16_384
+        let contextLimit = omni ? 64_000 : 16_384
+        maxTokens = try integer("max_tokens") ?? contextLimit
         maxStateTokens = try integer("max_state_tokens")
-        guard (1...16_384).contains(maxTokens), maxStateTokens.map({ $0 >= 0 }) ?? true else {
-            throw ClefError.invalidInput("Clef max_tokens must be 1–16384; max_state_tokens must be nonnegative.")
+        guard (1...contextLimit).contains(maxTokens), maxStateTokens.map({ $0 >= 0 }) ?? true else {
+            throw ClefError.invalidInput("Clef max_tokens must be 1–\(contextLimit); max_state_tokens must be nonnegative.")
         }
     }
 }
@@ -163,6 +178,16 @@ public struct ClefDecisionResponse: Encodable, Sendable {
             }
         }
         return answer
+    }
+}
+
+private extension ClefJSON {
+    var isOmniInstruction: Bool {
+        switch self {
+        case .null: false
+        case .string(let text): !text.isEmpty
+        default: true
+        }
     }
 }
 #endif

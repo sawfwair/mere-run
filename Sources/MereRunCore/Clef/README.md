@@ -53,5 +53,42 @@ Flash full-checkpoint parity is covered by the opt-in
 `native-runtime.json` in the parity directory; it does not exercise CLI admission.
 See `docs/benchmarks/clef-flash-native-qualification-2026-10-02.md` for results.
 
+## Omni thinker
+
+`ClefDecisionOperation` dispatches dense Clef/Flash to `ClefDenseDecisionOperation`
+and Qwen3-Omni to `ClefOmniDecisionOperation` using the typed checkpoint identity.
+Omni's MoE text computation and vision/deepstack layers belong to
+`MereRunQwenModel`; its audio encoder belongs to `AudioQwen3ASRModel`. Core owns
+strict shard mapping, request encoding, local media preparation, and orchestration.
+Core now depends directly on `AudioQwen3ASRModel` because Omni needs its shared
+Qwen audio tower without depending on speech-transcription orchestration.
+The dependency closure also adds that model target to AudioTTS and its tests
+through their existing Core edge; their direct dependencies remain unchanged.
+Only thinker components are instantiated. Output-embedding rows are untied.
+
+Omni permits mixed images, audio, and videos with a 64,000-token context. File
+videos use the first decoded frame at or after each 2-fps timestamp, with a
+262,144-pixel raster cap before processor resizing; frame arrays are already
+sampled at 2 fps. File videos carry sound only when every video has a track.
+Whisper features pad clips together before the centered STFT; feature masks
+retain partial hops for shorter clips. Audio/video tokens interleave by time.
+Local file decoding and raster scaling remain backend-dependent and require
+full-checkpoint media qualification.
+
+`Fixtures/ClefOmni` contains tiny untrained independent FP32 thinker, vision,
+audio, joint-head, and Whisper preprocessing fixtures exported by
+`scripts/fixtures/export-clef-omni-reference.py` with Transformers 5.10.2.
+These checks establish component comparisons, not qualification of the original
+BF16 checkpoint or general model quality. Eight short Q4 checkpoint probes now
+pass on a 36 GB Mac; see `docs/benchmarks/clef-omni-q4-qualification-2026-10-09.md`
+for measured allocation, probability differences, and qualification limits.
+
+The optional Omni `quantization` descriptor permits only affine Q4/group-64
+routed experts. The loader stacks packed weights, scales, and biases by expert
+index, while ordinary thinker parameters remain BF16. A disk-loading regression
+compares the packed thinker against its reconstructed dense counterpart.
+The streaming converter omits speech-output tensors and preserves source/output
+hashes; local memory and decision-quality qualification are separate steps.
+
 Inference is built for macOS and Linux. iOS retains the typed configuration and
 managed-model catalog metadata without linking the decision execution path.

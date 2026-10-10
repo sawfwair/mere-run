@@ -81,3 +81,51 @@ differences within 0.0011. Normal Flash CLI inference was refused by available
 memory admission on the test machine. See
 docs/benchmarks/clef-flash-native-qualification-2026-10-02.md for the runtime
 results and the remaining CLI validation gap.
+
+
+## Clef Omni
+
+`text-decide-clef-omni` runs the native Qwen3-Omni 30B-A3B MoE thinker and
+shared Clef joint head. It pins [`Cloudflare/clef-omni`](https://huggingface.co/Cloudflare/clef-omni/tree/0db1cd2607d76a7bdb2a382f659e7b313079f84b)
+at `0db1cd2607d76a7bdb2a382f659e7b313079f84b`. This is the original BF16
+checkpoint: about 70.5 GB of sharded weights, including unused upstream speech
+output weights. The native runtime loads only thinker components and the joint
+head. Discovery recommends at least 96 GB unified memory, preferably 128 GB.
+There is no Python inference subprocess and no free-form generation.
+
+```sh
+mere.run model pull text-decide-clef-omni
+mere.run text decide --model text-decide-clef-omni --input request.json --preflight --pretty
+mere.run text decide --model text-decide-clef-omni --input request.json --pretty
+```
+
+Omni uses the same `state` and `questions` object. It accepts mixed local
+`images`, `audio`, and `videos`. Audio is decoded to mono 16 kHz and Whisper
+128-bin log-mel features. `videos` may contain local video paths or arrays of
+frames already sampled at 2 fps. File videos hear their soundtracks only when
+all videos have an audio track, matching the reference's policy. Video and
+audio tokens interleave by timestamp; spatial/temporal positions and all
+vision deep-stack features are preserved. Remote URLs, data URLs, and
+`media_kwargs` overrides are rejected. Limits are 16 images, 16 audio clips,
+four videos with at most 768 sampled frames each, and 384 seconds per audio
+clip or heard soundtrack. Oversized inputs fail explicitly. Omni defaults to
+64,000 context tokens; `max_state_tokens` truncates only the state.
+
+```json
+{
+  "state": {"task": "Review the call and dashcam clip"},
+  "audio": ["call.wav"],
+  "videos": ["dashcam.mp4"],
+  "questions": {
+    "collision": {"type": "noul", "instructions": "Does the video show a collision?"},
+    "glass": {"type": "noul", "instructions": "Is glass breaking audible?"}
+  }
+}
+```
+
+Tiny independently exported PyTorch fixtures cover causal MoE states,
+interleaved positions, deep-stack injection, vision, chunked audio, and the
+joint head's untied output-embedding prior. These are component tests with
+untrained weights. Full 30B checkpoint probabilities and cross-platform GPU
+qualification remain unverified; do not treat component agreement as a
+published checkpoint qualification.

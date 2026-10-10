@@ -13,6 +13,7 @@ struct ClefTokenSequence {
 struct ClefTokenizer {
     static let systemPrompt = "Read the complete state and schema. Decide every field jointly. Each answer "
         + "must be exactly one of that field's allowed options."
+    static let prefixText = "<|im_start|>system\n\(systemPrompt)<|im_end|>\n<|im_start|>user\nSTATE:\n"
     let encode: (String) -> [Int]
 
     static func load(root: URL) throws -> ClefTokenizer {
@@ -29,7 +30,7 @@ struct ClefTokenizer {
         return ClefTokenizer(encode: { tokenizer.encode(text: $0, addSpecialTokens: false) })
     }
 
-    func sequence(_ request: ClefDecisionRequest, modelID: String, mediaText: String = "") throws -> ClefTokenSequence {
+    func sequence(_ request: ClefDecisionRequest, modelID: String, mediaText: String = "", mediaIDs: [Int]? = nil) throws -> ClefTokenSequence {
         var schema = encode("\n\nSCHEMA FIELDS:\n")
         var spans: [ClefHeadField] = []
         for (index, question) in request.questions.enumerated() {
@@ -55,8 +56,8 @@ struct ClefTokenizer {
             let type = question.type == .noul ? 0 : question.type == .choice ? 1 : 2
             spans.append(ClefHeadField(type: type, questionSpan: questionSpan, optionSpans: optionSpans))
         }
-        let prefix = encode("<|im_start|>system\n\(Self.systemPrompt)<|im_end|>\n<|im_start|>user\nSTATE:\n")
-            + encode(mediaText)
+        let prefix = encode(Self.prefixText)
+            + (mediaIDs ?? encode(mediaText))
         let suffix = encode("\n<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\nJOINT SCHEMA DECISIONS:")
         let state = encode(try request.state.rendered())
         let fixed = prefix.count + schema.count + suffix.count

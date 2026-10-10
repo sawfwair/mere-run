@@ -724,13 +724,15 @@ enum FFmpegMediaIO {
         }
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         let pattern = directoryURL.appendingPathComponent("frame_%05d.png")
-        let expression = indices.map { "eq(n\\,\($0))" }.joined(separator: "+")
+        let expression = strategy == .timestampFirstAtOrAfter
+            ? "gte(t+0.000001\\,selected_n/\(framesPerSecond))"
+            : indices.map { "eq(n\\,\($0))" }.joined(separator: "+")
         _ = try FFmpegProcess.run(
             tool: MediaTool.ffmpegPath,
             arguments: [
                 "-v", "error", "-y", "-i", videoURL.path,
                 "-map", "0:v:0", "-vf", "select=\(expression)",
-                "-fps_mode", "vfr", "-frames:v", "\(indices.count)", pattern.path,
+                "-fps_mode", "vfr", "-frames:v", "\(strategy == .timestampFirstAtOrAfter ? maximumFrames : indices.count)", pattern.path,
             ]
         )
         let frameURLs = (try FileManager.default.contentsOfDirectory(
@@ -746,7 +748,7 @@ enum FFmpegMediaIO {
             fps: sourceFPS,
             frameWidth: size.width,
             frameHeight: size.height,
-            sourceFrameIndices: indices
+            sourceFrameIndices: strategy == .timestampFirstAtOrAfter ? nil : indices
         )
     }
 

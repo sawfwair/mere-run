@@ -4,6 +4,8 @@ public enum MediaVideoSamplingStrategy: Sendable {
     case fullTimeline
     /// Sample at the requested rate, then uniformly subsample that sequence if capped.
     case frameRate
+    /// Decode the first frame at or after each target timestamp, including variable-rate sources.
+    case timestampFirstAtOrAfter
 }
 
 enum MediaVideoSamplingIndices {

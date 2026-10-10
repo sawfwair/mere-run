@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add native Clef Omni BF16 structured decisions with the Qwen3-Omni MoE thinker, mixed local image/audio/video input, deep-stack vision, timestamp-interleaved video soundtracks, and 64,000-token preflight. Add streaming MLX Q4/group-64 expert conversion for smaller-memory machines; eight short real-checkpoint text/media probes pass on a 36 GB Mac with 22.06 GB peak MLX allocation. Larger contexts and media budgets remain unqualified.
+
 - Strip local symbols from the iOS Release executable while preserving its dSYM
   and exported symbols for hosted tests, keeping the existing CI size budget.
 

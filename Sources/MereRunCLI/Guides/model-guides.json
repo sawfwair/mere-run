@@ -706,7 +706,8 @@
     "category": "Text",
     "models": [
       "text-decide-clef-4bit",
-      "text-decide-clef-flash-4bit"
+      "text-decide-clef-flash-4bit",
+      "text-decide-clef-omni"
     ],
     "resourceName": "handbook-clef.md"
   },

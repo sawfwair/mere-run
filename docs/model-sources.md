@@ -156,6 +156,7 @@ an effective overlay; they are not a second capability catalog.
 | `text-decide` | `text-decide-d1-omni-600m-fp32` |
 | `text-decide` | `text-decide-clef-4bit` |
 | `text-decide` | `text-decide-clef-flash-4bit` |
+| `text-decide` | `text-decide-clef-omni` |
 | `vision-ocr` | `vision-ocr-infinity-pro` |
 | `vision-ocr` | `vision-ocr-infinity-pro-int8` |
 | `vision-ocr` | `vision-ocr-lighton` |

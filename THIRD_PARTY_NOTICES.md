@@ -1588,6 +1588,20 @@ PERFORMANCE OF THIS SOFTWARE.
   deterministic tiny synthetic weights and PyTorch reference outputs. It
   contains no pretrained Kolibri weights.
 
+## Clef Omni native thinker
+
+- model and decision reference: [Cloudflare/clef-omni](https://huggingface.co/Cloudflare/clef-omni/tree/0db1cd2607d76a7bdb2a382f659e7b313079f84b), Apache-2.0
+- architecture reference: [Transformers Qwen3-Omni MoE, v5.10.2](https://github.com/huggingface/transformers/blob/v5.10.2/src/transformers/models/qwen3_omni_moe/modeling_qwen3_omni_moe.py), Apache-2.0
+- local implementation: `Qwen3OmniConfiguration.swift`, `Qwen3OmniThinker.swift`, `Qwen3OmniVision.swift` in `Sources/MereRunQwenModel`, and the Omni operation/media/loading files in `Sources/MereRunCore/Clef`
+
+The native Swift/MLX implementation follows Qwen3-Omni thinker attention,
+expert routing, deep-stack visual injection, audio encoding, media positions,
+and Clef joint schema scoring. The synthetic fixtures under
+`Tests/MereRunCoreTests/Fixtures/ClefOmni` contain independently generated tiny
+untrained weights, exported by `scripts/fixtures/export-clef-omni-reference.py`.
+They contain no original checkpoint weights. The Apache-2.0 license is retained
+in `licenses/clef-APACHE-2.0.txt`.
+
 ## D1 native decision implementation
 
 - source: [LiquidAI/d1-3B](https://huggingface.co/LiquidAI/d1-3B/tree/da1fe36a861f24690f27f622dca1d8688503d113), revision `da1fe36a861f24690f27f622dca1d8688503d113`

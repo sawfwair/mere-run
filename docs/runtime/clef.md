@@ -118,3 +118,78 @@ for the runtime results, reproduction steps, and CLI validation gap.
 Implementation: `Sources/MereRunCore/Clef` and
 `Sources/MereRunQwenModel/ClefJointHead.swift`. Reference source:
 [`clef_mlx.py`](https://huggingface.co/mlx-community/clef-4bit/blob/e0a23bd4406c15075b7473616429c46f3fd130a9/clef_mlx.py).
+
+
+## Clef Omni
+
+`text-decide-clef-omni` runs the native Qwen3-Omni 30B-A3B MoE thinker and
+shared Clef joint head. It pins [`Cloudflare/clef-omni`](https://huggingface.co/Cloudflare/clef-omni/tree/0db1cd2607d76a7bdb2a382f659e7b313079f84b)
+at `0db1cd2607d76a7bdb2a382f659e7b313079f84b`. This is the original BF16
+checkpoint: about 70.5 GB of sharded weights, including unused upstream speech
+output weights. The native runtime loads only thinker components and the joint
+head. Discovery recommends at least 96 GB unified memory, preferably 128 GB.
+There is no Python inference subprocess and no free-form generation.
+
+```sh
+mere.run model pull text-decide-clef-omni
+mere.run text decide --model text-decide-clef-omni --input request.json --preflight --pretty
+mere.run text decide --model text-decide-clef-omni --input request.json --pretty
+```
+
+Omni uses the same `state` and `questions` object. It accepts mixed local
+`images`, `audio`, and `videos`. Audio is decoded to mono 16 kHz and Whisper
+128-bin log-mel features. `videos` may contain local video paths or arrays of
+frames already sampled at 2 fps. File videos hear their soundtracks only when
+all videos have an audio track, matching the reference's policy. Video and
+audio tokens interleave by timestamp; spatial/temporal positions and all
+vision deep-stack features are preserved. Remote URLs, data URLs, and
+`media_kwargs` overrides are rejected. Limits are 16 images, 16 audio clips,
+four videos with at most 768 sampled frames each, and 384 seconds per audio
+clip or heard soundtrack. Oversized inputs fail explicitly. Omni defaults to
+64,000 context tokens; `max_state_tokens` truncates only the state.
+
+```json
+{
+  "state": {"task": "Review the call and dashcam clip"},
+  "audio": ["call.wav"],
+  "videos": ["dashcam.mp4"],
+  "questions": {
+    "collision": {"type": "noul", "instructions": "Does the video show a collision?"},
+    "glass": {"type": "noul", "instructions": "Is glass breaking audible?"}
+  }
+}
+```
+
+Tiny independently exported PyTorch fixtures cover causal MoE states,
+interleaved positions, deep-stack injection, vision, chunked audio, and the
+joint head's untied output-embedding prior. These are component tests with
+untrained weights. Eight short real Q4 checkpoint probes also pass on a 36 GB Mac; see the
+[dated qualification](../benchmarks/clef-omni-q4-qualification-2026-10-09.md).
+Original BF16 native execution and cross-platform GPU qualification remain
+unverified.
+
+### A quantized checkpoint for 36 GB Macs
+
+`scripts/model-conversion/convert_clef_omni_mlx.py` streams the pinned original
+checkpoint on a CUDA MLX host. It packs only routed expert matrices with affine
+4-bit/group-64 quantization. Attention, routers, embeddings, vision, audio, and
+the joint decision head retain source BF16 precision. Speech-output weights are
+omitted. The native loader accepts the converter's explicit
+`quantization.scope: thinker_moe_experts` policy and rejects other policies.
+
+```sh
+python scripts/model-conversion/convert_clef_omni_mlx.py \
+  --source /workspace/clef-omni-source --output /workspace/clef-omni-mlx-q4
+mere.run text decide --model /path/to/clef-omni-mlx-q4 --input request.json --pretty
+```
+
+The converted bundle is 22.0 GB. A native Metal run on a 36 GB Mac passed eight
+151–294-token text/media probes at 22.06 GB peak MLX allocation. These short probes
+do not qualify an 8,192-token context. Set an explicit `max_tokens` budget and
+close other model workloads.
+Weight size alone does not establish memory fit: input length, media features,
+loading temporaries, and current memory pressure also matter. The conversion
+manifest records source hashes, output hashes, logical weights, and bounded
+reconstruction errors. Those errors are not decision-quality measurements.
+Real local execution and independent BF16 decision comparisons must qualify
+an artifact before treating it as tested on 36 GB hardware.

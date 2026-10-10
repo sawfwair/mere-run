@@ -252,7 +252,7 @@ extension MereRunCapabilityCatalog {
                 models: ["text-decide-laya", "text-decide-laya-multilingual", "text-decide-laya-typed-decisions"]
             ),
             .init(TextDecideFamily.d1, title: "D1", models: ["text-decide-d1-3b-bf16", "text-decide-d1-omni-600m-fp32"]),
-            .init(TextDecideFamily.clef, title: "Clef", models: ["text-decide-clef-4bit", "text-decide-clef-flash-4bit"])
+            .init(TextDecideFamily.clef, title: "Clef", models: ["text-decide-clef-4bit", "text-decide-clef-flash-4bit", "text-decide-clef-omni"])
         ]
     )
 }

@@ -41,7 +41,9 @@ struct TextDecide: AsyncParsableCommand {
         let localClef = FileManager.default.fileExists(atPath: URL(fileURLWithPath: model).appending(path: "joint_head_config.json").path)
         let isClef = managed?.validationKind == .clef || localClef
         // Decode before model resolution so invalid inputs never trigger checkpoint work.
-        let clefRequest = isClef ? try ClefDecisionRequest.decode(data) : nil
+        let localOmni = localClef ? try ClefCatalog.isOmni(root: URL(fileURLWithPath: model)) : false
+        let isOmni = managed?.id == ClefOmniCatalog.modelID || localOmni
+        let clefRequest = isClef ? try ClefDecisionRequest.decode(data, omni: isOmni) : nil
         let layaRequest = isClef || isD1 ? nil : try Self.decodeRequest(data)
         let resolved = try await ManagedModelResolver.resolveForRuntime(
             requestedModel: model, defaultModelID: isD1 ? D1Catalog.modelID : isClef ? ClefCatalog.modelID : LayaCatalog.modelID, progress: nil)
