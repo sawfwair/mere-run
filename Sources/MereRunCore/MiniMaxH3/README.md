@@ -76,6 +76,11 @@ accepts text-only FL2VA generation with `--h3-acceleration quality`. It rejects
 frame conditioning, continuation, references, non-unit adapter strength, and
 other H3 approximation modes.
 
+Managed FastH3 installation and discovery validate the compression gates and
+AdaLN cache through file checksums and cache header geometry. They do not load
+or evaluate MLX tensors. The pinned cache checksum binds the sigma values to
+the published sampler schedule; inference also checks the loaded schedule.
+
 All standard projection pairs execute as activation-space low-rank wrappers
 around the dense or stock MLX quantized base linear. QKV keeps independent
 query, key, and value pairs while preserving the runtime's global-QKV slab
