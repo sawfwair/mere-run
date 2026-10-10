@@ -262,6 +262,10 @@ public extension ManagedModelSpec {
             return Self.missingQwen3ASRPaths(in: rootURL, fileManager: fileManager)
         case .parakeet:
             return Self.missingParakeetPaths(in: rootURL, fileManager: fileManager)
+        case .whistle:
+            return Self.missingFiles(
+                ["config.json", "whistle.cact"], in: rootURL, fileManager: fileManager
+            )
         case .sortformer:
             return id == Nemotron3DiarizationResources.modelID
                 ? Self.missingFiles(

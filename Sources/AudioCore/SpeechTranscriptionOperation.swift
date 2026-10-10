@@ -27,6 +27,7 @@ public struct SpeechTranscriptionPlan: Sendable, Hashable, Codable {
         guard request.maxTokens > 0 else {
             throw SpeechTranscriptionIssue("invalid_max_tokens", "Maximum transcription tokens must be positive.")
         }
+        if decision.backend == .whistle { try (request.whistle ?? WhistleOptions()).validate() }
         guard request.task != .translate || decision.backend == .qwen else {
             throw SpeechTranscriptionIssue("unsupported_task", "Translation requires the Qwen backend.")
         }
@@ -58,6 +59,11 @@ public struct SpeechTranscriptionIssue: Error, LocalizedError, Sendable, Equatab
 
 /// Supplies a native generator or borrows one from a resident runtime pool.
 public protocol SpeechTranscriptionExecutor: Sendable {
+    func transcribeWhistle(
+        request: ASRRequest, modelID: String, modelPath: String?,
+        progressHandler: (@Sendable (ASRProgress) -> Void)?
+    ) async throws -> ASRResult
+
     func transcribeQwen(
         request: ASRRequest, modelID: String, modelPath: String?,
         progressHandler: (@Sendable (ASRProgress) -> Void)?
@@ -67,6 +73,15 @@ public protocol SpeechTranscriptionExecutor: Sendable {
         request: ASRRequest, modelID: String, modelPath: String?,
         progressHandler: (@Sendable (ASRProgress) -> Void)?
     ) async throws -> ASRResult
+}
+
+extension SpeechTranscriptionExecutor {
+    public func transcribeWhistle(
+        request: ASRRequest, modelID: String, modelPath: String?,
+        progressHandler: (@Sendable (ASRProgress) -> Void)?
+    ) async throws -> ASRResult {
+        throw SpeechTranscriptionIssue("unsupported_backend", "This executor does not provide Whistle.")
+    }
 }
 
 public struct SpeechTranscriptionOutcome: Sendable {
@@ -116,6 +131,10 @@ public enum SpeechTranscriptionOperation {
             }
             let result: ASRResult
             switch plan.decision.backend {
+            case .whistle:
+                result = try await executor.transcribeWhistle(
+                    request: plan.request, modelID: plan.modelID, modelPath: plan.modelPath, progressHandler: progress
+                )
             case .qwen:
                 result = try await executor.transcribeQwen(
                     request: plan.request, modelID: plan.modelID, modelPath: plan.modelPath,

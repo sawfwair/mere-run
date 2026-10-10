@@ -13,7 +13,7 @@ import CoreAudio
 struct SpeechListen: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "listen",
-        abstract: "Transcribe a macOS microphone with live Qwen ASR."
+        abstract: "Transcribe a macOS microphone with live Qwen or Whistle ASR."
     )
 
     @Option(name: [.long], help: "CoreAudio input-device UID. Defaults to the system input.")
@@ -25,8 +25,25 @@ struct SpeechListen: AsyncParsableCommand {
     @Option(name: [.long], help: "Language hint (for example, en or zh).")
     var language: String?
 
-    @Option(name: [.customShort("m"), .long], help: "Qwen model ID or local model path.")
+    @Option(name: [.customShort("m"), .long], help: "Qwen or Whistle model ID or local model path.")
     var model: String?
+
+    @Option(name: [.customLong("whistle-weights")], help: "Whistle weights: cactus or fp32 (requires a local checkpoint).")
+    var whistleWeights: String = "cactus"
+
+    @Option(name: [.customLong("beam-size")], help: "Whistle beam size, 1...8.")
+    var beamSize: Int = 5
+
+    @Option(name: [.customLong("decoder-depth")], help: "Whistle decoder depth, 2...8.")
+    var decoderDepth: Int = 8
+
+    @Option(name: [.customLong("keyword")], help: "Whistle keyword or phrase; repeat for multiple phrases.")
+    var keywords: [String] = []
+
+    private var whistleOptions: WhistleOptions {
+        WhistleOptions(weights: WhistleOptions.Weights(rawValue: whistleWeights)!, beamSize: beamSize,
+                       decoderDepth: decoderDepth, keywords: keywords, wordTimestamps: false)
+    }
 
     @Option(name: [.customLong("decode-ms")], help: "Partial decode cadence in milliseconds.")
     var decodeMs: Int = 2_000
@@ -41,6 +58,11 @@ struct SpeechListen: AsyncParsableCommand {
     var jsonl: Bool = false
 
     func validate() throws {
+        if !listDevices, let model {
+            _ = try SpeechTranscriptionResolver.route(task: .transcribe, language: language, preferredBackend: .auto, modelOverride: model)
+        }
+        guard WhistleOptions.Weights(rawValue: whistleWeights) != nil else { throw ValidationError("--whistle-weights must be cactus or fp32.") }
+        try whistleOptions.validate()
         guard decodeMs > 0 else { throw ValidationError("--decode-ms must be > 0.") }
         guard silenceMs > 0 else { throw ValidationError("--silence-ms must be > 0.") }
     }
@@ -65,20 +87,7 @@ struct SpeechListen: AsyncParsableCommand {
                 if let message = progress.message { CLIStderr.write("[\(progress.stage.rawValue)] \(message)\n") }
             }
         }
-        let generator = try await CLIQwenASRLoader.prepare(model: model, progressHandler: progressHandler)
-        let live = Qwen3ASRLiveSession(
-            generator: generator,
-            request: ASRStreamingRequest(
-                language: language,
-                sampleRate: 16_000,
-                decodeIntervalMs: decodeMs,
-                minDecodeAudioMs: 1_600
-            ),
-            configuration: Qwen3ASRLiveConfiguration(
-                decodeIntervalMs: decodeMs,
-                silenceMs: silenceMs
-            )
-        )
+        let live = try await makeLiveSession(progressHandler: progressHandler)
         if jsonl { try LiveASRCLIWriter.write(.ready()) }
         let writer = Task { try await LiveASRCLIWriter.consume(live.events, jsonl: jsonl, quiet: quiet) }
         let capture = try MicrophoneCapture(deviceUID: device)
@@ -94,7 +103,7 @@ struct SpeechListen: AsyncParsableCommand {
                 group.addTask {
                     for await samples in capture.samples {
                         try Task.checkCancellation()
-                        try await live.feed(samples: samples)
+                        try await live.feed(samples)
                     }
                     try Task.checkCancellation()
                     return .captureEnded
@@ -107,7 +116,7 @@ struct SpeechListen: AsyncParsableCommand {
             guard termination == .interrupted else {
                 throw ValidationError("Microphone capture ended unexpectedly. Check that the selected input is still connected.")
             }
-            try await live.finish(reason: .stopped)
+            try await live.finish(.stopped)
             try await writer.value
         } catch {
             capture.stop()
@@ -125,6 +134,30 @@ struct SpeechListen: AsyncParsableCommand {
         throw ValidationError("mere.run speech listen requires the macOS live-capture backend.")
         #endif
     }
+    private func makeLiveSession(progressHandler: (@Sendable (ASRProgress) -> Void)?) async throws -> CLILiveASRSession {
+        let request = ASRStreamingRequest(language: language, sampleRate: 16_000, decodeIntervalMs: decodeMs, minDecodeAudioMs: 1_600)
+        let configuration = Qwen3ASRLiveConfiguration(decodeIntervalMs: decodeMs, silenceMs: silenceMs)
+        let route = try SpeechTranscriptionResolver.route(task: .transcribe, language: language,
+                                                          preferredBackend: model == nil ? .qwen : .auto, modelOverride: model)
+        if route.decision.backend == .whistle {
+            let generator = WhistleGenerator()
+            try await generator.prepare(modelPath: model, options: whistleOptions, progressHandler: progressHandler)
+            var bounded = configuration
+            bounded.maxUtteranceMs = min(bounded.maxUtteranceMs, 30_000)
+            let live = ASRUtteranceLiveSession(request: request, configuration: bounded, redecodeWholeUtterance: true) { samples, language in
+                try await generator.transcribePrepared(samples: samples, language: language)
+            }
+            return CLILiveASRSession(backend: .whistle, events: live.events,
+                                     feed: { try await live.feed(samples: $0) }, finish: { try await live.finish(reason: $0) },
+                                     cancel: { await live.cancel() })
+        }
+        let generator = try await CLIQwenASRLoader.prepare(model: model, progressHandler: progressHandler)
+        let live = Qwen3ASRLiveSession(generator: generator, request: request, configuration: configuration)
+        return CLILiveASRSession(backend: .qwen, events: live.events,
+                                 feed: { try await live.feed(samples: $0) }, finish: { try await live.finish(reason: $0) },
+                                 cancel: { await live.cancel() })
+    }
+
 }
 
 #if os(macOS)

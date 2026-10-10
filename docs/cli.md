@@ -51,7 +51,7 @@ Public tree:
   - `mere.run speech transcribe` — Transcribe or translate speech to text using native ASR backends.
   - `mere.run speech diarize` — Identify who spoke when in an audio file with native MLX diarization.
   - `mere.run speech diarize-live` — Stream Nemotron 3 speaker activity from a microphone or raw PCM stdin.
-  - `mere.run speech listen` — Transcribe a macOS microphone with live Qwen ASR.
+  - `mere.run speech listen` — Transcribe a macOS microphone with live Qwen or Whistle ASR.
   - `mere.run speech profile` — Manage saved voice clone profiles.
     - `mere.run speech profile list` — List saved speech voice profiles.
     - `mere.run speech profile create` — Create a speech profile from reference audio.

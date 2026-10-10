@@ -1679,6 +1679,18 @@ extension MereRunModelManifest {
                 upstreamRepoId: "mlx-community/Qwen3-ASR-1.7B-8bit",
                 createdAt: createdAt
             )
+        case .whistleASR:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .whistleASR, family: .asr, tier: .latest,
+                variant: .standard, precision: .int4, defaults: nil,
+                supports: [.speechRecognition],
+                components: Components(
+                    tokenizer: .local(path: "whistle.cact"),
+                    transformer: .local(path: "whistle.cact")
+                ),
+                upstreamRepoId: "Cactus-Compute/whistle@ca5287601bef25af26dcf2e1b2bdc0843a7c19e5",
+                createdAt: createdAt
+            )
         case .parakeetASR:
             return MereRunModelManifest(
                 id: modelID.rawValue,

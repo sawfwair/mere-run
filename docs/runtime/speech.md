@@ -2,7 +2,7 @@
 
 Read text aloud, clone a voice from a short reference clip and save it for
 reuse, transcribe either a file or a live microphone, and identify who spoke
-when in a recording. Two automatic speech recognition (ASR) backends and two
+when in a recording. Three automatic speech recognition (ASR) backends and two
 speaker-diarization backends are available. These operations run locally, so
 the audio does not leave the machine.
 
@@ -31,6 +31,7 @@ the audio does not leave the machine.
 
 - `speech-asr-qwen3`
 - `speech-asr-parakeet`
+- [`speech-asr-whistle`](./whistle.md) (native packed CQ2/CQ4 transcription in seven languages)
 
 ### Speaker diarization
 
@@ -171,7 +172,12 @@ swift run mere.run speech synthesize \
 swift run mere.run speech transcribe ./hello.wav --backend auto
 ```
 
-The backend is chosen in this order:
+Whistle is selected explicitly with `--backend whistle` or
+`--model speech-asr-whistle`. It supports file and live transcription in seven languages;
+translation and unsupported language hints are rejected. See
+[Native Whistle](./whistle.md) for its limits.
+
+The other backends are chosen in this order:
 
 1. `--task translate` always runs Qwen, because Parakeet does not translate.
 2. A `--language` that Parakeet's router does not recognize runs Qwen, which
@@ -184,9 +190,9 @@ A managed model of the other backend is replaced by the chosen backend's
 default, and a flag the choice overrules has no effect. The CLI prints a
 `Warning:` line for either, for example for `--model speech-asr-parakeet --task
 translate`. A local model folder of the other backend stops the run instead.
-Each backend also ignores the other's options, with a warning: Qwen returns no
-timestamps, so `--timestamps` and `--no-timestamps` apply to Parakeet, and
-Parakeet has no token budget, so `--max-tokens` applies to Qwen.
+Options outside a backend's scope produce a warning: Qwen returns no
+word timestamps, so `--timestamps` and `--no-timestamps` apply to Parakeet and Whistle.
+`--max-tokens` applies to Qwen and Whistle; Whistle caps it at 318 per window.
 
 Translation always produces English, whatever language the audio is in, so
 `--language` has no effect with `--task translate` and the CLI says so.

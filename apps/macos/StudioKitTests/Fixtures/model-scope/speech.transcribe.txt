@@ -12,3 +12,9 @@ qwen3-asr	composer.listen	validated	--backend --language --model
 qwen3-asr	console.speechTranscribe	emitted	--backend --input-format --jsonl --language --max-tokens --model --output --quiet --receipt --run-dir --sample-rate --stream --stream-chunk-ms --stream-decode-ms
 qwen3-asr	console.speechTranscribe	shown	--backend --input-format --jsonl --language --max-tokens --model --output --quiet --receipt --run-dir --sample-rate --stream --stream-chunk-ms --stream-decode-ms --task
 qwen3-asr	console.speechTranscribe	validated	--backend --input-format --jsonl --language --max-tokens --model --output --quiet --receipt --run-dir --sample-rate --stream --stream-chunk-ms --stream-decode-ms
+whistle	composer.listen	emitted	--backend --language --model --no-timestamps --output --task
+whistle	composer.listen	shown	--backend --language --model --no-timestamps
+whistle	composer.listen	validated	--language --model --no-timestamps
+whistle	console.speechTranscribe	emitted	--backend --beam-size --decoder-depth --input-format --jsonl --keyword --language --max-tokens --model --no-timestamps --output --quiet --receipt --run-dir --sample-rate --stream --stream-chunk-ms --stream-decode-ms --timestamps --whistle-weights
+whistle	console.speechTranscribe	shown	--backend --beam-size --decoder-depth --input-format --jsonl --keyword --language --max-tokens --model --no-timestamps --output --quiet --receipt --run-dir --sample-rate --stream --stream-chunk-ms --stream-decode-ms --task --timestamps --whistle-weights
+whistle	console.speechTranscribe	validated	--backend --beam-size --decoder-depth --input-format --jsonl --keyword --language --max-tokens --model --no-timestamps --output --quiet --receipt --run-dir --sample-rate --stream --stream-chunk-ms --stream-decode-ms --timestamps --whistle-weights

@@ -1,0 +1,3218 @@
+{
+  "encoder/final_norm/scale": {
+    "pieces": [
+      {
+        "record": 672
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/ZCRMSNorm_0/scale": {
+    "pieces": [
+      {
+        "record": 320
+      },
+      {
+        "record": 363
+      },
+      {
+        "record": 406
+      },
+      {
+        "record": 449
+      },
+      {
+        "record": 492
+      },
+      {
+        "record": 535
+      },
+      {
+        "record": 578
+      },
+      {
+        "record": 621
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/attn_gate": {
+    "pieces": [
+      {
+        "record": 332
+      },
+      {
+        "record": 375
+      },
+      {
+        "record": 418
+      },
+      {
+        "record": 461
+      },
+      {
+        "record": 504
+      },
+      {
+        "record": 547
+      },
+      {
+        "record": 590
+      },
+      {
+        "record": 202
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/conv_norm/scale": {
+    "pieces": [
+      {
+        "record": 322
+      },
+      {
+        "record": 365
+      },
+      {
+        "record": 408
+      },
+      {
+        "record": 451
+      },
+      {
+        "record": 494
+      },
+      {
+        "record": 537
+      },
+      {
+        "record": 580
+      },
+      {
+        "record": 623
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/conv_out_norm/scale": {
+    "pieces": [
+      {
+        "record": 323
+      },
+      {
+        "record": 366
+      },
+      {
+        "record": 409
+      },
+      {
+        "record": 452
+      },
+      {
+        "record": 495
+      },
+      {
+        "record": 538
+      },
+      {
+        "record": 581
+      },
+      {
+        "record": 624
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/dw": {
+    "pieces": [
+      {
+        "record": 335
+      },
+      {
+        "record": 378
+      },
+      {
+        "record": 421
+      },
+      {
+        "record": 464
+      },
+      {
+        "record": 507
+      },
+      {
+        "record": 550
+      },
+      {
+        "record": 593
+      },
+      {
+        "record": 636
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp/b2": {
+    "pieces": [
+      {
+        "record": 351
+      },
+      {
+        "record": 394
+      },
+      {
+        "record": 437
+      },
+      {
+        "record": 480
+      },
+      {
+        "record": 523
+      },
+      {
+        "record": 566
+      },
+      {
+        "record": 609
+      },
+      {
+        "record": 652
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp/cond_u": {
+    "pieces": [
+      {
+        "record": 361
+      },
+      {
+        "record": 404
+      },
+      {
+        "record": 447
+      },
+      {
+        "record": 490
+      },
+      {
+        "record": 533
+      },
+      {
+        "record": 576
+      },
+      {
+        "record": 619
+      },
+      {
+        "record": 662
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp/cond_v": {
+    "pieces": [
+      {
+        "record": 360
+      },
+      {
+        "record": 403
+      },
+      {
+        "record": 446
+      },
+      {
+        "record": 489
+      },
+      {
+        "record": 532
+      },
+      {
+        "record": 575
+      },
+      {
+        "record": 618
+      },
+      {
+        "record": 661
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp/d1": {
+    "pieces": [
+      {
+        "record": 349
+      },
+      {
+        "record": 392
+      },
+      {
+        "record": 435
+      },
+      {
+        "record": 478
+      },
+      {
+        "record": 521
+      },
+      {
+        "record": 564
+      },
+      {
+        "record": 607
+      },
+      {
+        "record": 650
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp/d2": {
+    "pieces": [
+      {
+        "record": 350
+      },
+      {
+        "record": 393
+      },
+      {
+        "record": 436
+      },
+      {
+        "record": 479
+      },
+      {
+        "record": 522
+      },
+      {
+        "record": 565
+      },
+      {
+        "record": 608
+      },
+      {
+        "record": 651
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp/d3": {
+    "pieces": [
+      {
+        "record": 352
+      },
+      {
+        "record": 395
+      },
+      {
+        "record": 438
+      },
+      {
+        "record": 481
+      },
+      {
+        "record": 524
+      },
+      {
+        "record": 567
+      },
+      {
+        "record": 610
+      },
+      {
+        "record": 653
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp/d4": {
+    "pieces": [
+      {
+        "record": 353
+      },
+      {
+        "record": 396
+      },
+      {
+        "record": 439
+      },
+      {
+        "record": 482
+      },
+      {
+        "record": 525
+      },
+      {
+        "record": 568
+      },
+      {
+        "record": 611
+      },
+      {
+        "record": 654
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp/w1a": {
+    "pieces": [
+      {
+        "record": 354
+      },
+      {
+        "record": 397
+      },
+      {
+        "record": 440
+      },
+      {
+        "record": 483
+      },
+      {
+        "record": 526
+      },
+      {
+        "record": 569
+      },
+      {
+        "record": 612
+      },
+      {
+        "record": 655
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp/w1b": {
+    "pieces": [
+      {
+        "record": 355
+      },
+      {
+        "record": 398
+      },
+      {
+        "record": 441
+      },
+      {
+        "record": 484
+      },
+      {
+        "record": 527
+      },
+      {
+        "record": 570
+      },
+      {
+        "record": 613
+      },
+      {
+        "record": 656
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp/w2a": {
+    "pieces": [
+      {
+        "record": 356
+      },
+      {
+        "record": 399
+      },
+      {
+        "record": 442
+      },
+      {
+        "record": 485
+      },
+      {
+        "record": 528
+      },
+      {
+        "record": 571
+      },
+      {
+        "record": 614
+      },
+      {
+        "record": 657
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp/w2b": {
+    "pieces": [
+      {
+        "record": 357
+      },
+      {
+        "record": 400
+      },
+      {
+        "record": 443
+      },
+      {
+        "record": 486
+      },
+      {
+        "record": 529
+      },
+      {
+        "record": 572
+      },
+      {
+        "record": 615
+      },
+      {
+        "record": 658
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp/w3a": {
+    "pieces": [
+      {
+        "record": 358
+      },
+      {
+        "record": 401
+      },
+      {
+        "record": 444
+      },
+      {
+        "record": 487
+      },
+      {
+        "record": 530
+      },
+      {
+        "record": 573
+      },
+      {
+        "record": 616
+      },
+      {
+        "record": 659
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp/w3b": {
+    "pieces": [
+      {
+        "record": 359
+      },
+      {
+        "record": 402
+      },
+      {
+        "record": 445
+      },
+      {
+        "record": 488
+      },
+      {
+        "record": 531
+      },
+      {
+        "record": 574
+      },
+      {
+        "record": 617
+      },
+      {
+        "record": 660
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp_0/b2": {
+    "pieces": [
+      {
+        "record": 338
+      },
+      {
+        "record": 381
+      },
+      {
+        "record": 424
+      },
+      {
+        "record": 467
+      },
+      {
+        "record": 510
+      },
+      {
+        "record": 553
+      },
+      {
+        "record": 596
+      },
+      {
+        "record": 639
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp_0/cond_u": {
+    "pieces": [
+      {
+        "record": 348
+      },
+      {
+        "record": 391
+      },
+      {
+        "record": 434
+      },
+      {
+        "record": 477
+      },
+      {
+        "record": 520
+      },
+      {
+        "record": 563
+      },
+      {
+        "record": 606
+      },
+      {
+        "record": 649
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp_0/cond_v": {
+    "pieces": [
+      {
+        "record": 347
+      },
+      {
+        "record": 390
+      },
+      {
+        "record": 433
+      },
+      {
+        "record": 476
+      },
+      {
+        "record": 519
+      },
+      {
+        "record": 562
+      },
+      {
+        "record": 605
+      },
+      {
+        "record": 648
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp_0/d1": {
+    "pieces": [
+      {
+        "record": 336
+      },
+      {
+        "record": 379
+      },
+      {
+        "record": 422
+      },
+      {
+        "record": 465
+      },
+      {
+        "record": 508
+      },
+      {
+        "record": 551
+      },
+      {
+        "record": 594
+      },
+      {
+        "record": 637
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp_0/d2": {
+    "pieces": [
+      {
+        "record": 337
+      },
+      {
+        "record": 380
+      },
+      {
+        "record": 423
+      },
+      {
+        "record": 466
+      },
+      {
+        "record": 509
+      },
+      {
+        "record": 552
+      },
+      {
+        "record": 595
+      },
+      {
+        "record": 638
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp_0/d3": {
+    "pieces": [
+      {
+        "record": 339
+      },
+      {
+        "record": 382
+      },
+      {
+        "record": 425
+      },
+      {
+        "record": 468
+      },
+      {
+        "record": 511
+      },
+      {
+        "record": 554
+      },
+      {
+        "record": 597
+      },
+      {
+        "record": 640
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp_0/d4": {
+    "pieces": [
+      {
+        "record": 340
+      },
+      {
+        "record": 383
+      },
+      {
+        "record": 426
+      },
+      {
+        "record": 469
+      },
+      {
+        "record": 512
+      },
+      {
+        "record": 555
+      },
+      {
+        "record": 598
+      },
+      {
+        "record": 641
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp_0/w1a": {
+    "pieces": [
+      {
+        "record": 341
+      },
+      {
+        "record": 384
+      },
+      {
+        "record": 427
+      },
+      {
+        "record": 470
+      },
+      {
+        "record": 513
+      },
+      {
+        "record": 556
+      },
+      {
+        "record": 599
+      },
+      {
+        "record": 642
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp_0/w1b": {
+    "pieces": [
+      {
+        "record": 342
+      },
+      {
+        "record": 385
+      },
+      {
+        "record": 428
+      },
+      {
+        "record": 471
+      },
+      {
+        "record": 514
+      },
+      {
+        "record": 557
+      },
+      {
+        "record": 600
+      },
+      {
+        "record": 643
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp_0/w2a": {
+    "pieces": [
+      {
+        "record": 343
+      },
+      {
+        "record": 386
+      },
+      {
+        "record": 429
+      },
+      {
+        "record": 472
+      },
+      {
+        "record": 515
+      },
+      {
+        "record": 558
+      },
+      {
+        "record": 601
+      },
+      {
+        "record": 644
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp_0/w2b": {
+    "pieces": [
+      {
+        "record": 344
+      },
+      {
+        "record": 387
+      },
+      {
+        "record": 430
+      },
+      {
+        "record": 473
+      },
+      {
+        "record": 516
+      },
+      {
+        "record": 559
+      },
+      {
+        "record": 602
+      },
+      {
+        "record": 645
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp_0/w3a": {
+    "pieces": [
+      {
+        "record": 345
+      },
+      {
+        "record": 388
+      },
+      {
+        "record": 431
+      },
+      {
+        "record": 474
+      },
+      {
+        "record": 517
+      },
+      {
+        "record": 560
+      },
+      {
+        "record": 603
+      },
+      {
+        "record": 646
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/hadamard_mlp_0/w3b": {
+    "pieces": [
+      {
+        "record": 346
+      },
+      {
+        "record": 389
+      },
+      {
+        "record": 432
+      },
+      {
+        "record": 475
+      },
+      {
+        "record": 518
+      },
+      {
+        "record": 561
+      },
+      {
+        "record": 604
+      },
+      {
+        "record": 647
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/post_attn_norm/scale": {
+    "pieces": [
+      {
+        "record": 321
+      },
+      {
+        "record": 364
+      },
+      {
+        "record": 407
+      },
+      {
+        "record": 450
+      },
+      {
+        "record": 493
+      },
+      {
+        "record": 536
+      },
+      {
+        "record": 579
+      },
+      {
+        "record": 622
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/pre_hada_norm/scale": {
+    "pieces": [
+      {
+        "record": 324
+      },
+      {
+        "record": 367
+      },
+      {
+        "record": 410
+      },
+      {
+        "record": 453
+      },
+      {
+        "record": 496
+      },
+      {
+        "record": 539
+      },
+      {
+        "record": 582
+      },
+      {
+        "record": 625
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/pre_hada_norm_0/scale": {
+    "pieces": [
+      {
+        "record": 319
+      },
+      {
+        "record": 362
+      },
+      {
+        "record": 405
+      },
+      {
+        "record": 448
+      },
+      {
+        "record": 491
+      },
+      {
+        "record": 534
+      },
+      {
+        "record": 577
+      },
+      {
+        "record": 620
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/pw1/kernel": {
+    "pieces": [
+      {
+        "record": 333,
+        "rows": [
+          0,
+          1024
+        ]
+      },
+      {
+        "record": 376,
+        "rows": [
+          0,
+          1024
+        ]
+      },
+      {
+        "record": 419,
+        "rows": [
+          0,
+          1024
+        ]
+      },
+      {
+        "record": 462,
+        "rows": [
+          0,
+          1024
+        ]
+      },
+      {
+        "record": 505,
+        "rows": [
+          0,
+          1024
+        ]
+      },
+      {
+        "record": 548,
+        "rows": [
+          0,
+          1024
+        ]
+      },
+      {
+        "record": 591,
+        "rows": [
+          0,
+          1024
+        ]
+      },
+      {
+        "record": 634,
+        "rows": [
+          0,
+          1024
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "encoder/layers/block/pw2/kernel": {
+    "pieces": [
+      {
+        "record": 334,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 377,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 420,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 463,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 506,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 549,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 592,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 635,
+        "rows": [
+          0,
+          512
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "encoder/layers/block/self_attn/gate_proj/kernel": {
+    "pieces": [
+      {
+        "record": 328,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 371,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 414,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 457,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 500,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 543,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 586,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 629,
+        "rows": [
+          0,
+          512
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "encoder/layers/block/self_attn/k_norm/scale": {
+    "pieces": [
+      {
+        "record": 331
+      },
+      {
+        "record": 374
+      },
+      {
+        "record": 417
+      },
+      {
+        "record": 460
+      },
+      {
+        "record": 503
+      },
+      {
+        "record": 546
+      },
+      {
+        "record": 589
+      },
+      {
+        "record": 632
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/self_attn/k_proj/kernel": {
+    "pieces": [
+      {
+        "record": 326,
+        "rows": [
+          0,
+          96
+        ]
+      },
+      {
+        "record": 369,
+        "rows": [
+          0,
+          96
+        ]
+      },
+      {
+        "record": 412,
+        "rows": [
+          0,
+          96
+        ]
+      },
+      {
+        "record": 455,
+        "rows": [
+          0,
+          96
+        ]
+      },
+      {
+        "record": 498,
+        "rows": [
+          0,
+          96
+        ]
+      },
+      {
+        "record": 541,
+        "rows": [
+          0,
+          96
+        ]
+      },
+      {
+        "record": 584,
+        "rows": [
+          0,
+          96
+        ]
+      },
+      {
+        "record": 627,
+        "rows": [
+          0,
+          96
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "encoder/layers/block/self_attn/out_proj/kernel": {
+    "pieces": [
+      {
+        "record": 329,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 372,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 415,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 458,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 501,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 544,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 587,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 630,
+        "rows": [
+          0,
+          512
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "encoder/layers/block/self_attn/q_norm/scale": {
+    "pieces": [
+      {
+        "record": 330
+      },
+      {
+        "record": 373
+      },
+      {
+        "record": 416
+      },
+      {
+        "record": 459
+      },
+      {
+        "record": 502
+      },
+      {
+        "record": 545
+      },
+      {
+        "record": 588
+      },
+      {
+        "record": 631
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/layers/block/self_attn/q_proj/kernel": {
+    "pieces": [
+      {
+        "record": 325,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 368,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 411,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 454,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 497,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 540,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 583,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 626,
+        "rows": [
+          0,
+          384
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "encoder/layers/block/self_attn/v_proj/kernel": {
+    "pieces": [
+      {
+        "record": 327,
+        "rows": [
+          0,
+          128
+        ]
+      },
+      {
+        "record": 370,
+        "rows": [
+          0,
+          128
+        ]
+      },
+      {
+        "record": 413,
+        "rows": [
+          0,
+          128
+        ]
+      },
+      {
+        "record": 456,
+        "rows": [
+          0,
+          128
+        ]
+      },
+      {
+        "record": 499,
+        "rows": [
+          0,
+          128
+        ]
+      },
+      {
+        "record": 542,
+        "rows": [
+          0,
+          128
+        ]
+      },
+      {
+        "record": 585,
+        "rows": [
+          0,
+          128
+        ]
+      },
+      {
+        "record": 628,
+        "rows": [
+          0,
+          128
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "encoder/mhc_a_post": {
+    "pieces": [
+      {
+        "record": 664
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/mhc_a_pre": {
+    "pieces": [
+      {
+        "record": 663
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/mhc_a_res": {
+    "pieces": [
+      {
+        "record": 665
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/mhc_b_post": {
+    "pieces": [
+      {
+        "record": 667
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/mhc_b_pre": {
+    "pieces": [
+      {
+        "record": 666
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/mhc_b_res": {
+    "pieces": [
+      {
+        "record": 668
+      }
+    ],
+    "transpose": false
+  },
+  "encoder/mhc_phi_post": {
+    "pieces": [
+      {
+        "record": 670,
+        "rows": [
+          0,
+          32
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "encoder/mhc_phi_pre": {
+    "pieces": [
+      {
+        "record": 669,
+        "rows": [
+          0,
+          32
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "encoder/mhc_phi_res": {
+    "pieces": [
+      {
+        "record": 671,
+        "rows": [
+          0,
+          128
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "pe_gate": {
+    "pieces": [
+      {
+        "record": 318
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/cross_attn/k_norm/scale": {
+    "pieces": [
+      {
+        "record": 245
+      },
+      {
+        "record": 255
+      },
+      {
+        "record": 265
+      },
+      {
+        "record": 275
+      },
+      {
+        "record": 285
+      },
+      {
+        "record": 295
+      },
+      {
+        "record": 305
+      },
+      {
+        "record": 315
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/cross_attn/k_proj/kernel": {
+    "pieces": [
+      {
+        "record": 240,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 250,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 260,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 270,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 280,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 290,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 300,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 310,
+        "rows": [
+          0,
+          384
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "stack/layers/block/cross_attn/v_proj/kernel": {
+    "pieces": [
+      {
+        "record": 241,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 251,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 261,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 271,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 281,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 291,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 301,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 311,
+        "rows": [
+          0,
+          512
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "stem/dw_1": {
+    "pieces": [
+      {
+        "record": 674
+      }
+    ],
+    "transpose": false
+  },
+  "stem/dw_2": {
+    "pieces": [
+      {
+        "record": 676
+      }
+    ],
+    "transpose": false
+  },
+  "stem/out/kernel": {
+    "pieces": [
+      {
+        "record": 678,
+        "rows": [
+          0,
+          512
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "stem/pw_1/kernel": {
+    "pieces": [
+      {
+        "record": 675,
+        "rows": [
+          0,
+          128
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "stem/pw_2/kernel": {
+    "pieces": [
+      {
+        "record": 677,
+        "rows": [
+          0,
+          128
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "stem/w": {
+    "pieces": [
+      {
+        "record": 673
+      }
+    ],
+    "transpose": false
+  },
+  "embedding/embedding": {
+    "pieces": [
+      {
+        "record": 0,
+        "rows": [
+          0,
+          8199
+        ]
+      }
+    ],
+    "transpose": false
+  },
+  "engrams_0/key_proj/kernel": {
+    "pieces": [
+      {
+        "record": 229,
+        "rows": [
+          0,
+          512
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "engrams_0/taps": {
+    "pieces": [
+      {
+        "record": 231
+      }
+    ],
+    "transpose": false
+  },
+  "engrams_0/value_proj/kernel": {
+    "pieces": [
+      {
+        "record": 230,
+        "rows": [
+          0,
+          512
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "engrams_1/key_proj/kernel": {
+    "pieces": [
+      {
+        "record": 233,
+        "rows": [
+          0,
+          512
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "engrams_1/taps": {
+    "pieces": [
+      {
+        "record": 235
+      }
+    ],
+    "transpose": false
+  },
+  "engrams_1/value_proj/kernel": {
+    "pieces": [
+      {
+        "record": 234,
+        "rows": [
+          0,
+          512
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "stack/final_norm/scale": {
+    "pieces": [
+      {
+        "record": 236
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/ZCRMSNorm_0/scale": {
+    "pieces": [
+      {
+        "record": 1
+      },
+      {
+        "record": 28
+      },
+      {
+        "record": 55
+      },
+      {
+        "record": 82
+      },
+      {
+        "record": 109
+      },
+      {
+        "record": 136
+      },
+      {
+        "record": 163
+      },
+      {
+        "record": 190
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/attn_gate": {
+    "pieces": [
+      {
+        "record": 13
+      },
+      {
+        "record": 40
+      },
+      {
+        "record": 67
+      },
+      {
+        "record": 94
+      },
+      {
+        "record": 121
+      },
+      {
+        "record": 148
+      },
+      {
+        "record": 175
+      },
+      {
+        "record": 202
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/cross_attn/gate_proj/kernel": {
+    "pieces": [
+      {
+        "record": 242,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 252,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 262,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 272,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 282,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 292,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 302,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 312,
+        "rows": [
+          0,
+          512
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "stack/layers/block/cross_attn/out_proj/kernel": {
+    "pieces": [
+      {
+        "record": 243,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 253,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 263,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 273,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 283,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 293,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 303,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 313,
+        "rows": [
+          0,
+          512
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "stack/layers/block/cross_attn/q_norm/scale": {
+    "pieces": [
+      {
+        "record": 244
+      },
+      {
+        "record": 254
+      },
+      {
+        "record": 264
+      },
+      {
+        "record": 274
+      },
+      {
+        "record": 284
+      },
+      {
+        "record": 294
+      },
+      {
+        "record": 304
+      },
+      {
+        "record": 314
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/cross_attn/q_proj/kernel": {
+    "pieces": [
+      {
+        "record": 239,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 249,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 259,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 269,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 279,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 289,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 299,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 309,
+        "rows": [
+          0,
+          384
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "stack/layers/block/cross_gate": {
+    "pieces": [
+      {
+        "record": 247
+      },
+      {
+        "record": 257
+      },
+      {
+        "record": 267
+      },
+      {
+        "record": 267
+      },
+      {
+        "record": 287
+      },
+      {
+        "record": 13
+      },
+      {
+        "record": 307
+      },
+      {
+        "record": 13
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/cross_norm/scale": {
+    "pieces": [
+      {
+        "record": 238
+      },
+      {
+        "record": 248
+      },
+      {
+        "record": 258
+      },
+      {
+        "record": 268
+      },
+      {
+        "record": 278
+      },
+      {
+        "record": 288
+      },
+      {
+        "record": 298
+      },
+      {
+        "record": 308
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/hadamard_mlp/b2": {
+    "pieces": [
+      {
+        "record": 17
+      },
+      {
+        "record": 44
+      },
+      {
+        "record": 71
+      },
+      {
+        "record": 98
+      },
+      {
+        "record": 125
+      },
+      {
+        "record": 152
+      },
+      {
+        "record": 179
+      },
+      {
+        "record": 206
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/hadamard_mlp/cond_u": {
+    "pieces": [
+      {
+        "record": 27
+      },
+      {
+        "record": 54
+      },
+      {
+        "record": 81
+      },
+      {
+        "record": 108
+      },
+      {
+        "record": 135
+      },
+      {
+        "record": 162
+      },
+      {
+        "record": 189
+      },
+      {
+        "record": 216
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/hadamard_mlp/cond_v": {
+    "pieces": [
+      {
+        "record": 26
+      },
+      {
+        "record": 53
+      },
+      {
+        "record": 80
+      },
+      {
+        "record": 107
+      },
+      {
+        "record": 134
+      },
+      {
+        "record": 161
+      },
+      {
+        "record": 188
+      },
+      {
+        "record": 215
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/hadamard_mlp/d1": {
+    "pieces": [
+      {
+        "record": 15
+      },
+      {
+        "record": 42
+      },
+      {
+        "record": 69
+      },
+      {
+        "record": 96
+      },
+      {
+        "record": 123
+      },
+      {
+        "record": 150
+      },
+      {
+        "record": 177
+      },
+      {
+        "record": 204
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/hadamard_mlp/d2": {
+    "pieces": [
+      {
+        "record": 16
+      },
+      {
+        "record": 43
+      },
+      {
+        "record": 70
+      },
+      {
+        "record": 97
+      },
+      {
+        "record": 124
+      },
+      {
+        "record": 151
+      },
+      {
+        "record": 178
+      },
+      {
+        "record": 205
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/hadamard_mlp/d3": {
+    "pieces": [
+      {
+        "record": 18
+      },
+      {
+        "record": 45
+      },
+      {
+        "record": 72
+      },
+      {
+        "record": 99
+      },
+      {
+        "record": 126
+      },
+      {
+        "record": 153
+      },
+      {
+        "record": 180
+      },
+      {
+        "record": 207
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/hadamard_mlp/d4": {
+    "pieces": [
+      {
+        "record": 19
+      },
+      {
+        "record": 46
+      },
+      {
+        "record": 73
+      },
+      {
+        "record": 100
+      },
+      {
+        "record": 127
+      },
+      {
+        "record": 154
+      },
+      {
+        "record": 181
+      },
+      {
+        "record": 208
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/hadamard_mlp/w1a": {
+    "pieces": [
+      {
+        "record": 20
+      },
+      {
+        "record": 47
+      },
+      {
+        "record": 74
+      },
+      {
+        "record": 101
+      },
+      {
+        "record": 128
+      },
+      {
+        "record": 155
+      },
+      {
+        "record": 182
+      },
+      {
+        "record": 209
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/hadamard_mlp/w1b": {
+    "pieces": [
+      {
+        "record": 21
+      },
+      {
+        "record": 48
+      },
+      {
+        "record": 75
+      },
+      {
+        "record": 102
+      },
+      {
+        "record": 129
+      },
+      {
+        "record": 156
+      },
+      {
+        "record": 183
+      },
+      {
+        "record": 210
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/hadamard_mlp/w2a": {
+    "pieces": [
+      {
+        "record": 22
+      },
+      {
+        "record": 49
+      },
+      {
+        "record": 76
+      },
+      {
+        "record": 103
+      },
+      {
+        "record": 130
+      },
+      {
+        "record": 157
+      },
+      {
+        "record": 184
+      },
+      {
+        "record": 211
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/hadamard_mlp/w2b": {
+    "pieces": [
+      {
+        "record": 23
+      },
+      {
+        "record": 50
+      },
+      {
+        "record": 77
+      },
+      {
+        "record": 104
+      },
+      {
+        "record": 131
+      },
+      {
+        "record": 158
+      },
+      {
+        "record": 185
+      },
+      {
+        "record": 212
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/hadamard_mlp/w3a": {
+    "pieces": [
+      {
+        "record": 24
+      },
+      {
+        "record": 51
+      },
+      {
+        "record": 78
+      },
+      {
+        "record": 105
+      },
+      {
+        "record": 132
+      },
+      {
+        "record": 159
+      },
+      {
+        "record": 186
+      },
+      {
+        "record": 213
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/hadamard_mlp/w3b": {
+    "pieces": [
+      {
+        "record": 25
+      },
+      {
+        "record": 52
+      },
+      {
+        "record": 79
+      },
+      {
+        "record": 106
+      },
+      {
+        "record": 133
+      },
+      {
+        "record": 160
+      },
+      {
+        "record": 187
+      },
+      {
+        "record": 214
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/post_attn_norm/scale": {
+    "pieces": [
+      {
+        "record": 12
+      },
+      {
+        "record": 39
+      },
+      {
+        "record": 66
+      },
+      {
+        "record": 93
+      },
+      {
+        "record": 120
+      },
+      {
+        "record": 147
+      },
+      {
+        "record": 174
+      },
+      {
+        "record": 201
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/post_cross_norm/scale": {
+    "pieces": [
+      {
+        "record": 246
+      },
+      {
+        "record": 256
+      },
+      {
+        "record": 266
+      },
+      {
+        "record": 276
+      },
+      {
+        "record": 286
+      },
+      {
+        "record": 296
+      },
+      {
+        "record": 306
+      },
+      {
+        "record": 316
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/pre_hada_norm/scale": {
+    "pieces": [
+      {
+        "record": 14
+      },
+      {
+        "record": 41
+      },
+      {
+        "record": 68
+      },
+      {
+        "record": 95
+      },
+      {
+        "record": 122
+      },
+      {
+        "record": 149
+      },
+      {
+        "record": 176
+      },
+      {
+        "record": 203
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/self_attn/gate_proj/kernel": {
+    "pieces": [
+      {
+        "record": 10,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 37,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 64,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 91,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 118,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 145,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 172,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 199,
+        "rows": [
+          0,
+          512
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "stack/layers/block/self_attn/k_norm/scale": {
+    "pieces": [
+      {
+        "record": 9
+      },
+      {
+        "record": 36
+      },
+      {
+        "record": 63
+      },
+      {
+        "record": 90
+      },
+      {
+        "record": 117
+      },
+      {
+        "record": 144
+      },
+      {
+        "record": 171
+      },
+      {
+        "record": 198
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/self_attn/k_proj/kernel": {
+    "pieces": [
+      {
+        "record": 3,
+        "rows": [
+          0,
+          96
+        ]
+      },
+      {
+        "record": 30,
+        "rows": [
+          0,
+          96
+        ]
+      },
+      {
+        "record": 57,
+        "rows": [
+          0,
+          96
+        ]
+      },
+      {
+        "record": 84,
+        "rows": [
+          0,
+          96
+        ]
+      },
+      {
+        "record": 111,
+        "rows": [
+          0,
+          96
+        ]
+      },
+      {
+        "record": 138,
+        "rows": [
+          0,
+          96
+        ]
+      },
+      {
+        "record": 165,
+        "rows": [
+          0,
+          96
+        ]
+      },
+      {
+        "record": 192,
+        "rows": [
+          0,
+          96
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "stack/layers/block/self_attn/k_taps": {
+    "pieces": [
+      {
+        "record": 6
+      },
+      {
+        "record": 33
+      },
+      {
+        "record": 60
+      },
+      {
+        "record": 87
+      },
+      {
+        "record": 114
+      },
+      {
+        "record": 141
+      },
+      {
+        "record": 168
+      },
+      {
+        "record": 195
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/self_attn/out_proj/kernel": {
+    "pieces": [
+      {
+        "record": 11,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 38,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 65,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 92,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 119,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 146,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 173,
+        "rows": [
+          0,
+          512
+        ]
+      },
+      {
+        "record": 200,
+        "rows": [
+          0,
+          512
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "stack/layers/block/self_attn/q_norm/scale": {
+    "pieces": [
+      {
+        "record": 8
+      },
+      {
+        "record": 35
+      },
+      {
+        "record": 62
+      },
+      {
+        "record": 89
+      },
+      {
+        "record": 116
+      },
+      {
+        "record": 143
+      },
+      {
+        "record": 170
+      },
+      {
+        "record": 197
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/self_attn/q_proj/kernel": {
+    "pieces": [
+      {
+        "record": 2,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 29,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 56,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 83,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 110,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 137,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 164,
+        "rows": [
+          0,
+          384
+        ]
+      },
+      {
+        "record": 191,
+        "rows": [
+          0,
+          384
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "stack/layers/block/self_attn/q_taps": {
+    "pieces": [
+      {
+        "record": 5
+      },
+      {
+        "record": 32
+      },
+      {
+        "record": 59
+      },
+      {
+        "record": 86
+      },
+      {
+        "record": 113
+      },
+      {
+        "record": 140
+      },
+      {
+        "record": 167
+      },
+      {
+        "record": 194
+      }
+    ],
+    "transpose": false
+  },
+  "stack/layers/block/self_attn/v_proj/kernel": {
+    "pieces": [
+      {
+        "record": 4,
+        "rows": [
+          0,
+          128
+        ]
+      },
+      {
+        "record": 31,
+        "rows": [
+          0,
+          128
+        ]
+      },
+      {
+        "record": 58,
+        "rows": [
+          0,
+          128
+        ]
+      },
+      {
+        "record": 85,
+        "rows": [
+          0,
+          128
+        ]
+      },
+      {
+        "record": 112,
+        "rows": [
+          0,
+          128
+        ]
+      },
+      {
+        "record": 139,
+        "rows": [
+          0,
+          128
+        ]
+      },
+      {
+        "record": 166,
+        "rows": [
+          0,
+          128
+        ]
+      },
+      {
+        "record": 193,
+        "rows": [
+          0,
+          128
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "stack/layers/block/self_attn/v_taps": {
+    "pieces": [
+      {
+        "record": 7
+      },
+      {
+        "record": 34
+      },
+      {
+        "record": 61
+      },
+      {
+        "record": 88
+      },
+      {
+        "record": 115
+      },
+      {
+        "record": 142
+      },
+      {
+        "record": 169
+      },
+      {
+        "record": 196
+      }
+    ],
+    "transpose": false
+  },
+  "stack/mhc_a_post": {
+    "pieces": [
+      {
+        "record": 218
+      }
+    ],
+    "transpose": false
+  },
+  "stack/mhc_a_pre": {
+    "pieces": [
+      {
+        "record": 217
+      }
+    ],
+    "transpose": false
+  },
+  "stack/mhc_a_res": {
+    "pieces": [
+      {
+        "record": 219
+      }
+    ],
+    "transpose": false
+  },
+  "stack/mhc_b_post": {
+    "pieces": [
+      {
+        "record": 221
+      }
+    ],
+    "transpose": false
+  },
+  "stack/mhc_b_pre": {
+    "pieces": [
+      {
+        "record": 220
+      }
+    ],
+    "transpose": false
+  },
+  "stack/mhc_b_res": {
+    "pieces": [
+      {
+        "record": 222
+      }
+    ],
+    "transpose": false
+  },
+  "stack/mhc_phi_post": {
+    "pieces": [
+      {
+        "record": 224,
+        "rows": [
+          0,
+          32
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "stack/mhc_phi_pre": {
+    "pieces": [
+      {
+        "record": 223,
+        "rows": [
+          0,
+          32
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "stack/mhc_phi_res": {
+    "pieces": [
+      {
+        "record": 225,
+        "rows": [
+          0,
+          128
+        ]
+      }
+    ],
+    "transpose": true
+  },
+  "engrams_0/embedding": {
+    "pieces": [
+      {
+        "record": 228,
+        "rows": [
+          0,
+          73728
+        ]
+      }
+    ],
+    "transpose": false
+  },
+  "engrams_1/embedding": {
+    "pieces": [
+      {
+        "record": 232,
+        "rows": [
+          0,
+          73728
+        ]
+      }
+    ],
+    "transpose": false
+  }
+}

@@ -386,7 +386,7 @@ enum InstalledModelSmokePlans {
                 try await runner.installedTTSCheck(model: spec.id)
             }
 
-        case .qwen3ASR, .parakeet:
+        case .qwen3ASR, .parakeet, .whistle:
             return companion(
                 spec,
                 installedIDs: installedIDs,
@@ -919,7 +919,7 @@ extension GateRunner {
                 timeout: 1_800
             )
         }
-        let backend = model.contains("qwen") ? "qwen" : "parakeet"
+        let backend = model == "speech-asr-whistle" ? "whistle" : model.contains("qwen") ? "qwen" : "parakeet"
         let run = try await exec(
             [
                 "speech", "transcribe", input.path,

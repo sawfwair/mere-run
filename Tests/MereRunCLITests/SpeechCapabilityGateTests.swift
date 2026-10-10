@@ -122,13 +122,32 @@ private func temporaryFolder() throws -> URL {
                     if let model { arguments += ["--model", model] }
                     if let language { arguments += ["--language", language] }
                     let context = arguments.joined(separator: " ")
-                    let route = try SpeechTranscriptionResolver.route(
-                        task: task, language: language, preferredBackend: backend, modelOverride: model
-                    )
-                    let parakeet = route.decision.backend == .parakeet
-                    let runs = route.modelOverride ?? (parakeet ? ParakeetResources.defaultModelId : Qwen3ASRResources.defaultModelId)
+                    let route: SpeechTranscriptionRoute
+                    do {
+                        route = try SpeechTranscriptionResolver.route(
+                            task: task, language: language, preferredBackend: backend, modelOverride: model
+                        )
+                    } catch let issue as SpeechTranscriptionIssue {
+                        #expect(backend == .whistle || backend == .auto && model == WhistleGenerator.modelID, "\(context)")
+                        #expect(issue.code == "unsupported_task" || issue.code == "unsupported_language", "\(context)")
+                        continue
+                    }
+                    let family: String
+                    let defaultModel: String
+                    switch route.decision.backend {
+                    case .whistle:
+                        family = "whistle"
+                        defaultModel = WhistleGenerator.modelID
+                    case .parakeet:
+                        family = "parakeet"
+                        defaultModel = ParakeetResources.defaultModelId
+                    case .qwen:
+                        family = "qwen3-asr"
+                        defaultModel = Qwen3ASRResources.defaultModelId
+                    }
+                    let runs = route.modelOverride ?? defaultModel
                     let report = try #require(CLICapabilityGate.evaluate(commandLine: ["speech", "transcribe"] + arguments)).report
-                    #expect(report.family == (parakeet ? "parakeet" : "qwen3-asr"), "\(context)")
+                    #expect(report.family == family, "\(context)")
                     #expect(report.model == (ManagedModelCatalog.spec(for: runs)?.id ?? runs), "\(context)")
                     #expect(report.violations.isEmpty, "\(context): \(report.violations)")
                 }

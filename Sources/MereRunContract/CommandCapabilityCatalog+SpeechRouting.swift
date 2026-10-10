@@ -2,6 +2,7 @@ import Foundation
 
 extension MereRunCapabilityCatalog {
     enum SpeechListenFamily: String, MereRunFamilyID {
+        case whistle
         case qwen3ASR = "qwen3-asr"
     }
 
@@ -11,6 +12,7 @@ extension MereRunCapabilityCatalog {
 
     enum SpeechTranscribeFamily: String, MereRunFamilyID {
         case parakeet
+        case whistle
         case qwen3ASR = "qwen3-asr"
     }
 
@@ -27,7 +29,8 @@ extension MereRunCapabilityCatalog {
         case clone
     }
 
-    /// The CLI's precedence (`SpeechTranscriptionResolver.route`): translation needs Qwen3-ASR and
+    /// Explicit Whistle selection requires a supported transcription request. For the other
+    /// backends, the CLI's precedence (`SpeechTranscriptionResolver.route`): translation needs Qwen3-ASR and
     /// outranks everything, an explicit `--backend` comes next, then a named model, and Parakeet
     /// otherwise. A named model runs only when the flags leave it its own family, so the
     /// selectors outrank it: `--backend qwen --model speech-asr-parakeet` runs Qwen3-ASR's default
@@ -38,6 +41,7 @@ extension MereRunCapabilityCatalog {
     static let speechTranscribeRouting = MereRunCapabilityRouting(
         modelFlags: ["--model"],
         defaultModels: [
+            .init(whenAny: [.init(flag: "--backend", values: ["whistle"])], models: ["speech-asr-whistle"]),
             .init(
                 whenAny: [
                     .init(flag: "--task", values: ["translate"]),
@@ -49,6 +53,10 @@ extension MereRunCapabilityCatalog {
             .always("speech-asr-parakeet")
         ],
         families: [
+            .init(
+                SpeechTranscribeFamily.whistle, title: "Whistle", models: ["speech-asr-whistle"],
+                selectors: [.init(flag: "--backend", values: ["auto", "whistle"])]
+            ),
             .init(
                 SpeechTranscribeFamily.parakeet, title: "Parakeet", models: ["speech-asr-parakeet"],
                 selectors: [
@@ -117,7 +125,10 @@ extension MereRunCapabilityCatalog {
     static let speechListenRouting = MereRunCapabilityRouting(
         modelFlags: ["--model"],
         defaultModels: [.always("speech-asr-qwen3")],
-        families: [.init(SpeechListenFamily.qwen3ASR, title: "Qwen3-ASR", models: ["speech-asr-qwen3"])],
+        families: [
+            .init(SpeechListenFamily.qwen3ASR, title: "Qwen3-ASR", models: ["speech-asr-qwen3"]),
+            .init(SpeechListenFamily.whistle, title: "Whistle", models: ["speech-asr-whistle"])
+        ],
         // The live loader takes any id and runs Qwen3-ASR (`CLIQwenASRLoader`), so a Parakeet id
         // runs and has no effect.
         excludedModels: .models(

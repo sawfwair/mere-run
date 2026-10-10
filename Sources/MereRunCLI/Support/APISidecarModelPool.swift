@@ -428,6 +428,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 },
                 make: {
                     switch key.backend {
+                    case .whistle:
+                        throw SpeechTranscriptionIssue("unsupported_backend", "Whistle is available through speech transcribe only.")
                     case .qwen:
                         return .qwen(Qwen3ASRGenerator(modelId: key.modelID))
                     case .parakeet:

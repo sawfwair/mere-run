@@ -111,7 +111,7 @@ final class GateWarningsJSONTests: XCTestCase {
         try Data("RIFF".utf8).write(to: audio)
         let arguments = [audio.path, "--backend", "parakeet", "--max-tokens", "64", "--receipt", "--quiet"]
         let gate = try CLICapabilityGate.pass(arguments: ["mere.run", "speech", "transcribe"] + arguments)
-        XCTAssertEqual(gate.warnings, ["--max-tokens has no effect with Parakeet. It applies to Qwen3-ASR."])
+        XCTAssertEqual(gate.warnings, ["--max-tokens has no effect with Parakeet. It applies to Whistle and Qwen3-ASR."])
         XCTAssertEqual(gate.stderrLines, [], "--quiet keeps stderr clean; the JSON still carries them")
 
         SpeechTranscribe.transcriptionExecutorOverride = FixtureASR()
@@ -125,7 +125,7 @@ final class GateWarningsJSONTests: XCTestCase {
         XCTAssertEqual(
             warned,
             "hello\n{\"event\":\"result\",\"exit\":0,\"outputs\":[],"
-                + "\"warnings\":[\"--max-tokens has no effect with Parakeet. It applies to Qwen3-ASR.\"]}\n"
+                + "\"warnings\":[\"--max-tokens has no effect with Parakeet. It applies to Whistle and Qwen3-ASR.\"]}\n"
         )
         let receipt = try JSONDecoder().decode(RunReceipt.self, from: Data(warned.split(separator: "\n")[1].utf8))
         XCTAssertEqual(receipt.warnings, gate.warnings)

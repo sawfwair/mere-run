@@ -795,6 +795,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 16
             ),
             descriptor(
+                ModelResolver.ModelID.whistleASR.rawValue,
+                "Whistle speech recognition",
+                "Native packed CQ2/CQ4 transcription in seven European languages with beam search and live audio.",
+                minimum: 8,
+                recommended: 16
+            ),
+            descriptor(
                 "speech-asr-parakeet",
                 "Speech recognition, fast",
                 "Transcribes speech quickly with the Parakeet ASR runtime.",

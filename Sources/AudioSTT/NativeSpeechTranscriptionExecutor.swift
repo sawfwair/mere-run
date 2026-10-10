@@ -10,6 +10,24 @@ public struct NativeSpeechTranscriptionExecutor: SpeechTranscriptionExecutor {
         self.parakeetExecutionProvider = parakeetExecutionProvider
     }
 
+    public func transcribeWhistle(
+        request: ASRRequest, modelID: String, modelPath: String?,
+        progressHandler: (@Sendable (ASRProgress) -> Void)?
+    ) async throws -> ASRResult {
+        guard case .mlx = parakeetExecutionProvider else {
+            throw SpeechTranscriptionIssue("incompatible_execution_provider", "Whistle requires MLX execution.")
+        }
+        let generator = WhistleGenerator()
+        do {
+            let result = try await generator.transcribe(request, modelID: modelID, modelPath: modelPath, progressHandler: progressHandler)
+            await generator.unload()
+            return result
+        } catch {
+            await generator.unload()
+            throw error
+        }
+    }
+
     public func transcribeQwen(
         request: ASRRequest, modelID: String, modelPath: String?,
         progressHandler: (@Sendable (ASRProgress) -> Void)?

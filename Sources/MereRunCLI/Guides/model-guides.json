@@ -364,6 +364,13 @@
     "resourceName": "handbook-qwen3-tts.md"
   },
   {
+    "topic": "handbook-whistle",
+    "title": "Whistle speech recognition",
+    "category": "Speech",
+    "models": ["speech-asr-whistle"],
+    "resourceName": "handbook-whistle.md"
+  },
+  {
     "topic": "handbook-qwen3-asr",
     "title": "Qwen3 ASR (Qwen)",
     "category": "Speech",

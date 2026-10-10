@@ -1624,3 +1624,18 @@ The BSD license and contributor notices are retained in
 `licenses/d1-resampling-PYTORCH-LICENSE.txt`. Pixel fixtures use PyTorch 2.14.1
 and torchvision 0.29.1; the native path selects bicubic for D1-3B and bilinear
 for omni.
+
+## Whistle native speech recognition
+
+- weights and vocabulary: [Cactus-Compute/whistle](https://huggingface.co/Cactus-Compute/whistle/tree/ca5287601bef25af26dcf2e1b2bdc0843a7c19e5), Apache-2.0
+- shared architecture reference: [cactus-compute/needle](https://github.com/cactus-compute/needle), Apache-2.0
+- local implementation: `Sources/AudioWhistleModel` and `Sources/AudioSTT/Whistle`
+- modifications: native Swift/MLX computation and packed CQ2/CQ4 Metal operations,
+  typed checkpoint validation, cached beam search, BPE keyword biasing, approximate
+  word alignment, decoder-depth selection, and shared file/live transcription routing
+
+The synthetic forward fixture contains deterministic untrained numerical outputs,
+not checkpoint weights or an original tokenizer. Its independent audio-graph
+reference is the public [Whistle WebGPU port](https://huggingface.co/spaces/mrfakename/whistle-webgpu).
+No ONNX graph or Cactus executable is included or executed by the native runtime.
+The publisher's Apache-2.0 license is retained in `licenses/whistle-APACHE-2.0.txt`.
