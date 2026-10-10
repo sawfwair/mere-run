@@ -8,6 +8,10 @@ The format is based on Keep a Changelog.
 
 ## 0.64.0 - 2026-10-10
 
+- Use portable MLX operations for packed Whistle inference on Linux, avoiding a
+  call to the Metal-only custom-kernel API. Apple platforms retain packed Metal
+  kernels; Linux expands projection rows and selected embedding rows on demand.
+
 - Add native Whistle transcription with packed CQ2/CQ4 weights, cached beam search,
   keyword biasing, decoder-depth selection, estimated word timestamps, and resident
   file/PCM/microphone streaming. `speech-asr-whistle` pins the compact upstream archive;

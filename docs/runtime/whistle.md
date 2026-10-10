@@ -17,7 +17,9 @@ and downloads about 17 MB. A local model directory needs `config.json` and
 `whistle.cact`. The archive supplies CQ2/CQ4 neural weights, FP16 scales and
 small tensors, the exact tokenizer, and the audio filterbank. Native Metal
 matrix operations read packed indices directly; Engram tables expand only the
-requested rows. The runtime does not execute an upstream binary or use ONNX.
+requested rows. On Linux, portable MLX operations expand projection or requested
+embedding rows on the CUDA device; they do not expand the full Engram table.
+The runtime does not execute an upstream binary or use ONNX.
 
 For the original FP32 reference path, also place
 `checkpoints/whistle.safetensors` in that directory and select it explicitly:

@@ -115,6 +115,11 @@ final class WhistleModelTests: MLXTestCase {
             let input = MLXArray(fixture.input, [3, 256])
             let rows = MLXArray(fixture.rows, [4, 256])
             assertClose(matrix.project(input), MLXArray(fixture.output, [3, 4]), tolerance: 2e-6)
+            assertClose(matrix.portableProject(input), MLXArray(fixture.output, [3, 4]), tolerance: 2e-6)
+            assertClose(matrix.portableGather(MLXArray([Int32(3), 1, 3])),
+                        take(rows, MLXArray([Int32(3), 1, 3]), axis: 0), tolerance: 2e-7)
+            assertClose(matrix.slice(1..<3).portableProject(input),
+                        MLXArray(fixture.output, [3, 4])[0..., 1..<3], tolerance: 2e-6)
             assertClose(matrix.gather(MLXArray([Int32(3), 1, 3])), take(rows, MLXArray([Int32(3), 1, 3]), axis: 0), tolerance: 2e-7)
             assertClose(matrix.slice(1..<3).project(input), MLXArray(fixture.output, [3, 4])[0..., 1..<3], tolerance: 2e-6)
         }

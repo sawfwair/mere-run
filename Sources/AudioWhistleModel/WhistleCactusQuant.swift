@@ -31,22 +31,53 @@ struct WhistleCactusQuant {
     }
 
     func project(_ input: MLXArray) -> MLXArray {
+        #if os(Linux)
+        return portableProject(input)
+        #else
         let shape = Array(input.shape.dropLast()) + [rows]
         let rotated = Self.rotate(input).reshaped(-1, columns)
         let parameters = MLXArray([Int32(columns), Int32(rows), Int32(bits), Int32(rowOffset)])
         return Self.multiply([packed, norms, codebook, rotated, parameters],
                              grid: (32, rows, rotated.dim(0)), threadGroup: (32, 1, 1),
                              outputShapes: [shape], outputDTypes: [.float32])[0]
+        #endif
     }
 
     func gather(_ indices: MLXArray) -> MLXArray {
+        #if os(Linux)
+        return portableGather(indices)
+        #else
         let parameters = MLXArray([Int32(columns), Int32(bits), Int32(rowOffset)])
         let rotated = Self.readRows([packed, norms, codebook, indices.asType(.int32), parameters],
                                     grid: (indices.size * columns, 1, 1), threadGroup: (256, 1, 1),
                                     outputShapes: [[indices.size, columns]], outputDTypes: [.float32])[0]
         return Self.rotate(rotated)
+        #endif
     }
 
+    /// CUDA uses tensor operations because the upstream Swift Metal kernel API is unavailable.
+    /// Only projection rows or requested embedding rows are expanded, never the full Engram table.
+    func portableProject(_ input: MLXArray) -> MLXArray {
+        let weights = rotatedRows(MLXArray(0..<rows))
+        return matmul(Self.rotate(input), weights.T)
+    }
+
+    func portableGather(_ indices: MLXArray) -> MLXArray {
+        Self.rotate(rotatedRows(indices))
+    }
+
+    private func rotatedRows(_ indices: MLXArray) -> MLXArray {
+        let column = MLXArray(0..<columns).asType(.int32)
+        let stored = (indices.asType(.int32) + rowOffset).reshaped(-1, 1)
+        let bitPosition = column * bits
+        let byteIndices = stored * (columns * bits / 8) + floorDivide(bitPosition, 8)
+        let bytes = take(packed, byteIndices, axis: 0).asType(.int32)
+        let codes = bitwiseAnd(rightShift(bytes, bitPosition % 8), (1 << bits) - 1)
+        let scaleIndices = stored * (columns / 128) + floorDivide(column, 128)
+        return take(codebook, codes, axis: 0) * take(norms, scaleIndices, axis: 0)
+    }
+
+    #if !os(Linux)
     private static let multiply = MLXFast.metalKernel(
         name: "whistle_cq_matmul", inputNames: ["w", "norm", "cb", "x", "p"], outputNames: ["y"], source: """
         const int lane = thread_position_in_threadgroup.x;
@@ -76,4 +107,5 @@ struct WhistleCactusQuant {
         y[i] = cb[index] * norm[row * (cols / 128) + col / 128];
         """, ensureRowContiguous: true
     )
+    #endif
 }
