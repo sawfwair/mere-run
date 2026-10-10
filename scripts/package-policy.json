@@ -4,6 +4,26 @@
   "existingImplementationProducts": ["AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSortformer", "MereRunAdmission", "MereRunAudioModels", "MereRunDecode", "MereRunExecution", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunKVCache", "MereRunLTXModel", "MereRunLagunaModel", "MereRunQwenModel", "MereRunResidency", "MereRunTensor", "MereRunTextEncoder"],
   "targets": [
     {
+      "name": "AudioWhistleModel",
+      "variants": [
+        "darwin",
+        "linux-source",
+        "linux-cuda-prebuilt"
+      ],
+      "role": "model-runtime",
+      "manifestType": "regular",
+      "owner": "AudioWhistleModel",
+      "purpose": "Whistle native encoder, cached decoder, checkpoint and vocabulary loading",
+      "allowedDirect": [
+        "product:mlx-swift/MLX",
+        "product:mlx-swift/MLXFast"
+      ],
+      "allowedTransitive": [
+        "product:mlx-swift/MLX",
+        "product:mlx-swift/MLXFast"
+      ]
+    },
+    {
       "name": "MereRunKolibriModel",
       "variants": [
         "darwin",
@@ -136,8 +156,8 @@
       "manifestType": "regular",
       "owner": "speech",
       "purpose": "Speech recognition orchestration and compatibility facade",
-      "allowedDirect": ["AudioCodecs", "AudioCore", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioSortformer", "MereRunCore", "MereRunExecution", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom", "product:swift-transformers/Transformers"],
-      "allowedTransitive": ["MereRunKolibriModel", "AudioCodecs", "AudioCore", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioSortformer", "COnnxRuntimeCoreML", "MediaIO", "MereRunAudioModels", "MereRunContract", "MereRunCore", "MereRunDecode", "MereRunExecution", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunKVCache", "MereRunLTXModel", "MereRunLagunaModel", "MereRunGLiNERModel", "MereRunLayaModel", "MereRunD1Model", "MereRunModelKit", "MereRunQwenModel", "MereRunTensor", "MereRunTextEncoder", "llama", "magentart", "product:mlx-swift/MLX", "product:mlx-swift/MLXFFT", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXOptimizers", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto", "product:swift-onnxruntime/CONNXRuntime", "product:swift-transformers/Transformers"]
+      "allowedDirect": ["AudioWhistleModel", "AudioCodecs", "AudioCore", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioSortformer", "MereRunCore", "MereRunExecution", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom", "product:swift-transformers/Transformers"],
+      "allowedTransitive": ["AudioWhistleModel", "MereRunKolibriModel", "AudioCodecs", "AudioCore", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioSortformer", "COnnxRuntimeCoreML", "MediaIO", "MereRunAudioModels", "MereRunContract", "MereRunCore", "MereRunDecode", "MereRunExecution", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunKVCache", "MereRunLTXModel", "MereRunLagunaModel", "MereRunGLiNERModel", "MereRunLayaModel", "MereRunD1Model", "MereRunModelKit", "MereRunQwenModel", "MereRunTensor", "MereRunTextEncoder", "llama", "magentart", "product:mlx-swift/MLX", "product:mlx-swift/MLXFFT", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXOptimizers", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto", "product:swift-onnxruntime/CONNXRuntime", "product:swift-transformers/Transformers"]
     },
     {
       "name": "AudioSortformer",
@@ -319,7 +339,7 @@
       "owner": "cli",
       "purpose": "Public CLI parsing, transport, and presentation",
       "allowedDirect": ["AudioCodecs", "AudioCore", "AudioSTT", "AudioTTS", "MediaIO", "MereRunAdmission", "MereRunContract", "MereRunCore", "MereRunEvaluation", "MereRunExecution", "MereRunRelayKit", "MereRunResidency", "product:hummingbird/Hummingbird", "product:swift-argument-parser/ArgumentParser", "product:swift-crypto/Crypto"],
-      "allowedTransitive": ["MereRunKolibriModel", "AudioBreezeTTSModel", "AudioCodecs", "AudioCore", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSTT", "AudioSortformer", "AudioTTS", "COnnxRuntimeCoreML", "MediaIO", "MereRunAdmission", "MereRunAudioModels", "MereRunContract", "MereRunCore", "MereRunDecode", "MereRunEvaluation", "MereRunExecution", "MereRunGLiNERModel", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunKVCache", "MereRunLTXModel", "MereRunLagunaModel", "MereRunLayaModel", "MereRunD1Model", "MereRunModelKit", "MereRunQwenModel", "MereRunRelayKit", "MereRunResidency", "MereRunTensor", "MereRunTextEncoder", "llama", "magentart", "product:hummingbird/Hummingbird", "product:mlx-swift/MLX", "product:mlx-swift/MLXFFT", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXOptimizers", "product:mlx-swift/MLXRandom", "product:swift-argument-parser/ArgumentParser", "product:swift-crypto/Crypto", "product:swift-onnxruntime/CONNXRuntime", "product:swift-transformers/Tokenizers", "product:swift-transformers/Transformers"]
+      "allowedTransitive": ["AudioWhistleModel", "MereRunKolibriModel", "AudioBreezeTTSModel", "AudioCodecs", "AudioCore", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSTT", "AudioSortformer", "AudioTTS", "COnnxRuntimeCoreML", "MediaIO", "MereRunAdmission", "MereRunAudioModels", "MereRunContract", "MereRunCore", "MereRunDecode", "MereRunEvaluation", "MereRunExecution", "MereRunGLiNERModel", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunKVCache", "MereRunLTXModel", "MereRunLagunaModel", "MereRunLayaModel", "MereRunD1Model", "MereRunModelKit", "MereRunQwenModel", "MereRunRelayKit", "MereRunResidency", "MereRunTensor", "MereRunTextEncoder", "llama", "magentart", "product:hummingbird/Hummingbird", "product:mlx-swift/MLX", "product:mlx-swift/MLXFFT", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXOptimizers", "product:mlx-swift/MLXRandom", "product:swift-argument-parser/ArgumentParser", "product:swift-crypto/Crypto", "product:swift-onnxruntime/CONNXRuntime", "product:swift-transformers/Tokenizers", "product:swift-transformers/Transformers"]
     },
     {
       "name": "MereRunCLITests",
@@ -329,7 +349,7 @@
       "owner": "testing",
       "purpose": "CLI and serving integration regressions; MLX test-resource initialization",
       "allowedDirect": ["AudioCore", "MediaIO", "MereRunCLI", "MereRunEvaluation", "MereRunMLXTestSupport"],
-      "allowedTransitive": ["MereRunKolibriModel", "AudioBreezeTTSModel", "AudioCodecs", "AudioCore", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSTT", "AudioSortformer", "AudioTTS", "COnnxRuntimeCoreML", "MediaIO", "MereRunAdmission", "MereRunAudioModels", "MereRunCLI", "MereRunContract", "MereRunCore", "MereRunDecode", "MereRunEvaluation", "MereRunExecution", "MereRunGLiNERModel", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunKVCache", "MereRunLTXModel", "MereRunLagunaModel", "MereRunLayaModel", "MereRunD1Model", "MereRunMLXTestSupport", "MereRunModelKit", "MereRunQwenModel", "MereRunRelayKit", "MereRunResidency", "MereRunTensor", "MereRunTextEncoder", "llama", "magentart", "product:hummingbird/Hummingbird", "product:mlx-swift/MLX", "product:mlx-swift/MLXFFT", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXOptimizers", "product:mlx-swift/MLXRandom", "product:swift-argument-parser/ArgumentParser", "product:swift-crypto/Crypto", "product:swift-onnxruntime/CONNXRuntime", "product:swift-transformers/Tokenizers", "product:swift-transformers/Transformers"]
+      "allowedTransitive": ["AudioWhistleModel", "MereRunKolibriModel", "AudioBreezeTTSModel", "AudioCodecs", "AudioCore", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSTT", "AudioSortformer", "AudioTTS", "COnnxRuntimeCoreML", "MediaIO", "MereRunAdmission", "MereRunAudioModels", "MereRunCLI", "MereRunContract", "MereRunCore", "MereRunDecode", "MereRunEvaluation", "MereRunExecution", "MereRunGLiNERModel", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunKVCache", "MereRunLTXModel", "MereRunLagunaModel", "MereRunLayaModel", "MereRunD1Model", "MereRunMLXTestSupport", "MereRunModelKit", "MereRunQwenModel", "MereRunRelayKit", "MereRunResidency", "MereRunTensor", "MereRunTextEncoder", "llama", "magentart", "product:hummingbird/Hummingbird", "product:mlx-swift/MLX", "product:mlx-swift/MLXFFT", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXOptimizers", "product:mlx-swift/MLXRandom", "product:swift-argument-parser/ArgumentParser", "product:swift-crypto/Crypto", "product:swift-onnxruntime/CONNXRuntime", "product:swift-transformers/Tokenizers", "product:swift-transformers/Transformers"]
     },
     {
       "name": "MereRunContract",
@@ -369,7 +389,7 @@
       "owner": "testing",
       "purpose": "Regression coverage for AudioCodecs, AudioCore, AudioParakeetModel, AudioQwen3ASRModel, AudioQwen3TTSModel, AudioSTT, AudioSortformer, AudioTTS, MediaIO, MereRunAudioModels, MereRunContract, MereRunCore, MereRunGemmaModel, MereRunH3Model, MereRunImageModels, MereRunLTXModel, MereRunLagunaModel, MereRunMLXTestSupport, MereRunQwenModel, MereRunTensor, MereRunTextEncoder, product:swift-crypto/Crypto, product:swift-jinja/Jinja",
       "allowedDirect": ["AudioCodecs", "AudioCore", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSTT", "AudioSortformer", "AudioTTS", "MediaIO", "MereRunAudioModels", "MereRunContract", "MereRunCore", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunLTXModel", "MereRunLagunaModel", "MereRunGLiNERModel", "MereRunLayaModel", "MereRunD1Model", "MereRunMLXTestSupport", "MereRunQwenModel", "MereRunTensor", "MereRunTextEncoder", "product:swift-crypto/Crypto", "product:swift-jinja/Jinja"],
-      "allowedTransitive": ["MereRunKolibriModel", "AudioBreezeTTSModel", "AudioCodecs", "AudioCore", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSTT", "AudioSortformer", "AudioTTS", "COnnxRuntimeCoreML", "MediaIO", "MereRunAudioModels", "MereRunContract", "MereRunCore", "MereRunDecode", "MereRunExecution", "MereRunGLiNERModel", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunKVCache", "MereRunLTXModel", "MereRunLagunaModel", "MereRunLayaModel", "MereRunD1Model", "MereRunMLXTestSupport", "MereRunModelKit", "MereRunQwenModel", "MereRunTensor", "MereRunTextEncoder", "llama", "magentart", "product:mlx-swift/MLX", "product:mlx-swift/MLXFFT", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXOptimizers", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto", "product:swift-jinja/Jinja", "product:swift-onnxruntime/CONNXRuntime", "product:swift-transformers/Tokenizers", "product:swift-transformers/Transformers"]
+      "allowedTransitive": ["AudioWhistleModel", "MereRunKolibriModel", "AudioBreezeTTSModel", "AudioCodecs", "AudioCore", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSTT", "AudioSortformer", "AudioTTS", "COnnxRuntimeCoreML", "MediaIO", "MereRunAudioModels", "MereRunContract", "MereRunCore", "MereRunDecode", "MereRunExecution", "MereRunGLiNERModel", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunKVCache", "MereRunLTXModel", "MereRunLagunaModel", "MereRunLayaModel", "MereRunD1Model", "MereRunMLXTestSupport", "MereRunModelKit", "MereRunQwenModel", "MereRunTensor", "MereRunTextEncoder", "llama", "magentart", "product:mlx-swift/MLX", "product:mlx-swift/MLXFFT", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXOptimizers", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto", "product:swift-jinja/Jinja", "product:swift-onnxruntime/CONNXRuntime", "product:swift-transformers/Tokenizers", "product:swift-transformers/Transformers"]
     },
     {
       "name": "MereRunDecode",
@@ -598,8 +618,8 @@
       "manifestType": "test",
       "owner": "testing",
       "purpose": "Regression coverage for AudioParakeetModel, AudioQwen3ASRModel, AudioQwen3TTSModel, AudioSortformer, MereRunKVCache, MereRunMLXTestSupport, product:mlx-swift/MLXRandom",
-      "allowedDirect": ["AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSortformer", "MereRunKVCache", "MereRunMLXTestSupport", "product:mlx-swift/MLXRandom"],
-      "allowedTransitive": ["AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSortformer", "MereRunKVCache", "MereRunMLXTestSupport", "MereRunModelKit", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto"]
+      "allowedDirect": ["AudioWhistleModel", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSortformer", "MereRunKVCache", "MereRunMLXTestSupport", "product:mlx-swift/MLXRandom"],
+      "allowedTransitive": ["AudioWhistleModel", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSortformer", "MereRunKVCache", "MereRunMLXTestSupport", "MereRunModelKit", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto"]
     },
     {
       "name": "StudioKit",

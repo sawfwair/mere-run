@@ -63,7 +63,7 @@ func dependencyClosure(_ roots: [String], targets: [String: PackageManifest.Targ
 func checkBoundary(_ manifest: PackageManifest) -> [String] {
     let targets = Dictionary(uniqueKeysWithValues: manifest.targets.map { ($0.name, $0) })
     let modelTargets: Set<String> = [
-        "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioParakeetModel", "AudioSortformer"
+        "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioParakeetModel", "AudioSortformer", "AudioWhistleModel"
     ]
     let supportTargets: Set<String> = ["MereRunKVCache", "MereRunModelKit"]
     let allowedProducts: Set<String> = ["MLX", "MLXFast", "MLXNN", "MLXRandom", "Crypto"]

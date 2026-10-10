@@ -171,6 +171,7 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .apBWE
             || spec?.validationKind == .univerSR
             || spec?.validationKind == .sortformer
+            || spec?.validationKind == .whistle
             || spec?.validationKind == .magentaRT2
             || spec?.validationKind == .muScriptor
             || spec?.validationKind == .woosh
@@ -490,8 +491,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=face expects insightface.")
             case .tts where engine != .qwen3TTS && engine != .breezeTTS:
                 warnings.append("Manifest engine mismatch: family=tts expects qwen3-tts or breeze-tts.")
-            case .asr where engine != .qwen3ASR && engine != .parakeetASR && engine != .sortformer:
-                warnings.append("Manifest engine mismatch: family=asr expects qwen3-asr, parakeet-asr, or sortformer.")
+            case .asr where engine != .qwen3ASR && engine != .parakeetASR && engine != .whistleASR && engine != .sortformer:
+                warnings.append("Manifest engine mismatch: family=asr expects qwen3-asr, parakeet-asr, whistle-asr, or sortformer.")
             case .embed where engine != .qwen3Embedding && engine != .embeddingGemma2:
                 warnings.append("Manifest engine mismatch: family=embed expects qwen3-embedding or embeddinggemma2.")
             case .privacy where engine != .openAIPrivacyFilter:
@@ -593,7 +594,7 @@ public enum MereRunModelValidator {
             switch manifest.engine {
             case .qwen3Coder?, .northMiniCode?, .inkling?, .deepseekV4Flash?, .aceStep?, .miniMaxMusic3?, .yue2?, .magentaRT2?, .muScriptor?, .roFormer?, .auk?, .apBWE?, .univerSR?, .woosh?, .mmaudio?, .ltxVideo?,
                  .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .marigoldV2?, .tripoSR?, .instantMesh?, .trellis2?,
-                 .insightFace?, .sortformer?, .terramindFlood?, .terramindFire?, .tessera?, .olmoEarth?:
+                 .insightFace?, .sortformer?, .whistleASR?, .terramindFlood?, .terramindFire?, .tessera?, .olmoEarth?:
                 return true
             default:
                 return false

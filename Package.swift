@@ -603,6 +603,17 @@ targets.append(
 
 targets.append(
   .target(
+    name: "AudioWhistleModel",
+    dependencies: mlxDependency("MLX") + mlxDependency("MLXFast"),
+    path: "Sources/AudioWhistleModel",
+    exclude: ["README.md"],
+    resources: [.process("Resources")],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
     name: "AudioQwen3ASRModel",
     dependencies: [.target(name: "MereRunKVCache")]
       + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
@@ -805,11 +816,13 @@ targets.append(
 targets.append(
   .target(
     name: "AudioSTT",
-    dependencies: audioRuntimeDependencies + ["AudioQwen3ASRModel", "AudioSortformer", "AudioParakeetModel"],
+    dependencies: audioRuntimeDependencies + ["AudioQwen3ASRModel", "AudioSortformer", "AudioParakeetModel", "AudioWhistleModel"],
     path: "Sources/AudioSTT",
     exclude: [
+      "README.md",
       "Parakeet/README.md",
-      "Qwen3ASR/README.md"
+      "Qwen3ASR/README.md",
+      "Whistle/README.md"
     ],
     swiftSettings: commonSwiftSettings,
     linkerSettings: isLinuxPackage ? [] : [
@@ -949,8 +962,9 @@ targets.append(
 targets.append(
   .testTarget(
     name: "SpeechRuntimeTests",
-    dependencies: ["AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioParakeetModel", "AudioSortformer", "MereRunKVCache", "MereRunMLXTestSupport"] + mlxDependency("MLXRandom"),
+    dependencies: ["AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioParakeetModel", "AudioSortformer", "AudioWhistleModel", "MereRunKVCache", "MereRunMLXTestSupport"] + mlxDependency("MLXRandom"),
     path: "Tests/SpeechRuntimeTests",
+    resources: [.copy("Fixtures")],
     swiftSettings: commonSwiftSettings,
     linkerSettings: linuxNativeLinkerSettings
   )

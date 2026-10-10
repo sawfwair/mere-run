@@ -3,6 +3,22 @@ import Foundation
 extension ManagedModelCatalog {
     static let speechSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
+            id: ManagedModelID.whistleASR.rawValue,
+            category: .speechASR,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "Cactus-Compute/whistle",
+                revision: "ca5287601bef25af26dcf2e1b2bdc0843a7c19e5",
+                patterns: ["LICENSE", "README.md", "config.json", "whistle.cact"]
+            ),
+            upstreamRepoId: "Cactus-Compute/whistle",
+            upstreamRevision: "ca5287601bef25af26dcf2e1b2bdc0843a7c19e5",
+            validationKind: .whistle,
+            estimatedDownloadBytes: 17_000_000,
+            defaultCLICommands: ["speech transcribe", "speech listen"],
+            apiAvailability: .cliOnly
+        ),
+        ManagedModelSpec(
             id: ManagedModelID.breezeTTS2.rawValue,
             category: .speechTTS,
             installShape: .directoryRoot,

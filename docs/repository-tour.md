@@ -123,6 +123,10 @@ owns Laguna target and draft computation. `Sources/MereRunAudioModels` owns
 BigVGAN layers shared by H3 and MMAudio. Core retains their runtime adapters.
 See [H3 and Laguna runtime boundaries](./internals/h3-laguna-runtime-boundaries.md).
 
+`Sources/AudioWhistleModel` is an internal target for native Whistle speech
+recognition layers and checkpoint geometry. `Sources/AudioSTT/Whistle` owns
+waveform features, word alignment, and file/live transcription. See [Native Whistle](./runtime/whistle.md).
+
 ### Kolibri model library
 
 `Sources/MereRunKolibriModel` owns Kolibri attention, sigmoid expert routing,

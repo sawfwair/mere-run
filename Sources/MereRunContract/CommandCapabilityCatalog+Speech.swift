@@ -78,11 +78,11 @@ extension MereRunCapabilityCatalog {
         options: [
             .init(flag: "--run-dir", label: "Run directory", kind: .directory, group: Group.output, tier: .expert),
             .init(flag: "--timestamps", label: "Include timestamps", kind: .boolean)
-                .scoped(SpeechTranscribeFamily.only(.parakeet, ignoredBy: [.qwen3ASR])),
+                .scoped(SpeechTranscribeFamily.only(.parakeet, .whistle, ignoredBy: [.qwen3ASR])),
             .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file, group: Group.output, tier: .standard),
             .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .standard),
             .init(
-                flag: "--backend", label: "Backend", kind: .choice, choices: ["auto", "parakeet", "qwen"],
+                flag: "--backend", label: "Backend", kind: .choice, choices: ["auto", "parakeet", "qwen", "whistle"],
                 defaultValue: "auto", group: Group.modelAndAdapters, tier: .essential, choiceSpellings: .exact
             ).scoped(SpeechTranscribeFamily.rule(.qwen3ASR, values: ["auto", "qwen"], severity: .warning)),
             .init(
@@ -90,7 +90,8 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "mlx", group: Group.modelAndAdapters, tier: .standard, choiceSpellings: .exact
             ).scoped(
                 // Qwen3-ASR always runs MLX: the default passes with no effect, Core ML is refused.
-                SpeechTranscribeFamily.only(.parakeet, ignoredBy: [.qwen3ASR]), .rule(.qwen3ASR, values: ["mlx"])
+                SpeechTranscribeFamily.only(.parakeet, ignoredBy: [.qwen3ASR, .whistle]),
+                .rule(.qwen3ASR, values: ["mlx"]), .rule(.whistle, values: ["mlx"])
             ),
             .init(
                 flag: "--coreml-encoder", label: "Core ML artifact", kind: .directory,
@@ -108,8 +109,20 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--max-tokens", label: "Max tokens", kind: .integer,
                 defaultValue: "448", group: Group.sampling, tier: .standard, range: .init(min: 1, max: 8_192, step: 1)
-            ).scoped(SpeechTranscribeFamily.only(.qwen3ASR, ignoredBy: [.parakeet])),
-            .init(flag: "--stream", label: "Stream", kind: .boolean, group: Group.run, tier: .expert),
+            ).scoped(SpeechTranscribeFamily.only(.qwen3ASR, .whistle, ignoredBy: [.parakeet])),
+            .init(flag: "--whistle-weights", label: "Whistle weights", kind: .choice, choices: ["cactus", "fp32"],
+                  defaultValue: "cactus", group: Group.modelAndAdapters, tier: .expert, choiceSpellings: .exact)
+                .scoped(SpeechTranscribeFamily.only(.whistle)),
+            .init(flag: "--beam-size", label: "Beam size", kind: .integer, defaultValue: "5",
+                  group: Group.sampling, tier: .standard, range: .init(min: 1, max: 8, step: 1))
+                .scoped(SpeechTranscribeFamily.only(.whistle)),
+            .init(flag: "--decoder-depth", label: "Decoder depth", kind: .integer, defaultValue: "8",
+                  group: Group.sampling, tier: .expert, range: .init(min: 2, max: 8, step: 1))
+                .scoped(SpeechTranscribeFamily.only(.whistle)),
+            .init(flag: "--keyword", label: "Keyword bias", kind: .string, repeatable: true, group: Group.prompt, tier: .expert)
+                .scoped(SpeechTranscribeFamily.only(.whistle)),
+            .init(flag: "--stream", label: "Stream", kind: .boolean, group: Group.run, tier: .expert)
+                .scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle)),
             .init(
                 flag: "--stream-chunk-ms", label: "Feed interval", kind: .integer,
                 defaultValue: "200", group: Group.run, tier: .expert, range: .init(min: 10, max: 5_000, step: 10), dependsOn: "--stream"
@@ -128,7 +141,7 @@ extension MereRunCapabilityCatalog {
             ),
             .init(flag: "--jsonl", label: "JSON Lines", kind: .boolean, group: Group.output, tier: .expert, dependsOn: "--stream"),
             .init(flag: "--no-timestamps", label: "No timestamps", kind: .boolean, group: Group.output, tier: .standard)
-                .scoped(SpeechTranscribeFamily.only(.parakeet, ignoredBy: [.qwen3ASR])),
+                .scoped(SpeechTranscribeFamily.only(.parakeet, .whistle, ignoredBy: [.qwen3ASR])),
             .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             receiptOption
         ],
@@ -243,12 +256,23 @@ extension MereRunCapabilityCatalog {
         id: "speech.listen",
         command: ["speech", "listen"],
         title: "Live transcription",
-        summary: "Transcribe a macOS microphone with live Qwen ASR.",
+        summary: "Transcribe a macOS microphone with live Qwen or Whistle ASR.",
         options: [
             .init(flag: "--device", label: "Input device", kind: .string, group: Group.inputs, tier: .standard),
             .init(flag: "--list-devices", label: "List devices", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--language", label: "Language", kind: .string, tier: .essential),
             .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--whistle-weights", label: "Whistle weights", kind: .choice, choices: ["cactus", "fp32"],
+                  defaultValue: "cactus", group: Group.modelAndAdapters, tier: .expert, choiceSpellings: .exact)
+                .scoped(SpeechListenFamily.only(.whistle)),
+            .init(flag: "--beam-size", label: "Beam size", kind: .integer, defaultValue: "5",
+                  group: Group.sampling, tier: .standard, range: .init(min: 1, max: 8, step: 1))
+                .scoped(SpeechListenFamily.only(.whistle)),
+            .init(flag: "--decoder-depth", label: "Decoder depth", kind: .integer, defaultValue: "8",
+                  group: Group.sampling, tier: .expert, range: .init(min: 2, max: 8, step: 1))
+                .scoped(SpeechListenFamily.only(.whistle)),
+            .init(flag: "--keyword", label: "Keyword bias", kind: .string, repeatable: true, group: Group.prompt, tier: .expert)
+                .scoped(SpeechListenFamily.only(.whistle)),
             .init(
                 flag: "--decode-ms", label: "Decode window (ms)", kind: .integer,
                 defaultValue: "2000", tier: .standard, range: .init(min: 1, max: 10_000, step: 100)

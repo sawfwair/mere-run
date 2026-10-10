@@ -4,24 +4,28 @@ public enum ASRBackend: String, Sendable, Hashable, Codable, CaseIterable {
     case auto
     case parakeet
     case qwen
+    case whistle
 }
 
 public enum ASRResolvedBackend: String, Sendable, Hashable, Codable {
     case parakeet
     case qwen
+    case whistle
 }
 
 public struct ASRBackendAvailability: Sendable, Hashable {
     public let parakeetAvailable: Bool
     public let qwenAvailable: Bool
+    public let whistleAvailable: Bool
 
-    public init(parakeetAvailable: Bool, qwenAvailable: Bool) {
+    public init(parakeetAvailable: Bool, qwenAvailable: Bool, whistleAvailable: Bool = false) {
         self.parakeetAvailable = parakeetAvailable
         self.qwenAvailable = qwenAvailable
+        self.whistleAvailable = whistleAvailable
     }
 
     public var hasAnyBackend: Bool {
-        parakeetAvailable || qwenAvailable
+        parakeetAvailable || qwenAvailable || whistleAvailable
     }
 }
 
@@ -50,6 +54,11 @@ public enum ASRBackendRouting {
         parakeetSupportedLanguageCodes: Set<String>? = nil
     ) -> ASRBackendDecision {
         let normalizedHint = normalizeLanguageHint(languageHint)
+
+        if preferredBackend == .whistle {
+            return pick(preferred: .whistle, fallback: nil, availableBackends: availableBackends,
+                        reason: "preferred_whistle", normalizedLanguageHint: normalizedHint)
+        }
 
         if task == .translate {
             return pick(
@@ -88,6 +97,9 @@ public enum ASRBackendRouting {
         }
 
         switch preferredBackend {
+        case .whistle:
+            return pick(preferred: .whistle, fallback: nil, availableBackends: availableBackends,
+                        reason: "preferred_whistle", normalizedLanguageHint: normalizedHint)
         case .qwen:
             return pick(
                 preferred: .qwen,
@@ -199,6 +211,7 @@ public enum ASRBackendRouting {
         in availability: ASRBackendAvailability
     ) -> Bool {
         switch backend {
+        case .whistle: return availability.whistleAvailable
         case .parakeet: return availability.parakeetAvailable
         case .qwen: return availability.qwenAvailable
         }

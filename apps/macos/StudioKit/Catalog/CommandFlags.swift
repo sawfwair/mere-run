@@ -2527,6 +2527,9 @@ extension CommandFlags {
             "--provider": "mlx",
             "--task": "transcribe",
             "--max-tokens": "448",
+            "--whistle-weights": "cactus",
+            "--beam-size": "5",
+            "--decoder-depth": "8",
             "--stream-chunk-ms": "200",
             "--stream-decode-ms": "2000"
         ]
@@ -2541,6 +2544,10 @@ extension CommandFlags {
         package static let task = "--task"
         package static let language = "--language"
         package static let maxTokens = "--max-tokens"
+        package static let whistleWeights = "--whistle-weights"
+        package static let beamSize = "--beam-size"
+        package static let decoderDepth = "--decoder-depth"
+        package static let keyword = "--keyword"
         package static let stream = "--stream"
         package static let streamChunkMs = "--stream-chunk-ms"
         package static let streamDecodeMs = "--stream-decode-ms"
@@ -2644,6 +2651,9 @@ extension CommandFlags {
     package enum SpeechListen: CommandFlagNamespace {
         package static let command = ["speech", "listen"]
         package static let defaultValues = [
+            "--whistle-weights": "cactus",
+            "--beam-size": "5",
+            "--decoder-depth": "8",
             "--decode-ms": "2000",
             "--silence-ms": "900"
         ]
@@ -2652,6 +2662,10 @@ extension CommandFlags {
         package static let listDevices = "--list-devices"
         package static let language = "--language"
         package static let model = "--model"
+        package static let whistleWeights = "--whistle-weights"
+        package static let beamSize = "--beam-size"
+        package static let decoderDepth = "--decoder-depth"
+        package static let keyword = "--keyword"
         package static let decodeMs = "--decode-ms"
         package static let silenceMs = "--silence-ms"
         package static let quiet = "--quiet"

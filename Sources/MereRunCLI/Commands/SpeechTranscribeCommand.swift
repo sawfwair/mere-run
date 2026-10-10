@@ -11,9 +11,11 @@ enum SpeechBackendOption: String, ExpressibleByArgument {
     case auto
     case parakeet
     case qwen
+    case whistle
 
     var backend: ASRBackend {
         switch self {
+        case .whistle: return .whistle
         case .auto: return .auto
         case .parakeet: return .parakeet
         case .qwen: return .qwen
@@ -43,7 +45,8 @@ struct SpeechTranscribe: AsyncParsableCommand {
         commandName: "transcribe",
         abstract: "Transcribe or translate speech to text using native ASR backends.",
         discussion: """
-        Supports native Parakeet and Qwen backends with policy routing.
+        Supports native Parakeet, Qwen, and Whistle backends with policy routing.
+        Whistle supports packed CQ2/CQ4 weights, beam search, word timestamps, and seven European languages.
         In auto mode, transcription prefers Parakeet while translation routes to Qwen.
 
         Example:
@@ -68,7 +71,7 @@ struct SpeechTranscribe: AsyncParsableCommand {
     @Option(name: [.customShort("m"), .long], help: "Model ID or local model path override for the selected backend.")
     var model: String?
 
-    @Option(name: [.long], help: "ASR backend: auto, parakeet, or qwen.")
+    @Option(name: [.long], help: "ASR backend: auto, parakeet, qwen, or whistle.")
     var backend: SpeechBackendOption = .auto
 
     @Option(
@@ -91,6 +94,23 @@ struct SpeechTranscribe: AsyncParsableCommand {
 
     @Option(name: [.long], help: "Maximum tokens to generate (default: 448).")
     var maxTokens: Int = 448
+
+    @Option(name: [.customLong("whistle-weights")], help: "Whistle weights: cactus (packed CQ2/CQ4) or fp32 (local original checkpoint).")
+    var whistleWeights: String = "cactus"
+
+    @Option(name: [.customLong("beam-size")], help: "Whistle beam size, 1...8 (1 selects greedy decoding).")
+    var beamSize: Int = 5
+
+    @Option(name: [.customLong("decoder-depth")], help: "Whistle decoder depth, 2...8 physical layers selected by bisection.")
+    var decoderDepth: Int = 8
+
+    @Option(name: [.customLong("keyword")], help: "Whistle keyword or phrase to bias; repeat for multiple phrases.")
+    var keywords: [String] = []
+
+    private var whistleOptions: WhistleOptions {
+        WhistleOptions(weights: WhistleOptions.Weights(rawValue: whistleWeights)!, beamSize: beamSize,
+                       decoderDepth: decoderDepth, keywords: keywords, wordTimestamps: timestamps)
+    }
 
     @Flag(name: [.long], help: "Enable streaming ASR mode using the selected backend.")
     var stream: Bool = false
@@ -132,6 +152,10 @@ struct SpeechTranscribe: AsyncParsableCommand {
     private var transcriptionExecutor: (any CLIASRTranscriptionExecutor)? { Self.transcriptionExecutorOverride }
 
     func validate() throws {
+        guard WhistleOptions.Weights(rawValue: whistleWeights) != nil else {
+            throw ValidationError("--whistle-weights must be cactus or fp32.")
+        }
+        try whistleOptions.validate()
         guard maxTokens > 0 else {
             throw ValidationError("--max-tokens must be positive.")
         }
@@ -235,11 +259,15 @@ struct SpeechTranscribe: AsyncParsableCommand {
             }
         }
 
+        let requestRoute = try SpeechTranscriptionResolver.route(
+            task: task.task, language: language, preferredBackend: backend.backend, modelOverride: model
+        )
         let request = ASRRequest(
             audioURL: audioURL,
             language: language,
             task: task.task,
-            maxTokens: maxTokens
+            maxTokens: maxTokens,
+            whistle: requestRoute.decision.backend == .whistle ? whistleOptions : nil
         )
 
         if stream {
@@ -472,6 +500,19 @@ struct SpeechTranscribe: AsyncParsableCommand {
         let configuration = Qwen3ASRLiveConfiguration(decodeIntervalMs: streamDecodeMs)
 
         switch route.decision.backend {
+        case .whistle:
+            let generator = WhistleGenerator()
+            var liveOptions = whistleOptions
+            liveOptions.wordTimestamps = false
+            try await generator.prepare(modelPath: route.modelOverride, options: liveOptions, progressHandler: progressHandler)
+            var whistleConfiguration = configuration
+            whistleConfiguration.maxUtteranceMs = min(whistleConfiguration.maxUtteranceMs, 30_000)
+            let live = ASRUtteranceLiveSession(request: request, configuration: whistleConfiguration, redecodeWholeUtterance: true) { samples, language in
+                try await generator.transcribePrepared(samples: samples, language: language, maxTokens: request.maxTokens)
+            }
+            return CLILiveASRSession(backend: .whistle, events: live.events,
+                                     feed: { try await live.feed(samples: $0) },
+                                     finish: { try await live.finish(reason: $0) }, cancel: { await live.cancel() })
         case .parakeet:
             var parakeetConfiguration = configuration
             parakeetConfiguration.silenceMs = min(configuration.silenceMs, 600)

@@ -24,6 +24,7 @@ extension CLIFamilyRouters {
             return nil
         }
         return switch route.decision.backend {
+        case .whistle: "whistle"
         case .parakeet: "parakeet"
         case .qwen: "qwen3-asr"
         }

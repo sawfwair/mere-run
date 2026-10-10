@@ -9,6 +9,7 @@ Transcribe or translate speech from a WAV file using native ASR backends. Auto m
 - `speech-asr-parakeet` for default MLX transcription. The standalone Core ML
   artifact replaces it when `--provider coreml` is selected.
 - `speech-asr-qwen3` for quality-first transcription and translation.
+- `speech-asr-whistle` for native packed CQ2/CQ4 transcription in seven European languages.
 
 ## Install and check
 
@@ -23,7 +24,7 @@ mere.run speech transcribe --help
 - positional audio: input WAV, 16 kHz recommended.
 - `--output`, `-o`: optional transcript path.
 - `--model`, `-m`: model id or local model path.
-- `--backend`: `auto`, `parakeet`, or `qwen`.
+- `--backend`: `auto`, `parakeet`, `qwen`, or `whistle`.
 - `--provider`: Parakeet encoder provider, `mlx` or `coreml`. The default is
   `mlx`. Core ML requires explicit `--backend parakeet` selection.
 - `--coreml-encoder`: Mere-built Parakeet Core ML artifact directory.
@@ -32,25 +33,30 @@ mere.run speech transcribe --help
   always produces English, whatever language the audio is in; `--language`
   has no effect with it.
 - `--language`: optional language hint.
-- `--max-tokens`: Qwen generation cap, default `448`. Parakeet ignores it.
+- `--max-tokens`: Qwen or Whistle generation cap, default `448`. Whistle caps it
+  at 318 per window. Parakeet ignores it.
 - `--stream`: streaming ASR mode using the selected backend. A local
   `--model` folder runs its own backend whatever the `--language` hint says.
 - `--stream-chunk-ms`: audio feed chunk size for streaming.
 - `--stream-decode-ms`: decode interval for streaming.
-- `--timestamps`, `--no-timestamps`: include Parakeet alignment lines. Qwen
-  and streaming output carry none.
+- `--timestamps`, `--no-timestamps`: include Parakeet alignments or estimated Whistle word times.
+  Qwen and streaming output carry no word alignments.
+- `--beam-size`, `--decoder-depth`, `--keyword`, `--whistle-weights`: Whistle decoding controls.
+  See `guide --model speech-asr-whistle`.
 - `--quiet`, `-q`: suppress progress.
 
 ## Usage patterns
 
 - Start with `--backend auto`.
 - Use `--backend parakeet` for normal transcription where speed matters.
+- Whistle is selected explicitly by backend or model ID. It rejects translation,
+  unsupported language hints and Core ML; see `guide --model speech-asr-whistle`.
 - Use `--provider coreml` with a verified Mere-built hybrid artifact. It uses
   Core ML for the encoder and TDT decoder, so the full managed MLX checkpoint
   is not required. Non-streaming files are processed in 15-second windows with
   two seconds of overlap. The decoder processes as many as 16 windows in
   parallel, and matching aligned tokens are reconciled at each boundary.
-- The backend comes from, in order: `--task translate` (always Qwen), a
+- For the other backends, the choice comes from, in order: `--task translate` (Qwen), a
   `--language` Parakeet's router does not recognize (Qwen), an explicit
   `--backend`, the `--model`'s own backend, and otherwise Parakeet. Live
   transcription follows the same policy.

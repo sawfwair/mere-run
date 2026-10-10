@@ -6,3 +6,9 @@ qwen3-asr	console.speechListen	validated	--decode-ms --device --jsonl --language
 qwen3-asr	task.speechListen	emitted	--decode-ms --device --jsonl --language --list-devices --model --quiet --silence-ms
 qwen3-asr	task.speechListen	shown	--decode-ms --device --jsonl --language --list-devices --model --quiet --silence-ms
 qwen3-asr	task.speechListen	validated	--decode-ms --device --jsonl --language --list-devices --model --quiet --silence-ms
+whistle	console.speechListen	emitted	--beam-size --decode-ms --decoder-depth --device --jsonl --keyword --language --list-devices --model --quiet --silence-ms --whistle-weights
+whistle	console.speechListen	shown	--beam-size --decode-ms --decoder-depth --device --jsonl --keyword --language --list-devices --model --quiet --silence-ms --whistle-weights
+whistle	console.speechListen	validated	--beam-size --decode-ms --decoder-depth --device --jsonl --keyword --language --list-devices --model --quiet --silence-ms --whistle-weights
+whistle	task.speechListen	emitted	--beam-size --decode-ms --decoder-depth --device --jsonl --keyword --language --list-devices --model --quiet --silence-ms --whistle-weights
+whistle	task.speechListen	shown	--beam-size --decode-ms --decoder-depth --device --jsonl --keyword --language --list-devices --model --quiet --silence-ms --whistle-weights
+whistle	task.speechListen	validated	--beam-size --decode-ms --decoder-depth --device --jsonl --keyword --language --list-devices --model --quiet --silence-ms --whistle-weights

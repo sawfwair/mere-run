@@ -1,0 +1,514 @@
+{
+  "embedding/embedding": [
+    8199,
+    512
+  ],
+  "encoder/final_norm/scale": [
+    512
+  ],
+  "encoder/layers/block/ZCRMSNorm_0/scale": [
+    8,
+    512
+  ],
+  "encoder/layers/block/attn_gate": [
+    8
+  ],
+  "encoder/layers/block/conv_norm/scale": [
+    8,
+    512
+  ],
+  "encoder/layers/block/conv_out_norm/scale": [
+    8,
+    512
+  ],
+  "encoder/layers/block/dw": [
+    8,
+    9,
+    1,
+    512
+  ],
+  "encoder/layers/block/hadamard_mlp/b2": [
+    8,
+    512
+  ],
+  "encoder/layers/block/hadamard_mlp/cond_u": [
+    8,
+    8,
+    512
+  ],
+  "encoder/layers/block/hadamard_mlp/cond_v": [
+    8,
+    512,
+    8
+  ],
+  "encoder/layers/block/hadamard_mlp/d1": [
+    8,
+    512
+  ],
+  "encoder/layers/block/hadamard_mlp/d2": [
+    8,
+    512
+  ],
+  "encoder/layers/block/hadamard_mlp/d3": [
+    8,
+    512
+  ],
+  "encoder/layers/block/hadamard_mlp/d4": [
+    8,
+    512
+  ],
+  "encoder/layers/block/hadamard_mlp/w1a": [
+    8,
+    16,
+    16
+  ],
+  "encoder/layers/block/hadamard_mlp/w1b": [
+    8,
+    32,
+    32
+  ],
+  "encoder/layers/block/hadamard_mlp/w2a": [
+    8,
+    16,
+    16
+  ],
+  "encoder/layers/block/hadamard_mlp/w2b": [
+    8,
+    32,
+    32
+  ],
+  "encoder/layers/block/hadamard_mlp/w3a": [
+    8,
+    16,
+    16
+  ],
+  "encoder/layers/block/hadamard_mlp/w3b": [
+    8,
+    32,
+    32
+  ],
+  "encoder/layers/block/hadamard_mlp_0/b2": [
+    8,
+    512
+  ],
+  "encoder/layers/block/hadamard_mlp_0/cond_u": [
+    8,
+    8,
+    512
+  ],
+  "encoder/layers/block/hadamard_mlp_0/cond_v": [
+    8,
+    512,
+    8
+  ],
+  "encoder/layers/block/hadamard_mlp_0/d1": [
+    8,
+    512
+  ],
+  "encoder/layers/block/hadamard_mlp_0/d2": [
+    8,
+    512
+  ],
+  "encoder/layers/block/hadamard_mlp_0/d3": [
+    8,
+    512
+  ],
+  "encoder/layers/block/hadamard_mlp_0/d4": [
+    8,
+    512
+  ],
+  "encoder/layers/block/hadamard_mlp_0/w1a": [
+    8,
+    16,
+    16
+  ],
+  "encoder/layers/block/hadamard_mlp_0/w1b": [
+    8,
+    32,
+    32
+  ],
+  "encoder/layers/block/hadamard_mlp_0/w2a": [
+    8,
+    16,
+    16
+  ],
+  "encoder/layers/block/hadamard_mlp_0/w2b": [
+    8,
+    32,
+    32
+  ],
+  "encoder/layers/block/hadamard_mlp_0/w3a": [
+    8,
+    16,
+    16
+  ],
+  "encoder/layers/block/hadamard_mlp_0/w3b": [
+    8,
+    32,
+    32
+  ],
+  "encoder/layers/block/post_attn_norm/scale": [
+    8,
+    512
+  ],
+  "encoder/layers/block/pre_hada_norm/scale": [
+    8,
+    512
+  ],
+  "encoder/layers/block/pre_hada_norm_0/scale": [
+    8,
+    512
+  ],
+  "encoder/layers/block/pw1/kernel": [
+    8,
+    512,
+    1024
+  ],
+  "encoder/layers/block/pw2/kernel": [
+    8,
+    512,
+    512
+  ],
+  "encoder/layers/block/self_attn/gate_proj/kernel": [
+    8,
+    512,
+    512
+  ],
+  "encoder/layers/block/self_attn/k_norm/scale": [
+    8,
+    48
+  ],
+  "encoder/layers/block/self_attn/k_proj/kernel": [
+    8,
+    512,
+    96
+  ],
+  "encoder/layers/block/self_attn/out_proj/kernel": [
+    8,
+    512,
+    512
+  ],
+  "encoder/layers/block/self_attn/q_norm/scale": [
+    8,
+    48
+  ],
+  "encoder/layers/block/self_attn/q_proj/kernel": [
+    8,
+    512,
+    384
+  ],
+  "encoder/layers/block/self_attn/v_proj/kernel": [
+    8,
+    512,
+    128
+  ],
+  "encoder/mhc_a_post": [
+    8
+  ],
+  "encoder/mhc_a_pre": [
+    8
+  ],
+  "encoder/mhc_a_res": [
+    8
+  ],
+  "encoder/mhc_b_post": [
+    8,
+    4
+  ],
+  "encoder/mhc_b_pre": [
+    8,
+    4
+  ],
+  "encoder/mhc_b_res": [
+    8,
+    4,
+    4
+  ],
+  "encoder/mhc_phi_post": [
+    8,
+    2048,
+    4
+  ],
+  "encoder/mhc_phi_pre": [
+    8,
+    2048,
+    4
+  ],
+  "encoder/mhc_phi_res": [
+    8,
+    2048,
+    16
+  ],
+  "engrams_0/embedding": [
+    4,
+    18432,
+    128
+  ],
+  "engrams_0/key_proj/kernel": [
+    512,
+    512
+  ],
+  "engrams_0/taps": [
+    4,
+    512
+  ],
+  "engrams_0/value_proj/kernel": [
+    512,
+    512
+  ],
+  "engrams_1/embedding": [
+    4,
+    18432,
+    128
+  ],
+  "engrams_1/key_proj/kernel": [
+    512,
+    512
+  ],
+  "engrams_1/taps": [
+    4,
+    512
+  ],
+  "engrams_1/value_proj/kernel": [
+    512,
+    512
+  ],
+  "pe_gate": [],
+  "stack/final_norm/scale": [
+    512
+  ],
+  "stack/layers/block/ZCRMSNorm_0/scale": [
+    8,
+    512
+  ],
+  "stack/layers/block/attn_gate": [
+    8
+  ],
+  "stack/layers/block/cross_attn/gate_proj/kernel": [
+    8,
+    512,
+    512
+  ],
+  "stack/layers/block/cross_attn/k_norm/scale": [
+    8,
+    48
+  ],
+  "stack/layers/block/cross_attn/k_proj/kernel": [
+    8,
+    512,
+    384
+  ],
+  "stack/layers/block/cross_attn/out_proj/kernel": [
+    8,
+    512,
+    512
+  ],
+  "stack/layers/block/cross_attn/q_norm/scale": [
+    8,
+    48
+  ],
+  "stack/layers/block/cross_attn/q_proj/kernel": [
+    8,
+    512,
+    384
+  ],
+  "stack/layers/block/cross_attn/v_proj/kernel": [
+    8,
+    512,
+    512
+  ],
+  "stack/layers/block/cross_gate": [
+    8
+  ],
+  "stack/layers/block/cross_norm/scale": [
+    8,
+    512
+  ],
+  "stack/layers/block/hadamard_mlp/b2": [
+    8,
+    512
+  ],
+  "stack/layers/block/hadamard_mlp/cond_u": [
+    8,
+    8,
+    512
+  ],
+  "stack/layers/block/hadamard_mlp/cond_v": [
+    8,
+    512,
+    8
+  ],
+  "stack/layers/block/hadamard_mlp/d1": [
+    8,
+    512
+  ],
+  "stack/layers/block/hadamard_mlp/d2": [
+    8,
+    512
+  ],
+  "stack/layers/block/hadamard_mlp/d3": [
+    8,
+    512
+  ],
+  "stack/layers/block/hadamard_mlp/d4": [
+    8,
+    512
+  ],
+  "stack/layers/block/hadamard_mlp/w1a": [
+    8,
+    16,
+    16
+  ],
+  "stack/layers/block/hadamard_mlp/w1b": [
+    8,
+    32,
+    32
+  ],
+  "stack/layers/block/hadamard_mlp/w2a": [
+    8,
+    16,
+    16
+  ],
+  "stack/layers/block/hadamard_mlp/w2b": [
+    8,
+    32,
+    32
+  ],
+  "stack/layers/block/hadamard_mlp/w3a": [
+    8,
+    16,
+    16
+  ],
+  "stack/layers/block/hadamard_mlp/w3b": [
+    8,
+    32,
+    32
+  ],
+  "stack/layers/block/post_attn_norm/scale": [
+    8,
+    512
+  ],
+  "stack/layers/block/post_cross_norm/scale": [
+    8,
+    512
+  ],
+  "stack/layers/block/pre_hada_norm/scale": [
+    8,
+    512
+  ],
+  "stack/layers/block/self_attn/gate_proj/kernel": [
+    8,
+    512,
+    512
+  ],
+  "stack/layers/block/self_attn/k_norm/scale": [
+    8,
+    48
+  ],
+  "stack/layers/block/self_attn/k_proj/kernel": [
+    8,
+    512,
+    96
+  ],
+  "stack/layers/block/self_attn/k_taps": [
+    8,
+    3,
+    96
+  ],
+  "stack/layers/block/self_attn/out_proj/kernel": [
+    8,
+    512,
+    512
+  ],
+  "stack/layers/block/self_attn/q_norm/scale": [
+    8,
+    48
+  ],
+  "stack/layers/block/self_attn/q_proj/kernel": [
+    8,
+    512,
+    384
+  ],
+  "stack/layers/block/self_attn/q_taps": [
+    8,
+    3,
+    384
+  ],
+  "stack/layers/block/self_attn/v_proj/kernel": [
+    8,
+    512,
+    128
+  ],
+  "stack/layers/block/self_attn/v_taps": [
+    8,
+    3,
+    128
+  ],
+  "stack/mhc_a_post": [
+    8
+  ],
+  "stack/mhc_a_pre": [
+    8
+  ],
+  "stack/mhc_a_res": [
+    8
+  ],
+  "stack/mhc_b_post": [
+    8,
+    4
+  ],
+  "stack/mhc_b_pre": [
+    8,
+    4
+  ],
+  "stack/mhc_b_res": [
+    8,
+    4,
+    4
+  ],
+  "stack/mhc_phi_post": [
+    8,
+    2048,
+    4
+  ],
+  "stack/mhc_phi_pre": [
+    8,
+    2048,
+    4
+  ],
+  "stack/mhc_phi_res": [
+    8,
+    2048,
+    16
+  ],
+  "stem/dw_1": [
+    3,
+    3,
+    1,
+    128
+  ],
+  "stem/dw_2": [
+    3,
+    3,
+    1,
+    128
+  ],
+  "stem/out/kernel": [
+    1280,
+    512
+  ],
+  "stem/pw_1/kernel": [
+    128,
+    128
+  ],
+  "stem/pw_2/kernel": [
+    128,
+    128
+  ],
+  "stem/w": [
+    3,
+    3,
+    1,
+    128
+  ]
+}

@@ -256,7 +256,7 @@
       "evidence": "Parakeet never reads the token budget.",
       "branch": "warns",
       "warnings": [
-        "--max-tokens has no effect with Parakeet. It applies to Qwen3-ASR."
+        "--max-tokens has no effect with Parakeet. It applies to Whistle and Qwen3-ASR."
       ]
     },
     {

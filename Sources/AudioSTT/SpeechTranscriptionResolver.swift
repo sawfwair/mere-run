@@ -27,6 +27,12 @@ public enum SpeechTranscriptionResolver {
         let effectiveOverride = route.modelOverride
         var plan: SpeechTranscriptionPlan
         switch decision.backend {
+        case .whistle:
+            plan = SpeechTranscriptionPlan(
+                request: request, decision: decision,
+                modelID: existingPath(from: effectiveOverride) == nil ? effectiveOverride ?? WhistleGenerator.modelID : WhistleGenerator.modelID,
+                modelPath: existingPath(from: effectiveOverride)?.path, provider: parakeetExecutionProvider
+            )
         case .qwen:
             let qwenRoot = localQwenModelRoot()
             plan = SpeechTranscriptionPlan(
@@ -52,7 +58,8 @@ public enum SpeechTranscriptionResolver {
     }
 
     /// The routing half of `resolve`, without an audio file: file transcription, streaming, and
-    /// the CLI's capability gate share it. Translation and a language hint Parakeet does not list
+    /// the CLI's capability gate share it. Explicit Whistle validates task and language first.
+    /// For other backends, translation and a language hint Parakeet does not list
     /// route to Qwen; otherwise an explicit backend wins, then the named model's backend
     /// (`ASRBackendRouting.select`). With `followsLocalModel`, a local model folder decides the
     /// backend whatever the language hint says: a stream has always run the folder it was given,
@@ -74,6 +81,10 @@ public enum SpeechTranscriptionResolver {
             return inferredBackend
         }()
 
+        if effectivePreferredBackend == .whistle {
+            _ = try WhistleGenerator.validate(task: task, language: language)
+        }
+
         let parakeetRoot = localParakeetModelRoot()
         let parakeetCodes = loadParakeetLanguageCodesIfAvailable(
             modelOverride: normalizedOverride,
@@ -86,7 +97,7 @@ public enum SpeechTranscriptionResolver {
             task: task,
             languageHint: routesByFolder ? nil : language,
             preferredBackend: effectivePreferredBackend,
-            availableBackends: ASRBackendAvailability(parakeetAvailable: true, qwenAvailable: true),
+            availableBackends: ASRBackendAvailability(parakeetAvailable: true, qwenAvailable: true, whistleAvailable: true),
             parakeetSupportedLanguageCodes: parakeetCodes
         )
 
@@ -94,7 +105,7 @@ public enum SpeechTranscriptionResolver {
             throw SpeechTranscriptionIssue(
                 "incompatible_execution_provider",
                 "Core ML requires a Parakeet-compatible transcription request. "
-                    + "This request selects Qwen (\(decision.reason))."
+                    + "This request selects \(decision.backend.rawValue) (\(decision.reason))."
             )
         }
 
@@ -111,13 +122,20 @@ public enum SpeechTranscriptionResolver {
     }
 
     /// Fingerprints local configuration and installation metadata, not tensor
-    /// weights. Native model loading still owns checkpoint integrity checks.
+    /// weights for most families. Whistle's binary vocabulary also carries neural weights.
+    /// Native model loading still owns checkpoint integrity checks.
     private static func recordingPlan(_ plan: SpeechTranscriptionPlan) throws -> SpeechTranscriptionPlan {
         guard let modelPath = plan.modelPath else { return plan }
         let root = URL(fileURLWithPath: modelPath)
         let modelRoot = plan.decision.backend == .parakeet ? ParakeetResources.resolveNestedIfNeeded(base: root) : root
         var files = ["config.json", "tokenizer.json", "tokenizer_config.json", MereRunModelManifest.filename]
             .map { modelRoot.appendingPathComponent($0) }
+        if plan.decision.backend == .whistle {
+            files.append(modelRoot.appendingPathComponent("whistle.cact"))
+            if plan.request.whistle?.weights == .fp32 {
+                files.append(modelRoot.appendingPathComponent("checkpoints/whistle.safetensors"))
+            }
+        }
         if case .coreML(let artifactURL) = plan.provider {
             files.append(artifactURL.appendingPathComponent(ParakeetCoreMLManifest.filename))
         }
@@ -133,6 +151,7 @@ public enum SpeechTranscriptionResolver {
         guard let modelOverride else { return nil }
         let matches = inferredBackend == .qwen && selectedBackend == .qwen
             || inferredBackend == .parakeet && selectedBackend == .parakeet
+            || inferredBackend == .whistle && selectedBackend == .whistle
         guard !matches else { return modelOverride }
         if existingPath(from: modelOverride) != nil {
             throw SpeechTranscriptionIssue(
@@ -240,6 +259,9 @@ public enum SpeechTranscriptionResolver {
     private static func inferredBackendFromModelOverride(_ modelOverride: String?) -> ASRBackend {
         guard let modelOverride else { return .auto }
         if let existingPath = existingPath(from: modelOverride) {
+            if FileManager.default.fileExists(atPath: existingPath.appendingPathComponent("whistle.cact").path) {
+                return .whistle
+            }
             let resolved = ParakeetResources.resolveNestedIfNeeded(base: existingPath)
             if FileManager.default.fileExists(
                 atPath: resolved.appendingPathComponent("config.json").path
@@ -255,6 +277,7 @@ public enum SpeechTranscriptionResolver {
         }
 
         let lowered = modelOverride.lowercased()
+        if lowered == WhistleGenerator.modelID || lowered == "cactus-compute/whistle" { return .whistle }
         if lowered.contains("parakeet") {
             return .parakeet
         }
