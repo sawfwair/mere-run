@@ -12,11 +12,11 @@ extension ManagedModelCatalog {
             defaultCLICommands: ["text embed"], apiAvailability: .cliOnly
         ),
         ManagedModelSpec(
-            id: EmbeddingGemma2CoreAICatalog.modelID, category: .textEmbed, installShape: .structuredRoot,
-            hubFallback: EmbeddingGemma2CoreAICatalog.hubFallback,
-            upstreamRepoId: EmbeddingGemma2CoreAICatalog.repository, upstreamRevision: EmbeddingGemma2CoreAICatalog.revision,
-            validationKind: .embeddingGemma2CoreAI, runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: 2_205_230_544,
+            id: EmbeddingGemma2CoreMLCatalog.modelID, category: .textEmbed, installShape: .directoryRoot,
+            hubFallback: EmbeddingGemma2CoreMLCatalog.hubFallback,
+            upstreamRepoId: EmbeddingGemma2CoreMLCatalog.repository, upstreamRevision: EmbeddingGemma2CoreMLCatalog.revision,
+            validationKind: .embeddingGemma2CoreML, runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 1_481_911_235,
             defaultCLICommands: ["text embed"], apiAvailability: .cliOnly
         ),
         ManagedModelSpec(

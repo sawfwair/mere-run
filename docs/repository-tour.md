@@ -343,8 +343,8 @@ SigLIP2 NaFlex vision, learned option heads, and FastConformer audio computation
 `Sources/MereRunCore/D1` owns pinned checkpoint loading, ordered prompts, local
 media, preflight, and decision responses. See [Native D1 decisions](./runtime/d1.md).
 
-`Sources/MereRunCoreAIModel` is an internal target for EmbeddingGemma 2 Core AI
-graph execution and native tokenizer/media preprocessing. Inference requires
-Apple Silicon, macOS 27, and the macOS 27 SDK; older SDK builds retain the
-catalog and artifact checks. Core owns installation and ordered input routing.
-See [EmbeddingGemma 2](./runtime/embeddinggemma2.md#apple-core-ai-export).
+`Sources/MereRunCoreMLModel` is an internal target for EmbeddingGemma 2 Core ML
+graph execution, BF16 token lookup, and native tokenizer/media preprocessing.
+It runs on Apple Silicon macOS 15 or later, including macOS 26. Core owns
+installation and ordered input routing. See
+[EmbeddingGemma 2](./runtime/embeddinggemma2.md#apple-core-ml-export).

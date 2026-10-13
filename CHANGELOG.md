@@ -6,11 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
-- Add a separate `text-embed-embeddinggemma2-coreai` install for native Core AI
-  text, image, audio, and ordered mixed embeddings. It requires Apple Silicon,
-  macOS 27, and a macOS 27 SDK build; the pinned export has a 2,048-token limit.
-  Older SDK builds reject inference before model resolution. Core AI graph
-  compilation, released-artifact inference, and parity remain unverified.
+- Add `text-embed-embeddinggemma2-coreml` for native Core ML text, image, audio,
+  and ordered mixed embeddings on Apple Silicon macOS 15 or later, including
+  macOS 26. The pinned export accepts 512 tokens and audio segments up to 10 seconds.
+  The existing MLX model and default selections remain unchanged.
 
 ## 0.64.0 - 2026-10-10
 

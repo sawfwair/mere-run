@@ -196,74 +196,94 @@ package. These boundary checks do not run the upstream CPU reference.
 The managed model uses the existing small-model admission class with 6 GiB
 reclaimable headroom; arbitrary local model folders retain the 16 GiB floor.
 
-## Apple Core AI export
+## Apple Core ML export
 
-To run the preconverted Core AI graphs on Apple Silicon, use a `mere.run` build
-made with the macOS 27 SDK on macOS 27:
+To run the preconverted Core ML graphs on Apple Silicon macOS 15 or later,
+including macOS 26, install the separate Core ML model:
 
 ```bash
-mere.run model pull text-embed-embeddinggemma2-coreai
-mere.run text embed "What causes the northern lights?" \
-  --model text-embed-embeddinggemma2-coreai --task query --dimensions 256
-mere.run text embed --image ./photo.png --audio ./clip.wav \
-  --model text-embed-embeddinggemma2-coreai
-mere.run text embed --input-json ./inputs.json \
-  --model text-embed-embeddinggemma2-coreai --dimensions 512
+mere.run model pull text-embed-embeddinggemma2-coreml
+mere.run text embed "What causes the northern lights?" --model text-embed-embeddinggemma2-coreml --task query --dimensions 256
+mere.run text embed --image ./photo.png --audio ./clip.wav --model text-embed-embeddinggemma2-coreml
+mere.run text embed --input-json ./inputs.json --model text-embed-embeddinggemma2-coreml --dimensions 512
 ```
 
-This separate managed install uses
-[EverPaper's Core AI export](https://huggingface.co/EverPaper/embeddinggemma-2-coreai/tree/305fc2a96790d9343f38038aeca211dfca56d9a5),
-revision `305fc2a96790d9343f38038aeca211dfca56d9a5`. It downloads the `model/`
-bundle, tokenizer, attribution, and license files. No conversion is required.
-The original model ID and Qwen3 default retain their existing behavior.
-You can pass a local snapshot root or its `model/` directory to `--model`.
+This install uses [FluidInference's Core ML export](https://huggingface.co/FluidInference/embeddinggemma-2-coreml/tree/3f978ddf92cac9aa07eb2dcf6eb36cf450f3dba4),
+revision `3f978ddf92cac9aa07eb2dcf6eb36cf450f3dba4`. It downloads three
+`.mlpackage` graphs, the tokenizer, a BF16 token table, and FP16 vision
+position tables. Core ML compiles the packages locally on first use. No source
+checkpoint conversion or external inference process is required.
+You can pass a local snapshot directory to `--model`.
 
-Core AI uses `.aimodel` graphs, rather than Core ML `.mlpackage` files.
-Builds made with older SDKs reject inference before resolving the managed model.
-Download explicitly with `model pull`; inference does not download this model
-automatically. Text, vision, and audio use the Neural Engine preference.
-Vision and audio graphs load only when a request includes those modalities.
-The runtime may take longer on first use while it specializes the graphs.
+The runtime uses Core ML available on macOS 26. It does not depend on Apple's
+macOS 27 Core AI framework or its `.aimodel` format. The original MLX model ID,
+Qwen3 default, and Studio media selection retain their existing behavior.
+Inference requires an explicit install; it does not download this model
+automatically. Text prefers CPU and Neural Engine. Vision and audio use CPU
+and GPU. Media graphs load only when a request includes those modalities.
 
-The export uses FP16 graph inputs and a **2,048-token** limit, including task
-prefixes and BOS/EOS. `--max-tokens` lowers this budget. Text-only inputs truncate
-the body while preserving BOS/EOS. Mixed records preserve content order and
-reject overflow without truncating media blocks. Task names, document titles,
-output dimensions, indices, and token usage follow the existing CLI contract.
-Every returned 128/256/512/768-dimensional vector is L2-normalized.
+### Input limits
 
-Images use the export's native byte-exact tokenizer and bicubic RGB patch
-preprocessor; EXIF rotation is not applied. Audio uses mono 16 kHz log-mel
-features and the first 30 seconds of each file. Split longer recordings into
-separate inputs to include their later content. Video and `video-frames` are
-unsupported by this export; select `text-embed-embeddinggemma2` for those inputs.
-The Core AI variant is CLI-only.
+The export uses a **512-token** budget, including task prefixes and BOS/EOS.
+`--max-tokens` lowers this budget. Text-only inputs truncate the body while
+preserving BOS/EOS. Mixed records preserve content order and reject overflow
+without truncating media blocks.
 
-Local checks cover artifact layout, typed bundle geometry, availability errors,
-CLI routing, and native preprocessing. Graph compilation with the macOS 27 SDK,
-released-artifact inference, and embedding parity remain unverified. The MLX
-qualification results in this guide do not qualify the Core AI export.
+Images use aspect-preserving bicubic RGB resizing, row-major normalized patches,
+explicit 3-by-3 pooling, and the published position tables. EXIF rotation is not
+applied. One image uses at most 280 soft tokens.
+
+Audio files decode to mono 16 kHz; the audio graph computes log-mel features.
+Each segment must be longer than 10 milliseconds and at most **10 seconds**.
+Longer audio is rejected; split it into explicit segments before embedding.
+Video and `video-frames` require `text-embed-embeddinggemma2`.
+
+Task names, document titles, dimensions, input indices, and token usage follow
+the existing CLI contract. Returned 128/256/512/768-dimensional vectors are
+L2-normalized. This variant is CLI-only.
+
+### Validation on macOS 26
+
+The native Core ML target compiles with the installed macOS 26 SDK. The released
+text, vision, and audio graphs executed against the pinned published FP32
+reference corpus:
+
+| Modality | Cases | Minimum cosine |
+| --- | ---: | ---: |
+| Text | 3 | 0.999934670 |
+| Image | 10 | 0.999726019 |
+| Audio | 14 | 0.986651154 |
+
+The 35-second audio reference was excluded because it exceeds this export's
+10-second window. Audio has measurable FP16 drift, especially the synthetic
+chirp/siren and piano cases. These results establish bounded compatibility,
+not broad retrieval quality or sustained throughput. Keep the original MLX
+backend when higher reference fidelity or longer context is required.
+The [raw qualification receipt](../public/qualification/embeddinggemma2-coreml-2026-10-13.json)
+preserves each vector, token count, cosine, and skipped input. Managed-ID CLI
+checks also passed for 256-dimensional text and a 128-dimensional mixed
+text/image/audio record (312 tokens).
+
+To repeat the graph check, download the pinned model artifact and the reference
+JSON files and matching media from EverPaper/embeddinggemma-2-coreai revision
+`305fc2a96790d9343f38038aeca211dfca56d9a5`. Build the native target and
+compile `scripts/validation/qualify-embeddinggemma2-coreml.swift` against it:
+
+```bash
+swift build --target MereRunCoreMLModel --disable-index-store -debug-info-format none
+build_dir="$(swift build --show-bin-path)"
+swiftc -parse-as-library -module-cache-path "$build_dir/ModuleCache" -I "$build_dir/Modules" scripts/validation/qualify-embeddinggemma2-coreml.swift "$build_dir"/MereRunCoreMLModel.build/*.o -framework CoreML -framework Accelerate -framework AVFoundation -framework ImageIO -framework CoreGraphics -o /tmp/qualify-embeddinggemma2-coreml
+/tmp/qualify-embeddinggemma2-coreml /path/to/coreml-model /path/to/reference-tests
+```
 
 ### Reproduce tokenizer parity
 
-The native tokenizer matched all 3,758 published cases (608,225 token IDs) at the
-pinned revision with zero mismatches. The [tokenizer receipt](../benchmarks/embeddinggemma2-coreai-tokenizer-2026-10-13.json) records input hashes.
-This check covers tokenization, including
-Unicode and reserved-token cases; it does not execute the embedding graphs.
-To repeat it, download `model/tokenizer/tokenizer.json` and
-`tests/tokenizer-cases.json` from the pinned repository, then run:
+The native tokenizer matched all 3,758 published cases (608,225 token IDs) at
+the pinned reference revision with zero mismatches.
+The [tokenizer receipt](../benchmarks/embeddinggemma2-coreml-tokenizer-2026-10-13.json)
+records input hashes. This check does not execute the embedding graphs.
 
 ```bash
-swift build --target MereRunCoreAIModel --disable-index-store -debug-info-format none
-build_dir="$(swift build --show-bin-path)"
-swiftc -module-cache-path "$build_dir/ModuleCache" -I "$build_dir/Modules" \
-  scripts/validation/verify-embeddinggemma2-coreai-tokenizer.swift \
-  "$build_dir"/MereRunCoreAIModel.build/*.o \
-  -framework Accelerate -framework AVFoundation -framework ImageIO -framework CoreGraphics \
-  -o /tmp/verify-embeddinggemma2-coreai-tokenizer
-/tmp/verify-embeddinggemma2-coreai-tokenizer \
-  /path/to/model/tokenizer/tokenizer.json /path/to/tests/tokenizer-cases.json
+swiftc -module-cache-path "$build_dir/ModuleCache" -I "$build_dir/Modules" scripts/validation/verify-embeddinggemma2-coreml-tokenizer.swift "$build_dir"/MereRunCoreMLModel.build/*.o -framework CoreML -framework Accelerate -framework AVFoundation -framework ImageIO -framework CoreGraphics -o /tmp/verify-embeddinggemma2-coreml-tokenizer
+/tmp/verify-embeddinggemma2-coreml-tokenizer /path/to/coreml-model/tokenizer.json /path/to/reference-tests/tokenizer-cases.json
 ```
-
-The verifier runs on Apple Silicon macOS without Core AI or graph weights and
-prints a JSON receipt. Preserve the pinned input files with that receipt.

@@ -1640,20 +1640,22 @@ reference is the public [Whistle WebGPU port](https://huggingface.co/spaces/mrfa
 No ONNX graph or Cactus executable is included or executed by the native runtime.
 The publisher's Apache-2.0 license is retained in `licenses/whistle-APACHE-2.0.txt`.
 
-## EmbeddingGemma 2 Core AI Swift runtime
+## EmbeddingGemma 2 Core ML runtime and preprocessing
 
-`Sources/MereRunCoreAIModel/` adapts the native Swift graph adapter, exact Gemma
-tokenizer, image preprocessing, and audio frontend from
+`Sources/MereRunCoreMLModel/` contains tokenizer, image/audio decoding, bicubic
+resampling, and audio resampling adapted from
 [EverPaper/embeddinggemma-2-coreai](https://huggingface.co/EverPaper/embeddinggemma-2-coreai/tree/305fc2a96790d9343f38038aeca211dfca56d9a5/swift),
 revision `305fc2a96790d9343f38038aeca211dfca56d9a5`.
 
-Copyright 2026 Everpaper. Licensed under the Apache License, Version 2.0.
-The audio frontend reproduces Gemma4AudioFeatureExtractor defaults
-(Copyright 2026 Google LLC) and the HTK mel filter-bank formula described in
-Transformers audio utilities (Copyright 2023 The HuggingFace Inc. team and the
-librosa and torchaudio authors), under Apache-2.0. The source headers preserve
-these attributions. Changes add platform availability guards, typed bundle
-validation, and mere.run integration; the standalone CLI and process cleanup
-helpers are excluded. `Sources/MereRunCoreAIModel/LICENSE` supplies the Apache-2.0 license
-text. The model graphs and tokenizer are downloaded separately with their
-upstream LICENSE, NOTICE, and MODEL-ATTRIBUTION.json; they are not bundled here.
+Copyright 2026 Everpaper. Licensed under Apache-2.0. `LICENSE` and `NOTICE` in
+the target directory retain the license text and upstream image-preprocessing
+attributions, including ATen's bicubic resize arithmetic (BSD-3-Clause) and
+Pillow's CMYK conversion formula (MIT-CMU). The Core AI graph adapter is not
+included. The Core ML graph adapter, typed geometry, table lookup, and ordered
+input integration are implemented in this repository.
+
+The separately downloaded graph packages and BF16/FP16 tables come from
+[FluidInference/embeddinggemma-2-coreml](https://huggingface.co/FluidInference/embeddinggemma-2-coreml/tree/3f978ddf92cac9aa07eb2dcf6eb36cf450f3dba4),
+revision `3f978ddf92cac9aa07eb2dcf6eb36cf450f3dba4`, under the model card's
+Apache-2.0 license. The source model is Google's EmbeddingGemma 2. These model
+artifacts are not bundled with mere.run.

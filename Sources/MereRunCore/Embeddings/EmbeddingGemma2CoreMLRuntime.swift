@@ -1,17 +1,14 @@
-#if canImport(CoreAI) && os(macOS) && arch(arm64)
+#if canImport(CoreML) && os(macOS) && arch(arm64)
 import Foundation
-import MereRunCoreAIModel
+import MereRunCoreMLModel
 
-@available(macOS 27.0, *)
-extension EmbeddingGemma2CoreAIRuntime {
+@available(macOS 15.0, *)
+extension EmbeddingGemma2CoreMLRuntime {
     static func execute(root: URL, inputs: [EmbeddingGemma2Input], task: EmbeddingGemma2Task,
                         title: String?, dimensions: Int, maxTokens: Int?) async throws
         -> (embeddings: [[Float]], tokenCounts: [Int]) {
-        let parts = inputs.flatMap(\.content)
-        let loadVision = parts.contains { if case .image = $0 { return true }; return false }
-        let loadAudio = parts.contains { if case .audio = $0 { return true }; return false }
-        let model = try await EmbeddingGemma2(bundle: root, loadVision: loadVision, loadAudio: loadAudio)
-        let limit = min(maxTokens ?? model.config.max_tokens, model.config.max_tokens)
+        let model = try EmbeddingGemma2(bundle: root)
+        let limit = min(maxTokens ?? 512, 512)
         var vectors: [[Float]] = [], counts: [Int] = []
         for input in inputs {
             let sequence = try await prepare(input, model: model, task: task, title: title, limit: limit)
@@ -19,7 +16,7 @@ extension EmbeddingGemma2CoreAIRuntime {
             var prefix = Array(vector.prefix(dimensions))
             let norm = sqrt(prefix.reduce(Float(0)) { $0 + $1 * $1 })
             guard norm.isFinite, norm > 0, prefix.count == dimensions, prefix.allSatisfy(\.isFinite) else {
-                throw EmbeddingGemma2Error.invalidConfiguration("Core AI returned an invalid embedding.")
+                throw EmbeddingGemma2Error.invalidConfiguration("Core ML returned an invalid embedding.")
             }
             for index in prefix.indices { prefix[index] /= norm }
             vectors.append(prefix)
@@ -55,23 +52,20 @@ extension EmbeddingGemma2CoreAIRuntime {
             case .text(let text): pendingText += text
             case .image(let url):
                 try flushText()
-                let soft = try await model.softTokens(ImagePreprocessor.prepare(url: url))
-                seq.appendMedia(model.imageSequence(softTokens: soft))
+                seq.appendMedia(try await model.imageSequence(url: url))
             case .audio(let url):
                 try flushText()
-                let prepared = try AudioFrontend.prepare(wav16k: AudioFrontend.loadMono16k(url: url))
-                let soft = try await model.audioSoftTokens(prepared)
-                seq.appendMedia(model.audioSequence(softTokens: soft))
+                seq.appendMedia(try await model.audioSequence(url: url))
             case .video, .videoFrames:
-                throw EmbeddingGemma2Error.invalidInput("Video is unsupported by the pinned Core AI export.")
+                throw EmbeddingGemma2Error.invalidInput("Video is unsupported by the pinned Core ML export.")
             }
             guard seq.ids.count + 1 <= limit else {
-                throw EmbeddingGemma2Error.invalidInput("Mixed record exceeds the \(limit)-token Core AI budget; media blocks cannot be truncated.")
+                throw EmbeddingGemma2Error.invalidInput("Mixed record exceeds the \(limit)-token Core ML budget; media blocks cannot be truncated.")
             }
         }
         try flushText()
         guard seq.ids.count + 1 <= limit else {
-            throw EmbeddingGemma2Error.invalidInput("Mixed record exceeds the \(limit)-token Core AI budget; media blocks cannot be truncated.")
+            throw EmbeddingGemma2Error.invalidInput("Mixed record exceeds the \(limit)-token Core ML budget; media blocks cannot be truncated.")
         }
         seq.ids.append(model.config.eos_token_id)
         return seq

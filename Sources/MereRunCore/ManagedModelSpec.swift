@@ -70,7 +70,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case sortformer
     case qwen3Embedding
     case embeddingGemma2
-    case embeddingGemma2CoreAI
+    case embeddingGemma2CoreML
     case pplxEmbedV2
     case qwen3VLEmbedding
     case privacyFilter

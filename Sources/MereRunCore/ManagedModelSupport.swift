@@ -853,8 +853,8 @@ public enum ManagedModelCapabilityCatalog {
                 minimum: 8, recommended: 16
             ),
             descriptor(
-                EmbeddingGemma2CoreAICatalog.modelID, "EmbeddingGemma 2 Core AI",
-                "Native text, image, and audio embeddings on macOS 27 with Apple Core AI; 2048-token limit.",
+                EmbeddingGemma2CoreMLCatalog.modelID, "EmbeddingGemma 2 Core ML",
+                "Native Core ML text, image, and audio embeddings on macOS 15 or later; 512-token limit.",
                 minimum: 8, recommended: 16
             ),
             descriptor(

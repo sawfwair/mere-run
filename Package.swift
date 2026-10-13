@@ -162,26 +162,18 @@ if !isLinuxPackage {
   products.append(.executable(name: "mere.run.app", targets: ["MereRunApp"]))
 }
 
-#if canImport(CoreAI) && os(macOS) && arch(arm64)
-// A build using the newer SDK must still launch on supported older macOS versions.
-let coreAILinkerSettings: [LinkerSetting] = [
-  .unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "CoreAI"], .when(platforms: [.macOS]))
-]
-#else
-let coreAILinkerSettings: [LinkerSetting] = []
-#endif
-
 var targets: [Target] = [
   .target(
-    name: "MereRunCoreAIModel",
-    path: "Sources/MereRunCoreAIModel",
-    exclude: ["README.md", "LICENSE"],
-    linkerSettings: coreAILinkerSettings + (isLinuxPackage ? [] : [
+    name: "MereRunCoreMLModel",
+    path: "Sources/MereRunCoreMLModel",
+    exclude: ["README.md", "LICENSE", "NOTICE"],
+    linkerSettings: isLinuxPackage ? [] : [
+      .linkedFramework("CoreML", .when(platforms: [.macOS])),
       .linkedFramework("Accelerate", .when(platforms: [.macOS])),
       .linkedFramework("AVFoundation", .when(platforms: [.macOS])),
       .linkedFramework("ImageIO", .when(platforms: [.macOS])),
       .linkedFramework("CoreGraphics", .when(platforms: [.macOS]))
-    ])
+    ]
   )
 ]
 var mereRunCoreDependencies: [Target.Dependency] = mlxDependency("MLX")
@@ -209,7 +201,7 @@ mereRunCoreDependencies.append("MereRunDecode")
 mereRunCoreDependencies.append("MereRunQwenModel")
 mereRunCoreDependencies.append("MereRunKolibriModel")
 mereRunCoreDependencies.append("MereRunGemmaModel")
-mereRunCoreDependencies.append("MereRunCoreAIModel")
+mereRunCoreDependencies.append("MereRunCoreMLModel")
 mereRunCoreDependencies.append("MereRunLTXModel")
 mereRunCoreDependencies.append("AudioCodecs")
 mereRunCoreDependencies.append("AudioQwen3ASRModel")
@@ -332,7 +324,7 @@ if hasMediaIOTarget {
 }
 
 var mereRunCoreTestDependencies: [Target.Dependency] = [
-  "MereRunCoreAIModel",
+  "MereRunCoreMLModel",
   "MereRunLagunaModel",
   "MereRunH3Model",
   "MereRunAudioModels",

@@ -7,10 +7,10 @@ struct TextEmbed: AsyncParsableCommand {
         commandName: "embed",
         abstract: "Generate native text, multimodal, or PPLX multi-vector embeddings.",
         discussion: """
-        Uses native MLX encoders or Apple Core AI (macOS 27).
+        Uses native MLX encoders or Apple Core ML (macOS 15).
         EmbeddingGemma 2 supports task prefixes and normalized 128/256/512/768-dimensional vectors.
-        MLX supports text, code, images, audio, and video. The Core AI export supports
-        text, images, and audio with a 2048-token limit.
+        MLX supports text, code, images, audio, and video. The Core ML export supports
+        text, images, and audio with a 512-token limit.
         PPLX v2 late returns normalized 128-dimensional token vectors; context returns
         int8 chunk vectors (1024/2048 dimensions). PPLX output uses data[].embeddings.
         Context JSON uses {"documents":[["first chunk","second chunk"]]} and never truncates chunks.
@@ -94,10 +94,10 @@ struct TextEmbed: AsyncParsableCommand {
         if let maxTokens, maxTokens <= 0 { throw ValidationError("--max-tokens must be positive.") }
         if let model, PPLXEmbedV2Catalog.modelIDs.contains(model) {
             try validatePPLXOptions(contextual: PPLXEmbedV2Catalog.isContextual(model))
-        } else if model == EmbeddingGemma2Catalog.modelID || model == EmbeddingGemma2CoreAICatalog.modelID {
+        } else if model == EmbeddingGemma2Catalog.modelID || model == EmbeddingGemma2CoreMLCatalog.modelID {
             try validateGemmaOptions()
-            if model == EmbeddingGemma2CoreAICatalog.modelID, !video.isEmpty {
-                throw ValidationError("The Core AI export supports text, images, and audio; use text-embed-embeddinggemma2 for video.")
+            if model == EmbeddingGemma2CoreMLCatalog.modelID, !video.isEmpty {
+                throw ValidationError("The Core ML export supports text, images, and audio; use text-embed-embeddinggemma2 for video.")
             }
             if let maxTokens, maxTokens < 2 { throw ValidationError("EmbeddingGemma 2 requires at least two tokens (BOS and EOS).") }
         } else if model == nil || model == Qwen3EmbeddingCatalog.modelId {
@@ -142,12 +142,12 @@ struct TextEmbed: AsyncParsableCommand {
     }
 
     static func embeddingModelType(root: URL) throws -> String {
-        let bundle = EmbeddingGemma2CoreAICatalog.bundleRoot(root)
+        let bundle = EmbeddingGemma2CoreMLCatalog.bundleRoot(root)
         let probe = try JSONDecoder().decode(ModelConfigProbe.self, from: Data(contentsOf: bundle.appending(path: "config.json")))
-        if probe.format == "coreai", probe.baseModel == "google/embeddinggemma-2" {
-            return "embedding_gemma2_coreai"
+        if probe.format == "coreml", probe.baseModel == "google/embeddinggemma-2" {
+            return "embedding_gemma2_coreml"
         }
-        guard let modelType = probe.modelType else { throw ValidationError("Missing embedding model_type or supported Core AI format.") }
+        guard let modelType = probe.modelType else { throw ValidationError("Missing embedding model_type or supported Core ML format.") }
         guard ["embedding_gemma2", "qwen3", "qwen3_5", "pplx_contextual_qwen3_5"].contains(modelType) else {
             throw ValidationError("Unsupported text embedding model type: \(modelType).")
         }
@@ -160,19 +160,19 @@ struct TextEmbed: AsyncParsableCommand {
 
     func run() async throws {
         let inputs = try loadMediaInputs()
-        if model == EmbeddingGemma2CoreAICatalog.modelID {
-            try EmbeddingGemma2CoreAIRuntime.requireAvailable()
+        if model == EmbeddingGemma2CoreMLCatalog.modelID {
+            try EmbeddingGemma2CoreMLRuntime.requireAvailable()
         }
         let resolvedModelRoot = try await resolveModelRoot()
         let type = try Self.embeddingModelType(root: resolvedModelRoot)
-        if type == "embedding_gemma2_coreai" {
+        if type == "embedding_gemma2_coreml" {
             try validateGemmaOptions()
             let records = inputs ?? texts.map { EmbeddingGemma2Input(content: [.text($0)]) }
-            let result = try await EmbeddingGemma2CoreAIRuntime.embed(
+            let result = try await EmbeddingGemma2CoreMLRuntime.embed(
                 root: resolvedModelRoot, inputs: records, task: EmbeddingGemma2Task(rawValue: task)!,
                 title: title, dimensions: dimensions ?? 768, maxTokens: maxTokens
             )
-            try emitEmbeddings(result, modelID: EmbeddingGemma2CoreAICatalog.modelID)
+            try emitEmbeddings(result, modelID: EmbeddingGemma2CoreMLCatalog.modelID)
             return
         }
         try MLXBundleSupport.ensureAvailable(quiet: false)

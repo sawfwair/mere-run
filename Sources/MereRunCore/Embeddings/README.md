@@ -29,10 +29,10 @@ query/document tokenization with optional NFC normalization, punctuation masks, 
 projection, int8 quantization, and image preparation. Each row runs unpadded.
 Late token vectors use MaxSim; contextual chunk vectors use cosine similarity.
 
-`EmbeddingGemma2CoreAIResources.swift` owns the separate pinned Core AI managed
-artifact, file-only installation checks, typed config validation, and platform
-availability. `EmbeddingGemma2CoreAIRuntime.swift` maps existing ordered input
-records to graph sequences. `MereRunCoreAIModel` owns graph execution, exact
-UTF-8 tokenization, and image/audio preprocessing. Core AI requires a macOS 27
-SDK build on macOS 27; unsupported builds reject inference before downloads.
-This export has a 2048-token budget and supports text, images, and audio.
+`EmbeddingGemma2CoreMLResources.swift` owns the separate pinned Core ML artifact,
+file-only installation checks, typed config validation, and platform availability.
+`EmbeddingGemma2CoreMLRuntime.swift` maps ordered records to graph sequences.
+`MereRunCoreMLModel` owns Core ML execution, BF16 token lookup, exact UTF-8
+tokenization, and image/audio preprocessing. It runs on Apple Silicon macOS 15
+or later, including macOS 26. This export accepts 512 tokens, text, images, and
+audio segments up to 10 seconds.

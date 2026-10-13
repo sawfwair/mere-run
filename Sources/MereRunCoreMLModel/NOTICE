@@ -1,0 +1,330 @@
+EmbeddingGemma-2-CoreAI v1.2
+============================
+
+This package contains a derivative of the EmbeddingGemma 2 model.
+
+    EmbeddingGemma 2
+    Authors: Google DeepMind (as stated on the model card)
+    https://huggingface.co/google/embeddinggemma-2
+    License as linked by the model card: Apache 2.0, https://ai.google.dev/gemma/docs/gemma_4_license
+    Licensed under the Apache License, Version 2.0 (the "License"); you may not use these files except in
+    compliance with the License. A copy of the License is in the file LICENSE and at
+    http://www.apache.org/licenses/LICENSE-2.0.
+    Unless required by applicable law or agreed to in writing, software distributed under the License is
+    distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+
+The model card of google/embeddinggemma-2 asks that deployments adhere to the Gemma Prohibited Use Policy:
+https://ai.google.dev/gemma/prohibited_use_policy. Please read it before using this model in a product.
+
+The tokenizer files in model/tokenizer/ (tokenizer.json, tokenizer_config.json) are copied unchanged from
+google/embeddinggemma-2 and are covered by the same license and attribution.
+
+
+MODIFICATIONS (Apache License, Section 4(b))
+--------------------------------------------
+
+Changes made to google/embeddinggemma-2, 11-12 October 2026, to produce model/embeddinggemma-2-text-mm.aimodel,
+model/embeddinggemma-2-vision.aimodel and model/embeddinggemma-2-audio.aimodel.
+
+Text encoder (v1.0, unchanged in v1.1 and v1.2 except where noted):
+
+  2026-10-11  The audio encoder of the multimodal checkpoint was dropped (v1.0 also dropped the vision
+              encoder; v1.1 adds the vision encoder back and v1.2 the audio encoder, see below).
+  2026-10-11  The encoder architecture (24 bidirectional Gemma 4 layers, per-layer embeddings, RMSNorm with
+              max-abs rescaling, RoPE, GQA/MQA attention, GELU-tanh MLP, final RMSNorm, 512->768 projection,
+              masked mean pooling, L2 normalization) was re-authored in plain PyTorch for the Core AI
+              converter. The weights are the original ones rounded from bfloat16 to float16, except that the
+              sqrt(512) token-embedding scale and the 512^-0.5 per-layer-embedding scale are folded into the
+              tables.
+  2026-10-11  fp16 handling for the Neural Engine: every RMSNorm and the final L2 normalization divide the row
+              by its max-abs value before squaring (activations reach ~2000, whose square overflows fp16);
+              in the model code every division is expressed as rsqrt(x)*rsqrt(x); the additive attention-mask
+              value is -10000. (The model card advises against float16; this rescaling is what makes fp16
+              safe here, see the parity figures in README.md.)
+  2026-10-11  Pooling, projection and normalization run inside the graph; the output is the final embedding.
+  2026-10-11  Fixed sequence buckets, one function per bucket. Input longer than 2048 tokens is not supported
+              by this build (the original accepts 8192).
+  2026-10-12  Attention of the four global (full-attention, single key/value head) layers rewritten from a
+              5-D grouped matmul to an equivalent plain 4-D matmul with the key/value tensors broadcast over
+              the four query heads, so that the Neural Engine compiler accepts the whole graph. Mathematically
+              identical to the reference (fp32 max abs diff 3e-7).
+
+Added in v1.1:
+
+  2026-10-12  Text: one input mix at the start of the graph, x = embed(input_ids) * (1 - mm_mask) +
+              mm_embeds * mm_mask, so that externally computed image soft tokens replace the <|image|>
+              placeholder embeddings. Soft tokens are not scaled; everything after the mix is the v1.0 text
+              graph, and with zero soft tokens the outputs are bit-identical to v1.0. The functions are now
+              mm_<S> for S in 32, 64, 128, 288, 512, 1024, 2048 (288 replaces 256 so that one image sequence of
+              at most 284 tokens fits). This asset replaces v1.0's model/embeddinggemma-2-text.aimodel.
+  2026-10-12  Vision encoder (Gemma 4 vision model: patch embedder, 16 bidirectional encoder layers with axial
+              2-D RoPE, 3x3 average pooling) and the vision embedder (RMSNorm + 768->512 projection) re-authored
+              in plain PyTorch for the Core AI converter. The weights are the original ones rounded from
+              bfloat16 to float16, with the scale fold and table cut described in the next entries (the 2/255
+              input scale folded into the patch-embedding projection, the position tables cut to 840 rows).
+  2026-10-12  Vision: one fixed shape, the default budget of 280 soft tokens (2520 patches of 16x16 px). The
+              patches are fed in "cell-major" order (the 9 patches of each 3x3 pooling cell contiguous, cells
+              row-major, padding last) so that the pooling is a reshape and a mean instead of a one-hot matmul.
+              Attention is permutation-equivariant, so the result is identical.
+  2026-10-12  Vision: the pooler's multiplication by sqrt(768) (computed in float32 upstream because it exceeds
+              the float16 range) is dropped and the vision embedder's RMSNorm uses eps/768 instead of eps:
+              RMSNorm(x*s, eps) == RMSNorm(x, eps/s^2) exactly.
+  2026-10-12  Vision: the 2-D position-embedding tables (2 x 10240 x 768) are cut to the 840 rows that an image
+              of this budget can address; the axial-RoPE cos/sin tables and the key mask are inputs computed by
+              the host instead of being computed in the graph.
+  2026-10-12  Vision fp16 handling for the Neural Engine: every RMSNorm divides the row by its max-abs value
+              before squaring (the vision residual reaches ~1400), divisions are expressed as rsqrt(x)*rsqrt(x),
+              the additive key-mask value is -10000, the 3x3 mean is a sum times 1/9. The attention queries are
+              processed in 12 blocks (same result, lower Neural Engine latency).
+  2026-10-12  Vision input scaling: the model takes integer pixel values 0..255 (exact in float16) instead of
+              pixel/255. The graph computes P - 127.5 and the 2/255 factor is folded into the weights of the
+              patch-embedding projection, which equals upstream's projection of 2*(P/255) - 1 without rounding
+              the inputs to float16 (that rounding cost heavily upscaled tiny images up to 0.004 of cosine).
+  2026-10-12  Image preprocessing (host side, not part of the model): the upstream image processor's
+              aspect-preserving size rule and its antialiased bicubic resize on 8-bit pixels (the ATen uint8
+              kernel used by torchvision) re-implemented in numpy and in Swift so that the pixels fed to the
+              model are identical to the reference pipeline.
+
+Added in v1.2:
+
+  2026-10-12  Audio encoder (Gemma 4 audio model: two stride-2 subsampling convolutions with channel LayerNorm,
+              a 1024->1024 projection, 12 conformer layers of half-step feed-forward, local causal attention with
+              relative-position bias, light depthwise convolution, half-step feed-forward and RMSNorm, the
+              1024->1536 output projection) and the audio embedder (RMSNorm without scale + 1536->512 projection)
+              re-authored in plain PyTorch for the Core AI converter. The weights are the original ones rounded
+              from bfloat16 to float16, with the scale folds listed below.
+  2026-10-12  Audio attention written in its banded form: the upstream chunked local attention (chunks of 12,
+              13 of left context, pad / unfold / rel-shift) lets every token see itself and the 11 previous
+              tokens; the port computes exactly those 12 logits per token, logit[t, d] = q_t . (k_{t-d} +
+              relk_d), where relk_d = relative_k_proj(sinusoid(d)) is precomputed per layer as a constant. The
+              query scale (128^-0.5 / ln 2 times softplus(per_dim_scale)) and the key scale (ln(1 + e) / ln 2)
+              are folded into q_proj / k_proj and their output clip bounds. The masked_fill(-1e9) of padded keys
+              is an additive -10000; the gradient-clipping clamps (+-1e10, no-ops in inference) are dropped; the
+              120 clipped linears keep their clip bounds. Mathematically identical to the reference (fp32
+              soft-token cosine >= 0.99999998 on 213 clips, max abs diff 8e-4).
+  2026-10-12  Audio fp16 handling for the Neural Engine: every RMSNorm (including the scale-free one of the
+              audio embedder) divides the row by its max-abs value before squaring (the residual stream reaches
+              ~412), divisions are expressed as rsqrt(x)*rsqrt(x), the logit softcap is tanh(x/50)*50.
+  2026-10-12  Audio: fixed frame buckets 192, 384, 1024, 1536 and 3000 frames of 10 ms (functions audio_<Tb>);
+              inputs longer than 30 s are truncated by the host, as upstream does by default. The three masks
+              (frames, after the first convolution, tokens) are host inputs. The bucket set is limited to the
+              sizes validated on the Neural Engine.
+  2026-10-12  Audio preprocessing (host side, not part of the model): the upstream feature extractor's log-mel
+              computation (30 s truncation, 160-sample left pad, 320-sample periodic Hann frames every 160
+              samples, 512-point magnitude FFT, 128 HTK mel bands 0-8000 Hz without normalization, ln(mel +
+              0.001), frame validity rule) re-implemented in numpy and in Swift; the mono mix (mean of the
+              channels) as librosa does it; resampling to 16 kHz with a Kaiser-windowed sinc low-pass of our own
+              (pass band 0.913 and stop band 1.0 of the lower Nyquist, 125 dB) instead of the libsoxr "HQ"
+              resampler that librosa.load uses upstream (the only intended deviation from upstream in the audio
+              pipeline; README gives the measured difference).
+
+  2026-10-11/12  Converted with coreai-torch 0.4.3 / coreai-core 1.0.0b3 on torch 2.9.0 to the Core AI
+              .aimodel format (macOS 27).
+
+The exporter in export/ reproduces these changes from the original checkpoint.
+
+
+THIRD-PARTY ATTRIBUTIONS
+------------------------
+
+HF transformers (Apache-2.0; Copyright 2026 The HuggingFace Team for the modeling, configuration and image-processing
+files named below, Copyright 2026 Google LLC for feature_extraction_gemma4.py, Copyright 2023 The HuggingFace Inc.
+team and the librosa & torchaudio authors for audio_utils.py). export/eg2_text.py re-authors the
+architecture described by modeling_embedding_gemma2.py / configuration_embedding_gemma2.py, export/eg2_vision.py
+the vision model and vision embedder, and export/eg2_audio.py the audio model (Gemma4AudioModel) and audio
+embedder, all described by modeling_gemma4.py / modeling_embedding_gemma2.py, from transformers 5.19. The
+host-side image preprocessing (python/eg2_image.py, swift/Sources/EmbeddingGemma2CoreAI/ImagePreprocessor.swift)
+ports the logic of image_processing_gemma4.py, including its aspect-preserving size rule
+(`get_aspect_ratio_preserving_size`); the host-side audio front end (python/eg2_audio_frontend.py,
+swift/Sources/EmbeddingGemma2CoreAI/AudioFrontend.swift) re-implements the log-mel feature extraction described by
+feature_extraction_gemma4.py with the defaults sentence-transformers uses for this model, and the HTK mel filter
+bank formula (as in librosa / torchaudio) of transformers' audio_utils.py (HTK scale, no normalization). No
+transformers source files are included in this package; the re-authored and ported modules carry their own
+Apache-2.0 header and credit transformers.
+
+librosa (ISC) and libsoxr (LGPL-2.1+) are what upstream uses to load and resample audio files; neither is included,
+and no librosa or libsoxr code is ported; the HTK mel filter formula above is the one librosa and torchaudio also
+implement (credited through transformers' audio_utils.py). The resampler in this package is our own design (a
+Kaiser-windowed sinc, see MODIFICATIONS); the decode-mono-resample order and the output-length rule follow what
+librosa.load does, re-implemented from its documented behaviour.
+
+PyTorch / ATen (BSD-3-Clause, notice below). The integer antialiased bicubic resize in python/eg2_image.py and
+swift/Sources/EmbeddingGemma2CoreAI/ImageResampler.swift is ported from the logic of ATen's uint8
+`_upsample_bicubic2d_aa` kernel (aten/src/ATen/native/cpu/UpSampleKernel.cpp: the tap-index and weight helpers
+`_compute_indices_min_size_weights_aa` / `_compute_index_ranges_int16_weights`, the dynamic int16 precision and
+the separable uint8 passes), which torchvision uses for `resize(..., BICUBIC, antialias=True)`. No PyTorch
+source file is included; the port is translated to numpy and Swift.
+
+Pillow (MIT-CMU / HPND, notice below). The ATen kernel above is itself modelled on Pillow's Resample.c, and
+the CMYK -> RGB conversion in swift/Sources/EmbeddingGemma2CoreAI/ImageDecoder.swift is ported from Pillow's
+conversion formula so that CMYK files embed like the reference. No Pillow source file is included. The Python
+runner uses Pillow to decode images; it is not redistributed.
+
+FluidInference Core ML port of EmbeddingGemma 2 (Apache-2.0, https://huggingface.co/FluidInference). The idea of
+dividing each RMSNorm row by its max-abs value to keep fp16 in range was taken from the README of that port and
+re-derived independently; no code was copied from it. Nothing else in this package derives from it.
+
+Apple Core AI (coreai-torch, coreai-core, the CoreAI framework), ImageIO, Core Graphics, AVFoundation / AudioToolbox
+(audio decoding) and Accelerate (vDSP FFT and dot products): used as tools and runtime, not redistributed. Hugging
+Face tokenizers (Apache-2.0): used by the Python runner and to generate the test fixtures; not redistributed.
+python-soundfile / libsndfile (BSD-3-Clause / LGPL-2.1+): audio decoder of the Python runner (installed by
+python/requirements.txt, not redistributed) and the decoder of the audio reference fixtures; not redistributed.
+eSpeak NG (GPL-3.0-or-later): used as a tool to synthesize the spoken test clips (tests/make_test_audio.py); no part
+of it is included. FFmpeg with libmp3lame (LGPL / GPL): used as a tool to encode the MP3 test clips and to decode
+AAC for the reference fixtures; not included.
+
+
+TRADEMARKS
+----------
+
+Gemma and EmbeddingGemma are trademarks of Google LLC. Apple, Core AI, Apple silicon and Neural Engine are
+trademarks of Apple Inc. This port is not affiliated with, sponsored by or endorsed by Google or Apple.
+
+
+OUR OWN CODE
+------------
+
+Everything in this package that is not the model weights or the tokenizer files, i.e. the exporter
+(export/), the Python runner (python/), the Swift library and command-line tool (swift/), the tests, test
+images and test audio clips (tests/) and the documentation, is
+
+    Copyright 2026 Everpaper
+    Licensed under the Apache License, Version 2.0 (LICENSE).
+
+The parts ported from transformers, PyTorch and Pillow (see THIRD-PARTY ATTRIBUTIONS) also remain subject to
+those projects' licenses: Apache-2.0 for transformers (LICENSE), and the PyTorch and Pillow notices reproduced
+below.
+
+The test texts, test images and test audio clips are written, rendered or synthesized from code (tests/make_*.py).
+The people, companies, products, numbers and events in them are invented; a few real place names and common
+words that are also brand names (for example in the chart and invoice test images) appear only as fictional
+content, with no reference to any real business. The spoken clips are invented sentences synthesized with the
+eSpeak NG formant synthesizer, which generates speech from rules and formant parameters rather than from voice
+recordings; no recording of a person is included or was used.
+
+
+THIRD-PARTY LICENSE NOTICES
+---------------------------
+
+Reproduced as their licenses require, for the ported logic described under THIRD-PARTY ATTRIBUTIONS.
+
+PyTorch (BSD-3-Clause), from the LICENSE file of PyTorch 2.9.0:
+
+    From PyTorch:
+
+    Copyright (c) 2016-     Facebook, Inc            (Adam Paszke)
+    Copyright (c) 2014-     Facebook, Inc            (Soumith Chintala)
+    Copyright (c) 2011-2014 Idiap Research Institute (Ronan Collobert)
+    Copyright (c) 2012-2014 Deepmind Technologies    (Koray Kavukcuoglu)
+    Copyright (c) 2011-2012 NEC Laboratories America (Koray Kavukcuoglu)
+    Copyright (c) 2011-2013 NYU                      (Clement Farabet)
+    Copyright (c) 2006-2010 NEC Laboratories America (Ronan Collobert, Leon Bottou, Iain Melvin, Jason Weston)
+    Copyright (c) 2006      Idiap Research Institute (Samy Bengio)
+    Copyright (c) 2001-2004 Idiap Research Institute (Ronan Collobert, Samy Bengio, Johnny Mariethoz)
+
+    From Caffe2:
+
+    Copyright (c) 2016-present, Facebook Inc. All rights reserved.
+
+    All contributions by Facebook:
+    Copyright (c) 2016 Facebook Inc.
+
+    All contributions by Google:
+    Copyright (c) 2015 Google Inc.
+    All rights reserved.
+
+    All contributions by Yangqing Jia:
+    Copyright (c) 2015 Yangqing Jia
+    All rights reserved.
+
+    All contributions by Kakao Brain:
+    Copyright 2019-2020 Kakao Brain
+
+    All contributions by Cruise LLC:
+    Copyright (c) 2022 Cruise LLC.
+    All rights reserved.
+
+    All contributions by Tri Dao:
+    Copyright (c) 2024 Tri Dao.
+    All rights reserved.
+
+    All contributions by Arm:
+    Copyright (c) 2021, 2023-2024 Arm Limited and/or its affiliates
+
+    All contributions from Caffe:
+    Copyright(c) 2013, 2014, 2015, the respective contributors
+    All rights reserved.
+
+    All other contributions:
+    Copyright(c) 2015, 2016 the respective contributors
+    All rights reserved.
+
+    Caffe2 uses a copyright model similar to Caffe: each contributor holds
+    copyright over their contributions to Caffe2. The project versioning records
+    all such contribution and copyright details. If a contributor wants to further
+    mark their specific copyright on a particular contribution, they should
+    indicate their copyright solely in the commit message of the change when it is
+    committed.
+
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+
+    3. Neither the names of Facebook, Deepmind Technologies, NYU, NEC Laboratories America
+       and IDIAP Research Institute nor the names of its contributors may be
+       used to endorse or promote products derived from this software without
+       specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+    AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+    ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+    LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+    CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+
+
+Pillow (MIT-CMU / HPND), from the LICENSE file of Pillow 12.3.0:
+
+    The Python Imaging Library (PIL) is
+
+        Copyright © 1997-2011 by Secret Labs AB
+        Copyright © 1995-2011 by Fredrik Lundh and contributors
+
+    Pillow is the friendly PIL fork. It is
+
+        Copyright © 2010 by Jeffrey 'Alex' Clark and contributors
+
+    Like PIL, Pillow is licensed under the open source MIT-CMU License:
+
+    By obtaining, using, and/or copying this software and/or its associated
+    documentation, you agree that you have read, understood, and will comply
+    with the following terms and conditions:
+
+    Permission to use, copy, modify and distribute this software and its
+    documentation for any purpose and without fee is hereby granted,
+    provided that the above copyright notice appears in all copies, and that
+    both that copyright notice and this permission notice appear in supporting
+    documentation, and that the name of Secret Labs AB or the author not be
+    used in advertising or publicity pertaining to distribution of the software
+    without specific, written prior permission.
+
+    SECRET LABS AB AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS
+    SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
+    IN NO EVENT SHALL SECRET LABS AB OR THE AUTHOR BE LIABLE FOR ANY SPECIAL,
+    INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+    LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
+    OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+    PERFORMANCE OF THIS SOFTWARE.

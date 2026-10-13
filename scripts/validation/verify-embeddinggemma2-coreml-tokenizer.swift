@@ -1,10 +1,13 @@
-// Compile against MereRunCoreAIModel; see docs/runtime/embeddinggemma2.md.
+// Compile against MereRunCoreMLModel; see docs/runtime/embeddinggemma2.md.
 import Foundation
-import MereRunCoreAIModel
+import MereRunCoreMLModel
 
 enum VerificationError: Error { case arguments, invalidCase(Int) }
 struct Receipt: Encodable {
-    let sourceRevision: String
+    let tokenizerArtifactRepository = "FluidInference/embeddinggemma-2-coreml"
+    let tokenizerArtifactRevision = "3f978ddf92cac9aa07eb2dcf6eb36cf450f3dba4"
+    let referenceRepository = "EverPaper/embeddinggemma-2-coreai"
+    let referenceRevision = "305fc2a96790d9343f38038aeca211dfca56d9a5"
     let cases: Int
     let referenceTokenIDs: Int
     let mismatches: Int
@@ -33,8 +36,7 @@ for (index, test) in cases.enumerated() {
         }
     }
 }
-let receipt = Receipt(sourceRevision: "305fc2a96790d9343f38038aeca211dfca56d9a5",
-                      cases: cases.count, referenceTokenIDs: tokens, mismatches: mismatches)
+let receipt = Receipt(cases: cases.count, referenceTokenIDs: tokens, mismatches: mismatches)
 let encoder = JSONEncoder()
 encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 FileHandle.standardOutput.write(try encoder.encode(receipt))

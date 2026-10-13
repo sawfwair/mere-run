@@ -104,7 +104,7 @@ public enum MereRunModelValidator {
                 return false
             case .directoryRoot, .structuredRoot:
                 return spec.validationKind != .codegenGGUF
-                    && spec.validationKind != .embeddingGemma2CoreAI
+                    && spec.validationKind != .embeddingGemma2CoreML
                     && spec.validationKind != .laya
                     && spec.validationKind != .roFormer
                     && spec.validationKind != .auk
@@ -158,7 +158,7 @@ public enum MereRunModelValidator {
             textEncoderDir = nil
             vaeDir = nil
             tokenizerDir = nil
-        } else if spec?.validationKind == .embeddingGemma2CoreAI
+        } else if spec?.validationKind == .embeddingGemma2CoreML
             || spec?.validationKind == .laya
             || spec?.validationKind == .clef
             || spec?.validationKind == .gliner25Decide
@@ -495,8 +495,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=tts expects qwen3-tts or breeze-tts.")
             case .asr where engine != .qwen3ASR && engine != .parakeetASR && engine != .whistleASR && engine != .sortformer:
                 warnings.append("Manifest engine mismatch: family=asr expects qwen3-asr, parakeet-asr, whistle-asr, or sortformer.")
-            case .embed where engine != .qwen3Embedding && engine != .embeddingGemma2 && engine != .embeddingGemma2CoreAI:
-                warnings.append("Manifest engine mismatch: family=embed expects qwen3-embedding, embeddinggemma2, or embeddinggemma2-coreai.")
+            case .embed where engine != .qwen3Embedding && engine != .embeddingGemma2 && engine != .embeddingGemma2CoreML:
+                warnings.append("Manifest engine mismatch: family=embed expects qwen3-embedding, embeddinggemma2, or embeddinggemma2-coreml.")
             case .privacy where engine != .openAIPrivacyFilter:
                 warnings.append("Manifest engine mismatch: family=privacy expects openai-privacy-filter.")
             case .code where engine != .qwen3Coder && engine != .northMiniCode && engine != .qwen35HybridMoE:
