@@ -6,6 +6,16 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Cache compiled Core ML embedding packages across processes, pack short text
+  batches with bounded concurrent ANE predictions, and expose caller-owned warm
+  embedding sessions. Include full runtime license notices in macOS app bundles.
+- Add `text-embed-embeddinggemma2-coreml` for native Core ML text, image, audio,
+  and ordered mixed embeddings on Apple Silicon macOS 15 or later, including
+  macOS 26. The pinned export accepts 512 tokens and audio segments up to 10 seconds.
+  An optional local conversion expands context to 8,192 tokens and audio segments
+  to 30 seconds, using float32 GPU graphs for longer inputs.
+  The existing MLX model and default selections remain unchanged.
+
 ## 0.64.0 - 2026-10-10
 
 - Use portable MLX operations for packed Whistle inference on Linux, avoiding a

@@ -210,6 +210,10 @@ done
 third_party_licenses="${resources}/ThirdPartyLicenses"
 mkdir -p "$third_party_licenses"
 cp "${repo_root}/THIRD_PARTY_NOTICES.md" "${third_party_licenses}/THIRD_PARTY_NOTICES.md"
+embedding_licenses="${third_party_licenses}/EmbeddingGemma2"
+mkdir -p "$embedding_licenses"
+cp "${repo_root}/Sources/MereRunCoreMLModel/LICENSE" "${embedding_licenses}/LICENSE"
+cp "${repo_root}/Sources/MereRunCoreMLModel/NOTICE" "${embedding_licenses}/NOTICE"
 
 # The StudioUI target's SwiftPM resource bundle (the Caveat wordmark font) belongs in
 # Contents/Resources, where codesign seals it as data rather than nested code and

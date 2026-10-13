@@ -97,6 +97,7 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case pplxEmbedV2Context = "text-embed-pplx-v2-context-9b-preview"
     case pplxEmbedV2LateLargeMixed4Bit = "text-embed-pplx-v2-late-9b-mixed-4bit"
     case pplxEmbedV2Context8Bit = "text-embed-pplx-v2-context-9b-preview-8bit"
+    case embeddingGemma2CoreML = "text-embed-embeddinggemma2-coreml"
     case embeddingGemma2 = "text-embed-embeddinggemma2"
     case privacyFilter = "text-anonymize-privacy-filter"
     case laya = "text-decide-laya"

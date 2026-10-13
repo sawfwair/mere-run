@@ -322,7 +322,8 @@
     "title": "EmbeddingGemma 2 multimodal embeddings (Google)",
     "category": "Text and multimodal",
     "models": [
-      "text-embed-embeddinggemma2"
+      "text-embed-embeddinggemma2",
+      "text-embed-embeddinggemma2-coreml"
     ],
     "resourceName": "handbook-embeddinggemma2.md"
   },

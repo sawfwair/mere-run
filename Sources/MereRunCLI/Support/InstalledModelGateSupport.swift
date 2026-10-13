@@ -408,7 +408,7 @@ enum InstalledModelSmokePlans {
             return direct(spec, route: "text embed PPLX multi-vector") { runner in
                 try await runner.installedPPLXEmbeddingCheck(model: spec.id)
             }
-        case .qwen3Embedding, .embeddingGemma2:
+        case .qwen3Embedding, .embeddingGemma2, .embeddingGemma2CoreML:
             return direct(spec, route: "text embed") { runner in
                 try await runner.installedEmbeddingCheck(model: spec.id)
             }

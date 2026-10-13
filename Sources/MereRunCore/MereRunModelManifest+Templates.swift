@@ -1769,6 +1769,14 @@ extension MereRunModelManifest {
                 defaults: nil, supports: PPLXEmbedV2Catalog.isContextual(modelID.rawValue) ? [.textEmbedding] : [.textEmbedding, .multimodalEmbedding],
                 components: genericTextComponents, upstreamRepoId: PPLXEmbedV2Catalog.repository(modelID.rawValue), createdAt: createdAt
             )
+        case .embeddingGemma2CoreML:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .embeddingGemma2CoreML, family: .embed,
+                tier: .small, variant: .standard, precision: .fp16,
+                defaults: nil, supports: [.textEmbedding, .multimodalEmbedding],
+                components: Components(tokenizer: .local(path: "."), textEncoder: .local(path: ".")),
+                upstreamRepoId: EmbeddingGemma2CoreMLCatalog.repository, createdAt: createdAt
+            )
         case .embeddingGemma2:
             return MereRunModelManifest(
                 id: modelID.rawValue, engine: .embeddingGemma2, family: .embed,

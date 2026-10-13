@@ -162,7 +162,20 @@ if !isLinuxPackage {
   products.append(.executable(name: "mere.run.app", targets: ["MereRunApp"]))
 }
 
-var targets: [Target] = []
+var targets: [Target] = [
+  .target(
+    name: "MereRunCoreMLModel",
+    path: "Sources/MereRunCoreMLModel",
+    exclude: ["README.md", "LICENSE", "NOTICE"],
+    linkerSettings: isLinuxPackage ? [] : [
+      .linkedFramework("CoreML", .when(platforms: [.macOS])),
+      .linkedFramework("Accelerate", .when(platforms: [.macOS])),
+      .linkedFramework("AVFoundation", .when(platforms: [.macOS])),
+      .linkedFramework("ImageIO", .when(platforms: [.macOS])),
+      .linkedFramework("CoreGraphics", .when(platforms: [.macOS]))
+    ]
+  )
+]
 var mereRunCoreDependencies: [Target.Dependency] = mlxDependency("MLX")
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXFast"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXFFT"))
@@ -188,6 +201,7 @@ mereRunCoreDependencies.append("MereRunDecode")
 mereRunCoreDependencies.append("MereRunQwenModel")
 mereRunCoreDependencies.append("MereRunKolibriModel")
 mereRunCoreDependencies.append("MereRunGemmaModel")
+mereRunCoreDependencies.append("MereRunCoreMLModel")
 mereRunCoreDependencies.append("MereRunLTXModel")
 mereRunCoreDependencies.append("AudioCodecs")
 mereRunCoreDependencies.append("AudioQwen3ASRModel")
@@ -310,6 +324,7 @@ if hasMediaIOTarget {
 }
 
 var mereRunCoreTestDependencies: [Target.Dependency] = [
+  "MereRunCoreMLModel",
   "MereRunLagunaModel",
   "MereRunH3Model",
   "MereRunAudioModels",

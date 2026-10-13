@@ -75,4 +75,32 @@ final class TextEmbedCommandParsingTests: XCTestCase {
         try Data(#"{"model_type":"gemma4"}"#.utf8).write(to: config)
         XCTAssertThrowsError(try TextEmbed.isEmbeddingGemma2(root: root))
     }
+    func testCoreMLCatalogAndCommandContract() throws {
+        let id = EmbeddingGemma2CoreMLCatalog.modelID
+        let command = try TextEmbed.parse(["hello", "--model", id, "--task", "query", "--dimensions", "256"])
+        XCTAssertEqual(command.model, id)
+        XCTAssertThrowsError(try TextEmbed.parse(["--video", "clip.mp4", "--model", id]))
+        XCTAssertThrowsError(try TextEmbed.parse(["hello", "--model", id, "--max-tokens", "1"]))
+        XCTAssertThrowsError(try TextEmbed.parse(["hello", "--model", id, "--dimensions", "1024"]))
+        XCTAssertEqual(try TextEmbed.parse(["--audio", "sound.wav", "--model", id]).audio, ["sound.wav"])
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
+        XCTAssertEqual(spec.validationKind, .embeddingGemma2CoreML)
+        XCTAssertEqual(spec.upstreamRevision, "3f978ddf92cac9aa07eb2dcf6eb36cf450f3dba4")
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertFalse(spec.isAPISidecarRuntimeModel)
+        XCTAssertNotNil(InstalledModelSmokePlans.plan(for: spec, installedIDs: [id]))
+        let manifest = MereRunModelManifest.template(for: .embeddingGemma2CoreML)
+        XCTAssertEqual(manifest.engine, .embeddingGemma2CoreML)
+        XCTAssertEqual(manifest.precision, .fp16)
+    }
+
+    func testCoreMLLocalSnapshotDispatch() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try Data(#"{"format":"coreml","base_model":"google/embeddinggemma-2"}"#.utf8)
+            .write(to: root.appending(path: "config.json"))
+        XCTAssertEqual(try TextEmbed.embeddingModelType(root: root), "embedding_gemma2_coreml")
+    }
+
 }

@@ -78,9 +78,10 @@ enum CLIInferenceAdmissionClassifier {
             ].contains(subcommand)
             return MachineInferenceRequest(label: label, resourceClass: large ? .large : .standard)
         case "text":
-            // The pinned BF16 embedding checkpoint, including media towers, fits
+            // The pinned embedding checkpoints, including media towers, fit
             // the small-model class. Unknown folders keep the standard floor.
-            if subcommand == "embed", selectedModelIdentifiers == [EmbeddingGemma2Catalog.modelID] {
+            if subcommand == "embed", selectedModelIdentifiers == [EmbeddingGemma2Catalog.modelID]
+                || selectedModelIdentifiers == [EmbeddingGemma2CoreMLCatalog.modelID] {
                 return MachineInferenceRequest(label: label, resourceClass: .small)
             }
             let large = subcommand == "train-lora"

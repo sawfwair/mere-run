@@ -1,0 +1,117 @@
+{
+  "base_model": "google/embeddinggemma-2",
+  "format": "coreml",
+  "modality": [
+    "text",
+    "audio",
+    "image"
+  ],
+  "precision": "fp16",
+  "hidden_size": 512,
+  "embedding_dim": 768,
+  "matryoshka_dims": [
+    768,
+    512,
+    256,
+    128
+  ],
+  "embed_scale": 22.627417,
+  "token_table": {
+    "file": "embeddings.bf16",
+    "dtype": "bfloat16",
+    "shape": [
+      262144,
+      512
+    ]
+  },
+  "functions": {
+    "embed_32": {
+      "tokens": 32
+    },
+    "embed_48": {
+      "tokens": 48
+    },
+    "embed_64": {
+      "tokens": 64
+    },
+    "embed_128": {
+      "tokens": 128
+    },
+    "embed_256": {
+      "tokens": 256
+    },
+    "embed_512": {
+      "tokens": 512
+    },
+    "pack_256": {
+      "tokens": 256,
+      "slots": 8
+    }
+  },
+  "bos_token_id": 2,
+  "eos_token_id": 1,
+  "pad_token_id": 0,
+  "prompts": {
+    "document": "title: none | text: ",
+    "search_query": "task: search result | query: ",
+    "question_answering": "task: question answering | query: ",
+    "fact_checking": "task: fact checking | query: ",
+    "code_retrieval": "task: code retrieval | query: ",
+    "classification": "task: classification | query: ",
+    "clustering": "task: clustering | query: ",
+    "sentence_similarity": "task: sentence similarity | query: "
+  },
+  "audio": {
+    "package": "EmbeddingGemma2Audio.mlpackage",
+    "compute_units": "cpuAndGPU",
+    "precision": "fp16",
+    "sample_rate": 16000,
+    "window_seconds": 10,
+    "waveform_samples": 160160,
+    "left_pad_samples": 160,
+    "frames": 1000,
+    "frame_valid_if": "i * 160 + 321 <= 160 + audio_samples",
+    "tokens_per_window": 250,
+    "token_ms": 40,
+    "boa_token_id": 256000,
+    "eoa_token_id": 258883,
+    "text_sequence": "<bos> <|audio> [audio tokens] <audio|> <eos> -> embed_256"
+  },
+  "vision": {
+    "package": "EmbeddingGemma2Vision.mlpackage",
+    "compute_units": "cpuAndGPU",
+    "precision": "fp16",
+    "functions": {
+      "vision_70": {
+        "tokens": 70,
+        "patches": 630
+      },
+      "vision_140": {
+        "tokens": 140,
+        "patches": 1260
+      },
+      "vision_280": {
+        "tokens": 280,
+        "patches": 2520
+      }
+    },
+    "patch_size": 16,
+    "pooling_kernel": 3,
+    "resize": "aspect-preserving, bicubic + antialias, sides multiple of 48 px, at most 9 x tokens patches",
+    "pixel_scale": "RGB / 255 (the model applies 2x - 1)",
+    "patch_layout": "row-major patches, each [16 rows][16 cols][RGB]",
+    "position_table": {
+      "file": "position_embeddings.f16",
+      "dtype": "float16",
+      "shape": [
+        2,
+        1024,
+        768
+      ],
+      "use": "table[0][x] + table[1][y] per patch, zero for padding"
+    },
+    "boi_token_id": 255999,
+    "eoi_token_id": 258882,
+    "text_sequence": "<bos> <|image> [image tokens] <image|> <eos> -> smallest embed_S that fits"
+  }
+}

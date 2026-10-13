@@ -6,6 +6,12 @@ embeddinggemma2	console.textEmbed	validated	--audio --dimensions --image --input
 embeddinggemma2	task.textEmbed	emitted	--audio --dimensions --image --input-json --max-tokens --model --output --pretty --task --title --video
 embeddinggemma2	task.textEmbed	shown	--audio --dimensions --image --input-json --max-tokens --model --task --title --video
 embeddinggemma2	task.textEmbed	validated	--audio --dimensions --image --input-json --max-tokens --model --output --pretty --task --title --video
+embeddinggemma2-coreml	console.textEmbed	emitted	--audio --dimensions --image --input-json --max-tokens --model --output --pretty --task --title
+embeddinggemma2-coreml	console.textEmbed	shown	--audio --dimensions --image --input-json --max-tokens --model --output --pretty --task --title
+embeddinggemma2-coreml	console.textEmbed	validated	--audio --dimensions --image --input-json --max-tokens --model --output --pretty --task --title
+embeddinggemma2-coreml	task.textEmbed	emitted	--audio --dimensions --image --input-json --max-tokens --model --output --pretty --task --title
+embeddinggemma2-coreml	task.textEmbed	shown	--audio --dimensions --image --input-json --max-tokens --model --task --title
+embeddinggemma2-coreml	task.textEmbed	validated	--audio --dimensions --image --input-json --max-tokens --model --output --pretty --task --title
 pplx-context	console.textEmbed	emitted	--chunks-json --dimensions --max-tokens --model --normalize --output --pretty --task
 pplx-context	console.textEmbed	shown	--chunks-json --dimensions --max-tokens --model --normalize --output --pretty --task
 pplx-context	console.textEmbed	validated	--chunks-json --dimensions --max-tokens --model --normalize --output --pretty --task
