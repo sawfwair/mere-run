@@ -59,3 +59,26 @@ guide for the reproducible checks. Editorial review date: October 6, 2026.
 
 - [Google model card](https://huggingface.co/google/embeddinggemma-2/blob/914f7f89142e33e77833254d9c9b90c3cef7303b/README.md)
 - [Native usage guide](https://github.com/sawfwair/mere-run/blob/main/docs/runtime/embeddinggemma2.md)
+
+## Apple Core AI variant
+
+`text-embed-embeddinggemma2-coreai` is a separate preconverted install from
+EverPaper, pinned to `305fc2a96790d9343f38038aeca211dfca56d9a5`. It requires
+Apple Silicon, macOS 27, and a build made with the macOS 27 SDK. No conversion
+or Python process is required. Download explicitly before inference:
+
+```bash
+mere.run model pull text-embed-embeddinggemma2-coreai
+mere.run text embed "find a sorting function" \
+  --model text-embed-embeddinggemma2-coreai --task query --dimensions 256
+mere.run text embed --image ./photo.png --audio ./clip.wav \
+  --model text-embed-embeddinggemma2-coreai
+```
+
+These examples have not been validated with Core AI model inference.
+The export supports text, images, audio, and ordered mixed JSON with a 2,048-token
+budget. Text truncates; mixed records reject overflow. Audio embeds the first
+30 seconds. Video requires the original MLX model. Outputs retain input indices,
+actual token usage, and normalized 128/256/512/768 dimensions. Older SDK builds
+reject inference before model resolution. Core AI graph compilation and parity
+remain unverified; the preceding MLX measurements do not apply to this export.

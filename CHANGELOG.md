@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add a separate `text-embed-embeddinggemma2-coreai` install for native Core AI
+  text, image, audio, and ordered mixed embeddings. It requires Apple Silicon,
+  macOS 27, and a macOS 27 SDK build; the pinned export has a 2,048-token limit.
+  Older SDK builds reject inference before model resolution. Core AI graph
+  compilation, released-artifact inference, and parity remain unverified.
+
 ## 0.64.0 - 2026-10-10
 
 - Use portable MLX operations for packed Whistle inference on Linux, avoiding a

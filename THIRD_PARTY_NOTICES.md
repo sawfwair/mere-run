@@ -1639,3 +1639,21 @@ not checkpoint weights or an original tokenizer. Its independent audio-graph
 reference is the public [Whistle WebGPU port](https://huggingface.co/spaces/mrfakename/whistle-webgpu).
 No ONNX graph or Cactus executable is included or executed by the native runtime.
 The publisher's Apache-2.0 license is retained in `licenses/whistle-APACHE-2.0.txt`.
+
+## EmbeddingGemma 2 Core AI Swift runtime
+
+`Sources/MereRunCoreAIModel/` adapts the native Swift graph adapter, exact Gemma
+tokenizer, image preprocessing, and audio frontend from
+[EverPaper/embeddinggemma-2-coreai](https://huggingface.co/EverPaper/embeddinggemma-2-coreai/tree/305fc2a96790d9343f38038aeca211dfca56d9a5/swift),
+revision `305fc2a96790d9343f38038aeca211dfca56d9a5`.
+
+Copyright 2026 Everpaper. Licensed under the Apache License, Version 2.0.
+The audio frontend reproduces Gemma4AudioFeatureExtractor defaults
+(Copyright 2026 Google LLC) and the HTK mel filter-bank formula described in
+Transformers audio utilities (Copyright 2023 The HuggingFace Inc. team and the
+librosa and torchaudio authors), under Apache-2.0. The source headers preserve
+these attributions. Changes add platform availability guards, typed bundle
+validation, and mere.run integration; the standalone CLI and process cleanup
+helpers are excluded. `Sources/MereRunCoreAIModel/LICENSE` supplies the Apache-2.0 license
+text. The model graphs and tokenizer are downloaded separately with their
+upstream LICENSE, NOTICE, and MODEL-ATTRIBUTION.json; they are not bundled here.

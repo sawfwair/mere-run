@@ -195,3 +195,75 @@ and 32 video frames. `--stress` additionally requires the Python `tokenizers`
 package. These boundary checks do not run the upstream CPU reference.
 The managed model uses the existing small-model admission class with 6 GiB
 reclaimable headroom; arbitrary local model folders retain the 16 GiB floor.
+
+## Apple Core AI export
+
+To run the preconverted Core AI graphs on Apple Silicon, use a `mere.run` build
+made with the macOS 27 SDK on macOS 27:
+
+```bash
+mere.run model pull text-embed-embeddinggemma2-coreai
+mere.run text embed "What causes the northern lights?" \
+  --model text-embed-embeddinggemma2-coreai --task query --dimensions 256
+mere.run text embed --image ./photo.png --audio ./clip.wav \
+  --model text-embed-embeddinggemma2-coreai
+mere.run text embed --input-json ./inputs.json \
+  --model text-embed-embeddinggemma2-coreai --dimensions 512
+```
+
+This separate managed install uses
+[EverPaper's Core AI export](https://huggingface.co/EverPaper/embeddinggemma-2-coreai/tree/305fc2a96790d9343f38038aeca211dfca56d9a5),
+revision `305fc2a96790d9343f38038aeca211dfca56d9a5`. It downloads the `model/`
+bundle, tokenizer, attribution, and license files. No conversion is required.
+The original model ID and Qwen3 default retain their existing behavior.
+You can pass a local snapshot root or its `model/` directory to `--model`.
+
+Core AI uses `.aimodel` graphs, rather than Core ML `.mlpackage` files.
+Builds made with older SDKs reject inference before resolving the managed model.
+Download explicitly with `model pull`; inference does not download this model
+automatically. Text, vision, and audio use the Neural Engine preference.
+Vision and audio graphs load only when a request includes those modalities.
+The runtime may take longer on first use while it specializes the graphs.
+
+The export uses FP16 graph inputs and a **2,048-token** limit, including task
+prefixes and BOS/EOS. `--max-tokens` lowers this budget. Text-only inputs truncate
+the body while preserving BOS/EOS. Mixed records preserve content order and
+reject overflow without truncating media blocks. Task names, document titles,
+output dimensions, indices, and token usage follow the existing CLI contract.
+Every returned 128/256/512/768-dimensional vector is L2-normalized.
+
+Images use the export's native byte-exact tokenizer and bicubic RGB patch
+preprocessor; EXIF rotation is not applied. Audio uses mono 16 kHz log-mel
+features and the first 30 seconds of each file. Split longer recordings into
+separate inputs to include their later content. Video and `video-frames` are
+unsupported by this export; select `text-embed-embeddinggemma2` for those inputs.
+The Core AI variant is CLI-only.
+
+Local checks cover artifact layout, typed bundle geometry, availability errors,
+CLI routing, and native preprocessing. Graph compilation with the macOS 27 SDK,
+released-artifact inference, and embedding parity remain unverified. The MLX
+qualification results in this guide do not qualify the Core AI export.
+
+### Reproduce tokenizer parity
+
+The native tokenizer matched all 3,758 published cases (608,225 token IDs) at the
+pinned revision with zero mismatches. The [tokenizer receipt](../benchmarks/embeddinggemma2-coreai-tokenizer-2026-10-13.json) records input hashes.
+This check covers tokenization, including
+Unicode and reserved-token cases; it does not execute the embedding graphs.
+To repeat it, download `model/tokenizer/tokenizer.json` and
+`tests/tokenizer-cases.json` from the pinned repository, then run:
+
+```bash
+swift build --target MereRunCoreAIModel --disable-index-store -debug-info-format none
+build_dir="$(swift build --show-bin-path)"
+swiftc -module-cache-path "$build_dir/ModuleCache" -I "$build_dir/Modules" \
+  scripts/validation/verify-embeddinggemma2-coreai-tokenizer.swift \
+  "$build_dir"/MereRunCoreAIModel.build/*.o \
+  -framework Accelerate -framework AVFoundation -framework ImageIO -framework CoreGraphics \
+  -o /tmp/verify-embeddinggemma2-coreai-tokenizer
+/tmp/verify-embeddinggemma2-coreai-tokenizer \
+  /path/to/model/tokenizer/tokenizer.json /path/to/tests/tokenizer-cases.json
+```
+
+The verifier runs on Apple Silicon macOS without Core AI or graph weights and
+prints a JSON receipt. Preserve the pinned input files with that receipt.

@@ -1,0 +1,132 @@
+{
+  "base_model": "google/embeddinggemma-2",
+  "format": "coreai",
+  "asset": "embeddinggemma-2-text-mm.aimodel",
+  "functions": [
+    "mm_32",
+    "mm_64",
+    "mm_128",
+    "mm_288",
+    "mm_512",
+    "mm_1024",
+    "mm_2048"
+  ],
+  "buckets": [
+    32,
+    64,
+    128,
+    288,
+    512,
+    1024,
+    2048
+  ],
+  "max_tokens": 2048,
+  "precision_mode": "ane",
+  "inputs": {
+    "input_ids": "[1, S] int32 (bos=2 ... eos=1, right-padded with pad=0; image slots hold 258880)",
+    "attention_mask": "[1, S] float16 (1 = token, 0 = padding)",
+    "mm_embeds": "[1, S, 512] float16 soft tokens at their slots (zeros elsewhere), unscaled",
+    "mm_mask": "[1, S] float16 (1 at a soft-token slot)"
+  },
+  "output": {
+    "embedding": "[1, 768] float16, L2-normalized; Matryoshka: keep the first 512/256/128 and re-normalize"
+  },
+  "text_only_use": "mm_embeds = 0 and mm_mask = 0 give the text embedding (bit-identical to the v1.0 main_<S> functions)",
+  "vision": {
+    "asset": "embeddinggemma-2-vision.aimodel",
+    "function": "vision_2520",
+    "max_patches": 2520,
+    "max_soft_tokens": 280,
+    "qchunks": 12,
+    "inputs": {
+      "patches": "[1, 2520, 768] float16: 16x16x3 patches (py, px, c), integer pixel values 0..255 (not /255), CELL-MAJOR order, zero padded",
+      "pos_x": "[1, 2520] int32 patch column (0 for padding)",
+      "pos_y": "[1, 2520] int32 patch row (0 for padding)",
+      "cos": "[1, 1, 2520, 64] float16 axial RoPE cos (channels 0-31 by x, 32-63 by y, 16 freqs theta 100 duplicated)",
+      "sin": "[1, 1, 2520, 64] float16",
+      "patch_mask": "[1, 2520] float16 (1 = patch, 0 = padding)"
+    },
+    "output": {
+      "soft_tokens": "[1, 280, 512] float16; rows >= n_soft are padding"
+    },
+    "patch_size": 16,
+    "pooling_kernel": 3,
+    "cell_px": 48,
+    "rope_theta": 100.0,
+    "head_dim": 64,
+    "resize": "aspect-preserving to multiples of 48 px within 2520 patches; antialiased bicubic on uint8 (torchvision-exact)",
+    "image_prompt": null,
+    "exif_orientation": "not applied (upstream parity); optional in the runners"
+  },
+  "image_sequence": "<bos> <|image> <|image|> x n_soft <image|> <eos>  (n_soft + 4 tokens, at most 284 -> bucket 288)",
+  "audio": {
+    "asset": "embeddinggemma-2-audio.aimodel",
+    "functions": [
+      "audio_192",
+      "audio_384",
+      "audio_1024",
+      "audio_1536",
+      "audio_3000"
+    ],
+    "frame_buckets": [
+      192,
+      384,
+      1024,
+      1536,
+      3000
+    ],
+    "max_frames": 3000,
+    "max_soft_tokens": 750,
+    "inputs": {
+      "features": "[1, Tb, 128] float16 log-mel frames (10 ms hop, 128 HTK mel bands, ln(mel + 1e-3)), the first n_frames rows real, zero after",
+      "frame_mask": "[1, Tb] float16 (1 for the first n_frames rows)",
+      "half_mask": "[1, Tb/2] float16 (1 for the first ceil(n_frames/2) rows)",
+      "token_mask": "[1, Tb/4] float16 (1 for the first ceil(ceil(n_frames/2)/2) rows = the soft-token count)"
+    },
+    "output": {
+      "soft_tokens": "[1, Tb/4, 512] float16; rows >= n_tokens are padding"
+    },
+    "sample_rate": 16000,
+    "max_seconds": 30.0,
+    "max_samples": 480000,
+    "frame_ms": 20,
+    "hop_ms": 10,
+    "fft": 512,
+    "n_mels": 128,
+    "frames_per_token": 4,
+    "front_end": "python/eg2_audio_frontend.py, swift AudioFrontend (upstream Gemma4AudioFeatureExtractor defaults)",
+    "resampler": "Kaiser-windowed sinc, pass band 0.913 / stop band 1.0 of the lower Nyquist, 125 dB (upstream: libsoxr HQ)",
+    "audio_prompt": null,
+    "long_audio": "the first 30 s (upstream); the runners also offer the mean of 30 s windows"
+  },
+  "audio_sequence": "<bos> <|audio> <|audio|> x n_tokens <audio|> <eos>  (n_tokens + 4 tokens, at most 754 -> bucket 1024)",
+  "hidden_size": 512,
+  "embedding_dim": 768,
+  "matryoshka_dims": [
+    768,
+    512,
+    256,
+    128
+  ],
+  "bos_token_id": 2,
+  "eos_token_id": 1,
+  "pad_token_id": 0,
+  "boi_token_id": 255999,
+  "image_token_id": 258880,
+  "eoi_token_id": 258882,
+  "video_token_id": 258884,
+  "boa_token_id": 256000,
+  "audio_token_id": 258881,
+  "eoa_token_id": 258883,
+  "prompts": {
+    "document": "title: none | text: ",
+    "search_query": "task: search result | query: ",
+    "question_answering": "task: question answering | query: ",
+    "fact_checking": "task: fact checking | query: ",
+    "code_retrieval": "task: code retrieval | query: ",
+    "classification": "task: classification | query: ",
+    "clustering": "task: clustering | query: ",
+    "sentence_similarity": "task: sentence similarity | query: "
+  },
+  "tokenizer": "tokenizer/tokenizer.json (unchanged Gemma tokenizer; the runner adds <bos> and <eos>)"
+}

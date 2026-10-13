@@ -75,4 +75,34 @@ final class TextEmbedCommandParsingTests: XCTestCase {
         try Data(#"{"model_type":"gemma4"}"#.utf8).write(to: config)
         XCTAssertThrowsError(try TextEmbed.isEmbeddingGemma2(root: root))
     }
+    func testCoreAICatalogAndCommandContract() throws {
+        let id = EmbeddingGemma2CoreAICatalog.modelID
+        let command = try TextEmbed.parse(["hello", "--model", id, "--task", "query", "--dimensions", "256"])
+        XCTAssertEqual(command.model, id)
+        XCTAssertThrowsError(try TextEmbed.parse(["--video", "clip.mp4", "--model", id]))
+        XCTAssertThrowsError(try TextEmbed.parse(["hello", "--model", id, "--max-tokens", "1"]))
+        XCTAssertThrowsError(try TextEmbed.parse(["hello", "--model", id, "--dimensions", "1024"]))
+        XCTAssertEqual(try TextEmbed.parse(["--audio", "sound.wav", "--model", id]).audio, ["sound.wav"])
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
+        XCTAssertEqual(spec.validationKind, .embeddingGemma2CoreAI)
+        XCTAssertEqual(spec.upstreamRevision, "305fc2a96790d9343f38038aeca211dfca56d9a5")
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertFalse(spec.isAPISidecarRuntimeModel)
+        XCTAssertNotNil(InstalledModelSmokePlans.plan(for: spec, installedIDs: [id]))
+        let manifest = MereRunModelManifest.template(for: .embeddingGemma2CoreAI)
+        XCTAssertEqual(manifest.engine, .embeddingGemma2CoreAI)
+        XCTAssertEqual(manifest.precision, .fp16)
+    }
+
+    func testCoreAILocalSnapshotAndModelDirectoryDispatch() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bundle = root.appending(path: "model")
+        try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
+        try Data(#"{"format":"coreai","base_model":"google/embeddinggemma-2"}"#.utf8)
+            .write(to: bundle.appending(path: "config.json"))
+        XCTAssertEqual(try TextEmbed.embeddingModelType(root: root), "embedding_gemma2_coreai")
+        XCTAssertEqual(try TextEmbed.embeddingModelType(root: bundle), "embedding_gemma2_coreai")
+    }
+
 }

@@ -240,22 +240,23 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
             .init(flag: "--image", label: "Images", kind: .file, repeatable: true)
-                .scoped(TextEmbedFamily.only(.embeddingGemma2, .pplxLate)),
+                .scoped(TextEmbedFamily.only(.embeddingGemma2CoreAI, .embeddingGemma2, .pplxLate)),
             .init(flag: "--audio", label: "Audio", kind: .file, repeatable: true)
-                .scoped(TextEmbedFamily.only(.embeddingGemma2)),
+                .scoped(TextEmbedFamily.only(.embeddingGemma2CoreAI, .embeddingGemma2)),
             .init(flag: "--video", label: "Videos", kind: .file, repeatable: true)
                 .scoped(TextEmbedFamily.only(.embeddingGemma2)),
             .init(flag: "--input-json", label: "Mixed inputs", kind: .file)
-                .scoped(TextEmbedFamily.only(.embeddingGemma2)),
+                .scoped(TextEmbedFamily.only(.embeddingGemma2CoreAI, .embeddingGemma2)),
             .init(flag: "--task", label: "Embedding task", kind: .choice,
                   choices: ["raw", "query", "document", "code-retrieval", "question-answering", "fact-checking",
                             "classification", "clustering", "similarity"], defaultValue: "raw", choiceSpellings: .exact)
-                .scoped(TextEmbedFamily.only(.embeddingGemma2, .pplxLate, .pplxContext),
+                .scoped(TextEmbedFamily.only(.embeddingGemma2CoreAI, .embeddingGemma2, .pplxLate, .pplxContext),
                         .rule(.pplxLate, values: ["query", "document"], defaultValue: "document"), .rule(.pplxContext, values: ["query", "document"], defaultValue: "document")),
             .init(flag: "--title", label: "Document title", kind: .string)
-                .scoped(TextEmbedFamily.only(.embeddingGemma2)),
+                .scoped(TextEmbedFamily.only(.embeddingGemma2CoreAI, .embeddingGemma2)),
             .init(flag: "--dimensions", label: "Embedding dimensions", kind: .integer)
-                .scoped(TextEmbedFamily.only(.embeddingGemma2, .pplxLate, .pplxContext),
+                .scoped(TextEmbedFamily.only(.embeddingGemma2CoreAI, .embeddingGemma2, .pplxLate, .pplxContext),
+                        .rule(.embeddingGemma2CoreAI, values: ["128", "256", "512", "768"]),
                         .rule(.embeddingGemma2, values: ["128", "256", "512", "768"]),
                         .rule(.pplxLate, values: ["128"]), .rule(.pplxContext, values: ["1024", "2048"])),
             .init(flag: "--chunks-json", label: "Document chunks", kind: .file)

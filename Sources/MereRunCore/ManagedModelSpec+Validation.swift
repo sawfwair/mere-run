@@ -278,6 +278,8 @@ public extension ManagedModelSpec {
             return Qwen3EmbeddingResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .pplxEmbedV2:
             return PPLXEmbedV2Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .embeddingGemma2CoreAI:
+            return EmbeddingGemma2CoreAICatalog.missingFiles(root: rootURL, fileManager: fileManager)
         case .embeddingGemma2:
             return EmbeddingGemma2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .qwen3VLEmbedding:
@@ -382,6 +384,13 @@ public extension ManagedModelSpec {
 
     func validationMessages(in rootURL: URL, fileManager: FileManager = .default) -> [String] {
         switch validationKind {
+        case .embeddingGemma2CoreAI:
+            let missing = missingPaths(in: rootURL, fileManager: fileManager)
+            guard missing.isEmpty else { return missing.map { "Missing required file: \($0.path)" } }
+            do {
+                try EmbeddingGemma2CoreAICatalog.validateConfiguration(root: rootURL)
+                return []
+            } catch { return [error.localizedDescription] }
         case .sortformer where id == Nemotron3DiarizationResources.modelID:
             do {
                 _ = try Nemotron3DiarizationResources.verify(

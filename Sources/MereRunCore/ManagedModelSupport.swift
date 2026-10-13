@@ -853,6 +853,11 @@ public enum ManagedModelCapabilityCatalog {
                 minimum: 8, recommended: 16
             ),
             descriptor(
+                EmbeddingGemma2CoreAICatalog.modelID, "EmbeddingGemma 2 Core AI",
+                "Native text, image, and audio embeddings on macOS 27 with Apple Core AI; 2048-token limit.",
+                minimum: 8, recommended: 16
+            ),
+            descriptor(
                 PPLXEmbedV2Catalog.lateSmallID, "PPLX Embed v2 Late 0.6B",
                 "Creates native 128-dimensional token vectors for text and image document retrieval with MaxSim.",
                 minimum: 16, recommended: 24
