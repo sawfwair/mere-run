@@ -255,6 +255,13 @@ per call; a fresh CLI process still has model-loading overhead. Warm inference,
 batch throughput, and fresh-process latency are separate measurements. The
 optional 8K FP32 GPU extension does not inherit the short ANE graph's speed claims.
 
+The dated [short-text performance receipt](../public/qualification/embeddinggemma2-coreml-performance-2026-10-13.json)
+records release-build comparisons with the native BF16 MLX backend. It separates
+warm requests from fresh CLI processes and first-use specialization. These local
+observations cover short text; they do not establish an 8K or media throughput
+advantage. The receipt includes raw timing samples and precision, cache, and
+harness limitations.
+
 ### Input limits of the downloaded bundle
 
 The export uses a **512-token** budget, including task prefixes and BOS/EOS.
