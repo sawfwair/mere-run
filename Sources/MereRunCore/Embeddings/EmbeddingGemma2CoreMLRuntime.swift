@@ -7,21 +7,43 @@ extension EmbeddingGemma2CoreMLRuntime {
     static func execute(root: URL, inputs: [EmbeddingGemma2Input], task: EmbeddingGemma2Task,
                         title: String?, dimensions: Int, maxTokens: Int?) async throws
         -> (embeddings: [[Float]], tokenCounts: [Int]) {
-        let model = try EmbeddingGemma2(bundle: root)
+        let session = try EmbeddingGemma2CoreMLSession(root: root)
+        return try await session.embed(inputs: inputs, task: task, title: title, dimensions: dimensions, maxTokens: maxTokens)
+    }
+
+    static func execute(model: EmbeddingGemma2, inputs: [EmbeddingGemma2Input], task: EmbeddingGemma2Task,
+                        title: String?, dimensions: Int, maxTokens: Int?) async throws
+        -> (embeddings: [[Float]], tokenCounts: [Int]) {
         let limit = min(maxTokens ?? model.config.maximumTokens, model.config.maximumTokens)
         var vectors: [[Float]] = [], counts: [Int] = []
-        for input in inputs {
-            let sequence = try await prepare(input, model: model, task: task, title: title, limit: limit)
-            let vector = try await model.embed(sequence: sequence)
-            var prefix = Array(vector.prefix(dimensions))
-            let norm = sqrt(prefix.reduce(Float(0)) { $0 + $1 * $1 })
-            guard norm.isFinite, norm > 0, prefix.count == dimensions, prefix.allSatisfy(\.isFinite) else {
-                throw EmbeddingGemma2Error.invalidConfiguration("Core ML returned an invalid embedding.")
+        // Keep media preparation and long GPU records bounded. Text batches use the
+        // packed ANE path; no model instances survive beyond their session owner.
+        var pending: [MultimodalSequence] = []
+        func append(_ sequences: [MultimodalSequence]) async throws {
+            let embeddings = try await model.embed(sequences: sequences)
+            for (sequence, vector) in zip(sequences, embeddings) {
+                var prefix = Array(vector.prefix(dimensions))
+                let norm = sqrt(prefix.reduce(Float(0)) { $0 + $1 * $1 })
+                guard norm.isFinite, norm > 0, prefix.count == dimensions, prefix.allSatisfy(\.isFinite) else {
+                    throw EmbeddingGemma2Error.invalidConfiguration("Core ML returned an invalid embedding.")
+                }
+                for index in prefix.indices { prefix[index] /= norm }
+                vectors.append(prefix)
+                counts.append(sequence.ids.count)
             }
-            for index in prefix.indices { prefix[index] /= norm }
-            vectors.append(prefix)
-            counts.append(sequence.ids.count)
         }
+        for input in inputs {
+            try Task.checkCancellation()
+            let media = input.content.contains { if case .text = $0 { return false }; return true }
+            if media, !pending.isEmpty { try await append(pending); pending.removeAll(keepingCapacity: true) }
+            let sequence = try await prepare(input, model: model, task: task, title: title, limit: limit)
+            if media { try await append([sequence]) }
+            else {
+                pending.append(sequence)
+                if pending.count == 64 { try await append(pending); pending.removeAll(keepingCapacity: true) }
+            }
+        }
+        if !pending.isEmpty { try await append(pending) }
         return (vectors, counts)
     }
 

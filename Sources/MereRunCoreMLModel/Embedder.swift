@@ -3,14 +3,14 @@
 import Foundation
 
 /// Native Core ML execution of the pinned text, image, and audio export.
-public final class EmbeddingGemma2 {
-    public let config: BundleConfig
-    public let tokenizer: GemmaTokenizer
+public actor EmbeddingGemma2 {
+    public nonisolated let config: BundleConfig
+    public nonisolated let tokenizer: GemmaTokenizer
     private let root: URL
-    private let table: TokenEmbeddingTable
+    let table: TokenEmbeddingTable
     private var positionTable: Data?
     private var models: [String: MLModel] = [:]
-    private var compiled: [String: URL] = [:]
+    private var loading: [String: Task<MLModel, Error>] = [:]
 
     public init(bundle: URL) throws {
         root = bundle
@@ -25,29 +25,31 @@ public final class EmbeddingGemma2 {
                                         rows: config.token_table.shape[0], columns: config.hidden_size, scale: config.embed_scale)
     }
 
-    deinit {
-        models.removeAll()
-        for url in compiled.values { try? FileManager.default.removeItem(at: url) }
-    }
-
-    private func model(package: String, function: String?, compute: MLComputeUnits) async throws -> MLModel {
+    func model(package: String, function: String?, compute: MLComputeUnits) async throws -> MLModel {
         let key = package + ":" + (function ?? "main")
         if let existing = models[key] { return existing }
-        let url: URL
-        if let cached = compiled[package] { url = cached }
-        else {
-            url = try await MLModel.compileModel(at: root.appending(path: package))
-            compiled[package] = url
+        if let pending = loading[key] { return try await pending.value }
+        let source = root.appending(path: package)
+        let task = Task<MLModel, Error> {
+            let url = try await CompiledModelStore.shared.compiled(package: source)
+            let settings = MLModelConfiguration()
+            settings.computeUnits = compute
+            settings.functionName = function
+            return try await MLModel.load(contentsOf: url, configuration: settings)
         }
-        let settings = MLModelConfiguration()
-        settings.computeUnits = compute
-        settings.functionName = function
-        let loaded = try await MLModel.load(contentsOf: url, configuration: settings)
+        loading[key] = task
+        defer { loading[key] = nil }
+        let loaded = try await task.value
         models[key] = loaded
         return loaded
     }
 
     public func embed(sequence: MultimodalSequence) async throws -> [Float] {
+        let prediction = try await singlePrediction(sequence)
+        return try await prediction.run()[0]
+    }
+
+    func singlePrediction(_ sequence: MultimodalSequence) async throws -> EmbeddingPrediction {
         let length = try config.textLength(for: sequence.ids.count)
         guard sequence.slots.count * 512 == sequence.softTokens.count,
               Set(sequence.slots).count == sequence.slots.count,
@@ -65,12 +67,7 @@ public final class EmbeddingGemma2 {
         ])
         let package = length <= 512 ? "EmbeddingGemma2Text.mlpackage" : config.extended!.text_package
         let text = try await model(package: package, function: "embed_\(length)", compute: length <= 512 ? .cpuAndNeuralEngine : .cpuAndGPU)
-        let result = try await text.prediction(from: features)
-        guard let output = result.featureValue(for: "embedding")?.multiArrayValue,
-              output.shape.map(\.intValue) == [1, 768], output.dataType == .float32 else {
-            throw EmbedderError(description: "Core ML returned an invalid embedding output.")
-        }
-        return (0..<768).map { output[[0, NSNumber(value: $0)]].floatValue }
+        return EmbeddingPrediction(model: text, features: features, rows: 1, outputRows: 1)
     }
 
     public func imageSequence(url: URL, capacity: Int = 280) async throws -> MultimodalSequence {
@@ -160,7 +157,7 @@ public final class EmbeddingGemma2 {
         }
     }
 
-    private func array(_ values: [Float16], shape: [Int]) throws -> MLMultiArray {
+    func array(_ values: [Float16], shape: [Int]) throws -> MLMultiArray {
         let array = try MLMultiArray(shape: shape.map(NSNumber.init(value:)), dataType: .float16)
         values.withUnsafeBufferPointer { array.dataPointer.assumingMemoryBound(to: Float16.self).update(from: $0.baseAddress!, count: values.count) }
         return array

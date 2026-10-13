@@ -14,8 +14,22 @@ Multifunction Core ML requires macOS 15 or later; this runtime compiles and runs
 with the macOS 26 SDK. Graph execution is excluded on Linux and iOS, while
 portable metadata remains available. Text prefers CPU and Neural Engine; image
 and audio encoders use CPU and GPU. Core ML compiles packages locally and may
-specialize functions on first use. The class releases its temporary compiled
-packages when inference finishes.
+specialize functions on first use. Compiled packages persist under
+`~/Library/Caches/MereRun/CoreML/EmbeddingGemma2/`. Cache keys cover the graph,
+manifest, resolved weight identity and metadata, operating system, and cache
+format. Compilation is coalesced in process and published atomically across
+processes. An artifact replacement or operating-system update selects a new key.
+The actor owns loaded models and coalesces overlapping function loads.
+
+`embed(sequences:)` packs eligible texts into the upstream `pack_256` graph,
+using independent attention, reset positions, and per-record pooling. At most
+eight short ANE predictions overlap per batch. Long GPU records run individually.
+Core exposes `EmbeddingGemma2CoreMLSession` for caller-owned reuse across
+requests, without a global resident model or an extra admission reservation.
+The static convenience API creates one session per call. Media prepares and
+executes in order; text preparation is bounded to 64 records at a time.
+Packing adapts FluidUse at `d278e17df85e39e8c21bb64a467da81c39576fcd` under
+Apache-2.0; see NOTICE.
 
 Read `RuntimeContract.swift` for typed geometry and BF16 lookup, `Embedder.swift`
 for graph interfaces, and `ImagePreprocessor.swift` for normalized row-major

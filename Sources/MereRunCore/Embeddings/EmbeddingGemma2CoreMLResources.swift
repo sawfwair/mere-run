@@ -83,11 +83,6 @@ public enum EmbeddingGemma2CoreMLRuntime {
         -> (embeddings: [[Float]], tokenCounts: [Int]) {
         try validateInputs(inputs, task: task, title: title, dimensions: dimensions, maxTokens: maxTokens)
         try requireAvailable()
-        let missing = EmbeddingGemma2CoreMLCatalog.missingFiles(root: root)
-        guard missing.isEmpty else {
-            throw EmbeddingGemma2Error.invalidConfiguration("Missing Core ML resources:\n" + missing.map(\.path).joined(separator: "\n"))
-        }
-        try EmbeddingGemma2CoreMLCatalog.validateConfiguration(root: root)
         #if canImport(CoreML) && os(macOS) && arch(arm64)
         if #available(macOS 15.0, *) {
             return try await execute(root: EmbeddingGemma2CoreMLCatalog.bundleRoot(root), inputs: inputs,

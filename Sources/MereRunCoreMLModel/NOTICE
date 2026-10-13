@@ -341,3 +341,17 @@ log-mel features and frame, half-frame, and token masks. The short-input
 FluidInference graphs and their original weights remain unchanged.
 The original Google checkpoint is revision
 914f7f89142e33e77833254d9c9b90c3cef7303b (Apache-2.0).
+
+MERE.RUN PACKED CORE ML INFERENCE (2026-10-13)
+-------------------------------------------
+PackedEmbeddings.swift adapts the token-isolated packing and bounded concurrent
+prediction approach in FluidInference/FluidUse's EmbeddingGemma2Manager.swift,
+revision d278e17df85e39e8c21bb64a467da81c39576fcd, licensed under Apache-2.0:
+https://github.com/FluidInference/FluidUse/tree/d278e17df85e39e8c21bb64a467da81c39576fcd
+The Apache-2.0 license text is retained in LICENSE. The upstream license has no
+project-specific copyright notice beyond the standard license appendix.
+Modifications: actor-owned lazy loading, persistent compilation caching,
+order-preserving batching, individual long GPU predictions, and caller-owned
+sessions integrated with mere.run's ordered multimodal contract.
+This section describes additional mere.run adaptations; the earlier EverPaper
+notice describes the original EverPaper distribution.

@@ -108,6 +108,48 @@ final class EmbeddingGemma2CoreMLQualificationTests: MLXTestCase {
         }
     }
 
+    func testPackedReleasedCheckpointMatchesIndependentPredictionsAndSessionReuse() async throws {
+        guard let bundle = ProcessInfo.processInfo.environment["MERERUN_EMBEDDINGGEMMA2_COREML_EXPANDED"] else {
+            throw XCTSkip("Set the expanded Core ML bundle to qualify packed predictions.")
+        }
+        let root = URL(fileURLWithPath: bundle)
+        let model = try EmbeddingGemma2(bundle: root)
+        let texts = ["Auroras in the northern sky", "A stable Swift sorting function", "海洋の温度と塩分", "", "Café déjà vu"]
+        var sequences = (0..<73).map { index in
+            MultimodalSequence(ids: [2] + model.tokenizer.encode(texts[index % texts.count]) + [1])
+        }
+        // Both sides of the pack boundary, ordinary 512-token graphs, and the long
+        // GPU path must preserve output order when interspersed with packed texts.
+        for (index, length) in [(3, 256), (11, 257), (20, 512), (31, 513)] {
+            sequences[index] = MultimodalSequence(ids: [2] + Array(repeating: 100, count: length - 2) + [1])
+        }
+        let actual = try await model.embed(sequences: sequences)
+        XCTAssertEqual(actual.count, sequences.count)
+        for (sequence, vector) in zip(sequences, actual) {
+            let expected = try await model.embed(sequence: sequence)
+            let dot = zip(vector, expected).reduce(0.0) { $0 + Double($1.0) * Double($1.1) }
+            let norm = sqrt(vector.reduce(0.0) { $0 + Double($1) * Double($1) }
+                            * expected.reduce(0.0) { $0 + Double($1) * Double($1) })
+            XCTAssertGreaterThan(dot / norm, 0.9999)
+        }
+        let session = try EmbeddingGemma2CoreMLSession(root: root)
+        let inputs = texts.map { EmbeddingGemma2Input(content: [.text($0)]) }
+        for dimension in [128, 256, 512, 768] {
+            let batch = try await session.embed(inputs: inputs, task: .document, title: "Auroras", dimensions: dimension)
+            for (index, input) in inputs.enumerated() {
+                let single = try await session.embed(inputs: [input], task: .document, title: "Auroras", dimensions: dimension)
+                XCTAssertEqual(batch.tokenCounts[index], single.tokenCounts[0])
+                let dot = zip(batch.embeddings[index], single.embeddings[0]).reduce(0.0) { $0 + Double($1.0) * Double($1.1) }
+                XCTAssertGreaterThan(dot, 0.9999)
+            }
+        }
+        async let first = session.embed(inputs: inputs, task: .query)
+        async let second = session.embed(inputs: inputs, task: .similarity)
+        let concurrent = try await [first, second]
+        XCTAssertEqual(concurrent[0].embeddings.count, texts.count)
+        XCTAssertEqual(concurrent[1].embeddings.count, texts.count)
+    }
+
     private func writeTone(seconds: Int, to url: URL) throws {
         let samples = (0..<(seconds * 16000)).map { index -> Int16 in
             let t = Double(index) / 16000

@@ -1651,7 +1651,12 @@ Copyright 2026 Everpaper. Licensed under Apache-2.0. `LICENSE` and `NOTICE` in
 the target directory retain the license text and upstream image-preprocessing
 attributions, including ATen's bicubic resize arithmetic (BSD-3-Clause) and
 Pillow's CMYK conversion formula (MIT-CMU). The Core ML graph adapter, typed geometry, table lookup, and ordered
-input integration are implemented in this repository.
+input integration are implemented in this repository. Packed text prediction
+adapts `EmbeddingGemma2Manager.swift` from
+[FluidInference/FluidUse](https://github.com/FluidInference/FluidUse/tree/d278e17df85e39e8c21bb64a467da81c39576fcd),
+revision `d278e17df85e39e8c21bb64a467da81c39576fcd`, under Apache-2.0.
+The module's `LICENSE` and `NOTICE` retain this attribution and accompany the
+macOS app in `Contents/Resources/ThirdPartyLicenses/EmbeddingGemma2/`.
 
 The separately downloaded graph packages and BF16/FP16 tables come from
 [FluidInference/embeddinggemma-2-coreml](https://huggingface.co/FluidInference/embeddinggemma-2-coreml/tree/3f978ddf92cac9aa07eb2dcf6eb36cf450f3dba4),

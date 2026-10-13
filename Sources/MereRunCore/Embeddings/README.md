@@ -31,7 +31,10 @@ Late token vectors use MaxSim; contextual chunk vectors use cosine similarity.
 
 `EmbeddingGemma2CoreMLResources.swift` owns the separate pinned Core ML artifact,
 file-only installation checks, typed config validation, and platform availability.
-`EmbeddingGemma2CoreMLRuntime.swift` maps ordered records to graph sequences.
+`EmbeddingGemma2CoreMLRuntime.swift` maps ordered records to graph sequences and
+packed text batches. `EmbeddingGemma2CoreMLSession.swift` offers caller-owned
+warm reuse with validation once per session; serving owners retain responsibility
+for admission and residency eviction.
 `MereRunCoreMLModel` owns Core ML execution, BF16 token lookup, exact UTF-8
 tokenization, and image/audio preprocessing. It runs on Apple Silicon macOS 15
 or later, including macOS 26. This export accepts 512 tokens, text, images, and

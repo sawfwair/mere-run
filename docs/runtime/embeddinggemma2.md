@@ -222,6 +222,39 @@ Inference requires an explicit install; it does not download this model
 automatically. Text prefers CPU and Neural Engine. Vision and audio use CPU
 and GPU. Media graphs load only when a request includes those modalities.
 
+### Compilation cache and repeated requests
+
+Compiled packages persist in
+`~/Library/Caches/MereRun/CoreML/EmbeddingGemma2/`. The first device load can
+spend substantial time specializing ANE functions. Later CLI processes reuse the
+compiled package at a stable path. Package graph changes, weight replacement or
+modification, and operating-system updates select a new cache entry. This cache
+contains generated models and can be removed when no embedding process is active;
+the next request compiles again. Original downloaded artifacts remain separate.
+
+Text batches automatically pack up to eight records into 256 total tokens per
+prediction, with isolated attention and pooling. Up to eight short predictions
+can overlap. Single queries use the smallest fitting function. Longer text and
+media records retain their validated graph paths and output order.
+
+For repeated Swift requests, retain a caller-owned session:
+
+```swift
+let session = try EmbeddingGemma2CoreMLSession(root: modelDirectory)
+let result = try await session.embed(
+    inputs: [EmbeddingGemma2Input(content: [.text("What causes auroras?")])],
+    task: .query,
+    dimensions: 256
+)
+```
+
+Releasing the session releases its loaded models. Serving applications must
+own admission and apply their residency/eviction policy to the session. The
+static `EmbeddingGemma2CoreMLRuntime.embed` convenience API creates one session
+per call; a fresh CLI process still has model-loading overhead. Warm inference,
+batch throughput, and fresh-process latency are separate measurements. The
+optional 8K FP32 GPU extension does not inherit the short ANE graph's speed claims.
+
 ### Input limits of the downloaded bundle
 
 The export uses a **512-token** budget, including task prefixes and BOS/EOS.
