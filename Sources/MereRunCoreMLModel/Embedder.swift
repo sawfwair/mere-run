@@ -48,11 +48,11 @@ public final class EmbeddingGemma2 {
     }
 
     public func embed(sequence: MultimodalSequence) async throws -> [Float] {
-        guard !sequence.ids.isEmpty, let length = BundleConfig.lengths.first(where: { $0 >= sequence.ids.count }),
-              sequence.slots.count * 512 == sequence.softTokens.count,
+        let length = try config.textLength(for: sequence.ids.count)
+        guard sequence.slots.count * 512 == sequence.softTokens.count,
               Set(sequence.slots).count == sequence.slots.count,
               sequence.slots.allSatisfy({ sequence.ids.indices.contains($0) }) else {
-            throw EmbedderError(description: "Invalid Core ML embedding sequence or 512-token budget exceeded.")
+            throw EmbedderError(description: "Invalid Core ML embedding sequence.")
         }
         var values = try table.embeddings(ids: sequence.ids + Array(repeating: config.pad_token_id, count: length - sequence.ids.count))
         for (row, slot) in sequence.slots.enumerated() {
@@ -63,7 +63,8 @@ public final class EmbeddingGemma2 {
             "inputs_embeds": MLFeatureValue(multiArray: array(values, shape: [1, length, 512])),
             "attention_mask": MLFeatureValue(multiArray: array(mask, shape: [1, length]))
         ])
-        let text = try await model(package: "EmbeddingGemma2Text.mlpackage", function: "embed_\(length)", compute: .cpuAndNeuralEngine)
+        let package = length <= 512 ? "EmbeddingGemma2Text.mlpackage" : config.extended!.text_package
+        let text = try await model(package: package, function: "embed_\(length)", compute: length <= 512 ? .cpuAndNeuralEngine : .cpuAndGPU)
         let result = try await text.prediction(from: features)
         guard let output = result.featureValue(for: "embedding")?.multiArrayValue,
               output.shape.map(\.intValue) == [1, 768], output.dataType == .float32 else {
@@ -103,8 +104,11 @@ public final class EmbeddingGemma2 {
     }
 
     public func audioSequence(samples: [Float]) async throws -> MultimodalSequence {
-        guard samples.count > 160, samples.count <= 160000, samples.allSatisfy(\.isFinite) else {
-            throw EmbedderError(description: "Each Core ML audio segment must contain finite 16 kHz samples and be longer than 10 ms and at most 10 seconds. Split longer recordings into separate inputs.")
+        guard samples.count > 160, samples.count <= config.maximumAudioSeconds * 16000, samples.allSatisfy(\.isFinite) else {
+            throw EmbedderError(description: "Each Core ML audio segment must contain finite 16 kHz samples and be longer than 10 ms and at most \(config.maximumAudioSeconds) seconds. Split longer recordings into ordered segments.")
+        }
+        if samples.count > 160000, let extended = config.extended {
+            return try await extendedAudioSequence(samples: samples, settings: extended)
         }
         var waveform = [Float](repeating: 0, count: 160160)
         waveform.replaceSubrange(160..<(160 + samples.count), with: samples)
@@ -120,15 +124,36 @@ public final class EmbeddingGemma2 {
         return mediaSequence(soft: soft, start: config.audio.boa_token_id, end: config.audio.eoa_token_id)
     }
 
+    private func extendedAudioSequence(samples: [Float], settings: BundleConfig.Extended) async throws -> MultimodalSequence {
+        let inputs = AudioFrontend.logMel(samples)
+        let frames = settings.audio_frames
+        let tokens = AudioFrontend.softTokenCount(frames: inputs.frames)
+        let features = inputs.features + [Float](repeating: 0, count: (frames - inputs.frames) * 128)
+        let named: [(String, [Float], [Int])] = [
+            ("features", features, [1, frames, 128]),
+            ("frame_mask", (0..<frames).map { $0 < inputs.frames ? 1 : 0 }, [1, frames]),
+            ("half_mask", (0..<(frames / 2)).map { $0 < (inputs.frames + 1) / 2 ? 1 : 0 }, [1, frames / 2]),
+            ("token_mask", (0..<(frames / 4)).map { $0 < tokens ? 1 : 0 }, [1, frames / 4])
+        ]
+        let provider = try MLDictionaryFeatureProvider(dictionary: Dictionary(uniqueKeysWithValues: named.map {
+            ($0.0, MLFeatureValue(multiArray: try floatArray($0.1, shape: $0.2)))
+        }))
+        let audio = try await model(package: settings.audio_package, function: nil, compute: .cpuAndGPU)
+        let output = try await audio.prediction(from: provider)
+        let soft = try softTokens(output: output, name: "audio_tokens", capacity: frames / 4, count: tokens, dtype: .float32)
+        return mediaSequence(soft: soft, start: config.audio.boa_token_id, end: config.audio.eoa_token_id)
+    }
+
     private func mediaSequence(soft: [Float16], start: Int32, end: Int32) -> MultimodalSequence {
         let count = soft.count / 512
         return MultimodalSequence(ids: [config.bos_token_id, start] + Array(repeating: config.pad_token_id, count: count)
             + [end, config.eos_token_id], softTokens: soft, slots: Array(2..<(2 + count)))
     }
 
-    private func softTokens(output: any MLFeatureProvider, name: String, capacity: Int, count: Int) throws -> [Float16] {
+    private func softTokens(output: any MLFeatureProvider, name: String, capacity: Int, count: Int,
+                            dtype: MLMultiArrayDataType = .float16) throws -> [Float16] {
         guard let matrix = output.featureValue(for: name)?.multiArrayValue,
-              matrix.shape.map(\.intValue) == [1, capacity, 512], matrix.dataType == .float16,
+              matrix.shape.map(\.intValue) == [1, capacity, 512], matrix.dataType == dtype,
               (1...capacity).contains(count) else { throw EmbedderError(description: "Invalid Core ML \(name) output.") }
         return (0..<count).flatMap { row in
             (0..<512).map { column in Float16(matrix[[0, NSNumber(value: row), NSNumber(value: column)]].floatValue) }

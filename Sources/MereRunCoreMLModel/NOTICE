@@ -328,3 +328,16 @@ Pillow (MIT-CMU / HPND), from the LICENSE file of Pillow 12.3.0:
     LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
     OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
     PERFORMANCE OF THIS SOFTWARE.
+
+MERE.RUN EXPANDED CORE ML CONVERSION (2026-10-13)
+------------------------------------------------
+The optional expanded bundle adapts export/eg2_text.py and export/eg2_audio.py
+from the pinned EverPaper revision. Text attention uses fused Core ML SDPA
+with query scaling that preserves the original unit attention scale; local
+attention remains bidirectional through distance 512. The host supplies token
+embeddings. Long text and the 30-second audio encoder use float32 computation.
+Text functions cover 1024, 2048, 4096, and 8192 positions; audio consumes native
+log-mel features and frame, half-frame, and token masks. The short-input
+FluidInference graphs and their original weights remain unchanged.
+The original Google checkpoint is revision
+914f7f89142e33e77833254d9c9b90c3cef7303b (Apache-2.0).

@@ -30,6 +30,16 @@ public struct BundleConfig: Decodable, Sendable {
         public let boi_token_id: Int32
         public let eoi_token_id: Int32
     }
+    public struct Extended: Decodable, Sendable {
+        public let version: Int
+        public let text_package: String
+        public let lengths: [Int]
+        public let audio_package: String
+        public let audio_frames: Int
+        public let audio_seconds: Int
+        public let source_revision: String
+        public let source_sha256: String
+    }
     public let base_model: String
     public let format: String
     public let hidden_size: Int
@@ -43,7 +53,19 @@ public struct BundleConfig: Decodable, Sendable {
     public let pad_token_id: Int32
     public let audio: Audio
     public let vision: Vision
+    public let extended: Extended?
     public static let lengths = [32, 48, 64, 128, 256, 512]
+    public static let extendedLengths = [1024, 2048, 4096, 8192]
+    public var supportedLengths: [Int] { Self.lengths + (extended?.lengths ?? []) }
+    public var maximumTokens: Int { supportedLengths.last! }
+    public var maximumAudioSeconds: Int { extended?.audio_seconds ?? audio.window_seconds }
+
+    public func textLength(for tokens: Int) throws -> Int {
+        guard tokens > 0, let length = supportedLengths.first(where: { $0 >= tokens }) else {
+            throw EmbedderError(description: "Core ML sequence exceeds the \(maximumTokens)-token bundle budget.")
+        }
+        return length
+    }
 
     public func validate() throws {
         guard base_model == "google/embeddinggemma-2", format == "coreml", hidden_size == 512, embedding_dim == 768,
@@ -62,6 +84,15 @@ public struct BundleConfig: Decodable, Sendable {
               vision.position_table.file == "position_embeddings.f16", vision.position_table.dtype == "float16",
               vision.position_table.shape == [2, 1024, 768], vision.boi_token_id == 255999, vision.eoi_token_id == 258882 else {
             throw EmbedderError(description: "Unsupported EmbeddingGemma 2 Core ML bundle configuration; use the pinned managed artifact.")
+        }
+        if let extended {
+            guard extended.version == 1, extended.text_package == "EmbeddingGemma2TextExtended.mlpackage",
+                  extended.lengths == Self.extendedLengths, extended.audio_package == "EmbeddingGemma2AudioExtended.mlpackage",
+                  extended.audio_frames == 3000, extended.audio_seconds == 30,
+                  extended.source_revision == "914f7f89142e33e77833254d9c9b90c3cef7303b",
+                  extended.source_sha256 == "197a32965d4b1105faf060417baa899e193fb73cd401f42ec9295234d5553d79" else {
+                throw EmbedderError(description: "Unsupported expanded Core ML bundle; run the pinned EmbeddingGemma conversion tool.")
+            }
         }
     }
 }

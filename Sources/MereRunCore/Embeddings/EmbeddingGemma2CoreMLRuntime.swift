@@ -8,7 +8,7 @@ extension EmbeddingGemma2CoreMLRuntime {
                         title: String?, dimensions: Int, maxTokens: Int?) async throws
         -> (embeddings: [[Float]], tokenCounts: [Int]) {
         let model = try EmbeddingGemma2(bundle: root)
-        let limit = min(maxTokens ?? 512, 512)
+        let limit = min(maxTokens ?? model.config.maximumTokens, model.config.maximumTokens)
         var vectors: [[Float]] = [], counts: [Int] = []
         for input in inputs {
             let sequence = try await prepare(input, model: model, task: task, title: title, limit: limit)

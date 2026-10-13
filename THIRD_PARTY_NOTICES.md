@@ -1643,15 +1643,14 @@ The publisher's Apache-2.0 license is retained in `licenses/whistle-APACHE-2.0.t
 ## EmbeddingGemma 2 Core ML runtime and preprocessing
 
 `Sources/MereRunCoreMLModel/` contains tokenizer, image/audio decoding, bicubic
-resampling, and audio resampling adapted from
+resampling, audio resampling, and log-mel feature extraction adapted from
 [EverPaper/embeddinggemma-2-coreai](https://huggingface.co/EverPaper/embeddinggemma-2-coreai/tree/305fc2a96790d9343f38038aeca211dfca56d9a5/swift),
 revision `305fc2a96790d9343f38038aeca211dfca56d9a5`.
 
 Copyright 2026 Everpaper. Licensed under Apache-2.0. `LICENSE` and `NOTICE` in
 the target directory retain the license text and upstream image-preprocessing
 attributions, including ATen's bicubic resize arithmetic (BSD-3-Clause) and
-Pillow's CMYK conversion formula (MIT-CMU). The Core AI graph adapter is not
-included. The Core ML graph adapter, typed geometry, table lookup, and ordered
+Pillow's CMYK conversion formula (MIT-CMU). The Core ML graph adapter, typed geometry, table lookup, and ordered
 input integration are implemented in this repository.
 
 The separately downloaded graph packages and BF16/FP16 tables come from
@@ -1659,3 +1658,14 @@ The separately downloaded graph packages and BF16/FP16 tables come from
 revision `3f978ddf92cac9aa07eb2dcf6eb36cf450f3dba4`, under the model card's
 Apache-2.0 license. The source model is Google's EmbeddingGemma 2. These model
 artifacts are not bundled with mere.run.
+
+`scripts/model-conversion/embeddinggemma2_export_text.py` and
+`embeddinggemma2_export_audio.py` adapt the same pinned EverPaper repository's
+Apache-2.0 `export/eg2_text.py` and `export/eg2_audio.py`. The expanded Core ML
+conversion replaces text attention with fused SDPA while retaining unit
+attention scaling and the bidirectional 512-distance local mask. It supplies
+token embeddings from the host, uses float32 long-input computation, and
+exports 1K/2K/4K/8K text functions and a 30-second audio function. The original
+Google checkpoint revision is `914f7f89142e33e77833254d9c9b90c3cef7303b`.
+License and original modification notices remain in
+`Sources/MereRunCoreMLModel/LICENSE` and `NOTICE`.

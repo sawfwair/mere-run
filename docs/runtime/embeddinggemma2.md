@@ -222,7 +222,7 @@ Inference requires an explicit install; it does not download this model
 automatically. Text prefers CPU and Neural Engine. Vision and audio use CPU
 and GPU. Media graphs load only when a request includes those modalities.
 
-### Input limits
+### Input limits of the downloaded bundle
 
 The export uses a **512-token** budget, including task prefixes and BOS/EOS.
 `--max-tokens` lowers this budget. Text-only inputs truncate the body while
@@ -242,6 +242,87 @@ Task names, document titles, dimensions, input indices, and token usage follow
 the existing CLI contract. Returned 128/256/512/768-dimensional vectors are
 L2-normalized. This variant is CLI-only.
 
+### Expand to 8K context and 30-second audio
+
+To embed longer records on macOS 26, convert the original Google checkpoint
+into an expanded Core ML bundle. The expanded bundle accepts **8,192 total
+tokens** and **30 seconds per audio segment**. Multiple ordered segments share
+the token budget. Task prefixes, media tokens, markers, and BOS/EOS count
+toward that budget.
+
+Install the original checkpoint and the preconverted Core ML bundle first:
+
+```bash
+mere.run model pull text-embed-embeddinggemma2
+mere.run model pull text-embed-embeddinggemma2-coreml
+```
+
+Run the converter from the repository checkout. Replace the two input paths
+with your installed model directories and choose a new output directory:
+
+```bash
+uv run scripts/model-conversion/convert_embeddinggemma2_coreml.py \
+  --source /path/to/text-embed-embeddinggemma2 \
+  --base-bundle /path/to/text-embed-embeddinggemma2-coreml \
+  --output ./embeddinggemma2-coreml-8k
+mere.run text embed "A longer document" --model ./embeddinggemma2-coreml-8k --max-tokens 8192
+mere.run text embed --audio ./recording-30s.wav --model ./embeddinggemma2-coreml-8k
+mere.run text embed --input-json ./ordered-records.json --model ./embeddinggemma2-coreml-8k
+```
+
+The converter pins Python dependencies and verifies the original checkpoint,
+configuration, and base bundle hashes before exporting. It preserves both input
+directories. To resume a previous conversion, pass `--resume`; it verifies the
+retained base files before reusing staged graphs. `conversion.json` records
+source revisions, tool versions, graph source hashes, and artifact hashes.
+The output includes the source license and notices. Python runs only during
+conversion; inference uses the native Swift runtime.
+
+Longer text functions cover 1,024, 2,048, 4,096, and 8,192 positions. They
+preserve absolute RoPE positions and bidirectional local attention through
+distance 512, alongside the four global attention layers. They use fused
+Core ML attention and float32 computation on CPU/GPU. The 30-second audio
+encoder also uses float32, with log-mel features computed by native Accelerate.
+These choices increase bundle size and memory use. Short inputs retain the
+downloaded functions and their existing compute preferences.
+
+The runtime reads limits from the bundle configuration. `--max-tokens` can
+lower the limit. Text truncation preserves BOS/EOS; mixed records reject
+overflow. Audio longer than 30 seconds is rejected instead of truncated.
+Video support remains available through the original MLX model.
+
+The managed Core ML download retains its published 512-token/10-second limits.
+Use the converted directory with `--model` to select the expanded bundle.
+
+To repeat the expanded checkpoint qualification, set the bundle, original
+checkpoint, and output receipt paths and run the opt-in test:
+
+```bash
+MERERUN_EMBEDDINGGEMMA2_COREML_EXPANDED=/path/to/embeddinggemma2-coreml-8k \
+MERERUN_EMBEDDINGGEMMA2_SOURCE=/path/to/text-embed-embeddinggemma2 \
+MERERUN_EMBEDDINGGEMMA2_COREML_RECEIPT=/path/to/expanded-parity.json \
+MERERUN_TEST_MLX_DEVICE=gpu \
+swift test --filter EmbeddingGemma2CoreMLQualificationTests
+```
+
+The test compares released-checkpoint vectors against the native MLX float32
+runtime across text bucket boundaries, the full context limit, 11/20/30-second
+audio, mixed text/audio, and two ordered 30-second segments. It rejects audio
+over the segment limit. Set `MERERUN_EMBEDDINGGEMMA2_AUDIO_FIXTURE` to include an
+additional local audio fixture. This bounded corpus does not establish broad
+retrieval quality or throughput.
+
+On macOS 26, all 14 expanded checkpoint cases passed. Text parity through
+8,192 tokens had minimum cosine **0.999999991** against native MLX float32.
+The 30-second tone, mixed audio, ordered pair, and repeated speech cases had
+minimum cosine **0.999999858**. The 11/20-second cases use the retained short
+text functions and had minimum cosine **0.999929803**. The public CLI returned
+normalized 128-dimensional vectors for an 8,192-token text and two ordered
+30-second audio segments, reporting 9,701 tokens total. It rejected audio
+exceeding 30 seconds by one sample. The
+[expanded qualification receipt](../public/qualification/embeddinggemma2-coreml-expanded-2026-10-13.json)
+records vectors, input construction, artifact hashes, and CLI results.
+
 ### Validation on macOS 26
 
 The native Core ML target compiles with the installed macOS 26 SDK. The released
@@ -257,8 +338,8 @@ reference corpus:
 The 35-second audio reference was excluded because it exceeds this export's
 10-second window. Audio has measurable FP16 drift, especially the synthetic
 chirp/siren and piano cases. These results establish bounded compatibility,
-not broad retrieval quality or sustained throughput. Keep the original MLX
-backend when higher reference fidelity or longer context is required.
+not broad retrieval quality or sustained throughput. The expanded conversion
+provides longer context; the original MLX backend remains available.
 The [raw qualification receipt](../public/qualification/embeddinggemma2-coreml-2026-10-13.json)
 preserves each vector, token count, cosine, and skipped input. Managed-ID CLI
 checks also passed for 256-dimensional text and a 128-dimensional mixed

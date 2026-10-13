@@ -23,6 +23,18 @@ public enum EmbeddingGemma2CoreMLCatalog {
         let bundle = bundleRoot(root)
         let config = try JSONDecoder().decode(BundleConfig.self, from: Data(contentsOf: bundle.appending(path: "config.json")))
         try config.validate()
+        if let extended = config.extended {
+            for package in [extended.text_package, extended.audio_package] {
+                for file in ["Manifest.json", "Data/com.apple.CoreML/model.mlmodel", "Data/com.apple.CoreML/weights/weight.bin"] {
+                    guard FileManager.default.fileExists(atPath: bundle.appending(path: package + "/" + file).path) else {
+                        throw EmbeddingGemma2Error.invalidConfiguration("Missing expanded Core ML resource: \(package)/\(file).")
+                    }
+                }
+            }
+            guard FileManager.default.fileExists(atPath: bundle.appending(path: "conversion.json").path) else {
+                throw EmbeddingGemma2Error.invalidConfiguration("Expanded Core ML bundle is missing conversion.json.")
+            }
+        }
         for (name, bytes) in [("embeddings.bf16", 262144 * 512 * 2), ("position_embeddings.f16", 2 * 1024 * 768 * 2)] {
             let size = try FileManager.default.attributesOfItem(atPath: root.appending(path: name).resolvingSymlinksInPath().path)[.size] as? NSNumber
             guard size?.intValue == bytes else {

@@ -118,7 +118,71 @@ final class EmbeddingGemma2CoreMLTests: XCTestCase {
         XCTAssertEqual(CoreMLAudioGeometry.tokenCount(samples: 160000), 250)
     }
 
+    private func expandedConfigData() throws -> Data {
+        let base = String(decoding: try configData, as: UTF8.self)
+        let extra = #""extended":{"version":1,"text_package":"EmbeddingGemma2TextExtended.mlpackage","lengths":[1024,2048,4096,8192],"audio_package":"EmbeddingGemma2AudioExtended.mlpackage","audio_frames":3000,"audio_seconds":30,"source_revision":"914f7f89142e33e77833254d9c9b90c3cef7303b","source_sha256":"197a32965d4b1105faf060417baa899e193fb73cd401f42ec9295234d5553d79"},"#
+        return Data(("{" + extra + base.dropFirst()).utf8)
+    }
+
+    func testExpandedBundleUsesCorrectBucketsAndRetainsShortInputGeometry() throws {
+        let base = try JSONDecoder().decode(BundleConfig.self, from: configData)
+        XCTAssertEqual(base.maximumTokens, 512)
+        XCTAssertEqual(base.maximumAudioSeconds, 10)
+        XCTAssertThrowsError(try base.textLength(for: 513))
+        let expanded = try JSONDecoder().decode(BundleConfig.self, from: expandedConfigData())
+        try expanded.validate()
+        XCTAssertEqual(expanded.maximumTokens, 8192)
+        XCTAssertEqual(expanded.maximumAudioSeconds, 30)
+        for (tokens, expected) in [(1, 32), (512, 512), (513, 1024), (1024, 1024), (1025, 2048),
+                                   (2049, 4096), (4097, 8192), (8192, 8192)] {
+            XCTAssertEqual(try expanded.textLength(for: tokens), expected)
+        }
+        XCTAssertThrowsError(try expanded.textLength(for: 0))
+        XCTAssertThrowsError(try expanded.textLength(for: 8193))
+        let json = String(decoding: try expandedConfigData(), as: UTF8.self)
+        for (old, new) in [("TextExtended.mlpackage", "../outside.mlpackage"), ("\"audio_frames\":3000", "\"audio_frames\":4000"),
+                           ("[1024,2048,4096,8192]", "[1024,8192]"), ("\"version\":1", "\"version\":2")] {
+            let invalid = json.replacingOccurrences(of: old, with: new)
+            XCTAssertNotEqual(invalid, json)
+            XCTAssertThrowsError(try JSONDecoder().decode(BundleConfig.self, from: Data(invalid.utf8)).validate())
+        }
+    }
+
+    func testExpandedArtifactValidationRequiresBothNewGraphsAndConversionReceipt() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try expandedConfigData().write(to: root.appending(path: "config.json"))
+        XCTAssertThrowsError(try EmbeddingGemma2CoreMLCatalog.validateConfiguration(root: root))
+        for package in ["EmbeddingGemma2TextExtended.mlpackage", "EmbeddingGemma2AudioExtended.mlpackage"] {
+            for file in ["Manifest.json", "Data/com.apple.CoreML/model.mlmodel", "Data/com.apple.CoreML/weights/weight.bin"] {
+                let url = root.appending(path: package + "/" + file)
+                try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try Data([0]).write(to: url)
+            }
+        }
+        XCTAssertThrowsError(try EmbeddingGemma2CoreMLCatalog.validateConfiguration(root: root))
+        try Data("{}".utf8).write(to: root.appending(path: "conversion.json"))
+        for (name, bytes) in [("embeddings.bf16", 262144 * 512 * 2), ("position_embeddings.f16", 2 * 1024 * 768 * 2)] {
+            let url = root.appending(path: name)
+            try Data().write(to: url)
+            let handle = try FileHandle(forWritingTo: url)
+            try handle.truncate(atOffset: UInt64(bytes)); try handle.close()
+        }
+        try EmbeddingGemma2CoreMLCatalog.validateConfiguration(root: root)
+    }
+
     #if os(macOS) && arch(arm64)
+    func testExpandedAudioFrontendUsesThirtySecondBoundaries() throws {
+        XCTAssertEqual(AudioFrontend.validFrameCount(samples: 160), 0)
+        XCTAssertEqual(AudioFrontend.validFrameCount(samples: 161), 1)
+        XCTAssertEqual(AudioFrontend.validFrameCount(samples: 480000), 2999)
+        XCTAssertEqual(AudioFrontend.softTokenCount(frames: 2999), 750)
+        let silence = AudioFrontend.logMel([Float](repeating: 0, count: 161))
+        XCTAssertEqual(silence.frames, 1)
+        XCTAssertEqual(silence.features.count, 128)
+        XCTAssertTrue(silence.features.allSatisfy { abs($0 - Float(log(0.001))) < 0.000001 })
+    }
     func testExactTokenizerJSONPreservesBOMAndDistinctUnicodeKeys() throws {
         let json = #"{"\ufeff":"\ufeff","é":1,"e\u0301":2}"#
         let parsed = try ExactJSON.parse(Data(json.utf8))
