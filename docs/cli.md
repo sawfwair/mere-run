@@ -131,6 +131,14 @@ Public tree:
   - `mere.run graph run-job` — Run an existing immutable workflow job bundle locally.
   - `mere.run graph submit` — Submit a portable workflow job to an SSH or relay executor.
   - `mere.run graph submit-job` — Submit an existing immutable workflow job bundle to SSH or Relay.
+  - `mere.run graph batch` — Distribute independent complete workflow graphs across a relay fleet.
+    - `mere.run graph batch list` — List durable batches in the relay account.
+    - `mere.run graph batch submit` — Prepare and submit a durable workflow batch.
+    - `mere.run graph batch inspect` — Inspect batch progress and item output references.
+    - `mere.run graph batch watch` — Watch batch changes as NDJSON until terminal.
+    - `mere.run graph batch cancel` — Stop admission and cancel unfinished batch children.
+    - `mere.run graph batch retry` — Retry failed items while retaining completed outputs.
+    - `mere.run graph batch fetch` — Fetch verified outputs from completed batch items.
   - `mere.run graph worker` — Run the portable workflow worker protocol.
     - `mere.run graph worker probe` — Report worker capabilities.
     - `mere.run graph worker execute` — Execute a materialized job bundle.
