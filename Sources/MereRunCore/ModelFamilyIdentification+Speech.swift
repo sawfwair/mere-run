@@ -33,6 +33,9 @@ extension ModelFamilyIdentifier {
               let speakers = try? JSONDecoder().decode(Qwen3TTSSpeakerTable.self, from: data) else {
             return nil
         }
+        if modelType.modelType == "fish_omni" {
+            return .family(invocation.value("--mode") == "clone" ? "drama3-clone" : "drama3")
+        }
         if invocation.value("--mode") == "clone" {
             return .family(modelType.modelType == "breeze" ? "breeze-clone" : "clone")
         }

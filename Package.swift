@@ -190,6 +190,7 @@ mereRunCoreDependencies.append("MereRunKolibriModel")
 mereRunCoreDependencies.append("MereRunGemmaModel")
 mereRunCoreDependencies.append("MereRunLTXModel")
 mereRunCoreDependencies.append("AudioCodecs")
+mereRunCoreDependencies.append("AudioDrama3Model")
 mereRunCoreDependencies.append("AudioQwen3ASRModel")
 mereRunCoreDependencies.append(.product(name: "Crypto", package: "swift-crypto"))
 mereRunCoreDependencies.append(.product(name: "Transformers", package: "swift-transformers"))
@@ -310,6 +311,7 @@ if hasMediaIOTarget {
 }
 
 var mereRunCoreTestDependencies: [Target.Dependency] = [
+  "AudioDrama3Model",
   "MereRunLagunaModel",
   "MereRunH3Model",
   "MereRunAudioModels",
@@ -472,6 +474,27 @@ targets.append(
     dependencies: ["MereRunKolibriModel", "MereRunTensor", "MereRunMLXTestSupport"]
       + mlxDependency("MLX") + mlxDependency("MLXNN"),
     path: "Tests/KolibriRuntimeTests",
+    exclude: ["Fixtures"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "AudioDrama3Model",
+    dependencies: ["MereRunQwenModel", "MereRunKVCache", "MereRunTensor"]
+      + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN") + mlxDependency("MLXRandom"),
+    path: "Sources/AudioDrama3Model",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+targets.append(
+  .testTarget(
+    name: "Drama3RuntimeTests",
+    dependencies: ["AudioDrama3Model", "MereRunMLXTestSupport", "MereRunTensor"]
+      + mlxDependency("MLX") + mlxDependency("MLXNN"),
+    path: "Tests/Drama3RuntimeTests",
     exclude: ["Fixtures"],
     swiftSettings: commonSwiftSettings
   )
@@ -834,7 +857,7 @@ targets.append(
 targets.append(
   .target(
     name: "AudioTTS",
-    dependencies: audioRuntimeDependencies + ["AudioQwen3TTSModel", "AudioBreezeTTSModel"],
+    dependencies: audioRuntimeDependencies + ["AudioQwen3TTSModel", "AudioBreezeTTSModel", "AudioDrama3Model"],
     path: "Sources/AudioTTS",
     exclude: [
       "Qwen3TTS/README.md"

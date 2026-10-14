@@ -193,7 +193,7 @@ private func temporaryFolder() throws -> URL {
     let style = try report("speech", "synthesize", "Hi", "-o", "a.wav", "--voice", "calm", "--profile", "narrator")
     #expect(style.family == "style" && style.model == "speech-tts-qwen3-nano" && style.violations.isEmpty)
     #expect(style.warnings == [
-        "--profile has no effect with Qwen3-TTS style. It applies to Breeze TTS 2 clone and direction and Qwen3-TTS clone."
+        "--profile has no effect with Qwen3-TTS style. It applies to Breeze TTS 2 clone and direction, DRAMA-3 clone and Qwen3-TTS clone."
     ])
 
     let clone = try report("speech", "synthesize", "Hi", "-o", "a.wav", "--mode", "clone", "-v", "calm",

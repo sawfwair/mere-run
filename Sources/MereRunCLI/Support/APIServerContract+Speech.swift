@@ -30,7 +30,11 @@ extension APIServerContract {
 
         func modelSelection() throws -> SpeechSynthesisModelSelection {
             do {
-                return try SpeechSynthesisModelSelection.resolve(modelID)
+                let selection = try SpeechSynthesisModelSelection.resolve(modelID)
+                guard selection.backend != .drama3 else {
+                    throw APIRequestValidationError.invalidField("model", "DRAMA-3 is available through the local speech synthesize CLI")
+                }
+                return selection
             } catch Qwen3TTSError.unsupportedModelId {
                 throw APIRequestValidationError.invalidField(
                     "model", "use a mere.run TTS model id or a local supported TTS model path"

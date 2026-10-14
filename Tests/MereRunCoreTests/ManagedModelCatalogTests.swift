@@ -197,6 +197,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             D1Catalog.modelID,
             D1Catalog.omniModelID,
             "speech-tts-breeze-2",
+            "speech-tts-drama-3",
             "image-qwen-21",
             "image-qwen-21-turbo",
             "image-flux1-dev",

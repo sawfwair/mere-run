@@ -26,6 +26,8 @@ extension MereRunCapabilityCatalog {
         case customVoice = "custom-voice"
         case breeze
         case breezeClone = "breeze-clone"
+        case drama3
+        case drama3Clone = "drama3-clone"
         case clone
     }
 
@@ -98,6 +100,10 @@ extension MereRunCapabilityCatalog {
             .init(models: ["speech-tts-qwen3-nano"], family: SpeechSynthesizeFamily.style.rawValue)
         ],
         families: [
+            .init(SpeechSynthesizeFamily.drama3, title: "DRAMA-3",
+                  models: ["speech-tts-drama-3"], selectors: [.init(flag: "--mode", values: ["style"])]),
+            .init(SpeechSynthesizeFamily.drama3Clone, title: "DRAMA-3 clone",
+                  models: ["speech-tts-drama-3"], selectors: [.init(flag: "--mode", values: ["clone"])]),
             .init(
                 SpeechSynthesizeFamily.style, title: "Qwen3-TTS style", models: ["speech-tts-qwen3-nano"],
                 selectors: [.init(flag: "--mode", values: ["style"])]

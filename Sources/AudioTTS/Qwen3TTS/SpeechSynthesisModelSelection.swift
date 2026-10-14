@@ -4,7 +4,7 @@ import MereRunCore
 
 /// Resolves the common CLI/API selector without loading or downloading a model.
 public struct SpeechSynthesisModelSelection: Sendable, Hashable {
-    public enum Backend: Sendable, Hashable { case qwen3, breeze }
+    public enum Backend: Sendable, Hashable { case qwen3, breeze, drama3 }
     public let modelID: String
     public let modelPath: String?
     public let backend: Backend
@@ -18,23 +18,28 @@ public struct SpeechSynthesisModelSelection: Sendable, Hashable {
             guard isDirectory.boolValue else { throw Qwen3TTSError.unsupportedModelId(selected) }
             let configURL = path.appending(path: "config.json")
             let config = try JSONDecoder().decode(ModelTypeProbe.self, from: Data(contentsOf: configURL))
-            let backend: Backend = config.modelType == "breeze" ? .breeze : .qwen3
-            return Self(modelID: backend == .breeze ? ManagedModelID.breezeTTS2.rawValue
+            let backend: Backend = config.modelType == "fish_omni" ? .drama3 : config.modelType == "breeze" ? .breeze : .qwen3
+            return Self(modelID: backend == .drama3 ? Drama3Resources.modelID : backend == .breeze ? ManagedModelID.breezeTTS2.rawValue
                         : Qwen3TTSResources.defaultModelId, modelPath: path.path, backend: backend)
         }
         guard let spec = ManagedModelCatalog.spec(for: selected),
               spec.category == .speechTTS,
-              Qwen3TTSResources.supportedModelIds.contains(spec.id) || spec.id == ManagedModelID.breezeTTS2.rawValue else {
+              Qwen3TTSResources.supportedModelIds.contains(spec.id) || spec.id == ManagedModelID.breezeTTS2.rawValue || spec.id == Drama3Resources.modelID else {
             throw Qwen3TTSError.unsupportedModelId(selected)
         }
         return Self(modelID: spec.id, modelPath: nil,
-                    backend: spec.id == ManagedModelID.breezeTTS2.rawValue ? .breeze : .qwen3)
+                    backend: spec.id == Drama3Resources.modelID ? .drama3 : spec.id == ManagedModelID.breezeTTS2.rawValue ? .breeze : .qwen3)
+    }
+
+    public var displayName: String {
+        switch backend { case .qwen3: "Qwen3-TTS"; case .breeze: "Breeze TTS 2"; case .drama3: "DRAMA-3" }
     }
 
     public func makeGenerator() -> SpeechSynthesisGenerator {
         switch backend {
         case .qwen3: .qwen3(Qwen3TTSGenerator(modelId: modelID))
         case .breeze: .breeze(BreezeTTSGenerator(modelID: modelID))
+        case .drama3: .drama3(Drama3Generator())
         }
     }
 
@@ -42,6 +47,7 @@ public struct SpeechSynthesisModelSelection: Sendable, Hashable {
         switch generator {
         case .qwen3(let value): Qwen3TTSSynthesisExecutor(generator: value, modelPath: modelPath)
         case .breeze(let value): BreezeTTSSynthesisExecutor(generator: value, modelPath: modelPath)
+        case .drama3(let value): Drama3SynthesisExecutor(generator: value, modelPath: modelPath)
         }
     }
 }
@@ -54,11 +60,13 @@ private struct ModelTypeProbe: Decodable {
 public enum SpeechSynthesisGenerator: Sendable {
     case qwen3(Qwen3TTSGenerator)
     case breeze(BreezeTTSGenerator)
+    case drama3(Drama3Generator)
 
     public func unload() async {
         switch self {
         case .qwen3(let value): await value.unload()
         case .breeze(let value): await value.unload()
+        case .drama3(let value): await value.unload()
         }
     }
 }

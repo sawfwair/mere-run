@@ -22,7 +22,7 @@ struct ModelOptimize: ParsableCommand {
 
     @Option(
         name: [.customLong("output")],
-        help: "For Nemotron Omni, write a standalone native checkpoint to this directory."
+        help: "For Nemotron Omni or DRAMA-3, write a standalone native checkpoint to this directory."
     )
     var output: String?
 
@@ -33,7 +33,22 @@ struct ModelOptimize: ParsableCommand {
         let rootURL = try resolveRootURL()
         let artifacts: [URL]
         let optimization: String
-        if NemotronOmniNativeCheckpoint.isValid(rootURL: rootURL) {
+        if Drama3Resources.isDrama3(root: rootURL) {
+            guard !textEncoderOnly, let output, !output.isEmpty else {
+                throw ValidationError("DRAMA-3 Q4 export requires --output <new-directory>.")
+            }
+            #if !os(iOS)
+            artifacts = try Drama3QuantizedCheckpoint.export(source: rootURL,
+                destination: URL(fileURLWithPath: output), progress: { completed, total in
+                    if completed == total || completed.isMultiple(of: 256) {
+                        CLIStderr.write("DRAMA-3 expert Q4: \(completed)/\(total) tensors\n")
+                    }
+                })
+            optimization = Drama3QuantizedCheckpoint.format
+            #else
+            throw ValidationError("DRAMA-3 Q4 export requires macOS or Linux.")
+            #endif
+        } else if NemotronOmniNativeCheckpoint.isValid(rootURL: rootURL) {
             throw ValidationError(
                 "Nemotron Omni model root is already a standalone native checkpoint."
             )

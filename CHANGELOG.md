@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add native DRAMA-3 speech synthesis, reference cloning, inline speaker and event
+  tags, and causal audio streaming. `speech-tts-drama-3` pins the licensed source;
+  `model optimize --output` exports expert-only affine Q4 for memory-constrained
+  Macs. The runtime preserves BF16 nonexpert weights and the original DAC codec.
+  Component tests cover tensor layout, audio-tower numerics, prompts, and packing;
+  full-checkpoint quality, peak memory, and throughput remain unqualified.
+
 ## 0.64.0 - 2026-10-10
 
 - Use portable MLX operations for packed Whistle inference on Linux, avoiding a

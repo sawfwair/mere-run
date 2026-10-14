@@ -525,3 +525,61 @@ Fixture attribution and exact turn boundaries are in
   model-store conventions as the rest of the repository.
 
 See the [architecture map](../architecture.md) for a recommended reading order.
+
+## DRAMA-3 on a 36 GB Mac
+
+Use DRAMA-3 for multilingual scenes, inline speaker tags, vocal events, and voice
+cloning. The runtime uses Swift and MLX for the text backbone, ten-codebook audio
+tower, and 44.1 kHz DAC codec. Built with Fish Audio.
+
+Review the [Fish Audio Community License](https://huggingface.co/fishaudio/drama-3/blob/dd64a85cd82e9521f7202610ede97b367fc83946/LICENSE)
+before installing. The managed model requires explicit license acceptance and
+supports the local CLI. The API server excludes this model, including local paths.
+
+To install the pinned source checkpoint, reserve at least 42 GB for its files:
+
+```bash
+mere.run model pull speech-tts-drama-3 --accept-model-license
+```
+
+The loader packs only the routed experts as affine Q4 with groups of 64. It decodes
+the original FP8 experts using their 128 by 128 block scales. Attention, routing,
+embeddings, and audio-tower weights retain BF16. The codec file is preserved;
+native codec execution uses FP32.
+You don't need Python or an upstream serving process.
+
+To avoid repacking experts at every load, export a standalone Q4 directory:
+
+```bash
+mere.run model optimize speech-tts-drama-3 --output ./drama-3-q4
+mere.run speech synthesize '<|speaker:0|> [sighs] Fine. [laughs] That seems fair.' \
+  --model ./drama-3-q4 --seed 42 --output ./scene.wav
+```
+
+The source tensors total 39,594,895,616 bytes, plus the 1,871,099,728-byte codec.
+The Q4 model and codec total approximately 27,365,269,584 bytes (25.49 GiB), before
+tokenizer files, receipts, and runtime allocations. The exporter checks free space,
+preserves the source, refuses an existing destination, and records SHA-256 hashes
+for source and exported files in `drama3-quantization.json`. Preserve its `LICENSE`
+and `Notice` files when moving the checkpoint.
+
+The catalog declares a 32 GB minimum and recommends 36 GB. These are capacity
+estimates from the pinned tensor shapes, not measured peak memory or performance.
+Full-checkpoint audio quality, Q4 quality loss, and 36 GB hardware qualification
+remain separate validation gates.
+
+For cloning, supply a reference clip and its exact transcript:
+
+```bash
+mere.run speech synthesize '<|speaker:0|> Welcome to the harbor.' \
+  --model ./drama-3-q4 --mode clone --ref-audio ./reference.wav \
+  --ref-text 'This is the exact reference transcript.' --output ./clone.wav
+```
+
+References must be nonempty and at most 30 seconds. The CLI accepts one reference;
+the native prompt builder also accepts multiple references. Use `<|speaker:0|>`
+through `<|speaker:15|>` and event tags such as `[sighs]` or `[laughs]` in the text.
+DRAMA-3 infers language from text and doesn't use `--voice`, named `--speaker`
+values, or classifier-free guidance. `--stream` publishes causal waveform prefixes;
+its codec recomputes the accumulated prefix at each chunk. Reaching the acoustic
+frame limit fails the operation instead of publishing a truncated final WAV.

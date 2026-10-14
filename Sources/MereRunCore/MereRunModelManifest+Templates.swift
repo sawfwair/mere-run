@@ -1637,6 +1637,14 @@ extension MereRunModelManifest {
                 upstreamRepoId: "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
                 createdAt: createdAt
             )
+        case .drama3TTS:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .drama3TTS, family: .tts,
+                tier: .latest, variant: .standard, precision: .unknown,
+                defaults: nil, supports: [.speechSynthesis], components: genericTextComponents,
+                upstreamRepoId: "fishaudio/drama-3@dd64a85cd82e9521f7202610ede97b367fc83946",
+                createdAt: createdAt
+            )
         case .breezeTTS2:
             return MereRunModelManifest(
                 id: modelID.rawValue,

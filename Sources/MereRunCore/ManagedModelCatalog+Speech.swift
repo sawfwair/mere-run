@@ -3,6 +3,30 @@ import Foundation
 extension ManagedModelCatalog {
     static let speechSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
+            id: Drama3Resources.modelID,
+            category: .speechTTS,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: Drama3Resources.repository, revision: Drama3Resources.revision,
+                patterns: ["LICENSE", "README.md", "config.json", "tokenizer.json", "tokenizer_config.json",
+                           "special_tokens_map.json", "chat_template.jinja", "model.safetensors.index.json",
+                           "model-*.safetensors", "codec.pth"]
+            ),
+            upstreamRepoId: Drama3Resources.repository,
+            upstreamRevision: Drama3Resources.revision,
+            usageRestriction: usageRestriction(
+                summary: "Built with Fish Audio. Review the Community License revenue, hosted-service, attribution, and voice-consent terms.",
+                license: "Fish Audio Community License 1.0",
+                sourceRepoId: Drama3Resources.repository, sourceRevision: Drama3Resources.revision,
+                licenseURL: "https://huggingface.co/fishaudio/drama-3/blob/\(Drama3Resources.revision)/LICENSE"
+            ),
+            validationKind: .drama3TTS,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 41_466_000_000,
+            defaultCLICommands: ["speech synthesize"],
+            apiAvailability: .cliOnly
+        ),
+        ManagedModelSpec(
             id: ManagedModelID.whistleASR.rawValue,
             category: .speechASR,
             installShape: .directoryRoot,

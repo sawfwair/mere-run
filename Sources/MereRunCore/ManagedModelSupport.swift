@@ -781,6 +781,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 16
             ),
             descriptor(
+                "speech-tts-drama-3",
+                "DRAMA-3 Q4 experts",
+                "Native multilingual and multi-speaker speech, event tags, and voice cloning. Built with Fish Audio.",
+                minimum: 32,
+                recommended: 36
+            ),
+            descriptor(
                 "speech-tts-breeze-2",
                 "Breeze TTS 2",
                 "Synthesizes English and Chinese speech with voice design, cloning, and direction. Research and non-commercial use only.",

@@ -41,7 +41,7 @@ struct SpeechSynthesize: AsyncParsableCommand {
     @Option(name: [.customShort("o"), .long], help: "Output WAV file path (required).")
     var output: String
 
-    @Option(name: [.customShort("m"), .long], help: "TTS model id (Qwen3 or speech-tts-breeze-2) or a local model path.")
+    @Option(name: [.customShort("m"), .long], help: "TTS model id (Qwen3, speech-tts-breeze-2, or speech-tts-drama-3) or a local model path.")
     var model: String = Qwen3TTSResources.defaultModelId
 
     @Option(
@@ -126,12 +126,12 @@ struct SpeechSynthesize: AsyncParsableCommand {
         try SpeechSynthesisPlan.validateStreamingOptions(streamingOptions)
         try SpeechSynthesisPlan.validateCFGScale(cfgScale)
         let selection = try SpeechSynthesisModelSelection.resolve(model)
-        if selection.backend != .breeze && (seed != nil || cfgScale != nil) {
-            throw ValidationError("--seed and --cfg-scale are supported only by Breeze TTS 2.")
+        if (selection.backend != .breeze && selection.backend != .drama3 && seed != nil) || (selection.backend != .breeze && cfgScale != nil) {
+            throw ValidationError("--seed requires Breeze TTS 2 or DRAMA-3; --cfg-scale requires Breeze TTS 2.")
         }
-        if selection.backend == .breeze && mode == .clone
+        if (selection.backend == .breeze || selection.backend == .drama3) && mode == .clone
             && normalized(profile) == nil && normalized(refText) == nil {
-            throw ValidationError("Breeze TTS 2 cloning requires --ref-text with the exact reference transcript or a saved profile.")
+            throw ValidationError("This model requires --ref-text with the exact reference transcript or a saved profile.")
         }
         if Self.synthesizerOverride == nil {
             try MLXBundleSupport.ensureAvailable(quiet: quiet)
@@ -141,13 +141,13 @@ struct SpeechSynthesize: AsyncParsableCommand {
         let plan = try synthesisPlan(outputURL: outputURL, cloneReference: reference)
         try plan.validateForExecution()
         if let executor = Self.synthesizerOverride {
-            try await run(plan: plan, executor: executor, modelName: selection.backend == .breeze ? "Breeze TTS 2" : "Qwen3-TTS")
+            try await run(plan: plan, executor: executor, modelName: selection.displayName)
             return
         }
         let generator = selection.makeGenerator()
         do {
             try await run(plan: plan, executor: selection.executor(using: generator),
-                          modelName: selection.backend == .breeze ? "Breeze TTS 2" : "Qwen3-TTS")
+                          modelName: selection.displayName)
             await generator.unload()
         } catch {
             await generator.unload()
