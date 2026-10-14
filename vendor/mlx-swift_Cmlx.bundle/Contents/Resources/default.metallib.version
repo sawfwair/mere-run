@@ -5,5 +5,7 @@ mlx-upstream-revision: 3a6219917e4535575ce5bce2fc2ba27a483a709b
 mlx-swift-version: unknown
 mlx-swift-revision: 001d1aa3e5655d7efc073fb9632f952f57cdf528
 kernel-sources-sha256: 36412403ff4f0117579f0bc4471a17083411422bfc446f9f11420614ddbeb9ee
-built-at: 2026-09-07T22:57:58Z
+metal-language-version: 3.2
+macos-deployment-target: 15.0
+built-at: 2026-10-14T12:35:06Z
 metal-compiler: Apple metal version 32023.883 (metalfe-32023.883)
