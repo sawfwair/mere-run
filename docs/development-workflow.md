@@ -54,6 +54,27 @@ build cache. A direct push without that evidence fails instead of bypassing the
 matrix. `./scripts/check.sh` remains the local gate for everything. See the
 root `CONTRIBUTING.md` file for the lane rules.
 
+## MLX shader compatibility
+
+The macOS minimum is 15.0 on Apple Silicon. The bundled MLX library uses Metal
+Shading Language 3.2. Build and link shaders with the explicit macOS 15.0 target;
+Xcode 26 defaults can produce a library that macOS 15 cannot load.
+
+To rebuild shaders from the pinned MLX sources, use the Xcode Metal toolchain:
+
+```bash
+./scripts/build_mlx_metallib.sh
+./scripts/build_mlx_metallib.sh --verify-only vendor/mlx-swift_Cmlx.bundle
+```
+
+The script installs the library into the local build directories and refreshes
+its vendored copy when source revisions or compatibility settings change.
+The provenance sidecar records the language version and deployment target.
+Build verification and the CLI reject missing or mismatched compatibility fields.
+If you update the vendored library, update `THIRD_PARTY_NOTICES.md` in the same change.
+A build or test on macOS 26 does not establish runtime compatibility on macOS 15;
+release qualification must also load the packaged library on macOS 15 hardware.
+
 ## Which command to run
 
 ### Docs-only change

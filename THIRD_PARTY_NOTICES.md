@@ -1022,6 +1022,8 @@ limitations under the License.
   `3a6219917e4535575ce5bce2fc2ba27a483a709b`
 - generated-kernel and required core AOT source SHA-256:
   `36412403ff4f0117579f0bc4471a17083411422bfc446f9f11420614ddbeb9ee`
+- build compatibility: Metal Shading Language 3.2, macOS deployment target 15.0
+  for compilation and linking; rebuilt with Xcode 26.4 for macOS 15 support
 - license: MIT
 
 ```

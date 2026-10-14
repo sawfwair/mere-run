@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Build bundled MLX shaders with Metal 3.2 and a macOS 15.0 deployment target,
+  including the library link step, so Xcode 26 builds load on supported macOS 15
+  systems. Validate both settings in the build and runtime provenance checks (#586).
+
 - Cache compiled Core ML embedding packages across processes, pack short text
   batches with bounded concurrent ANE predictions, and expose caller-owned warm
   embedding sessions. Include full runtime license notices in macOS app bundles.

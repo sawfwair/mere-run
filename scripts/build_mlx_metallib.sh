@@ -43,6 +43,10 @@ core_kernel_dir="$core_checkout/mlx/backend/metal/kernels"
 version_header="$checkout/Source/Cmlx/mlx/mlx/version.h"
 resolved="$repo_root/Package.resolved"
 stamp_name="default.metallib.version"
+# Match Package.swift and the macOS app's LSMinimumSystemVersion. Xcode 26
+# defaults to Metal 4 and the host SDK's deployment target without these pins.
+metal_language_version="3.2"
+macos_deployment_target="15.0"
 upstream_tag="v0.32.1"
 upstream_revision="3a6219917e4535575ce5bce2fc2ba27a483a709b"
 core_aot_source_paths=(
@@ -231,6 +235,8 @@ if [[ "$mode" == "verify" ]]; then
   stamped_upstream_revision="$(stamp_field "mlx-upstream-revision" "$sidecar")"
   stamped_rev="$(stamp_field "mlx-swift-revision" "$sidecar")"
   stamped_hash="$(stamp_field "kernel-sources-sha256" "$sidecar")"
+  stamped_language="$(stamp_field "metal-language-version" "$sidecar")"
+  stamped_target="$(stamp_field "macos-deployment-target" "$sidecar")"
   status=0
   [[ "$stamped_core" == "$core_version" ]] || { echo "STALE: mlx core version $stamped_core != checkout $core_version" >&2; status=1; }
   [[ "$stamped_core_revision" == "$core_revision" ]] || { echo "STALE: mlx core revision $stamped_core_revision != checkout $core_revision" >&2; status=1; }
@@ -238,6 +244,8 @@ if [[ "$mode" == "verify" ]]; then
   [[ "$stamped_upstream_revision" == "$upstream_revision" ]] || { echo "STALE: upstream revision $stamped_upstream_revision != required $upstream_revision" >&2; status=1; }
   [[ "$stamped_rev" == "$swift_pin_revision" ]] || { echo "STALE: mlx-swift revision $stamped_rev != pinned $swift_pin_revision" >&2; status=1; }
   [[ "$stamped_hash" == "$sources_hash" ]] || { echo "STALE: kernel source hash mismatch" >&2; status=1; }
+  [[ "$stamped_language" == "$metal_language_version" ]] || { echo "STALE: Metal language version $stamped_language != required $metal_language_version" >&2; status=1; }
+  [[ "$stamped_target" == "$macos_deployment_target" ]] || { echo "STALE: macOS deployment target $stamped_target != required $macos_deployment_target" >&2; status=1; }
   metallib="$(dirname "$sidecar")/default.metallib"
   if [[ ! -f "$metallib" ]]; then
     echo "STALE: no default.metallib next to $sidecar" >&2
@@ -278,6 +286,7 @@ for src in "${metal_sources[@]}"; do
     include_dir="$core_checkout"
   fi
   xcrun -sdk macosx metal \
+    -std="metal$metal_language_version" -mmacosx-version-min="$macos_deployment_target" \
     -x metal -Wall -Wextra -fno-fast-math -Wno-c++17-extensions -Wno-c++20-extensions \
     -c "$src" -I "$include_dir" -o "$workdir/$base.air" \
     2> "$workdir/$base.err" &
@@ -295,7 +304,10 @@ for src in "${metal_sources[@]}"; do
 done
 [[ $failed -eq 0 ]] || exit 1
 
-xcrun -sdk macosx metallib "$workdir"/*.air -o "$workdir/default.metallib"
+# Use the compiler driver for linking too: invoking metallib directly defaults
+# the library header's platform version to the build SDK, even for older AIR.
+xcrun -sdk macosx metal -mmacosx-version-min="$macos_deployment_target" \
+  "$workdir"/*.air -o "$workdir/default.metallib"
 
 metal_compiler="$(xcrun -sdk macosx metal --version 2>/dev/null | head -1 || echo unknown)"
 cat > "$workdir/$stamp_name" <<EOF
@@ -306,6 +318,8 @@ mlx-upstream-revision: $upstream_revision
 mlx-swift-version: $swift_pin_version
 mlx-swift-revision: $swift_pin_revision
 kernel-sources-sha256: $sources_hash
+metal-language-version: $metal_language_version
+macos-deployment-target: $macos_deployment_target
 built-at: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 metal-compiler: $metal_compiler
 EOF
@@ -379,7 +393,9 @@ if [[ -d "$vendor_bundle" ]]; then
     && [[ "$(stamp_field "mlx-core-version" "$vendor_stamp")" == "$core_version" ]] \
     && [[ "$(stamp_field "mlx-core-revision" "$vendor_stamp")" == "$core_revision" ]] \
     && [[ "$(stamp_field "mlx-upstream-tag" "$vendor_stamp")" == "$upstream_tag" ]] \
-    && [[ "$(stamp_field "mlx-upstream-revision" "$vendor_stamp")" == "$upstream_revision" ]]; then
+    && [[ "$(stamp_field "mlx-upstream-revision" "$vendor_stamp")" == "$upstream_revision" ]] \
+    && [[ "$(stamp_field "metal-language-version" "$vendor_stamp")" == "$metal_language_version" ]] \
+    && [[ "$(stamp_field "macos-deployment-target" "$vendor_stamp")" == "$macos_deployment_target" ]]; then
     echo "[metallib] vendored $vendor_bundle already current; left untouched"
   else
     install_pair "$vendor_bundle/Contents/Resources"

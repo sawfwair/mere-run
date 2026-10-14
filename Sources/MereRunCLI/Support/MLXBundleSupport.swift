@@ -20,6 +20,8 @@ enum MLXBundleSupport {
       let upstreamRevision: String
       let swiftRevision: String
       let kernelSourcesSHA256: String
+      let metalLanguageVersion: String
+      let macOSDeploymentTarget: String
     }
 
     struct MetallibMismatch: Equatable {
@@ -34,7 +36,9 @@ enum MLXBundleSupport {
       upstreamTag: "v0.32.1",
       upstreamRevision: "3a6219917e4535575ce5bce2fc2ba27a483a709b",
       swiftRevision: "001d1aa3e5655d7efc073fb9632f952f57cdf528",
-      kernelSourcesSHA256: "36412403ff4f0117579f0bc4471a17083411422bfc446f9f11420614ddbeb9ee"
+      kernelSourcesSHA256: "36412403ff4f0117579f0bc4471a17083411422bfc446f9f11420614ddbeb9ee",
+      metalLanguageVersion: "3.2",
+      macOSDeploymentTarget: "15.0"
     )
 
     /// Relationship between a bundle's metallib version stamp
@@ -278,6 +282,8 @@ enum MLXBundleSupport {
         ("mlx-upstream-revision", stampField("mlx-upstream-revision", in: contents)),
         ("mlx-swift-revision", stampField("mlx-swift-revision", in: contents)),
         ("kernel-sources-sha256", stampField("kernel-sources-sha256", in: contents)),
+        ("metal-language-version", stampField("metal-language-version", in: contents)),
+        ("macos-deployment-target", stampField("macos-deployment-target", in: contents)),
       ]
       let missingFields = fields.compactMap { field, value in
         value == nil ? field : nil
@@ -288,7 +294,9 @@ enum MLXBundleSupport {
         let upstreamTag = fields[2].1,
         let upstreamRevision = fields[3].1,
         let swiftRevision = fields[4].1,
-        let kernelSourcesSHA256 = fields[5].1
+        let kernelSourcesSHA256 = fields[5].1,
+        let metalLanguageVersion = fields[6].1,
+        let macOSDeploymentTarget = fields[7].1
       else {
         return .unstamped(missingFields: missingFields)
       }
@@ -299,7 +307,9 @@ enum MLXBundleSupport {
         upstreamTag: upstreamTag,
         upstreamRevision: upstreamRevision,
         swiftRevision: swiftRevision,
-        kernelSourcesSHA256: kernelSourcesSHA256
+        kernelSourcesSHA256: kernelSourcesSHA256,
+        metalLanguageVersion: metalLanguageVersion,
+        macOSDeploymentTarget: macOSDeploymentTarget
       )
       let expected = expectedProvenance
       let comparisons = [
@@ -309,6 +319,8 @@ enum MLXBundleSupport {
         ("mlx-upstream-revision", stamped.upstreamRevision, expected.upstreamRevision),
         ("mlx-swift-revision", stamped.swiftRevision, expected.swiftRevision),
         ("kernel-sources-sha256", stamped.kernelSourcesSHA256, expected.kernelSourcesSHA256),
+        ("metal-language-version", stamped.metalLanguageVersion, expected.metalLanguageVersion),
+        ("macos-deployment-target", stamped.macOSDeploymentTarget, expected.macOSDeploymentTarget),
       ]
       let mismatches = comparisons.compactMap { field, actual, required in
         actual == required
