@@ -11,10 +11,12 @@ import FoundationNetworking
 public struct RelayWorkflowExecutor: Sendable {
     public let profile: WorkflowExecutorProfile
     public let credentialStorage: (any RelayCredentialStorage)?
+    public let session: URLSession
 
-    public init(profile: WorkflowExecutorProfile, credentialStorage: (any RelayCredentialStorage)? = nil) {
+    public init(profile: WorkflowExecutorProfile, credentialStorage: (any RelayCredentialStorage)? = nil, session: URLSession = .shared) {
         self.profile = profile
         self.credentialStorage = credentialStorage
+        self.session = session
     }
 
     package func resolveCredential(forceRefresh: Bool = false) async throws -> RelayResolvedCredential {
@@ -247,7 +249,7 @@ public struct RelayWorkflowExecutor: Sendable {
             request.httpMethod = "GET"
             request.timeoutInterval = 300
             request.setValue("Bearer \(credential.accessToken)", forHTTPHeaderField: "Authorization")
-            let (temporary, response) = try await URLSession.shared.download(for: request)
+            let (temporary, response) = try await session.download(for: request)
             guard let http = response as? HTTPURLResponse else {
                 try? FileManager.default.removeItem(at: temporary)
                 throw RelayClientError("Relay returned a non-HTTP response.")
@@ -285,7 +287,7 @@ public struct RelayWorkflowExecutor: Sendable {
             request.setValue("Bearer \(credential.accessToken)", forHTTPHeaderField: "Authorization")
         }
         request.httpBody = body
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw RelayClientError("Relay returned a non-HTTP response.")
         }
