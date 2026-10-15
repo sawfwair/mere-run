@@ -99,6 +99,7 @@ an effective overlay; they are not a second capability catalog.
 | `text-chat` | `text-chat-laguna-xs-2-1` |
 | `text-chat` | `text-chat-inkling-small` |
 | `vision-chat` | `vision-chat-muse-glimmer-30b` |
+| `vision-chat` | `vision-chat-nemotron-35-bolt-24gb` |
 | `text-chat` | `text-chat-nemotron-35-lightning` |
 | `omni-chat` | `omni-chat-nemotron3-nano-30b-a3b-bf16` |
 | `text-chat` | `text-chat-q36-nano` |
@@ -1925,3 +1926,14 @@ projections in FP32. Contextual int8 output remains a separate contract.
 Both passed bounded full-checkpoint native CLI checks. Read the
 [qualification report](./qualification/pplx-embed-v2-9b-2026-10-09.md) for paired FP32 drift and limitations. Broad retrieval quality and maximum
 context remain unqualified. See [native usage](./runtime/pplx-embed-v2.md).
+
+### Nemotron 3.5 Bolt packed checkpoint
+
+`vision-chat-nemotron-35-bolt-24gb` pins NVIDIA's original safetensors at
+`96a5d63027ac013c8ef37fb438f3b4ec5fbd3ba6` in
+[`nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB`](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB).
+The 90 shards contain 24,079,678,824 weight bytes using mixed IQ2_XXS, Q8_0,
+NVFP4, and BF16 storage. The model materials use OpenMDW-1.1. The managed
+pull is explicit; the source weights do not require conversion. See
+[Native Nemotron Bolt](./runtime/nemotron-bolt.md) for supported inputs and
+qualification limits.

@@ -494,6 +494,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 64
             ),
             descriptor(
+                NemotronBoltResources.modelID,
+                "Nemotron 3.5 Bolt 74B-A9B 24GB",
+                "Text and image chat from NVIDIA's original packed checkpoint. Full-checkpoint quality and peak memory remain unqualified.",
+                minimum: 32,
+                recommended: 48
+            ),
+            descriptor(
                 NemotronHResources.modelID,
                 "Nemotron 3.5 Lightning 30B-A3B",
                 "Runs NVIDIA's hybrid Nemotron-H NVFP4 checkpoint with its verified DSpark speculative companion through native Swift/MLX.",

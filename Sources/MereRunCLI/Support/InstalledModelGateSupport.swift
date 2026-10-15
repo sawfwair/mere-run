@@ -216,7 +216,7 @@ enum InstalledModelSmokePlans {
                 try await runner.installedQwenImageEditCheck(model: spec.id)
             }
 
-        case .gemma4, .gemma4Unified, .q35, .museGlimmer:
+        case .gemma4, .gemma4Unified, .q35, .museGlimmer, .nemotronBolt:
             if spec.category == .visionOCR {
                 return direct(spec, route: "vision ocr") { runner in
                     try await runner.installedOCRCheck(model: spec.id)

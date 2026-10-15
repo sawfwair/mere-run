@@ -60,6 +60,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case museGlimmer
     case museGlimmerAssistant
     case nemotronH
+    case nemotronBolt
     case nemotronHDSpark
     case nemotronOmni
     case qwen3TTS

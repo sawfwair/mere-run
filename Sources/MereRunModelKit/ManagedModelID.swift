@@ -43,6 +43,7 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case museGlimmer30B = "vision-chat-muse-glimmer-30b"
     case museGlimmer30BDFlash2 = "vision-chat-muse-glimmer-30b-dflash2"
     case museGlimmer30BAssistant = "vision-chat-muse-glimmer-30b-assistant"
+    case nemotron35Bolt24GB = "vision-chat-nemotron-35-bolt-24gb"
     case nemotron35Lightning = "text-chat-nemotron-35-lightning"
     case nemotron35LightningDSpark = "text-chat-nemotron-35-lightning-dspark"
     case nemotron3NanoOmni30BA3BBF16 = "omni-chat-nemotron3-nano-30b-a3b-bf16"

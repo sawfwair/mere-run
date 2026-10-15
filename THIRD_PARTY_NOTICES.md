@@ -1676,3 +1676,20 @@ exports 1K/2K/4K/8K text functions and a 30-second audio function. The original
 Google checkpoint revision is `914f7f89142e33e77833254d9c9b90c3cef7303b`.
 License and original modification notices remain in
 `Sources/MereRunCoreMLModel/LICENSE` and `NOTICE`.
+
+### Nemotron 3.5 Bolt native runtime and IQ2 codebook
+
+- Model configuration and architecture reference:
+  [`nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB`](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB),
+  revision `96a5d63027ac013c8ef37fb438f3b4ec5fbd3ba6`.
+- Model materials: OpenMDW-1.1. Copyright (c) 2026 NVIDIA CORPORATION &
+  AFFILIATES. All rights reserved. The license is retained in
+  `Sources/MereRunNemotronBoltModel/LICENSE.OpenMDW-1.1`.
+- IQ2_XXS grid data: `ggml/src/ggml-common.h` from
+  [`ggml-org/llama.cpp`](https://github.com/ggml-org/llama.cpp), revision
+  `b76b13379d3b7d67ab0bc424516bb6fd2522bd8e`. Copyright (c) 2023-2026
+  The ggml authors. MIT license, retained in
+  `Sources/MereRunNemotronBoltModel/LICENSE.ggml`.
+- Integration: independent Swift/MLX execution of heterogeneous Mamba-2,
+  attention, latent MoE, and C-RADIO blocks; original packed weight formats.
+  The repository does not distribute the checkpoint weights.
