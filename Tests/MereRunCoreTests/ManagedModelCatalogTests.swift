@@ -199,6 +199,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "speech-tts-breeze-2",
             "image-qwen-21",
             "image-qwen-21-turbo",
+            "image-flux3-klein",
             "image-flux1-dev",
             "image-flux2-dev",
             "image-klein-9b",

@@ -121,6 +121,8 @@ public extension ManagedModelSpec {
         switch validationKind {
         case .flux1:
             return Flux1Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .flux3:
+            return Flux3Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .flux2Klein:
             return Self.missingDiffusersImagePaths(in: rootURL, fileManager: fileManager)
         case .bonsaiImage:

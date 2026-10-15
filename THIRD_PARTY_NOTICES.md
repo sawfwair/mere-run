@@ -1693,3 +1693,19 @@ License and original modification notices remain in
 - Integration: independent Swift/MLX execution of heterogeneous Mamba-2,
   attention, latent MoE, and C-RADIO blocks; original packed weight formats.
   The repository does not distribute the checkpoint weights.
+
+## FLUX 3 Image Klein reference implementation
+
+The native FLUX 3 transformer and sampling implementation follows Black Forest
+Labs' reference code at
+[`45e57c9fb06f9751cdced29a65c5d2171003be05`](https://github.com/black-forest-labs/flux-3-image-klein/tree/45e57c9fb06f9751cdced29a65c5d2171003be05).
+The Swift implementation changes the tensor backend to MLX, processes one sample
+per call, omits unobserved phantom reference tokens, and loads the original BF16
+tensor names with strict shape checks. The reference code is Apache-2.0; its
+license is preserved in `Sources/MereRunCore/Resources/ModelLicenses/Flux3-Klein-Code-LICENSE`.
+
+The model weights use the separate FLUX Kommunity License v1.0, preserved in
+`Sources/MereRunCore/Resources/ModelLicenses/Flux3-Klein-Weights-LICENSE.md`.
+Managed downloads require explicit local acceptance and Hugging Face access.
+The bundled Qwen3-VL text encoder uses Apache-2.0. The numerical test fixtures
+contain synthetic weights, not pretrained model parameters.

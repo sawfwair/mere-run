@@ -756,6 +756,7 @@ targets.append(
       "FalconPerception/README.md",
       "Flux1/README.md",
       "Flux2Klein/README.md",
+      "Flux3/README.md",
       "Gemma4/README.md",
       "Embeddings/README.md",
       "GLiNER/README.md",

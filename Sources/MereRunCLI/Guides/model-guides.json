@@ -90,6 +90,13 @@
     "resourceName": "handbook-krea2.md"
   },
   {
+    "topic": "handbook-flux3-klein",
+    "title": "FLUX 3 Klein (Black Forest Labs)",
+    "category": "Image",
+    "models": ["image-flux3-klein"],
+    "resourceName": "handbook-flux3-klein.md"
+  },
+  {
     "topic": "handbook-qwen-image-21",
     "title": "Qwen Image 2.1 (Qwen)",
     "category": "Image",

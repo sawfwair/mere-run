@@ -5,6 +5,7 @@ extension MereRunCapabilityCatalog {
     /// `mererun_model.json`; FLUX.2-dev shares the Klein engine but ignores negative prompts, and
     /// Qwen-Image-Edit Lightning is the edit engine with fixed steps and guidance.
     enum ImageGenerateFamily: String, MereRunFamilyID {
+        case flux3
         case flux1
         case klein
         case flux2Dev = "flux2-dev"
@@ -47,6 +48,7 @@ extension MereRunCapabilityCatalog {
         modelFlags: ["--model"],
         defaultModels: [.always("image-zimage-nano")],
         families: [
+            .init(ImageGenerateFamily.flux3, title: "FLUX 3 Klein", models: ["image-flux3-klein"]),
             .init(ImageGenerateFamily.flux1, title: "FLUX.1-dev", models: ["image-flux1-dev"]),
             .init(
                 ImageGenerateFamily.klein,

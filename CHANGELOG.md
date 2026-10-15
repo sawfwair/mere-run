@@ -6,6 +6,16 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add experimental native Swift/MLX FLUX 3 Klein generation and ordered reference
+  editing through `image-flux3-klein`, loading the pinned original BF16 package
+  directly. Use 16-step flow-map sampling at CFG 1, explicit gated downloads,
+  and the bundled FLUX Kommunity License notice.
+
+- Add durable relay workflow batches with immutable child IDs and seeds, resumable
+  shared-asset submission, bounded fleet admission, ordered verified results, and
+  `graph batch submit`, `inspect`, `watch`, `fetch`, `cancel`, and `retry` commands.
+  Each child executes its entire graph on one worker.
+
 - Build bundled MLX shaders with Metal 3.2 and a macOS 15.0 deployment target,
   including the library link step, so Xcode 26 builds load on supported macOS 15
   systems. Validate both settings in the build and runtime provenance checks (#586).

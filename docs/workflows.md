@@ -400,6 +400,8 @@ queries a separate content-addressed cache, uploads only missing hashes, verifie
 size and SHA-256 remotely, links cached assets into the immutable job directory,
 and launches a fixed worker script detached.
 
+For independent input sets, use [fleet workflow batches](./workflow-batches.md).
+
 ## Relay execution
 
 ```bash

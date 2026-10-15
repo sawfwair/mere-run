@@ -163,6 +163,7 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .clef
             || spec?.validationKind == .gliner25Decide
             || spec?.validationKind == .qwenImage21
+            || spec?.validationKind == .flux3
             || spec?.validationKind == .aceStep
             || spec?.validationKind == .aceStepLM
             || spec?.validationKind == .miniMaxMusic3
@@ -460,6 +461,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=flux1 expects flux1.")
             case .klein where engine != .flux2Klein:
                 warnings.append("Manifest engine mismatch: family=klein expects flux2-klein.")
+            case .flux3 where engine != .flux3:
+                warnings.append("Manifest engine mismatch: family=flux3 expects flux3-klein.")
             case .zimage where engine != .zimageTurbo:
                 warnings.append("Manifest engine mismatch: family=zimage expects zimage-turbo.")
             case .hidream where engine != .hidreamO1:
@@ -626,7 +629,9 @@ public enum MereRunModelValidator {
             errors.append("Manifest components missing unconditional_transformer.")
         }
         if supportsImagePipeline && !usesUnifiedImageTransformer && components.vae == nil { errors.append("Manifest components missing vae.") }
-        if supportsImagePipeline && !usesUnifiedImageTransformer && components.scheduler == nil { errors.append("Manifest components missing scheduler.") }
+        if supportsImagePipeline && !usesUnifiedImageTransformer && manifest.engine != .flux3 && components.scheduler == nil {
+            errors.append("Manifest components missing scheduler.")
+        }
     }
 
     private static func manifestIDIsCompatible(expected: String, actual: String) -> Bool {

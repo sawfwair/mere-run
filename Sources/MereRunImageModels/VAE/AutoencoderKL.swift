@@ -17,6 +17,7 @@ public struct VAEConfig {
   public let midBlockAddAttention: Bool
   public let useQuantConv: Bool
   public let usePostQuantConv: Bool
+  public let attentionNormEps: Float
 
   public init(
     inChannels: Int = 3,
@@ -30,7 +31,8 @@ public struct VAEConfig {
     sampleSize: Int = ZImageModelMetadata.VAE.sampleSize,
     midBlockAddAttention: Bool = true,
     useQuantConv: Bool = false,
-    usePostQuantConv: Bool = false
+    usePostQuantConv: Bool = false,
+    attentionNormEps: Float = 1e-5
   ) {
     self.inChannels = inChannels
     self.outChannels = outChannels
@@ -44,6 +46,7 @@ public struct VAEConfig {
     self.midBlockAddAttention = midBlockAddAttention
     self.useQuantConv = useQuantConv
     self.usePostQuantConv = usePostQuantConv
+    self.attentionNormEps = attentionNormEps
   }
 
   public var vaeScaleFactor: Int {
@@ -62,9 +65,9 @@ private final class VAESelfAttention: Module {
   @ModuleInfo(key: "to_v") var toV: Linear
   @ModuleInfo(key: "to_out") var toOut: [Linear]
 
-  init(channels: Int, normGroups: Int) {
+  init(channels: Int, normGroups: Int, eps: Float) {
     self._groupNorm.wrappedValue = GroupNorm(
-      groupCount: normGroups, dimensions: channels, pytorchCompatible: true)
+      groupCount: normGroups, dimensions: channels, eps: eps, pytorchCompatible: true)
     self._toQ.wrappedValue = Linear(channels, channels)
     self._toK.wrappedValue = Linear(channels, channels)
     self._toV.wrappedValue = Linear(channels, channels)
@@ -280,8 +283,9 @@ private final class VAEMidBlock: Module {
   @ModuleInfo(key: "attentions") var attentions: [VAESelfAttention]
   @ModuleInfo(key: "resnets") var resnets: [VAEResnetBlock2D]
 
-  init(channels: Int, normGroups: Int, addAttention: Bool) {
-    self._attentions.wrappedValue = addAttention ? [VAESelfAttention(channels: channels, normGroups: normGroups)] : []
+  init(channels: Int, normGroups: Int, addAttention: Bool, attentionNormEps: Float) {
+    self._attentions.wrappedValue = addAttention
+      ? [VAESelfAttention(channels: channels, normGroups: normGroups, eps: attentionNormEps)] : []
     self._resnets.wrappedValue = [
       VAEResnetBlock2D(inChannels: channels, outChannels: channels, normGroups: normGroups),
       VAEResnetBlock2D(inChannels: channels, outChannels: channels, normGroups: normGroups)
@@ -318,7 +322,8 @@ private final class VAEDecoder: Module {
     self._midBlock.wrappedValue = VAEMidBlock(
       channels: channels.last ?? 512,
       normGroups: config.normNumGroups,
-      addAttention: config.midBlockAddAttention
+      addAttention: config.midBlockAddAttention,
+      attentionNormEps: config.attentionNormEps
     )
 
     var up: [VAEUpBlock] = []
@@ -401,7 +406,8 @@ private final class VAEEncoder: Module {
     self._midBlock.wrappedValue = VAEMidBlock(
       channels: channels.last ?? 512,
       normGroups: config.normNumGroups,
-      addAttention: config.midBlockAddAttention
+      addAttention: config.midBlockAddAttention,
+      attentionNormEps: config.attentionNormEps
     )
     self._convNormOut.wrappedValue = GroupNorm(
       groupCount: config.normNumGroups,

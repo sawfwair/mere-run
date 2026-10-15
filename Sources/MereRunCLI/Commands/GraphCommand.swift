@@ -23,6 +23,7 @@ struct Graph: AsyncParsableCommand {
             GraphRunJob.self,
             GraphSubmit.self,
             GraphSubmitJob.self,
+            GraphBatch.self,
             GraphWorker.self,
         ]
     )

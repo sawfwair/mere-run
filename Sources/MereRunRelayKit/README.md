@@ -34,3 +34,8 @@ shared contract fixtures. Do not change field names or add required fields
 without a coordinated contract revision.
 
 Tests live in `Tests/MereRunRelayKitTests`.
+
+`WorkflowBatchMaterializer` pins child IDs and seeds before bundle preparation.
+`RelayWorkflowExecutor` submits, inspects, cancels, and retries durable batches over
+the account graph-batch API. Each child keeps the ordinary immutable job contract.
+See `docs/workflow-batches.md`.

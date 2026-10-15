@@ -62,6 +62,7 @@ an effective overlay; they are not a second capability catalog.
 <!-- managed-model-catalog:start -->
 | Catalog category | Model ID |
 | --- | --- |
+| `image` | `image-flux3-klein` |
 | `image` | `image-klein-nano` |
 | `image` | `image-klein-max` |
 | `image` | `image-klein-9b` |
@@ -263,6 +264,7 @@ validates all configured models before downloading any; both accept the same
 
 | Models | Upstream terms that require acceptance |
 | --- | --- |
+| `image-flux3-klein` | FLUX Kommunity License v1.0; use restrictions, a Qualifying User commercial-output exception, and filtering or output-review conditions |
 | `image-flux1-dev` | FLUX.1 dev Non-Commercial License v1.1.1; non-commercial, non-production use |
 | `image-flux2-dev` | FLUX Non-Commercial License and BFL Acceptable Use Policy; non-commercial, non-production use |
 | `image-klein-9b`, `image-klein-base-9b` | FLUX Non-Commercial License v2.1; non-commercial, non-production use |
