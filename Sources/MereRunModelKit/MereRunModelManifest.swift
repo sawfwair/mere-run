@@ -14,6 +14,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
     public static let filename: String = "mererun_model.json"
 
     public enum Engine: String, Codable, CaseIterable, Hashable, Sendable {
+        case flux3 = "flux3-klein"
         case laya
         case clef
         case d1
@@ -138,6 +139,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
     }
 
     public enum Family: String, Codable, CaseIterable, Hashable, Sendable {
+        case flux3
         case laya
         case clef
         case d1

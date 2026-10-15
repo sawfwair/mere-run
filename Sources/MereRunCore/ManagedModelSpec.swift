@@ -44,6 +44,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case senseNovaU15
     case krea2
     case qwenImage21
+    case flux3
     case qwenImageEdit
     case ideogram4SDNQ
     case gemma4

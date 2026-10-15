@@ -20,7 +20,7 @@ public struct ImageGenerationSampling: Sendable, Equatable {
         let usesManifest: Bool
         switch manifest?.family {
         case .klein: usesManifest = policy.kleinUsesManifestDefaults
-        case .hidream, .senseNova, .krea, .ideogram, .flux1: usesManifest = true
+        case .hidream, .senseNova, .krea, .ideogram, .flux1, .flux3: usesManifest = true
         case .qwen: usesManifest = manifest?.engine == .qwenImageEdit || manifest?.engine == .qwenImage21
         default: usesManifest = false
         }
@@ -89,7 +89,7 @@ public struct ImageGenerationConditioning: Sendable, Equatable {
         family: MereRunModelManifest.Family?, inputImage: URL?, referenceImages: [URL]
     ) -> String {
         guard inputImage != nil || !referenceImages.isEmpty else { return "text_to_image" }
-        if family == .klein { return "reference_image" }
+        if family == .klein || family == .flux3 { return "reference_image" }
         if inputImage != nil, !referenceImages.isEmpty { return "image_to_image_with_references" }
         return inputImage == nil ? "reference_image" : "image_to_image"
     }
@@ -252,6 +252,19 @@ public struct ImageGenerationPlan: Sendable {
             reject((sampling.steps ?? 40) < 2, "steps_invalid", "Qwen Image 2.1 requires at least two steps.")
             reject(options.outputURL.pathExtension.lowercased() != "png", "output_format_invalid", "Qwen Image 2.1 requires PNG output to preserve alpha.")
             reject(options.strength != nil, "strength_unsupported", "Qwen Image 2.1 uses reference conditioning rather than an image strength.")
+        }
+        if manifest.engine == .flux3 {
+            let count = [options.inputImage].compactMap { $0 }.count + options.referenceImages.count
+            reject(count > 10, "reference_count_invalid", "FLUX 3 Klein supports up to ten ordered references.")
+            reject(!options.width.isMultiple(of: 16) || !options.height.isMultiple(of: 16)
+                || !(64...4096).contains(options.width) || !(64...4096).contains(options.height),
+                "dimensions_invalid", "FLUX 3 Klein requires 64–4096 pixel sides divisible by 16.")
+            reject(sampling.guidanceScale != 1, "cfg_invalid", "Distilled FLUX 3 Klein requires CFG 1.")
+            reject(options.negativePrompt?.isEmpty == false, "negative_prompt_unsupported", "Distilled FLUX 3 Klein does not use negative prompts.")
+            reject(options.sigmaShift != nil, "sigma_shift_unsupported", "FLUX 3 Klein uses the publisher's fixed alpha schedule.")
+            reject(options.strength != nil, "strength_unsupported", "FLUX 3 Klein uses reference conditioning without edit strength.")
+            reject(options.outputURL.pathExtension.lowercased() != "png", "output_format_invalid", "FLUX 3 Klein requires PNG output.")
+            reject(manifest.variant != .distilled || manifest.precision != .bf16, "model_variant_unsupported", "Use the original distilled BF16 FLUX 3 package.")
         }
         if manifest.engine == .qwenImageEdit {
             let count = Set(([options.inputImage].compactMap { $0 } + options.referenceImages).map { $0.standardizedFileURL }).count

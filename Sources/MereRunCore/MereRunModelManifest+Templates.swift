@@ -1336,6 +1336,14 @@ extension MereRunModelManifest {
                 upstreamRepoId: "\(Krea2Resources.upstreamRepoId)@\(Krea2Resources.upstreamRevision)",
                 createdAt: createdAt
             )
+        case .flux3Klein:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .flux3, family: .flux3,
+                tier: .latest, variant: .distilled, precision: .bf16,
+                defaults: Defaults(steps: Flux3Sampling.defaultSteps, cfg: 1), supports: [.txt2img, .referenceEdit],
+                components: Components(tokenizer: .local(path: "text_encoder"), textEncoder: .local(path: "text_encoder"),
+                    transformer: .local(path: "."), vae: .local(path: "."), scheduler: nil),
+                upstreamRepoId: "\(Flux3Resources.repoID)@\(Flux3Resources.revision)", createdAt: createdAt)
         case .qwenImage21, .qwenImage21Turbo:
             let turbo = modelID == .qwenImage21Turbo
             return MereRunModelManifest(

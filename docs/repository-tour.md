@@ -138,7 +138,7 @@ loading, tokenizer integration, generation, and paired-logprob export. See
 
 `Sources/MereRunTensor` owns checkpoint loading and shared tensor kernels.
 `Sources/MereRunTextEncoder` owns the shared Qwen text encoder and vision tower.
-`Sources/MereRunImageModels` owns FLUX.2 and ZImage transformer layers and the
+`Sources/MereRunImageModels` owns FLUX.2, FLUX 3, and ZImage transformer layers and the
 shared VAE. Core re-exports these libraries and owns generation orchestration.
 See [Image runtime boundaries](./internals/image-runtime-boundaries.md).
 

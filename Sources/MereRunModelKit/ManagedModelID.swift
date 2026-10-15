@@ -2,6 +2,7 @@ import Foundation
 
 /// Canonical public model identities, independent of inference implementations.
 public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
+    case flux3Klein = "image-flux3-klein"
     case kleinNano = "image-klein-nano"
     case kleinMax = "image-klein-max"
     case klein9B = "image-klein-9b"
