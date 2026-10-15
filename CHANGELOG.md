@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add pinned Bonsai 2 Small 2B, 4B, and 9B vision chat packs to the native Swift/MLX runtime,
+  including Hadamard-aware tied output embeddings for the 2B and 4B packs.
+
 - Add durable relay workflow batches with immutable child IDs and seeds, resumable
   shared-asset submission, bounded fleet admission, ordered verified results, and
   `graph batch submit`, `inspect`, `watch`, `fetch`, `cancel`, and `retry` commands.

@@ -126,6 +126,7 @@ extension MereRunCapabilityCatalog {
                 title: "Qwen3.6 vision",
                 models: [
                     "text-chat-bonsai-27b-1bit", "text-chat-bonsai-27b-2bit", "text-chat-bonsai-2-27b-2bit",
+                    "text-chat-bonsai-2-2b-2bit", "text-chat-bonsai-2-4b-2bit", "text-chat-bonsai-2-9b-2bit",
                     "text-agent-ornith-35b-mlx-4bit", "vision-chat-ornith-35b"
                 ]
             ),

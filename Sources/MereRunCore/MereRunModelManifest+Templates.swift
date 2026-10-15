@@ -795,7 +795,8 @@ extension MereRunModelManifest {
                     + "@\(Q35Resources.bonsai27B2BitUpstreamRevision)",
                 createdAt: createdAt
             )
-        case .bonsai2:
+        case .bonsai2, .bonsai2TwoB, .bonsai2FourB, .bonsai2NineB:
+            let profile = Q35Resources.profile(for: modelID.rawValue)!
             return MereRunModelManifest(
                 id: modelID.rawValue,
                 engine: .qwen35HybridMoE,
@@ -807,8 +808,7 @@ extension MereRunModelManifest {
                 defaults: nil,
                 supports: [.chat, .codeGeneration, .visionChat],
                 components: q35TextComponents,
-                upstreamRepoId: "\(Q35Resources.bonsai2UpstreamRepoId)"
-                    + "@\(Q35Resources.bonsai2UpstreamRevision)",
+                upstreamRepoId: "\(profile.upstreamRepoId)@\(profile.upstreamRevision)",
                 createdAt: createdAt
             )
         case .lfm25A1B8Bit:

@@ -1676,3 +1676,20 @@ exports 1K/2K/4K/8K text functions and a 30-second audio function. The original
 Google checkpoint revision is `914f7f89142e33e77833254d9c9b90c3cef7303b`.
 License and original modification notices remain in
 `Sources/MereRunCoreMLModel/LICENSE` and `NOTICE`.
+
+## Bonsai 2 Small model packs
+
+The optional Bonsai 2 Small 2B, 4B, and 9B managed models use Prism ML's
+Apache-2.0 MLX packs derived from Alibaba Cloud's Apache-2.0 Qwen3.5 models.
+The pinned source repositories and revisions are listed in
+`docs/model-sources.md`. The configuration fixtures in
+`Tests/MereRunCoreTests/Fixtures/Bonsai2Small/` come from those revisions;
+`provenance.json` records their SHA-256 hashes and upstream weight identities.
+
+Copyright 2026-present Prism ML, Inc. Created using Bonsai by Prism ML.
+Qwen3.5: Copyright 2026 Alibaba Cloud.
+
+Managed pulls retain the upstream `LICENSE` and `NOTICE.txt` files. No model
+weights or upstream Python runtime are bundled in this repository. The Swift
+tied output implementation follows the signed Hadamard and affine packed
+weight contract documented by the packs' `runtime/runtime.py`.

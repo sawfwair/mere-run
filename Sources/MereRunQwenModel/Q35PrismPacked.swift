@@ -61,6 +61,13 @@ package final class Q35PrismEmbedding: Embedding {
         freeze()
     }
 
+    /// The shared output head rotates hidden states into the embedding's packed basis.
+    package override func asLinear(_ input: MLXArray) -> MLXArray {
+        let value = signs.map { Q35PrismTransform.apply(input, block: block, signs: $0) } ?? input
+        return MLX.quantizedMM(value, weight, scales: scales, biases: biases,
+                               transpose: true, groupSize: 128, bits: 2)
+    }
+
     package override func callAsFunction(_ input: MLXArray) -> MLXArray {
         let indices = input.flattened()
         let value = MLX.dequantized(

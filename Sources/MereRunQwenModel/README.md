@@ -79,3 +79,11 @@ It installs packed embeddings/linear layers with strict key coverage, geometry,
 and dtype checks. Recurrent gates, convolution, norms and output heads stay
 FP32. CPU and Metal fixtures compare packed execution with independently
 dequantized tensors; full 9B native proofs are linked from the runtime guide.
+
+Bonsai 2 Small adds 512-element transforms and tied packed output embeddings
+for the 2B and 4B packs. `Q35PrismEmbedding.asLinear` applies the forward
+transform before packed matmul, while lookup retains the inverse transform.
+The 9B pack uses 4096-element transforms and a separate packed output head.
+`Bonsai2SmallTests` compares tied logits with independently reconstructed dense
+embedding rows and checks the three pinned configuration fixtures. Full-model
+checkpoint parity and performance require separate evidence.

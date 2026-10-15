@@ -84,6 +84,11 @@ final class Bonsai2Tests: MereRunCoreTestCase {
     }
 
     func testNativeLoaderInstallsRotatedModulesAndRejectsMissingOrdinaryWeights() throws {
+        try checkNativeLoader(tied: false)
+        try checkNativeLoader(tied: true)
+    }
+
+    private func checkNativeLoader(tied: Bool) throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -100,11 +105,15 @@ final class Bonsai2Tests: MereRunCoreTestCase {
          "modules":[
           {"path":"model.embed_tokens","block":512,"embedding":true,"dtype":"float16"},
           {"path":"lm_head","block":512,"embedding":false,"dtype":"float16"}]}
-        """.utf8)
+        """.replacingOccurrences(of: "\"tie_word_embeddings\":false", with: "\"tie_word_embeddings\":\(tied)")
+            .replacingOccurrences(
+                of: tied ? ",\n  {\"path\":\"lm_head\",\"block\":512,\"embedding\":false,\"dtype\":\"float16\"}" : "__none__",
+                with: ""
+            ).utf8)
         try configData.write(to: root.appendingPathComponent("config.json"))
         let config = try JSONDecoder().decode(Q35Config.self, from: configData)
         var arrays: [String: MLXArray] = ["language_model.model.norm.weight": MLXArray.ones([512])]
-        for path in ["model.embed_tokens", "lm_head"] {
+        for path in tied ? ["model.embed_tokens"] : ["model.embed_tokens", "lm_head"] {
             let base = "language_model." + path
             arrays[base + ".weight"] = MLXArray.zeros([8, 32], dtype: .uint32)
             arrays[base + ".scales"] = MLXArray.ones([8, 4])
@@ -118,7 +127,12 @@ final class Bonsai2Tests: MereRunCoreTestCase {
         try generator.loadTextWeights(into: model, from: Q35Resources(rootURL: root), groupSize: 128, bits: 2)
         let leaves = Dictionary(uniqueKeysWithValues: model.leafModules().flattened())
         XCTAssertTrue(leaves["model.embed_tokens"] is Q35PrismEmbedding)
-        XCTAssertTrue(leaves["lm_head"] is Q35PrismLinear)
+        if tied {
+            XCTAssertNil(leaves["lm_head"])
+            XCTAssertEqual(model.logits(from: MLXArray.ones([1, 1, 512])).shape, [1, 1, 8])
+        } else {
+            XCTAssertTrue(leaves["lm_head"] is Q35PrismLinear)
+        }
         let norm = try XCTUnwrap(model.parameters().flattened().first { $0.0 == "model.norm.weight" }?.1)
         XCTAssertEqual(MLX.max(MLX.abs(norm)).item(Float.self), 0)
         arrays.removeValue(forKey: "language_model.model.norm.weight")

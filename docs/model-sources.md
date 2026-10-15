@@ -110,6 +110,9 @@ an effective overlay; they are not a second capability catalog.
 | `vision-chat` | `vision-chat-q38-flash-next-4bit` |
 | `text-chat` | `text-chat-bonsai-27b-1bit` |
 | `text-chat` | `text-chat-bonsai-27b-2bit` |
+| `text-chat` | `text-chat-bonsai-2-2b-2bit` |
+| `text-chat` | `text-chat-bonsai-2-4b-2bit` |
+| `text-chat` | `text-chat-bonsai-2-9b-2bit` |
 | `text-chat` | `text-chat-bonsai-2-27b-2bit` |
 | `text-code` | `text-agent-ornith-9b` |
 | `vision-chat` | `text-agent-ornith-35b-mlx-4bit` |
@@ -1925,3 +1928,44 @@ projections in FP32. Contextual int8 output remains a separate contract.
 Both passed bounded full-checkpoint native CLI checks. Read the
 [qualification report](./qualification/pplx-embed-v2-9b-2026-10-09.md) for paired FP32 drift and limitations. Broad retrieval quality and maximum
 context remain unqualified. See [native usage](./runtime/pplx-embed-v2.md).
+
+### Bonsai 2 Small MLX
+
+The [Bonsai 2 Small collection](https://huggingface.co/collections/prism-ml/bonsai-2-small)
+provides Qwen3.5-based 2B, 4B, and 9B vision models. These managed installs load
+the original packed safetensors directly through Swift/MLX. No conversion or
+Python runtime is required.
+
+| Model ID | Upstream repository | Pinned revision |
+| --- | --- | --- |
+| `text-chat-bonsai-2-2b-2bit` | `prism-ml/Ternary-Bonsai-2-2B-mlx-2bit` | `1c6cbae21f8c38830ce337972b46fdae7b18eaaa` |
+| `text-chat-bonsai-2-4b-2bit` | `prism-ml/Ternary-Bonsai-2-4B-mlx-2bit` | `dff2caaa23fa8706164c44c10f1b58feb405f76a` |
+| `text-chat-bonsai-2-9b-2bit` | `prism-ml/Ternary-Bonsai-2-9B-mlx-2bit` | `f4e28a59531731c41b6dfac88cf271bd58f0a287` |
+
+The language weights use affine 2-bit groups of 128 with signed Hadamard
+transforms. The 2B and 4B packs use 512-element blocks and a shared input/output
+embedding. The output projection applies the forward rotation; token lookup
+applies its inverse. The 9B pack uses 4096-element blocks and a separate output
+head. Each pack includes an unrotated FP16 vision tower. MTP is not loaded.
+
+Thinking is enabled by default. Use `--no-thinking` for short answers, or allow
+at least 8,192 output tokens with `--max-tokens` for reasoning requests.
+All three use the published sampling defaults: temperature 1.0, top-p 0.95,
+and top-k 20. Generation stops on both IDs in `generation_config.json`.
+The declared context window is 262,144 tokens. Use a smaller request context
+to bound memory; the declared window is not a long-context quality result.
+
+```bash
+mere.run model pull text-chat-bonsai-2-2b-2bit
+mere.run text chat --model text-chat-bonsai-2-2b-2bit --context-size 8192 --no-thinking --prompt "Explain how a heat pump works."
+```
+
+Use `--image ./photo.png` with `text chat` to include an image. The 4B and 9B
+IDs use the same commands. Model support estimates start at 8 GB for 2B/4B and
+12 GB for 9B; context, images, and other resident models also consume memory.
+Shared admission checks still apply.
+
+The pinned configuration fixtures and packed projection tests cover native
+loading, tied output math, catalog routing, and defaults. Released-checkpoint
+text and vision parity, broad quality, maximum context, and throughput remain
+separate validation gates.
