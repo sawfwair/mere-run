@@ -121,8 +121,10 @@ public final class Drama3Codec {
 
     public func encode(_ samples: [Float]) throws -> [[Int32]] {
         guard !samples.isEmpty else { throw Drama3Error.invalid("reference audio is empty") }
-        // DAC pads to the encoder hop (512), then RVQ downsamples twice more.
-        let padded = samples + Array(repeating: 0, count: (512 - samples.count % 512) % 512)
+        // Released DAC.encode pads to the complete acoustic frame before the
+        // encoder and its two RVQ downsamplers, including the final partial frame.
+        let padded = samples + Array(repeating: 0,
+            count: (Self.samplesPerFrame - samples.count % Self.samplesPerFrame) % Self.samplesPerFrame)
         var h = try conv(MLXArray(padded).reshaped(1, padded.count, 1), "encoder.block.0.conv")
         for (i, stride) in [2, 4, 8, 8].enumerated() {
             let p = "encoder.block.\(i + 1).block"

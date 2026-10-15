@@ -19,6 +19,21 @@ final class Drama3Tests: MLXTestCase {
         XCTAssertTrue(Drama3TensorArchive.decodeE4M3(0x7f).isNaN)
     }
 
+    func testTensorReaderSeeksAndReportsTruncatedPayload() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".safetensors")
+        defer { try? FileManager.default.removeItem(at: file) }
+        try MLX.save(arrays: ["first": MLXArray([Float(1), 2]), "second": MLXArray([Float(3), 4])], url: file)
+        let reader = try Drama3TensorArchive(url: file)
+        XCTAssertEqual(try reader.read("second").asArray(Float.self), [3, 4])
+        XCTAssertEqual(try reader.read("first").asArray(Float.self), [1, 2])
+        let writer = try FileHandle(forWritingTo: file)
+        try writer.truncate(atOffset: 8)
+        try writer.close()
+        XCTAssertThrowsError(try reader.read("first")) { error in
+            XCTAssertTrue(error.localizedDescription.contains("truncated tensor data"))
+        }
+    }
+
     func testPublishedNamespacesExactlyCoverNonExpertRuntimeParameters() throws {
         struct Shape: Decodable { let shape: [Int] }
         let c = try config("config.json")

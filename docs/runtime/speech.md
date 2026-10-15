@@ -10,7 +10,7 @@ the audio does not leave the machine.
 
 | Command | What it does |
 | --- | --- |
-| `mere.run speech synthesize` | Generate speech from text using Qwen3-TTS or Breeze TTS 2. |
+| `mere.run speech synthesize` | Generate speech from text using Qwen3-TTS, Breeze TTS 2, or DRAMA-3. |
 | `mere.run speech transcribe` | Transcribe or translate speech to text using native ASR backends. |
 | `mere.run speech diarize` | Identify speaker time ranges as versioned JSON or RTTM using native MLX diarization. |
 | `mere.run speech diarize-live` | Emit incremental Nemotron 3 speaker activity from a microphone or PCM stdin. |
@@ -26,6 +26,7 @@ the audio does not leave the machine.
 - `speech-tts-qwen3-nano`
 - `speech-tts-qwen3-customvoice`
 - `speech-tts-breeze-2` (English and Chinese; research and non-commercial use only)
+- `speech-tts-drama-3` (CLI only; Fish Audio Community License; inline delivery and speaker tags)
 
 ### Speech-to-text
 
@@ -562,6 +563,19 @@ tokenizer files, receipts, and runtime allocations. The exporter checks free spa
 preserves the source, refuses an existing destination, and records SHA-256 hashes
 for source and exported files in `drama3-quantization.json`. Preserve its `LICENSE`
 and `Notice` files when moving the checkpoint.
+
+The [released-checkpoint export](../qualification/drama3-native-20261015/README.md)
+produced 27,408,212,020 bytes across 99 files and peaked at 2.62 GB of physical
+memory during conversion. The reader uses bounded tensor reads on external
+volumes; conversion and hashing release temporary buffers within each iteration.
+These measurements describe export, not inference memory.
+
+To use an exported checkpoint on an external volume through the model ID:
+
+```bash
+mere.run model location bind speech-tts-drama-3 /Volumes/T7/drama-3-q4 \
+  --accept-model-license
+```
 
 The catalog declares a 32 GB minimum and recommends 36 GB. These are capacity
 estimates from the pinned tensor shapes, not measured peak memory or performance.

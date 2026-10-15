@@ -18,10 +18,10 @@ struct SpeechSynthesize: AsyncParsableCommand {
         commandName: "synthesize",
         abstract: "Generate speech from text using a native TTS model.",
         discussion: """
-        Converts text to speech using Qwen3-TTS or Breeze TTS 2.
+        Converts text to speech using Qwen3-TTS, Breeze TTS 2, or DRAMA-3.
         Qwen3-TTS is downloaded from Hugging Face on first use. Breeze TTS 2
-        requires an explicit license-reviewed model pull for research and
-        non-commercial use.
+        and DRAMA-3 require an explicit license-reviewed model pull.
+        DRAMA-3 uses inline event and speaker tags for delivery control.
 
         The CustomVoice checkpoint (speech-tts-qwen3-customvoice) also speaks as a named speaker in
         style mode: \(Qwen3TTSResources.customVoiceSpeakers.joined(separator: ", ")).
@@ -32,6 +32,7 @@ struct SpeechSynthesize: AsyncParsableCommand {
           mere.run speech synthesize "Welcome to mere.run." --voice "A calm British male voice" -o welcome.wav
           mere.run speech synthesize "Welcome to mere.run." --model speech-tts-qwen3-customvoice --speaker ryan -o welcome.wav
           mere.run speech synthesize "Hello." --model speech-tts-breeze-2 --voice "A warm voice" -o breeze.wav
+          mere.run speech synthesize "[excited] Hello!" --model speech-tts-drama-3 --seed 42 -o drama.wav
         """
     )
 
@@ -74,7 +75,7 @@ struct SpeechSynthesize: AsyncParsableCommand {
     @Option(name: [.long], help: "Sampling temperature (default: 0.6).")
     var temperature: Float = TTSRequest.defaultTemperature
 
-    @Option(name: [.long], help: "Breeze TTS 2 sampling seed (unsigned integer).")
+    @Option(name: [.long], help: "Breeze TTS 2 or DRAMA-3 sampling seed (unsigned integer).")
     var seed: UInt64?
 
     @Option(name: [.customLong("cfg-scale")], help: "Breeze TTS 2 voice guidance scale (0–20; default: 4).")

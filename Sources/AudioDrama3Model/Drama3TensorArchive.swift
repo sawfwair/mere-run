@@ -3,8 +3,9 @@ import Foundation
 import MLX
 import MereRunTensor
 
-/// Typed, non-executing safetensors reader. FP8 bytes are decoded explicitly;
-/// MLX has no native E4M3FN storage dtype. Each read materializes only one tensor.
+/// Typed, non-executing safetensors reader with bounded file I/O. FP8 bytes are
+/// decoded explicitly; MLX has no native E4M3FN storage dtype. Each read
+/// materializes only one tensor, including on volumes that disallow safe mapping.
 public final class Drama3TensorArchive {
     public struct Tensor: Decodable {
         public let dtype: String
@@ -29,19 +30,27 @@ public final class Drama3TensorArchive {
             tensors = result
         }
     }
-    private let data: Data
+    private let handle: FileHandle
     private let dataStart: Int
     public let tensors: [String: Tensor]
 
     public init(url: URL) throws {
-        data = try Data(contentsOf: url, options: .mappedIfSafe)
-        guard data.count >= 8 else { throw Drama3Error.invalid("truncated safetensors header") }
-        let length = data.withUnsafeBytes { $0.loadUnaligned(as: UInt64.self).littleEndian }
-        guard length <= 64 * 1_024 * 1_024, length <= data.count - 8 else {
+        handle = try FileHandle(forReadingFrom: url)
+        let fileSize = try handle.seekToEnd()
+        try handle.seek(toOffset: 0)
+        guard fileSize >= 8, fileSize <= Int.max,
+              let prefix = try Self.readBytes(8, from: handle), prefix.count == 8 else {
+            throw Drama3Error.invalid("truncated safetensors header")
+        }
+        let length = prefix.withUnsafeBytes { $0.loadUnaligned(as: UInt64.self).littleEndian }
+        guard length > 0, length <= 64 * 1_024 * 1_024, length <= fileSize - 8 else {
             throw Drama3Error.invalid("invalid safetensors header length")
         }
         dataStart = 8 + Int(length)
-        tensors = try JSONDecoder().decode(Header.self, from: data.subdata(in: 8..<dataStart)).tensors
+        guard let header = try Self.readBytes(Int(length), from: handle), header.count == Int(length) else {
+            throw Drama3Error.invalid("truncated safetensors header")
+        }
+        tensors = try JSONDecoder().decode(Header.self, from: header).tensors
         for (name, tensor) in tensors {
             let widths = ["F8_E4M3": 1, "F8_E4M3FN": 1, "BF16": 2, "F16": 2, "F32": 4, "U32": 4]
             guard let width = widths[tensor.dtype], !tensor.shape.isEmpty,
@@ -55,11 +64,21 @@ public final class Drama3TensorArchive {
                 bytes = product.partialValue
             }
             guard tensor.offsets[0] >= 0, tensor.offsets[1] >= tensor.offsets[0],
-                  tensor.offsets[1] <= data.count - dataStart,
+                  tensor.offsets[1] <= Int(fileSize) - dataStart,
                   tensor.offsets[1] - tensor.offsets[0] == bytes else {
                 throw Drama3Error.invalid("tensor data range mismatch: \(name)")
             }
         }
+    }
+
+    deinit { try? handle.close() }
+
+    private static func readBytes(_ count: Int, from handle: FileHandle) throws -> Data? {
+        #if canImport(ObjectiveC)
+        return try autoreleasepool { try handle.read(upToCount: count) }
+        #else
+        return try handle.read(upToCount: count)
+        #endif
     }
 
     public static func decodeE4M3(_ byte: UInt8) -> Float {
@@ -74,7 +93,11 @@ public final class Drama3TensorArchive {
 
     public func read(_ name: String) throws -> MLXArray {
         guard let tensor = tensors[name] else { throw Drama3Error.invalid("missing tensor \(name)") }
-        let bytes = data.subdata(in: (dataStart + tensor.offsets[0])..<(dataStart + tensor.offsets[1]))
+        let count = tensor.offsets[1] - tensor.offsets[0]
+        try handle.seek(toOffset: UInt64(dataStart + tensor.offsets[0]))
+        guard let bytes = try Self.readBytes(count, from: handle), bytes.count == count else {
+            throw Drama3Error.invalid("truncated tensor data: \(name)")
+        }
         switch tensor.dtype {
         case "BF16": return MLXArray(bytes, tensor.shape, dtype: .bfloat16)
         case "F16": return MLXArray(bytes, tensor.shape, dtype: .float16)

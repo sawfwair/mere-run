@@ -44,6 +44,14 @@ final class RunStorageTests: XCTestCase {
         XCTAssertTrue(try absent.isUnchanged())
     }
 
+    func testArtifactHashIncludesFinalPartialChunk() throws {
+        let file = try root().appendingPathComponent("multi-chunk.bin")
+        try Data(repeating: 0, count: 1_048_593).write(to: file)
+        let artifact = try RunArtifact.read(file)
+        XCTAssertEqual(artifact.byteCount, 1_048_593)
+        XCTAssertEqual(artifact.sha256, "f2c67c81372d31a24e3fe5ac0c10685e97d8d6b671ace65d75fd243d3741f59e")
+    }
+
     func testRecordCodecPreservesWireFormattingAndPrivatePermissions() throws {
         struct Fixture: Codable, Equatable {
             let createdAt: Date

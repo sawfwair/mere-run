@@ -7,6 +7,16 @@ import XCTest
 @testable import MereRunCore
 
 final class Drama3QuantizationTests: MereRunCoreTestCase {
+    func testCodecRejectsUnverifiedCheckpointBeforeParsing() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data("unverified checkpoint".utf8).write(to: root.appendingPathComponent("codec.pth"))
+        XCTAssertThrowsError(try Drama3Resources.loadCodec(root: root)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("pinned DRAMA-3 codec SHA-256"))
+        }
+    }
+
     private func digest(_ url: URL) throws -> String {
         SHA256.hash(data: try Data(contentsOf: url)).map { String(format: "%02x", $0) }.joined()
     }

@@ -16,10 +16,13 @@ mere.run speech synthesize '<|speaker:0|> [sighs] Fine. [laughs] That seems fair
   --model ./drama-3-q4 --seed 42 --output ./scene.wav
 ```
 
-This example hasn't been validated with the released checkpoint. The source
-weights and codec require approximately 41.5 GB. The standalone Q4 files require
-approximately 27.4 GB, with additional space needed for runtime allocations.
-The exporter preserves the source and requires a new output directory.
+The Q4 export has been validated with the released checkpoint: 27.41 GB across
+99 files, with a 2.62 GB peak physical footprint during conversion. The scene
+generation example still requires speech qualification. The source weights and
+codec require approximately 41.5 GB. Inference needs additional memory.
+The exporter preserves the source and requires a new output directory. Use
+`model location bind speech-tts-drama-3 /path/to/drama-3-q4 --accept-model-license`
+to register a read-only checkpoint on an external volume.
 
 ## Controls and variants
 
@@ -47,7 +50,10 @@ The architecture reference is SGLang-Omni at
 
 Component tests cover published tensor shapes, prompt boundaries, an independent
 NumPy audio-tower reference, temporal caches, causal convolution, FP8 scales, and
-Q4 export/reload with source preservation and hash receipts. The 32 GB minimum
+Q4 export/reload with source preservation and hash receipts. The released DAC
+matches all 220 encoded positions in a synthetic reference probe; deterministic
+waveform decoding has RMSE 0.0001933 against the pinned upstream graph.
+The 32 GB minimum
 and 36 GB recommendation are estimates. Released-checkpoint speech quality, Q4
 quality loss, peak unified memory, and throughput remain unqualified.
 

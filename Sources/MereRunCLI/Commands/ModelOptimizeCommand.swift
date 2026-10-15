@@ -38,6 +38,7 @@ struct ModelOptimize: ParsableCommand {
                 throw ValidationError("DRAMA-3 Q4 export requires --output <new-directory>.")
             }
             #if !os(iOS)
+            try MLXBundleSupport.ensureAvailable(quiet: false)
             artifacts = try Drama3QuantizedCheckpoint.export(source: rootURL,
                 destination: URL(fileURLWithPath: output), progress: { completed, total in
                     if completed == total || completed.isMultiple(of: 256) {
