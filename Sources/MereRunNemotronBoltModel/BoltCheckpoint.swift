@@ -33,6 +33,17 @@ public enum BoltCheckpoint {
     }
 
     public static func loadShard(at url: URL) throws -> [String: MLXArray] {
+        // FileHandle bridges through autoreleased Foundation buffers. Drain
+        // them at the shard boundary after MLX has copied the tensor payloads;
+        // otherwise a full async load can retain a second checkpoint in RAM.
+        #if canImport(ObjectiveC)
+        return try autoreleasepool { try readShard(at: url) }
+        #else
+        return try readShard(at: url)
+        #endif
+    }
+
+    private static func readShard(at url: URL) throws -> [String: MLXArray] {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         let fileSize = try handle.seekToEnd()

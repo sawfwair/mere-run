@@ -315,13 +315,14 @@ public final class NemotronBoltModel {
     public func prefill(embeddings input: MLXArray, cache: NemotronBoltCache) -> MLXArray {
         precondition(cache.layers.count == blocks.count)
         var hidden = input
-        for (block, state) in zip(blocks, cache.layers) {
+        for (index, block) in blocks.enumerated() {
+            let state = cache.layers[index]
             hidden = block(hidden, state: state)
-            // Bound command-buffer work during multimodal/prompt prefill.
-            if input.dim(1) > 1 { MLX.eval(hidden) }
+            // Bound command buffers during prompt prefill and single-token decode.
+            if input.dim(1) > 1 || (index + 1).isMultiple(of: 8) { MLX.eval(hidden) }
         }
         let last = MLXFast.rmsNorm(hidden[0..., (hidden.dim(1) - 1)..., 0...], weight: norm, eps: config.language.normEps)
-        return head(last).reshaped(config.language.vocabSize)
+        return head(last)
     }
 
     public func lastPositionLogits(_ token: MLXArray, cache: NemotronBoltCache) -> MLXArray {

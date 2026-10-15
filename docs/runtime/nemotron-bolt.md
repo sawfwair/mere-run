@@ -33,6 +33,46 @@ The upstream checkpoint is pinned to
 Review the [OpenMDW-1.1 terms](https://openmdw.ai/license/1-1/) for the model
 materials. The repository does not bundle the checkpoint weights.
 
-Local structural and arithmetic tests do not establish released-checkpoint
-quality, throughput, peak process memory, or long-context behavior. Those
-measurements require a complete installed checkpoint and separate evidence.
+The [released-checkpoint diagnostic run](../qualification/nemotron35-bolt-checkpoint-2026-10-15.md)
+passed 8/8 text and 4/4 image probes on a 36 GiB M3 Max. The report separates
+debug-harness measurements, optimized CLI measurements, and peak process
+footprint. These synthetic probes do not establish broad capability,
+upstream parity, or long-context behavior.
+
+## Run checkpoint diagnostics
+
+Keep weights, fixtures, and raw results on a volume with room for the full
+checkpoint. For example, select an external model store and download cache:
+
+```bash
+export MERERUN_MODELS_DIR=/Volumes/T7/bolt/models
+mere.run model pull vision-chat-nemotron-35-bolt-24gb --cache-dir /Volumes/T7/bolt/hub-cache
+swift scripts/validation/prepare_nemotron_bolt_suite.swift /Volumes/T7/bolt/fixtures
+MERERUN_TEST_MLX_DEVICE=gpu \
+MERERUN_TEST_BOLT_ROOT="$MERERUN_MODELS_DIR/vision-chat-nemotron-35-bolt-24gb" \
+MERERUN_TEST_BOLT_SUITE=/Volumes/T7/bolt/fixtures/manifest.json \
+MERERUN_TEST_BOLT_OUTPUT=/Volumes/T7/bolt/results \
+/usr/bin/time -l swift test --filter NemotronBoltCheckpointTests
+python3 scripts/validation/summarize_nemotron_bolt.py \
+  /Volumes/T7/bolt/results --output /Volumes/T7/bolt/summary.json
+```
+
+Set `MERERUN_TEST_BOLT_CASES` to comma-separated case IDs for a subset, such
+as `smoke,ocr`. The harness acquires the shared inference admission lease. During active
+inference, the runtime also requests GPU residency through MLX's shared
+memory manager. That request is capped below Metal's recommended working
+set and ends with the request.
+It uses greedy decoding, a 4,096-token context limit, and the original
+checkpoint's text/image path. The suite contains small synthetic probes
+with exact expected answers and two capped decode throughput runs.
+
+Every completed case records its raw answer, prompt and generated token
+counts, load/prefill/decode times, wall time to the first visible piece,
+and peak memory. MLX allocation peaks reset per case and include resident
+weights. Process peak RSS and the kernel peak physical footprint are cumulative
+across the test process, including loading and earlier cases. These
+measures have different scopes and should be reported separately. The default SwiftPM harness is a debug build;
+identify optimized CLI measurements separately when reporting throughput.
+
+Exact-answer results on these probes do not establish broad capability,
+upstream implementation parity, or long-context quality.

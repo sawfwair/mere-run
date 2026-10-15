@@ -66,3 +66,18 @@ extension NemotronBoltIntegrationTests {
             "\(NemotronBoltResources.upstreamRepoID)@\(NemotronBoltResources.upstreamRevision)")
     }
 }
+
+extension NemotronBoltIntegrationTests {
+    func testWiredDemandRespectsDeviceWorkingSetAndExistingBaseline() {
+        let gibibyte = 1_073_741_824
+        XCTAssertEqual(NemotronBoltGenerator.wiredMemoryTargetBytes(recommended: nil), 0)
+        XCTAssertEqual(NemotronBoltGenerator.wiredMemoryTargetBytes(recommended: 0), 0)
+        XCTAssertEqual(NemotronBoltGenerator.wiredMemoryTargetBytes(recommended: 16 * gibibyte),
+                       16 * gibibyte - 1_048_576)
+        XCTAssertEqual(NemotronBoltGenerator.wiredMemoryTargetBytes(recommended: 32 * gibibyte),
+                       24_079_678_824 + 2 * gibibyte)
+        let policy = NemotronBoltWiredMemoryPolicy()
+        XCTAssertEqual(policy.limit(baseline: 1_024, activeSizes: [2_048, 4_096]), 4_096)
+        XCTAssertEqual(policy.limit(baseline: 8_192, activeSizes: [2_048, 4_096]), 8_192)
+    }
+}

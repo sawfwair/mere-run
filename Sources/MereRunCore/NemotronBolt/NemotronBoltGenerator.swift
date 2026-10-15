@@ -3,7 +3,7 @@ import MLX
 import MereRunNemotronBoltModel
 
 public actor NemotronBoltGenerator: ChatGenerator {
-    private static let prefillChunkSize = 128
+    private static let prefillChunkSize = 64
 
     private var model: NemotronBoltModel?
     private var tokenizer: Q35TokenizerAndTemplate?
@@ -24,23 +24,25 @@ public actor NemotronBoltGenerator: ChatGenerator {
         modelPath: String?,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> ChatResponse {
-        try await Stream.withNewDefaultStream {
-            guard request.lora == nil else {
-                throw NemotronBoltError.invalidCheckpoint("LoRA is not supported by this runtime")
+        return try await withWiredMemory {
+            try await Stream.withNewDefaultStream {
+                guard request.lora == nil else {
+                    throw NemotronBoltError.invalidCheckpoint("LoRA is not supported by this runtime")
+                }
+                guard !request.requiresJSON else {
+                    throw NemotronBoltError.invalidCheckpoint("constrained JSON is not supported")
+                }
+                let root = try await resolveRoot(
+                    modelPath: modelPath,
+                    progressHandler: progressHandler
+                )
+                let loadStart = Date()
+                try await ensureLoaded(rootURL: root, progressHandler: progressHandler)
+                let loadSeconds = Date().timeIntervalSince(loadStart)
+                var response = try await generate(request, progressHandler: progressHandler)
+                response.timing?.loadSeconds = loadSeconds
+                return response
             }
-            guard !request.requiresJSON else {
-                throw NemotronBoltError.invalidCheckpoint("constrained JSON is not supported")
-            }
-            let root = try await resolveRoot(
-                modelPath: modelPath,
-                progressHandler: progressHandler
-            )
-            let loadStart = Date()
-            try await ensureLoaded(rootURL: root, progressHandler: progressHandler)
-            let loadSeconds = Date().timeIntervalSince(loadStart)
-            var response = try await generate(request, progressHandler: progressHandler)
-            response.timing?.loadSeconds = loadSeconds
-            return response
         }
     }
 
@@ -48,12 +50,14 @@ public actor NemotronBoltGenerator: ChatGenerator {
         modelPath: String? = nil,
         progressHandler: (@Sendable (ChatProgress) -> Void)? = nil
     ) async throws {
-        try await Stream.withNewDefaultStream {
-            let root = try await resolveRoot(
-                modelPath: modelPath,
-                progressHandler: progressHandler
-            )
-            try await ensureLoaded(rootURL: root, progressHandler: progressHandler)
+        try await withWiredMemory {
+            try await Stream.withNewDefaultStream {
+                let root = try await resolveRoot(
+                    modelPath: modelPath,
+                    progressHandler: progressHandler
+                )
+                try await ensureLoaded(rootURL: root, progressHandler: progressHandler)
+            }
         }
     }
 
@@ -63,6 +67,36 @@ public actor NemotronBoltGenerator: ChatGenerator {
         config = nil
         loadedPath = nil
         Memory.clearCache()
+    }
+
+    private func withWiredMemory<Result: Sendable>(
+        _ body: () async throws -> Result
+    ) async throws -> Result {
+        let ticket = NemotronBoltWiredMemoryPolicy().ticket(size: Self.wiredMemoryTargetBytes())
+        _ = await ticket.start()
+        do {
+            try Task.checkCancellation()
+            let result = try await body()
+            _ = await ticket.end()
+            return result
+        } catch {
+            _ = await ticket.end()
+            throw error
+        }
+    }
+
+    static func wiredMemoryTargetBytes(recommended: Int?) -> Int {
+        guard let recommended else { return 0 }
+        let payloadAndWorkspace = Int(NemotronBoltConfig.checkpointWeightBytes) + 2 * 1_073_741_824
+        return min(payloadAndWorkspace, max(0, recommended - 1_048_576))
+    }
+
+    private static func wiredMemoryTargetBytes() -> Int {
+        #if os(macOS)
+        return wiredMemoryTargetBytes(recommended: GPU.maxRecommendedWorkingSetBytes())
+        #else
+        return 0
+        #endif
     }
 
     private func resolveRoot(
@@ -115,6 +149,7 @@ public actor NemotronBoltGenerator: ChatGenerator {
         guard request.messages.allSatisfy({ $0.audioUrl == nil && $0.videoUrl == nil }) else {
             throw NemotronBoltError.invalidCheckpoint("This Bolt runtime accepts text and images; audio and video inputs are unsupported")
         }
+        let prefillStart = Date()
         let processor = try JSONDecoder().decode(NemotronOmniPreprocessorConfig.self,
             from: Data(contentsOf: URL(fileURLWithPath: loadedPath).appendingPathComponent("preprocessor_config.json")))
         var messages = request.messages
@@ -150,7 +185,6 @@ public actor NemotronBoltGenerator: ChatGenerator {
         }
         promptEmbeddings = try NemotronOmniGenerator.replaceMediaEmbeddings(promptEmbeddings,
             promptTokens: promptTokens, placeholderTokenID: config.imageContextTokenID, replacements: replacements)
-        let prefillStart = Date()
         var offset = 0
         var initialLogits: MLXArray?
         while offset < promptTokens.count {
@@ -258,5 +292,11 @@ public actor NemotronBoltGenerator: ChatGenerator {
             logprobs: decode.logprobs,
             acceleration: ChatAccelerationDiagnostics(route: "nemotron-bolt-packed-native")
         )
+    }
+}
+
+struct NemotronBoltWiredMemoryPolicy: WiredMemoryPolicy, Hashable {
+    func limit(baseline: Int, activeSizes: [Int]) -> Int {
+        max(baseline, activeSizes.max() ?? baseline)
     }
 }
