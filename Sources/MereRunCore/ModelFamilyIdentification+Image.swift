@@ -29,6 +29,7 @@ extension ModelFamilyIdentifier {
     static func imageGenerateFamily(_ manifest: MereRunModelManifest) -> String? {
         switch try? ImageGenerationBackend(manifest: manifest) {
         case .flux1: "flux1"
+        case .flux3: "flux3"
         case .flux2Klein:
             switch manifest.variant {
             case .standard: "flux2-dev"
