@@ -1,5 +1,5 @@
 {
-  "status": "bounded_parity_passed_local_gate_blocked_by_locked_device",
+  "status": "bounded_parity_and_local_validation_complete",
   "change": "Explicit metal::precise::pow in the Prism vision rotary-frequency GPU path; separate unchanged MLX reciprocal/multiplication. CPU and other vision paths retain existing operations.",
   "protocol": {
     "checkpoint_sizes": [
@@ -2689,13 +2689,15 @@
   "local_validation": {
     "repository_gate": {
       "command": "./scripts/check.sh",
-      "passed": false,
+      "passed": true,
       "xctest": 5472,
       "xctest_skipped": 454,
-      "xctest_failures": 52,
+      "xctest_failures": 0,
       "swift_testing_passed": 193,
-      "log_sha256": "40948aaa5525826b0e88eaedfd4c41bc96ef2a8597a545a3ec7ac509e02e1cfd",
-      "blocker": "IOConsoleLocked=Yes; protected run-record files return EPERM after closing. All 52 failure reports are in run-record storage suites. Unlock the Mac and rerun the full gate."
+      "log": "check-unlocked.log",
+      "log_sha256": "ab7c9bfc959615d39e1e4c9bb02f65816d1729eba2a33a04669bf61d2cbb37e2",
+      "console_locked": false,
+      "note": "Rerun passed after unlocking; no runtime or test changes since e419af12."
     },
     "release_build_passed": true,
     "release_chart_semantic_matches": 3,
@@ -2706,7 +2708,21 @@
       "rotary_fixture_bitwise_equal": true
     },
     "lint_and_package_policy_passed": true,
-    "hosted_ci": "not run; no PR requested"
+    "hosted_ci": "not run; no PR requested",
+    "previous_repository_gate_attempts": [
+      {
+        "command": "./scripts/check.sh",
+        "passed": false,
+        "xctest": 5472,
+        "xctest_skipped": 454,
+        "xctest_failures": 52,
+        "swift_testing_passed": 193,
+        "log_sha256": "40948aaa5525826b0e88eaedfd4c41bc96ef2a8597a545a3ec7ac509e02e1cfd",
+        "blocker": "IOConsoleLocked=Yes; protected run-record files return EPERM after closing. All 52 failure reports are in run-record storage suites. Unlock the Mac and rerun the full gate."
+      }
+    ],
+    "documentation_build_passed": true,
+    "documentation_examples_passed": true
   },
   "post_run_integrity": {
     "models": [

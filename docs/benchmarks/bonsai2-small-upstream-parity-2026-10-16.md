@@ -32,7 +32,9 @@ The full-model result belongs to the preserved test executable and recorded sour
 
 The release build passed. Its SHA-256 is `6468cd000e7268c9ba1678892a96beccbf13f296fceacf970a4af7f72322d23a`; the tested executable and its preserved T7 copy match. All three CLI chart requests return PINE 9, CEDAR 4, and difference 5 under greedy sampling, thinking disabled, context 16,384, and a 256-token budget. All three wrap the JSON in Markdown fences, as upstream does: semantic scoring passes 3/3 and strict JSON scoring passes 0/3. These fresh-process checks are separate from resident throughput.
 
-The five focused GPU tests pass, including exact independent frequency fixtures for both head sizes. Lint, package policy, the release build, and all model parity checks pass. The complete repository gate is **blocked by the locked Mac**: 5,472 XCTest cases report 454 skips and 52 failures, all in protected run-record storage suites; 193 Swift Testing cases pass. macOS reports `IOConsoleLocked=Yes`, and closed protected records return permission errors. The storage codec explicitly requires unlocking before those records can be read. This run is retained as failed; the full gate must be rerun after unlocking. No storage protection or test expectation was changed.
+The five focused GPU tests pass, including exact independent frequency fixtures for both head sizes. The complete repository gate (`./scripts/check.sh`) passed after unlocking: 5,472 XCTest cases, 454 skips, zero failures, plus 193 Swift Testing cases. Lint, package policy, build, CLI help checks, documentation examples, docs build, and whitespace checks pass.
+
+The earlier locked-device attempt is preserved as failed: it reported 52 failures in protected run-record storage suites while macOS reported `IOConsoleLocked=Yes`. Those failures disappeared in the unlocked rerun without runtime or test changes. Both logs and their hashes remain in the evidence.
 
 All 50 checkpoint source files and all four input-image hashes still match their receipts. Corpus and protocol contents match committed baseline `c615cb30`. No hosted CI or PR publication was run.
 
