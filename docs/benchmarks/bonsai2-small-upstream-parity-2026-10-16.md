@@ -26,7 +26,7 @@ The comparison independently preprocesses and tokenizes native requests and expo
 
 New artifacts are under `/Volumes/T7/mere-run-qualification/bonsai2-small-2026-10-15/parity-precise-2026-10-16`. The previous failed comparisons remain intact under `parity`. Immutable reference exports are reused through links; all three native models loaded their original pinned checkpoints and acquired standard shared admission independently.
 
-The full-model result belongs to the preserved test executable and recorded source hashes. Release smoke and the final local gate are recorded separately below. This bounded comparison does not establish broad quality, sampled-output equivalence, maximum-context accuracy, or cross-device behavior. The original 16-case quality corpus and resident throughput have not been rerun for the corrected executable.
+The full-model result belongs to the preserved test executable and recorded source hashes. Release smoke and the final local gate are recorded separately below. This bounded comparison does not establish broad quality, sampled-output equivalence, maximum-context accuracy, or cross-device behavior. The original 16-case quality corpus and resident throughput were subsequently rerun for the corrected release; see the [fixed-runtime quality and throughput report](./bonsai2-small-fixed-2026-10-16.md).
 
 ## Release smoke and local validation
 

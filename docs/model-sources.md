@@ -1975,8 +1975,10 @@ bounded text and vision quality, format failures, reasoning token caps, and
 resident throughput for all three models on the earlier executable. The
 [upstream parity report](./benchmarks/bonsai2-small-upstream-parity-2026-10-16.md)
 records the corrected implementation: all three packs pass every bounded text
-and vision gate. Broad quality, maximum context, smaller-memory hardware, and
-corrected-runtime resident throughput remain separate gates.
+and vision gate. The [fixed-runtime rerun](./benchmarks/bonsai2-small-fixed-2026-10-16.md)
+records fresh text and vision quality checks and repeated resident throughput
+for all three checkpoints, including strict-format failures and timing spread.
+Broad quality, maximum context, and smaller-memory hardware remain unqualified.
 
 For resident text throughput measurements, use `model benchmark q36-mtp` with
 one of the three Small IDs and `--variants baseline`. Set `--warmups`,
