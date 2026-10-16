@@ -1,0 +1,321 @@
+{
+  "binary_sha256": "a1e3224fae3c4c85d54bcae618de8602c5cbfdd041105292f535ffbef25d54b3",
+  "collector_sha256": "1b2a625b607ed3a08a22fb167078dd7bc1b631cc9c97b75f0967c778bdfa9a60",
+  "case_manifest_sha256": "2c4f8b2f3cb1b2eb4497e38d32600592796b57c24ae1cb35cee86227b7bce03f",
+  "raw_results_sha256": "36e3f67f9cd8e3e20eb7d1aaabe0f7a6d9746b3cbbafcc7e80d48af622fea459",
+  "models": [
+    {
+      "size": "2B",
+      "cases": 16,
+      "strict_passed": 11,
+      "groups": {
+        "grounded": {
+          "cases": 8,
+          "strict_passed": 7
+        },
+        "code": {
+          "cases": 2,
+          "strict_passed": 1,
+          "tests_passed": 9,
+          "tests_total": 10
+        },
+        "vision": {
+          "cases": 4,
+          "strict_passed": 1
+        },
+        "arithmetic": {
+          "cases": 1,
+          "strict_passed": 1
+        },
+        "reasoning": {
+          "cases": 1,
+          "strict_passed": 1
+        }
+      },
+      "token_caps": 1,
+      "median_request_seconds": 6.630206108093262,
+      "fence_recovery_only": [
+        {
+          "case": "2b-vision-shapes",
+          "removed_one_outer_fence": false,
+          "passed": false,
+          "checks": {
+            "heading": false,
+            "red_circles": true,
+            "blue_squares": true,
+            "green_triangles": true
+          }
+        },
+        {
+          "case": "2b-vision-receipt",
+          "removed_one_outer_fence": false,
+          "passed": true,
+          "checks": {
+            "date": true,
+            "total": true,
+            "apples_quantity": true,
+            "tea_unit_price": true
+          }
+        },
+        {
+          "case": "2b-vision-chart",
+          "removed_one_outer_fence": true,
+          "passed": true,
+          "checks": {
+            "largest": true,
+            "largest_count": true,
+            "smallest": true,
+            "smallest_count": true,
+            "difference": true
+          }
+        },
+        {
+          "case": "2b-vision-photo",
+          "removed_one_outer_fence": true,
+          "passed": true,
+          "checks": {
+            "people": true,
+            "orange_suit": true,
+            "helmet": true,
+            "us_flag": true,
+            "space_shuttle": true
+          }
+        }
+      ],
+      "failures": [
+        {
+          "case": "2b-grounded-7",
+          "finish_reason": "length",
+          "completion_tokens": 4096,
+          "response_sha256": "d46de35ca1c32a85a9cc32cc08282bc8b5083e786c94213c9b9c31c6c15718d5"
+        },
+        {
+          "case": "2b-code-merge_intervals",
+          "finish_reason": "stop",
+          "completion_tokens": 462,
+          "response_sha256": "e356e0f04ef295eeaff2a404f6c3ef98d1a21c6bc7052a2e518d0a648a762091"
+        },
+        {
+          "case": "2b-vision-shapes",
+          "finish_reason": "stop",
+          "completion_tokens": 1930,
+          "response_sha256": "f2ba0516851390c31cca4c437edcf63bf5f0dbeb2186b4a3f3512a5aae16d8a9"
+        },
+        {
+          "case": "2b-vision-chart",
+          "finish_reason": "stop",
+          "completion_tokens": 466,
+          "response_sha256": "41c725c9a12d919ee82b1aa9679ccb24996f7783e619e789387a0441de82c131"
+        },
+        {
+          "case": "2b-vision-photo",
+          "finish_reason": "stop",
+          "completion_tokens": 237,
+          "response_sha256": "444b7910cc632590c777d3e6b3c4595c06012510783cd15c687aa78cbdc55029"
+        }
+      ]
+    },
+    {
+      "size": "4B",
+      "cases": 16,
+      "strict_passed": 13,
+      "groups": {
+        "grounded": {
+          "cases": 8,
+          "strict_passed": 6
+        },
+        "code": {
+          "cases": 2,
+          "strict_passed": 2,
+          "tests_passed": 10,
+          "tests_total": 10
+        },
+        "vision": {
+          "cases": 4,
+          "strict_passed": 3
+        },
+        "arithmetic": {
+          "cases": 1,
+          "strict_passed": 1
+        },
+        "reasoning": {
+          "cases": 1,
+          "strict_passed": 1
+        }
+      },
+      "token_caps": 1,
+      "median_request_seconds": 11.051898956298828,
+      "fence_recovery_only": [
+        {
+          "case": "4b-vision-shapes",
+          "removed_one_outer_fence": false,
+          "passed": false,
+          "checks": {
+            "heading": false,
+            "red_circles": true,
+            "blue_squares": true,
+            "green_triangles": true
+          }
+        },
+        {
+          "case": "4b-vision-receipt",
+          "removed_one_outer_fence": false,
+          "passed": true,
+          "checks": {
+            "date": true,
+            "total": true,
+            "apples_quantity": true,
+            "tea_unit_price": true
+          }
+        },
+        {
+          "case": "4b-vision-chart",
+          "removed_one_outer_fence": false,
+          "passed": true,
+          "checks": {
+            "largest": true,
+            "largest_count": true,
+            "smallest": true,
+            "smallest_count": true,
+            "difference": true
+          }
+        },
+        {
+          "case": "4b-vision-photo",
+          "removed_one_outer_fence": false,
+          "passed": true,
+          "checks": {
+            "people": true,
+            "orange_suit": true,
+            "helmet": true,
+            "us_flag": true,
+            "space_shuttle": true
+          }
+        }
+      ],
+      "failures": [
+        {
+          "case": "4b-grounded-3",
+          "finish_reason": "length",
+          "completion_tokens": 4096,
+          "response_sha256": "65a43eafc3a75daeef0ae4f3d95d13c90e4f3578c1308300645f7f9ad9a0e5b9"
+        },
+        {
+          "case": "4b-grounded-7",
+          "finish_reason": "stop",
+          "completion_tokens": 2931,
+          "response_sha256": "800ffabe0ce08505f325a85c2ace262054c50e7f669c7051928d95c4e6de0c24"
+        },
+        {
+          "case": "4b-vision-shapes",
+          "finish_reason": "stop",
+          "completion_tokens": 229,
+          "response_sha256": "4d685f8bf394421f0c96e4ab67654090efd2a43eaebe843e6afa7a981a5261a1"
+        }
+      ]
+    },
+    {
+      "size": "9B",
+      "cases": 16,
+      "strict_passed": 13,
+      "groups": {
+        "grounded": {
+          "cases": 8,
+          "strict_passed": 7
+        },
+        "code": {
+          "cases": 2,
+          "strict_passed": 2,
+          "tests_passed": 10,
+          "tests_total": 10
+        },
+        "vision": {
+          "cases": 4,
+          "strict_passed": 2
+        },
+        "arithmetic": {
+          "cases": 1,
+          "strict_passed": 1
+        },
+        "reasoning": {
+          "cases": 1,
+          "strict_passed": 1
+        }
+      },
+      "token_caps": 0,
+      "median_request_seconds": 12.14033055305481,
+      "fence_recovery_only": [
+        {
+          "case": "9b-vision-shapes",
+          "removed_one_outer_fence": true,
+          "passed": true,
+          "checks": {
+            "heading": true,
+            "red_circles": true,
+            "blue_squares": true,
+            "green_triangles": true
+          }
+        },
+        {
+          "case": "9b-vision-receipt",
+          "removed_one_outer_fence": false,
+          "passed": true,
+          "checks": {
+            "date": true,
+            "total": true,
+            "apples_quantity": true,
+            "tea_unit_price": true
+          }
+        },
+        {
+          "case": "9b-vision-chart",
+          "removed_one_outer_fence": true,
+          "passed": true,
+          "checks": {
+            "largest": true,
+            "largest_count": true,
+            "smallest": true,
+            "smallest_count": true,
+            "difference": true
+          }
+        },
+        {
+          "case": "9b-vision-photo",
+          "removed_one_outer_fence": false,
+          "passed": true,
+          "checks": {
+            "people": true,
+            "orange_suit": true,
+            "helmet": true,
+            "us_flag": true,
+            "space_shuttle": true
+          }
+        }
+      ],
+      "failures": [
+        {
+          "case": "9b-grounded-7",
+          "finish_reason": "stop",
+          "completion_tokens": 771,
+          "response_sha256": "400c28b6a6fa53d52b37751a4f0486e83e779d675b493488f1fba33467acb301"
+        },
+        {
+          "case": "9b-vision-shapes",
+          "finish_reason": "stop",
+          "completion_tokens": 334,
+          "response_sha256": "3ad3c19cee2b8c27594ce1b942629e8725272d28f17b5bca37269411d92493fc"
+        },
+        {
+          "case": "9b-vision-chart",
+          "finish_reason": "stop",
+          "completion_tokens": 480,
+          "response_sha256": "41c725c9a12d919ee82b1aa9679ccb24996f7783e619e789387a0441de82c131"
+        }
+      ]
+    }
+  ],
+  "strict_passed": 37,
+  "cases": 48,
+  "limits": "Single unseeded trial, unchanged strict scoring and 4096-token budget. Fence recovery is separately labeled and does not change primary scores. Two named-count formulas are semantically valid but fail the original literal numeric-operand checks; retained as failures.",
+  "quality_timing_scope": "CPU-only compilation overlapped some quality requests; wall-time fields are retained for diagnosis and are not comparable throughput measurements."
+}

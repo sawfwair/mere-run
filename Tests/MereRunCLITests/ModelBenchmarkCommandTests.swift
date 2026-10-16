@@ -3,6 +3,18 @@ import XCTest
 @testable import MereRunCore
 
 final class ModelBenchmarkCommandTests: XCTestCase {
+    func testBonsai2SmallBenchmarkAcceptsResidentBaseline() throws {
+        for modelID in [Q35Resources.bonsai2TwoBModelId, Q35Resources.bonsai2FourBModelId,
+                        Q35Resources.bonsai2NineBModelId] {
+            let command = try ModelBenchmarkQ36MTP.parse([
+                "--model", modelID, "--variants", "baseline", "--repetitions", "3",
+                "--warmups", "1", "--warmup-tokens", "128", "--decode-tokens", "512",
+            ])
+            XCTAssertEqual(command.model, modelID)
+            XCTAssertEqual(try command.parsedVariants().map(\.name), ["baseline"])
+        }
+    }
+
     func testQwenBenchmarkParsesResidentMeasurementsAndVariantOrder() throws {
         let command = try ModelBenchmarkQ36MTP.parse([
             "--repetitions", "3", "--warmups", "2", "--warmup-tokens", "512",

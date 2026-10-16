@@ -37,6 +37,30 @@ final class Q35RequestStreamTests: MereRunCoreTestCase {
         }
     }
 
+    func testBonsaiRequestsOwnCompiledGraphsAcrossModelsAndReusedStreams() async {
+        var previousOwner: Q35CompiledOperations?
+        for model in [Q35Resources.bonsai2FourBModelId, Q35Resources.bonsai2TwoBModelId,
+                      Q35Resources.bonsai2NineBModelId] {
+            let generator = Q35Generator(modelId: model)
+            var firstStream: MLX.Stream?
+            for _ in 0..<2 {
+                let owner = await generator.withRequestStream {
+                    let current = Q35CompiledOperations.current
+                    XCTAssertEqual(current.stream, StreamOrDevice.default.stream)
+                    if let firstStream { XCTAssertEqual(current.stream, firstStream) }
+                    firstStream = current.stream
+                    await Task.yield()
+                    XCTAssertTrue(current === Q35CompiledOperations.current)
+                    return current
+                }
+                if let previousOwner {
+                    XCTAssertFalse(owner === previousOwner, "A previous model or request must not own this graph")
+                }
+                previousOwner = owner
+            }
+        }
+    }
+
     func testThrownRequestReturnsItsStreamForReuse() async {
         let generator = Q35Generator()
         let first = await generator.withRequestStream { StreamOrDevice.default.stream }

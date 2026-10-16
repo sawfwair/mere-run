@@ -230,6 +230,9 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
             throw ValidationError("Specify either --prompt or --prompt-file, not both.")
         }
         let supportedModels = [
+            Q35Resources.bonsai2TwoBModelId,
+            Q35Resources.bonsai2FourBModelId,
+            Q35Resources.bonsai2NineBModelId,
             Q35Resources.q36NanoModelId,
             Q35Resources.q38TwentySevenBModelId,
             Q35Resources.q38TwentySevenB4BitModelId,

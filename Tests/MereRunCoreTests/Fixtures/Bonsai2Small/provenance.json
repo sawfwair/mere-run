@@ -1,0 +1,53 @@
+[
+  {
+    "model_id": "text-chat-bonsai-2-2b-2bit",
+    "repo_id": "prism-ml/Ternary-Bonsai-2-2B-mlx-2bit",
+    "revision": "1c6cbae21f8c38830ce337972b46fdae7b18eaaa",
+    "config_sha256": "f8d80cb7fd148b8841e63051c337d2758b4bc16243c577d35eaab6779534b591",
+    "weights": {
+      "rfilename": "model.safetensors",
+      "blobId": "fb3e304b756a4493feab0dc87ee1c3aebc63f893",
+      "size": 1200284784,
+      "lfs": {
+        "sha256": "da5095b9f34d7f0d5094090afeeadf124eef821c75136dc28957ce586ae7ac0c",
+        "size": 1200284784,
+        "pointerSize": 135
+      }
+    },
+    "license": "Apache-2.0"
+  },
+  {
+    "model_id": "text-chat-bonsai-2-4b-2bit",
+    "repo_id": "prism-ml/Ternary-Bonsai-2-4B-mlx-2bit",
+    "revision": "dff2caaa23fa8706164c44c10f1b58feb405f76a",
+    "config_sha256": "119ae9e731281a52b8a590edc6971a6f95c8b283cd6bb215f12b1f172e587b23",
+    "weights": {
+      "rfilename": "model.safetensors",
+      "blobId": "71fe6170a7a66f0d5d2e208c510c807e6063baf9",
+      "size": 1871365704,
+      "lfs": {
+        "sha256": "432f48d0edcb8da2e6a4e0c96078588362397e2603e7fdea99957babfe968259",
+        "size": 1871365704,
+        "pointerSize": 135
+      }
+    },
+    "license": "Apache-2.0"
+  },
+  {
+    "model_id": "text-chat-bonsai-2-9b-2bit",
+    "repo_id": "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit",
+    "revision": "f4e28a59531731c41b6dfac88cf271bd58f0a287",
+    "config_sha256": "b028784e087316b7ce0fb7ae3d2d6eaeb0b15144dd3f234da4c5d57ef1ffbacb",
+    "weights": {
+      "rfilename": "model.safetensors",
+      "blobId": "09034d322c8dda6b9a9d5c437ea023f0d6838d13",
+      "size": 3462149260,
+      "lfs": {
+        "sha256": "b8ebd13459dcd53504432a4a0a797287c3a4c00d80835466dbb499f05b7512bb",
+        "size": 3462149260,
+        "pointerSize": 135
+      }
+    },
+    "license": "Apache-2.0"
+  }
+]

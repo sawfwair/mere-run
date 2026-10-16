@@ -1,5 +1,6 @@
 import Foundation
 import MLX
+import MLXFast
 import MLXNN
 
 enum VisionTowerError: LocalizedError {
@@ -48,6 +49,31 @@ package final class QwenVisionTower: Module {
     case embeddingDType
   }
   package var positionEmbeddingArithmetic: PositionEmbeddingArithmetic = .float32
+
+  /// Preserve the published Conv3d accumulation instead of flattening to GEMM.
+  package func useCheckpointPatchProjection() {
+    patchEmbed.useConvolution = true
+  }
+
+  private var checkpointRotaryFrequencies = false
+
+  #if os(macOS)
+  // Explicit precision is required: the default Metal pow intrinsic can differ
+  // across library builds, and its rounding amplifies through FP16 vision blocks.
+  private static let checkpointPower = MLXFast.metalKernel(
+    name: "qwen_vision_checkpoint_power",
+    inputNames: ["base", "exponents"],
+    outputNames: ["powers"],
+    source: """
+      uint i = thread_position_in_grid.x;
+      powers[i] = metal::precise::pow(float(base), float(exponents[i]));
+      """
+  )
+  #endif
+
+  package func useCheckpointRotaryFrequencies() {
+    checkpointRotaryFrequencies = true
+  }
 
   @ModuleInfo(key: "patch_embed") private var patchEmbed: QwenVisionPatchEmbed
   @ModuleInfo(key: "patch_merger") private var patchMerger: QwenVisionPatchMerger
@@ -379,8 +405,17 @@ package final class QwenVisionTower: Module {
     var weightList: [[Float32]] = [[], [], [], []]
 
     for (t, h, w) in gridThw {
-      let hIdxs = (0..<h).map { Float32($0) * Float32(numGridPerSide - 1) / Float32(max(1, h - 1)) }
-      let wIdxs = (0..<w).map { Float32($0) * Float32(numGridPerSide - 1) / Float32(max(1, w - 1)) }
+      let hIdxs: [Float32]
+      let wIdxs: [Float32]
+      if positionEmbeddingArithmetic == .embeddingDType {
+        // Match the reference's FP32 linspace before rounding interpolation
+        // coefficients to the checkpoint dtype.
+        hIdxs = MLX.linspace(Float32(0), Float32(numGridPerSide - 1), count: h).asArray(Float32.self)
+        wIdxs = MLX.linspace(Float32(0), Float32(numGridPerSide - 1), count: w).asArray(Float32.self)
+      } else {
+        hIdxs = (0..<h).map { Float32($0) * Float32(numGridPerSide - 1) / Float32(max(1, h - 1)) }
+        wIdxs = (0..<w).map { Float32($0) * Float32(numGridPerSide - 1) / Float32(max(1, w - 1)) }
+      }
 
       for hi in 0..<h {
         let hIdx = hIdxs[hi]
@@ -672,6 +707,30 @@ package final class QwenVisionTower: Module {
   }
 
   private func makeRotaryTable(maxSize: Int, dtype: DType) -> MLXArray {
+    if checkpointRotaryFrequencies {
+      // The reference computes a positive FP32 power, then its reciprocal.
+      // powf(theta, -exponent) differs by an ULP and can amplify through FP16 blocks.
+      let exponents = MLX.arange(0, rotaryInnerDim, step: 2).asType(.float32) / Float(rotaryInnerDim)
+      let powers: MLXArray
+      #if os(macOS)
+      if Device.defaultDevice().deviceType == .gpu {
+        powers = Self.checkpointPower(
+          [MLXArray(ropeTheta), exponents],
+          grid: (exponents.size, 1, 1),
+          threadGroup: (exponents.size, 1, 1),
+          outputShapes: [exponents.shape],
+          outputDTypes: [.float32]
+        )[0]
+      } else {
+        powers = MLX.pow(MLXArray(ropeTheta), exponents)
+      }
+      #else
+      powers = MLX.pow(MLXArray(ropeTheta), exponents)
+      #endif
+      let inverse = MLXArray(Float(1)) / powers
+      let positions = MLX.arange(maxSize).asType(.float32)
+      return (positions.expandedDimensions(axis: 1) * inverse.expandedDimensions(axis: 0)).asType(dtype)
+    }
     let count = max(1, rotaryHalfDim)
     var table: [Float32] = []
     table.reserveCapacity(maxSize * count)

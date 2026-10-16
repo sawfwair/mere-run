@@ -63,7 +63,11 @@ process exit, so allocating streams per request accumulates command queues in
 long-running API sessions. Graph owners remain separate for each request even
 when the stream context is reused. Supported short decode and verification blocks submit
 asynchronously, and permanent greedy MTP fallback uses the pipelined target
-decoder. Other model IDs keep their existing scheduling defaults. Set
+decoder. Bonsai 2 Small (2B, 4B, and 9B) also owns compiled activation graphs per request;
+this prevents the first-loaded model's stream from serializing later models in
+a resident API session. Its other scheduling features retain their existing
+defaults. See the [Small throughput comparison](../../../docs/benchmarks/bonsai2-small-throughput-2026-10-16.md).
+Other model IDs keep their existing scheduling defaults. Set
 `MERERUN_Q35_SCOPED_COMPILE=0`, `MERERUN_Q35_ASYNC_DECODE_BLOCKS=0`, or
 `MERERUN_Q35_MTP_PIPELINED_FALLBACK=0` to disable an individual change for
 comparison. The draft-cost default remains 0.18, with generation blocks of

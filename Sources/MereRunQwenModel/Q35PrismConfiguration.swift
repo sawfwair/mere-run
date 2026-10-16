@@ -58,8 +58,7 @@ package struct Q35PrismConfiguration: Decodable {
     package func replacements(model: Module, arrays: [String: MLXArray]) throws -> [(String, Module)] {
         guard schemaVersion == 2, modelType == "prism_hadamard_qwen35",
               tensorNamespace == "mlx-vlm-qwen3_5", gdnActivationLayout == "grouped",
-              quantization.bits == 2, quantization.groupSize == 128, quantization.mode == "affine",
-              !tieWordEmbeddings else {
+              quantization.bits == 2, quantization.groupSize == 128, quantization.mode == "affine" else {
             throw LoadError.unsupportedContract
         }
         let leaves = Dictionary(uniqueKeysWithValues: model.leafModules().flattened())
@@ -102,7 +101,10 @@ package struct Q35PrismConfiguration: Decodable {
             result.append((record.path, replacement))
         }
         let packedPaths = Set(arrays.keys.filter { $0.hasSuffix(".scales") }.map { String($0.dropLast(7)) })
-        guard seen == packedPaths, !seen.isEmpty else { throw LoadError.unsupportedContract }
+        guard seen == packedPaths, !seen.isEmpty,
+              !tieWordEmbeddings || (seen.contains("model.embed_tokens") && !seen.contains("lm_head")) else {
+            throw LoadError.unsupportedContract
+        }
         return result
     }
 }

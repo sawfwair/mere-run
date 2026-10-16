@@ -1,6 +1,7 @@
 import Foundation
 import MLX
 import MLXNN
+import MLXFast
 import XCTest
 @testable import MereRunCore
 @testable import MereRunQwenModel
@@ -84,6 +85,11 @@ final class Bonsai2Tests: MereRunCoreTestCase {
     }
 
     func testNativeLoaderInstallsRotatedModulesAndRejectsMissingOrdinaryWeights() throws {
+        try checkNativeLoader(tied: false)
+        try checkNativeLoader(tied: true)
+    }
+
+    private func checkNativeLoader(tied: Bool) throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -100,11 +106,16 @@ final class Bonsai2Tests: MereRunCoreTestCase {
          "modules":[
           {"path":"model.embed_tokens","block":512,"embedding":true,"dtype":"float16"},
           {"path":"lm_head","block":512,"embedding":false,"dtype":"float16"}]}
-        """.utf8)
+        """.replacingOccurrences(of: "\"tie_word_embeddings\":false", with: "\"tie_word_embeddings\":\(tied)")
+            .replacingOccurrences(
+                of: tied ? ",\n  {\"path\":\"lm_head\",\"block\":512,\"embedding\":false,\"dtype\":\"float16\"}" : "__none__",
+                with: ""
+            ).utf8)
         try configData.write(to: root.appendingPathComponent("config.json"))
         let config = try JSONDecoder().decode(Q35Config.self, from: configData)
-        var arrays: [String: MLXArray] = ["language_model.model.norm.weight": MLXArray.ones([512])]
-        for path in ["model.embed_tokens", "lm_head"] {
+        let ordinaryScale = MLXArray((0..<512).map { [Float(0.0001), 0.1, 0.4, 1.7][$0 % 4] }).asType(.float16)
+        var arrays: [String: MLXArray] = ["language_model.model.norm.weight": ordinaryScale]
+        for path in tied ? ["model.embed_tokens"] : ["model.embed_tokens", "lm_head"] {
             let base = "language_model." + path
             arrays[base + ".weight"] = MLXArray.zeros([8, 32], dtype: .uint32)
             arrays[base + ".scales"] = MLXArray.ones([8, 4])
@@ -118,9 +129,18 @@ final class Bonsai2Tests: MereRunCoreTestCase {
         try generator.loadTextWeights(into: model, from: Q35Resources(rootURL: root), groupSize: 128, bits: 2)
         let leaves = Dictionary(uniqueKeysWithValues: model.leafModules().flattened())
         XCTAssertTrue(leaves["model.embed_tokens"] is Q35PrismEmbedding)
-        XCTAssertTrue(leaves["lm_head"] is Q35PrismLinear)
+        if tied {
+            XCTAssertNil(leaves["lm_head"])
+            XCTAssertEqual(model.logits(from: MLXArray.ones([1, 1, 512])).shape, [1, 1, 8])
+        } else {
+            XCTAssertTrue(leaves["lm_head"] is Q35PrismLinear)
+        }
         let norm = try XCTUnwrap(model.parameters().flattened().first { $0.0 == "model.norm.weight" }?.1)
-        XCTAssertEqual(MLX.max(MLX.abs(norm)).item(Float.self), 0)
+        XCTAssertEqual(norm.dtype, .float16)
+        XCTAssertEqual(norm.asArray(Float.self), ordinaryScale.asArray(Float.self))
+        let input = MLXArray((0..<512).map { Float($0 % 13 - 6) / 8 }).reshaped(1, 1, 512).asType(.float16)
+        let expected = MLXFast.rmsNorm(input, weight: ordinaryScale, eps: config.textConfig.rmsNormEps)
+        XCTAssertEqual(model.model.norm(input).asArray(Float.self), expected.asArray(Float.self))
         arrays.removeValue(forKey: "language_model.model.norm.weight")
         try MLX.save(arrays: arrays, url: weightsURL)
         do {

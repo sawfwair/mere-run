@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add pinned Bonsai 2 Small 2B, 4B, and 9B vision chat packs to the native Swift/MLX runtime,
+  including Hadamard-aware tied output embeddings for the 2B and 4B packs.
+
+- Preserve Bonsai 2 checkpoint RMS scales and vision arithmetic, including
+  bicubic Small-pack image preprocessing, FP16 position interpolation, Conv3d
+  patch projection, and the upstream rotary-frequency formula. Add independent
+  checkpoint parity evidence for all three Small packs. Use the precise Metal
+  power intrinsic for vision rotary frequencies to match checkpoint rounding.
+
 - Add experimental native Swift/MLX FLUX 3 Klein generation and ordered reference
   editing through `image-flux3-klein`, loading the pinned original BF16 package
   directly. Use 16-step flow-map sampling at CFG 1, explicit gated downloads,

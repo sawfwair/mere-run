@@ -1709,3 +1709,20 @@ The model weights use the separate FLUX Kommunity License v1.0, preserved in
 Managed downloads require explicit local acceptance and Hugging Face access.
 The bundled Qwen3-VL text encoder uses Apache-2.0. The numerical test fixtures
 contain synthetic weights, not pretrained model parameters.
+
+## Bonsai 2 Small model packs
+
+The optional Bonsai 2 Small 2B, 4B, and 9B managed models use Prism ML's
+Apache-2.0 MLX packs derived from Alibaba Cloud's Apache-2.0 Qwen3.5 models.
+The pinned source repositories and revisions are listed in
+`docs/model-sources.md`. The configuration fixtures in
+`Tests/MereRunCoreTests/Fixtures/Bonsai2Small/` come from those revisions;
+`provenance.json` records their SHA-256 hashes and upstream weight identities.
+
+Copyright 2026-present Prism ML, Inc. Created using Bonsai by Prism ML.
+Qwen3.5: Copyright 2026 Alibaba Cloud.
+
+Managed pulls retain the upstream `LICENSE` and `NOTICE.txt` files. No model
+weights or upstream Python runtime are bundled in this repository. The Swift
+tied output implementation follows the signed Hadamard and affine packed
+weight contract documented by the packs' `runtime/runtime.py`.

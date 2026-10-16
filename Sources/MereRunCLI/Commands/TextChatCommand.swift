@@ -28,6 +28,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-gemma4-12b-4bit (Gemma 4 12B MLX 4-bit, default on Apple Silicon)
           - text-chat-q36-nano (Qwen3.6-35B-A3B OptiQ 4-bit)
           - text-chat-bonsai-27b-1bit (Bonsai 27B packed 1-bit Qwen3.6 vision/reasoning model)
+          - text-chat-bonsai-2-{2b,4b,9b}-2bit (Bonsai 2 Small Hadamard 2-bit Qwen3.5 vision models)
           - text-chat-bonsai-2-27b-2bit (Bonsai 2 27B Hadamard 2-bit Qwen3.8 vision/reasoning model)
           - text-chat-bonsai-27b-2bit (Ternary Bonsai 27B packed 2-bit Qwen3.6 vision/reasoning model)
           - text-chat-q36-nano-gguf (Qwen3.6-35B-A3B GGUF, default on Linux CUDA)
@@ -60,7 +61,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-psi-agent
         Models are cached under ~/Library/Application Support/MereRun/models/<model-id>.
         Thinking output is hidden by default; pass --thinking to include it.
-        Bonsai 27B and R1-style lanes (text-agent-ornith-*) generate with thinking enabled even
+        Bonsai and R1-style lanes (text-agent-ornith-*) generate with thinking enabled even
         when it is hidden; pass --no-thinking to disable reasoning generation.
         Use --models-root or MERERUN_MODELS_DIR to override the model store path.
         """
@@ -169,7 +170,7 @@ struct TextChat: AsyncParsableCommand {
     @Flag(
         name: [.customLong("thinking"), .customLong("show-thinking")],
         inversion: .prefixedNo,
-        help: "Show model reasoning output. Bonsai 27B and R1-style lanes (text-agent-ornith-*) generate with thinking enabled by default; pass --no-thinking to disable reasoning generation."
+        help: "Show model reasoning output. Bonsai and R1-style lanes (text-agent-ornith-*) generate with thinking enabled by default; pass --no-thinking to disable reasoning generation."
     )
     var thinking: Bool?
 

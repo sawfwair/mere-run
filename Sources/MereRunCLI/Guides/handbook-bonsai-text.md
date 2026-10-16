@@ -121,3 +121,23 @@ reasoning problem, five tests of a generated Python function, and a synthetic
 vision check for text and colored shapes. These short, greedy-decoding checks
 do not establish full tokenizer parity, long-context quality, or broad benchmark
 performance.
+
+## Bonsai 2 Small
+
+Use `text-chat-bonsai-2-2b-2bit`, `text-chat-bonsai-2-4b-2bit`, or
+`text-chat-bonsai-2-9b-2bit` for the pinned Qwen3.5-based vision packs.
+They load the original MLX safetensors through the native Swift runtime.
+The 2B and 4B packs share packed input/output embeddings; the 9B head is separate.
+
+```bash
+mere.run model pull text-chat-bonsai-2-2b-2bit
+mere.run text chat --model text-chat-bonsai-2-2b-2bit --context-size 8192 --no-thinking --prompt "Explain how a heat pump works."
+```
+
+Thinking is enabled by default. For reasoning requests, omit `--no-thinking`
+and allow at least 8,192 output tokens with `--max-tokens`.
+Add `--image ./photo.png` to include an image. Sampling defaults are temperature
+1.0, top-p 0.95, and top-k 20. Both published end tokens stop generation.
+The declared context window is 262,144 tokens; select a smaller request context
+for bounded memory. MTP is not loaded. Released-checkpoint quality, full-context
+behavior, and throughput require separate validation.
