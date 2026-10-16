@@ -1950,8 +1950,11 @@ head. Each pack includes an unrotated FP16 vision tower. MTP is not loaded.
 
 Thinking is enabled by default. Use `--no-thinking` for short answers, or allow
 at least 8,192 output tokens with `--max-tokens` for reasoning requests.
-All three use the published sampling defaults: temperature 1.0, top-p 0.95,
-and top-k 20. Generation stops on both IDs in `generation_config.json`.
+All three generation sidecars set temperature 1.0, top-p 0.95, and top-k 20.
+The model cards additionally recommend presence penalty 1.0 for thinking and
+1.5 for non-thinking; the sidecars do not supply these penalties. API requests
+can set `presence_penalty` explicitly. Native presence penalties cover the
+generated history; the model cards prefer a 64-token window. Generation stops on both IDs in `generation_config.json`.
 The declared context window is 262,144 tokens. Use a smaller request context
 to bound memory; the declared window is not a long-context quality result.
 
@@ -1966,6 +1969,16 @@ IDs use the same commands. Model support estimates start at 8 GB for 2B/4B and
 Shared admission checks still apply.
 
 The pinned configuration fixtures and packed projection tests cover native
-loading, tied output math, catalog routing, and defaults. Released-checkpoint
-text and vision parity, broad quality, maximum context, and throughput remain
-separate validation gates.
+loading, tied output math, catalog routing, and defaults. The
+[released-checkpoint report](./benchmarks/bonsai2-small-2026-10-15.md) records
+bounded text and vision quality, format failures, reasoning token caps, and
+resident throughput for all three models. Upstream-runtime parity, broad
+quality, maximum context, and smaller-memory hardware remain separate gates.
+
+For resident text throughput measurements, use `model benchmark q36-mtp` with
+one of the three Small IDs and `--variants baseline`. Set `--warmups`,
+`--warmup-tokens`, and `--repetitions` to measure repeated requests after loading.
+This baseline disables speculation; the Small integration does not load MTP.
+The shared benchmark requires 32 GiB of admission headroom. A normally admitted
+resident API session can collect repeated requests when that larger class is
+unavailable; keep both machine and request admission enabled.
