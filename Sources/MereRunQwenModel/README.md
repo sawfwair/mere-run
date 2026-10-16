@@ -57,13 +57,20 @@ about 4.35 GiB of additional packed weights for Bonsai 2. The default shares
 transforms without copying weights. `Bonsai2FusionTests` checks numerical
 agreement, incompatible rotations, and cache invalidation.
 
-On Metal, the validated 1024-element Prism transform uses one FP32 butterfly
-kernel that also applies the sign vector and activation casts. Other block
-sizes and CPU execution use the reference MLX operations. Set
+On Metal, the 1024-element Prism transform uses one FP32 butterfly kernel that
+also applies the sign vector and activation casts. The 512-element
+Small-pack transform uses this kernel for at most eight activation rows;
+larger prefills and CPU execution retain the reference MLX operations. The
+4096-element path retains the reference transform after whole-model controls
+showed a throughput regression from its fused variant. The
+normalization coefficient uses the same host Float bit pattern as the
+reference expression. Metal tests check exact equality in FP16, BF16, and
+FP32, in both directions and across multiple activation widths. Set
 `MERERUN_Q35_PRISM_METAL=0` to select the reference transform for comparison.
 Run `Bonsai2FusionTests` with `MERERUN_TEST_MLX_DEVICE=gpu` for exact transform
 comparisons in both directions and all supported floating-point dtypes.
-`Bonsai2PerformanceTests` is an opt-in component profile: set
+`Bonsai2PerformanceTests` is an opt-in, normally admitted component profile
+for the installed pack’s block geometry and tied or untied output head: set
 `MERERUN_BONSAI2_PROFILE` to the installed checkpoint directory and select the
 GPU test device. Its synchronized timings include launch overhead and are not
 full-model decode throughput.

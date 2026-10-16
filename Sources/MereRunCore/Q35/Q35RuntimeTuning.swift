@@ -1,6 +1,6 @@
 import Foundation
 
-/// Selects the scheduling defaults qualified with the managed Q4 checkpoints.
+/// Selects scheduling features qualified for each managed checkpoint family.
 enum Q35RuntimeTuning {
     enum Feature: String, CaseIterable {
         case scopedCompilation = "MERERUN_Q35_SCOPED_COMPILE"
@@ -15,6 +15,11 @@ enum Q35RuntimeTuning {
     ) -> Bool {
         if let override = environment[feature.rawValue] {
             return override == "1"
+        }
+        // Shared activation graphs retain the first generator's MLX stream.
+        // Keep later Small models on their own request streams as well.
+        if feature == .scopedCompilation, Q35Resources.isBonsai2SmallModelId(modelID) {
+            return true
         }
         return modelID == Q35Resources.q38TwentySevenB4BitModelId
             || modelID == Q35Resources.ornith35BMLX4BitModelId

@@ -295,3 +295,32 @@ python scripts/reference-parity/prepare_kolibri_chat_fixture.py \
 MERERUN_KOLIBRI_CHAT_FIXTURE=/tmp/kolibri-chat-fixture \
   swift test --filter KolibriQualificationTests
 ```
+
+## Bonsai 2 Small throughput
+
+`benchmark_bonsai2_small.py` measures the pinned upstream pack with the same
+text and image requests as the native resident API collector. Run it through
+`Bonsai2SmallThroughputTests` so the reference process holds normal machine
+admission and Swift verifies exact prompt-token agreement. The product path
+continues to use native Swift/MLX.
+
+The evidence root contains verified `models`, `metadata`, and `fixtures`
+directories, plus `baseline-requests.json` with the exact `text` and `vision`
+API request bodies. It retains warm-ups, every measured response, native
+upstream generation metrics, source hashes, and quiet-start observations.
+Use the recorded Python 3.12 reference environment: MLX and mlx-metal 0.32.0,
+mlx-lm 0.31.3, mlx-vlm 0.6.3, Transformers 5.5.0, Pillow 12.3.0, and NumPy
+2.5.4. The script requires Python 3.11 or later. The test rejects an existing
+output directory.
+
+```bash
+MERERUN_TEST_MLX_DEVICE=gpu \
+MERERUN_BONSAI_THROUGHPUT_ROOT=/Volumes/T7/bonsai-throughput \
+MERERUN_BONSAI_THROUGHPUT_SIZE=4 \
+MERERUN_BONSAI_REFERENCE_PYTHON=/Volumes/T7/bonsai-reference/bin/python \
+swift test --filter Bonsai2SmallThroughputTests
+```
+
+The [throughput report](../../docs/benchmarks/bonsai2-small-throughput-2026-10-16.md)
+records the model-order control, scheduling ablation, upstream comparison,
+and measurement limits.

@@ -38,6 +38,8 @@ All three models counted every shape correctly but failed the exact heading chec
 
 ## Resident throughput
 
+The later [upstream comparison and performance fix](./bonsai2-small-throughput-2026-10-16.md) identifies a compiled-graph model-order penalty in this executable. The measurements below remain the original observations; use the later report for the corrected runtime.
+
 Each model/modality has one discarded 128-token warm-up and three measured resident requests. Text budgets are 512 tokens; image budgets are 256. Native `lastRequest` timings provide decode seconds and token counts, checked against API usage. Prefix reuse follows the server default; the collector unloads each model between sizes. Decode TPS includes reasoning tokens and excludes model load and prefill. These capped requests are not scored for completion or quality.
 
 | Model | Text median tok/s | Text range | Vision median tok/s | Vision range |

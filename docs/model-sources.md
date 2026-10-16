@@ -1978,6 +1978,9 @@ records the corrected implementation: all three packs pass every bounded text
 and vision gate. The [fixed-runtime rerun](./benchmarks/bonsai2-small-fixed-2026-10-16.md)
 records fresh text and vision quality checks and repeated resident throughput
 for all three checkpoints, including strict-format failures and timing spread.
+The [upstream throughput comparison](./benchmarks/bonsai2-small-throughput-2026-10-16.md)
+records model-order controls, request-owned compilation, and signed-Hadamard
+GPU fusion measurements on the same pinned checkpoints.
 Broad quality, maximum context, and smaller-memory hardware remain unqualified.
 
 For resident text throughput measurements, use `model benchmark q36-mtp` with
