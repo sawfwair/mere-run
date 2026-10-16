@@ -7,6 +7,7 @@ final class QwenVisionPatchEmbed: Module {
   let temporalPatchSize: Int
   let inChannels: Int
   let embedDim: Int
+  var useConvolution = false
 
   @ModuleInfo(key: "proj") private var projection: Conv3d
 
@@ -44,6 +45,12 @@ final class QwenVisionPatchEmbed: Module {
     )
 
     let targetType = projection.weight.dtype
+    if useConvolution {
+      let volumes = patches.asType(targetType)
+        .reshaped(-1, inChannels, temporalPatchSize, patchSize, patchSize)
+        .transposed(0, 2, 3, 4, 1)
+      return projection(volumes).reshaped(-1, embedDim)
+    }
     let reshapedWeight = projection.weight.transposed(0, 4, 1, 2, 3)
     let kernel = reshapedWeight.reshaped(embedDim, patchVolume)
     let transposed = kernel.transposed(1, 0)

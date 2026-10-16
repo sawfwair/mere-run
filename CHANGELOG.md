@@ -9,6 +9,11 @@ The format is based on Keep a Changelog.
 - Add pinned Bonsai 2 Small 2B, 4B, and 9B vision chat packs to the native Swift/MLX runtime,
   including Hadamard-aware tied output embeddings for the 2B and 4B packs.
 
+- Preserve Bonsai 2 checkpoint RMS scales and vision arithmetic, including
+  bicubic Small-pack image preprocessing, FP16 position interpolation, Conv3d
+  patch projection, and the upstream rotary-frequency formula. Add independent
+  checkpoint parity evidence; strict 2B/4B vision agreement remains open.
+
 - Add durable relay workflow batches with immutable child IDs and seeds, resumable
   shared-asset submission, bounded fleet admission, ordered verified results, and
   `graph batch submit`, `inspect`, `watch`, `fetch`, `cancel`, and `retry` commands.

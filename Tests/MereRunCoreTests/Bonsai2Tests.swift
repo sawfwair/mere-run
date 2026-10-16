@@ -1,6 +1,7 @@
 import Foundation
 import MLX
 import MLXNN
+import MLXFast
 import XCTest
 @testable import MereRunCore
 @testable import MereRunQwenModel
@@ -112,7 +113,8 @@ final class Bonsai2Tests: MereRunCoreTestCase {
             ).utf8)
         try configData.write(to: root.appendingPathComponent("config.json"))
         let config = try JSONDecoder().decode(Q35Config.self, from: configData)
-        var arrays: [String: MLXArray] = ["language_model.model.norm.weight": MLXArray.ones([512])]
+        let ordinaryScale = MLXArray((0..<512).map { [Float(0.0001), 0.1, 0.4, 1.7][$0 % 4] }).asType(.float16)
+        var arrays: [String: MLXArray] = ["language_model.model.norm.weight": ordinaryScale]
         for path in tied ? ["model.embed_tokens"] : ["model.embed_tokens", "lm_head"] {
             let base = "language_model." + path
             arrays[base + ".weight"] = MLXArray.zeros([8, 32], dtype: .uint32)
@@ -134,7 +136,11 @@ final class Bonsai2Tests: MereRunCoreTestCase {
             XCTAssertTrue(leaves["lm_head"] is Q35PrismLinear)
         }
         let norm = try XCTUnwrap(model.parameters().flattened().first { $0.0 == "model.norm.weight" }?.1)
-        XCTAssertEqual(MLX.max(MLX.abs(norm)).item(Float.self), 0)
+        XCTAssertEqual(norm.dtype, .float16)
+        XCTAssertEqual(norm.asArray(Float.self), ordinaryScale.asArray(Float.self))
+        let input = MLXArray((0..<512).map { Float($0 % 13 - 6) / 8 }).reshaped(1, 1, 512).asType(.float16)
+        let expected = MLXFast.rmsNorm(input, weight: ordinaryScale, eps: config.textConfig.rmsNormEps)
+        XCTAssertEqual(model.model.norm(input).asArray(Float.self), expected.asArray(Float.self))
         arrays.removeValue(forKey: "language_model.model.norm.weight")
         try MLX.save(arrays: arrays, url: weightsURL)
         do {

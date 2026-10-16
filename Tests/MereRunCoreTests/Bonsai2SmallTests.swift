@@ -1,6 +1,8 @@
 import Foundation
 import MLX
 import MLXNN
+import MediaIO
+@testable import MereRunTextEncoder
 import XCTest
 @testable import MereRunCore
 @testable import MereRunQwenModel
@@ -42,6 +44,62 @@ final class Bonsai2SmallTests: MereRunCoreTestCase {
         }
     }
 
+    func testImagePatchesMatchIndependentPinnedPillowProcessor() async throws {
+        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/Bonsai2Small")
+        for id in [Q35Resources.bonsai2TwoBModelId, Q35Resources.bonsai2FourBModelId, Q35Resources.bonsai2NineBModelId] {
+            let generator = Q35Generator(modelId: id, visionMinPixels: 1_024, visionMaxPixels: 1_024)
+            let difference = try await generator.bonsaiProcessorDifference(fixture: fixture)
+            XCTAssertLessThanOrEqual(difference, 0.000001)
+        }
+    }
+
+    func testFP16PositionsMatchIndependentUpstreamInterpolation() throws {
+        struct Provenance: Decodable { let grids: [[Int]] }
+        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/Bonsai2Small")
+        let provenance = try JSONDecoder().decode(Provenance.self,
+            from: Data(contentsOf: fixture.appendingPathComponent("position-provenance.json")))
+        let arrays = try MLX.loadArrays(url: fixture.appendingPathComponent("position-reference.safetensors"))
+        let embedding = Embedding(embeddingCount: 2_304, dimensions: 8)
+        try embedding.update(parameters: ModuleParameters.unflattened([
+            ("weight", try XCTUnwrap(arrays["weight"]))
+        ]), verify: [.all])
+        let tower = QwenVisionTower(configuration: QwenVisionConfiguration(
+            depth: 0, embedDim: 8, mlpHiddenDim: 16, numHeads: 2, outHiddenDim: 8,
+            numPositionEmbeddings: 2_304, useLearnedPosEmbed: true))
+        tower.positionEmbeddingArithmetic = .embeddingDType
+        for (index, grid) in provenance.grids.enumerated() {
+            let actual = tower.fastPosEmbedInterpolate(gridThw: [(t: grid[0], h: grid[1], w: grid[2])], posEmbed: embedding)
+            let expected = try XCTUnwrap(arrays["fp16_\(index)"])
+            XCTAssertEqual(actual.dtype, .float16)
+            XCTAssertEqual(actual.shape, expected.shape)
+            XCTAssertEqual(MLX.max(MLX.abs(actual - expected)).item(Float.self), 0, "grid \(grid)")
+        }
+    }
+
+    func testRotaryFrequencyFormulaMatchesIndependentReference() throws {
+        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/Bonsai2Small/rotary-reference.safetensors")
+        let arrays = try MLX.loadArrays(url: fixture)
+        let device = ProcessInfo.processInfo.environment["MERERUN_TEST_MLX_DEVICE"] == "gpu" ? "gpu" : "cpu"
+        for headDim in [64, 72] {
+            let tower = QwenVisionTower(configuration: QwenVisionConfiguration(
+                depth: 0, embedDim: headDim, mlpHiddenDim: 128, numHeads: 1, patchSize: 16,
+                temporalPatchSize: 2, outHiddenDim: headDim, numPositionEmbeddings: 2_304, useLearnedPosEmbed: true))
+            tower.useCheckpointRotaryFrequencies()
+            let output = try tower(patchInputs: MLXArray.zeros([1, 24, 1_536]),
+                grid: [QwenVisionGrid(temporal: 1, height: 4, width: 6)])
+            let expected = try XCTUnwrap(arrays["\(device)_\(headDim)"])
+            XCTAssertEqual(output.rotaryCos.dtype, .float32)
+            XCTAssertEqual(output.rotaryCos.shape, expected.shape)
+            // Metal intrinsic rounding differs across the published wheel and bundled shaders.
+            // The full-checkpoint parity harness separately enforces the frozen embedding/logit gates.
+            XCTAssertLessThanOrEqual(MLX.max(MLX.abs(output.rotaryCos - expected)).item(Float.self),
+                                     device == "gpu" ? 0.000001 : 0)
+        }
+    }
+
     func testTiedPackedHeadMatchesIndependentlyDecodedEmbeddingRows() {
         for block in [512, 4096] {
             let rows = 3
@@ -74,5 +132,22 @@ final class Bonsai2SmallTests: MereRunCoreTestCase {
                 XCTAssertLessThan(MLX.max(MLX.abs(actual - expected)).item(Float.self), 0.0002)
             }
         }
+    }
+}
+
+
+extension Q35Generator {
+    fileprivate func bonsaiProcessorDifference(fixture: URL) throws -> Float {
+        let reference = try MLX.loadArrays(url: fixture.appendingPathComponent("processor-reference.safetensors"))
+        let prepared = try loadImageTensor(
+            from: fixture.appendingPathComponent("processor-input.png").path,
+            patchSize: 16, spatialMergeSize: 2, maximumVisionTokens: 1
+        )
+        XCTAssertEqual([prepared.gridTHW.0, prepared.gridTHW.1, prepared.gridTHW.2], [1, 2, 2])
+        let patches = Q35VisionTower.preparePatchInputs(pixelValues: prepared.tensor,
+            patchSize: 16, temporalPatchSize: 2, mergeSize: 2).reshaped(4, 1_536)
+        let expected = try XCTUnwrap(reference["patches"])
+        XCTAssertEqual(patches.shape, expected.shape)
+        return MLX.max(MLX.abs(patches - expected)).item(Float.self)
     }
 }

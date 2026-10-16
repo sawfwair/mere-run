@@ -2,6 +2,8 @@
 
 These results cover the pinned 2B, 4B, and 9B MLX checkpoints through the native Swift/MLX release runtime. Python orchestrates requests and scores saved outputs; it does not execute model inference.
 
+The later [upstream parity investigation](./bonsai2-small-upstream-parity-2026-10-15.md) found native vision discrepancies and changed the runtime. The measurements below belong to the original executable identified here; they do not qualify the corrected implementation.
+
 The [machine-readable summary](./bonsai2-small-2026-10-15-summary.json) contains redacted copies of the cases and selected outputs, fixture hashes, and timing samples. Original prompts and outputs remain unchanged on T7; response hashes refer to those originals.
 
 ## Scope and provenance

@@ -1,0 +1,28 @@
+{
+  "reference": "Unmodified mlx-vlm 0.6.3 Qwen3VL VisionModel.fast_pos_embed_interpolate on CPU",
+  "mlx": "0.32.0",
+  "weight": "sin(arange(2304*8).float32 * 0.17).reshape(2304,8).float16",
+  "grids": [
+    [
+      1,
+      4,
+      6
+    ],
+    [
+      1,
+      40,
+      60
+    ],
+    [
+      1,
+      42,
+      62
+    ],
+    [
+      1,
+      32,
+      32
+    ]
+  ],
+  "sha256": "94210f5b3aa3b04edf2268a6cf318aaae60668c4cd6152d0dcb19b26f1c409c6"
+}

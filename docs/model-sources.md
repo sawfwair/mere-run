@@ -1972,8 +1972,12 @@ The pinned configuration fixtures and packed projection tests cover native
 loading, tied output math, catalog routing, and defaults. The
 [released-checkpoint report](./benchmarks/bonsai2-small-2026-10-15.md) records
 bounded text and vision quality, format failures, reasoning token caps, and
-resident throughput for all three models. Upstream-runtime parity, broad
-quality, maximum context, and smaller-memory hardware remain separate gates.
+resident throughput for all three models on the earlier executable. The
+[upstream parity report](./benchmarks/bonsai2-small-upstream-parity-2026-10-15.md)
+records the corrected implementation: text passes for all three packs, 9B passes
+every bounded gate, and 2B/4B retain strict vision failures. Broad quality,
+maximum context, smaller-memory hardware, and corrected-runtime resident
+throughput remain separate gates.
 
 For resident text throughput measurements, use `model benchmark q36-mtp` with
 one of the three Small IDs and `--variants baseline`. Set `--warmups`,

@@ -75,12 +75,12 @@ final class Q35FullAttention: Module {
         self._qNorm.wrappedValue = Q35RMSNorm(
             dimensions: text.headDim,
             eps: text.rmsNormEps,
-            zeroCenteredWeight: !text.isQwen4Exp
+            zeroCenteredWeight: !text.isQwen4Exp && config.modelType != "prism_hadamard_qwen35"
         )
         self._kNorm.wrappedValue = Q35RMSNorm(
             dimensions: text.headDim,
             eps: text.rmsNormEps,
-            zeroCenteredWeight: !text.isQwen4Exp
+            zeroCenteredWeight: !text.isQwen4Exp && config.modelType != "prism_hadamard_qwen35"
         )
         self._indexer.wrappedValue = text.isQwen4Exp ? Q38QSAIndexer(config: config) : nil
 

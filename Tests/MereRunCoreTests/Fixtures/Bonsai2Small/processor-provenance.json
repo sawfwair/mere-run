@@ -1,0 +1,17 @@
+{
+  "reference": "Unmodified pack build_processor plus transformers Qwen2VLImageProcessorPil",
+  "revision": "1c6cbae21f8c38830ce337972b46fdae7b18eaaa",
+  "versions": {
+    "transformers": "5.5.0",
+    "pillow": "12.3.0"
+  },
+  "size": {
+    "shortest_edge": 1024,
+    "longest_edge": 1024
+  },
+  "input": "Original synthetic RGB pattern (x*61+y*37+c*83+(x*y)%127)%256, 17x23",
+  "sha256": {
+    "processor-input.png": "e4059931656e912226452a7206da5793bd260f12bdd317a32ef1866537c748c3",
+    "processor-reference.safetensors": "6e15687eb68f7bc29681a0274d816cf82fd760402dfce0f0bfff5f9c8044e222"
+  }
+}
