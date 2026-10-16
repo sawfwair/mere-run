@@ -93,10 +93,7 @@ final class Bonsai2SmallTests: MereRunCoreTestCase {
             let expected = try XCTUnwrap(arrays["\(device)_\(headDim)"])
             XCTAssertEqual(output.rotaryCos.dtype, .float32)
             XCTAssertEqual(output.rotaryCos.shape, expected.shape)
-            // Metal intrinsic rounding differs across the published wheel and bundled shaders.
-            // The full-checkpoint parity harness separately enforces the frozen embedding/logit gates.
-            XCTAssertLessThanOrEqual(MLX.max(MLX.abs(output.rotaryCos - expected)).item(Float.self),
-                                     device == "gpu" ? 0.000001 : 0)
+            XCTAssertEqual(MLX.max(MLX.abs(output.rotaryCos - expected)).item(Float.self), 0)
         }
     }
 

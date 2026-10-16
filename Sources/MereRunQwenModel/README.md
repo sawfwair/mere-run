@@ -39,12 +39,13 @@ projection path. Core validates complete text parameter coverage and preserves
 the pack's FP16 vision weights. Prism norms use the checkpoint's ordinary RMS
 scales directly. Its vision path preserves Conv3d patch projection and FP16
 learned-position interpolation, with MLX linspace coordinates, and the upstream
-FP32 power/reciprocal vision-frequency expression. Small-pack
+FP32 power/reciprocal vision-frequency expression. Metal power explicitly uses
+the precise intrinsic to preserve checkpoint rounding. Small-pack
 image preprocessing uses Pillow-compatible bicubic RGB resizing and explicit
 FP32 rescaling. `Bonsai2Tests` and `Bonsai2SmallTests` cover structural math and
 independent processor/position fixtures. The opt-in
 `Bonsai2SmallReferenceTests` compares real packed rows and exports full-model
-conditional logits for the [upstream parity check](../../docs/benchmarks/bonsai2-small-upstream-parity-2026-10-15.md).
+conditional logits for the [upstream parity check](../../docs/benchmarks/bonsai2-small-upstream-parity-2026-10-16.md).
 
 `Q35PrismFusion` shares the signed transform across attention Q/K/V,
 linear-attention QKV/Z, and dense MLP gate/up projections when their block
@@ -92,7 +93,6 @@ for the 2B and 4B packs. `Q35PrismEmbedding.asLinear` applies the forward
 transform before packed matmul, while lookup retains the inverse transform.
 The 9B pack uses 4096-element transforms and a separate packed output head.
 `Bonsai2SmallTests` compares tied logits with independently reconstructed dense
-embedding rows and checks the three pinned configuration fixtures. The bounded upstream check passes text for all three packs and every gate for
-9B. Strict 2B/4B vision agreement remains open. A 2B chart trace isolates its
-drift to amplified Metal rotary-frequency rounding; see the report above. Performance requires separate
-evidence for each executable.
+embedding rows and checks the three pinned configuration fixtures. The bounded
+upstream check passes every text and vision gate for all three packs; see the
+report above. Performance requires separate evidence for each executable.

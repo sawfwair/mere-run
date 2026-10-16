@@ -1,0 +1,2824 @@
+{
+  "status": "bounded_parity_passed_local_gate_blocked_by_locked_device",
+  "change": "Explicit metal::precise::pow in the Prism vision rotary-frequency GPU path; separate unchanged MLX reciprocal/multiplication. CPU and other vision paths retain existing operations.",
+  "protocol": {
+    "checkpoint_sizes": [
+      "2",
+      "4",
+      "9"
+    ],
+    "reference": "Pinned pack loader and its published dependency versions; unmodified neural implementation",
+    "native": "Production tokenizer, preprocessing, vision loader, prefill, and cached decoder; test-only tensor exports",
+    "context": 16384,
+    "prefill_chunk": 512,
+    "decode": "Up to64 greedy upstream steps; native uses the identical upstream continuation to compare conditional logits",
+    "gates": {
+      "prompt_ids": "exact",
+      "image_grid": "exact",
+      "mrope_positions": "exact",
+      "normalized_patches_max_absolute_delta": 1e-06,
+      "image_embedding_relative_l2": 0.01,
+      "maximum_probability_delta": 0.01,
+      "teacher_forced_greedy_argmax": "exact at every exported position"
+    },
+    "interpretation": "Report each gate separately; any failure prevents an overall parity claim. Tolerances are frozen before native/reference comparison. No sampled-output equivalence claim.",
+    "reference_prefill_positions": "Explicit slices of unmodified upstream full-prompt get_rope_index output for image chunks; default scalar cache offset is only used during decode"
+  },
+  "request_corpus": {
+    "system": "You are a helpful assistant.",
+    "cases": [
+      {
+        "id": "text-thinking",
+        "prompt": "What is 84 multiplied by 3 divided by 2? Answer with the number only.",
+        "thinking": true,
+        "steps": 64
+      },
+      {
+        "id": "text-json",
+        "prompt": "Return only JSON with keys item and count, with values maple and 7.",
+        "thinking": false,
+        "steps": 64
+      },
+      {
+        "id": "vision-shapes",
+        "prompt": "Read the image. Return only a JSON object with keys heading (the exact heading), red_circles, blue_squares, green_triangles. Count the shapes.",
+        "image": "shapes.png",
+        "thinking": false,
+        "steps": 64
+      },
+      {
+        "id": "vision-receipt",
+        "prompt": "Read this receipt. Return only JSON with keys date (YYYY-MM-DD), total (number), apples_quantity (integer), tea_unit_price (number).",
+        "image": "receipt.png",
+        "thinking": false,
+        "steps": 64
+      },
+      {
+        "id": "vision-chart",
+        "prompt": "Read the bar chart. Return only JSON with keys largest (uppercase tree name), largest_count, smallest (uppercase tree name), smallest_count, difference (largest minus smallest).",
+        "image": "chart.png",
+        "thinking": false,
+        "steps": 64
+      },
+      {
+        "id": "vision-photo",
+        "prompt": "Describe only what is visible. Return only JSON with integer people, and boolean orange_suit, helmet, us_flag, space_shuttle indicating whether each is visible.",
+        "image": "astronaut.png",
+        "thinking": false,
+        "steps": 64
+      }
+    ]
+  },
+  "fixture_manifest": [
+    {
+      "file": "chart.png",
+      "sha256": "0fb120b6e3a32852187f630f160978d67beaf1385d059d1045052a9786d40f04",
+      "source": "deterministic Pillow fixture; source script retained"
+    },
+    {
+      "file": "receipt.png",
+      "sha256": "459440f290bc239d848656e057261d16169a49ed1136656ee83dc5f1be8ddf2d",
+      "source": "deterministic Pillow fixture; source script retained"
+    },
+    {
+      "file": "shapes.png",
+      "sha256": "e1491f8a0464147ead0c4b928f86420ae9940321cdc2fc6ef1bf43798dbc063b",
+      "source": "deterministic Pillow fixture; source script retained"
+    },
+    {
+      "file": "astronaut.png",
+      "sha256": "88431cd9653ccd539741b555fb0a46b61558b301d4110412b5bc28b5e3ea6cb5",
+      "source": "https://raw.githubusercontent.com/scikit-image/scikit-image/v0.22.0/skimage/data/astronaut.png",
+      "license": "NASA public domain",
+      "license_reference": "https://scikit-image.org/docs/stable/api/skimage.data.html#skimage.data.astronaut"
+    }
+  ],
+  "reference_outputs": {
+    "2": [
+      {
+        "id": "text-thinking",
+        "prompt_tokens": 41,
+        "prompt_ids_sha256_compact_json": "900f8bc018d714e1c921fefe8c6b51a34f587487466b522910c2991bc637ccc7",
+        "continuation": [
+          90700,
+          8340,
+          25,
+          271,
+          16,
+          13,
+          220,
+          2972,
+          27382,
+          1386,
+          279,
+          5488,
+          64700,
+          561,
+          1156,
+          6587,
+          728,
+          310,
+          10724,
+          393,
+          23,
+          19,
+          1088,
+          14695,
+          220,
+          18,
+          1088,
+          596,
+          220,
+          17,
+          12576,
+          198,
+          17,
+          13,
+          220,
+          2972,
+          45382,
+          279,
+          21261,
+          64700,
+          198,
+          262,
+          348,
+          256,
+          6519,
+          220,
+          16,
+          25,
+          56727,
+          1633,
+          1118,
+          11,
+          1179,
+          12436,
+          13,
+          198,
+          285,
+          348,
+          256,
+          393,
+          23,
+          19,
+          1088,
+          14695
+        ],
+        "text": "Thinking Process:\n\n1.  **Identify the operation:** The user wants me to calculate $84 \\times 3 \\div 2$.\n2.  **Perform the calculation:**\n    *   Method 1: Multiplication first, then division.\n        *   $84 \\times"
+      },
+      {
+        "id": "text-json",
+        "prompt_tokens": 39,
+        "prompt_ids_sha256_compact_json": "8b4885285f1f1d51fac412deb558d740c1670912281de2ae23f23670e65c5463",
+        "continuation": [
+          71093,
+          2164,
+          198,
+          90,
+          198,
+          220,
+          328,
+          1163,
+          763,
+          328,
+          2117,
+          273,
+          487,
+          198,
+          220,
+          328,
+          1767,
+          763,
+          220,
+          22,
+          198,
+          92,
+          198,
+          71093,
+          248046
+        ],
+        "text": "```json\n{\n  \"item\": \"maple\",\n  \"count\": 7\n}\n```<|im_end|>"
+      },
+      {
+        "id": "vision-shapes",
+        "prompt_tokens": 658,
+        "prompt_ids_sha256_compact_json": "0f619ef4664533558520df066e82b719e309390308d32473eea2421ebab83286",
+        "continuation": [
+          90,
+          198,
+          220,
+          328,
+          11084,
+          763,
+          328,
+          28804,
+          13251,
+          487,
+          198,
+          220,
+          328,
+          1114,
+          648,
+          71735,
+          763,
+          220,
+          18,
+          11,
+          198,
+          220,
+          328,
+          11855,
+          625,
+          39507,
+          763,
+          220,
+          17,
+          11,
+          198,
+          220,
+          328,
+          12865,
+          40726,
+          16740,
+          763,
+          220,
+          16,
+          198,
+          92,
+          198,
+          248069,
+          271,
+          71093,
+          2164,
+          198,
+          90,
+          198,
+          220,
+          328,
+          11084,
+          763,
+          328,
+          28804,
+          13251,
+          487,
+          198,
+          220,
+          328,
+          1114,
+          648,
+          71735,
+          763
+        ],
+        "text": "{\n  \"heading\": \"BOARD CHECK\",\n  \"red_circles\": 3,\n  \"blue_squares\": 2,\n  \"green_triangles\": 1\n}\n</think>\n\n```json\n{\n  \"heading\": \"BOARD CHECK\",\n  \"red_circles\":"
+      },
+      {
+        "id": "vision-receipt",
+        "prompt_tokens": 706,
+        "prompt_ids_sha256_compact_json": "5a5e39acc78439265ecc94af3673cb7cb7aa6fd206e271356e5a0a6e931f7bae",
+        "continuation": [
+          71093,
+          2164,
+          198,
+          90,
+          198,
+          220,
+          328,
+          993,
+          763,
+          328,
+          17,
+          15,
+          17,
+          21,
+          12,
+          16,
+          15,
+          12,
+          16,
+          20,
+          487,
+          198,
+          220,
+          328,
+          4873,
+          763,
+          220,
+          17,
+          15,
+          13,
+          15,
+          11,
+          198,
+          220,
+          328,
+          658,
+          624,
+          31040,
+          763,
+          220,
+          18,
+          11,
+          198,
+          220,
+          328,
+          78781,
+          14402,
+          8768,
+          763,
+          220,
+          20,
+          13,
+          15,
+          198,
+          92,
+          198,
+          71093,
+          248046
+        ],
+        "text": "```json\n{\n  \"date\": \"2026-10-15\",\n  \"total\": 20.0,\n  \"apples_quantity\": 3,\n  \"tea_unit_price\": 5.0\n}\n```<|im_end|>"
+      },
+      {
+        "id": "vision-chart",
+        "prompt_tokens": 690,
+        "prompt_ids_sha256_compact_json": "b98255f8acde518763c66280cd54afb2c8798e655f591396bf29fbdc93be2a10",
+        "continuation": [
+          71093,
+          2164,
+          198,
+          90,
+          198,
+          220,
+          328,
+          26035,
+          467,
+          763,
+          328,
+          47,
+          3848,
+          487,
+          198,
+          220,
+          328,
+          26035,
+          467,
+          3079,
+          763,
+          220,
+          24,
+          11,
+          198,
+          220,
+          328,
+          3445,
+          18655,
+          763,
+          328,
+          59964,
+          905,
+          487,
+          198,
+          220,
+          328,
+          3445,
+          18655,
+          3079,
+          763,
+          220,
+          19,
+          11,
+          198,
+          220,
+          328,
+          57248,
+          763,
+          220,
+          20,
+          198,
+          92,
+          198,
+          71093,
+          248046
+        ],
+        "text": "```json\n{\n  \"largest\": \"PINE\",\n  \"largest_count\": 9,\n  \"smallest\": \"CEDAR\",\n  \"smallest_count\": 4,\n  \"difference\": 5\n}\n```<|im_end|>"
+      },
+      {
+        "id": "vision-photo",
+        "prompt_tokens": 314,
+        "prompt_ids_sha256_compact_json": "536edd46dd7235cf57b9f9fc9b5290c886840fc01d2444c9a43e891bddafed4f",
+        "continuation": [
+          90,
+          198,
+          220,
+          328,
+          15596,
+          763,
+          220,
+          16,
+          11,
+          198,
+          220,
+          328,
+          33034,
+          625,
+          2983,
+          763,
+          804,
+          11,
+          198,
+          220,
+          328,
+          47473,
+          3923,
+          763,
+          804,
+          11,
+          198,
+          220,
+          328,
+          350,
+          10614,
+          763,
+          804,
+          11,
+          198,
+          220,
+          328,
+          8481,
+          3586,
+          94853,
+          763,
+          804,
+          198,
+          92,
+          198,
+          248069,
+          271,
+          71093,
+          2164,
+          198,
+          90,
+          198,
+          220,
+          328,
+          15596,
+          763,
+          220,
+          16,
+          11,
+          198,
+          220,
+          328,
+          33034,
+          625
+        ],
+        "text": "{\n  \"people\": 1,\n  \"orange_suit\": true,\n  \"helmet\": true,\n  \"us_flag\": true,\n  \"space_shuttle\": true\n}\n</think>\n\n```json\n{\n  \"people\": 1,\n  \"orange_s"
+      }
+    ],
+    "4": [
+      {
+        "id": "text-thinking",
+        "prompt_tokens": 41,
+        "prompt_ids_sha256_compact_json": "900f8bc018d714e1c921fefe8c6b51a34f587487466b522910c2991bc637ccc7",
+        "continuation": [
+          90700,
+          8340,
+          25,
+          271,
+          16,
+          13,
+          220,
+          2972,
+          2014,
+          53983,
+          279,
+          5952,
+          64700,
+          561,
+          1156,
+          6587,
+          310,
+          10724,
+          279,
+          1067,
+          314,
+          328,
+          23,
+          19,
+          53070,
+          539,
+          220,
+          18,
+          17249,
+          539,
+          220,
+          17,
+          1,
+          321,
+          3300,
+          348,
+          3138,
+          9,
+          279,
+          1324,
+          430,
+          279,
+          4087,
+          13,
+          271,
+          17,
+          13,
+          220,
+          2972,
+          45382,
+          279,
+          71690,
+          64700,
+          198,
+          262,
+          348,
+          256,
+          14392,
+          220,
+          16,
+          25,
+          68647,
+          220,
+          23
+        ],
+        "text": "Thinking Process:\n\n1.  **Analyze the Request:** The user wants to calculate the result of \"84 multiplied by 3 divided by 2\" and provide *only* the number as the answer.\n\n2.  **Perform the Calculation:**\n    *   Step 1: Multiply 8"
+      },
+      {
+        "id": "text-json",
+        "prompt_tokens": 39,
+        "prompt_ids_sha256_compact_json": "8b4885285f1f1d51fac412deb558d740c1670912281de2ae23f23670e65c5463",
+        "continuation": [
+          90,
+          198,
+          220,
+          328,
+          1163,
+          763,
+          328,
+          2117,
+          273,
+          487,
+          198,
+          220,
+          328,
+          1767,
+          763,
+          220,
+          22,
+          198,
+          92,
+          248046
+        ],
+        "text": "{\n  \"item\": \"maple\",\n  \"count\": 7\n}<|im_end|>"
+      },
+      {
+        "id": "vision-shapes",
+        "prompt_tokens": 658,
+        "prompt_ids_sha256_compact_json": "0f619ef4664533558520df066e82b719e309390308d32473eea2421ebab83286",
+        "continuation": [
+          71093,
+          2164,
+          198,
+          90,
+          198,
+          220,
+          328,
+          11084,
+          763,
+          328,
+          33,
+          691,
+          5228,
+          220,
+          19,
+          487,
+          198,
+          220,
+          328,
+          1114,
+          648,
+          71735,
+          763,
+          220,
+          18,
+          11,
+          198,
+          220,
+          328,
+          11855,
+          625,
+          39507,
+          763,
+          220,
+          17,
+          11,
+          198,
+          220,
+          328,
+          12865,
+          40726,
+          16740,
+          763,
+          220,
+          16,
+          198,
+          92,
+          198,
+          71093,
+          248046
+        ],
+        "text": "```json\n{\n  \"heading\": \"BONIX 4\",\n  \"red_circles\": 3,\n  \"blue_squares\": 2,\n  \"green_triangles\": 1\n}\n```<|im_end|>"
+      },
+      {
+        "id": "vision-receipt",
+        "prompt_tokens": 706,
+        "prompt_ids_sha256_compact_json": "5a5e39acc78439265ecc94af3673cb7cb7aa6fd206e271356e5a0a6e931f7bae",
+        "continuation": [
+          71093,
+          2164,
+          198,
+          90,
+          198,
+          220,
+          328,
+          993,
+          763,
+          328,
+          17,
+          15,
+          17,
+          21,
+          12,
+          16,
+          15,
+          12,
+          16,
+          20,
+          487,
+          198,
+          220,
+          328,
+          4873,
+          763,
+          220,
+          17,
+          15,
+          13,
+          15,
+          11,
+          198,
+          220,
+          328,
+          658,
+          624,
+          31040,
+          763,
+          220,
+          18,
+          11,
+          198,
+          220,
+          328,
+          78781,
+          14402,
+          8768,
+          763,
+          220,
+          20,
+          13,
+          15,
+          198,
+          92,
+          198,
+          71093,
+          248046
+        ],
+        "text": "```json\n{\n  \"date\": \"2026-10-15\",\n  \"total\": 20.0,\n  \"apples_quantity\": 3,\n  \"tea_unit_price\": 5.0\n}\n```<|im_end|>"
+      },
+      {
+        "id": "vision-chart",
+        "prompt_tokens": 690,
+        "prompt_ids_sha256_compact_json": "b98255f8acde518763c66280cd54afb2c8798e655f591396bf29fbdc93be2a10",
+        "continuation": [
+          71093,
+          2164,
+          198,
+          90,
+          198,
+          220,
+          328,
+          26035,
+          467,
+          763,
+          328,
+          47,
+          3848,
+          487,
+          198,
+          220,
+          328,
+          26035,
+          467,
+          3079,
+          763,
+          220,
+          24,
+          11,
+          198,
+          220,
+          328,
+          3445,
+          18655,
+          763,
+          328,
+          59964,
+          905,
+          487,
+          198,
+          220,
+          328,
+          3445,
+          18655,
+          3079,
+          763,
+          220,
+          19,
+          11,
+          198,
+          220,
+          328,
+          57248,
+          763,
+          220,
+          20,
+          198,
+          92,
+          198,
+          71093,
+          248046
+        ],
+        "text": "```json\n{\n  \"largest\": \"PINE\",\n  \"largest_count\": 9,\n  \"smallest\": \"CEDAR\",\n  \"smallest_count\": 4,\n  \"difference\": 5\n}\n```<|im_end|>"
+      },
+      {
+        "id": "vision-photo",
+        "prompt_tokens": 314,
+        "prompt_ids_sha256_compact_json": "536edd46dd7235cf57b9f9fc9b5290c886840fc01d2444c9a43e891bddafed4f",
+        "continuation": [
+          90,
+          198,
+          220,
+          328,
+          15596,
+          763,
+          220,
+          16,
+          11,
+          198,
+          220,
+          328,
+          33034,
+          625,
+          2983,
+          763,
+          804,
+          11,
+          198,
+          220,
+          328,
+          47473,
+          3923,
+          763,
+          804,
+          11,
+          198,
+          220,
+          328,
+          350,
+          10614,
+          763,
+          804,
+          11,
+          198,
+          220,
+          328,
+          8481,
+          3586,
+          94853,
+          763,
+          804,
+          198,
+          92,
+          248046
+        ],
+        "text": "{\n  \"people\": 1,\n  \"orange_suit\": true,\n  \"helmet\": true,\n  \"us_flag\": true,\n  \"space_shuttle\": true\n}<|im_end|>"
+      }
+    ],
+    "9": [
+      {
+        "id": "text-thinking",
+        "prompt_tokens": 41,
+        "prompt_ids_sha256_compact_json": "900f8bc018d714e1c921fefe8c6b51a34f587487466b522910c2991bc637ccc7",
+        "continuation": [
+          90700,
+          8340,
+          25,
+          271,
+          16,
+          13,
+          220,
+          2972,
+          2014,
+          53983,
+          279,
+          5952,
+          64700,
+          561,
+          1156,
+          369,
+          9859,
+          364,
+          279,
+          1067,
+          314,
+          264,
+          34780,
+          7258,
+          25,
+          328,
+          23,
+          19,
+          53070,
+          539,
+          220,
+          18,
+          17249,
+          539,
+          220,
+          17,
+          3158,
+          561,
+          20908,
+          369,
+          310,
+          4087,
+          440,
+          279,
+          1324,
+          1132,
+          13,
+          271,
+          17,
+          13,
+          220,
+          2972,
+          46270,
+          279,
+          15897,
+          64700,
+          198,
+          262,
+          348,
+          256,
+          15897,
+          25,
+          393,
+          23
+        ],
+        "text": "Thinking Process:\n\n1.  **Analyze the Request:** The user is asking for the result of a mathematical expression: \"84 multiplied by 3 divided by 2\". The constraint is to answer with the number only.\n\n2.  **Calculate the Expression:**\n    *   Expression: $8"
+      },
+      {
+        "id": "text-json",
+        "prompt_tokens": 39,
+        "prompt_ids_sha256_compact_json": "8b4885285f1f1d51fac412deb558d740c1670912281de2ae23f23670e65c5463",
+        "continuation": [
+          71093,
+          2164,
+          198,
+          90,
+          198,
+          220,
+          328,
+          1163,
+          763,
+          328,
+          2117,
+          273,
+          487,
+          198,
+          220,
+          328,
+          1767,
+          763,
+          220,
+          22,
+          198,
+          92,
+          198,
+          71093,
+          248046
+        ],
+        "text": "```json\n{\n  \"item\": \"maple\",\n  \"count\": 7\n}\n```<|im_end|>"
+      },
+      {
+        "id": "vision-shapes",
+        "prompt_tokens": 658,
+        "prompt_ids_sha256_compact_json": "0f619ef4664533558520df066e82b719e309390308d32473eea2421ebab83286",
+        "continuation": [
+          71093,
+          2164,
+          198,
+          90,
+          198,
+          220,
+          328,
+          11084,
+          763,
+          328,
+          33,
+          691,
+          7532,
+          40,
+          13251,
+          220,
+          19,
+          22,
+          487,
+          198,
+          220,
+          328,
+          1114,
+          648,
+          71735,
+          763,
+          220,
+          18,
+          11,
+          198,
+          220,
+          328,
+          11855,
+          625,
+          39507,
+          763,
+          220,
+          17,
+          11,
+          198,
+          220,
+          328,
+          12865,
+          40726,
+          16740,
+          763,
+          220,
+          16,
+          198,
+          92,
+          198,
+          71093,
+          248046
+        ],
+        "text": "```json\n{\n  \"heading\": \"BONSAI CHECK 47\",\n  \"red_circles\": 3,\n  \"blue_squares\": 2,\n  \"green_triangles\": 1\n}\n```<|im_end|>"
+      },
+      {
+        "id": "vision-receipt",
+        "prompt_tokens": 706,
+        "prompt_ids_sha256_compact_json": "5a5e39acc78439265ecc94af3673cb7cb7aa6fd206e271356e5a0a6e931f7bae",
+        "continuation": [
+          71093,
+          2164,
+          198,
+          90,
+          198,
+          220,
+          328,
+          993,
+          763,
+          328,
+          17,
+          15,
+          17,
+          21,
+          12,
+          16,
+          15,
+          12,
+          16,
+          20,
+          487,
+          198,
+          220,
+          328,
+          4873,
+          763,
+          220,
+          17,
+          15,
+          13,
+          15,
+          11,
+          198,
+          220,
+          328,
+          658,
+          624,
+          31040,
+          763,
+          220,
+          18,
+          11,
+          198,
+          220,
+          328,
+          78781,
+          14402,
+          8768,
+          763,
+          220,
+          20,
+          13,
+          15,
+          198,
+          92,
+          198,
+          71093,
+          248046
+        ],
+        "text": "```json\n{\n  \"date\": \"2026-10-15\",\n  \"total\": 20.0,\n  \"apples_quantity\": 3,\n  \"tea_unit_price\": 5.0\n}\n```<|im_end|>"
+      },
+      {
+        "id": "vision-chart",
+        "prompt_tokens": 690,
+        "prompt_ids_sha256_compact_json": "b98255f8acde518763c66280cd54afb2c8798e655f591396bf29fbdc93be2a10",
+        "continuation": [
+          71093,
+          2164,
+          198,
+          90,
+          198,
+          220,
+          328,
+          26035,
+          467,
+          763,
+          328,
+          47,
+          3848,
+          487,
+          198,
+          220,
+          328,
+          26035,
+          467,
+          3079,
+          763,
+          220,
+          24,
+          11,
+          198,
+          220,
+          328,
+          3445,
+          18655,
+          763,
+          328,
+          59964,
+          905,
+          487,
+          198,
+          220,
+          328,
+          3445,
+          18655,
+          3079,
+          763,
+          220,
+          19,
+          11,
+          198,
+          220,
+          328,
+          57248,
+          763,
+          220,
+          20,
+          198,
+          92,
+          198,
+          71093,
+          248046
+        ],
+        "text": "```json\n{\n  \"largest\": \"PINE\",\n  \"largest_count\": 9,\n  \"smallest\": \"CEDAR\",\n  \"smallest_count\": 4,\n  \"difference\": 5\n}\n```<|im_end|>"
+      },
+      {
+        "id": "vision-photo",
+        "prompt_tokens": 314,
+        "prompt_ids_sha256_compact_json": "536edd46dd7235cf57b9f9fc9b5290c886840fc01d2444c9a43e891bddafed4f",
+        "continuation": [
+          71093,
+          2164,
+          198,
+          90,
+          198,
+          220,
+          328,
+          15596,
+          763,
+          220,
+          16,
+          11,
+          198,
+          220,
+          328,
+          33034,
+          625,
+          2983,
+          763,
+          804,
+          11,
+          198,
+          220,
+          328,
+          47473,
+          3923,
+          763,
+          804,
+          11,
+          198,
+          220,
+          328,
+          350,
+          10614,
+          763,
+          804,
+          11,
+          198,
+          220,
+          328,
+          8481,
+          3586,
+          94853,
+          763,
+          804,
+          198,
+          92,
+          198,
+          71093,
+          248046
+        ],
+        "text": "```json\n{\n  \"people\": 1,\n  \"orange_suit\": true,\n  \"helmet\": true,\n  \"us_flag\": true,\n  \"space_shuttle\": true\n}\n```<|im_end|>"
+      }
+    ]
+  },
+  "models": [
+    {
+      "size": "2",
+      "source": {
+        "repo": "prism-ml/Ternary-Bonsai-2-2B-mlx-2bit",
+        "revision": "1c6cbae21f8c38830ce337972b46fdae7b18eaaa",
+        "files": [
+          {
+            "file": "LICENSE",
+            "bytes": 10174,
+            "sha256": "69849221bfb90053de2134ef5e6d540287b4b98062326492f1f96f5da685524b",
+            "upstream_identity": "66a27ec5ff940d3a9652d2948746ebac4c9d0188"
+          },
+          {
+            "file": "NOTICE.txt",
+            "bytes": 409,
+            "sha256": "316012fa6094c03c7b0600bec258bffb675a9261d86f37bc86e15763a1fabc99",
+            "upstream_identity": "f90179ad7823ab0d98f31490f50aa160870543b1"
+          },
+          {
+            "file": "PACK-RUNTIME.md",
+            "bytes": 2165,
+            "sha256": "49cc8676521bc64ee0eb58ef387f12540acfc90ff4d9b406f29d6c17516a86ca",
+            "upstream_identity": "2d62bdd25edf09f8e97c4f86e8cc15b8d52a4268"
+          },
+          {
+            "file": "README.md",
+            "bytes": 4889,
+            "sha256": "f72480ef2fba5328d976f69e40f5efbd4ec99e849928b19df6e0f626a5437987",
+            "upstream_identity": "5396e9705ef35fb97cbc43a7ac1bdc9a0e71ff7a"
+          },
+          {
+            "file": "chat_template.jinja",
+            "bytes": 7755,
+            "sha256": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80",
+            "upstream_identity": "0ef09f214eaa6d9bca297988afc1454b5827b2c7"
+          },
+          {
+            "file": "config.json",
+            "bytes": 22998,
+            "sha256": "f8d80cb7fd148b8841e63051c337d2758b4bc16243c577d35eaab6779534b591",
+            "upstream_identity": "422caf7f12b8b697f6d4c34bb7d469c8f401c458"
+          },
+          {
+            "file": "files.json",
+            "bytes": 2863,
+            "sha256": "bd56bdd2873855970b20022ab40408d810e6311c74530f6b05f0b9a0b552b3c6",
+            "upstream_identity": "7d52a7d639a730c2679ebe745d86269fd42cc17e"
+          },
+          {
+            "file": "generation_config.json",
+            "bytes": 201,
+            "sha256": "a3345cadb9d63a91a11c2c12135da7eadc3d0c820e3287b04682b51cad1b12d2",
+            "upstream_identity": "2995f0a9d161f73de9287d87766c35a5f5fd4753"
+          },
+          {
+            "file": "hadamard.json",
+            "bytes": 87679,
+            "sha256": "9e7c5f6e5f073f912dc536fc0e70e0789bd05e81c94e95721a7d4f370293f2de",
+            "upstream_identity": "e37945c1133f48a508ff4dda06d5598a47a6f5ee"
+          },
+          {
+            "file": "model.safetensors",
+            "bytes": 1200284784,
+            "sha256": "da5095b9f34d7f0d5094090afeeadf124eef821c75136dc28957ce586ae7ac0c",
+            "upstream_identity": "da5095b9f34d7f0d5094090afeeadf124eef821c75136dc28957ce586ae7ac0c"
+          },
+          {
+            "file": "preprocessor_config.json",
+            "bytes": 390,
+            "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+            "upstream_identity": "2ea84a437d448ff71b08df68fdd949d5cc4ebb64"
+          },
+          {
+            "file": "reload-validation.json",
+            "bytes": 86,
+            "sha256": "992b6a1bfbf99e43ec8a7b3bda11050fcbafdc82c66949d52b83173047abf376",
+            "upstream_identity": "d36d15db91be86ddf05920c9483be0f046668e5a"
+          },
+          {
+            "file": "tokenizer-validation.json",
+            "bytes": 63,
+            "sha256": "b36f33d09bd3de3e19de3fd2cf493a69ec0a5e24acf648b0c9fba120d9357554",
+            "upstream_identity": "b97fea5842a7b267293476f9f965216a707e73f6"
+          },
+          {
+            "file": "tokenizer.json",
+            "bytes": 12807982,
+            "sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+            "upstream_identity": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+          },
+          {
+            "file": "tokenizer_config.json",
+            "bytes": 16709,
+            "sha256": "49e2b6e395f959f077f1e992b338919c0d4a9732fc6e613995e06557f843500c",
+            "upstream_identity": "fae3ce993e07c092ad024dde45e592379fde91bb"
+          },
+          {
+            "file": "video_preprocessor_config.json",
+            "bytes": 385,
+            "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13",
+            "upstream_identity": "3ba673a5ad7d4d13f54155ecd38b2a94a6dac8fe"
+          }
+        ],
+        "verified": true
+      },
+      "comparison": {
+        "size": "2",
+        "passed": true,
+        "protocol": {
+          "checkpoint_sizes": [
+            "2",
+            "4",
+            "9"
+          ],
+          "reference": "Pinned pack loader and its published dependency versions; unmodified neural implementation",
+          "native": "Production tokenizer, preprocessing, vision loader, prefill, and cached decoder; test-only tensor exports",
+          "context": 16384,
+          "prefill_chunk": 512,
+          "decode": "Up to64 greedy upstream steps; native uses the identical upstream continuation to compare conditional logits",
+          "gates": {
+            "prompt_ids": "exact",
+            "image_grid": "exact",
+            "mrope_positions": "exact",
+            "normalized_patches_max_absolute_delta": 1e-06,
+            "image_embedding_relative_l2": 0.01,
+            "maximum_probability_delta": 0.01,
+            "teacher_forced_greedy_argmax": "exact at every exported position"
+          },
+          "interpretation": "Report each gate separately; any failure prevents an overall parity claim. Tolerances are frozen before native/reference comparison. No sampled-output equivalence claim.",
+          "reference_prefill_positions": "Explicit slices of unmodified upstream full-prompt get_rope_index output for image chunks; default scalar cache offset is only used during decode"
+        },
+        "reference_versions": {
+          "mlx": "0.32.0",
+          "mlx-vlm": "0.6.3",
+          "mlx-lm": "0.31.3",
+          "transformers": "5.5.0",
+          "pillow": "12.3.0",
+          "numpy": "2.5.4"
+        },
+        "native_prefix": "native",
+        "cases": [
+          {
+            "id": "text-thinking",
+            "passed": true,
+            "gates": {
+              "prompt_ids": true,
+              "image_grid": true,
+              "continuation": true,
+              "rope_delta": true,
+              "probabilities": true,
+              "teacher_forced_greedy_argmax": true,
+              "exported_argmax_consistent": true
+            },
+            "tensors": {
+              "input_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "logits": {
+                "shape_equal": true,
+                "max_absolute_delta": 2.384185791015625e-05,
+                "rmse": 1.4142152943226945e-06,
+                "relative_l2": 3.821598287793034e-07,
+                "finite": true,
+                "max_probability_delta": 1.860789916152683e-06,
+                "top1_agreement_count": 64,
+                "positions": 64,
+                "first_top1_mismatch": null
+              }
+            },
+            "reference_sha256": "0e210d7c5fe9eb3e86a997bbd6e9ee9df92d070ff3b817994ed740dee78c31fa",
+            "native_sha256": "a53a5c555a85a6aed698661fbdbdab6c2eb78dc4186a6f64979290a034bca2a9"
+          },
+          {
+            "id": "text-json",
+            "passed": true,
+            "gates": {
+              "prompt_ids": true,
+              "image_grid": true,
+              "continuation": true,
+              "rope_delta": true,
+              "probabilities": true,
+              "teacher_forced_greedy_argmax": true,
+              "exported_argmax_consistent": true
+            },
+            "tensors": {
+              "input_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "logits": {
+                "shape_equal": true,
+                "max_absolute_delta": 2.86102294921875e-05,
+                "rmse": 2.047791920378996e-06,
+                "relative_l2": 6.036494971286311e-07,
+                "finite": true,
+                "max_probability_delta": 1.2552593282255664e-05,
+                "top1_agreement_count": 25,
+                "positions": 25,
+                "first_top1_mismatch": null
+              }
+            },
+            "reference_sha256": "f06f017e6ae6b4f6b38017a2cbdfa1fab910ceb4c2b8ffb26ddb6f763ce68acf",
+            "native_sha256": "1d2bd62dda4d4e4ccdfa02ab6fb050429addd827ef59cdfe08dd4f0975d584b7"
+          },
+          {
+            "id": "vision-shapes",
+            "passed": true,
+            "gates": {
+              "prompt_ids": true,
+              "image_grid": true,
+              "continuation": true,
+              "rope_delta": true,
+              "mrope_positions": true,
+              "normalized_patches": true,
+              "image_embeddings": true,
+              "probabilities": true,
+              "teacher_forced_greedy_argmax": true,
+              "exported_argmax_consistent": true
+            },
+            "tensors": {
+              "patches": {
+                "shape_equal": true,
+                "max_absolute_delta": 1.1920928955078125e-07,
+                "rmse": 1.9092289452459013e-08,
+                "relative_l2": 1.9678524304096995e-08,
+                "finite": true
+              },
+              "image_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "input_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "positions": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "logits": {
+                "shape_equal": true,
+                "max_absolute_delta": 8.046627044677734e-05,
+                "rmse": 2.8309958728412227e-06,
+                "relative_l2": 8.406116975736356e-07,
+                "finite": true,
+                "max_probability_delta": 4.391637875911236e-06,
+                "top1_agreement_count": 64,
+                "positions": 64,
+                "first_top1_mismatch": null
+              }
+            },
+            "reference_sha256": "a30314bd5bb9885c0aa74c75f313b60402f3c12193e75b9de146787b66ac0ffe",
+            "native_sha256": "2340d3ca1ad5847d8a8cb0de5658c2289536846dd3993182ad508a03cabbc9b2"
+          },
+          {
+            "id": "vision-receipt",
+            "passed": true,
+            "gates": {
+              "prompt_ids": true,
+              "image_grid": true,
+              "continuation": true,
+              "rope_delta": true,
+              "mrope_positions": true,
+              "normalized_patches": true,
+              "image_embeddings": true,
+              "probabilities": true,
+              "teacher_forced_greedy_argmax": true,
+              "exported_argmax_consistent": true
+            },
+            "tensors": {
+              "patches": {
+                "shape_equal": true,
+                "max_absolute_delta": 1.1920928955078125e-07,
+                "rmse": 1.2316724451308546e-08,
+                "relative_l2": 1.2420768985934452e-08,
+                "finite": true
+              },
+              "image_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "input_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "positions": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "logits": {
+                "shape_equal": true,
+                "max_absolute_delta": 3.910064697265625e-05,
+                "rmse": 2.240285061855637e-06,
+                "relative_l2": 6.474220194984234e-07,
+                "finite": true,
+                "max_probability_delta": 5.758643928599483e-06,
+                "top1_agreement_count": 58,
+                "positions": 58,
+                "first_top1_mismatch": null
+              }
+            },
+            "reference_sha256": "f71bc0960afa7d4f5623afc9f2ac7cee4f6a4b230366cfb04a0d503f7662e9bf",
+            "native_sha256": "a037817a3cb528cb48d366529fb2cb77f8084152f925fd4ac7513dda12fdaaa7"
+          },
+          {
+            "id": "vision-chart",
+            "passed": true,
+            "gates": {
+              "prompt_ids": true,
+              "image_grid": true,
+              "continuation": true,
+              "rope_delta": true,
+              "mrope_positions": true,
+              "normalized_patches": true,
+              "image_embeddings": true,
+              "probabilities": true,
+              "teacher_forced_greedy_argmax": true,
+              "exported_argmax_consistent": true
+            },
+            "tensors": {
+              "patches": {
+                "shape_equal": true,
+                "max_absolute_delta": 1.1920928955078125e-07,
+                "rmse": 2.4631798588472924e-08,
+                "relative_l2": 2.6341351331767513e-08,
+                "finite": true
+              },
+              "image_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "input_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "positions": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "logits": {
+                "shape_equal": true,
+                "max_absolute_delta": 4.947185516357422e-05,
+                "rmse": 2.7294725416879387e-06,
+                "relative_l2": 7.930765115168654e-07,
+                "finite": true,
+                "max_probability_delta": 1.221239558546472e-05,
+                "top1_agreement_count": 56,
+                "positions": 56,
+                "first_top1_mismatch": null
+              }
+            },
+            "reference_sha256": "b22d8f414a92ccc2d73dd2341acdc8d8cfebe1470bc766021c343ca38aee11a1",
+            "native_sha256": "0826430477dcbf024cf0aadaacb2324dd2ca30b36c9d26605dc03655ffacdfbe"
+          },
+          {
+            "id": "vision-photo",
+            "passed": true,
+            "gates": {
+              "prompt_ids": true,
+              "image_grid": true,
+              "continuation": true,
+              "rope_delta": true,
+              "mrope_positions": true,
+              "normalized_patches": true,
+              "image_embeddings": true,
+              "probabilities": true,
+              "teacher_forced_greedy_argmax": true,
+              "exported_argmax_consistent": true
+            },
+            "tensors": {
+              "patches": {
+                "shape_equal": true,
+                "max_absolute_delta": 1.1920928955078125e-07,
+                "rmse": 6.184740418644324e-08,
+                "relative_l2": 9.587467589418235e-08,
+                "finite": true
+              },
+              "image_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "input_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "positions": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "logits": {
+                "shape_equal": true,
+                "max_absolute_delta": 4.673004150390625e-05,
+                "rmse": 2.5275733058828156e-06,
+                "relative_l2": 7.541496887791559e-07,
+                "finite": true,
+                "max_probability_delta": 4.959682315286429e-06,
+                "top1_agreement_count": 64,
+                "positions": 64,
+                "first_top1_mismatch": null
+              }
+            },
+            "reference_sha256": "fa923c832e8044b27ac92a5ac6bd8cf508e17d9b499d69915d2a1b17abf73385",
+            "native_sha256": "7c11649f8602c02a9aa5bdc2760d1716b563ea7989a202e7eb6f0fe5ad45b513"
+          }
+        ]
+      }
+    },
+    {
+      "size": "4",
+      "source": {
+        "repo": "prism-ml/Ternary-Bonsai-2-4B-mlx-2bit",
+        "revision": "dff2caaa23fa8706164c44c10f1b58feb405f76a",
+        "files": [
+          {
+            "file": "LICENSE",
+            "bytes": 10174,
+            "sha256": "69849221bfb90053de2134ef5e6d540287b4b98062326492f1f96f5da685524b",
+            "upstream_identity": "66a27ec5ff940d3a9652d2948746ebac4c9d0188"
+          },
+          {
+            "file": "MTP.md",
+            "bytes": 1645,
+            "sha256": "74e5d05a1503636cd8c1829ade57db9bf9189beee9de04f226a260c2e4e01888",
+            "upstream_identity": "ee815ae77212df57131f9b5a62b862d3c73c0502"
+          },
+          {
+            "file": "NOTICE.txt",
+            "bytes": 409,
+            "sha256": "8dcc043c84d87cfaabdc4be40fa60742bbce1ddcbc53137610632d6d6f9aa5db",
+            "upstream_identity": "7b6ad576ae7f9a3dd5008c194a65942a0b65b7e3"
+          },
+          {
+            "file": "PACK-RUNTIME.md",
+            "bytes": 2165,
+            "sha256": "49cc8676521bc64ee0eb58ef387f12540acfc90ff4d9b406f29d6c17516a86ca",
+            "upstream_identity": "2d62bdd25edf09f8e97c4f86e8cc15b8d52a4268"
+          },
+          {
+            "file": "README.md",
+            "bytes": 5507,
+            "sha256": "4a41a271c6f0ed099d03bd0810c7cf083c4c447cd75ecd75f4a94cdb597627eb",
+            "upstream_identity": "a034d0fe30cab0aebccfc6c6c03c4a71e9a88653"
+          },
+          {
+            "file": "chat_template.jinja",
+            "bytes": 7756,
+            "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+            "upstream_identity": "a585dec894e63da457d9440ec6aa7caa16d20860"
+          },
+          {
+            "file": "config.json",
+            "bytes": 29911,
+            "sha256": "119ae9e731281a52b8a590edc6971a6f95c8b283cd6bb215f12b1f172e587b23",
+            "upstream_identity": "cee1f7434e8c4b1c088f76058c5442a616a4465f"
+          },
+          {
+            "file": "files.json",
+            "bytes": 3246,
+            "sha256": "4d6e58f2d8754ef079d55407a7d4ae119e1eb973a5f9451ea727e260bced0614",
+            "upstream_identity": "f4759d59913d97d060ba8d8cdccbcd458c469233"
+          },
+          {
+            "file": "generation_config.json",
+            "bytes": 201,
+            "sha256": "a3345cadb9d63a91a11c2c12135da7eadc3d0c820e3287b04682b51cad1b12d2",
+            "upstream_identity": "2995f0a9d161f73de9287d87766c35a5f5fd4753"
+          },
+          {
+            "file": "hadamard.json",
+            "bytes": 163656,
+            "sha256": "e6393f16372cd0d45833d97d2390afd10919a813b4ac7f26b990d5315ae8fbeb",
+            "upstream_identity": "b3c6cf86c1d4bfe2ba78cad5d8eb20b11943a352"
+          },
+          {
+            "file": "model.safetensors",
+            "bytes": 1871365704,
+            "sha256": "432f48d0edcb8da2e6a4e0c96078588362397e2603e7fdea99957babfe968259",
+            "upstream_identity": "432f48d0edcb8da2e6a4e0c96078588362397e2603e7fdea99957babfe968259"
+          },
+          {
+            "file": "preprocessor_config.json",
+            "bytes": 390,
+            "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+            "upstream_identity": "2ea84a437d448ff71b08df68fdd949d5cc4ebb64"
+          },
+          {
+            "file": "reload-validation.json",
+            "bytes": 86,
+            "sha256": "18d9d01791d2cdddde90d36089e6b1358b86e52eda3f32157d9fc335c79d0630",
+            "upstream_identity": "6d1d2b901dc12d4a6babd3abcb28c3bde0a47c66"
+          },
+          {
+            "file": "tokenizer-validation.json",
+            "bytes": 63,
+            "sha256": "b36f33d09bd3de3e19de3fd2cf493a69ec0a5e24acf648b0c9fba120d9357554",
+            "upstream_identity": "b97fea5842a7b267293476f9f965216a707e73f6"
+          },
+          {
+            "file": "tokenizer.json",
+            "bytes": 12807982,
+            "sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+            "upstream_identity": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+          },
+          {
+            "file": "tokenizer_config.json",
+            "bytes": 16710,
+            "sha256": "316230d6a809701f4db5ea8f8fc862bc3a6f3229c937c174e674ff3ca0a64ac8",
+            "upstream_identity": "eda48d3e75a8e59a8479ee4ec8b37f76e711d9c1"
+          },
+          {
+            "file": "video_preprocessor_config.json",
+            "bytes": 385,
+            "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13",
+            "upstream_identity": "3ba673a5ad7d4d13f54155ecd38b2a94a6dac8fe"
+          }
+        ],
+        "verified": true
+      },
+      "comparison": {
+        "size": "4",
+        "passed": true,
+        "protocol": {
+          "checkpoint_sizes": [
+            "2",
+            "4",
+            "9"
+          ],
+          "reference": "Pinned pack loader and its published dependency versions; unmodified neural implementation",
+          "native": "Production tokenizer, preprocessing, vision loader, prefill, and cached decoder; test-only tensor exports",
+          "context": 16384,
+          "prefill_chunk": 512,
+          "decode": "Up to64 greedy upstream steps; native uses the identical upstream continuation to compare conditional logits",
+          "gates": {
+            "prompt_ids": "exact",
+            "image_grid": "exact",
+            "mrope_positions": "exact",
+            "normalized_patches_max_absolute_delta": 1e-06,
+            "image_embedding_relative_l2": 0.01,
+            "maximum_probability_delta": 0.01,
+            "teacher_forced_greedy_argmax": "exact at every exported position"
+          },
+          "interpretation": "Report each gate separately; any failure prevents an overall parity claim. Tolerances are frozen before native/reference comparison. No sampled-output equivalence claim.",
+          "reference_prefill_positions": "Explicit slices of unmodified upstream full-prompt get_rope_index output for image chunks; default scalar cache offset is only used during decode"
+        },
+        "reference_versions": {
+          "mlx": "0.32.0",
+          "mlx-vlm": "0.6.3",
+          "mlx-lm": "0.31.3",
+          "transformers": "5.5.0",
+          "pillow": "12.3.0",
+          "numpy": "2.5.4"
+        },
+        "native_prefix": "native",
+        "cases": [
+          {
+            "id": "text-thinking",
+            "passed": true,
+            "gates": {
+              "prompt_ids": true,
+              "image_grid": true,
+              "continuation": true,
+              "rope_delta": true,
+              "probabilities": true,
+              "teacher_forced_greedy_argmax": true,
+              "exported_argmax_consistent": true
+            },
+            "tensors": {
+              "input_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "logits": {
+                "shape_equal": true,
+                "max_absolute_delta": 2.6702880859375e-05,
+                "rmse": 1.3424653899011988e-06,
+                "relative_l2": 3.593715727873396e-07,
+                "finite": true,
+                "max_probability_delta": 1.3966796597042475e-06,
+                "top1_agreement_count": 64,
+                "positions": 64,
+                "first_top1_mismatch": null
+              }
+            },
+            "reference_sha256": "8c114cec141d2e8688b934efc9cd7dc88efec56c0eba611e6354edf5d69a559b",
+            "native_sha256": "5b5e46713a9ea15e25506fca238d0b286c42ea42941b6c0a4f4380f20984eb69"
+          },
+          {
+            "id": "text-json",
+            "passed": true,
+            "gates": {
+              "prompt_ids": true,
+              "image_grid": true,
+              "continuation": true,
+              "rope_delta": true,
+              "probabilities": true,
+              "teacher_forced_greedy_argmax": true,
+              "exported_argmax_consistent": true
+            },
+            "tensors": {
+              "input_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "logits": {
+                "shape_equal": true,
+                "max_absolute_delta": 4.00543212890625e-05,
+                "rmse": 2.3069587879801452e-06,
+                "relative_l2": 7.7034518523925e-07,
+                "finite": true,
+                "max_probability_delta": 1.750628089630668e-06,
+                "top1_agreement_count": 20,
+                "positions": 20,
+                "first_top1_mismatch": null
+              }
+            },
+            "reference_sha256": "d663061a99b304a98ffe46da2c03b47018606052ca47f7e789b76ea759fa6230",
+            "native_sha256": "af67751238810d2ccfa1327a2c26160c814be8e297cf22cc67c609e34c3cacbc"
+          },
+          {
+            "id": "vision-shapes",
+            "passed": true,
+            "gates": {
+              "prompt_ids": true,
+              "image_grid": true,
+              "continuation": true,
+              "rope_delta": true,
+              "mrope_positions": true,
+              "normalized_patches": true,
+              "image_embeddings": true,
+              "probabilities": true,
+              "teacher_forced_greedy_argmax": true,
+              "exported_argmax_consistent": true
+            },
+            "tensors": {
+              "patches": {
+                "shape_equal": true,
+                "max_absolute_delta": 1.1920928955078125e-07,
+                "rmse": 1.9092289452459013e-08,
+                "relative_l2": 1.9678524304096995e-08,
+                "finite": true
+              },
+              "image_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "input_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "positions": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "logits": {
+                "shape_equal": true,
+                "max_absolute_delta": 5.9604644775390625e-05,
+                "rmse": 2.9338552735677575e-06,
+                "relative_l2": 9.87021537723376e-07,
+                "finite": true,
+                "max_probability_delta": 2.437047850384344e-06,
+                "top1_agreement_count": 50,
+                "positions": 50,
+                "first_top1_mismatch": null
+              }
+            },
+            "reference_sha256": "92c0b9bb6d10c13cda8a4ea8725a480b06d0bd5c290ca0b810da6b12dfd4d4f8",
+            "native_sha256": "eebeb0bc8183efe2c25d3524a1586b9dc52cca6e39b2776a95501ea6c471e7ee"
+          },
+          {
+            "id": "vision-receipt",
+            "passed": true,
+            "gates": {
+              "prompt_ids": true,
+              "image_grid": true,
+              "continuation": true,
+              "rope_delta": true,
+              "mrope_positions": true,
+              "normalized_patches": true,
+              "image_embeddings": true,
+              "probabilities": true,
+              "teacher_forced_greedy_argmax": true,
+              "exported_argmax_consistent": true
+            },
+            "tensors": {
+              "patches": {
+                "shape_equal": true,
+                "max_absolute_delta": 1.1920928955078125e-07,
+                "rmse": 1.2316724451308546e-08,
+                "relative_l2": 1.2420768985934452e-08,
+                "finite": true
+              },
+              "image_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "input_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "positions": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "logits": {
+                "shape_equal": true,
+                "max_absolute_delta": 3.814697265625e-05,
+                "rmse": 2.215204362073587e-06,
+                "relative_l2": 7.098166303087348e-07,
+                "finite": true,
+                "max_probability_delta": 6.115506108184121e-07,
+                "top1_agreement_count": 58,
+                "positions": 58,
+                "first_top1_mismatch": null
+              }
+            },
+            "reference_sha256": "726c3d9b4db0fb1a9e2118a756c09073ccfdf1ecb11ad9d4f19013a95e4f2371",
+            "native_sha256": "4855d8a6f724d95139826c2e542befb1f6ceb2dec427f825484c97ebcb5a493b"
+          },
+          {
+            "id": "vision-chart",
+            "passed": true,
+            "gates": {
+              "prompt_ids": true,
+              "image_grid": true,
+              "continuation": true,
+              "rope_delta": true,
+              "mrope_positions": true,
+              "normalized_patches": true,
+              "image_embeddings": true,
+              "probabilities": true,
+              "teacher_forced_greedy_argmax": true,
+              "exported_argmax_consistent": true
+            },
+            "tensors": {
+              "patches": {
+                "shape_equal": true,
+                "max_absolute_delta": 1.1920928955078125e-07,
+                "rmse": 2.4631798588472924e-08,
+                "relative_l2": 2.6341351331767513e-08,
+                "finite": true
+              },
+              "image_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "input_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "positions": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "logits": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.00020694732666015625,
+                "rmse": 3.662849059758338e-06,
+                "relative_l2": 1.2341258335149558e-06,
+                "finite": true,
+                "max_probability_delta": 4.563301149840271e-06,
+                "top1_agreement_count": 56,
+                "positions": 56,
+                "first_top1_mismatch": null
+              }
+            },
+            "reference_sha256": "646ca9546eba78ef592b2314879ce0c85d26c1315299ad52bf166d09ef0990d1",
+            "native_sha256": "0d89ee3405d9c18e700db9871437a9128c8fc21de2f585bb22a83f14ca3a7942"
+          },
+          {
+            "id": "vision-photo",
+            "passed": true,
+            "gates": {
+              "prompt_ids": true,
+              "image_grid": true,
+              "continuation": true,
+              "rope_delta": true,
+              "mrope_positions": true,
+              "normalized_patches": true,
+              "image_embeddings": true,
+              "probabilities": true,
+              "teacher_forced_greedy_argmax": true,
+              "exported_argmax_consistent": true
+            },
+            "tensors": {
+              "patches": {
+                "shape_equal": true,
+                "max_absolute_delta": 1.1920928955078125e-07,
+                "rmse": 6.184740418644324e-08,
+                "relative_l2": 9.587467589418235e-08,
+                "finite": true
+              },
+              "image_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "input_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "positions": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "logits": {
+                "shape_equal": true,
+                "max_absolute_delta": 5.054473876953125e-05,
+                "rmse": 2.9459424088244927e-06,
+                "relative_l2": 9.91169372231293e-07,
+                "finite": true,
+                "max_probability_delta": 3.1959920604451852e-06,
+                "top1_agreement_count": 45,
+                "positions": 45,
+                "first_top1_mismatch": null
+              }
+            },
+            "reference_sha256": "d82aa0724b3bb238b560cb684a9ed01ecaa047f46267d70ee966afdb96f1843a",
+            "native_sha256": "0e49bd695841948cfb32d09f5c8a4188dfd9387f95c01b6a0caf5f79f14edacd"
+          }
+        ]
+      }
+    },
+    {
+      "size": "9",
+      "source": {
+        "repo": "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit",
+        "revision": "f4e28a59531731c41b6dfac88cf271bd58f0a287",
+        "files": [
+          {
+            "file": "LICENSE",
+            "bytes": 10174,
+            "sha256": "69849221bfb90053de2134ef5e6d540287b4b98062326492f1f96f5da685524b",
+            "upstream_identity": "66a27ec5ff940d3a9652d2948746ebac4c9d0188"
+          },
+          {
+            "file": "MTP.md",
+            "bytes": 1645,
+            "sha256": "74e5d05a1503636cd8c1829ade57db9bf9189beee9de04f226a260c2e4e01888",
+            "upstream_identity": "ee815ae77212df57131f9b5a62b862d3c73c0502"
+          },
+          {
+            "file": "NOTICE.txt",
+            "bytes": 409,
+            "sha256": "362344de30a17813fed132eab01825641835fdee55b5101a7c0ffbf8760424ba",
+            "upstream_identity": "9f9382ad101baa75313a5d7f9eb575e7fa4668c0"
+          },
+          {
+            "file": "PACK-RUNTIME.md",
+            "bytes": 2165,
+            "sha256": "49cc8676521bc64ee0eb58ef387f12540acfc90ff4d9b406f29d6c17516a86ca",
+            "upstream_identity": "2d62bdd25edf09f8e97c4f86e8cc15b8d52a4268"
+          },
+          {
+            "file": "README.md",
+            "bytes": 5508,
+            "sha256": "84a1b99bc32cf994c2d769db6aff58fdb10e3f21f2f1a315996f33205bb52bfd",
+            "upstream_identity": "2f645c81c8c290a245b9f475cc7a174aaa34f151"
+          },
+          {
+            "file": "chat_template.jinja",
+            "bytes": 7756,
+            "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+            "upstream_identity": "a585dec894e63da457d9440ec6aa7caa16d20860"
+          },
+          {
+            "file": "config.json",
+            "bytes": 30202,
+            "sha256": "b028784e087316b7ce0fb7ae3d2d6eaeb0b15144dd3f234da4c5d57ef1ffbacb",
+            "upstream_identity": "965db2255b398c704bd3666e7e8c89559d67cb67"
+          },
+          {
+            "file": "files.json",
+            "bytes": 2742,
+            "sha256": "e0b1c795fc4bbcc371bbd6e2eb66c66f7ad2f3229a462e262c101d76d8cd5f54",
+            "upstream_identity": "932f2bcdcc4fde6a1e3cf175a98d404ef716fabb"
+          },
+          {
+            "file": "generation_config.json",
+            "bytes": 201,
+            "sha256": "a3345cadb9d63a91a11c2c12135da7eadc3d0c820e3287b04682b51cad1b12d2",
+            "upstream_identity": "2995f0a9d161f73de9287d87766c35a5f5fd4753"
+          },
+          {
+            "file": "hadamard.json",
+            "bytes": 168574,
+            "sha256": "6d0b37a136e1b5b25b3e8b0467599c78dd0a90c341b640a1f49271cb0be7c73b",
+            "upstream_identity": "09bb52889f5b4948bb873b7f48cee09c8715f978"
+          },
+          {
+            "file": "model.safetensors",
+            "bytes": 3462149260,
+            "sha256": "b8ebd13459dcd53504432a4a0a797287c3a4c00d80835466dbb499f05b7512bb",
+            "upstream_identity": "b8ebd13459dcd53504432a4a0a797287c3a4c00d80835466dbb499f05b7512bb"
+          },
+          {
+            "file": "preprocessor_config.json",
+            "bytes": 390,
+            "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+            "upstream_identity": "2ea84a437d448ff71b08df68fdd949d5cc4ebb64"
+          },
+          {
+            "file": "reload-validation.json",
+            "bytes": 86,
+            "sha256": "18d9d01791d2cdddde90d36089e6b1358b86e52eda3f32157d9fc335c79d0630",
+            "upstream_identity": "6d1d2b901dc12d4a6babd3abcb28c3bde0a47c66"
+          },
+          {
+            "file": "tokenizer-validation.json",
+            "bytes": 63,
+            "sha256": "b36f33d09bd3de3e19de3fd2cf493a69ec0a5e24acf648b0c9fba120d9357554",
+            "upstream_identity": "b97fea5842a7b267293476f9f965216a707e73f6"
+          },
+          {
+            "file": "tokenizer.json",
+            "bytes": 12807982,
+            "sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+            "upstream_identity": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+          },
+          {
+            "file": "tokenizer_config.json",
+            "bytes": 16710,
+            "sha256": "316230d6a809701f4db5ea8f8fc862bc3a6f3229c937c174e674ff3ca0a64ac8",
+            "upstream_identity": "eda48d3e75a8e59a8479ee4ec8b37f76e711d9c1"
+          },
+          {
+            "file": "video_preprocessor_config.json",
+            "bytes": 385,
+            "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13",
+            "upstream_identity": "3ba673a5ad7d4d13f54155ecd38b2a94a6dac8fe"
+          }
+        ],
+        "verified": true
+      },
+      "comparison": {
+        "size": "9",
+        "passed": true,
+        "protocol": {
+          "checkpoint_sizes": [
+            "2",
+            "4",
+            "9"
+          ],
+          "reference": "Pinned pack loader and its published dependency versions; unmodified neural implementation",
+          "native": "Production tokenizer, preprocessing, vision loader, prefill, and cached decoder; test-only tensor exports",
+          "context": 16384,
+          "prefill_chunk": 512,
+          "decode": "Up to64 greedy upstream steps; native uses the identical upstream continuation to compare conditional logits",
+          "gates": {
+            "prompt_ids": "exact",
+            "image_grid": "exact",
+            "mrope_positions": "exact",
+            "normalized_patches_max_absolute_delta": 1e-06,
+            "image_embedding_relative_l2": 0.01,
+            "maximum_probability_delta": 0.01,
+            "teacher_forced_greedy_argmax": "exact at every exported position"
+          },
+          "interpretation": "Report each gate separately; any failure prevents an overall parity claim. Tolerances are frozen before native/reference comparison. No sampled-output equivalence claim.",
+          "reference_prefill_positions": "Explicit slices of unmodified upstream full-prompt get_rope_index output for image chunks; default scalar cache offset is only used during decode"
+        },
+        "reference_versions": {
+          "mlx": "0.32.0",
+          "mlx-vlm": "0.6.3",
+          "mlx-lm": "0.31.3",
+          "transformers": "5.5.0",
+          "pillow": "12.3.0",
+          "numpy": "2.5.4"
+        },
+        "native_prefix": "native",
+        "cases": [
+          {
+            "id": "text-thinking",
+            "passed": true,
+            "gates": {
+              "prompt_ids": true,
+              "image_grid": true,
+              "continuation": true,
+              "rope_delta": true,
+              "probabilities": true,
+              "teacher_forced_greedy_argmax": true,
+              "exported_argmax_consistent": true
+            },
+            "tensors": {
+              "input_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "logits": {
+                "shape_equal": true,
+                "max_absolute_delta": 4.315376281738281e-05,
+                "rmse": 1.6854952587723231e-06,
+                "relative_l2": 4.1964706206703536e-07,
+                "finite": true,
+                "max_probability_delta": 1.4264325480795037e-06,
+                "top1_agreement_count": 64,
+                "positions": 64,
+                "first_top1_mismatch": null
+              }
+            },
+            "reference_sha256": "d55055f8354dee2536e0912f87b0af04549c7211602093ae32543369f3d3be20",
+            "native_sha256": "e2a1cc13600568038cc57fe75741da27939aba2bc3adc741a7da800f4cbdedd6"
+          },
+          {
+            "id": "text-json",
+            "passed": true,
+            "gates": {
+              "prompt_ids": true,
+              "image_grid": true,
+              "continuation": true,
+              "rope_delta": true,
+              "probabilities": true,
+              "teacher_forced_greedy_argmax": true,
+              "exported_argmax_consistent": true
+            },
+            "tensors": {
+              "input_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "logits": {
+                "shape_equal": true,
+                "max_absolute_delta": 3.4332275390625e-05,
+                "rmse": 1.945453960469304e-06,
+                "relative_l2": 6.03130797117207e-07,
+                "finite": true,
+                "max_probability_delta": 3.425841553328368e-06,
+                "top1_agreement_count": 25,
+                "positions": 25,
+                "first_top1_mismatch": null
+              }
+            },
+            "reference_sha256": "12cdf01fd7740af101f48fd37fe0499fa39b01d5312cca843b821d26f1057514",
+            "native_sha256": "eb707f93bafd3236cd5da8d5bd741ef0a8e26e5f19bf0add54db2598354871b4"
+          },
+          {
+            "id": "vision-shapes",
+            "passed": true,
+            "gates": {
+              "prompt_ids": true,
+              "image_grid": true,
+              "continuation": true,
+              "rope_delta": true,
+              "mrope_positions": true,
+              "normalized_patches": true,
+              "image_embeddings": true,
+              "probabilities": true,
+              "teacher_forced_greedy_argmax": true,
+              "exported_argmax_consistent": true
+            },
+            "tensors": {
+              "patches": {
+                "shape_equal": true,
+                "max_absolute_delta": 1.1920928955078125e-07,
+                "rmse": 1.9092289452459013e-08,
+                "relative_l2": 1.9678524304096995e-08,
+                "finite": true
+              },
+              "image_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.375,
+                "rmse": 0.000909798260047594,
+                "relative_l2": 0.0053057531212050025,
+                "finite": true
+              },
+              "input_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.375,
+                "rmse": 0.0008687759306150669,
+                "relative_l2": 0.005304623456362689,
+                "finite": true
+              },
+              "positions": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "logits": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0754399299621582,
+                "rmse": 0.0037164610976528983,
+                "relative_l2": 0.001112527141477673,
+                "finite": true,
+                "max_probability_delta": 0.0024220464282747045,
+                "top1_agreement_count": 53,
+                "positions": 53,
+                "first_top1_mismatch": null
+              }
+            },
+            "reference_sha256": "f4387bb54fe9dedbe67bc12276820b06a73ec5f2f52ee9e6b35a4808d9b80b9c",
+            "native_sha256": "eb5a57ae18eb178963c7a4361503f2a1f5e7dc7b306084bf04a9e720e5da4f4a"
+          },
+          {
+            "id": "vision-receipt",
+            "passed": true,
+            "gates": {
+              "prompt_ids": true,
+              "image_grid": true,
+              "continuation": true,
+              "rope_delta": true,
+              "mrope_positions": true,
+              "normalized_patches": true,
+              "image_embeddings": true,
+              "probabilities": true,
+              "teacher_forced_greedy_argmax": true,
+              "exported_argmax_consistent": true
+            },
+            "tensors": {
+              "patches": {
+                "shape_equal": true,
+                "max_absolute_delta": 1.1920928955078125e-07,
+                "rmse": 1.2316724451308546e-08,
+                "relative_l2": 1.2420768985934452e-08,
+                "finite": true
+              },
+              "image_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.041015625,
+                "rmse": 0.0001987070207485153,
+                "relative_l2": 0.0024951174618676,
+                "finite": true
+              },
+              "input_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.041015625,
+                "rmse": 0.00019081009848826962,
+                "relative_l2": 0.002492912914350091,
+                "finite": true
+              },
+              "positions": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "logits": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.029537677764892578,
+                "rmse": 0.0012453084153306053,
+                "relative_l2": 0.0003608087043646963,
+                "finite": true,
+                "max_probability_delta": 0.0006350768367877624,
+                "top1_agreement_count": 58,
+                "positions": 58,
+                "first_top1_mismatch": null
+              }
+            },
+            "reference_sha256": "fa5ae74cd247f85a1b2f789a4a5e3192c2abd48a3f58373265d11f1f1683fd1c",
+            "native_sha256": "e7d107686958a101b8b99d5a0602785a30d0e95c9d9d49c468ff2080187a51b6"
+          },
+          {
+            "id": "vision-chart",
+            "passed": true,
+            "gates": {
+              "prompt_ids": true,
+              "image_grid": true,
+              "continuation": true,
+              "rope_delta": true,
+              "mrope_positions": true,
+              "normalized_patches": true,
+              "image_embeddings": true,
+              "probabilities": true,
+              "teacher_forced_greedy_argmax": true,
+              "exported_argmax_consistent": true
+            },
+            "tensors": {
+              "patches": {
+                "shape_equal": true,
+                "max_absolute_delta": 1.1920928955078125e-07,
+                "rmse": 2.4631798588472924e-08,
+                "relative_l2": 2.6341351331767513e-08,
+                "finite": true
+              },
+              "image_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.1796875,
+                "rmse": 0.0004752599695676911,
+                "relative_l2": 0.004424500656713846,
+                "finite": true
+              },
+              "input_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.1796875,
+                "rmse": 0.0004541266253285644,
+                "relative_l2": 0.004422091494729289,
+                "finite": true
+              },
+              "positions": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "logits": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.07823562622070312,
+                "rmse": 0.001847877136045028,
+                "relative_l2": 0.0005660358539803818,
+                "finite": true,
+                "max_probability_delta": 0.00016515917354995718,
+                "top1_agreement_count": 56,
+                "positions": 56,
+                "first_top1_mismatch": null
+              }
+            },
+            "reference_sha256": "ae565ec06bfed8dc49b908b5ad9c3bee768bb782f4ac848b72800d9b71c65cad",
+            "native_sha256": "02c0d95f6138383822b57607d753b5b7164b6f46f5b7d6b7efbac166c56e4ddc"
+          },
+          {
+            "id": "vision-photo",
+            "passed": true,
+            "gates": {
+              "prompt_ids": true,
+              "image_grid": true,
+              "continuation": true,
+              "rope_delta": true,
+              "mrope_positions": true,
+              "normalized_patches": true,
+              "image_embeddings": true,
+              "probabilities": true,
+              "teacher_forced_greedy_argmax": true,
+              "exported_argmax_consistent": true
+            },
+            "tensors": {
+              "patches": {
+                "shape_equal": true,
+                "max_absolute_delta": 1.1920928955078125e-07,
+                "rmse": 6.184740418644324e-08,
+                "relative_l2": 9.587467589418235e-08,
+                "finite": true
+              },
+              "image_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.390625,
+                "rmse": 0.0010589197538835166,
+                "relative_l2": 0.0039783481845261925,
+                "finite": true
+              },
+              "input_embeddings": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.390625,
+                "rmse": 0.0009561327819371166,
+                "relative_l2": 0.003977494281503482,
+                "finite": true
+              },
+              "positions": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.0,
+                "rmse": 0.0,
+                "relative_l2": 0.0,
+                "finite": true
+              },
+              "logits": {
+                "shape_equal": true,
+                "max_absolute_delta": 0.09844970703125,
+                "rmse": 0.0017498132522775773,
+                "relative_l2": 0.0005231936408501489,
+                "finite": true,
+                "max_probability_delta": 0.0003714299146890254,
+                "top1_agreement_count": 50,
+                "positions": 50,
+                "first_top1_mismatch": null
+              }
+            },
+            "reference_sha256": "1cdf9d799c1ee3b472f03c71f31d649f5e2e7f011a189988f33edfc083978df7",
+            "native_sha256": "b36f0d8b7ef5612d5663a283302b3bce5872d9dbee58624b0477d56c4ecc47f7"
+          }
+        ]
+      }
+    }
+  ],
+  "test_receipt": {
+    "source_sha256": {
+      "Sources/MereRunCore/Q35/Q35Generator+TextWeights.swift": "c50b1c7d13335963d5345a63c8a71f45131a502e41e886ede2b31c06970a65b4",
+      "Sources/MereRunCore/Q35/Q35Generator+Vision.swift": "309c25ec2f1ab4ca7ece85aded65bcbdd9e5e1a1cce81af8bf9a889d2ffe14cb",
+      "Sources/MereRunQwenModel/Q35FullAttention.swift": "a5e2e412fd878c2f9617e017ef2de4dc0f4fff0b2d2378d4305cd100ce6f56f8",
+      "Sources/MereRunQwenModel/Q35Model.swift": "5727bb6e94a3bf50718a7805f4ac01c3eb29354c8363b2b93ac8958cae9506de",
+      "Sources/MereRunQwenModel/Q35VisionTower.swift": "67c33147077eafe04b2368429233c147e8183fbe97e2d5de9b07d5f29ad92190",
+      "Sources/MereRunQwenModel/README.md": "6f90cb18669082382e8f71b6a13c1dd377b5c1e85c2c0f0bc4be4191b7462563",
+      "Sources/MereRunTextEncoder/Vision/QwenVisionPatchEmbed.swift": "dd5e890d51aa0879d6fa6423dfb0b8fb5c2233dd86134bed4e045dca97b54970",
+      "Sources/MereRunTextEncoder/Vision/QwenVisionTower.swift": "7de49fb879fdf0d0290baa9d8f32874f91b2ac383c04cd819587f63a412213d5",
+      "Tests/MereRunCoreTests/Bonsai2SmallReferenceTests.swift": "5003e977fb6b1c1adfdc774466d5d0ddedb0d74674175d8ddbc6d65fe70b6018",
+      "Tests/MereRunCoreTests/Bonsai2SmallTests.swift": "d227414d648e1c59afa08dd824c9238ec1f197e03b40c943af56eee79944bc8a",
+      "Tests/MereRunCoreTests/Bonsai2SmallVisionStageTests.swift": "ba235b805da7fad396a9a42735ea8287927951c51bdee9f12909f440aaaf1437"
+    },
+    "test_executable_sha256": "72606f1d480630433c44a32d87a5355d2e236f45ec41462b147282d3e7036373",
+    "native_mlx_core": "0.32.1",
+    "variant": "Explicit precise Metal power for checkpoint vision frequencies",
+    "base_commit": "c615cb30",
+    "artifact_resources_from": "/Volumes/T7/mere-run-qualification/bonsai2-small-2026-10-15/parity/candidate-products-final"
+  },
+  "microprobe": {
+    "root": "/Volumes/T7/mere-run-qualification/bonsai2-small-2026-10-15/parity/rounding-fix",
+    "files": {
+      "probe.swift": "6e7eb145f5dd594f283b9cf4daefe63e5a831ea4547674e4409c42a1540f2e7f",
+      "reference.json": "31bdd1aa6ebc2b6191730ebacbdd55a264e67c4a2427583d01c7edd43f5f6ffb",
+      "metal-probe.json": "dc601367a13ecf11d47498a78c63cd501d3437a1ae7f93fc6b84beebc62a631e",
+      "native-intrinsic-attribution.json": "73c3e2270d3628746d5289ee07fcc893a673f893033a5d59bc8287b07c49e614"
+    },
+    "native_intrinsic_attribution": [
+      {
+        "math": "fast",
+        "mismatches_against_previous_native_inverse": 0,
+        "mismatches_against_upstream_inverse": 11
+      },
+      {
+        "math": "precise",
+        "mismatches_against_previous_native_inverse": 11,
+        "mismatches_against_upstream_inverse": 0
+      }
+    ]
+  },
+  "evidence_root": "/Volumes/T7/mere-run-qualification/bonsai2-small-2026-10-15/parity-precise-2026-10-16",
+  "previous_evidence_root": "/Volumes/T7/mere-run-qualification/bonsai2-small-2026-10-15/parity",
+  "limits": [
+    "Two text and four image prompts per model; at most 64 teacher-forced continuation positions each.",
+    "Pinned upstream MLX 0.32.0 reference; native MLX core 0.32.1 on the same qualification host.",
+    "No broad quality, sampled-output, maximum-context, cross-device, or resident-throughput equivalence claim.",
+    "The original 16-case quality corpus and resident throughput were not rerun for this executable."
+  ],
+  "release_chart": {
+    "strict_upstream_parity_passed": true,
+    "release": {
+      "binary": "/Users/nerd/.codex/worktrees/native-bonsai2-small/mere-run/.build/arm64-apple-macosx/release/mere.run",
+      "preserved_binary": "/Volumes/T7/mere-run-qualification/bonsai2-small-2026-10-15/artifacts/mere.run-parity-precise-tested",
+      "sha256": "6468cd000e7268c9ba1678892a96beccbf13f296fceacf970a4af7f72322d23a",
+      "runtime_source_sha256": {
+        "Sources/MereRunCore/Q35/Q35Generator+TextWeights.swift": "c50b1c7d13335963d5345a63c8a71f45131a502e41e886ede2b31c06970a65b4",
+        "Sources/MereRunCore/Q35/Q35Generator+Vision.swift": "309c25ec2f1ab4ca7ece85aded65bcbdd9e5e1a1cce81af8bf9a889d2ffe14cb",
+        "Sources/MereRunQwenModel/Q35FullAttention.swift": "a5e2e412fd878c2f9617e017ef2de4dc0f4fff0b2d2378d4305cd100ce6f56f8",
+        "Sources/MereRunQwenModel/Q35Model.swift": "5727bb6e94a3bf50718a7805f4ac01c3eb29354c8363b2b93ac8958cae9506de",
+        "Sources/MereRunQwenModel/Q35VisionTower.swift": "67c33147077eafe04b2368429233c147e8183fbe97e2d5de9b07d5f29ad92190",
+        "Sources/MereRunTextEncoder/Vision/QwenVisionPatchEmbed.swift": "dd5e890d51aa0879d6fa6423dfb0b8fb5c2233dd86134bed4e045dca97b54970",
+        "Sources/MereRunTextEncoder/Vision/QwenVisionTower.swift": "7de49fb879fdf0d0290baa9d8f32874f91b2ac383c04cd819587f63a412213d5"
+      }
+    },
+    "conditions": {
+      "thinking": false,
+      "temperature": 0,
+      "top_p": 1,
+      "top_k": 0,
+      "min_p": 0,
+      "max_tokens": 256,
+      "context": 16384,
+      "prefill_chunk": 512,
+      "output_grammar": false
+    },
+    "cases": [
+      {
+        "size": "2",
+        "expected": {
+          "largest": "PINE",
+          "largest_count": 9,
+          "smallest": "CEDAR",
+          "smallest_count": 4,
+          "difference": 5
+        },
+        "actual": {
+          "largest": "PINE",
+          "largest_count": 9,
+          "smallest": "CEDAR",
+          "smallest_count": 4,
+          "difference": 5
+        },
+        "semantic_match": true,
+        "outer_fence": true,
+        "strict_json": false,
+        "timing_diagnostic": null,
+        "stdout_sha256": "888176caad88b8096d9f44e2224ee049b05e49a92c50439f0af402cea5c4d631"
+      },
+      {
+        "size": "4",
+        "expected": {
+          "largest": "PINE",
+          "largest_count": 9,
+          "smallest": "CEDAR",
+          "smallest_count": 4,
+          "difference": 5
+        },
+        "actual": {
+          "largest": "PINE",
+          "largest_count": 9,
+          "smallest": "CEDAR",
+          "smallest_count": 4,
+          "difference": 5
+        },
+        "semantic_match": true,
+        "outer_fence": true,
+        "strict_json": false,
+        "timing_diagnostic": null,
+        "stdout_sha256": "888176caad88b8096d9f44e2224ee049b05e49a92c50439f0af402cea5c4d631"
+      },
+      {
+        "size": "9",
+        "expected": {
+          "largest": "PINE",
+          "largest_count": 9,
+          "smallest": "CEDAR",
+          "smallest_count": 4,
+          "difference": 5
+        },
+        "actual": {
+          "largest": "PINE",
+          "largest_count": 9,
+          "smallest": "CEDAR",
+          "smallest_count": 4,
+          "difference": 5
+        },
+        "semantic_match": true,
+        "outer_fence": true,
+        "strict_json": false,
+        "timing_diagnostic": null,
+        "stdout_sha256": "888176caad88b8096d9f44e2224ee049b05e49a92c50439f0af402cea5c4d631"
+      }
+    ],
+    "all_semantic_matches": true,
+    "interpretation": "One fresh-process greedy chart smoke per model; timings are not a resident throughput benchmark. Original sampled quality corpus was not rerun under these conditions."
+  },
+  "local_validation": {
+    "repository_gate": {
+      "command": "./scripts/check.sh",
+      "passed": false,
+      "xctest": 5472,
+      "xctest_skipped": 454,
+      "xctest_failures": 52,
+      "swift_testing_passed": 193,
+      "log_sha256": "40948aaa5525826b0e88eaedfd4c41bc96ef2a8597a545a3ec7ac509e02e1cfd",
+      "blocker": "IOConsoleLocked=Yes; protected run-record files return EPERM after closing. All 52 failure reports are in run-record storage suites. Unlock the Mac and rerun the full gate."
+    },
+    "release_build_passed": true,
+    "release_chart_semantic_matches": 3,
+    "release_chart_strict_json_matches": 0,
+    "focused_gpu_tests": {
+      "passed": 5,
+      "failed": 0,
+      "rotary_fixture_bitwise_equal": true
+    },
+    "lint_and_package_policy_passed": true,
+    "hosted_ci": "not run; no PR requested"
+  },
+  "post_run_integrity": {
+    "models": [
+      {
+        "size": "2",
+        "revision": "1c6cbae21f8c38830ce337972b46fdae7b18eaaa",
+        "source_file_count": 16,
+        "all_sha256_match": true
+      },
+      {
+        "size": "4",
+        "revision": "dff2caaa23fa8706164c44c10f1b58feb405f76a",
+        "source_file_count": 17,
+        "all_sha256_match": true
+      },
+      {
+        "size": "9",
+        "revision": "f4e28a59531731c41b6dfac88cf271bd58f0a287",
+        "source_file_count": 17,
+        "all_sha256_match": true
+      }
+    ],
+    "swift_sources_match_test_receipt": true,
+    "frozen_inputs_sha256": {
+      "cases.json": "5b4616ee4e688cbcddfdd91da2e9da097f5697297218b1cab9e443b2d3a1c7a9",
+      "protocol.json": "2c53486e673465e3d670a783e26bc9ad18c5a73948d3ce3ca34e7733eeec8df1"
+    },
+    "unchanged_corpus_and_gates": true,
+    "corpus_and_gates_match_committed_baseline": "c615cb30",
+    "all_four_fixture_sha256_match_committed_baseline": true
+  },
+  "image_bitwise_comparison": [
+    {
+      "size": "2",
+      "case": "vision-shapes",
+      "dtype": "float16",
+      "shape": [
+        600,
+        2048
+      ],
+      "bitwise_equal": true
+    },
+    {
+      "size": "2",
+      "case": "vision-receipt",
+      "dtype": "float16",
+      "shape": [
+        651,
+        2048
+      ],
+      "bitwise_equal": true
+    },
+    {
+      "size": "2",
+      "case": "vision-chart",
+      "dtype": "float16",
+      "shape": [
+        630,
+        2048
+      ],
+      "bitwise_equal": true
+    },
+    {
+      "size": "2",
+      "case": "vision-photo",
+      "dtype": "float16",
+      "shape": [
+        256,
+        2048
+      ],
+      "bitwise_equal": true
+    },
+    {
+      "size": "4",
+      "case": "vision-shapes",
+      "dtype": "float16",
+      "shape": [
+        600,
+        2560
+      ],
+      "bitwise_equal": true
+    },
+    {
+      "size": "4",
+      "case": "vision-receipt",
+      "dtype": "float16",
+      "shape": [
+        651,
+        2560
+      ],
+      "bitwise_equal": true
+    },
+    {
+      "size": "4",
+      "case": "vision-chart",
+      "dtype": "float16",
+      "shape": [
+        630,
+        2560
+      ],
+      "bitwise_equal": true
+    },
+    {
+      "size": "4",
+      "case": "vision-photo",
+      "dtype": "float16",
+      "shape": [
+        256,
+        2560
+      ],
+      "bitwise_equal": true
+    }
+  ],
+  "parity_passed": true
+}

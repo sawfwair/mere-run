@@ -1,5 +1,6 @@
 import Foundation
 import MLX
+import MLXFast
 import MLXNN
 
 enum VisionTowerError: LocalizedError {
@@ -55,6 +56,20 @@ package final class QwenVisionTower: Module {
   }
 
   private var checkpointRotaryFrequencies = false
+
+  #if os(macOS)
+  // Explicit precision is required: the default Metal pow intrinsic can differ
+  // across library builds, and its rounding amplifies through FP16 vision blocks.
+  private static let checkpointPower = MLXFast.metalKernel(
+    name: "qwen_vision_checkpoint_power",
+    inputNames: ["base", "exponents"],
+    outputNames: ["powers"],
+    source: """
+      uint i = thread_position_in_grid.x;
+      powers[i] = metal::precise::pow(float(base), float(exponents[i]));
+      """
+  )
+  #endif
 
   package func useCheckpointRotaryFrequencies() {
     checkpointRotaryFrequencies = true
@@ -696,7 +711,23 @@ package final class QwenVisionTower: Module {
       // The reference computes a positive FP32 power, then its reciprocal.
       // powf(theta, -exponent) differs by an ULP and can amplify through FP16 blocks.
       let exponents = MLX.arange(0, rotaryInnerDim, step: 2).asType(.float32) / Float(rotaryInnerDim)
-      let inverse = MLXArray(Float(1)) / MLX.pow(MLXArray(ropeTheta), exponents)
+      let powers: MLXArray
+      #if os(macOS)
+      if Device.defaultDevice().deviceType == .gpu {
+        powers = Self.checkpointPower(
+          [MLXArray(ropeTheta), exponents],
+          grid: (exponents.size, 1, 1),
+          threadGroup: (exponents.size, 1, 1),
+          outputShapes: [exponents.shape],
+          outputDTypes: [.float32]
+        )[0]
+      } else {
+        powers = MLX.pow(MLXArray(ropeTheta), exponents)
+      }
+      #else
+      powers = MLX.pow(MLXArray(ropeTheta), exponents)
+      #endif
+      let inverse = MLXArray(Float(1)) / powers
       let positions = MLX.arange(maxSize).asType(.float32)
       return (positions.expandedDimensions(axis: 1) * inverse.expandedDimensions(axis: 0)).asType(dtype)
     }

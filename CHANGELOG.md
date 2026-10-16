@@ -12,7 +12,8 @@ The format is based on Keep a Changelog.
 - Preserve Bonsai 2 checkpoint RMS scales and vision arithmetic, including
   bicubic Small-pack image preprocessing, FP16 position interpolation, Conv3d
   patch projection, and the upstream rotary-frequency formula. Add independent
-  checkpoint parity evidence; strict 2B/4B vision agreement remains open.
+  checkpoint parity evidence for all three Small packs. Use the precise Metal
+  power intrinsic for vision rotary frequencies to match checkpoint rounding.
 
 - Add durable relay workflow batches with immutable child IDs and seeds, resumable
   shared-asset submission, bounded fleet admission, ordered verified results, and
