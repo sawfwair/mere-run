@@ -19,7 +19,7 @@ extension NativeChatRuntime {
         case .textChatNemotronH(let generator, _): result.nemotronDSpark = await generator.dsparkStats()
         case .textChatLFM2(let generator, _): result.lfm2DSpark = await generator.dsparkStats()
         case .textChatKolibri, .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatQ35,
-             .textChatDeepseekV4Flash, .textChatNemotronOmni, .textChatPsi, .textChatInkling:
+             .textChatDeepseekV4Flash, .textChatNemotronBolt, .textChatNemotronOmni, .textChatPsi, .textChatInkling:
             break
         }
         return result

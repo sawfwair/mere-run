@@ -982,3 +982,9 @@ preflight report uses the same checks. During a tool conversation, the command
 retains one native runtime and unloads it after completion, failure, or
 cancellation. See [shared chat execution](../internals/chat-execution.md) for the
 request and runtime boundaries shared with the API.
+
+## Nemotron 3.5 Bolt
+
+[Nemotron 3.5 Bolt](./nemotron-bolt.md) loads the original mixed packed
+checkpoint through the native Swift/MLX runtime for text and image chat.
+Install `vision-chat-nemotron-35-bolt-24gb` explicitly before inference.

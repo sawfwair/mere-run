@@ -606,14 +606,14 @@ final class TextChatCommandParsingTests: XCTestCase {
             XCTAssertEqual(try gate("--model", model, "--image", "a.png").violations.count, 1, model)
         }
         for model in [Gemma4Resources.visionTwelveBModelId, LFM2Resources.visionModelId, Q35Resources.bonsai2ModelId,
-                      NemotronOmniResources.modelID] {
+                      NemotronOmniResources.modelID, NemotronBoltResources.modelID] {
             let report = try gate("--model", model, "--image", "a.png")
             XCTAssertEqual(report.violations, [], model)
             XCTAssertEqual(report.warnings, [], model)
         }
         XCTAssertEqual(
             try gate("--model", NemotronHResources.modelID, "--image", "a.png").warnings,
-            ["--image has no effect with Nemotron 3.5 Lightning. It applies to Gemma 4 12B vision, Muse Glimmer, Nemotron 3 Nano Omni, LFM2.5-VL, Qwen3.6 vision and Qwen3.8."]
+            ["--image has no effect with Nemotron 3.5 Lightning. It applies to Gemma 4 12B vision, Muse Glimmer, Nemotron 3.5 Bolt, Nemotron 3 Nano Omni, LFM2.5-VL, Qwen3.6 vision and Qwen3.8."]
         )
     }
 

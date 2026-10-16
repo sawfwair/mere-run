@@ -200,6 +200,7 @@ mereRunCoreDependencies.append("MereRunKVCache")
 mereRunCoreDependencies.append("MereRunDecode")
 mereRunCoreDependencies.append("MereRunQwenModel")
 mereRunCoreDependencies.append("MereRunKolibriModel")
+mereRunCoreDependencies.append("MereRunNemotronBoltModel")
 mereRunCoreDependencies.append("MereRunGemmaModel")
 mereRunCoreDependencies.append("MereRunCoreMLModel")
 mereRunCoreDependencies.append("MereRunLTXModel")
@@ -468,6 +469,26 @@ targets.append(
     dependencies: mereRunQwenModelDependencies,
     path: "Sources/MereRunQwenModel",
     exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "MereRunNemotronBoltModel",
+    dependencies: ["MereRunTensor"] + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/MereRunNemotronBoltModel",
+    exclude: ["README.md", "LICENSE.ggml", "LICENSE.OpenMDW-1.1"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+targets.append(
+  .testTarget(
+    name: "NemotronBoltRuntimeTests",
+    dependencies: ["MereRunNemotronBoltModel", "MereRunMLXTestSupport"]
+      + mlxDependency("MLX") + mlxDependency("MLXNN") + mlxDependency("MLXRandom"),
+    path: "Tests/NemotronBoltRuntimeTests",
+    resources: [.copy("Fixtures")],
     swiftSettings: commonSwiftSettings
   )
 )
@@ -749,6 +770,7 @@ targets.append(
       "MuScriptor/README.md",
       "MuseGlimmer/README.md",
       "NemotronH/README.md",
+      "NemotronBolt/README.md",
       "NemotronOmni/README.md",
       "LFM2/README.md",
       "LightOnOCR/README.md",

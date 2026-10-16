@@ -37,6 +37,7 @@ extension MereRunCapabilityCatalog {
         case laguna
         case inkling
         case museGlimmer = "muse-glimmer"
+        case nemotronBolt = "nemotron-bolt"
         case nemotronH = "nemotron-h"
         case nemotronOmni = "nemotron-omni"
         case lfm2
@@ -97,6 +98,7 @@ extension MereRunCapabilityCatalog {
             .init(TextChatFamily.laguna, title: "Laguna", models: ["text-chat-laguna-s-2-1", "text-chat-laguna-xs-2-1"]),
             .init(TextChatFamily.inkling, title: "Inkling-Small", models: ["text-chat-inkling-small"]),
             .init(TextChatFamily.museGlimmer, title: "Muse Glimmer", models: ["vision-chat-muse-glimmer-30b"]),
+            .init(TextChatFamily.nemotronBolt, title: "Nemotron 3.5 Bolt", models: ["vision-chat-nemotron-35-bolt-24gb"]),
             .init(TextChatFamily.nemotronH, title: "Nemotron 3.5 Lightning", models: ["text-chat-nemotron-35-lightning"]),
             .init(
                 TextChatFamily.nemotronOmni, title: "Nemotron 3 Nano Omni", models: ["omni-chat-nemotron3-nano-30b-a3b-bf16"]

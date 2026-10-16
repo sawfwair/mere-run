@@ -582,6 +582,16 @@ extension MereRunModelManifest {
                     "\(MuseGlimmerResources.assistantUpstreamRepoId)@\(MuseGlimmerResources.assistantUpstreamRevision)",
                 createdAt: createdAt
             )
+        case .nemotron35Bolt24GB:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .nemotronH, family: .nemotron,
+                tier: .latest, variant: .standard, precision: .int2,
+                quantization: Quantization(bits: 2, groupSize: 256, scheme: "ggml-iq2-xxs-q8-0-nvfp4-mixed"),
+                defaults: nil, supports: [.chat, .codeGeneration, .visionChat, .visionOCR],
+                components: genericTextComponents,
+                upstreamRepoId: "\(NemotronBoltResources.upstreamRepoID)@\(NemotronBoltResources.upstreamRevision)",
+                createdAt: createdAt
+            )
         case .nemotron35Lightning:
             return MereRunModelManifest(
                 id: modelID.rawValue,

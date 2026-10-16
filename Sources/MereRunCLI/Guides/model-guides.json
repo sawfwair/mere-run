@@ -188,6 +188,15 @@
     "resourceName": "handbook-muse-glimmer.md"
   },
   {
+    "topic": "handbook-nemotron-bolt",
+    "title": "Nemotron 3.5 Bolt (NVIDIA)",
+    "category": "Text and multimodal",
+    "models": [
+      "vision-chat-nemotron-35-bolt-24gb"
+    ],
+    "resourceName": "handbook-nemotron-bolt.md"
+  },
+  {
     "topic": "handbook-nemotron-lightning",
     "title": "Nemotron 3.5 Lightning (NVIDIA)",
     "category": "Text and multimodal",
