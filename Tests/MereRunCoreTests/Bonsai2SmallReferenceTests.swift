@@ -99,6 +99,9 @@ final class Bonsai2SmallReferenceTests: MereRunCoreTestCase {
             let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             process.arguments = [repo.appending(path: "scripts/reference-parity/export_bonsai2_small.py").path,
                                  "--root", root.path, "--model", checkpoint.path, "--size", size]
+            if let version = env["MERERUN_TEST_BONSAI_REFERENCE_MLX_VERSION"] {
+                process.arguments?.append(contentsOf: ["--mlx-version", version])
+            }
             var environment = env
             environment["HF_HUB_OFFLINE"] = "1"
             environment["HF_HOME"] = root.appending(path: "hub-cache").path

@@ -324,3 +324,76 @@ swift test --filter Bonsai2SmallThroughputTests
 The [throughput report](../../docs/benchmarks/bonsai2-small-throughput-2026-10-16.md)
 records the model-order control, scheduling ablation, upstream comparison,
 and measurement limits.
+
+## Bonsai 2 Small matched model loop
+
+`Bonsai2SmallMatchedThroughputTests` isolates checkpoint execution from product
+sampling and text decoding. Both stacks use fresh caches, identical prompt IDs,
+and fixed continuation tokens. Vision prefixes use the same frozen upstream
+image features in both stacks; whole-vision parity remains a separate check.
+Each measured iteration feeds one continuation
+token through the model and reads an FP32 argmax. Synchronized monotonic timers
+exclude loading, vision encoding, and prefill. Reference image-prefill chunks
+receive explicit slices of the full prompt mRoPE positions, as in the frozen
+parity exporter; scalar decode offsets must not replace image coordinates.
+Keep these model-loop rates
+separate from resident API throughput.
+
+Prepare `matched-inputs-2.json`, `matched-inputs-4.json`, and
+`matched-inputs-9.json` in the verified evidence root. Each file has a `probes`
+array with `id`, `prompt`, `prompt_ids`, `continuation`, and optional `image`
+fields. Vision probes also require an `image_features` path to a safetensors
+file containing `image_embeddings` and `grid`, frozen from the pinned published
+reference. Hash these files and retain their source export lineage.
+Use 512 continuation tokens for text and 256 for vision. The test
+retains one discarded 128-token warm-up and three measured trials per modality.
+It rejects an existing output file and holds normal machine admission.
+
+Build with release optimization. The repository's diagnostic test APIs also
+require `DEBUG`; this does not change the timed Q35 model or kernel sources.
+
+```bash
+swift build -c release --build-tests -Xswiftc -enable-testing -Xswiftc -DDEBUG
+
+MERERUN_TEST_MLX_DEVICE=gpu \
+MERERUN_BONSAI_MATCHED_ROOT=/Volumes/T7/bonsai-throughput \
+MERERUN_BONSAI_MATCHED_SIZE=2 \
+MERERUN_BONSAI_MATCHED_STACK=native \
+MERERUN_BONSAI_MATCHED_OUTPUT=/Volumes/T7/bonsai-throughput/matched/native-2.json \
+swift test -c release -Xswiftc -enable-testing -Xswiftc -DDEBUG \
+  --skip-build --filter Bonsai2SmallMatchedThroughputTests
+```
+
+For reference execution, set `MERERUN_BONSAI_MATCHED_STACK=reference`, provide
+`MERERUN_BONSAI_REFERENCE_PYTHON`, and choose a fresh output filename. The default
+expected reference MLX version is 0.32.1. Set
+`MERERUN_BONSAI_MATCHED_REFERENCE_MLX_VERSION=0.32.0` for the original published
+backend control. Match the native backend source, C++ optimization and deployment
+target, AOT/JIT setting, and Metal-library bytes when isolating implementation
+costs. Matching library bytes alone does not align a JIT backend. Retain the
+published-backend control separately. Alternate stack and model order and record
+all samples, build hashes, admission, thermal state, and background GPU activity.
+
+For the native-source control, copy the pinned Swift dependency's
+`Source/Cmlx/mlx` tree to the T7 evidence directory and retain a source hash
+manifest. Build and install its Python wheel in a separate environment. Preserve
+the original published environment. The measured macOS build uses these flags:
+
+```bash
+PIP_CACHE_DIR="$EVIDENCE/pip-cache" TMPDIR="$EVIDENCE/tmp" \
+CMAKE_BUILD_PARALLEL_LEVEL=4 PYPI_RELEASE=1 \
+CMAKE_ARGS="-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 -DCMAKE_CXX_FLAGS_RELEASE=-O2 -DCMAKE_C_FLAGS_RELEASE=-O2 -DMLX_METAL_JIT=OFF -DMLX_BUILD_PYTHON_STUBS=OFF -DMLX_USE_CCACHE=OFF" \
+"$REFERENCE_PYTHON" -m pip wheel --no-cache-dir --no-deps --no-build-isolation \
+  --wheel-dir "$EVIDENCE/wheels" "$EVIDENCE/mlx-source"
+```
+
+Use the release build's `mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib`
+as that environment's `mlx/lib/mlx.metallib`, and verify byte equality. Record the
+wheel, extension, library, build-tool, and source identities. Install build tools
+in the isolated environment and verify its actual CMake cache; use the native
+build's flags when qualifying another platform or toolchain.
+
+The frozen parity exporter retains its MLX 0.32.0 default. For an additional
+source-matched check, set `MERERUN_TEST_BONSAI_REFERENCE_MLX_VERSION=0.32.1` in
+`Bonsai2SmallReferenceTests` reference mode. This selects an explicitly checked
+backend version without changing the corpus or comparison tolerances.

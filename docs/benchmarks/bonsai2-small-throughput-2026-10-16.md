@@ -1,5 +1,7 @@
 # Bonsai 2 Small upstream throughput and scheduling fix
 
+Follow-up: the [fresh selected-runtime quality run](./bonsai2-small-selected-quality-2026-10-16.md) closes the missing sampled quality rerun described below. This report retains the original throughput observations and conditions.
+
 This report is for runtime contributors comparing the native 2B, 4B, and 9B packs with their pinned upstream MLX implementations. A shared compiled-graph cache caused a model-order performance penalty. Each Small-model request now owns its compiled activation graphs. A fused Metal transform also reduces short-row signed-Hadamard dispatch work.
 
 ## Cause and control

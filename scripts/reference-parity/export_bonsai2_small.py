@@ -27,6 +27,7 @@ def main():
     parser.add_argument('--root', type=Path, required=True)
     parser.add_argument('--model', type=Path, required=True)
     parser.add_argument('--size', choices=['2', '4', '9'], required=True)
+    parser.add_argument('--mlx-version', choices=['0.32.0', '0.32.1'], default='0.32.0')
     args = parser.parse_args()
     root = args.root.resolve(strict=True)
     model_path = args.model.resolve(strict=True)
@@ -34,7 +35,7 @@ def main():
     receipt = json.loads((model_path / 'SOURCE-RECEIPT.json').read_text())
     if not receipt['verified']:
         raise ValueError('A source-verified checkpoint is required')
-    for name, version in [('mlx', '0.32.0'), ('mlx-vlm', '0.6.3'), ('transformers', '5.5.0')]:
+    for name, version in [('mlx', args.mlx_version), ('mlx-vlm', '0.6.3'), ('transformers', '5.5.0')]:
         if importlib.metadata.version(name) != version:
             raise ValueError(f'Use the pinned upstream {name}=={version}')
     metadata = json.loads((runtime.parent / 'metadata.json').read_text())
