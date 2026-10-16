@@ -101,6 +101,7 @@ enum APISidecarEvictionPlanner {
 /// Non-actor image generators are safe here because the resident slot holds an
 /// exclusive lease for their entire lifetime of use.
 private enum APISidecarImageGenerator: @unchecked Sendable {
+    case flux3(Flux3Generator)
     case flux1(Flux1Generator)
     case flux2Klein(Flux2KleinGenerator)
     case zImageTurbo(ZImageTurboGenerator)
@@ -245,6 +246,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 },
                 make: {
                     switch kind {
+                    case .flux3:
+                        return .flux3(Flux3Generator())
                     case .flux1:
                         return .flux1(Flux1Generator())
                     case .flux2Klein:
@@ -281,7 +284,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                         generator.unload()
                     case .ideogram4(let generator):
                         generator.unload()
-                    case .qwenImage21:
+                    case .flux3, .qwenImage21:
                         break
                     case .qwenImageEdit(let generator):
                         await generator.clearCache()
@@ -304,6 +307,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                     case .ideogram4(let generator):
                         return try await generator.generate(request, progressHandler: nil)
                     case .qwenImage21(let generator):
+                        return try await generator.generate(request, progressHandler: nil)
+                    case .flux3(let generator):
                         return try await generator.generate(request, progressHandler: nil)
                     case .qwenImageEdit(let generator):
                         return try await generator.generate(request, progressHandler: nil)
@@ -1023,7 +1028,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
             generator.unload()
         case .ideogram4(let generator):
             generator.unload()
-        case .qwenImage21:
+        case .flux3, .qwenImage21:
             break
         case .qwenImageEdit(let generator):
             await generator.clearCache()
@@ -1070,7 +1075,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         residentNeedsLoad: Bool
     ) -> UInt64? {
         // Qwen Image 2.1 releases all weights at the end of every operation.
-        let needsWeights = residentNeedsLoad || kind == .qwenImage21
+        let needsWeights = residentNeedsLoad || kind == .qwenImage21 || kind == .flux3
         let baseBytes = needsWeights
             ? Self.imageBaseLoadBytes(for: kind)
             : 8 * Self.gibibyte
@@ -1115,6 +1120,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
             return 40 * gibibyte
         case .flux2Klein:
             return 10 * gibibyte
+        case .flux3:
+            return 24 * gibibyte
         case .zImageTurbo:
             return 12 * gibibyte
         case .hiDreamO1, .krea2, .ideogram4, .qwenImageEdit, .qwenImage21:
@@ -1136,7 +1143,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 height: height
             )
             return (resolution.width, resolution.height)
-        case .flux1, .flux2Klein, .zImageTurbo, .senseNovaU15, .krea2, .ideogram4, .qwenImageEdit, .qwenImage21:
+        case .flux1, .flux2Klein, .flux3, .zImageTurbo, .senseNovaU15, .krea2, .ideogram4, .qwenImageEdit, .qwenImage21:
             return (width, height)
         }
     }

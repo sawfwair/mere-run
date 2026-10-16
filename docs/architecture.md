@@ -131,6 +131,12 @@ Klein image generation:
   - `Sources/MereRunCore/Flux2Klein/Flux2KleinGenerator+Denoising.swift`
   - `Sources/MereRunCore/Flux2Klein/Flux2KleinGenerator+Output.swift`
 
+FLUX 3 Klein generation and reference editing:
+
+- Runtime entry point: `Sources/MereRunCore/Flux3/Flux3Generator.swift`
+- Transformer, latent packing, and sampling: `Sources/MereRunImageModels/Flux3/`
+- Text, autoencoder, and reference preprocessing: `Sources/MereRunCore/Flux3/`
+
 ZImage generation:
 
 - Runtime entry point: `Sources/MereRunCore/ZImageTurbo/ZImageTurboGenerator.swift`

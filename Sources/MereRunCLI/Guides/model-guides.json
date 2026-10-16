@@ -90,6 +90,13 @@
     "resourceName": "handbook-krea2.md"
   },
   {
+    "topic": "handbook-flux3-klein",
+    "title": "FLUX 3 Klein (Black Forest Labs)",
+    "category": "Image",
+    "models": ["image-flux3-klein"],
+    "resourceName": "handbook-flux3-klein.md"
+  },
+  {
     "topic": "handbook-qwen-image-21",
     "title": "Qwen Image 2.1 (Qwen)",
     "category": "Image",
@@ -179,6 +186,15 @@
       "vision-chat-muse-glimmer-30b"
     ],
     "resourceName": "handbook-muse-glimmer.md"
+  },
+  {
+    "topic": "handbook-nemotron-bolt",
+    "title": "Nemotron 3.5 Bolt (NVIDIA)",
+    "category": "Text and multimodal",
+    "models": [
+      "vision-chat-nemotron-35-bolt-24gb"
+    ],
+    "resourceName": "handbook-nemotron-bolt.md"
   },
   {
     "topic": "handbook-nemotron-lightning",

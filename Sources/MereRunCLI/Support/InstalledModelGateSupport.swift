@@ -206,7 +206,7 @@ enum InstalledModelSmokePlans {
             return direct(spec, route: "text classify and extract") { runner in
                 try await runner.installedGLiNERCheck(model: spec.id)
             }
-        case .flux1, .flux2Klein, .bonsaiImage, .zimageTurbo, .hidreamO1, .senseNovaU15, .krea2, .ideogram4SDNQ, .qwenImage21:
+        case .flux1, .flux2Klein, .flux3, .bonsaiImage, .zimageTurbo, .hidreamO1, .senseNovaU15, .krea2, .ideogram4SDNQ, .qwenImage21:
             return direct(spec, route: "image generate") { runner in
                 try await runner.installedImageCheck(model: spec.id)
             }
@@ -216,7 +216,7 @@ enum InstalledModelSmokePlans {
                 try await runner.installedQwenImageEditCheck(model: spec.id)
             }
 
-        case .gemma4, .gemma4Unified, .q35, .museGlimmer:
+        case .gemma4, .gemma4Unified, .q35, .museGlimmer, .nemotronBolt:
             if spec.category == .visionOCR {
                 return direct(spec, route: "vision ocr") { runner in
                     try await runner.installedOCRCheck(model: spec.id)

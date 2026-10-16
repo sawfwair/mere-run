@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-15",
+  "runtime": "native Swift/MLX/Metal",
+  "checkpoint": {
+    "repo_id": "black-forest-labs/flux-3-image-klein",
+    "revision": "8454017f9ebaada30c998fccd9f67a80c7580f68",
+    "all_weight_artifacts_verified": true,
+    "weights": [
+      {
+        "path": "ae.safetensors",
+        "bytes": 336211292,
+        "sha256": "868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3",
+        "matches_pinned_artifact": true,
+        "tensor_count": 251,
+        "dtypes": {
+          "I64": 1,
+          "F32": 250
+        }
+      },
+      {
+        "path": "model.safetensors",
+        "bytes": 11097404512,
+        "sha256": "c3e9813cdd049c831c836b2e9db61150e49a93fc1a4c63b256494642fee0bd7c",
+        "matches_pinned_artifact": true,
+        "tensor_count": 359,
+        "dtypes": {
+          "BF16": 359
+        }
+      },
+      {
+        "path": "text_encoder/model-00001-of-00002.safetensors",
+        "bytes": 4967229296,
+        "sha256": "30a01a0556622645a3cce87b655bbbbbc1f170c196099f1b666c93202c3339a9",
+        "matches_pinned_artifact": true,
+        "tensor_count": 231,
+        "dtypes": {
+          "BF16": 231
+        }
+      },
+      {
+        "path": "text_encoder/model-00002-of-00002.safetensors",
+        "bytes": 3908490048,
+        "sha256": "046296a2a387efb43b0c997d5833c789604d168834f6e0d3064bf7bb13d002a6",
+        "matches_pinned_artifact": true,
+        "tensor_count": 482,
+        "dtypes": {
+          "BF16": 482
+        }
+      }
+    ]
+  },
+  "source_revision": "45e57c9fb06f9751cdced29a65c5d2171003be05",
+  "hardware": {
+    "chip": "Apple M3 Max",
+    "physical_memory_bytes": 38654705664,
+    "macos": "26.6.2"
+  },
+  "timing_method": "Generation seconds use durable-run UTC timestamps at one-second resolution and exclude admission waiting. Raw process wall time includes any admission queue. This is a smoke run under shared host load, not an isolated throughput benchmark.",
+  "inference_source_sha256": {
+    "Sources/MereRunCore/Flux3/Flux3Conditioner.swift": "53c63f3f058126c169239b429ee877b028e8e9d8ca966265562920873e3047db",
+    "Sources/MereRunCore/Flux3/Flux3Generator.swift": "cb49864fd3882a7de385a9490a14dac462787800c031d736615e91375a5d6714",
+    "Sources/MereRunCore/Flux3/Flux3ImageIO.swift": "285de57672a5b7321f6fa29cf5871444bff49d0a253752ffc00bf495bf1b6ff0",
+    "Sources/MereRunCore/Flux3/Flux3Resources.swift": "5bec5c38b798ae741daf76e8cf396cac7600cadd0503a63fd43716f1065dd055",
+    "Sources/MereRunCore/Flux3/Flux3VAE.swift": "0a68c39706dd37caa4efac5e2c0c5b4f173ff49ab90624ad02dd2fc72ba2baaf",
+    "Sources/MereRunImageModels/Flux3/Flux3Configuration.swift": "4b235418d9f77efb11af03052339447d78dcc10d05b315c8d5fcd560076f398f",
+    "Sources/MereRunImageModels/Flux3/Flux3Latents.swift": "0768bb6920fabcfdb0497bc0c367da39cffc0ef4cd84ec07d65e59a26b98192b",
+    "Sources/MereRunImageModels/Flux3/Flux3Transformer.swift": "40b98049a2955686dbb02295f277e4ec410016b3606450d290682e426d1c0a1b",
+    "Sources/MereRunImageModels/VAE/AutoencoderKL.swift": "e4a40d2a215176737c778ad083fd8b0e04a16a6594a5af84da584e4de1ed6b34"
+  },
+  "all_outputs_ai_generated": true,
+  "all_outputs_reviewed": true,
+  "bounded_checkpoint_smokes_passed": true,
+  "broad_quality_qualified": false,
+  "maximum_canvas_qualified": false,
+  "maximum_reference_count_qualified": false,
+  "full_checkpoint_upstream_numerical_parity_qualified": false,
+  "cases": [
+    {
+      "id": "camera-512-s42",
+      "width": 512,
+      "height": 512,
+      "prompt": "A photograph of a brass camera on a walnut table, soft window light, clear realistic materials.",
+      "steps": 16,
+      "seed": 42,
+      "cfg": 1,
+      "status": "succeeded",
+      "sha256": "5d715ba2873c9f176084fc1842b3ccf92853584f89de2b84031ccadd77f444b3",
+      "output_bytes": 450093,
+      "maximum_resident_set_bytes": 9980149760,
+      "peak_process_footprint_bytes": 13629588944,
+      "output": "/qualification/flux3-klein-native-2026-10-15/camera-512-s42.png",
+      "reference_inputs": [],
+      "reference_flags": [],
+      "generation_seconds_rounded": 47.0,
+      "process_wall_seconds_including_admission": 47.28,
+      "visual_review": {
+        "status": "passed",
+        "observations": "Coherent brass camera on a walnut table with soft window lighting; no blank output or visible corruption.",
+        "scope": "manual visual smoke review"
+      }
+    },
+    {
+      "id": "camera-1024-s42",
+      "width": 1024,
+      "height": 1024,
+      "prompt": "A photograph of a brass camera on a walnut table, soft window light, clear realistic materials.",
+      "steps": 16,
+      "seed": 42,
+      "cfg": 1,
+      "status": "succeeded",
+      "sha256": "866095e1aae1e0f9242faa066893e79d2d0bb76083d5d0b692256a8b33ea1fdb",
+      "output_bytes": 1697275,
+      "maximum_resident_set_bytes": 7610449920,
+      "peak_process_footprint_bytes": 28745041264,
+      "output": "/qualification/flux3-klein-native-2026-10-15/camera-1024-s42.png",
+      "reference_inputs": [],
+      "reference_flags": [],
+      "generation_seconds_rounded": 116.0,
+      "process_wall_seconds_including_admission": 116.97,
+      "visual_review": {
+        "status": "passed",
+        "observations": "Coherent detailed brass camera, walnut table, and window lighting at 1024 pixels. Small markings contain invented or malformed text; typography is not qualified.",
+        "scope": "manual visual smoke review"
+      }
+    },
+    {
+      "id": "blue-camera-edit-512-s42",
+      "width": 512,
+      "height": 512,
+      "prompt": "Change the camera's brass-colored metal body to cobalt blue painted metal. Keep the same camera, black leather grip, lens, pose, walnut table, and soft window lighting. Photorealistic.",
+      "steps": 16,
+      "seed": 42,
+      "cfg": 1,
+      "status": "succeeded",
+      "sha256": "e70e65f51b96ff7d5f73abedef7a7752a59544ff1923449f703795714afab01d",
+      "output_bytes": 467256,
+      "maximum_resident_set_bytes": 10125426688,
+      "peak_process_footprint_bytes": 13757859184,
+      "output": "/qualification/flux3-klein-native-2026-10-15/blue-camera-edit-512-s42.png",
+      "reference_inputs": [
+        "camera-512-s42.png"
+      ],
+      "reference_flags": [
+        "--input"
+      ],
+      "generation_seconds_rounded": 65.0,
+      "process_wall_seconds_including_admission": 65.81,
+      "visual_review": {
+        "status": "passed",
+        "observations": "Main body panels change to cobalt blue. Camera design, lens, black grip, pose, walnut table, and soft lighting are preserved; knobs and lens trim remain brass.",
+        "scope": "manual visual smoke review"
+      }
+    },
+    {
+      "id": "two-camera-edit-768x512-s42",
+      "width": 768,
+      "height": 512,
+      "prompt": "Two cameras side by side on a walnut table: the brass camera from image 1 on the left and the cobalt blue camera from image 2 on the right. Preserve each camera's design and color. Soft window light, realistic product photograph.",
+      "steps": 16,
+      "seed": 42,
+      "cfg": 1,
+      "status": "succeeded",
+      "sha256": "1e4d8340a5a3f073c23b0cbe8c366e9a03a208b393eee9bf47c2159219ccf94e",
+      "output_bytes": 724047,
+      "maximum_resident_set_bytes": 10160635904,
+      "peak_process_footprint_bytes": 20834207064,
+      "output": "/qualification/flux3-klein-native-2026-10-15/two-camera-edit-768x512-s42.png",
+      "reference_inputs": [
+        "camera-512-s42.png",
+        "blue-camera-edit-512-s42.png"
+      ],
+      "reference_flags": [
+        "--ref-image",
+        "--ref-image"
+      ],
+      "generation_seconds_rounded": 100.0,
+      "process_wall_seconds_including_admission": 100.86,
+      "visual_review": {
+        "status": "passed",
+        "observations": "Two coherent cameras are composed side by side with the brass source on the left and the blue source on the right. Both designs and colors are preserved on the requested walnut table.",
+        "scope": "manual visual smoke review"
+      }
+    }
+  ]
+}

@@ -15,6 +15,11 @@ The format is based on Keep a Changelog.
   checkpoint parity evidence for all three Small packs. Use the precise Metal
   power intrinsic for vision rotary frequencies to match checkpoint rounding.
 
+- Add experimental native Swift/MLX FLUX 3 Klein generation and ordered reference
+  editing through `image-flux3-klein`, loading the pinned original BF16 package
+  directly. Use 16-step flow-map sampling at CFG 1, explicit gated downloads,
+  and the bundled FLUX Kommunity License notice.
+
 - Add durable relay workflow batches with immutable child IDs and seeds, resumable
   shared-asset submission, bounded fleet admission, ordered verified results, and
   `graph batch submit`, `inspect`, `watch`, `fetch`, `cancel`, and `retry` commands.

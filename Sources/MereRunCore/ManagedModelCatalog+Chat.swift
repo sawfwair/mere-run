@@ -224,6 +224,23 @@ extension ManagedModelCatalog {
             apiProfile: .museGlimmer()
         ),
         ManagedModelSpec(
+            id: NemotronBoltResources.modelID,
+            category: .visionChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: NemotronBoltResources.upstreamRepoID,
+                revision: NemotronBoltResources.upstreamRevision,
+                patterns: NemotronBoltResources.snapshotPatterns
+            ),
+            upstreamRepoId: NemotronBoltResources.upstreamRepoID,
+            upstreamRevision: NemotronBoltResources.upstreamRevision,
+            validationKind: .nemotronBolt,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: NemotronBoltResources.estimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
+            apiProfile: .nemotronBolt()
+        ),
+        ManagedModelSpec(
             id: NemotronHResources.modelID,
             category: .textChat,
             installShape: .directoryRoot,

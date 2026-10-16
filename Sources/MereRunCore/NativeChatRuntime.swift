@@ -16,6 +16,7 @@ public enum NativeChatRuntime: Sendable {
     case textChatDeepseekV4Flash(DeepseekV4FlashGenerator, modelPath: String?)
     case textChatMuseGlimmer(MuseGlimmerGenerator, modelPath: String?)
     case textChatNemotronH(NemotronHGenerator, modelPath: String?)
+    case textChatNemotronBolt(NemotronBoltGenerator, modelPath: String?)
     case textChatNemotronOmni(NemotronOmniGenerator, modelPath: String?)
 
     public func prepare(progressHandler: (@Sendable (ChatProgress) -> Void)?) async throws {
@@ -56,6 +57,8 @@ public enum NativeChatRuntime: Sendable {
             try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
         case .textChatNemotronH(let generator, let modelPath):
             try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+        case .textChatNemotronBolt(let generator, let modelPath):
+            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
         case .textChatNemotronOmni(let generator, let modelPath):
             try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
         }
@@ -89,6 +92,8 @@ public enum NativeChatRuntime: Sendable {
             await generator.unload()
         case .textChatNemotronH(let generator, _):
             await generator.unload()
+        case .textChatNemotronBolt(let generator, _):
+            await generator.unload()
         case .textChatNemotronOmni(let generator, _):
             await generator.unload()
         }
@@ -103,7 +108,7 @@ public enum NativeChatRuntime: Sendable {
         case .textChatLFM2(let generator, _):
             return await generator.prefixKVCacheStats()
         case .textChatKolibri, .textChatPsi, .textChatInkling, .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatLaguna, .textChatDeepseekV4Flash,
-             .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronOmni:
+             .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronBolt, .textChatNemotronOmni:
             return nil
         }
     }
@@ -119,7 +124,7 @@ public enum NativeChatRuntime: Sendable {
         case .textChatLFM2(let generator, _):
             return await generator.continuousBatchingStats()
         case .textChatKolibri, .textChatPsi, .textChatInkling, .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatDeepseekV4Flash, .textChatMuseGlimmer,
-             .textChatNemotronH, .textChatNemotronOmni:
+             .textChatNemotronH, .textChatNemotronBolt, .textChatNemotronOmni:
             return nil
         }
     }
@@ -129,7 +134,7 @@ public enum NativeChatRuntime: Sendable {
         case .textChatGemma4(let generator, _):
             return await generator.mtpStats()
         case .textChatKolibri, .textChatPsi, .textChatInkling, .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatLaguna, .textChatQ35, .textChatLFM2,
-             .textChatDeepseekV4Flash, .textChatMuseGlimmer, .textChatNemotronH,
+             .textChatDeepseekV4Flash, .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronBolt,
              .textChatNemotronOmni:
             return nil
         }
@@ -192,6 +197,8 @@ public enum NativeChatRuntime: Sendable {
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         case .textChatNemotronH(let generator, let modelPath):
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
+        case .textChatNemotronBolt(let generator, let modelPath):
+            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         case .textChatNemotronOmni(let generator, let modelPath):
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         }
@@ -207,7 +214,7 @@ public enum NativeChatRuntime: Sendable {
                 progressHandler: progressHandler
             )
         case .textChatKolibri, .textChatPsi, .textChatInkling, .textCode, .textChatKlein, .textChatGemma4, .textChatDiffusionGemma, .textChatLaguna, .textChatQ35,
-             .textChatLFM2, .textChatMuseGlimmer, .textChatNemotronH,
+             .textChatLFM2, .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronBolt,
              .textChatNemotronOmni:
             throw ChatRequestIssue("engine", "does not expose a raw chat proxy")
         }

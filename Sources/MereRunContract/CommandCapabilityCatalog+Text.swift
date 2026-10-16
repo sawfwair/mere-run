@@ -24,7 +24,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--prompt", aliases: ["-p"], label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
             .init(flag: "--image", label: "Image", kind: .file, group: Group.inputs, tier: .standard, blankReadsAsOmitted: true)
                 .scoped(Chat.only(
-                    .gemma4Unified, .museGlimmer, .nemotronOmni, .lfm2VL, .q35VL, .q38,
+                    .gemma4Unified, .museGlimmer, .nemotronBolt, .nemotronOmni, .lfm2VL, .q35VL, .q38,
                     ignoredBy: [.laguna, .nemotronH, .gguf, .psi]
                 )),
             .init(flag: "--system", aliases: ["-s"], label: "System prompt", kind: .string, group: Group.prompt, tier: .standard),
@@ -105,7 +105,7 @@ extension MereRunCapabilityCatalog {
             ).scoped(
                 Chat.rule(.kolibri, values: ["text"]), Chat.rule(.diffusionGemma, values: ["text"]), .rule(.laguna, values: ["text"]),
                 .rule(.inkling, values: ["text"]), .rule(.museGlimmer, values: ["text"]),
-                .rule(.nemotronH, values: ["text"]), .rule(.nemotronOmni, values: ["text"]),
+                .rule(.nemotronBolt, values: ["text"]), .rule(.nemotronH, values: ["text"]), .rule(.nemotronOmni, values: ["text"]),
                 .rule(.lfm2, values: ["text"]), .rule(.lfm2A1B, values: ["text"]), .rule(.lfm2VL, values: ["text"]),
                 .rule(.gguf, values: ["text"]), .rule(.psi, values: ["text"])
             ),
@@ -126,7 +126,7 @@ extension MereRunCapabilityCatalog {
             ).scoped(Chat.only(
                 .gemma4, .gemma4Unified, .laguna, .inkling, .lfm2A1B,
                 ignoredBy: [
-                    .diffusionGemma, .museGlimmer, .nemotronH, .nemotronOmni, .lfm2, .lfm2VL, .q35, .q35VL, .q38, .gguf, .psi
+                    .diffusionGemma, .museGlimmer, .nemotronH, .nemotronBolt, .nemotronOmni, .lfm2, .lfm2VL, .q35, .q35VL, .q38, .gguf, .psi
                 ]
             )),
             .init(flag: "--thinking", aliases: ["--show-thinking"], label: "Show thinking", kind: .boolean, group: Group.sampling, tier: .standard),
@@ -187,7 +187,7 @@ extension MereRunCapabilityCatalog {
 
     /// Families whose runtime keeps its own KV cache whatever the KV options say.
     private static let kvCacheIgnoring: [Chat] = [
-        .kolibri, .diffusionGemma, .laguna, .museGlimmer, .nemotronH, .nemotronOmni, .gguf, .psi
+        .kolibri, .diffusionGemma, .laguna, .museGlimmer, .nemotronH, .nemotronBolt, .nemotronOmni, .gguf, .psi
     ]
 
     public static let textCode = MereRunCommandCapability(

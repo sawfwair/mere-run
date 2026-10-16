@@ -582,6 +582,16 @@ extension MereRunModelManifest {
                     "\(MuseGlimmerResources.assistantUpstreamRepoId)@\(MuseGlimmerResources.assistantUpstreamRevision)",
                 createdAt: createdAt
             )
+        case .nemotron35Bolt24GB:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .nemotronH, family: .nemotron,
+                tier: .latest, variant: .standard, precision: .int2,
+                quantization: Quantization(bits: 2, groupSize: 256, scheme: "ggml-iq2-xxs-q8-0-nvfp4-mixed"),
+                defaults: nil, supports: [.chat, .codeGeneration, .visionChat, .visionOCR],
+                components: genericTextComponents,
+                upstreamRepoId: "\(NemotronBoltResources.upstreamRepoID)@\(NemotronBoltResources.upstreamRevision)",
+                createdAt: createdAt
+            )
         case .nemotron35Lightning:
             return MereRunModelManifest(
                 id: modelID.rawValue,
@@ -1336,6 +1346,14 @@ extension MereRunModelManifest {
                 upstreamRepoId: "\(Krea2Resources.upstreamRepoId)@\(Krea2Resources.upstreamRevision)",
                 createdAt: createdAt
             )
+        case .flux3Klein:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .flux3, family: .flux3,
+                tier: .latest, variant: .distilled, precision: .bf16,
+                defaults: Defaults(steps: Flux3Sampling.defaultSteps, cfg: 1), supports: [.txt2img, .referenceEdit],
+                components: Components(tokenizer: .local(path: "text_encoder"), textEncoder: .local(path: "text_encoder"),
+                    transformer: .local(path: "."), vae: .local(path: "."), scheduler: nil),
+                upstreamRepoId: "\(Flux3Resources.repoID)@\(Flux3Resources.revision)", createdAt: createdAt)
         case .qwenImage21, .qwenImage21Turbo:
             let turbo = modelID == .qwenImage21Turbo
             return MereRunModelManifest(

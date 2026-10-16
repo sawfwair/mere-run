@@ -57,6 +57,7 @@ public enum QuantizedModelManifestWriter {
             switch engine {
             case .flux1: return .flux1
             case .flux2Klein: return .klein
+            case .flux3: return .flux3
             case .zimageTurbo: return .zimage
             case .hidreamO1: return .hidream
             case .senseNovaU15: return .senseNova
@@ -137,6 +138,8 @@ public enum QuantizedModelManifestWriter {
                 case .krea2:
                     return [.txt2img]
                 case .qwenImage21:
+                    return [.txt2img, .referenceEdit]
+                case .flux3:
                     return [.txt2img, .referenceEdit]
                 case .qwenImageEdit:
                     return [.referenceEdit]
@@ -294,6 +297,8 @@ public enum QuantizedModelManifestWriter {
                 )
             case .qwenImage21:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 40, cfg: 1.0)
+            case .flux3:
+                manifest.defaults = MereRunModelManifest.Defaults(steps: 16, cfg: 1.0)
             case .qwenImageEdit:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 40, cfg: 4.0)
             case .ideogram4:

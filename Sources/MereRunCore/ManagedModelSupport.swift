@@ -202,6 +202,13 @@ public enum ManagedModelCapabilityCatalog {
     private static let descriptorsByID: [String: ManagedModelCapabilityDescriptor] = {
         let descriptors = [
             descriptor(
+                Flux3Resources.modelID,
+                "Image, FLUX 3 Klein",
+                "Installs experimental native BF16 FLUX 3 Klein generation and reference editing; released-checkpoint quality and memory remain unqualified.",
+                minimum: 32,
+                recommended: 48
+            ),
+            descriptor(
                 "image-klein-nano",
                 "Image, fast artistic",
                 "Creates fast FLUX.2 Klein images for prompts, drafts, and lightweight image workflows.",
@@ -492,6 +499,13 @@ public enum ManagedModelCapabilityCatalog {
                 "Preserves the original Muse Glimmer DFlash drafter for compatible existing installations.",
                 minimum: 32,
                 recommended: 64
+            ),
+            descriptor(
+                NemotronBoltResources.modelID,
+                "Nemotron 3.5 Bolt 74B-A9B 24GB",
+                "Text and image chat from NVIDIA's original packed checkpoint. Full-checkpoint quality and peak memory remain unqualified.",
+                minimum: 32,
+                recommended: 48
             ),
             descriptor(
                 NemotronHResources.modelID,

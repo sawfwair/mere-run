@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "model_id": "vision-chat-nemotron-35-bolt-24gb",
+  "recorded_at_utc": "2026-10-15T18:28:15.698407+00:00",
+  "upstream": {
+    "repo": "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB",
+    "revision": "96a5d63027ac013c8ef37fb438f3b4ec5fbd3ba6",
+    "license": "OpenMDW-1.1",
+    "weight_bytes": 24079678824,
+    "shards": 90,
+    "source_sha256": {
+      "config.json": "cf4e46f4d6d241e67a91ed949681531d3f378ca0a7e04e3f8af66324098d9587",
+      "hf_quant_config.json": "0c533a01ce840e63f4ed732d781b5fda6150daf5faa84feae7b906b7fd05a2d0",
+      "model.safetensors.index.json": "8e26109aa40707bb4aa92ef3263320810a63c1223af936e9949bc0ff4d6030b6",
+      "chat_template.jinja": "6521afc75afb0661e3558e7e6dee5f2d15de8be1c4dece8171935e778ea283f4",
+      "preprocessor_config.json": "0b80e5c895052ff2d8e528eca719a6b6e39b7b1b60afb0b94553ffae948e22bc",
+      "modeling_nemotron_h.py": "e1cb5fc02e887983f0a445bf4c1a2604453b2cb2db4624c7004dcf663bbb1b6e",
+      "modeling_nemotron_h_puzzle.py": "e81a7a97ce55896c6af898cf792cfbdff123eb476d11267aefc3f29bc5af3882",
+      "modeling_nemotron_h_omni.py": "5a1f40fea6a8fb0361c9da6510ed3de51c303046b82954258e92884cf9882fbf",
+      "modeling_radio.py": "ceec4c1ecd2a2649a79e74b16a2ea4af60e6cd11fbecebbd681c33fb1fccb943",
+      "image_processing_nemotron_h_omni.py": "0344e8432097e0718672d6529c68fd6095c36bea176500f131d203d1c7d497e0",
+      "processing_nemotron_h_omni.py": "406bc7689161d19e2a01e34f0ac8a7cc1bbc927f664d03bae3d23d00ea27f11a"
+    }
+  },
+  "ggml_reference": {
+    "repo": "ggml-org/llama.cpp",
+    "revision": "b76b13379d3b7d67ab0bc424516bb6fd2522bd8e",
+    "license": "MIT",
+    "ggml_common_sha256": "0061131b615c5721fc88a78feeb22c1f8c450f1c2646a317d80796a653bf595c",
+    "ggml_quants_sha256": "5574a2dccf7c07e75b143733e04a5412d3d8c819e7945f5217a7b83a2b2ff8ab"
+  },
+  "implementation": {
+    "runtime_target": "MereRunNemotronBoltModel",
+    "native_languages": [
+      "Swift",
+      "MLX",
+      "Metal"
+    ],
+    "python_in_product_path": false,
+    "conversion_required": false,
+    "supported_inputs": [
+      "text",
+      "image"
+    ],
+    "unsupported": [
+      "audio input",
+      "video input",
+      "LoRA",
+      "constrained JSON",
+      "LiLiCorr speculative decoding"
+    ],
+    "minimum_memory_gb_estimate": 32,
+    "recommended_memory_gb_estimate": 48,
+    "memory_fit_qualified": false
+  },
+  "validation": {
+    "local_gate": {
+      "command": "./scripts/check.sh",
+      "exit_code": 0,
+      "xctest_summary": "Executed 5467 tests, with 451 tests skipped and 0 failures (0 unexpected) in 139.705 (139.972) seconds",
+      "swift_testing_summary": "Test run with 193 tests in 7 suites passed after 4.869 seconds.",
+      "log_sha256": "f449ac0b309660d0b23021ee3b2aa9de3b830eddc40232eb125d9acc8501497f"
+    },
+    "gpu_focused": {
+      "command": "MERERUN_TEST_MLX_DEVICE=gpu swift test --filter NemotronBolt",
+      "tests": 13,
+      "failures": 0,
+      "scope": "Packed IQ2_XXS/Q8_0/NVFP4, routed inputs, sigmoid routing, SSM recurrence/chunking, pinned config, image-grid and managed dispatch checks. This run preceded the final metadata-only assertions."
+    },
+    "focused_registry": {
+      "command": "swift test --filter 'NemotronBolt|ManagedModelCatalogTests|ManagedModelSupportTests|APIModelScopeParityTests'",
+      "tests": 187,
+      "skipped": 1,
+      "failures": 0
+    },
+    "released_weight_rows": {
+      "formats": [
+        "IQ2_XXS",
+        "Q8_0",
+        "NVFP4"
+      ],
+      "rows_per_format": 4,
+      "absolute_error_tolerance": 1e-05,
+      "full_checkpoint_loaded": false,
+      "fixture_sha256": {
+        "released-rows.json": "71d1271b278263c1298ddef7e8ded7fd4c4817347c53e0f3e88c0c0b88c8efe8",
+        "nvfp4-rows.json": "199665cd81b390ab3463237a763558bd65be6d6f1f57fe62ebbd261db80c3166"
+      }
+    },
+    "docs_build": {
+      "command": "pnpm docs:build",
+      "exit_code": 0
+    },
+    "package_policy_variants": [
+      "darwin",
+      "linux-source",
+      "linux-cuda-prebuilt"
+    ]
+  },
+  "quality_qualified": false,
+  "unverified": [
+    "full released-checkpoint load and generation",
+    "text and image response quality",
+    "peak process memory",
+    "throughput",
+    "long-context behavior",
+    "Linux runtime execution",
+    "iOS build and binary budget",
+    "macOS 15 hardware execution",
+    "hosted CI"
+  ]
+}

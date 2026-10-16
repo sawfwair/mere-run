@@ -121,6 +121,8 @@ public extension ManagedModelSpec {
         switch validationKind {
         case .flux1:
             return Flux1Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .flux3:
+            return Flux3Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .flux2Klein:
             return Self.missingDiffusersImagePaths(in: rootURL, fileManager: fileManager)
         case .bonsaiImage:
@@ -208,6 +210,8 @@ public extension ManagedModelSpec {
                 rootURL: rootURL,
                 fileManager: fileManager
             )
+        case .nemotronBolt:
+            return NemotronBoltResources.missingTargetFiles(rootURL: rootURL, fileManager: fileManager)
         case .nemotronH:
             return NemotronHResources.missingTargetFiles(
                 rootURL: rootURL,
@@ -412,6 +416,8 @@ public extension ManagedModelSpec {
             } catch {
                 return [error.localizedDescription]
             }
+        case .nemotronBolt:
+            return NemotronBoltResources.validationMessages(rootURL: normalizedRootURL(rootURL, fileManager: fileManager), fileManager: fileManager)
         case .nemotronOmni:
             return NemotronOmniResources.validationMessages(
                 rootURL: normalizedRootURL(rootURL, fileManager: fileManager),

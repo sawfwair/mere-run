@@ -1677,6 +1677,39 @@ Google checkpoint revision is `914f7f89142e33e77833254d9c9b90c3cef7303b`.
 License and original modification notices remain in
 `Sources/MereRunCoreMLModel/LICENSE` and `NOTICE`.
 
+### Nemotron 3.5 Bolt native runtime and IQ2 codebook
+
+- Model configuration and architecture reference:
+  [`nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB`](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB),
+  revision `96a5d63027ac013c8ef37fb438f3b4ec5fbd3ba6`.
+- Model materials: OpenMDW-1.1. Copyright (c) 2026 NVIDIA CORPORATION &
+  AFFILIATES. All rights reserved. The license is retained in
+  `Sources/MereRunNemotronBoltModel/LICENSE.OpenMDW-1.1`.
+- IQ2_XXS grid data: `ggml/src/ggml-common.h` from
+  [`ggml-org/llama.cpp`](https://github.com/ggml-org/llama.cpp), revision
+  `b76b13379d3b7d67ab0bc424516bb6fd2522bd8e`. Copyright (c) 2023-2026
+  The ggml authors. MIT license, retained in
+  `Sources/MereRunNemotronBoltModel/LICENSE.ggml`.
+- Integration: independent Swift/MLX execution of heterogeneous Mamba-2,
+  attention, latent MoE, and C-RADIO blocks; original packed weight formats.
+  The repository does not distribute the checkpoint weights.
+
+## FLUX 3 Image Klein reference implementation
+
+The native FLUX 3 transformer and sampling implementation follows Black Forest
+Labs' reference code at
+[`45e57c9fb06f9751cdced29a65c5d2171003be05`](https://github.com/black-forest-labs/flux-3-image-klein/tree/45e57c9fb06f9751cdced29a65c5d2171003be05).
+The Swift implementation changes the tensor backend to MLX, processes one sample
+per call, omits unobserved phantom reference tokens, and loads the original BF16
+tensor names with strict shape checks. The reference code is Apache-2.0; its
+license is preserved in `Sources/MereRunCore/Resources/ModelLicenses/Flux3-Klein-Code-LICENSE`.
+
+The model weights use the separate FLUX Kommunity License v1.0, preserved in
+`Sources/MereRunCore/Resources/ModelLicenses/Flux3-Klein-Weights-LICENSE.md`.
+Managed downloads require explicit local acceptance and Hugging Face access.
+The bundled Qwen3-VL text encoder uses Apache-2.0. The numerical test fixtures
+contain synthetic weights, not pretrained model parameters.
+
 ## Bonsai 2 Small model packs
 
 The optional Bonsai 2 Small 2B, 4B, and 9B managed models use Prism ML's

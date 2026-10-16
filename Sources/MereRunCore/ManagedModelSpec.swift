@@ -44,6 +44,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case senseNovaU15
     case krea2
     case qwenImage21
+    case flux3
     case qwenImageEdit
     case ideogram4SDNQ
     case gemma4
@@ -60,6 +61,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case museGlimmer
     case museGlimmerAssistant
     case nemotronH
+    case nemotronBolt
     case nemotronHDSpark
     case nemotronOmni
     case qwen3TTS

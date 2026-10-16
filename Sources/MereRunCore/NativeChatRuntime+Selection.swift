@@ -62,6 +62,9 @@ extension NativeChatRuntime {
         case .textChatMuseGlimmer:
             return .textChatMuseGlimmer(MuseGlimmerGenerator(modelID: modelID), modelPath: modelPath)
         case .textChatNemotronH:
+            if NemotronBoltResources.handles(modelSpec: modelID) {
+                return .textChatNemotronBolt(NemotronBoltGenerator(), modelPath: modelPath)
+            }
             return .textChatNemotronH(NemotronHGenerator(), modelPath: modelPath)
         case .textChatNemotronOmni:
             return .textChatNemotronOmni(NemotronOmniGenerator(), modelPath: modelPath)
@@ -105,7 +108,7 @@ extension NativeChatRuntime {
             engine = .textChatMuseGlimmer
         case .nemotronOmni:
             engine = .textChatNemotronOmni
-        case .nemotronH:
+        case .nemotronBolt, .nemotronH:
             engine = .textChatNemotronH
         case .lfm2, .lfm2A1B, .lfm2VL:
             engine = .textChatLFM2

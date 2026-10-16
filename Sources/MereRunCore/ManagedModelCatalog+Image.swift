@@ -3,6 +3,18 @@ import Foundation
 extension ManagedModelCatalog {
     static let imageSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
+            id: Flux3Resources.modelID, category: .image, installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(repoId: Flux3Resources.repoID, revision: Flux3Resources.revision,
+                patterns: Flux3Resources.patterns),
+            upstreamRepoId: Flux3Resources.repoID, upstreamRevision: Flux3Resources.revision,
+            usageRestriction: usageRestriction(
+                summary: "FLUX 3 Klein uses the FLUX Kommunity License, with use restrictions, a Qualifying User commercial-output exception, and filtering or output-review conditions.",
+                license: "FLUX Kommunity License v1.0", sourceRepoId: Flux3Resources.repoID,
+                sourceRevision: Flux3Resources.revision,
+                licenseURL: "https://huggingface.co/\(Flux3Resources.repoID)/blob/\(Flux3Resources.revision)/LICENSE.md"),
+            validationKind: .flux3, runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 20_320_953_181, defaultCLICommands: ["image generate"]),
+        ManagedModelSpec(
             id: "image-klein-nano",
             category: .image,
             installShape: .directoryRoot,
