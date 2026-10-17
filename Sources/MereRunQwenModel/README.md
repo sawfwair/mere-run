@@ -15,8 +15,8 @@ decoder, and lexical-prior computation over Qwen3.5 states. Core's `Clef`
 operation owns request encoding, media, loading, and answer decoding. The head
 has no tokenizer, checkpoint I/O, model-download, or command dependency.
 Clef opts into checkpoint-dtype learned-position interpolation in the vision
-tower; independently exported BF16 fixtures cover the arithmetic. Existing
-vision callers retain their FP32 interpolation policy.
+tower; independently exported BF16 fixtures cover the arithmetic. Other
+vision callers retain their FP32 interpolation policy; Prism selects FP16 below.
 
 Preserve serial/verification arithmetic, hybrid-cache rollback, independent
 fork wrappers, QSA pooling state, PLE token history, and request-scoped compiled
@@ -36,8 +36,16 @@ Hadamard transform before affine 2-bit matmul; embeddings apply the inverse
 transform after row lookup. GDN activations are already grouped in the pack.
 Do not permute them or fuse rotated projections through the ordinary affine
 projection path. Core validates complete text parameter coverage and preserves
-the pack's FP16 vision weights. `Bonsai2Tests` covers transform math, pack
-rejection, and native loading; full-checkpoint parity is a separate gate.
+the pack's FP16 vision weights. Prism norms use the checkpoint's ordinary RMS
+scales directly. Its vision path preserves Conv3d patch projection and FP16
+learned-position interpolation, with MLX linspace coordinates, and the upstream
+FP32 power/reciprocal vision-frequency expression. Metal power explicitly uses
+the precise intrinsic to preserve checkpoint rounding. Small-pack
+image preprocessing uses Pillow-compatible bicubic RGB resizing and explicit
+FP32 rescaling. `Bonsai2Tests` and `Bonsai2SmallTests` cover structural math and
+independent processor/position fixtures. The opt-in
+`Bonsai2SmallReferenceTests` compares real packed rows and exports full-model
+conditional logits for the [upstream parity check](../../docs/benchmarks/bonsai2-small-upstream-parity-2026-10-16.md).
 
 `Q35PrismFusion` shares the signed transform across attention Q/K/V,
 linear-attention QKV/Z, and dense MLP gate/up projections when their block
@@ -49,13 +57,20 @@ about 4.35 GiB of additional packed weights for Bonsai 2. The default shares
 transforms without copying weights. `Bonsai2FusionTests` checks numerical
 agreement, incompatible rotations, and cache invalidation.
 
-On Metal, the validated 1024-element Prism transform uses one FP32 butterfly
-kernel that also applies the sign vector and activation casts. Other block
-sizes and CPU execution use the reference MLX operations. Set
+On Metal, the 1024-element Prism transform uses one FP32 butterfly kernel that
+also applies the sign vector and activation casts. The 512-element
+Small-pack transform uses this kernel for at most eight activation rows;
+larger prefills and CPU execution retain the reference MLX operations. The
+4096-element path retains the reference transform after whole-model controls
+showed a throughput regression from its fused variant. The
+normalization coefficient uses the same host Float bit pattern as the
+reference expression. Metal tests check exact equality in FP16, BF16, and
+FP32, in both directions and across multiple activation widths. Set
 `MERERUN_Q35_PRISM_METAL=0` to select the reference transform for comparison.
 Run `Bonsai2FusionTests` with `MERERUN_TEST_MLX_DEVICE=gpu` for exact transform
 comparisons in both directions and all supported floating-point dtypes.
-`Bonsai2PerformanceTests` is an opt-in component profile: set
+`Bonsai2PerformanceTests` is an opt-in, normally admitted component profile
+for the installed pack’s block geometry and tied or untied output head: set
 `MERERUN_BONSAI2_PROFILE` to the installed checkpoint directory and select the
 GPU test device. Its synchronized timings include launch overhead and are not
 full-model decode throughput.
@@ -79,3 +94,12 @@ It installs packed embeddings/linear layers with strict key coverage, geometry,
 and dtype checks. Recurrent gates, convolution, norms and output heads stay
 FP32. CPU and Metal fixtures compare packed execution with independently
 dequantized tensors; full 9B native proofs are linked from the runtime guide.
+
+Bonsai 2 Small adds 512-element transforms and tied packed output embeddings
+for the 2B and 4B packs. `Q35PrismEmbedding.asLinear` applies the forward
+transform before packed matmul, while lookup retains the inverse transform.
+The 9B pack uses 4096-element transforms and a separate packed output head.
+`Bonsai2SmallTests` compares tied logits with independently reconstructed dense
+embedding rows and checks the three pinned configuration fixtures. The bounded
+upstream check passes every text and vision gate for all three packs; see the
+report above. Performance requires separate evidence for each executable.

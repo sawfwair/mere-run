@@ -1,0 +1,13 @@
+{
+  "reference": "mlx-vlm 0.6.3 VisionModel.rot_pos_emb; MLX 0.32.0 CPU and Metal",
+  "grid": [
+    1,
+    4,
+    6
+  ],
+  "head_dimensions": [
+    64,
+    72
+  ],
+  "sha256": "57f99c2281eb073ca528e059721ff42f7827502ae7dc9e6689c66d13322a3944"
+}

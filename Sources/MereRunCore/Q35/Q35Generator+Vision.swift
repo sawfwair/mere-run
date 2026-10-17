@@ -216,7 +216,7 @@ extension Q35Generator {
         return MLX.concatenated(parts, axis: 1)
     }
 
-    private func loadImageTensor(
+    func loadImageTensor(
         from imageRef: String,
         patchSize: Int,
         spatialMergeSize: Int,
@@ -237,12 +237,13 @@ extension Q35Generator {
             minPixels: min(visionMinPixels, contextMaximumPixels),
             maxPixels: contextMaximumPixels
         )
-        let resized = try MediaImageIO.resized(
-            image,
-            width: target.width,
-            height: target.height
-        )
-        let floats = MediaImageIO.rgbCHWFloat(resized, normalizedToMinusOneToOne: true)
+        let usesPillowProcessor = Q35Resources.isBonsai2SmallModelId(modelId)
+        let resized = try usesPillowProcessor
+            ? MediaImageIO.bicubicResizedRGB(image, width: target.width, height: target.height)
+            : MediaImageIO.resized(image, width: target.width, height: target.height)
+        let floats = usesPillowProcessor
+            ? MediaImageIO.rescaledRGBCHWFloat(resized, rescaleFactor: Float(1 / 255.0), normalizedToMinusOneToOne: true)
+            : MediaImageIO.rgbCHWFloat(resized, normalizedToMinusOneToOne: true)
         let pixels = MLXArray(
             floats,
             [1, 3, resized.height, resized.width]

@@ -137,9 +137,9 @@ extension Q35Generator {
         model.update(modules: ModuleChildren.unflattened(replacements))
         let ordinary = mapped.filter { key, _ in
             !replacements.contains { key.hasPrefix($0.0 + ".") }
-        }.map { key, value in
-            (key, Self.isOffsetRMSNormWeight(key) ? value - MLXArray(1.0).asType(value.dtype) : value)
         }
+        // Prism stores ordinary RMS scales. Keep their FP16 bits intact; an
+        // offset round trip would round small scales before the first forward.
         try model.update(parameters: ModuleParameters.unflattened(ordinary), verify: [.shapeMismatch])
     }
 

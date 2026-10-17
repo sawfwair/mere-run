@@ -593,6 +593,27 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 24
             ),
             descriptor(
+                Q35Resources.bonsai2TwoBModelId,
+                "Ternary Bonsai 2 2B 2-bit vision chat",
+                "Runs Prism ML's Qwen3.5 2B vision model from Hadamard-transformed ternary 2-bit MLX weights.",
+                minimum: 8,
+                recommended: 12
+            ),
+            descriptor(
+                Q35Resources.bonsai2FourBModelId,
+                "Ternary Bonsai 2 4B 2-bit vision chat",
+                "Runs Prism ML's Qwen3.5 4B vision model from Hadamard-transformed ternary 2-bit MLX weights.",
+                minimum: 8,
+                recommended: 16
+            ),
+            descriptor(
+                Q35Resources.bonsai2NineBModelId,
+                "Ternary Bonsai 2 9B 2-bit vision chat",
+                "Runs Prism ML's Qwen3.5 9B vision model from Hadamard-transformed ternary 2-bit MLX weights.",
+                minimum: 12,
+                recommended: 16
+            ),
+            descriptor(
                 Q35Resources.bonsai2ModelId,
                 "Ternary Bonsai 2 27B 2-bit vision chat",
                 "Runs Prism ML's dense Qwen3.8 27B reasoning and vision model from Hadamard-transformed ternary 2-bit MLX weights.",

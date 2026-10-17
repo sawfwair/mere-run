@@ -38,6 +38,9 @@ public struct Q35Resources: Sendable, Hashable {
     public static let bonsai27B1BitModelId = "text-chat-bonsai-27b-1bit"
     public static let bonsai27B2BitModelId = "text-chat-bonsai-27b-2bit"
     public static let bonsai2ModelId = "text-chat-bonsai-2-27b-2bit"
+    public static let bonsai2TwoBModelId = "text-chat-bonsai-2-2b-2bit"
+    public static let bonsai2FourBModelId = "text-chat-bonsai-2-4b-2bit"
+    public static let bonsai2NineBModelId = "text-chat-bonsai-2-9b-2bit"
     public static let ornith9BModelId = "text-agent-ornith-9b"
     public static let ornith35BMLX4BitModelId = "text-agent-ornith-35b-mlx-4bit"
     public static let ornith35BMLX6BitModelId = "text-agent-ornith-35b-mlx-6bit"
@@ -57,12 +60,17 @@ public struct Q35Resources: Sendable, Hashable {
     public static func thinkingDefault(forModelId modelId: String) -> Bool {
         isQ38ModelId(modelId)
             || isBonsai27BModelId(modelId)
+            || isBonsai2SmallModelId(modelId)
             || modelId == ornith9BModelId
             || isOrnith35BModelId(modelId)
     }
 
     public static func isBonsai27BModelId(_ modelId: String) -> Bool {
         modelId == bonsai27B1BitModelId || modelId == bonsai27B2BitModelId || modelId == bonsai2ModelId
+    }
+
+    public static func isBonsai2SmallModelId(_ modelId: String) -> Bool {
+        modelId == bonsai2TwoBModelId || modelId == bonsai2FourBModelId || modelId == bonsai2NineBModelId
     }
 
     /// Convert the public continuous reasoning control into the three native
@@ -99,6 +107,8 @@ public struct Q35Resources: Sendable, Hashable {
             return RecommendedSampling(temperature: 1.0, topP: 0.95, topK: 20)
         case bonsai27B1BitModelId, bonsai27B2BitModelId:
             return RecommendedSampling(temperature: 0.7, topP: 0.95, topK: 20)
+        case bonsai2TwoBModelId, bonsai2FourBModelId, bonsai2NineBModelId:
+            return RecommendedSampling(temperature: 1.0, topP: 0.95, topK: 20)
         case ornith9BModelId,
              ornith35BMLX4BitModelId,
              ornith35BMLX6BitModelId,
@@ -332,6 +342,33 @@ public struct Q35Resources: Sendable, Hashable {
             upstreamRepoId: bonsai27B2BitUpstreamRepoId,
             upstreamRevision: bonsai27B2BitUpstreamRevision
         ),
+        bonsai2TwoBModelId: Profile(
+            modelId: bonsai2TwoBModelId,
+            upstreamRepoId: "prism-ml/Ternary-Bonsai-2-2B-mlx-2bit",
+            upstreamRevision: "1c6cbae21f8c38830ce337972b46fdae7b18eaaa",
+            snapshotPatterns: snapshotPatterns + [
+                "hadamard.json", "generation_config.json", "preprocessor_config.json",
+                "README.md", "LICENSE", "NOTICE.txt", "PACK-RUNTIME.md",
+            ]
+        ),
+        bonsai2FourBModelId: Profile(
+            modelId: bonsai2FourBModelId,
+            upstreamRepoId: "prism-ml/Ternary-Bonsai-2-4B-mlx-2bit",
+            upstreamRevision: "dff2caaa23fa8706164c44c10f1b58feb405f76a",
+            snapshotPatterns: snapshotPatterns + [
+                "hadamard.json", "generation_config.json", "preprocessor_config.json",
+                "README.md", "LICENSE", "NOTICE.txt", "PACK-RUNTIME.md",
+            ]
+        ),
+        bonsai2NineBModelId: Profile(
+            modelId: bonsai2NineBModelId,
+            upstreamRepoId: "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit",
+            upstreamRevision: "f4e28a59531731c41b6dfac88cf271bd58f0a287",
+            snapshotPatterns: snapshotPatterns + [
+                "hadamard.json", "generation_config.json", "preprocessor_config.json",
+                "README.md", "LICENSE", "NOTICE.txt", "PACK-RUNTIME.md",
+            ]
+        ),
         bonsai2ModelId: Profile(
             modelId: bonsai2ModelId,
             upstreamRepoId: bonsai2UpstreamRepoId,
@@ -419,7 +456,7 @@ public struct Q35Resources: Sendable, Hashable {
             bonsai27B1BitContextLength
         case bonsai27B2BitModelId:
             bonsai27B2BitContextLength
-        case bonsai2ModelId:
+        case bonsai2ModelId, bonsai2TwoBModelId, bonsai2FourBModelId, bonsai2NineBModelId:
             bonsai2ContextLength
         case ornith35BMLX4BitModelId,
              ornith35BMLX6BitModelId,

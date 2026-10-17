@@ -134,8 +134,14 @@ final class Q35DecoderLayer: Module {
         self._linearAttention.wrappedValue = Q35LinearAttention(config: config)
         self._selfAttention.wrappedValue = Q35FullAttention(config: config)
         self._mlp.wrappedValue = Q35FeedForward(config: config)
-        self._inputLayerNorm.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
-        self._postAttentionLayerNorm.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
+        self._inputLayerNorm.wrappedValue = Q35RMSNorm(
+            dimensions: text.hiddenSize, eps: text.rmsNormEps,
+            zeroCenteredWeight: config.modelType != "prism_hadamard_qwen35"
+        )
+        self._postAttentionLayerNorm.wrappedValue = Q35RMSNorm(
+            dimensions: text.hiddenSize, eps: text.rmsNormEps,
+            zeroCenteredWeight: config.modelType != "prism_hadamard_qwen35"
+        )
         self._attentionHyperConnection.wrappedValue = text.isQwen4Exp
             ? Q38GatedResidual(config: config)
             : nil
@@ -300,7 +306,10 @@ final class Q35Transformer: Module {
         self._layers.wrappedValue = (0..<text.numHiddenLayers).map { index in
             Q35DecoderLayer(config: config, layerIndex: index)
         }
-        self._norm.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
+        self._norm.wrappedValue = Q35RMSNorm(
+            dimensions: text.hiddenSize, eps: text.rmsNormEps,
+            zeroCenteredWeight: config.modelType != "prism_hadamard_qwen35"
+        )
         self._hyperConnectionMixer.wrappedValue = text.isQwen4Exp
             ? Q38GatedResidual(config: config, combinesBlockOutput: false)
             : nil

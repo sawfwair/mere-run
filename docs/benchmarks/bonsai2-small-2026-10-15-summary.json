@@ -1,0 +1,3558 @@
+{
+  "host": {
+    "chip": "Apple M3 Max",
+    "physical_memory_bytes": "38654705664",
+    "macos": "26.6.2",
+    "kernel": "arm64",
+    "gpu_cores": [
+      "30"
+    ],
+    "physical_cpu_cores": "14",
+    "swift_version": "Apple Swift version 6.3 (swiftlang-6.3.0.123.5 clang-2100.0.123.102)\nTarget: arm64-apple-macosx26.0",
+    "xcode_version": "Xcode 26.4\nBuild version 17E192"
+  },
+  "models": [
+    {
+      "size": "2B",
+      "id": "text-chat-bonsai-2-2b-2bit",
+      "quality_passed": 9,
+      "quality_total": 16,
+      "grounded_passed": 6,
+      "grounded_total": 8,
+      "code_checks_passed": 7,
+      "code_checks_total": 10,
+      "vision_strict_passed": 1,
+      "vision_total": 4,
+      "vision_fence_recovery_passed": 2,
+      "vision_recovered_fields_passed": 12,
+      "vision_fields_total": 18,
+      "arithmetic_passed": true,
+      "reasoning_passed": false,
+      "quality_latency": {
+        "median_wall_seconds": 5.593935489654541,
+        "maximum_wall_seconds": 32.994550704956055,
+        "output_budget_hits": 2
+      },
+      "failed_cases": [
+        {
+          "label": "2b-grounded-3",
+          "score": {
+            "passed": false,
+            "passed_checks": 1,
+            "total_checks": 9,
+            "checks": {
+              "required:orders@nova.example": true,
+              "json_object": false,
+              "key:id": false,
+              "key:sender": false,
+              "key:subject": false,
+              "key:date": false,
+              "value:id": false,
+              "value:subject": false,
+              "value:date": false
+            }
+          },
+          "tokens": 4096,
+          "wall_seconds": 31.32027292251587
+        },
+        {
+          "label": "2b-grounded-7",
+          "score": {
+            "passed": false,
+            "passed_checks": 2,
+            "total_checks": 5,
+            "checks": {
+              "required:17": false,
+              "required:12": false,
+              "required:5": false,
+              "forbidden:20": true,
+              "forbidden:15": true
+            }
+          },
+          "tokens": 2512,
+          "wall_seconds": 19.557312965393066
+        },
+        {
+          "label": "2b-code-merge_intervals",
+          "score": {
+            "passed": false,
+            "passed_checks": 2,
+            "total_checks": 5
+          },
+          "tokens": 569,
+          "wall_seconds": 4.52567195892334
+        },
+        {
+          "label": "2b-vision-shapes",
+          "score": {
+            "passed": false,
+            "checks": {
+              "heading": false,
+              "red_circles": true,
+              "blue_squares": true,
+              "green_triangles": true
+            },
+            "expected": {
+              "heading": "BONSAI CHECK 47",
+              "red_circles": 3,
+              "blue_squares": 2,
+              "green_triangles": 1
+            },
+            "actual": {
+              "heading": "BOARD CHECK",
+              "red_circles": 3,
+              "blue_squares": 2,
+              "green_triangles": 1
+            }
+          },
+          "tokens": 1061,
+          "wall_seconds": 11.893926858901978
+        },
+        {
+          "label": "2b-vision-receipt",
+          "score": {
+            "passed": false,
+            "checks": {
+              "strict_json": false
+            },
+            "expected": {
+              "date": "2026-10-15",
+              "total": 20,
+              "apples_quantity": 3,
+              "tea_unit_price": 5
+            }
+          },
+          "tokens": 293,
+          "wall_seconds": 3.3296618461608887
+        },
+        {
+          "label": "2b-vision-chart",
+          "score": {
+            "passed": false,
+            "checks": {
+              "strict_json": false
+            },
+            "expected": {
+              "largest": "PINE",
+              "largest_count": 9,
+              "smallest": "CEDAR",
+              "smallest_count": 4,
+              "difference": 5
+            }
+          },
+          "tokens": 4096,
+          "wall_seconds": 32.994550704956055
+        },
+        {
+          "label": "2b-reasoning",
+          "score": {
+            "passed": false,
+            "checks": {
+              "strict_json": false
+            },
+            "expected": {
+              "chickens": 23,
+              "rabbits": 12
+            }
+          },
+          "tokens": 565,
+          "wall_seconds": 4.334880828857422
+        }
+      ],
+      "text_throughput": {
+        "median_decode_tokens_per_second": 22.517816478471687,
+        "minimum": 20.24899788737933,
+        "maximum": 131.61287073973247,
+        "repetitions": 3,
+        "tokens": [
+          512,
+          512,
+          512
+        ],
+        "median_prefill_seconds": 0.000599980354309082,
+        "median_internal_first_token_seconds": 0.036624908447265625,
+        "median_request_wall_seconds": 22.740767002105713,
+        "samples": [
+          {
+            "label": "2b-text-measured-1",
+            "timing": {
+              "prefillKVCache": "native",
+              "promptTokens": 57,
+              "generatedTokens": 512,
+              "prefillSeconds": 0.000599980354309082,
+              "decodeSeconds": 3.8901970386505127,
+              "timeToFirstTokenSeconds": 0.011690974235534668,
+              "loadSeconds": 1.0013580322265625e-05,
+              "decodeKVCache": "native"
+            },
+            "wall_seconds": 3.8931708335876465,
+            "monotonic_wall_seconds": 3.893145000001823,
+            "thermal": "nominal",
+            "memory_pressure": "nominal",
+            "competing_before": []
+          },
+          {
+            "label": "2b-text-measured-2",
+            "timing": {
+              "prefillKVCache": "native",
+              "promptTokens": 57,
+              "generatedTokens": 512,
+              "prefillSeconds": 0.0005830526351928711,
+              "decodeSeconds": 22.737550973892212,
+              "timeToFirstTokenSeconds": 0.036624908447265625,
+              "loadSeconds": 8.940696716308594e-06,
+              "decodeKVCache": "native"
+            },
+            "wall_seconds": 22.740767002105713,
+            "monotonic_wall_seconds": 22.740618292002182,
+            "thermal": "nominal",
+            "memory_pressure": "nominal",
+            "competing_before": []
+          },
+          {
+            "label": "2b-text-measured-3",
+            "timing": {
+              "prefillKVCache": "native",
+              "promptTokens": 57,
+              "generatedTokens": 512,
+              "prefillSeconds": 0.0006279945373535156,
+              "decodeSeconds": 25.285201907157898,
+              "timeToFirstTokenSeconds": 0.04796886444091797,
+              "loadSeconds": 1.0967254638671875e-05,
+              "decodeKVCache": "native"
+            },
+            "wall_seconds": 25.289485931396484,
+            "monotonic_wall_seconds": 25.28932037499908,
+            "thermal": "nominal",
+            "memory_pressure": "nominal",
+            "competing_before": []
+          }
+        ]
+      },
+      "vision_throughput": {
+        "median_decode_tokens_per_second": 112.54582631041156,
+        "minimum": 23.722374151515467,
+        "maximum": 125.75934321441338,
+        "repetitions": 3,
+        "tokens": [
+          256,
+          256,
+          256
+        ],
+        "median_prefill_seconds": 0.5989269018173218,
+        "median_internal_first_token_seconds": 0.6160409450531006,
+        "median_request_wall_seconds": 2.880955934524536,
+        "samples": [
+          {
+            "label": "2b-vision-measured-1",
+            "timing": {
+              "prefillKVCache": "native",
+              "promptTokens": 649,
+              "generatedTokens": 256,
+              "loadSeconds": 9.894371032714844e-06,
+              "decodeSeconds": 2.27462899684906,
+              "timeToFirstTokenSeconds": 0.6160409450531006,
+              "prefillSeconds": 0.6039069890975952,
+              "decodeKVCache": "native"
+            },
+            "wall_seconds": 2.880955934524536,
+            "monotonic_wall_seconds": 2.8809352909956942,
+            "thermal": "nominal",
+            "memory_pressure": "nominal",
+            "competing_before": []
+          },
+          {
+            "label": "2b-vision-measured-2",
+            "timing": {
+              "prefillKVCache": "native",
+              "promptTokens": 649,
+              "generatedTokens": 256,
+              "prefillSeconds": 0.593235969543457,
+              "decodeSeconds": 10.791499972343445,
+              "timeToFirstTokenSeconds": 0.6298880577087402,
+              "loadSeconds": 9.059906005859375e-06,
+              "decodeKVCache": "native"
+            },
+            "wall_seconds": 11.387593030929565,
+            "monotonic_wall_seconds": 11.387517625000328,
+            "thermal": "nominal",
+            "memory_pressure": "nominal",
+            "competing_before": []
+          },
+          {
+            "label": "2b-vision-measured-3",
+            "timing": {
+              "prefillKVCache": "native",
+              "promptTokens": 649,
+              "generatedTokens": 256,
+              "loadSeconds": 1.0013580322265625e-05,
+              "decodeSeconds": 2.0356340408325195,
+              "timeToFirstTokenSeconds": 0.6098929643630981,
+              "prefillSeconds": 0.5989269018173218,
+              "decodeKVCache": "native"
+            },
+            "wall_seconds": 2.6371161937713623,
+            "monotonic_wall_seconds": 2.6370963329973165,
+            "thermal": "nominal",
+            "memory_pressure": "nominal",
+            "competing_before": []
+          }
+        ]
+      },
+      "recommended_probe": {
+        "passed": 0,
+        "total": 4,
+        "results": [
+          {
+            "label": "2b-grounded-3",
+            "score": {
+              "passed": false,
+              "passed_checks": 0,
+              "total_checks": 9,
+              "checks": {
+                "required:orders@nova.example": false,
+                "json_object": false,
+                "key:id": false,
+                "key:sender": false,
+                "key:subject": false,
+                "key:date": false,
+                "value:id": false,
+                "value:subject": false,
+                "value:date": false
+              }
+            },
+            "wall_seconds": 21.016841888427734,
+            "generated_tokens": 2515
+          },
+          {
+            "label": "2b-code-merge_intervals",
+            "score": {
+              "passed": false,
+              "passed_checks": 0,
+              "total_checks": 5,
+              "error": "unterminated string literal (detected at line 33) (<unknown>, line 33)"
+            },
+            "wall_seconds": 7.429147243499756,
+            "generated_tokens": 855
+          },
+          {
+            "label": "2b-vision-shapes",
+            "score": {
+              "passed": false,
+              "checks": {
+                "strict_json": false
+              },
+              "expected": {
+                "heading": "BONSAI CHECK 47",
+                "red_circles": 3,
+                "blue_squares": 2,
+                "green_triangles": 1
+              }
+            },
+            "wall_seconds": 34.17201900482178,
+            "generated_tokens": 3684
+          },
+          {
+            "label": "2b-vision-chart",
+            "score": {
+              "passed": false,
+              "checks": {
+                "strict_json": false
+              },
+              "expected": {
+                "largest": "PINE",
+                "largest_count": 9,
+                "smallest": "CEDAR",
+                "smallest_count": 4,
+                "difference": 5
+              }
+            },
+            "wall_seconds": 71.98364019393921,
+            "generated_tokens": 8192
+          }
+        ]
+      }
+    },
+    {
+      "size": "4B",
+      "id": "text-chat-bonsai-2-4b-2bit",
+      "quality_passed": 12,
+      "quality_total": 16,
+      "grounded_passed": 7,
+      "grounded_total": 8,
+      "code_checks_passed": 10,
+      "code_checks_total": 10,
+      "vision_strict_passed": 2,
+      "vision_total": 4,
+      "vision_fence_recovery_passed": 2,
+      "vision_recovered_fields_passed": 12,
+      "vision_fields_total": 18,
+      "arithmetic_passed": true,
+      "reasoning_passed": false,
+      "quality_latency": {
+        "median_wall_seconds": 9.000374436378479,
+        "maximum_wall_seconds": 219.77502012252808,
+        "output_budget_hits": 2
+      },
+      "failed_cases": [
+        {
+          "label": "4b-grounded-3",
+          "score": {
+            "passed": false,
+            "passed_checks": 8,
+            "total_checks": 9,
+            "checks": {
+              "required:orders@nova.example": false,
+              "json_object": true,
+              "key:id": true,
+              "key:sender": true,
+              "key:subject": true,
+              "key:date": true,
+              "value:id": true,
+              "value:subject": true,
+              "value:date": true
+            }
+          },
+          "tokens": 756,
+          "wall_seconds": 8.905435800552368
+        },
+        {
+          "label": "4b-vision-shapes",
+          "score": {
+            "passed": false,
+            "checks": {
+              "heading": false,
+              "red_circles": true,
+              "blue_squares": true,
+              "green_triangles": true
+            },
+            "expected": {
+              "heading": "BONSAI CHECK 47",
+              "red_circles": 3,
+              "blue_squares": 2,
+              "green_triangles": 1
+            },
+            "actual": {
+              "heading": "BO M O H X R 4",
+              "red_circles": 3,
+              "blue_squares": 2,
+              "green_triangles": 1
+            }
+          },
+          "tokens": 2446,
+          "wall_seconds": 33.90953803062439
+        },
+        {
+          "label": "4b-vision-chart",
+          "score": {
+            "passed": false,
+            "checks": {
+              "strict_json": false
+            },
+            "expected": {
+              "largest": "PINE",
+              "largest_count": 9,
+              "smallest": "CEDAR",
+              "smallest_count": 4,
+              "difference": 5
+            }
+          },
+          "tokens": 4096,
+          "wall_seconds": 54.29541826248169
+        },
+        {
+          "label": "4b-reasoning",
+          "score": {
+            "passed": false,
+            "checks": {
+              "strict_json": false
+            },
+            "expected": {
+              "chickens": 23,
+              "rabbits": 12
+            }
+          },
+          "tokens": 651,
+          "wall_seconds": 7.298363208770752
+        }
+      ],
+      "text_throughput": {
+        "median_decode_tokens_per_second": 15.467864363148115,
+        "minimum": 15.098124392653988,
+        "maximum": 15.612967219466004,
+        "repetitions": 3,
+        "tokens": [
+          512,
+          512,
+          512
+        ],
+        "median_prefill_seconds": 0.0008060932159423828,
+        "median_internal_first_token_seconds": 0.06397008895874023,
+        "median_request_wall_seconds": 33.105666160583496,
+        "samples": [
+          {
+            "label": "4b-text-measured-1",
+            "timing": {
+              "prefillKVCache": "native",
+              "promptTokens": 57,
+              "generatedTokens": 512,
+              "loadSeconds": 1.0013580322265625e-05,
+              "decodeSeconds": 33.10088503360748,
+              "timeToFirstTokenSeconds": 0.07035195827484131,
+              "prefillSeconds": 0.0007129907608032227,
+              "decodeKVCache": "native"
+            },
+            "wall_seconds": 33.105666160583496,
+            "monotonic_wall_seconds": 33.105450416995154,
+            "thermal": "nominal",
+            "memory_pressure": "nominal",
+            "competing_before": []
+          },
+          {
+            "label": "4b-text-measured-2",
+            "timing": {
+              "prefillKVCache": "native",
+              "promptTokens": 57,
+              "generatedTokens": 512,
+              "loadSeconds": 1.0967254638671875e-05,
+              "decodeSeconds": 32.793254017829895,
+              "timeToFirstTokenSeconds": 0.06397008895874023,
+              "prefillSeconds": 0.0008060932159423828,
+              "decodeKVCache": "native"
+            },
+            "wall_seconds": 32.79851508140564,
+            "monotonic_wall_seconds": 32.79830129200127,
+            "thermal": "nominal",
+            "memory_pressure": "nominal",
+            "competing_before": []
+          },
+          {
+            "label": "4b-text-measured-3",
+            "timing": {
+              "prefillKVCache": "native",
+              "promptTokens": 57,
+              "generatedTokens": 512,
+              "loadSeconds": 1.0013580322265625e-05,
+              "decodeSeconds": 33.91149699687958,
+              "timeToFirstTokenSeconds": 0.06067502498626709,
+              "prefillSeconds": 0.0008320808410644531,
+              "decodeKVCache": "native"
+            },
+            "wall_seconds": 33.91608786582947,
+            "monotonic_wall_seconds": 33.91586704200017,
+            "thermal": "nominal",
+            "memory_pressure": "nominal",
+            "competing_before": []
+          }
+        ]
+      },
+      "vision_throughput": {
+        "median_decode_tokens_per_second": 15.41413014128229,
+        "minimum": 15.303983416698216,
+        "maximum": 15.56767785043869,
+        "repetitions": 3,
+        "tokens": [
+          256,
+          256,
+          256
+        ],
+        "median_prefill_seconds": 1.072803020477295,
+        "median_internal_first_token_seconds": 1.1236759424209595,
+        "median_request_wall_seconds": 17.64715886116028,
+        "samples": [
+          {
+            "label": "4b-vision-measured-1",
+            "timing": {
+              "prefillKVCache": "native",
+              "promptTokens": 649,
+              "generatedTokens": 256,
+              "loadSeconds": 1.1920928955078125e-05,
+              "decodeSeconds": 16.4443279504776,
+              "timeToFirstTokenSeconds": 1.1236759424209595,
+              "prefillSeconds": 1.072803020477295,
+              "decodeKVCache": "native"
+            },
+            "wall_seconds": 17.5211021900177,
+            "monotonic_wall_seconds": 17.52098670799751,
+            "thermal": "nominal",
+            "memory_pressure": "nominal",
+            "competing_before": []
+          },
+          {
+            "label": "4b-vision-measured-2",
+            "timing": {
+              "prefillKVCache": "native",
+              "promptTokens": 649,
+              "generatedTokens": 256,
+              "decodeSeconds": 16.727671027183533,
+              "prefillSeconds": 1.0805410146713257,
+              "timeToFirstTokenSeconds": 1.129791021347046,
+              "loadSeconds": 8.940696716308594e-06,
+              "decodeKVCache": "native"
+            },
+            "wall_seconds": 17.811614990234375,
+            "monotonic_wall_seconds": 17.81149749999895,
+            "thermal": "nominal",
+            "memory_pressure": "nominal",
+            "competing_before": []
+          },
+          {
+            "label": "4b-vision-measured-3",
+            "timing": {
+              "prefillKVCache": "native",
+              "promptTokens": 649,
+              "generatedTokens": 256,
+              "prefillSeconds": 1.0356169939041138,
+              "loadSeconds": 1.1920928955078125e-05,
+              "decodeSeconds": 16.60813796520233,
+              "timeToFirstTokenSeconds": 1.0862839221954346,
+              "decodeKVCache": "native"
+            },
+            "wall_seconds": 17.64715886116028,
+            "monotonic_wall_seconds": 17.647042457996577,
+            "thermal": "nominal",
+            "memory_pressure": "nominal",
+            "competing_before": []
+          }
+        ]
+      },
+      "recommended_probe": {
+        "passed": 1,
+        "total": 4,
+        "results": [
+          {
+            "label": "4b-grounded-3",
+            "score": {
+              "passed": false,
+              "passed_checks": 8,
+              "total_checks": 9,
+              "checks": {
+                "required:orders@nova.example": false,
+                "json_object": true,
+                "key:id": true,
+                "key:sender": true,
+                "key:subject": true,
+                "key:date": true,
+                "value:id": true,
+                "value:subject": true,
+                "value:date": true
+              }
+            },
+            "wall_seconds": 12.362344026565552,
+            "generated_tokens": 792
+          },
+          {
+            "label": "4b-code-merge_intervals",
+            "score": {
+              "passed": true,
+              "passed_checks": 5,
+              "total_checks": 5
+            },
+            "wall_seconds": 54.29514288902283,
+            "generated_tokens": 4492
+          },
+          {
+            "label": "4b-vision-shapes",
+            "score": {
+              "passed": false,
+              "checks": {
+                "heading": false,
+                "red_circles": true,
+                "blue_squares": true,
+                "green_triangles": true
+              },
+              "expected": {
+                "heading": "BONSAI CHECK 47",
+                "red_circles": 3,
+                "blue_squares": 2,
+                "green_triangles": 1
+              },
+              "actual": {
+                "heading": "BOMBIE",
+                "red_circles": 3,
+                "blue_squares": 2,
+                "green_triangles": 1
+              }
+            },
+            "wall_seconds": 23.351749897003174,
+            "generated_tokens": 1589
+          },
+          {
+            "label": "4b-vision-chart",
+            "score": {
+              "passed": false,
+              "checks": {
+                "strict_json": false
+              },
+              "expected": {
+                "largest": "PINE",
+                "largest_count": 9,
+                "smallest": "CEDAR",
+                "smallest_count": 4,
+                "difference": 5
+              }
+            },
+            "wall_seconds": 545.2778379917145,
+            "generated_tokens": 8192
+          }
+        ]
+      }
+    },
+    {
+      "size": "9B",
+      "id": "text-chat-bonsai-2-9b-2bit",
+      "quality_passed": 12,
+      "quality_total": 16,
+      "grounded_passed": 7,
+      "grounded_total": 8,
+      "code_checks_passed": 10,
+      "code_checks_total": 10,
+      "vision_strict_passed": 1,
+      "vision_total": 4,
+      "vision_fence_recovery_passed": 3,
+      "vision_recovered_fields_passed": 13,
+      "vision_fields_total": 18,
+      "arithmetic_passed": true,
+      "reasoning_passed": true,
+      "quality_latency": {
+        "median_wall_seconds": 35.3756400346756,
+        "maximum_wall_seconds": 259.7651300430298,
+        "output_budget_hits": 2
+      },
+      "failed_cases": [
+        {
+          "label": "9b-grounded-7",
+          "score": {
+            "passed": false,
+            "passed_checks": 4,
+            "total_checks": 5,
+            "checks": {
+              "required:17": false,
+              "required:12": true,
+              "required:5": true,
+              "forbidden:20": true,
+              "forbidden:15": true
+            }
+          },
+          "tokens": 4096,
+          "wall_seconds": 254.51619291305542
+        },
+        {
+          "label": "9b-vision-shapes",
+          "score": {
+            "passed": false,
+            "checks": {
+              "strict_json": false
+            },
+            "expected": {
+              "heading": "BONSAI CHECK 47",
+              "red_circles": 3,
+              "blue_squares": 2,
+              "green_triangles": 1
+            }
+          },
+          "tokens": 377,
+          "wall_seconds": 11.738298892974854
+        },
+        {
+          "label": "9b-vision-receipt",
+          "score": {
+            "passed": false,
+            "checks": {
+              "strict_json": false
+            },
+            "expected": {
+              "date": "2026-10-15",
+              "total": 20,
+              "apples_quantity": 3,
+              "tea_unit_price": 5
+            }
+          },
+          "tokens": 585,
+          "wall_seconds": 13.173221111297607
+        },
+        {
+          "label": "9b-vision-chart",
+          "score": {
+            "passed": false,
+            "checks": {
+              "strict_json": false
+            },
+            "expected": {
+              "largest": "PINE",
+              "largest_count": 9,
+              "smallest": "CEDAR",
+              "smallest_count": 4,
+              "difference": 5
+            }
+          },
+          "tokens": 4096,
+          "wall_seconds": 259.7651300430298
+        }
+      ],
+      "text_throughput": {
+        "median_decode_tokens_per_second": 16.51513061843206,
+        "minimum": 13.824960046526897,
+        "maximum": 17.65234253444959,
+        "repetitions": 3,
+        "tokens": [
+          512,
+          512,
+          512
+        ],
+        "median_prefill_seconds": 0.0006960630416870117,
+        "median_internal_first_token_seconds": 0.06394302845001221,
+        "median_request_wall_seconds": 31.005276918411255,
+        "samples": [
+          {
+            "label": "9b-text-measured-1",
+            "timing": {
+              "decodeSeconds": 37.034465074539185,
+              "generatedTokens": 512,
+              "prefillKVCache": "native",
+              "decodeKVCache": "native",
+              "promptTokens": 57,
+              "prefillSeconds": 0.0008189678192138672,
+              "loadSeconds": 1.2993812561035156e-05,
+              "timeToFirstTokenSeconds": 0.06394302845001221
+            },
+            "wall_seconds": 37.0391149520874,
+            "monotonic_wall_seconds": 37.03887458299869,
+            "thermal": "nominal",
+            "memory_pressure": "nominal",
+            "competing_before": []
+          },
+          {
+            "label": "9b-text-measured-2",
+            "timing": {
+              "decodeSeconds": 31.001874089241028,
+              "generatedTokens": 512,
+              "prefillKVCache": "native",
+              "decodeKVCache": "native",
+              "promptTokens": 57,
+              "prefillSeconds": 0.0005578994750976562,
+              "loadSeconds": 1.0967254638671875e-05,
+              "timeToFirstTokenSeconds": 0.062190890312194824
+            },
+            "wall_seconds": 31.005276918411255,
+            "monotonic_wall_seconds": 31.005075749999378,
+            "thermal": "nominal",
+            "memory_pressure": "nominal",
+            "competing_before": []
+          },
+          {
+            "label": "9b-text-measured-3",
+            "timing": {
+              "decodeSeconds": 29.00464904308319,
+              "generatedTokens": 512,
+              "prefillKVCache": "native",
+              "decodeKVCache": "native",
+              "promptTokens": 57,
+              "prefillSeconds": 0.0006960630416870117,
+              "loadSeconds": 9.894371032714844e-06,
+              "timeToFirstTokenSeconds": 0.07635390758514404
+            },
+            "wall_seconds": 29.00863814353943,
+            "monotonic_wall_seconds": 29.008449292006844,
+            "thermal": "nominal",
+            "memory_pressure": "nominal",
+            "competing_before": []
+          }
+        ]
+      },
+      "vision_throughput": {
+        "median_decode_tokens_per_second": 18.518814590570727,
+        "minimum": 18.417729972410072,
+        "maximum": 18.610878221315144,
+        "repetitions": 3,
+        "tokens": [
+          256,
+          256,
+          256
+        ],
+        "median_prefill_seconds": 1.827152967453003,
+        "median_internal_first_token_seconds": 1.8842909336090088,
+        "median_request_wall_seconds": 15.653525114059448,
+        "samples": [
+          {
+            "label": "9b-vision-measured-1",
+            "timing": {
+              "decodeSeconds": 13.755396008491516,
+              "generatedTokens": 256,
+              "prefillKVCache": "native",
+              "decodeKVCache": "native",
+              "promptTokens": 649,
+              "prefillSeconds": 1.8148759603500366,
+              "loadSeconds": 1.0967254638671875e-05,
+              "timeToFirstTokenSeconds": 1.8780078887939453
+            },
+            "wall_seconds": 15.57335615158081,
+            "monotonic_wall_seconds": 15.573253750000731,
+            "thermal": "nominal",
+            "memory_pressure": "nominal",
+            "competing_before": []
+          },
+          {
+            "label": "9b-vision-measured-2",
+            "timing": {
+              "decodeSeconds": 13.823778986930847,
+              "generatedTokens": 256,
+              "prefillKVCache": "native",
+              "decodeKVCache": "native",
+              "promptTokens": 649,
+              "prefillSeconds": 1.827152967453003,
+              "loadSeconds": 1.0967254638671875e-05,
+              "timeToFirstTokenSeconds": 1.8842909336090088
+            },
+            "wall_seconds": 15.653525114059448,
+            "monotonic_wall_seconds": 15.65342262500053,
+            "thermal": "nominal",
+            "memory_pressure": "nominal",
+            "competing_before": []
+          },
+          {
+            "label": "9b-vision-measured-3",
+            "timing": {
+              "decodeSeconds": 13.899649977684021,
+              "generatedTokens": 256,
+              "prefillKVCache": "native",
+              "decodeKVCache": "native",
+              "promptTokens": 649,
+              "prefillSeconds": 1.8878449201583862,
+              "loadSeconds": 1.0013580322265625e-05,
+              "timeToFirstTokenSeconds": 1.9482789039611816
+            },
+            "wall_seconds": 15.790197134017944,
+            "monotonic_wall_seconds": 15.79009324999788,
+            "thermal": "nominal",
+            "memory_pressure": "nominal",
+            "competing_before": []
+          }
+        ]
+      },
+      "recommended_probe": {
+        "passed": 3,
+        "total": 4,
+        "results": [
+          {
+            "label": "9b-grounded-3",
+            "score": {
+              "passed": true,
+              "passed_checks": 9,
+              "total_checks": 9,
+              "checks": {
+                "required:orders@nova.example": true,
+                "json_object": true,
+                "key:id": true,
+                "key:sender": true,
+                "key:subject": true,
+                "key:date": true,
+                "value:id": true,
+                "value:subject": true,
+                "value:date": true
+              }
+            },
+            "wall_seconds": 188.0699601173401,
+            "generated_tokens": 3016
+          },
+          {
+            "label": "9b-code-merge_intervals",
+            "score": {
+              "passed": true,
+              "passed_checks": 5,
+              "total_checks": 5
+            },
+            "wall_seconds": 151.76100492477417,
+            "generated_tokens": 2389
+          },
+          {
+            "label": "9b-vision-shapes",
+            "score": {
+              "passed": true,
+              "checks": {
+                "heading": true,
+                "red_circles": true,
+                "blue_squares": true,
+                "green_triangles": true
+              },
+              "expected": {
+                "heading": "BONSAI CHECK 47",
+                "red_circles": 3,
+                "blue_squares": 2,
+                "green_triangles": 1
+              },
+              "actual": {
+                "heading": "BONSAI CHECK 47",
+                "red_circles": 3,
+                "blue_squares": 2,
+                "green_triangles": 1
+              }
+            },
+            "wall_seconds": 29.871084928512573,
+            "generated_tokens": 404
+          },
+          {
+            "label": "9b-vision-chart",
+            "score": {
+              "passed": false,
+              "checks": {
+                "strict_json": false
+              },
+              "expected": {
+                "largest": "PINE",
+                "largest_count": 9,
+                "smallest": "CEDAR",
+                "smallest_count": 4,
+                "difference": 5
+              }
+            },
+            "wall_seconds": 182.38148188591003,
+            "generated_tokens": 8192
+          }
+        ]
+      }
+    }
+  ],
+  "binary_sha256": "60de2728001459877ff32fe20ce26630b178e871aa06068a85a7f3dd8110b9cd",
+  "performance_binary_sha256": "60de2728001459877ff32fe20ce26630b178e871aa06068a85a7f3dd8110b9cd",
+  "probe_binary_sha256": "60de2728001459877ff32fe20ce26630b178e871aa06068a85a7f3dd8110b9cd",
+  "model_download_receipt_sha256": "5a096913431221f9fe4ff7536cfbbf63556fe2d9307fdd93938f6d4f67fd6ac4",
+  "plan": {
+    "models": [
+      {
+        "repo": "prism-ml/Ternary-Bonsai-2-2B-mlx-2bit",
+        "revision": "1c6cbae21f8c38830ce337972b46fdae7b18eaaa",
+        "verified": true,
+        "total_bytes": 1213249532
+      },
+      {
+        "repo": "prism-ml/Ternary-Bonsai-2-4B-mlx-2bit",
+        "revision": "dff2caaa23fa8706164c44c10f1b58feb405f76a",
+        "verified": true,
+        "total_bytes": 1884415990
+      },
+      {
+        "repo": "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit",
+        "revision": "f4e28a59531731c41b6dfac88cf271bd58f0a287",
+        "verified": true,
+        "total_bytes": 3475204252
+      }
+    ],
+    "quality_protocol": "8 grounded chat cases; arithmetic; reasoning; two Python functions with 5 tests each; 4 images with 18 field checks",
+    "context_size": 8192,
+    "grounded_fixture_sha256": "ead99ca7eaceb31d7eedefac43e2db1c94bdd4152e051231013ce54eca6e7682",
+    "resident_protocol": "Normally admitted resident API; published thinking default; temperature1 top_p0.95 top_k20; no seed because this API profile refuses deterministic seed controls. 4096 maximum output tokens for quality. Preserve CLI non-thinking scores separately. Native lastRequest timing, 1 warmup plus3 measured resident requests per modality/model. No admission override.",
+    "scorer_correction": "Allow ordinary list/string methods such as sort and copy in the closed code evaluator. Rescore saved outputs after collection; do not rerun model answers or change the five expected tests.",
+    "profiled_quality_requests": [
+      "4b-grounded-7"
+    ],
+    "quality_sampling": "PRIMARY resident API: thinking default, temperature1 top_p0.95 top_k20 min_p0; no penalties or seed; max4096 output; context8192.",
+    "performance_protocol": "PRIMARY resident API: same sidecar sampler; context8192. Each model/modality has one discarded128-token warmup plus three measured requests (512 text,256 vision). Normal16GiB machine admission and request admission remain enabled. No concurrent builds/tests.",
+    "primary_quality_collector_sha256": "d24d3ee22685b31e2db5e8244309383d5ac0a584fc6413f94afc7fd70645e38d",
+    "throughput_and_probe_collector_sha256": "16014d2c1881424be626289430e72965391ce671b61c9437a5390825fe65837a",
+    "quality_scorer_sha256": "f0926d7bc0927cfce5ff92653dd0df77ee3ea57ceb71843a3ee00a9a0c49b677",
+    "quality_case_manifest_sha256": "2c4f8b2f3cb1b2eb4497e38d32600592796b57c24ae1cb35cee86227b7bce03f",
+    "secondary_protocol": "Separate four-case matrix per model. Same binary, fresh server, context16384, max8192, presence1/repetition1, other sampler values unchanged. Normal machine/request admission. See recommended-diagnostic-plan.json.",
+    "secondary_case_manifest_sha256": "45a544341833071496f9f2080ec2d9f4ba18fe9671afa017e39b84a1a93f5e80"
+  },
+  "original_plan_sha256": "9ddb25c723bb462aa9803a7ae27f5f3963f6cd7b7ee258292405b949960f15ae",
+  "quality_cases": [
+    {
+      "label": "grounded-0",
+      "prompt": "Benchmark case: MereChat/0\nCategory: grounded-email\nTitle: Most recent email from a sender\n\nEvidence:\n[mail_101] workspace=sawfwair from=Abe Newsoil <abenewsoil@example.com> date=2026-06-24T09:18 subject=\"Soil order follow-up\"\n[mail_102] workspace=sawfwair from=Mara Lee <mara@example.com> date=2026-06-27T11:02 subject=\"Greenhouse lock schedule\"\n[mail_103] workspace=sawfwair from=Abe Newsoil <abenewsoil@example.com> date=2026-06-27T16:40 subject=\"Revised nursery quote\"\n\nQuestion: What is the most recent email from Abe?\nResponse requirements: include the exact id, sender email, date, and subject. Do not add links.",
+      "system": "You are running a grounded local assistant benchmark. Answer using only the evidence in the user prompt.\nIf the answer is not present in the evidence, say NOT_IN_EVIDENCE.\nDo not invent emails, links, dates, commands, workspace names, or people.\nKeep answers concise and follow the requested format.",
+      "type": "grounded",
+      "expected": {
+        "requiredPhrases": [
+          "mail_103",
+          "abenewsoil@example.com",
+          "2026-06-27",
+          "Revised nursery quote"
+        ],
+        "forbiddenPhrases": [
+          "mail_101",
+          "http://",
+          "https://"
+        ]
+      }
+    },
+    {
+      "label": "grounded-1",
+      "prompt": "Benchmark case: MereChat/1\nCategory: abstention\nTitle: Missing sender must not hallucinate\n\nEvidence:\n[mail_201] workspace=mere from=Rita Cho <rita@example.com> date=2026-06-25 subject=\"Invoice batch\"\n[mail_202] workspace=mere from=Mara Lee <mara@example.com> date=2026-06-26 subject=\"Project sync\"\n\nQuestion: What is the most recent email from abenewsoil@example.com?\nResponse requirements: if no matching email appears, include the exact token NOT_IN_EVIDENCE.",
+      "system": "You are running a grounded local assistant benchmark. Answer using only the evidence in the user prompt.\nIf the answer is not present in the evidence, say NOT_IN_EVIDENCE.\nDo not invent emails, links, dates, commands, workspace names, or people.\nKeep answers concise and follow the requested format.",
+      "type": "grounded",
+      "expected": {
+        "requiredPhrases": [
+          "NOT_IN_EVIDENCE"
+        ],
+        "forbiddenPhrases": [
+          "Revised nursery quote",
+          "mail_103",
+          "2026-06-27"
+        ]
+      }
+    },
+    {
+      "label": "grounded-2",
+      "prompt": "Benchmark case: MereChat/2\nCategory: workspace-grounding\nTitle: Respect selected workspace\n\nEvidence:\n[workspace mere] synced_email_count=4 latest_subject=\"Runtime notes\"\n[workspace sawfwair] synced_email_count=12 latest_subject=\"Greenhouse lock schedule\"\n\nQuestion: Which workspace has 12 synced emails?\nResponse requirements: answer with the workspace name only.",
+      "system": "You are running a grounded local assistant benchmark. Answer using only the evidence in the user prompt.\nIf the answer is not present in the evidence, say NOT_IN_EVIDENCE.\nDo not invent emails, links, dates, commands, workspace names, or people.\nKeep answers concise and follow the requested format.",
+      "type": "grounded",
+      "expected": {
+        "forbiddenPhrases": [
+          "mere"
+        ],
+        "requiredRegexes": [
+          "(?i)^\\s*sawfwair\\s*[\\.!]?$"
+        ]
+      }
+    },
+    {
+      "label": "grounded-3",
+      "prompt": "Benchmark case: MereChat/3\nCategory: structured-output\nTitle: Extract email metadata as JSON\n\nEvidence:\n[mail_301] from=Nova Supplies <orders@nova.example> date=2026-06-22T08:03 subject=\"PO 1178 accepted\"\n\nQuestion: Return JSON for this email.\nResponse requirements: return only a JSON object with keys id, sender, subject, and date.",
+      "system": "You are running a grounded local assistant benchmark. Answer using only the evidence in the user prompt.\nIf the answer is not present in the evidence, say NOT_IN_EVIDENCE.\nDo not invent emails, links, dates, commands, workspace names, or people.\nKeep answers concise and follow the requested format.",
+      "type": "grounded",
+      "expected": {
+        "requiredPhrases": [
+          "orders@nova.example"
+        ],
+        "requiredJSONKeys": [
+          "id",
+          "sender",
+          "subject",
+          "date"
+        ],
+        "expectedJSONValues": {
+          "id": "mail_301",
+          "subject": "PO 1178 accepted",
+          "date": "2026-06-22T08:03"
+        },
+        "mustBeJSON": true
+      }
+    },
+    {
+      "label": "grounded-4",
+      "prompt": "Benchmark case: MereChat/4\nCategory: grounded-summary\nTitle: Summarize recent inbox without inventing\n\nEvidence:\n[mail_401] from=Rita Cho subject=\"Invoice batch\" snippet=\"Three vendor invoices are ready for review.\"\n[mail_402] from=Jon Bell subject=\"Permit status\" snippet=\"The permit office moved inspection to July 2.\"\n[mail_403] from=Abe Newsoil subject=\"Soil samples\" snippet=\"Lab results show elevated clay in bed C.\"\n\nQuestion: Summarize the inbox in exactly three bullets.\nResponse requirements: each bullet should mention one sender and one concrete fact.",
+      "system": "You are running a grounded local assistant benchmark. Answer using only the evidence in the user prompt.\nIf the answer is not present in the evidence, say NOT_IN_EVIDENCE.\nDo not invent emails, links, dates, commands, workspace names, or people.\nKeep answers concise and follow the requested format.",
+      "type": "grounded",
+      "expected": {
+        "requiredPhrases": [
+          "Rita Cho",
+          "vendor invoices",
+          "Jon Bell",
+          "July 2",
+          "Abe Newsoil",
+          "clay"
+        ],
+        "forbiddenPhrases": [
+          "http://",
+          "urgent security"
+        ],
+        "minBulletCount": 3
+      }
+    },
+    {
+      "label": "grounded-5",
+      "prompt": "Benchmark case: MereChat/5\nCategory: local-action-boundary\nTitle: Do not claim to sync when asked without execution\n\nEvidence:\nemail_sync_status=disconnected\navailable_action=\"connect email\"\n\nQuestion: Sync my email now.\nResponse requirements: do not claim completion. State the current status and the next action needed.",
+      "system": "You are running a grounded local assistant benchmark. Answer using only the evidence in the user prompt.\nIf the answer is not present in the evidence, say NOT_IN_EVIDENCE.\nDo not invent emails, links, dates, commands, workspace names, or people.\nKeep answers concise and follow the requested format.",
+      "type": "grounded",
+      "expected": {
+        "requiredPhrases": [
+          "disconnected",
+          "connect email"
+        ],
+        "forbiddenPhrases": [
+          "synced successfully",
+          "sync completed",
+          "all email is synced"
+        ]
+      }
+    },
+    {
+      "label": "grounded-6",
+      "prompt": "Benchmark case: MereChat/6\nCategory: date-reasoning\nTitle: Choose latest by date\n\nEvidence:\n[project_alpha] updated=2026-06-12 status=active\n[project_beta] updated=2026-06-27 status=blocked\n[project_gamma] updated=2026-06-20 status=active\n\nQuestion: Which project was updated most recently?\nResponse requirements: include the project id and date only.",
+      "system": "You are running a grounded local assistant benchmark. Answer using only the evidence in the user prompt.\nIf the answer is not present in the evidence, say NOT_IN_EVIDENCE.\nDo not invent emails, links, dates, commands, workspace names, or people.\nKeep answers concise and follow the requested format.",
+      "type": "grounded",
+      "expected": {
+        "requiredPhrases": [
+          "project_beta",
+          "2026-06-27"
+        ],
+        "forbiddenPhrases": [
+          "project_alpha",
+          "project_gamma"
+        ]
+      }
+    },
+    {
+      "label": "grounded-7",
+      "prompt": "Benchmark case: MereChat/7\nCategory: arithmetic\nTitle: Compute from visible counts\n\nEvidence:\ninbox_count=12\nsent_count=5\ndraft_count=3\n\nQuestion: How many non-draft email records are visible?\nResponse requirements: answer with the number and the formula.",
+      "system": "You are running a grounded local assistant benchmark. Answer using only the evidence in the user prompt.\nIf the answer is not present in the evidence, say NOT_IN_EVIDENCE.\nDo not invent emails, links, dates, commands, workspace names, or people.\nKeep answers concise and follow the requested format.",
+      "type": "grounded",
+      "expected": {
+        "requiredPhrases": [
+          "17",
+          "12",
+          "5"
+        ],
+        "forbiddenPhrases": [
+          "20",
+          "15"
+        ]
+      }
+    },
+    {
+      "label": "code-count_vowels",
+      "prompt": "Write Python function count_vowels(text) that returns the number of English vowels in a string, ignoring case. Return only executable Python code, no explanation. Do not import anything.",
+      "type": "code",
+      "function": "count_vowels"
+    },
+    {
+      "label": "code-merge_intervals",
+      "prompt": "Write Python function merge_intervals(intervals) that returns sorted merged inclusive intervals as a list of two-element lists. Merge overlapping or touching endpoints. Handle an empty list. Return only executable Python code, no explanation. Do not import anything.",
+      "type": "code",
+      "function": "merge_intervals"
+    },
+    {
+      "label": "vision-shapes",
+      "prompt": "Read the image. Return only a JSON object with keys heading (the exact heading), red_circles, blue_squares, green_triangles. Count the shapes.",
+      "image": "shapes.png",
+      "expected": {
+        "heading": "BONSAI CHECK 47",
+        "red_circles": 3,
+        "blue_squares": 2,
+        "green_triangles": 1
+      },
+      "type": "vision"
+    },
+    {
+      "label": "vision-receipt",
+      "prompt": "Read this receipt. Return only JSON with keys date (YYYY-MM-DD), total (number), apples_quantity (integer), tea_unit_price (number).",
+      "image": "receipt.png",
+      "expected": {
+        "date": "2026-10-15",
+        "total": 20,
+        "apples_quantity": 3,
+        "tea_unit_price": 5
+      },
+      "type": "vision"
+    },
+    {
+      "label": "vision-chart",
+      "prompt": "Read the bar chart. Return only JSON with keys largest (uppercase tree name), largest_count, smallest (uppercase tree name), smallest_count, difference (largest minus smallest).",
+      "image": "chart.png",
+      "expected": {
+        "largest": "PINE",
+        "largest_count": 9,
+        "smallest": "CEDAR",
+        "smallest_count": 4,
+        "difference": 5
+      },
+      "type": "vision"
+    },
+    {
+      "label": "vision-photo",
+      "prompt": "Describe only what is visible. Return only JSON with integer people, and boolean orange_suit, helmet, us_flag, space_shuttle indicating whether each is visible.",
+      "image": "astronaut.png",
+      "expected": {
+        "people": 1,
+        "orange_suit": true,
+        "helmet": true,
+        "us_flag": true,
+        "space_shuttle": true
+      },
+      "type": "vision"
+    },
+    {
+      "label": "arithmetic",
+      "prompt": "What is 84 multiplied by 3 divided by 2? Answer with the number only.",
+      "type": "arithmetic",
+      "thinking": false,
+      "expected": "126"
+    },
+    {
+      "label": "reasoning",
+      "prompt": "A farm has only chickens and rabbits, with 35 heads and 94 legs in total. Determine how many of each animal there are. Finish with only a JSON object with keys chickens and rabbits and integer values.",
+      "type": "reasoning",
+      "thinking": true,
+      "expected": {
+        "chickens": 23,
+        "rabbits": 12
+      }
+    }
+  ],
+  "source_artifacts": [
+    {
+      "repo": "prism-ml/Ternary-Bonsai-2-2B-mlx-2bit",
+      "revision": "1c6cbae21f8c38830ce337972b46fdae7b18eaaa",
+      "files": [
+        {
+          "file": "LICENSE",
+          "bytes": 10174,
+          "sha256": "69849221bfb90053de2134ef5e6d540287b4b98062326492f1f96f5da685524b",
+          "upstream_identity": "66a27ec5ff940d3a9652d2948746ebac4c9d0188"
+        },
+        {
+          "file": "NOTICE.txt",
+          "bytes": 409,
+          "sha256": "316012fa6094c03c7b0600bec258bffb675a9261d86f37bc86e15763a1fabc99",
+          "upstream_identity": "f90179ad7823ab0d98f31490f50aa160870543b1"
+        },
+        {
+          "file": "PACK-RUNTIME.md",
+          "bytes": 2165,
+          "sha256": "49cc8676521bc64ee0eb58ef387f12540acfc90ff4d9b406f29d6c17516a86ca",
+          "upstream_identity": "2d62bdd25edf09f8e97c4f86e8cc15b8d52a4268"
+        },
+        {
+          "file": "README.md",
+          "bytes": 4889,
+          "sha256": "f72480ef2fba5328d976f69e40f5efbd4ec99e849928b19df6e0f626a5437987",
+          "upstream_identity": "5396e9705ef35fb97cbc43a7ac1bdc9a0e71ff7a"
+        },
+        {
+          "file": "chat_template.jinja",
+          "bytes": 7755,
+          "sha256": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80",
+          "upstream_identity": "0ef09f214eaa6d9bca297988afc1454b5827b2c7"
+        },
+        {
+          "file": "config.json",
+          "bytes": 22998,
+          "sha256": "f8d80cb7fd148b8841e63051c337d2758b4bc16243c577d35eaab6779534b591",
+          "upstream_identity": "422caf7f12b8b697f6d4c34bb7d469c8f401c458"
+        },
+        {
+          "file": "files.json",
+          "bytes": 2863,
+          "sha256": "bd56bdd2873855970b20022ab40408d810e6311c74530f6b05f0b9a0b552b3c6",
+          "upstream_identity": "7d52a7d639a730c2679ebe745d86269fd42cc17e"
+        },
+        {
+          "file": "generation_config.json",
+          "bytes": 201,
+          "sha256": "a3345cadb9d63a91a11c2c12135da7eadc3d0c820e3287b04682b51cad1b12d2",
+          "upstream_identity": "2995f0a9d161f73de9287d87766c35a5f5fd4753"
+        },
+        {
+          "file": "hadamard.json",
+          "bytes": 87679,
+          "sha256": "9e7c5f6e5f073f912dc536fc0e70e0789bd05e81c94e95721a7d4f370293f2de",
+          "upstream_identity": "e37945c1133f48a508ff4dda06d5598a47a6f5ee"
+        },
+        {
+          "file": "model.safetensors",
+          "bytes": 1200284784,
+          "sha256": "da5095b9f34d7f0d5094090afeeadf124eef821c75136dc28957ce586ae7ac0c",
+          "upstream_identity": "da5095b9f34d7f0d5094090afeeadf124eef821c75136dc28957ce586ae7ac0c"
+        },
+        {
+          "file": "preprocessor_config.json",
+          "bytes": 390,
+          "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+          "upstream_identity": "2ea84a437d448ff71b08df68fdd949d5cc4ebb64"
+        },
+        {
+          "file": "reload-validation.json",
+          "bytes": 86,
+          "sha256": "992b6a1bfbf99e43ec8a7b3bda11050fcbafdc82c66949d52b83173047abf376",
+          "upstream_identity": "d36d15db91be86ddf05920c9483be0f046668e5a"
+        },
+        {
+          "file": "tokenizer-validation.json",
+          "bytes": 63,
+          "sha256": "b36f33d09bd3de3e19de3fd2cf493a69ec0a5e24acf648b0c9fba120d9357554",
+          "upstream_identity": "b97fea5842a7b267293476f9f965216a707e73f6"
+        },
+        {
+          "file": "tokenizer.json",
+          "bytes": 12807982,
+          "sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+          "upstream_identity": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+        },
+        {
+          "file": "tokenizer_config.json",
+          "bytes": 16709,
+          "sha256": "49e2b6e395f959f077f1e992b338919c0d4a9732fc6e613995e06557f843500c",
+          "upstream_identity": "fae3ce993e07c092ad024dde45e592379fde91bb"
+        },
+        {
+          "file": "video_preprocessor_config.json",
+          "bytes": 385,
+          "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13",
+          "upstream_identity": "3ba673a5ad7d4d13f54155ecd38b2a94a6dac8fe"
+        }
+      ],
+      "verified": true
+    },
+    {
+      "repo": "prism-ml/Ternary-Bonsai-2-4B-mlx-2bit",
+      "revision": "dff2caaa23fa8706164c44c10f1b58feb405f76a",
+      "files": [
+        {
+          "file": "LICENSE",
+          "bytes": 10174,
+          "sha256": "69849221bfb90053de2134ef5e6d540287b4b98062326492f1f96f5da685524b",
+          "upstream_identity": "66a27ec5ff940d3a9652d2948746ebac4c9d0188"
+        },
+        {
+          "file": "MTP.md",
+          "bytes": 1645,
+          "sha256": "74e5d05a1503636cd8c1829ade57db9bf9189beee9de04f226a260c2e4e01888",
+          "upstream_identity": "ee815ae77212df57131f9b5a62b862d3c73c0502"
+        },
+        {
+          "file": "NOTICE.txt",
+          "bytes": 409,
+          "sha256": "8dcc043c84d87cfaabdc4be40fa60742bbce1ddcbc53137610632d6d6f9aa5db",
+          "upstream_identity": "7b6ad576ae7f9a3dd5008c194a65942a0b65b7e3"
+        },
+        {
+          "file": "PACK-RUNTIME.md",
+          "bytes": 2165,
+          "sha256": "49cc8676521bc64ee0eb58ef387f12540acfc90ff4d9b406f29d6c17516a86ca",
+          "upstream_identity": "2d62bdd25edf09f8e97c4f86e8cc15b8d52a4268"
+        },
+        {
+          "file": "README.md",
+          "bytes": 5507,
+          "sha256": "4a41a271c6f0ed099d03bd0810c7cf083c4c447cd75ecd75f4a94cdb597627eb",
+          "upstream_identity": "a034d0fe30cab0aebccfc6c6c03c4a71e9a88653"
+        },
+        {
+          "file": "chat_template.jinja",
+          "bytes": 7756,
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+          "upstream_identity": "a585dec894e63da457d9440ec6aa7caa16d20860"
+        },
+        {
+          "file": "config.json",
+          "bytes": 29911,
+          "sha256": "119ae9e731281a52b8a590edc6971a6f95c8b283cd6bb215f12b1f172e587b23",
+          "upstream_identity": "cee1f7434e8c4b1c088f76058c5442a616a4465f"
+        },
+        {
+          "file": "files.json",
+          "bytes": 3246,
+          "sha256": "4d6e58f2d8754ef079d55407a7d4ae119e1eb973a5f9451ea727e260bced0614",
+          "upstream_identity": "f4759d59913d97d060ba8d8cdccbcd458c469233"
+        },
+        {
+          "file": "generation_config.json",
+          "bytes": 201,
+          "sha256": "a3345cadb9d63a91a11c2c12135da7eadc3d0c820e3287b04682b51cad1b12d2",
+          "upstream_identity": "2995f0a9d161f73de9287d87766c35a5f5fd4753"
+        },
+        {
+          "file": "hadamard.json",
+          "bytes": 163656,
+          "sha256": "e6393f16372cd0d45833d97d2390afd10919a813b4ac7f26b990d5315ae8fbeb",
+          "upstream_identity": "b3c6cf86c1d4bfe2ba78cad5d8eb20b11943a352"
+        },
+        {
+          "file": "model.safetensors",
+          "bytes": 1871365704,
+          "sha256": "432f48d0edcb8da2e6a4e0c96078588362397e2603e7fdea99957babfe968259",
+          "upstream_identity": "432f48d0edcb8da2e6a4e0c96078588362397e2603e7fdea99957babfe968259"
+        },
+        {
+          "file": "preprocessor_config.json",
+          "bytes": 390,
+          "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+          "upstream_identity": "2ea84a437d448ff71b08df68fdd949d5cc4ebb64"
+        },
+        {
+          "file": "reload-validation.json",
+          "bytes": 86,
+          "sha256": "18d9d01791d2cdddde90d36089e6b1358b86e52eda3f32157d9fc335c79d0630",
+          "upstream_identity": "6d1d2b901dc12d4a6babd3abcb28c3bde0a47c66"
+        },
+        {
+          "file": "tokenizer-validation.json",
+          "bytes": 63,
+          "sha256": "b36f33d09bd3de3e19de3fd2cf493a69ec0a5e24acf648b0c9fba120d9357554",
+          "upstream_identity": "b97fea5842a7b267293476f9f965216a707e73f6"
+        },
+        {
+          "file": "tokenizer.json",
+          "bytes": 12807982,
+          "sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+          "upstream_identity": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+        },
+        {
+          "file": "tokenizer_config.json",
+          "bytes": 16710,
+          "sha256": "316230d6a809701f4db5ea8f8fc862bc3a6f3229c937c174e674ff3ca0a64ac8",
+          "upstream_identity": "eda48d3e75a8e59a8479ee4ec8b37f76e711d9c1"
+        },
+        {
+          "file": "video_preprocessor_config.json",
+          "bytes": 385,
+          "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13",
+          "upstream_identity": "3ba673a5ad7d4d13f54155ecd38b2a94a6dac8fe"
+        }
+      ],
+      "verified": true
+    },
+    {
+      "repo": "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit",
+      "revision": "f4e28a59531731c41b6dfac88cf271bd58f0a287",
+      "files": [
+        {
+          "file": "LICENSE",
+          "bytes": 10174,
+          "sha256": "69849221bfb90053de2134ef5e6d540287b4b98062326492f1f96f5da685524b",
+          "upstream_identity": "66a27ec5ff940d3a9652d2948746ebac4c9d0188"
+        },
+        {
+          "file": "MTP.md",
+          "bytes": 1645,
+          "sha256": "74e5d05a1503636cd8c1829ade57db9bf9189beee9de04f226a260c2e4e01888",
+          "upstream_identity": "ee815ae77212df57131f9b5a62b862d3c73c0502"
+        },
+        {
+          "file": "NOTICE.txt",
+          "bytes": 409,
+          "sha256": "362344de30a17813fed132eab01825641835fdee55b5101a7c0ffbf8760424ba",
+          "upstream_identity": "9f9382ad101baa75313a5d7f9eb575e7fa4668c0"
+        },
+        {
+          "file": "PACK-RUNTIME.md",
+          "bytes": 2165,
+          "sha256": "49cc8676521bc64ee0eb58ef387f12540acfc90ff4d9b406f29d6c17516a86ca",
+          "upstream_identity": "2d62bdd25edf09f8e97c4f86e8cc15b8d52a4268"
+        },
+        {
+          "file": "README.md",
+          "bytes": 5508,
+          "sha256": "84a1b99bc32cf994c2d769db6aff58fdb10e3f21f2f1a315996f33205bb52bfd",
+          "upstream_identity": "2f645c81c8c290a245b9f475cc7a174aaa34f151"
+        },
+        {
+          "file": "chat_template.jinja",
+          "bytes": 7756,
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+          "upstream_identity": "a585dec894e63da457d9440ec6aa7caa16d20860"
+        },
+        {
+          "file": "config.json",
+          "bytes": 30202,
+          "sha256": "b028784e087316b7ce0fb7ae3d2d6eaeb0b15144dd3f234da4c5d57ef1ffbacb",
+          "upstream_identity": "965db2255b398c704bd3666e7e8c89559d67cb67"
+        },
+        {
+          "file": "files.json",
+          "bytes": 2742,
+          "sha256": "e0b1c795fc4bbcc371bbd6e2eb66c66f7ad2f3229a462e262c101d76d8cd5f54",
+          "upstream_identity": "932f2bcdcc4fde6a1e3cf175a98d404ef716fabb"
+        },
+        {
+          "file": "generation_config.json",
+          "bytes": 201,
+          "sha256": "a3345cadb9d63a91a11c2c12135da7eadc3d0c820e3287b04682b51cad1b12d2",
+          "upstream_identity": "2995f0a9d161f73de9287d87766c35a5f5fd4753"
+        },
+        {
+          "file": "hadamard.json",
+          "bytes": 168574,
+          "sha256": "6d0b37a136e1b5b25b3e8b0467599c78dd0a90c341b640a1f49271cb0be7c73b",
+          "upstream_identity": "09bb52889f5b4948bb873b7f48cee09c8715f978"
+        },
+        {
+          "file": "model.safetensors",
+          "bytes": 3462149260,
+          "sha256": "b8ebd13459dcd53504432a4a0a797287c3a4c00d80835466dbb499f05b7512bb",
+          "upstream_identity": "b8ebd13459dcd53504432a4a0a797287c3a4c00d80835466dbb499f05b7512bb"
+        },
+        {
+          "file": "preprocessor_config.json",
+          "bytes": 390,
+          "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+          "upstream_identity": "2ea84a437d448ff71b08df68fdd949d5cc4ebb64"
+        },
+        {
+          "file": "reload-validation.json",
+          "bytes": 86,
+          "sha256": "18d9d01791d2cdddde90d36089e6b1358b86e52eda3f32157d9fc335c79d0630",
+          "upstream_identity": "6d1d2b901dc12d4a6babd3abcb28c3bde0a47c66"
+        },
+        {
+          "file": "tokenizer-validation.json",
+          "bytes": 63,
+          "sha256": "b36f33d09bd3de3e19de3fd2cf493a69ec0a5e24acf648b0c9fba120d9357554",
+          "upstream_identity": "b97fea5842a7b267293476f9f965216a707e73f6"
+        },
+        {
+          "file": "tokenizer.json",
+          "bytes": 12807982,
+          "sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+          "upstream_identity": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+        },
+        {
+          "file": "tokenizer_config.json",
+          "bytes": 16710,
+          "sha256": "316230d6a809701f4db5ea8f8fc862bc3a6f3229c937c174e674ff3ca0a64ac8",
+          "upstream_identity": "eda48d3e75a8e59a8479ee4ec8b37f76e711d9c1"
+        },
+        {
+          "file": "video_preprocessor_config.json",
+          "bytes": 385,
+          "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13",
+          "upstream_identity": "3ba673a5ad7d4d13f54155ecd38b2a94a6dac8fe"
+        }
+      ],
+      "verified": true
+    }
+  ],
+  "post_run_verification": {
+    "time": 1792108627.850223,
+    "checks": [
+      {
+        "phase": "api-quality",
+        "verified_requests": 48
+      },
+      {
+        "phase": "api-throughput",
+        "verified_requests": 24
+      },
+      {
+        "phase": "api-quality-card-presence-probe",
+        "verified_requests": 12
+      },
+      {
+        "file": "models/text-chat-bonsai-2-2b-2bit/LICENSE",
+        "sha256": "69849221bfb90053de2134ef5e6d540287b4b98062326492f1f96f5da685524b",
+        "bytes": 10174,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-2b-2bit/NOTICE.txt",
+        "sha256": "316012fa6094c03c7b0600bec258bffb675a9261d86f37bc86e15763a1fabc99",
+        "bytes": 409,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-2b-2bit/PACK-RUNTIME.md",
+        "sha256": "49cc8676521bc64ee0eb58ef387f12540acfc90ff4d9b406f29d6c17516a86ca",
+        "bytes": 2165,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-2b-2bit/README.md",
+        "sha256": "f72480ef2fba5328d976f69e40f5efbd4ec99e849928b19df6e0f626a5437987",
+        "bytes": 4889,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-2b-2bit/chat_template.jinja",
+        "sha256": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80",
+        "bytes": 7755,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-2b-2bit/config.json",
+        "sha256": "f8d80cb7fd148b8841e63051c337d2758b4bc16243c577d35eaab6779534b591",
+        "bytes": 22998,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-2b-2bit/files.json",
+        "sha256": "bd56bdd2873855970b20022ab40408d810e6311c74530f6b05f0b9a0b552b3c6",
+        "bytes": 2863,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-2b-2bit/generation_config.json",
+        "sha256": "a3345cadb9d63a91a11c2c12135da7eadc3d0c820e3287b04682b51cad1b12d2",
+        "bytes": 201,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-2b-2bit/hadamard.json",
+        "sha256": "9e7c5f6e5f073f912dc536fc0e70e0789bd05e81c94e95721a7d4f370293f2de",
+        "bytes": 87679,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-2b-2bit/model.safetensors",
+        "sha256": "da5095b9f34d7f0d5094090afeeadf124eef821c75136dc28957ce586ae7ac0c",
+        "bytes": 1200284784,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-2b-2bit/preprocessor_config.json",
+        "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+        "bytes": 390,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-2b-2bit/reload-validation.json",
+        "sha256": "992b6a1bfbf99e43ec8a7b3bda11050fcbafdc82c66949d52b83173047abf376",
+        "bytes": 86,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-2b-2bit/tokenizer-validation.json",
+        "sha256": "b36f33d09bd3de3e19de3fd2cf493a69ec0a5e24acf648b0c9fba120d9357554",
+        "bytes": 63,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-2b-2bit/tokenizer.json",
+        "sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+        "bytes": 12807982,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-2b-2bit/tokenizer_config.json",
+        "sha256": "49e2b6e395f959f077f1e992b338919c0d4a9732fc6e613995e06557f843500c",
+        "bytes": 16709,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-2b-2bit/video_preprocessor_config.json",
+        "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13",
+        "bytes": 385,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-4b-2bit/LICENSE",
+        "sha256": "69849221bfb90053de2134ef5e6d540287b4b98062326492f1f96f5da685524b",
+        "bytes": 10174,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-4b-2bit/MTP.md",
+        "sha256": "74e5d05a1503636cd8c1829ade57db9bf9189beee9de04f226a260c2e4e01888",
+        "bytes": 1645,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-4b-2bit/NOTICE.txt",
+        "sha256": "8dcc043c84d87cfaabdc4be40fa60742bbce1ddcbc53137610632d6d6f9aa5db",
+        "bytes": 409,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-4b-2bit/PACK-RUNTIME.md",
+        "sha256": "49cc8676521bc64ee0eb58ef387f12540acfc90ff4d9b406f29d6c17516a86ca",
+        "bytes": 2165,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-4b-2bit/README.md",
+        "sha256": "4a41a271c6f0ed099d03bd0810c7cf083c4c447cd75ecd75f4a94cdb597627eb",
+        "bytes": 5507,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-4b-2bit/chat_template.jinja",
+        "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+        "bytes": 7756,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-4b-2bit/config.json",
+        "sha256": "119ae9e731281a52b8a590edc6971a6f95c8b283cd6bb215f12b1f172e587b23",
+        "bytes": 29911,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-4b-2bit/files.json",
+        "sha256": "4d6e58f2d8754ef079d55407a7d4ae119e1eb973a5f9451ea727e260bced0614",
+        "bytes": 3246,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-4b-2bit/generation_config.json",
+        "sha256": "a3345cadb9d63a91a11c2c12135da7eadc3d0c820e3287b04682b51cad1b12d2",
+        "bytes": 201,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-4b-2bit/hadamard.json",
+        "sha256": "e6393f16372cd0d45833d97d2390afd10919a813b4ac7f26b990d5315ae8fbeb",
+        "bytes": 163656,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-4b-2bit/model.safetensors",
+        "sha256": "432f48d0edcb8da2e6a4e0c96078588362397e2603e7fdea99957babfe968259",
+        "bytes": 1871365704,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-4b-2bit/preprocessor_config.json",
+        "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+        "bytes": 390,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-4b-2bit/reload-validation.json",
+        "sha256": "18d9d01791d2cdddde90d36089e6b1358b86e52eda3f32157d9fc335c79d0630",
+        "bytes": 86,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-4b-2bit/tokenizer-validation.json",
+        "sha256": "b36f33d09bd3de3e19de3fd2cf493a69ec0a5e24acf648b0c9fba120d9357554",
+        "bytes": 63,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-4b-2bit/tokenizer.json",
+        "sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+        "bytes": 12807982,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-4b-2bit/tokenizer_config.json",
+        "sha256": "316230d6a809701f4db5ea8f8fc862bc3a6f3229c937c174e674ff3ca0a64ac8",
+        "bytes": 16710,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-4b-2bit/video_preprocessor_config.json",
+        "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13",
+        "bytes": 385,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-9b-2bit/LICENSE",
+        "sha256": "69849221bfb90053de2134ef5e6d540287b4b98062326492f1f96f5da685524b",
+        "bytes": 10174,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-9b-2bit/MTP.md",
+        "sha256": "74e5d05a1503636cd8c1829ade57db9bf9189beee9de04f226a260c2e4e01888",
+        "bytes": 1645,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-9b-2bit/NOTICE.txt",
+        "sha256": "362344de30a17813fed132eab01825641835fdee55b5101a7c0ffbf8760424ba",
+        "bytes": 409,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-9b-2bit/PACK-RUNTIME.md",
+        "sha256": "49cc8676521bc64ee0eb58ef387f12540acfc90ff4d9b406f29d6c17516a86ca",
+        "bytes": 2165,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-9b-2bit/README.md",
+        "sha256": "84a1b99bc32cf994c2d769db6aff58fdb10e3f21f2f1a315996f33205bb52bfd",
+        "bytes": 5508,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-9b-2bit/chat_template.jinja",
+        "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+        "bytes": 7756,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-9b-2bit/config.json",
+        "sha256": "b028784e087316b7ce0fb7ae3d2d6eaeb0b15144dd3f234da4c5d57ef1ffbacb",
+        "bytes": 30202,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-9b-2bit/files.json",
+        "sha256": "e0b1c795fc4bbcc371bbd6e2eb66c66f7ad2f3229a462e262c101d76d8cd5f54",
+        "bytes": 2742,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-9b-2bit/generation_config.json",
+        "sha256": "a3345cadb9d63a91a11c2c12135da7eadc3d0c820e3287b04682b51cad1b12d2",
+        "bytes": 201,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-9b-2bit/hadamard.json",
+        "sha256": "6d0b37a136e1b5b25b3e8b0467599c78dd0a90c341b640a1f49271cb0be7c73b",
+        "bytes": 168574,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-9b-2bit/model.safetensors",
+        "sha256": "b8ebd13459dcd53504432a4a0a797287c3a4c00d80835466dbb499f05b7512bb",
+        "bytes": 3462149260,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-9b-2bit/preprocessor_config.json",
+        "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+        "bytes": 390,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-9b-2bit/reload-validation.json",
+        "sha256": "18d9d01791d2cdddde90d36089e6b1358b86e52eda3f32157d9fc335c79d0630",
+        "bytes": 86,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-9b-2bit/tokenizer-validation.json",
+        "sha256": "b36f33d09bd3de3e19de3fd2cf493a69ec0a5e24acf648b0c9fba120d9357554",
+        "bytes": 63,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-9b-2bit/tokenizer.json",
+        "sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+        "bytes": 12807982,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-9b-2bit/tokenizer_config.json",
+        "sha256": "316230d6a809701f4db5ea8f8fc862bc3a6f3229c937c174e674ff3ca0a64ac8",
+        "bytes": 16710,
+        "matches_initial_verified_source": true
+      },
+      {
+        "file": "models/text-chat-bonsai-2-9b-2bit/video_preprocessor_config.json",
+        "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13",
+        "bytes": 385,
+        "matches_initial_verified_source": true
+      }
+    ],
+    "fixture_hashes_unchanged": true,
+    "binary_sha256": "60de2728001459877ff32fe20ce26630b178e871aa06068a85a7f3dd8110b9cd",
+    "package_resolved_sha256": "345d383f8c7825db91777b94a5b3f6bdc439048af5d503d11c229be22d5b03b2",
+    "published_collector_sha256": "1b2a625b607ed3a08a22fb167078dd7bc1b631cc9c97b75f0967c778bdfa9a60",
+    "server_stopped": true
+  },
+  "fixture_manifest": [
+    {
+      "file": "chart.png",
+      "sha256": "0fb120b6e3a32852187f630f160978d67beaf1385d059d1045052a9786d40f04",
+      "source": "deterministic Pillow fixture; source script retained"
+    },
+    {
+      "file": "receipt.png",
+      "sha256": "459440f290bc239d848656e057261d16169a49ed1136656ee83dc5f1be8ddf2d",
+      "source": "deterministic Pillow fixture; source script retained"
+    },
+    {
+      "file": "shapes.png",
+      "sha256": "e1491f8a0464147ead0c4b928f86420ae9940321cdc2fc6ef1bf43798dbc063b",
+      "source": "deterministic Pillow fixture; source script retained"
+    },
+    {
+      "file": "astronaut.png",
+      "sha256": "88431cd9653ccd539741b555fb0a46b61558b301d4110412b5bc28b5e3ea6cb5",
+      "source": "https://raw.githubusercontent.com/scikit-image/scikit-image/v0.22.0/skimage/data/astronaut.png",
+      "license": "NASA public domain",
+      "license_reference": "https://scikit-image.org/docs/stable/api/skimage.data.html#skimage.data.astronaut"
+    }
+  ],
+  "fixture_generator_source": "from PIL import Image,ImageDraw,ImageFont\nfrom pathlib import Path\nimport hashlib,json\nroot=Path('/Volumes/T7/mere-run-qualification/bonsai2-small-2026-10-15');out=root/'fixtures';out.mkdir(exist_ok=True)\nfont='/System/Library/Fonts/Supplemental/Arial.ttf'\nf=lambda n:ImageFont.truetype(font,n)\nim=Image.new('RGB',(960,640),'white');d=ImageDraw.Draw(im)\nd.text((38,25),'BONSAI CHECK 47',fill='black',font=f(66))\nfor x in [100,265,430]:d.ellipse((x,175,x+100,275),fill=(220,30,40))\nfor x in [640,790]:d.rectangle((x,175,x+100,275),fill=(20,85,220))\nd.polygon([(480,380),(380,550),(580,550)],fill=(25,155,65));im.save(out/'shapes.png')\nim=Image.new('RGB',(1000,680),'white');d=ImageDraw.Draw(im)\nd.text((40,25),'MARKET RECEIPT',fill='black',font=f(58));d.text((40,110),'2026-10-15',fill='black',font=f(34))\nfor y,line in [(190,'ITEM          QTY       UNIT       AMOUNT'),(270,'APPLES       3         $2.00       $6.00'),(350,'TEA              2         $5.00      $10.00'),(430,'BREAD         1         $4.00       $4.00'),(550,'TOTAL                                      $20.00')]:d.text((40,y),line,fill='black',font=f(36))\nim.save(out/'receipt.png')\nim=Image.new('RGB',(960,680),'white');d=ImageDraw.Draw(im);d.text((40,20),'TREE COUNTS',fill='black',font=f(58))\nfor x,label,val,color in [(170,'MAPLE',7,'#d55238'),(430,'CEDAR',4,'#319267'),(690,'PINE',9,'#3b6dbb')]:\n d.rectangle((x,570-val*43,x+115,570),fill=color);d.text((x+38,520-val*43),str(val),font=f(38),fill='black');d.text((x-12,590),label,font=f(35),fill='black')\nim.save(out/'chart.png')\nmanifest=[]\nfor p in out.glob('*.png'):manifest.append({'file':p.name,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'source':'deterministic Pillow fixture; source script retained'})\n(out/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\\n')\n",
+  "quality_results": [
+    {
+      "label": "2b-grounded-0",
+      "score": {
+        "passed": true,
+        "passed_checks": 7,
+        "total_checks": 7,
+        "checks": {
+          "required:mail_103": true,
+          "required:abenewsoil@example.com": true,
+          "required:2026-06-27": true,
+          "required:Revised nursery quote": true,
+          "forbidden:mail_101": true,
+          "forbidden:http://": true,
+          "forbidden:https://": true
+        }
+      },
+      "usage": {
+        "completion_tokens": 1266,
+        "prompt_tokens": 290,
+        "total_tokens": 1556
+      },
+      "timing": {
+        "prefillSeconds": 2.1737860441207886,
+        "promptTokens": 290,
+        "prefillKVCache": "native",
+        "generatedTokens": 1266,
+        "decodeSeconds": 10.38350796699524,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.2993812561035156e-05,
+        "timeToFirstTokenSeconds": 3.1581950187683105
+      },
+      "wall_seconds": 12.574143171310425,
+      "response_excerpt": "[mail_103] abenewsoil@example.com 2026-06-27T16:40 Revised nursery quote",
+      "response_sha256": "6e2d127e90b2d5e0a327ab7479d1771bd10bf80f3e804b42522559c38fa3b65c"
+    },
+    {
+      "label": "2b-grounded-1",
+      "score": {
+        "passed": true,
+        "passed_checks": 4,
+        "total_checks": 4,
+        "checks": {
+          "required:NOT_IN_EVIDENCE": true,
+          "forbidden:Revised nursery quote": true,
+          "forbidden:mail_103": true,
+          "forbidden:2026-06-27": true
+        }
+      },
+      "usage": {
+        "completion_tokens": 344,
+        "prompt_tokens": 216,
+        "total_tokens": 560
+      },
+      "timing": {
+        "prefillSeconds": 0.10427701473236084,
+        "promptTokens": 216,
+        "prefillKVCache": "native",
+        "decodeSeconds": 2.386003017425537,
+        "generatedTokens": 344,
+        "decodeKVCache": "native",
+        "loadSeconds": 8.940696716308594e-06,
+        "timeToFirstTokenSeconds": 0.11468994617462158
+      },
+      "wall_seconds": 2.4958131313323975,
+      "response_excerpt": "NOT_IN_EVIDENCE",
+      "response_sha256": "3b49bae9b83084b8e9cf443f507d8964349dc2eb86ed1e184e6092e472210533"
+    },
+    {
+      "label": "2b-grounded-2",
+      "score": {
+        "passed": true,
+        "passed_checks": 2,
+        "total_checks": 2,
+        "checks": {
+          "forbidden:mere": true,
+          "regex:(?i)^\\s*sawfwair\\s*[\\.!]?$": true
+        }
+      },
+      "usage": {
+        "completion_tokens": 282,
+        "prompt_tokens": 162,
+        "total_tokens": 444
+      },
+      "timing": {
+        "prefillSeconds": 0.09342706203460693,
+        "promptTokens": 162,
+        "prefillKVCache": "native",
+        "decodeSeconds": 2.0736809968948364,
+        "generatedTokens": 282,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.0967254638671875e-05,
+        "timeToFirstTokenSeconds": 0.10605895519256592
+      },
+      "wall_seconds": 2.172621965408325,
+      "response_excerpt": "sawfwair",
+      "response_sha256": "f42de1f44aad3f1aaf3600e1965b6437eb85b8ef7e88f9c64ab08690f59dce6c"
+    },
+    {
+      "label": "2b-grounded-3",
+      "score": {
+        "passed": false,
+        "passed_checks": 1,
+        "total_checks": 9,
+        "checks": {
+          "required:orders@nova.example": true,
+          "json_object": false,
+          "key:id": false,
+          "key:sender": false,
+          "key:subject": false,
+          "key:date": false,
+          "value:id": false,
+          "value:subject": false,
+          "value:date": false
+        }
+      },
+      "usage": {
+        "prompt_tokens": 178,
+        "completion_tokens": 4096,
+        "total_tokens": 4274
+      },
+      "timing": {
+        "prefillSeconds": 0.09132301807403564,
+        "promptTokens": 178,
+        "prefillKVCache": "native",
+        "decodeSeconds": 31.221073031425476,
+        "generatedTokens": 4096,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.0013580322265625e-05,
+        "timeToFirstTokenSeconds": 0.10317802429199219
+      },
+      "wall_seconds": 31.32027292251587,
+      "response_excerpt": "Thinking Process:\n\n1.  **Analyze the Request:** The user wants me to act as a grounded local assistant. I need to answer the benchmark case provided. If the answer is not present in the evidence, I should say \"NOT_IN_EVIDENCE\". The answer should be concise and follow the requested format.\n\n2.  **Analyze the Evidence:**\n    *   Case: MereChat/3\n    *   Category: structured-output\n    *   Title: Extract email metadata as JSON\n    *   Input Evidence: `[mail_301] from=Nova Supplies <orders@nova.example> date=2026-06-22T08:03 subject=\"PO 1178 accepted\"`\n    *   Question: Return JSON for this email.\n    *   Response requirements: return only a JSON object with keys id, sender, subject, and date.\n\n3.  **Analyze the Task:** I need to extract the email metadata from the evidence and format it according to the response requirements.\n    *   From evidence: `from=Nova Supplies <orders@nova.example>`, `date=2026-06-22T08:03`, `subject=\"PO 1178 accepted\"`.\n    *   Required keys: `id`, `sender`, `sub\n[excerpt omitted]\ned (`id` key missing from evidence) makes the complete answer not present.\n    *   Actually, wait. I am an assistant. The user wants the answer. If I say NOT_IN_EVIDENCE, it might be wrong if the expectation is to extract the data.\n    *   Let's look at the instruction again: \"Answer using only the evidence in the user prompt.\"\n    *   If I write the JSON, I am not using the evidence text as a whole, I am using it as data.\n    *   If I write NOT_IN_EVIDENCE, I follow the meta-rule.\n    *   Decision: The prompt is a directive for me. \"If the answer is not present in the evidence, say NOT_IN_EVIDENCE.\" This is a safety/guideline for this run. I must follow it.\n    *   The \"answer\" is the JSON output.\n    *   The JSON output is not in the evidence text.\n    *   So, NOT_IN_EVIDENCE.\n    *   Wait, is \"Response requirements\" the evidence or part of the prompt? It's in the Evidence section? No, the Evidence section lists `[mail_301]...`. The \"Response requirements\" are in the \"Evidence\" block",
+      "response_sha256": "a568425ed36c417404ae407dce569608c5792f0cabefeaa8fc7f4ba6e3c78bf8"
+    },
+    {
+      "label": "2b-grounded-4",
+      "score": {
+        "passed": true,
+        "passed_checks": 9,
+        "total_checks": 9,
+        "checks": {
+          "required:Rita Cho": true,
+          "required:vendor invoices": true,
+          "required:Jon Bell": true,
+          "required:July 2": true,
+          "required:Abe Newsoil": true,
+          "required:clay": true,
+          "forbidden:http://": true,
+          "forbidden:urgent security": true,
+          "bullet_count": true
+        }
+      },
+      "usage": {
+        "total_tokens": 1078,
+        "completion_tokens": 856,
+        "prompt_tokens": 222
+      },
+      "timing": {
+        "timeToFirstTokenSeconds": 0.11804401874542236,
+        "promptTokens": 222,
+        "prefillKVCache": "native",
+        "decodeSeconds": 6.5500229597091675,
+        "generatedTokens": 856,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.2993812561035156e-05,
+        "prefillSeconds": 0.10641801357269287
+      },
+      "wall_seconds": 6.662199020385742,
+      "response_excerpt": "*   Rita Cho: Three vendor invoices are ready for review.\n*   Jon Bell: The permit office moved inspection to July 2.\n*   Abe Newsoil: Lab results show elevated clay in bed C.",
+      "response_sha256": "0a271c65253986a22e8fce97b941102af98aae5002dbe2d37193d0c6298eb103"
+    },
+    {
+      "label": "2b-grounded-5",
+      "score": {
+        "passed": true,
+        "passed_checks": 5,
+        "total_checks": 5,
+        "checks": {
+          "required:disconnected": true,
+          "required:connect email": true,
+          "forbidden:synced successfully": true,
+          "forbidden:sync completed": true,
+          "forbidden:all email is synced": true
+        }
+      },
+      "usage": {
+        "total_tokens": 1059,
+        "prompt_tokens": 150,
+        "completion_tokens": 909
+      },
+      "timing": {
+        "prefillSeconds": 0.15511608123779297,
+        "promptTokens": 150,
+        "prefillKVCache": "native",
+        "decodeSeconds": 7.14409601688385,
+        "generatedTokens": 909,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.4066696166992188e-05,
+        "timeToFirstTokenSeconds": 0.16883611679077148
+      },
+      "wall_seconds": 7.30622673034668,
+      "response_excerpt": "Current status: disconnected. Next action: connect email",
+      "response_sha256": "de2d031d83f3ba51b309f6150738d8f645558dc42b9d0eca1d2b9e22a84d7282"
+    },
+    {
+      "label": "2b-grounded-6",
+      "score": {
+        "passed": true,
+        "passed_checks": 4,
+        "total_checks": 4,
+        "checks": {
+          "required:project_beta": true,
+          "required:2026-06-27": true,
+          "forbidden:project_alpha": true,
+          "forbidden:project_gamma": true
+        }
+      },
+      "usage": {
+        "total_tokens": 515,
+        "prompt_tokens": 186,
+        "completion_tokens": 329
+      },
+      "timing": {
+        "prefillSeconds": 0.09180104732513428,
+        "promptTokens": 186,
+        "prefillKVCache": "native",
+        "decodeSeconds": 2.552865982055664,
+        "generatedTokens": 329,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.0967254638671875e-05,
+        "timeToFirstTokenSeconds": 0.1032400131225586
+      },
+      "wall_seconds": 2.6501786708831787,
+      "response_excerpt": "project_beta 2026-06-27",
+      "response_sha256": "275828abdec122d9640b3c865e2db69eedc3d4ec1f453fed0c9a5337b51ea18c"
+    },
+    {
+      "label": "2b-grounded-7",
+      "score": {
+        "passed": false,
+        "passed_checks": 2,
+        "total_checks": 5,
+        "checks": {
+          "required:17": false,
+          "required:12": false,
+          "required:5": false,
+          "forbidden:20": true,
+          "forbidden:15": true
+        }
+      },
+      "usage": {
+        "prompt_tokens": 142,
+        "completion_tokens": 2512,
+        "total_tokens": 2654
+      },
+      "timing": {
+        "prefillSeconds": 0.07975506782531738,
+        "promptTokens": 142,
+        "prefillKVCache": "native",
+        "decodeSeconds": 19.47020697593689,
+        "generatedTokens": 2512,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.0967254638671875e-05,
+        "timeToFirstTokenSeconds": 0.09064507484436035
+      },
+      "wall_seconds": 19.557312965393066,
+      "response_excerpt": "9 = inbox_count - draft_count",
+      "response_sha256": "8b7e579aca3c307460a7c5fc459a2ddd5c1509876033d856ca75f47c7fd80901"
+    },
+    {
+      "label": "2b-code-count_vowels",
+      "score": {
+        "passed": true,
+        "passed_checks": 5,
+        "total_checks": 5
+      },
+      "usage": {
+        "total_tokens": 269,
+        "prompt_tokens": 47,
+        "completion_tokens": 222
+      },
+      "timing": {
+        "prefillSeconds": 0.037698984146118164,
+        "promptTokens": 47,
+        "prefillKVCache": "native",
+        "decodeSeconds": 1.707308053970337,
+        "generatedTokens": 222,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.3947486877441406e-05,
+        "timeToFirstTokenSeconds": 0.04797792434692383
+      },
+      "wall_seconds": 1.7507860660552979,
+      "response_excerpt": "```python\ndef count_vowels(text):\n    vowels = set('aeiouAEIOU')\n    return len([char for char in text if char in vowels])\n```",
+      "response_sha256": "c0af224cebb440da4fefaa1e9ea18c49cb5eef73d54ac2771524eaadce95c3e1"
+    },
+    {
+      "label": "2b-code-merge_intervals",
+      "score": {
+        "passed": false,
+        "passed_checks": 2,
+        "total_checks": 5
+      },
+      "usage": {
+        "prompt_tokens": 57,
+        "completion_tokens": 569,
+        "total_tokens": 626
+      },
+      "timing": {
+        "prefillSeconds": 0.0391390323638916,
+        "promptTokens": 57,
+        "prefillKVCache": "native",
+        "decodeSeconds": 4.4808030128479,
+        "generatedTokens": 569,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.2993812561035156e-05,
+        "timeToFirstTokenSeconds": 0.050663113594055176
+      },
+      "wall_seconds": 4.52567195892334,
+      "response_excerpt": "```python\ndef merge_intervals(intervals):\n    if not intervals:\n        return []\n    \n    # Sort intervals\n    intervals.sort()\n    \n    merged = []\n    for i in range(len(intervals)):\n        if merged and intervals[i][0] <= merged[-1][1]:\n            merged[-1] = (min(merged[-1][0], intervals[i][0]), max(merged[-1][1], intervals[i][1]))\n        else:\n            merged.append(intervals[i])\n    \n    return merged\n```",
+      "response_sha256": "c47c8f0b98d6199839316621730e2dd4c388ecb3bbe239bc732ea3ee0fde851e"
+    },
+    {
+      "label": "2b-vision-shapes",
+      "score": {
+        "passed": false,
+        "checks": {
+          "heading": false,
+          "red_circles": true,
+          "blue_squares": true,
+          "green_triangles": true
+        },
+        "expected": {
+          "heading": "BONSAI CHECK 47",
+          "red_circles": 3,
+          "blue_squares": 2,
+          "green_triangles": 1
+        },
+        "actual": {
+          "heading": "BOARD CHECK",
+          "red_circles": 3,
+          "blue_squares": 2,
+          "green_triangles": 1
+        }
+      },
+      "usage": {
+        "prompt_tokens": 645,
+        "completion_tokens": 1061,
+        "total_tokens": 1706
+      },
+      "timing": {
+        "prefillSeconds": 3.1624600887298584,
+        "promptTokens": 645,
+        "prefillKVCache": "native",
+        "generatedTokens": 1061,
+        "decodeSeconds": 8.724816918373108,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.2040138244628906e-05,
+        "timeToFirstTokenSeconds": 3.2604360580444336
+      },
+      "wall_seconds": 11.893926858901978,
+      "response_excerpt": "{\n  \"heading\": \"BOARD CHECK\",\n  \"red_circles\": 3,\n  \"blue_squares\": 2,\n  \"green_triangles\": 1\n}",
+      "response_sha256": "d5b4ac213ad2f6364b48d5c9f83becaebab6ed1696f71a0b323436c8e5258a32"
+    },
+    {
+      "label": "2b-vision-receipt",
+      "score": {
+        "passed": false,
+        "checks": {
+          "strict_json": false
+        },
+        "expected": {
+          "date": "2026-10-15",
+          "total": 20,
+          "apples_quantity": 3,
+          "tea_unit_price": 5
+        }
+      },
+      "usage": {
+        "completion_tokens": 293,
+        "total_tokens": 986,
+        "prompt_tokens": 693
+      },
+      "timing": {
+        "prefillSeconds": 0.768652081489563,
+        "promptTokens": 693,
+        "prefillKVCache": "native",
+        "generatedTokens": 293,
+        "decodeSeconds": 2.5559020042419434,
+        "decodeKVCache": "native",
+        "loadSeconds": 8.940696716308594e-06,
+        "timeToFirstTokenSeconds": 0.7810070514678955
+      },
+      "wall_seconds": 3.3296618461608887,
+      "response_excerpt": "```json\n{\n  \"date\": \"2026-10-15\",\n  \"total\": 20,\n  \"apples_quantity\": 3,\n  \"tea_unit_price\": 5\n}\n```",
+      "response_sha256": "a40491f8da19c790c191e04d81c934e8c5d201ae9e12938e363a59186c4ff793"
+    },
+    {
+      "label": "2b-vision-chart",
+      "score": {
+        "passed": false,
+        "checks": {
+          "strict_json": false
+        },
+        "expected": {
+          "largest": "PINE",
+          "largest_count": 9,
+          "smallest": "CEDAR",
+          "smallest_count": 4,
+          "difference": 5
+        }
+      },
+      "usage": {
+        "prompt_tokens": 677,
+        "total_tokens": 4773,
+        "completion_tokens": 4096
+      },
+      "timing": {
+        "prefillSeconds": 0.6464859247207642,
+        "promptTokens": 677,
+        "prefillKVCache": "native",
+        "decodeSeconds": 32.340206027030945,
+        "generatedTokens": 4096,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.1920928955078125e-05,
+        "timeToFirstTokenSeconds": 0.6580438613891602
+      },
+      "wall_seconds": 32.994550704956055,
+      "response_excerpt": "The user wants me to analyze the provided bar chart and extract specific information.\n\n1.  **Identify the tree names (labels on the x-axis):**\n    *   \"MA\" (Red bar)\n    *   \"GR\" (Green bar) - Wait, looking closely at the image, it says \"MA\", then there is a gap, then \"GR\" is actually not there. Let's re-read carefully.\n    *   Ah, the labels are:\n        *   Leftmost text: `MA` (Red bar)\n        *   Middle text: `GR` (Wait, no, looking at the crop, it says `GR` in the second position but actually looking at the full image, it says `GR`? No, let's look really closely. The label under the first blue bar is just blank? No, wait. Let's look at the labels below the bars.)\n        *   Label 1: `MA` (below the red bar) - Wait, actually the label is `MA` but the bar is colored red `M` and `A`? No, it looks like `M A`. Wait, let me look at the text below.\n        *   Text below Red Bar: `MA` is written. Wait, no. The text is `MA`. But usually, it's MA or MAX. Let's look at the letters. It look\n[excerpt omitted]\n                             *   Red bar top aligns with `2`.\n                                            *   Green bar top aligns with `2`.\n                                            *   Blue bar top aligns with `7`.\n                                        *   So Largest = Blue (7). Smallest = Red/Green (2). Difference = 5.\n                                        *   Tree names: Red is `MA`. Green is `GR`. Blue is `PAN`.\n                                        *   Wait, let's look at the text `SE` again. It looks like `S E`. Then `T` `H` `E`?\n                                        *   Maybe the words are `SE` `T` `H` `E`.\n                                        *   But the text below the bars is `MA`, `GR`, `PAN`.\n                                        *   Wait, looking at the right side text `P A N` and `E`. And below it `R`?\n                                        *   Let's look at the text `SE` at the top. `S E T E R Y`.\n                                        *   Okay, I see it",
+      "response_sha256": "dcf4853c742358e25c9d6c135976e4963f5739ddbff8ff4e905dd664bcb028cd"
+    },
+    {
+      "label": "2b-vision-photo",
+      "score": {
+        "passed": true,
+        "checks": {
+          "people": true,
+          "orange_suit": true,
+          "helmet": true,
+          "us_flag": true,
+          "space_shuttle": true
+        },
+        "expected": {
+          "people": 1,
+          "orange_suit": true,
+          "helmet": true,
+          "us_flag": true,
+          "space_shuttle": true
+        },
+        "actual": {
+          "people": 1,
+          "orange_suit": true,
+          "helmet": true,
+          "us_flag": true,
+          "space_shuttle": true
+        }
+      },
+      "usage": {
+        "prompt_tokens": 301,
+        "total_tokens": 1205,
+        "completion_tokens": 904
+      },
+      "timing": {
+        "timeToFirstTokenSeconds": 0.45282506942749023,
+        "promptTokens": 301,
+        "prefillKVCache": "native",
+        "decodeSeconds": 7.001089930534363,
+        "generatedTokens": 904,
+        "decodeKVCache": "native",
+        "loadSeconds": 8.940696716308594e-06,
+        "prefillSeconds": 0.4422870874404907
+      },
+      "wall_seconds": 7.487771987915039,
+      "response_excerpt": "{\n  \"people\": 1,\n  \"orange_suit\": true,\n  \"helmet\": true,\n  \"us_flag\": true,\n  \"space_shuttle\": true\n}",
+      "response_sha256": "11203ec43d1f5050c3e79fb5d7b523c23fab89d30cc22f4caaf982fc47aaf2d3"
+    },
+    {
+      "label": "2b-arithmetic",
+      "score": {
+        "passed": true,
+        "expected": "126"
+      },
+      "usage": {
+        "completion_tokens": 133,
+        "total_tokens": 163,
+        "prompt_tokens": 30
+      },
+      "timing": {
+        "timeToFirstTokenSeconds": 0.1111750602722168,
+        "promptTokens": 30,
+        "prefillKVCache": "native",
+        "decodeSeconds": 0.9575639963150024,
+        "generatedTokens": 133,
+        "decodeKVCache": "native",
+        "loadSeconds": 8.940696716308594e-06,
+        "prefillSeconds": 0.10072004795074463
+      },
+      "wall_seconds": 1.0638940334320068,
+      "response_excerpt": "126",
+      "response_sha256": "65a699905c02619370bcf9207f5a477c3d67130ca71ec6f750e07fe8d510b084"
+    },
+    {
+      "label": "2b-reasoning",
+      "score": {
+        "passed": false,
+        "checks": {
+          "strict_json": false
+        },
+        "expected": {
+          "chickens": 23,
+          "rabbits": 12
+        }
+      },
+      "usage": {
+        "completion_tokens": 565,
+        "total_tokens": 620,
+        "prompt_tokens": 55
+      },
+      "timing": {
+        "timeToFirstTokenSeconds": 0.049600958824157715,
+        "promptTokens": 55,
+        "prefillKVCache": "native",
+        "decodeSeconds": 4.290616035461426,
+        "generatedTokens": 565,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.0967254638671875e-05,
+        "prefillSeconds": 0.03846895694732666
+      },
+      "wall_seconds": 4.334880828857422,
+      "response_excerpt": "{\n  \"chickens\": 23,\n  \"rabbits\": 12\n}\n\n\n{\n  \"chickens\": 23,\n  \"rabbits\": 12\n}",
+      "response_sha256": "f9bc5e56d90472e3543eec1b54ee3bca8ecff499e6177be03bfcf77ed45672cb"
+    },
+    {
+      "label": "4b-grounded-0",
+      "score": {
+        "passed": true,
+        "passed_checks": 7,
+        "total_checks": 7,
+        "checks": {
+          "required:mail_103": true,
+          "required:abenewsoil@example.com": true,
+          "required:2026-06-27": true,
+          "required:Revised nursery quote": true,
+          "forbidden:mail_101": true,
+          "forbidden:http://": true,
+          "forbidden:https://": true
+        }
+      },
+      "usage": {
+        "prompt_tokens": 290,
+        "completion_tokens": 989,
+        "total_tokens": 1279
+      },
+      "timing": {
+        "prefillSeconds": 1.3455890417099,
+        "promptTokens": 290,
+        "prefillKVCache": "native",
+        "generatedTokens": 989,
+        "decodeSeconds": 11.569272994995117,
+        "decodeKVCache": "native",
+        "loadSeconds": 8.940696716308594e-06,
+        "timeToFirstTokenSeconds": 1.3623769283294678
+      },
+      "wall_seconds": 12.921757221221924,
+      "response_excerpt": "mail_103, abenewsoil@example.com, 2026-06-27T16:40, Revised nursery quote",
+      "response_sha256": "101c9031d7c83aec773f57a5d7d0b16bb2f62ea6c888156bf5fd97b45d2d6e25"
+    },
+    {
+      "label": "4b-grounded-1",
+      "score": {
+        "passed": true,
+        "passed_checks": 4,
+        "total_checks": 4,
+        "checks": {
+          "required:NOT_IN_EVIDENCE": true,
+          "forbidden:Revised nursery quote": true,
+          "forbidden:mail_103": true,
+          "forbidden:2026-06-27": true
+        }
+      },
+      "usage": {
+        "total_tokens": 658,
+        "completion_tokens": 442,
+        "prompt_tokens": 216
+      },
+      "timing": {
+        "prefillSeconds": 0.30517899990081787,
+        "promptTokens": 216,
+        "prefillKVCache": "native",
+        "generatedTokens": 442,
+        "decodeSeconds": 4.969913959503174,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.0013580322265625e-05,
+        "timeToFirstTokenSeconds": 0.31969499588012695
+      },
+      "wall_seconds": 5.282351016998291,
+      "response_excerpt": "NOT_IN_EVIDENCE",
+      "response_sha256": "3b49bae9b83084b8e9cf443f507d8964349dc2eb86ed1e184e6092e472210533"
+    },
+    {
+      "label": "4b-grounded-2",
+      "score": {
+        "passed": true,
+        "passed_checks": 2,
+        "total_checks": 2,
+        "checks": {
+          "forbidden:mere": true,
+          "regex:(?i)^\\s*sawfwair\\s*[\\.!]?$": true
+        }
+      },
+      "usage": {
+        "prompt_tokens": 162,
+        "total_tokens": 504,
+        "completion_tokens": 342
+      },
+      "timing": {
+        "prefillSeconds": 0.23489999771118164,
+        "promptTokens": 162,
+        "prefillKVCache": "native",
+        "generatedTokens": 342,
+        "decodeSeconds": 3.8222780227661133,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.0013580322265625e-05,
+        "timeToFirstTokenSeconds": 0.2495659589767456
+      },
+      "wall_seconds": 4.063604354858398,
+      "response_excerpt": "sawfwair",
+      "response_sha256": "f42de1f44aad3f1aaf3600e1965b6437eb85b8ef7e88f9c64ab08690f59dce6c"
+    },
+    {
+      "label": "4b-grounded-3",
+      "score": {
+        "passed": false,
+        "passed_checks": 8,
+        "total_checks": 9,
+        "checks": {
+          "required:orders@nova.example": false,
+          "json_object": true,
+          "key:id": true,
+          "key:sender": true,
+          "key:subject": true,
+          "key:date": true,
+          "value:id": true,
+          "value:subject": true,
+          "value:date": true
+        }
+      },
+      "usage": {
+        "total_tokens": 934,
+        "completion_tokens": 756,
+        "prompt_tokens": 178
+      },
+      "timing": {
+        "prefillSeconds": 0.23916006088256836,
+        "promptTokens": 178,
+        "prefillKVCache": "native",
+        "generatedTokens": 756,
+        "decodeSeconds": 8.658657908439636,
+        "decodeKVCache": "native",
+        "loadSeconds": 8.940696716308594e-06,
+        "timeToFirstTokenSeconds": 0.2546159029006958
+      },
+      "wall_seconds": 8.905435800552368,
+      "response_excerpt": "{\"id\": \"mail_301\", \"sender\": \"Nova Supplies\", \"subject\": \"PO 1178 accepted\", \"date\": \"2026-06-22T08:03\"}",
+      "response_sha256": "3700b6db103d7b59504a8aef92fcbd31eb8d28afda87847f36e0be3ae6ee752c"
+    },
+    {
+      "label": "4b-grounded-4",
+      "score": {
+        "passed": true,
+        "passed_checks": 9,
+        "total_checks": 9,
+        "checks": {
+          "required:Rita Cho": true,
+          "required:vendor invoices": true,
+          "required:Jon Bell": true,
+          "required:July 2": true,
+          "required:Abe Newsoil": true,
+          "required:clay": true,
+          "forbidden:http://": true,
+          "forbidden:urgent security": true,
+          "bullet_count": true
+        }
+      },
+      "usage": {
+        "prompt_tokens": 222,
+        "total_tokens": 1004,
+        "completion_tokens": 782
+      },
+      "timing": {
+        "prefillSeconds": 0.3430180549621582,
+        "promptTokens": 222,
+        "prefillKVCache": "native",
+        "generatedTokens": 782,
+        "decodeSeconds": 8.744603037834167,
+        "decodeKVCache": "native",
+        "loadSeconds": 7.987022399902344e-06,
+        "timeToFirstTokenSeconds": 0.3591800928115845
+      },
+      "wall_seconds": 9.09531307220459,
+      "response_excerpt": "* Rita Cho: Three vendor invoices are ready for review.\n* Jon Bell: The permit office moved inspection to July 2.\n* Abe Newsoil: Lab results show elevated clay in bed C.",
+      "response_sha256": "d2417273d725bbd76941f3df51747e746d639a630cd73e312cc6d43472689693"
+    },
+    {
+      "label": "4b-grounded-5",
+      "score": {
+        "passed": true,
+        "passed_checks": 5,
+        "total_checks": 5,
+        "checks": {
+          "required:disconnected": true,
+          "required:connect email": true,
+          "forbidden:synced successfully": true,
+          "forbidden:sync completed": true,
+          "forbidden:all email is synced": true
+        }
+      },
+      "usage": {
+        "total_tokens": 1399,
+        "completion_tokens": 1249,
+        "prompt_tokens": 150
+      },
+      "timing": {
+        "timeToFirstTokenSeconds": 0.25345492362976074,
+        "promptTokens": 150,
+        "prefillKVCache": "native",
+        "generatedTokens": 1249,
+        "decodeSeconds": 63.9575309753418,
+        "decodeKVCache": "native",
+        "loadSeconds": 9.894371032714844e-06,
+        "prefillSeconds": 0.20152199268341064
+      },
+      "wall_seconds": 64.18772006034851,
+      "response_excerpt": "Current status: disconnected. Next action needed: connect email.",
+      "response_sha256": "874c203887a651bea1b81d4b1ededebb12e16c33d273cd1cfb1d3442ffdc1a87"
+    },
+    {
+      "label": "4b-grounded-6",
+      "score": {
+        "passed": true,
+        "passed_checks": 4,
+        "total_checks": 4,
+        "checks": {
+          "required:project_beta": true,
+          "required:2026-06-27": true,
+          "forbidden:project_alpha": true,
+          "forbidden:project_gamma": true
+        }
+      },
+      "usage": {
+        "completion_tokens": 442,
+        "prompt_tokens": 186,
+        "total_tokens": 628
+      },
+      "timing": {
+        "prefillSeconds": 0.2792229652404785,
+        "promptTokens": 186,
+        "prefillKVCache": "native",
+        "generatedTokens": 442,
+        "decodeSeconds": 5.065930962562561,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.2040138244628906e-05,
+        "timeToFirstTokenSeconds": 0.29437506198883057
+      },
+      "wall_seconds": 5.351963996887207,
+      "response_excerpt": "project_beta 2026-06-27",
+      "response_sha256": "275828abdec122d9640b3c865e2db69eedc3d4ec1f453fed0c9a5337b51ea18c"
+    },
+    {
+      "label": "4b-grounded-7",
+      "score": {
+        "passed": true,
+        "passed_checks": 5,
+        "total_checks": 5,
+        "checks": {
+          "required:17": true,
+          "required:12": true,
+          "required:5": true,
+          "forbidden:20": true,
+          "forbidden:15": true
+        }
+      },
+      "usage": {
+        "total_tokens": 4238,
+        "completion_tokens": 4096,
+        "prompt_tokens": 142
+      },
+      "timing": {
+        "prefillSeconds": 0.18352007865905762,
+        "promptTokens": 142,
+        "prefillKVCache": "native",
+        "generatedTokens": 4096,
+        "decodeSeconds": 219.5186220407486,
+        "decodeKVCache": "native",
+        "loadSeconds": 8.940696716308594e-06,
+        "timeToFirstTokenSeconds": 0.22974908351898193
+      },
+      "wall_seconds": 219.77502012252808,
+      "response_excerpt": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   Task: Answer a benchmark case (MereChat/7).\n    *   Category: arithmetic.\n    *   Title: Compute from visible counts.\n    *   Evidence:\n        *   inbox_count=12\n        *   sent_count=5\n        *   draft_count=3\n    *   Question: How many non-draft email records are visible?\n    *   Response requirements: answer with the number and the formula.\n    *   Constraints: Answer using *only* the evidence in the user prompt. If the answer is not present, say NOT_IN_EVIDENCE. Do not invent emails, links, dates, commands, workspace names, or people. Keep answers concise and follow the requested format.\n\n2.  **Analyze the Evidence:**\n    *   Total visible records = inbox_count + sent_count + draft_count?\n    *   Wait, the question asks for \"non-draft email records\".\n    *   The evidence provides `inbox_count=12` and `sent_count=5`.\n    *   `draft_count=3`.\n    *   \"Non-draft\" means excluding `draft_count`.\n    *   Calculation: Total non-dr\n[excerpt omitted]\nnswer is not present in the evidence, say NOT_IN_EVIDENCE.\" This is part of my system instructions.\n    *   Okay, I must follow this. If I don't, I violate the system prompt.\n    *   Is the answer 17 present in the evidence? No.\n    *   So I must say NOT_IN_EVIDENCE.\n    *   BUT, if I say NOT_IN_EVIDENCE, I am not helpful, and the task says \"Compute\".\n    *   Let's check if there's ambiguity. \"How many... are visible?\"\n    *   Maybe the definition of \"visible\" is implicitly \"sum of counts\".\n    *   Okay, I will output NOT_IN_EVIDENCE to ensure I don't violate the system instruction regarding evidence grounding.\n    *   *Self-Correction*: Wait, if I don't output the answer, the benchmark fails the \"Compute\" test. But if I do output the answer, I might fail the \"Grounded\" test.\n    *   However, usually \"Grounded\" means using provided info to form the conclusion. If the provided info allows forming a logical conclusion without inventing new *entities*, is the conclusion \"in the evidence\"?",
+      "response_sha256": "6d0d2e62fe162eff084e1dd256e7fdb9cf08510e66fa99a48b5751745b17c04a"
+    },
+    {
+      "label": "4b-code-count_vowels",
+      "score": {
+        "passed": true,
+        "passed_checks": 5,
+        "total_checks": 5
+      },
+      "usage": {
+        "prompt_tokens": 47,
+        "completion_tokens": 1230,
+        "total_tokens": 1277
+      },
+      "timing": {
+        "timeToFirstTokenSeconds": 0.1547790765762329,
+        "promptTokens": 47,
+        "prefillKVCache": "native",
+        "generatedTokens": 1230,
+        "decodeSeconds": 16.451585054397583,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.0013580322265625e-05,
+        "prefillSeconds": 0.13779997825622559
+      },
+      "wall_seconds": 16.597181797027588,
+      "response_excerpt": "def count_vowels(text):\n    return sum(1 for c in text.lower() if c in 'aeiou')",
+      "response_sha256": "d148de3ec9236d52b6575ebe75ba44467630a5892bf45972cc253ba455b73a65"
+    },
+    {
+      "label": "4b-code-merge_intervals",
+      "score": {
+        "passed": true,
+        "passed_checks": 5,
+        "total_checks": 5
+      },
+      "usage": {
+        "completion_tokens": 2067,
+        "prompt_tokens": 57,
+        "total_tokens": 2124
+      },
+      "timing": {
+        "timeToFirstTokenSeconds": 0.09976112842559814,
+        "promptTokens": 57,
+        "prefillKVCache": "native",
+        "generatedTokens": 2067,
+        "decodeSeconds": 24.96678102016449,
+        "decodeKVCache": "native",
+        "loadSeconds": 9.059906005859375e-06,
+        "prefillSeconds": 0.0843210220336914
+      },
+      "wall_seconds": 25.064286947250366,
+      "response_excerpt": "```python\ndef merge_intervals(intervals):\n    if not intervals:\n        return []\n    intervals.sort()\n    merged = [intervals[0]]\n    for current in intervals[1:]:\n        if current[0] <= merged[-1][1]:\n            merged[-1][1] = max(merged[-1][1], current[1])\n        else:\n            merged.append(current)\n    return merged\n```",
+      "response_sha256": "15ebf70837c107ec21f2ed79f491820e16face0ce0fc478465e82471494d819f"
+    },
+    {
+      "label": "4b-vision-shapes",
+      "score": {
+        "passed": false,
+        "checks": {
+          "heading": false,
+          "red_circles": true,
+          "blue_squares": true,
+          "green_triangles": true
+        },
+        "expected": {
+          "heading": "BONSAI CHECK 47",
+          "red_circles": 3,
+          "blue_squares": 2,
+          "green_triangles": 1
+        },
+        "actual": {
+          "heading": "BO M O H X R 4",
+          "red_circles": 3,
+          "blue_squares": 2,
+          "green_triangles": 1
+        }
+      },
+      "usage": {
+        "total_tokens": 3091,
+        "prompt_tokens": 645,
+        "completion_tokens": 2446
+      },
+      "timing": {
+        "timeToFirstTokenSeconds": 1.9912638664245605,
+        "promptTokens": 645,
+        "prefillKVCache": "native",
+        "generatedTokens": 2446,
+        "decodeSeconds": 31.88462996482849,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.2993812561035156e-05,
+        "prefillSeconds": 1.975598931312561
+      },
+      "wall_seconds": 33.90953803062439,
+      "response_excerpt": "{\n  \"heading\": \"BO M O H X R 4\",\n  \"red_circles\": 3,\n  \"blue_squares\": 2,\n  \"green_triangles\": 1\n}",
+      "response_sha256": "4c3511b8f1784cb4b818cc7dce84b8aa673693cb600db1473693d0bae048fc6b"
+    },
+    {
+      "label": "4b-vision-receipt",
+      "score": {
+        "passed": true,
+        "checks": {
+          "date": true,
+          "total": true,
+          "apples_quantity": true,
+          "tea_unit_price": true
+        },
+        "expected": {
+          "date": "2026-10-15",
+          "total": 20,
+          "apples_quantity": 3,
+          "tea_unit_price": 5
+        },
+        "actual": {
+          "date": "2026-10-15",
+          "total": 20,
+          "apples_quantity": 3,
+          "tea_unit_price": 5.0
+        }
+      },
+      "usage": {
+        "total_tokens": 1013,
+        "completion_tokens": 320,
+        "prompt_tokens": 693
+      },
+      "timing": {
+        "prefillSeconds": 1.2442539930343628,
+        "promptTokens": 693,
+        "prefillKVCache": "native",
+        "decodeSeconds": 4.376706004142761,
+        "generatedTokens": 320,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.3113021850585938e-05,
+        "timeToFirstTokenSeconds": 1.265127182006836
+      },
+      "wall_seconds": 5.627466440200806,
+      "response_excerpt": "{\n  \"date\": \"2026-10-15\",\n  \"total\": 20,\n  \"apples_quantity\": 3,\n  \"tea_unit_price\": 5.0\n}",
+      "response_sha256": "3a0f8d62f5fcc2e300099deb2bde9894e3f5f70d7ee8e84bb3092463a39e56d6"
+    },
+    {
+      "label": "4b-vision-chart",
+      "score": {
+        "passed": false,
+        "checks": {
+          "strict_json": false
+        },
+        "expected": {
+          "largest": "PINE",
+          "largest_count": 9,
+          "smallest": "CEDAR",
+          "smallest_count": 4,
+          "difference": 5
+        }
+      },
+      "usage": {
+        "total_tokens": 4773,
+        "prompt_tokens": 677,
+        "completion_tokens": 4096
+      },
+      "timing": {
+        "timeToFirstTokenSeconds": 1.2560908794403076,
+        "promptTokens": 677,
+        "prefillKVCache": "native",
+        "generatedTokens": 4096,
+        "decodeSeconds": 52.95964801311493,
+        "decodeKVCache": "native",
+        "loadSeconds": 8.940696716308594e-06,
+        "prefillSeconds": 1.2355679273605347
+      },
+      "wall_seconds": 54.29541826248169,
+      "response_excerpt": "The user wants me to analyze the bar chart and extract specific information.\n\n1.  **Identify the trees:**\n    *   The chart has three bars.\n    *   Left bar: \"MADE\" - Color: reddish-brown (reddish). Height: Medium-large.\n    *   Middle bar: \"GARD\" - Color: green. Height: Smaller than \"MADE\" but taller than nothing (wait, let's look closer).\n    *   Right bar: \"PINE\" - Color: blue. Height: Largest.\n\n2.  **Determine sizes (largest and smallest):**\n    *   Visually comparing the heights:\n        *   The blue bar (\"PINE\") is clearly the tallest.\n        *   The green bar (\"GARD\") is shorter than the red one but taller than a hypothetical very small one. Actually, looking at the alignment, the green bar seems shorter than the red one. Let's re-evaluate.\n        *   Red bar (\"MADE\"): Starts from bottom, goes up. Top is around y=85.\n        *   Green bar (\"GARD\"): Starts from bottom, goes up. Top is around y=65.\n        *   Blue bar (\"PINE\"): Starts from bottom, goes up. Top is around y=95.\n \n[excerpt omitted]\n in I-V-E and 'U' in F-O-U-R... actually, looking at the middle letters, I think I see \"F O U R\".\n    - Let's look at the letters F-I-V-E again. F-I-V-E.\n    - Let's look at the letters N-I-N-E. N-I-N-E.\n    - Let's look at the middle. F-O-U-R. It fits the visual alignment.\n    - And 4 < 5 < 9.\n    - Visually, the green bar is significantly shorter than the red bar. 4 vs 5 is reasonable.\n    - If it were 1 or 2, it would look much shorter. 4 looks reasonable for 80% height of a bar vs 100%.\n    - Red bar height ~80% of max.\n    - Green bar height ~60% of max.\n    - 4/9 = 44%. 5/9 = 55%. This is a bit of a stretch visually but consistent enough.\n    - Wait, 60% of 10 is 6. 44% of 10 is 4.4. So 4 makes sense.\n    - If red was 5/10 = 50%. 60% would be 6.\n    - The red bar looks taller than half. The green bar looks shorter than half.\n    - So 5 vs 4 makes sense.\n\n    Final check of keys and values.\n    - largest: \"PINE\"\n    - largest_count: 9\n    - smallest: \"GARD\"\n    - smallest_count: 4",
+      "response_sha256": "3f4d23fbe338fbacc3cb83fd31b17a6565920781f71eb11f3bb0034adda1d235"
+    },
+    {
+      "label": "4b-vision-photo",
+      "score": {
+        "passed": true,
+        "checks": {
+          "people": true,
+          "orange_suit": true,
+          "helmet": true,
+          "us_flag": true,
+          "space_shuttle": true
+        },
+        "expected": {
+          "people": 1,
+          "orange_suit": true,
+          "helmet": true,
+          "us_flag": true,
+          "space_shuttle": true
+        },
+        "actual": {
+          "people": 1,
+          "orange_suit": true,
+          "helmet": true,
+          "us_flag": true,
+          "space_shuttle": true
+        }
+      },
+      "usage": {
+        "total_tokens": 463,
+        "prompt_tokens": 301,
+        "completion_tokens": 162
+      },
+      "timing": {
+        "timeToFirstTokenSeconds": 0.5116050243377686,
+        "promptTokens": 301,
+        "prefillKVCache": "native",
+        "generatedTokens": 162,
+        "decodeSeconds": 1.8410840034484863,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.0013580322265625e-05,
+        "prefillSeconds": 0.4961010217666626
+      },
+      "wall_seconds": 2.346094846725464,
+      "response_excerpt": "{\n  \"people\": 1,\n  \"orange_suit\": true,\n  \"helmet\": true,\n  \"us_flag\": true,\n  \"space_shuttle\": true\n}",
+      "response_sha256": "11203ec43d1f5050c3e79fb5d7b523c23fab89d30cc22f4caaf982fc47aaf2d3"
+    },
+    {
+      "label": "4b-arithmetic",
+      "score": {
+        "passed": true,
+        "expected": "126"
+      },
+      "usage": {
+        "total_tokens": 289,
+        "prompt_tokens": 30,
+        "completion_tokens": 259
+      },
+      "timing": {
+        "timeToFirstTokenSeconds": 0.06460392475128174,
+        "promptTokens": 30,
+        "prefillKVCache": "native",
+        "generatedTokens": 259,
+        "decodeSeconds": 2.855118989944458,
+        "decodeKVCache": "native",
+        "loadSeconds": 1.0967254638671875e-05,
+        "prefillSeconds": 0.05013692378997803
+      },
+      "wall_seconds": 2.912057876586914,
+      "response_excerpt": "126",
+      "response_sha256": "65a699905c02619370bcf9207f5a477c3d67130ca71ec6f750e07fe8d510b084"
+    },
+    {
+      "label": "4b-reasoning",
+      "score": {
+        "passed": false,
+        "checks": {
+          "strict_json": false
+        },
+        "expected": {
+          "chickens": 23,
+          "rabbits": 12
+        }
+      },
+      "usage": {
+        "total_tokens": 706,
+        "completion_tokens": 651,
+        "prompt_tokens": 55
+      },
+      "timing": {
+        "timeToFirstTokenSeconds": 0.1003350019454956,
+        "promptTokens": 55,
+        "prefillKVCache": "native",
+        "generatedTokens": 651,
+        "decodeSeconds": 7.206307053565979,
+        "decodeKVCache": "native",
+        "loadSeconds": 8.940696716308594e-06,
+        "prefillSeconds": 0.08496403694152832
+      },
+      "wall_seconds": 7.298363208770752,
+      "response_excerpt": "```json\n{\n  \"chickens\": 23,\n  \"rabbits\": 12\n}\n```",
+      "response_sha256": "0aee09f77dfb5e4a9fd429fb30dcf674381b9e8d1c0cfde078106177ee56a1f9"
+    },
+    {
+      "label": "9b-grounded-0",
+      "score": {
+        "passed": true,
+        "passed_checks": 7,
+        "total_checks": 7,
+        "checks": {
+          "required:mail_103": true,
+          "required:abenewsoil@example.com": true,
+          "required:2026-06-27": true,
+          "required:Revised nursery quote": true,
+          "forbidden:mail_101": true,
+          "forbidden:http://": true,
+          "forbidden:https://": true
+        }
+      },
+      "usage": {
+        "total_tokens": 2139,
+        "prompt_tokens": 290,
+        "completion_tokens": 1849
+      },
+      "timing": {
+        "decodeSeconds": 104.64304208755493,
+        "generatedTokens": 1849,
+        "prefillKVCache": "native",
+        "decodeKVCache": "native",
+        "promptTokens": 290,
+        "loadSeconds": 1.2993812561035156e-05,
+        "prefillSeconds": 2.7296429872512817,
+        "timeToFirstTokenSeconds": 2.798727035522461
+      },
+      "wall_seconds": 108.93957829475403,
+      "response_excerpt": "[mail_103] workspace=sawfwair from=Abe Newsoil <abenewsoil@example.com> date=2026-06-27T16:40 subject=\"Revised nursery quote\"",
+      "response_sha256": "4ef6c17009c21e0ea382d41dd66e2e42381aa9f51714eef4b54b50681b381811"
+    },
+    {
+      "label": "9b-grounded-1",
+      "score": {
+        "passed": true,
+        "passed_checks": 4,
+        "total_checks": 4,
+        "checks": {
+          "required:NOT_IN_EVIDENCE": true,
+          "forbidden:Revised nursery quote": true,
+          "forbidden:mail_103": true,
+          "forbidden:2026-06-27": true
+        }
+      },
+      "usage": {
+        "total_tokens": 627,
+        "prompt_tokens": 216,
+        "completion_tokens": 411
+      },
+      "timing": {
+        "decodeSeconds": 22.47504699230194,
+        "generatedTokens": 411,
+        "prefillKVCache": "native",
+        "decodeKVCache": "native",
+        "promptTokens": 216,
+        "loadSeconds": 9.059906005859375e-06,
+        "prefillSeconds": 0.511909008026123,
+        "timeToFirstTokenSeconds": 0.5632050037384033
+      },
+      "wall_seconds": 23.0176739692688,
+      "response_excerpt": "NOT_IN_EVIDENCE",
+      "response_sha256": "3b49bae9b83084b8e9cf443f507d8964349dc2eb86ed1e184e6092e472210533"
+    },
+    {
+      "label": "9b-grounded-2",
+      "score": {
+        "passed": true,
+        "passed_checks": 2,
+        "total_checks": 2,
+        "checks": {
+          "forbidden:mere": true,
+          "regex:(?i)^\\s*sawfwair\\s*[\\.!]?$": true
+        }
+      },
+      "usage": {
+        "total_tokens": 533,
+        "prompt_tokens": 162,
+        "completion_tokens": 371
+      },
+      "timing": {
+        "timeToFirstTokenSeconds": 0.5133218765258789,
+        "generatedTokens": 371,
+        "prefillKVCache": "native",
+        "decodeKVCache": "native",
+        "promptTokens": 162,
+        "prefillSeconds": 0.45789897441864014,
+        "loadSeconds": 9.894371032714844e-06,
+        "decodeSeconds": 20.553452014923096
+      },
+      "wall_seconds": 21.038198232650757,
+      "response_excerpt": "sawfwair",
+      "response_sha256": "f42de1f44aad3f1aaf3600e1965b6437eb85b8ef7e88f9c64ab08690f59dce6c"
+    },
+    {
+      "label": "9b-grounded-3",
+      "score": {
+        "passed": true,
+        "passed_checks": 9,
+        "total_checks": 9,
+        "checks": {
+          "required:orders@nova.example": true,
+          "json_object": true,
+          "key:id": true,
+          "key:sender": true,
+          "key:subject": true,
+          "key:date": true,
+          "value:id": true,
+          "value:subject": true,
+          "value:date": true
+        }
+      },
+      "usage": {
+        "prompt_tokens": 178,
+        "completion_tokens": 1140,
+        "total_tokens": 1318
+      },
+      "timing": {
+        "decodeSeconds": 64.00730407238007,
+        "generatedTokens": 1140,
+        "prefillKVCache": "native",
+        "decodeKVCache": "native",
+        "promptTokens": 178,
+        "loadSeconds": 9.059906005859375e-06,
+        "prefillSeconds": 0.4558889865875244,
+        "timeToFirstTokenSeconds": 0.5095980167388916
+      },
+      "wall_seconds": 64.5032651424408,
+      "response_excerpt": "{\n  \"id\": \"mail_301\",\n  \"sender\": \"Nova Supplies <orders@nova.example>\",\n  \"subject\": \"PO 1178 accepted\",\n  \"date\": \"2026-06-22T08:03\"\n}",
+      "response_sha256": "7f76b3f69f148ae8d9c68519f27b4b6ef6abdbc2f3aeee334299f05c18a7683d"
+    },
+    {
+      "label": "9b-grounded-4",
+      "score": {
+        "passed": true,
+        "passed_checks": 9,
+        "total_checks": 9,
+        "checks": {
+          "required:Rita Cho": true,
+          "required:vendor invoices": true,
+          "required:Jon Bell": true,
+          "required:July 2": true,
+          "required:Abe Newsoil": true,
+          "required:clay": true,
+          "forbidden:http://": true,
+          "forbidden:urgent security": true,
+          "bullet_count": true
+        }
+      },
+      "usage": {
+        "prompt_tokens": 222,
+        "completion_tokens": 801,
+        "total_tokens": 1023
+      },
+      "timing": {
+        "decodeSeconds": 45.487056016922,
+        "generatedTokens": 801,
+        "prefillKVCache": "native",
+        "decodeKVCache": "native",
+        "promptTokens": 222,
+        "prefillSeconds": 0.6047090291976929,
+        "loadSeconds": 9.894371032714844e-06,
+        "timeToFirstTokenSeconds": 0.6610889434814453
+      },
+      "wall_seconds": 46.11742281913757,
+      "response_excerpt": "*   Rita Cho: Three vendor invoices are ready for review.\n*   Jon Bell: The permit office moved inspection to July 2.\n*   Abe Newsoil: Lab results show elevated clay in bed C.",
+      "response_sha256": "0a271c65253986a22e8fce97b941102af98aae5002dbe2d37193d0c6298eb103"
+    },
+    {
+      "label": "9b-grounded-5",
+      "score": {
+        "passed": true,
+        "passed_checks": 5,
+        "total_checks": 5,
+        "checks": {
+          "required:disconnected": true,
+          "required:connect email": true,
+          "forbidden:synced successfully": true,
+          "forbidden:sync completed": true,
+          "forbidden:all email is synced": true
+        }
+      },
+      "usage": {
+        "prompt_tokens": 150,
+        "completion_tokens": 735,
+        "total_tokens": 885
+      },
+      "timing": {
+        "timeToFirstTokenSeconds": 0.4289369583129883,
+        "generatedTokens": 735,
+        "prefillKVCache": "native",
+        "decodeKVCache": "native",
+        "promptTokens": 150,
+        "loadSeconds": 1.0013580322265625e-05,
+        "prefillSeconds": 0.37793195247650146,
+        "decodeSeconds": 40.12966704368591
+      },
+      "wall_seconds": 40.538047075271606,
+      "response_excerpt": "Status: disconnected\nNext action: connect email",
+      "response_sha256": "f969a53f7f18a5ff36b6b90a58b1687932eecf363fbeb8e649317e0206303955"
+    },
+    {
+      "label": "9b-grounded-6",
+      "score": {
+        "passed": true,
+        "passed_checks": 4,
+        "total_checks": 4,
+        "checks": {
+          "required:project_beta": true,
+          "required:2026-06-27": true,
+          "forbidden:project_alpha": true,
+          "forbidden:project_gamma": true
+        }
+      },
+      "usage": {
+        "prompt_tokens": 186,
+        "completion_tokens": 534,
+        "total_tokens": 720
+      },
+      "timing": {
+        "timeToFirstTokenSeconds": 0.4887310266494751,
+        "generatedTokens": 534,
+        "prefillKVCache": "native",
+        "decodeKVCache": "native",
+        "promptTokens": 186,
+        "prefillSeconds": 0.43833398818969727,
+        "loadSeconds": 1.1086463928222656e-05,
+        "decodeSeconds": 29.752524971961975
+      },
+      "wall_seconds": 30.21323299407959,
+      "response_excerpt": "project_beta 2026-06-27",
+      "response_sha256": "275828abdec122d9640b3c865e2db69eedc3d4ec1f453fed0c9a5337b51ea18c"
+    },
+    {
+      "label": "9b-grounded-7",
+      "score": {
+        "passed": false,
+        "passed_checks": 4,
+        "total_checks": 5,
+        "checks": {
+          "required:17": false,
+          "required:12": true,
+          "required:5": true,
+          "forbidden:20": true,
+          "forbidden:15": true
+        }
+      },
+      "usage": {
+        "prompt_tokens": 142,
+        "completion_tokens": 4096,
+        "total_tokens": 4238
+      },
+      "timing": {
+        "timeToFirstTokenSeconds": 0.4544450044631958,
+        "generatedTokens": 4096,
+        "prefillKVCache": "native",
+        "decodeKVCache": "native",
+        "promptTokens": 142,
+        "prefillSeconds": 0.3965950012207031,
+        "loadSeconds": 8.940696716308594e-06,
+        "decodeSeconds": 254.0226889848709
+      },
+      "wall_seconds": 254.51619291305542,
+      "response_excerpt": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   Role: Grounded local assistant benchmark.\n    *   Task: Answer the question using *only* the evidence provided in the user prompt.\n    *   Constraint 1: If the answer is not present in the evidence, say NOT_IN_EVIDENCE.\n    *   Constraint 2: Do not invent emails, links, dates, commands, workspace names, or people.\n    *   Constraint 3: Keep answers concise and follow the requested format.\n    *   Input Evidence: `inbox_count=12`, `sent_count=5`, `draft_count=3`.\n    *   Question: \"How many non-draft email records are visible?\"\n    *   Response Requirement: Answer with the number and the formula.\n\n2.  **Evaluate the Evidence:**\n    *   `inbox_count=12`: Total emails in the inbox.\n    *   `sent_count=5`: Total emails sent.\n    *   `draft_count=3`: Total emails in draft status.\n    *   Question asks for \"non-draft email records\".\n\n3.  **Determine if the Answer is in the Evidence:**\n    *   The evidence provides counts for specific ca\n[excerpt omitted]\ng present*.\n        However, often these instructions are interpreted as: \"If you cannot answer based *solely* on the evidence provided, say NOT_IN_EVIDENCE\".\n        If I can deduce it from the evidence (12-3), is it based solely on evidence? Yes.\n        But is the *answer* present? No.\n        I'll bet on the strict interpretation: The specific number/summary is not in the evidence.\n        Actually, let's look at the instruction \"Answer using only the evidence in the user prompt.\"\n        This allows me to look at the evidence.\n        If the evidence contains `inbox_count=12` and `draft_count=3`.\n        And the question asks for a count based on these.\n        Most benchmarks allow this deduction.\n        But the specific fallback \"NOT_IN_EVIDENCE\" is usually for missing info (e.g. \"Who is the sender?\").\n        Here, the info is there, just aggregated.\n        I will output the calculation because it is an arithmetic task. The \"NOT_IN_EVIDENCE\" clause is likely for when the data",
+      "response_sha256": "53f91d82c4e95c6fdf23fcd99b22895f5406ae61b7c2b4d9d812e2ddc0eb41f5"
+    },
+    {
+      "label": "9b-code-count_vowels",
+      "score": {
+        "passed": true,
+        "passed_checks": 5,
+        "total_checks": 5
+      },
+      "usage": {
+        "prompt_tokens": 47,
+        "completion_tokens": 2291,
+        "total_tokens": 2338
+      },
+      "timing": {
+        "decodeSeconds": 148.4624229669571,
+        "generatedTokens": 2291,
+        "prefillKVCache": "native",
+        "decodeKVCache": "native",
+        "promptTokens": 47,
+        "prefillSeconds": 0.15609002113342285,
+        "loadSeconds": 9.059906005859375e-06,
+        "timeToFirstTokenSeconds": 0.21581506729125977
+      },
+      "wall_seconds": 148.64957284927368,
+      "response_excerpt": "```python\ndef count_vowels(text):\n    count = 0\n    vowels = \"aeiou\"\n    for char in text:\n        if char.lower() in vowels:\n            count += 1\n    return count\n```",
+      "response_sha256": "54fe9531a80fec0d370eaeaabb5ee80ff175ca21f9d58ef593f2e681818caf2b"
+    },
+    {
+      "label": "9b-code-merge_intervals",
+      "score": {
+        "passed": true,
+        "passed_checks": 5,
+        "total_checks": 5
+      },
+      "usage": {
+        "prompt_tokens": 57,
+        "completion_tokens": 3856,
+        "total_tokens": 3913
+      },
+      "timing": {
+        "decodeSeconds": 219.37458992004395,
+        "generatedTokens": 3856,
+        "prefillKVCache": "native",
+        "decodeKVCache": "native",
+        "promptTokens": 57,
+        "loadSeconds": 8.940696716308594e-06,
+        "prefillSeconds": 0.15775394439697266,
+        "timeToFirstTokenSeconds": 0.21613788604736328
+      },
+      "wall_seconds": 219.56012296676636,
+      "response_excerpt": "```python\ndef merge_intervals(intervals):\n    if not intervals:\n        return []\n    \n    intervals.sort(key=lambda x: x[0])\n    \n    merged = []\n    current_start, current_end = intervals[0]\n    \n    for start, end in intervals[1:]:\n        if start <= current_end:\n            current_end = max(current_end, end)\n        else:\n            merged.append([current_start, current_end])\n            current_start, current_end = start, end\n    \n    merged.append([current_start, current_end])\n    return merged\n```",
+      "response_sha256": "e528fb4399c035d26a1d507d12fe479b7e434f53ce7c75f2d6b989f5768f9218"
+    },
+    {
+      "label": "9b-vision-shapes",
+      "score": {
+        "passed": false,
+        "checks": {
+          "strict_json": false
+        },
+        "expected": {
+          "heading": "BONSAI CHECK 47",
+          "red_circles": 3,
+          "blue_squares": 2,
+          "green_triangles": 1
+        }
+      },
+      "usage": {
+        "prompt_tokens": 645,
+        "completion_tokens": 377,
+        "total_tokens": 1022
+      },
+      "timing": {
+        "decodeSeconds": 7.668797969818115,
+        "generatedTokens": 377,
+        "prefillKVCache": "native",
+        "decodeKVCache": "native",
+        "promptTokens": 645,
+        "prefillSeconds": 4.060943007469177,
+        "loadSeconds": 9.059906005859375e-06,
+        "timeToFirstTokenSeconds": 4.115046977996826
+      },
+      "wall_seconds": 11.738298892974854,
+      "response_excerpt": "```json\n{\n  \"heading\": \"BONSAI CHECK 47\",\n  \"red_circles\": 3,\n  \"blue_squares\": 2,\n  \"green_triangles\": 1\n}\n```",
+      "response_sha256": "3ad3c19cee2b8c27594ce1b942629e8725272d28f17b5bca37269411d92493fc"
+    },
+    {
+      "label": "9b-vision-receipt",
+      "score": {
+        "passed": false,
+        "checks": {
+          "strict_json": false
+        },
+        "expected": {
+          "date": "2026-10-15",
+          "total": 20,
+          "apples_quantity": 3,
+          "tea_unit_price": 5
+        }
+      },
+      "usage": {
+        "prompt_tokens": 693,
+        "completion_tokens": 585,
+        "total_tokens": 1278
+      },
+      "timing": {
+        "timeToFirstTokenSeconds": 2.117905020713806,
+        "generatedTokens": 585,
+        "prefillKVCache": "native",
+        "decodeKVCache": "native",
+        "promptTokens": 693,
+        "prefillSeconds": 2.087669014930725,
+        "loadSeconds": 1.0013580322265625e-05,
+        "decodeSeconds": 11.07561194896698
+      },
+      "wall_seconds": 13.173221111297607,
+      "response_excerpt": "```json\n{\n  \"date\": \"2026-10-15\",\n  \"total\": 20.0,\n  \"apples_quantity\": 3,\n  \"tea_unit_price\": 5.0\n}\n```",
+      "response_sha256": "d0dd6248d8ad2d000e74977960a2530e6140cdcb0d94d40efb35736b5493b422"
+    },
+    {
+      "label": "9b-vision-chart",
+      "score": {
+        "passed": false,
+        "checks": {
+          "strict_json": false
+        },
+        "expected": {
+          "largest": "PINE",
+          "largest_count": 9,
+          "smallest": "CEDAR",
+          "smallest_count": 4,
+          "difference": 5
+        }
+      },
+      "usage": {
+        "prompt_tokens": 677,
+        "completion_tokens": 4096,
+        "total_tokens": 4773
+      },
+      "timing": {
+        "timeToFirstTokenSeconds": 2.2365660667419434,
+        "generatedTokens": 4096,
+        "prefillKVCache": "native",
+        "decodeKVCache": "native",
+        "promptTokens": 677,
+        "prefillSeconds": 2.1635890007019043,
+        "loadSeconds": 9.059906005859375e-06,
+        "decodeSeconds": 257.59374499320984
+      },
+      "wall_seconds": 259.7651300430298,
+      "response_excerpt": "Based on the provided bar chart, I need to extract data for the trees. The chart has three bars, each with a label at the bottom. The y-axis represents a count (implied by the bar heights, though no explicit numbers are given, I can infer relative sizes or look for labels if any were present - wait, there are no numbers). However, the task asks for `largest` and `smallest` counts. Let's look at the labels.\n\n1.  **Left Bar:**\n    *   Label text: `PINE` (It looks like \"PINE\", specifically \"P\", \"I\", \"N\", \"E\"). Wait, let me look closer at the bottom left. It says \"P I N E\". Actually, looking at the strokes: `P`, `I`, `N`, `E`. So the tree name is \"PINE\".\n    *   Bar height: This is the tallest bar. It's a reddish-brown color.\n    *   Top label: `7`. So the count is 7.\n\n2.  **Middle Bar:**\n    *   Label text: The text at the bottom is `EUCALYPTUS`? No, let's look closer. It looks like `E U C A L Y P T U S`. Wait, let me re-examine the crop.\n    *   Crop 5 shows the bottom text for the middl\n[excerpt omitted]\n  *   `O` - Looks like it.\n            *   `D` - Looks like it.\n        *   This seems very plausible. \"COTTONWOOD\".\n    *   Now let's look at the right label.\n        *   `S` `W` `A` `T`... no.\n        *   `S` `W` `A` `M` `P`?\n        *   `S` `W` `E` `E` `T`?\n        *   `S` `W` `A` `M` `P`?\n        *   Let's look at the letters.\n        *   `S` - Yes.\n        *   `W` - Yes.\n        *   `A` - Yes.\n        *   `M` - Yes.\n        *   `P` - Yes.\n        *   So `SWAMP`. But is \"SWAMP\" a tree name? Usually \"Swamp Elm\" or something. Or maybe just a category.\n        *   Wait, look at the last letter. It has a loop at the bottom. Like a `P`.\n        *   So `S` `W` `A` `M` `P`.\n        *   Or `S` `W` `A` `T` `T` `E` `R`.\n        *   Let's look at the strokes. `S` `W` `A` `T`...\n        *   Let's assume it's `SWAMP`.\n        *   Wait, let's look at the labels again.\n        *   Left: `PINE`.\n        *   Middle: `COTTONWOOD`.\n        *   Right: `SWAMP`?\n        *   Wait, let's look at the right",
+      "response_sha256": "7a2a5a0d8ecd5aaa55197eddccf83d42bafc55505a1903c3d7925d3d51295709"
+    },
+    {
+      "label": "9b-vision-photo",
+      "score": {
+        "passed": true,
+        "checks": {
+          "people": true,
+          "orange_suit": true,
+          "helmet": true,
+          "us_flag": true,
+          "space_shuttle": true
+        },
+        "expected": {
+          "people": 1,
+          "orange_suit": true,
+          "helmet": true,
+          "us_flag": true,
+          "space_shuttle": true
+        },
+        "actual": {
+          "people": 1,
+          "orange_suit": true,
+          "helmet": true,
+          "us_flag": true,
+          "space_shuttle": true
+        }
+      },
+      "usage": {
+        "prompt_tokens": 301,
+        "completion_tokens": 272,
+        "total_tokens": 573
+      },
+      "timing": {
+        "decodeSeconds": 18.253339052200317,
+        "generatedTokens": 272,
+        "prefillKVCache": "native",
+        "decodeKVCache": "native",
+        "promptTokens": 301,
+        "loadSeconds": 1.0967254638671875e-05,
+        "prefillSeconds": 0.9574790000915527,
+        "timeToFirstTokenSeconds": 1.0139609575271606
+      },
+      "wall_seconds": 19.24654197692871,
+      "response_excerpt": "{\n  \"people\": 1,\n  \"orange_suit\": true,\n  \"helmet\": true,\n  \"us_flag\": true,\n  \"space_shuttle\": true\n}",
+      "response_sha256": "11203ec43d1f5050c3e79fb5d7b523c23fab89d30cc22f4caaf982fc47aaf2d3"
+    },
+    {
+      "label": "9b-arithmetic",
+      "score": {
+        "passed": true,
+        "expected": "126"
+      },
+      "usage": {
+        "total_tokens": 305,
+        "prompt_tokens": 30,
+        "completion_tokens": 275
+      },
+      "timing": {
+        "decodeSeconds": 17.311965942382812,
+        "generatedTokens": 275,
+        "prefillKVCache": "native",
+        "decodeKVCache": "native",
+        "promptTokens": 30,
+        "prefillSeconds": 0.1430879831314087,
+        "loadSeconds": 9.059906005859375e-06,
+        "timeToFirstTokenSeconds": 0.1999720335006714
+      },
+      "wall_seconds": 17.48810124397278,
+      "response_excerpt": "126",
+      "response_sha256": "65a699905c02619370bcf9207f5a477c3d67130ca71ec6f750e07fe8d510b084"
+    },
+    {
+      "label": "9b-reasoning",
+      "score": {
+        "passed": true,
+        "checks": {
+          "chickens": true,
+          "rabbits": true
+        },
+        "expected": {
+          "chickens": 23,
+          "rabbits": 12
+        },
+        "actual": {
+          "chickens": 23,
+          "rabbits": 12
+        }
+      },
+      "usage": {
+        "prompt_tokens": 55,
+        "completion_tokens": 647,
+        "total_tokens": 702
+      },
+      "timing": {
+        "decodeSeconds": 11.292053937911987,
+        "generatedTokens": 647,
+        "prefillKVCache": "native",
+        "decodeKVCache": "native",
+        "promptTokens": 55,
+        "prefillSeconds": 0.1643010377883911,
+        "loadSeconds": 1.0967254638671875e-05,
+        "timeToFirstTokenSeconds": 0.1851409673690796
+      },
+      "wall_seconds": 11.466068267822266,
+      "response_excerpt": "{\n  \"chickens\": 23,\n  \"rabbits\": 12\n}",
+      "response_sha256": "74b30e60f0115669cf09d441e77b65bb0023bed8bc0e9dfedd331ba5c35257df"
+    }
+  ],
+  "public_redaction": {
+    "original_email_domain": "gmail.com",
+    "replacement_domain": "example.com",
+    "scope": "Public case, score, and output text only. All hashes refer to the unredacted originals retained on T7. Restore the original domain to reproduce exact input bytes."
+  }
+}
