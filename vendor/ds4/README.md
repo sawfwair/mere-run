@@ -1,7 +1,9 @@
 # vendor/ds4
 
 Prebuilt DwarfStar inference binaries for DeepSeek V4 Flash vendored from
-[antirez/ds4](https://github.com/antirez/ds4.git) at commit `b6af0adf8ca97c89145c9f9c15be70c9fd6c4507`.
+[antirez/ds4](https://github.com/antirez/ds4.git) at commit `5379c1c9ac315f1540371b06a3db88491d4059ff`.
+
+The macOS binaries target macOS 15.0 and the Apple M1 CPU baseline.
 
 Rebuild with:
 
@@ -22,4 +24,9 @@ vendored. mere.run lazy-downloads it from
 tier is used on a 96 GB+ Apple Silicon Mac.
 
 The binaries include Iris image decoders. Their MIT notice is in
-`IRIS-LICENSE`. Model support exposed by mere.run remains DeepSeek V4 Flash.
+`IRIS-LICENSE`.
+
+This runtime includes upstream DeepSeek V4.1 Flash support. The managed
+mere.run tier remains V4 Flash 0731: V4.1 requires a separate checkpoint,
+about 341 GiB on disk and 152 GiB of main weights for Q2, and SSD streaming
+on a single 128 GB machine. It is not a drop-in replacement for this tier.

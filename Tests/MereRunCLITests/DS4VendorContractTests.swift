@@ -50,7 +50,10 @@ final class DS4VendorContractTests: XCTestCase {
             "IRIS-LICENSE",
             "metal/dense.metal",
             "metal/dsv4_kv.metal",
+            "metal/dsv41.metal",
             "metal/moe.metal",
+            "metal/qwen4.metal",
+            "metal/qwen4_vision.metal",
         ]
 
         for relativePath in requiredPaths {
@@ -62,4 +65,38 @@ final class DS4VendorContractTests: XCTestCase {
             )
         }
     }
+
+    #if os(macOS)
+    func testVendoredExecutablesSupportMacOS15() throws {
+        for name in ["ds4", "ds4-server", "ds4-bench"] {
+            let binary = repositoryRoot.appendingPathComponent("vendor/ds4/\(name)")
+            let output = try run(URL(fileURLWithPath: "/usr/bin/otool"), arguments: ["-l", binary.path])
+            XCTAssertTrue(output.contains("minos 15.0"), "\(name) must support macOS 15")
+        }
+    }
+
+    func testVendoredServerAcceptsManagedRuntimeOptions() throws {
+        let binary = repositoryRoot.appendingPathComponent("vendor/ds4/ds4-server")
+        let output = try run(binary, arguments: ["--help"])
+        for option in ["--model", "--host", "--port", "--ctx", "--prefill-chunk",
+                       "--kv-disk-dir", "--kv-disk-space-mb"] {
+            XCTAssertTrue(output.contains(option), "Vendored server is missing \(option)")
+        }
+    }
+
+    private func run(_ executable: URL, arguments: [String]) throws -> String {
+        let process = Process()
+        let output = Pipe()
+        process.executableURL = executable
+        process.arguments = arguments
+        process.standardOutput = output
+        process.standardError = output
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0, "\(executable.lastPathComponent) failed")
+        return String(decoding: data, as: UTF8.self)
+    }
+    #endif
+
 }
