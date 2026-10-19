@@ -5185,7 +5185,10 @@ kernel void kernel_dsv4_router_transform_finalize_weights_one_simd(
         device const float4 *s = (device const float4 *)logits;
         device float4 *d = (device float4 *)probs;
         const float4 x = s[tid];
-        const float4 sp = select(log(1.0f + exp(x)), x, x > 20.0f);
+        const float4 ex = exp(x);
+        const float4 em = min(ex, 0.03125f);
+        const float4 poly = em*(1.0f - em*(0.5f - em*(1.0f/3.0f - 0.25f*em)));
+        const float4 sp = select(select(log(1.0f + ex), poly, ex < 0.03125f), x, x > 20.0f);
         d[tid] = sqrt(sp);
     }
     threadgroup_barrier(mem_flags::mem_device);
@@ -5346,7 +5349,10 @@ kernel void kernel_dsv4_router_project_select_fused(
             (device volatile const float4 *)logits;
         device float4 *d = (device float4 *)probs;
         const float4 xv = s[tid];
-        const float4 sp = select(log(1.0f + exp(xv)), xv, xv > 20.0f);
+        const float4 ex = exp(xv);
+        const float4 em = min(ex, 0.03125f);
+        const float4 poly = em*(1.0f - em*(0.5f - em*(1.0f/3.0f - 0.25f*em)));
+        const float4 sp = select(select(log(1.0f + ex), poly, ex < 0.03125f), xv, xv > 20.0f);
         d[tid] = sqrt(sp);
     }
     threadgroup_barrier(mem_flags::mem_device);
@@ -5466,6 +5472,24 @@ kernel void kernel_dsv4_topk_mask_scatter(
     if (idx >= 0 && (int64_t)idx < args.ne0) {
         *((device float *) (dst + (int64_t)idx*args.nb0 + it*args.nb1)) = 0.0f;
     }
+}
+
+// Copy the selected compressed-key mask while retaining causal visibility.
+// Image bidirectionality applies to raw keys only, never compressed keys.
+struct ds4_metal_args_causal_comp_mask {
+    uint n_comp, n_tokens, pos0, ratio, n_keys;
+};
+
+kernel void kernel_dsv4_causal_comp_mask(
+        constant ds4_metal_args_causal_comp_mask &args,
+        device const float *selected_mask,
+        device half *dst,
+        uint2 gid [[thread_position_in_grid]]) {
+    const uint col = gid.x, row = gid.y;
+    if (col >= args.n_comp || row >= args.n_tokens) return;
+    const ulong visible = (ulong(args.pos0) + ulong(row) + 1ul) / args.ratio;
+    dst[ulong(row) * args.n_keys + col] = ulong(col) < visible
+        ? half(selected_mask[ulong(row) * args.n_comp + col]) : half(-INFINITY);
 }
 
 // Sorts each token's selected compressed rows by row id. The indexer selects by
