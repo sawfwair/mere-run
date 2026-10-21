@@ -70,7 +70,15 @@ sigmoid routing with selection-only probability bias, learned attention sinks,
 RoPE placement, and sliding-cache chunk boundaries. The fixture generator uses
 only the Python standard library and is test tooling; inference uses Swift/MLX.
 
-These tests do not qualify the full released checkpoint. Released-weight parity,
-real tool-use quality, long-context accuracy, peak memory, throughput, and Linux
-execution require separate validation. No publisher benchmark is a measurement
-of this implementation.
+The [2026-10-21 Spark validation](../qualification/flint-spark-2026-10-21.md)
+ran the released INT4 checkpoint through the native Swift/MLX CUDA runtime.
+It covered bounded numerical comparisons, cached decoding, CLI generation,
+API requests, and a tool-call round trip. CUDA used the dense compatibility
+path for routed experts. The short CLI sample decoded about 4.3 tokens per
+second; it is not a throughput benchmark.
+
+Released-weight numerical equivalence, broad tool-use quality, long-context
+accuracy, and Metal execution remain unqualified. Keep the catalog's memory
+estimates: the Spark memory measurement used a short prompt and does not cover
+worst-case working memory. No publisher benchmark is a measurement of this
+implementation.

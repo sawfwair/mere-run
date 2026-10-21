@@ -1,0 +1,371 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-21",
+  "scope": "bounded-native-swift-mlx-cuda-int4",
+  "source_revision": "9b03cb2a37975a4efea01f20ff69b1177f3681d1",
+  "test_source_patch": "Restrict Bonsai2SmallMatchedThroughputTests.swift to macOS; runtime sources unchanged.",
+  "checkpoint": {
+    "repository": "RecursiveSI/flint-int4",
+    "revision": "3b93f9053b530488405ae9fca51d4900d6ce21f0",
+    "pinned_files_sha256_verified": true,
+    "weight_shards": 5
+  },
+  "environment": {
+    "os": "Ubuntu 24.04.4",
+    "architecture": "aarch64",
+    "gpu": "NVIDIA GB10",
+    "driver": "580.159.03",
+    "visible_ram_gib": 116,
+    "swift": "6.3.3",
+    "cuda": "13.0",
+    "mlx_swift_revision": "001d1aa3e5655d7efc073fb9632f952f57cdf528",
+    "build": "debug",
+    "scheduler_reservation_gib": 48
+  },
+  "fixture_gpu_tf32_off": {
+    "seconds": 0.6695257425308228,
+    "mode": "scalar-fixture",
+    "generated": [],
+    "tokens": [
+      1,
+      3,
+      4,
+      2,
+      8,
+      9,
+      0,
+      5,
+      6,
+      1,
+      10,
+      7,
+      2
+    ],
+    "peakBytes": 78960,
+    "device": "gpu",
+    "maxError": 3.874302e-07
+  },
+  "fixture_gpu_tf32_default": {
+    "max_absolute_error": 0.0007788837,
+    "strict_fp32_tolerance_passed": false
+  },
+  "released_native_probe": {
+    "device": "gpu",
+    "seconds": 13.858243107795715,
+    "mode": "released-int4",
+    "tokens": [
+      1,
+      33,
+      204,
+      1024,
+      42
+    ],
+    "generated": [
+      332,
+      260,
+      3252,
+      297,
+      1078,
+      856,
+      422,
+      6652
+    ],
+    "peakBytes": 22822948104
+  },
+  "reference": {
+    "framework": "PyTorch 2.10.0+cu130",
+    "dtype": "BF16 activations, FP32 explicit affine dequantization and accumulation",
+    "tf32": false,
+    "tokens": [
+      1,
+      33,
+      204,
+      1024,
+      42
+    ],
+    "compared_logits": 750720,
+    "logits": {
+      "name": "full_logits",
+      "maxAbs": 1.3326435089111328,
+      "rms": 0.23926427960395813,
+      "cosine": 0.9999016523361206,
+      "argmaxMatch": [
+        [
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      ],
+      "referenceArgmax": [
+        [
+          3157,
+          10444,
+          332,
+          5023,
+          332
+        ]
+      ],
+      "nativeArgmax": [
+        [
+          3157,
+          10444,
+          332,
+          5023,
+          332
+        ]
+      ]
+    },
+    "per_layer_comparisons": 49,
+    "cuda_capability_warning": "PyTorch advertised support through 12.0; GB10 reports 12.1. Operations completed."
+  },
+  "cache_comparisons": {
+    "chunk_1_logits": {
+      "maxAbs": 1.1834888458251953,
+      "rms": 0.23054087162017822,
+      "cosine": 0.9999433159828186,
+      "argmaxMatch": [
+        [
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      ],
+      "argmax": [
+        [
+          3157,
+          10444,
+          332,
+          5023,
+          332
+        ]
+      ]
+    },
+    "chunk_3_logits": {
+      "maxAbs": 2.120370864868164,
+      "rms": 0.2980547249317169,
+      "cosine": 0.9998466372489929,
+      "argmaxMatch": [
+        [
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      ],
+      "argmax": [
+        [
+          3157,
+          10444,
+          332,
+          5023,
+          332
+        ]
+      ]
+    }
+  },
+  "dispatch": {
+    "numerical_probe": {
+      "quantized_mm": "native",
+      "gather_qmm": "dense-compatibility"
+    },
+    "cli_and_api": {
+      "quantized_mm": "dense-compatibility",
+      "gather_qmm": "dense-compatibility"
+    }
+  },
+  "cli": {
+    "prompt": "What is 2 + 2? Answer with a single digit.",
+    "temperature": 0,
+    "max_tokens": 128,
+    "visible_response": "4",
+    "load_seconds": 15.96,
+    "prefill_seconds": 1.5,
+    "decode_seconds": 10.93,
+    "generated_tokens_including_reasoning": 47,
+    "decode_tokens_per_second": 4.3,
+    "maximum_rss_kib": 23516032
+  },
+  "managed_id_preflight": {
+    "diagnostics": [],
+    "installed": true,
+    "model": "text-chat-flint-4bit",
+    "schema_version": 1,
+    "status": "ok"
+  },
+  "api": {
+    "result": {
+      "passed": true,
+      "cases": [
+        {
+          "case": "arithmetic",
+          "status": 200,
+          "seconds": 12.825097596039996
+        },
+        {
+          "case": "code",
+          "status": 200,
+          "seconds": 21.37991531798616
+        },
+        {
+          "case": "tool-call",
+          "status": 200,
+          "seconds": 14.504716388182715
+        },
+        {
+          "case": "tool-history",
+          "status": 200,
+          "seconds": 22.27384177292697
+        },
+        {
+          "case": "unsupported-json",
+          "status": 400,
+          "seconds": 0.0062736510299146175
+        }
+      ]
+    },
+    "responses": {
+      "arithmetic": {
+        "choices": [
+          {
+            "index": 0,
+            "finish_reason": "stop",
+            "message": {
+              "content": "4",
+              "reasoning_content": "We need answer user. They ask: \"What is 2 + 2? Answer with a single digit.\" Need likely answer 4. Must comply single digit. Could just output 4. Ensure no extra.",
+              "role": "assistant"
+            }
+          }
+        ],
+        "object": "chat.completion",
+        "created": 1792619969,
+        "model": "checkpoint",
+        "usage": {
+          "prompt_tokens": 16,
+          "total_tokens": 63,
+          "completion_tokens": 47
+        },
+        "id": "chatcmpl-2BA60E3A"
+      },
+      "code": {
+        "model": "checkpoint",
+        "usage": {
+          "prompt_tokens": 19,
+          "total_tokens": 102,
+          "completion_tokens": 83
+        },
+        "id": "chatcmpl-B83611E8",
+        "object": "chat.completion",
+        "choices": [
+          {
+            "index": 0,
+            "finish_reason": "stop",
+            "message": {
+              "content": "def add(a, b):\n    return a + b",
+              "role": "assistant",
+              "reasoning_content": "We need to write a Python function named add with parameters a and b that returns their sum.\n\nThe instruction is straightforward. We should output just the function definition.\n\nWe should not include any extra text, just the code.\n\nThe function should be:\n\ndef add(a, b):\n    return a + b\n\nThat's it.\n\nMake sure it's exactly that."
+            }
+          }
+        ],
+        "created": 1792619990
+      },
+      "tool-call": {
+        "usage": {
+          "completion_tokens": 38,
+          "prompt_tokens": 151,
+          "total_tokens": 189
+        },
+        "id": "chatcmpl-5079E4FD",
+        "created": 1792620005,
+        "model": "checkpoint",
+        "object": "chat.completion",
+        "choices": [
+          {
+            "index": 0,
+            "finish_reason": "tool_calls",
+            "message": {
+              "tool_calls": [
+                {
+                  "type": "function",
+                  "id": "call_0_B54457B0",
+                  "function": {
+                    "name": "get_weather",
+                    "arguments": "{\"city\":\"Toronto\"}"
+                  }
+                }
+              ],
+              "content": "",
+              "role": "assistant",
+              "reasoning_content": "The user wants me to call get_weather with city Toronto now, and not answer from memory. I should make the tool call."
+            }
+          }
+        ]
+      },
+      "tool-history": {
+        "id": "chatcmpl-2BFF9FA7",
+        "object": "chat.completion",
+        "created": 1792620027,
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "Toronto is currently 17°C with sunny conditions.",
+              "reasoning_content": "The weather tool has already been called and returned the result for Toronto: 17°C and sunny. The user asked to use get_weather with city Toronto now and not answer from memory, which I have done. Now I should present this result clearly."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "completion_tokens": 62,
+          "prompt_tokens": 199,
+          "total_tokens": 261
+        },
+        "model": "checkpoint"
+      },
+      "unsupported-json": {
+        "error": {
+          "message": "Invalid 'response_format': JSON mode is not supported by this engine.",
+          "type": "invalid_request_error"
+        }
+      }
+    }
+  },
+  "tests": {
+    "macos_flint": {
+      "executed": 18,
+      "failed": 0
+    },
+    "linux_flint": {
+      "executed": 18,
+      "failed": 0,
+      "mlx_cpu_opt_in": true
+    },
+    "macos_full_gate": "blocked: locked-session protected run-record reads"
+  },
+  "post_run": {
+    "owner_services_ready": true,
+    "live_tickets": [],
+    "temporary_api_port_closed": true,
+    "owner_units_active": 3
+  },
+  "not_qualified": [
+    "exact released-weight numerical equivalence",
+    "broad model or tool-use quality",
+    "long-context accuracy",
+    "BF16 checkpoint",
+    "Metal checkpoint inference",
+    "sustained or optimized throughput",
+    "packaged Linux distribution"
+  ],
+  "script_sha256": {
+    "flint-native-probe.swift": "c4ce70c9f5c3756c45debf853fecb376b775807388fc7d2e0e6484519241799c",
+    "torch-reference.py": "5321d1967cf65faacd1f2ce1589e26c6f7bae20013c0b9557ebc6dc6b38bf388",
+    "api-qualify.py": "1fa5802ce38a0c5d5f36d59659926d6a3f176baf5a8e4afd4875b4fb2043876b",
+    "scheduler-run.py": "4528e73f48a6943bc38cec2aecb4d6f7e671db1824535b6a00c208925faffe08"
+  }
+}
