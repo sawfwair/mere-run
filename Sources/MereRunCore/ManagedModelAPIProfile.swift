@@ -354,6 +354,14 @@ public extension ManagedModelAPIProfile {
         )
     }
 
+    static func flint() -> ManagedModelAPIProfile {
+        .chat(servingEngine: .textChatFlint, contextWindow: FlintResources.maximumContextLength,
+              maximumOutputTokens: 32_768, toolCall: true,
+              compatibility: .init(thinkingFormat: .deepseek, requiresReasoningContentOnAssistantMessages: true),
+              supportsStopSequences: true,
+              supportsSeed: true, supportsPenalties: true, supportsLogprobs: true)
+    }
+
     static func runtimeFallback(for engine: RuntimeServingEngine) -> ManagedModelAPIProfile {
         switch engine {
         case .textCode:
@@ -364,6 +372,8 @@ public extension ManagedModelAPIProfile {
             return .gemma4()
         case .textChatDiffusionGemma:
             return .diffusionGemma()
+        case .textChatFlint:
+            return .flint()
         case .textChatKolibri:
             return .chat(servingEngine: .textChatKolibri, contextWindow: 262_144, maximumOutputTokens: 16_384,
                          thinkingLevels: [.off, .high], toolCall: true, supportsStopSequences: true,

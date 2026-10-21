@@ -150,6 +150,8 @@ public extension ManagedModelSpec {
             return Ideogram4Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .gemma4:
             return Gemma4Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .flint:
+            return FlintResources.missingFiles(root: rootURL, quantized: id == FlintResources.modelID, fileManager: fileManager)
         case .diffusionGemma:
             return DiffusionGemmaResources(rootURL: rootURL).validate(
                 fileManager: fileManager,

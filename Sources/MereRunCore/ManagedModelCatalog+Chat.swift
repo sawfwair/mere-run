@@ -3,6 +3,20 @@ import Foundation
 extension ManagedModelCatalog {
     static let chatSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
+            id: FlintResources.modelID, category: .textChat, installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(repoId: FlintResources.repository, revision: FlintResources.revision, patterns: FlintResources.snapshotPatterns),
+            upstreamRepoId: FlintResources.repository, upstreamRevision: FlintResources.revision,
+            validationKind: .flint, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 22_580_000_000,
+            defaultCLICommands: ["text chat", "api serve"], apiProfile: .flint()
+        ),
+        ManagedModelSpec(
+            id: FlintResources.bf16ModelID, category: .textChat, installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(repoId: FlintResources.bf16Repository, revision: FlintResources.bf16Revision, patterns: FlintResources.snapshotPatterns),
+            upstreamRepoId: FlintResources.bf16Repository, upstreamRevision: FlintResources.bf16Revision,
+            validationKind: .flint, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 79_590_000_000,
+            defaultCLICommands: ["text chat", "api serve"], apiProfile: .flint()
+        ),
+        ManagedModelSpec(
             id: "text-chat-mebot",
             category: .textChat,
             installShape: .directoryRoot,

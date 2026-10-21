@@ -406,3 +406,10 @@ The advanced image validator is intentionally separate from generation:
    then output.
 5. If you need implementation detail, continue to the larger model-definition
    files.
+
+## Recursive Flint
+
+For install commands and validation scope, read [Run Recursive Flint](./runtime/flint.md).
+Core orchestration lives in `Sources/MereRunCore/Flint/`. Model computation lives
+in `Sources/MereRunFlintModel/`, including learned attention sinks, mixed attention,
+and sigmoid MoE routing.

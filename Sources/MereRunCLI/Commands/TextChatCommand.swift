@@ -549,7 +549,7 @@ struct TextChat: AsyncParsableCommand {
 
     var normalizedModelIdentifier: String {
         let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
-        return KolibriResources.localModelRoot(for: trimmed) == nil ? trimmed.lowercased() : trimmed
+        return FlintResources.localModelRoot(for: trimmed) == nil && KolibriResources.localModelRoot(for: trimmed) == nil ? trimmed.lowercased() : trimmed
     }
 
     private func resolvedInstalledModelPath(modelID: String) -> String? {
@@ -557,7 +557,7 @@ struct TextChat: AsyncParsableCommand {
             let url = URL(fileURLWithPath: modelRoot).standardizedFileURL
             return FileManager.default.fileExists(atPath: url.path) ? url.path : nil
         }
-        return KolibriResources.localModelRoot(for: modelID) ?? ManagedModelResolver.resolveInstalledModel(id: modelID)?.path
+        return FlintResources.localModelRoot(for: modelID) ?? KolibriResources.localModelRoot(for: modelID) ?? ManagedModelResolver.resolveInstalledModel(id: modelID)?.path
     }
 
     private static func resolveLocalMediaReference(
@@ -603,6 +603,7 @@ struct TextChat: AsyncParsableCommand {
         resourceDiagnostics: [PreflightDiagnostic] = []
     ) -> TextChatPreflightReport {
         var diagnostics = resourceDiagnostics
+        let flint = FlintResources.localModelRoot(for: modelID) != nil
         let kolibri = KolibriResources.handles(modelSpec: modelID)
         if kolibri, installedModelPath == nil {
             diagnostics.append(.init(
@@ -610,7 +611,7 @@ struct TextChat: AsyncParsableCommand {
                 title: "Kolibri checkpoint is required",
                 message: "Pass a converted native Kolibri directory through --model or --model-root."
             ))
-        } else if !kolibri, modelID.isEmpty || ManagedModelCatalog.spec(for: modelID) == nil {
+        } else if !kolibri, !flint, modelID.isEmpty || ManagedModelCatalog.spec(for: modelID) == nil {
             diagnostics.append(.init(
                 id: "text_chat_model_unknown",
                 severity: .blocker,
@@ -618,7 +619,7 @@ struct TextChat: AsyncParsableCommand {
                 message: "No managed model is cataloged as '\(modelID)'."
             ))
         }
-        if requireInstalled, installedModelPath == nil, !kolibri {
+        if requireInstalled, installedModelPath == nil, !kolibri, !flint {
             diagnostics.append(.init(
                 id: "text_chat_model_not_installed",
                 severity: .blocker,

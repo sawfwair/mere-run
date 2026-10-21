@@ -1726,3 +1726,18 @@ Managed pulls retain the upstream `LICENSE` and `NOTICE.txt` files. No model
 weights or upstream Python runtime are bundled in this repository. The Swift
 tied output implementation follows the signed Hadamard and affine packed
 weight contract documented by the packs' `runtime/runtime.py`.
+
+## Recursive Flint architecture and metadata
+
+The native Swift/MLX Flint runtime follows the Apache-2.0 architecture published
+by Recursive in `RecursiveSI/flint` at
+`2a247be0c0aec895ccb0ac7ca92229ec6df37288` and `recursive-oss/rec` at
+`e53663b262af4cb1ca498e596ca8b1a2d79e0800`. The checkpoint's SGLang model
+builds on SGLang (Copyright 2023-2024 SGLang Team, Apache-2.0). No SGLang,
+FlashAttention, or Python runtime code is executed by this integration.
+
+The published BF16 and INT4 configuration files are retained as test fixtures.
+INT4 artifact hashes come from Recursive's `flint-int4.json` manifest at
+`RecursiveSI/flint-int4@3b93f9053b530488405ae9fca51d4900d6ce21f0`.
+The small arithmetic checkpoints and scalar reference outputs are generated
+for this repository and contain no released model weights.

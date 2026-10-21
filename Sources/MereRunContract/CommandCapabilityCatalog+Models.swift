@@ -73,7 +73,7 @@ extension MereRunCapabilityCatalog {
                     "text-chat-gemma4",
                     "text-chat-diffusiongemma",
                     "text-chat-laguna",
-                    "text-chat-kolibri",
+                    "text-chat-flint", "text-chat-kolibri",
                     "text-chat-q36",
                     "text-chat-q35",
                     "text-chat-lfm2",
