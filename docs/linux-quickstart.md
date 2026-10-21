@@ -205,7 +205,24 @@ environment printed by the script before building:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda scripts/prepare-linux-native.sh
-swift build --product mere.run
+```
+
+Apply every export printed by the preparation script before running the source
+build. In particular, `MERERUN_MLX_CUDA_JIT_INCLUDE_PATH` points NVRTC to the
+matching CUTLASS/CuTe headers, and `MERERUN_CUDA_CCCL_INCLUDE_PATH` supplies
+CUDA's C++ headers. `CPATH` alone does not configure NVRTC. Missing JIT headers
+can cause automatic quantized dispatch to use slower dense compatibility
+kernels even when the build succeeds.
+
+Preparation builds the MLX bridge in CMake `Release` mode. `--check` rejects an
+unoptimized bridge; rebuild it rather than reusing debug native libraries with
+an optimized Swift CLI.
+
+After applying the printed exports, build an optimized CLI for performance
+measurements:
+
+```bash
+swift build --configuration release --product mere.run
 ```
 
 The preparation script first lets SwiftPM resolve dependencies under the active

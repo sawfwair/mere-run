@@ -1,5 +1,10 @@
 # Flint INT4 Spark validation
 
+The initial throughput figures below are superseded by the
+[performance investigation](./flint-spark-performance-2026-10-21.md), which found
+missing CUDA JIT headers and an unoptimized native bridge. The original
+measurements remain here as evidence of the first diagnostic run.
+
 On 2026-10-21, the released Recursive Flint INT4 checkpoint ran through the
 native Swift/MLX runtime on NVIDIA DGX Spark. The CLI and local API completed
 bounded generation and tool-use checks. Numerical comparisons preserved the

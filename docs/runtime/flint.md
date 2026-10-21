@@ -73,9 +73,12 @@ only the Python standard library and is test tooling; inference uses Swift/MLX.
 The [2026-10-21 Spark validation](../qualification/flint-spark-2026-10-21.md)
 ran the released INT4 checkpoint through the native Swift/MLX CUDA runtime.
 It covered bounded numerical comparisons, cached decoding, CLI generation,
-API requests, and a tool-call round trip. CUDA used the dense compatibility
-path for routed experts. The short CLI sample decoded about 4.3 tokens per
-second; it is not a throughput benchmark.
+API requests, and a tool-call round trip. The initial 4.3-token/s sample used
+dense fallbacks because the source-build environment omitted CUDA JIT headers.
+The [corrected performance investigation](../qualification/flint-spark-performance-2026-10-21.md)
+measured 27.71 and 28.73 tokens/s with native quantized kernels and an optimized
+bridge. These are short diagnostics; performance parity with the publisher's
+NVFP4 engine remains unqualified.
 
 Released-weight numerical equivalence, broad tool-use quality, long-context
 accuracy, and Metal execution remain unqualified. Keep the catalog's memory
