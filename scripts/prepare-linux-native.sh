@@ -300,6 +300,13 @@ patch_mlx_cuda_jit_include_path() {
   echo "[prepare-linux-native] patched mlx-swift CUDA JIT include path in ${mlx_jit_module#$repo_root/}."
 }
 
+patch_mlx_cuda_quantized_kernels() {
+  local cuda_backend="$1"
+  if [[ -f "$cuda_backend/device/qmm_sm80.cuh" ]]; then
+    bash "$repo_root/scripts/patch-mlx-cuda-quantized.sh" "$cuda_backend"
+  fi
+}
+
 patch_mlx_cuda_subbyte_qmm_pointer_step() {
   local mlx_qmm_naive="$1"
   if [[ ! -f "$mlx_qmm_naive" ]]; then
@@ -712,6 +719,7 @@ patch_mlx_swift_for_linux() {
       "$mlx_swift_checkout/Source/Cmlx/mlx/mlx/backend/cuda/device/qmm_naive.cuh"
     patch_mlx_cuda_bf16_sigmoid "$mlx_swift_checkout/Source/Cmlx/mlx/mlx/backend/cuda/device/unary_ops.cuh"
     patch_mlx_cuda_bf16_power "$mlx_swift_checkout/Source/Cmlx/mlx/mlx/backend/cuda/device/binary_ops.cuh"
+    patch_mlx_cuda_quantized_kernels "$mlx_swift_checkout/Source/Cmlx/mlx/mlx/backend/cuda"
     echo "[prepare-linux-native] skipping mlx-swift SwiftPM package fix; CUDA builds use the CMake prebuilt bridge."
   else
     local package_file="$mlx_swift_checkout/Package.swift"
@@ -804,6 +812,10 @@ smoke_mlx_swift_cuda() {
   patch_mlx_cuda_bf16_power "$mlx_cmake_src/Source/Cmlx/mlx/mlx/backend/cuda/device/binary_ops.cuh"
   patch_mlx_cuda_bf16_power "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/device/binary_ops.cuh"
   patch_mlx_cuda_bf16_power "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cuda/device/binary_ops.cuh"
+
+  patch_mlx_cuda_quantized_kernels "$mlx_cmake_src/Source/Cmlx/mlx/mlx/backend/cuda"
+  patch_mlx_cuda_quantized_kernels "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda"
+  patch_mlx_cuda_quantized_kernels "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cuda"
 
   local local_openblas_root="$native_root/deps/apt-root"
   local local_openblas_lib="$local_openblas_root/usr/lib/$deb_multiarch/openblas-pthread/libopenblas.so"
@@ -917,6 +929,9 @@ smoke_mlx_swift_cuda() {
   patch_mlx_cuda_bf16_sigmoid "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cuda/device/unary_ops.cuh"
   patch_mlx_cuda_bf16_power "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/device/binary_ops.cuh"
   patch_mlx_cuda_bf16_power "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cuda/device/binary_ops.cuh"
+
+  patch_mlx_cuda_quantized_kernels "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda"
+  patch_mlx_cuda_quantized_kernels "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cuda"
 
   echo "[prepare-linux-native] building mlx-swift CUDA smoke"
   local build_jobs
@@ -1108,6 +1123,11 @@ verify_mlx_swift_cuda_bridge() {
   fi
   if ! grep -Eiq '^CMAKE_BUILD_TYPE:STRING=(Release|RelWithDebInfo|MinSizeRel)$' "$mlx_cmake_build/CMakeCache.txt"; then
     echo "[prepare-linux-native] error: MLX CUDA bridge must use an optimized CMake build; rerun preparation without --check." >&2
+    exit 69
+  fi
+  if [[ -f "$mlx_cmake_src/Source/Cmlx/mlx/mlx/backend/cuda/device/qmm_sm80.cuh" ]] \
+      && ! LC_ALL=C grep -aq 'mr_epilogue1' "$mlx_cmake_build/_deps/mlx-build/libmlx.a"; then
+    echo "[prepare-linux-native] error: MLX CUDA bridge lacks the SM80 QMM race fix; rebuild the bridge." >&2
     exit 69
   fi
 }

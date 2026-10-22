@@ -80,6 +80,32 @@ measured 27.71 and 28.73 tokens/s with native quantized kernels and an optimized
 bridge. These are short diagnostics; performance parity with the publisher's
 NVFP4 engine remains unqualified.
 
+The [CUDA kernel investigation](../qualification/flint-spark-kernels-2026-10-21.md)
+records a quantized matrix shared-memory race, BF16 accumulation loss, and the
+native preparation fixes. It also covers fixed-capacity caches, asynchronous
+decode submission, and the remaining 36 GB Mac qualification boundary.
+
+### CUDA performance on Spark
+
+The kernel and decode investigation measures approximately 55 tokens/s with
+standard CUDA graph limits and 74 tokens/s with the tested graph profile on GB10.
+The measured build uses CUDA 13, architecture 121, and release builds of both
+Swift and the native libraries. For a source build, set
+`MERERUN_CUDA_ARCHITECTURES=121` during native preparation and follow the
+[Linux setup instructions](../linux-quickstart.md) for exports and compilation.
+
+For a dedicated Flint CUDA process, apply the profile before starting the CLI:
+
+```bash
+MERERUN_MLX_CUDA_NATIVE_QUANT=native MLX_ENABLE_TF32=0 \
+MLX_MAX_OPS_PER_BUFFER=256 MLX_MAX_MB_PER_BUFFER=2048 \
+mere.run api serve --engine text-chat-flint --model text-chat-flint-4bit
+```
+
+These settings control graph grouping for that process. They retain the catalog
+memory floor. The measurements use bounded 128- and 1,024-token requests and do
+not establish publisher performance parity or long-context throughput.
+
 Released-weight numerical equivalence, broad tool-use quality, long-context
 accuracy, and Metal execution remain unqualified. Keep the catalog's memory
 estimates: the Spark memory measurement used a short prompt and does not cover

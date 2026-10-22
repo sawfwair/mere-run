@@ -44,6 +44,7 @@ package final class FlintCausalLM: Module {
     @ModuleInfo(key: "model") package var model: FlintBackbone
     @ModuleInfo(key: "lm_head") var head: FlintProjection
     package let config: FlintConfiguration
+    package var asynchronousDecode = true
 
     package init(config: FlintConfiguration) throws {
         try config.validate()
@@ -53,16 +54,33 @@ package final class FlintCausalLM: Module {
         super.init()
     }
 
-    package func makeCache() -> [FlintCache] {
-        config.layerTypes.map { FlintCache(window: $0 == .sliding ? config.slidingWindow : nil) }
+    package func makeCache(maxTokens: Int? = nil) -> [FlintCache] {
+        config.layerTypes.map {
+            FlintCache(window: $0 == .sliding ? config.slidingWindow : nil,
+                       capacity: $0 == .full ? maxTokens : nil)
+        }
     }
 
     package func callAsFunction(_ tokens: MLXArray, cache: [FlintCache]? = nil, lastPositionOnly: Bool = false) -> MLXArray {
         var hidden = model.embeddings(tokens)
+        let enqueueBlocks = asynchronousDecode && tokens.size == 1
+        var pendingCache: [MLXArray] = []
         for (index, layer) in model.layers.enumerated() {
             hidden = layer(hidden, cache: cache?[index])
-            eval(hidden)
-            if let row = cache?[index], let keys = row.keys, let values = row.values { eval(keys, values) }
+            if let row = cache?[index], let keys = row.keys, let values = row.values {
+                pendingCache.append(contentsOf: [keys, values])
+            }
+            if enqueueBlocks {
+                if (index + 1).isMultiple(of: 4) || index + 1 == model.layers.count {
+                    // Submit bounded decode graphs without waiting after every layer.
+                    // The decode engine evaluates the final logits before accepting a token.
+                    asyncEval([hidden] + pendingCache)
+                    pendingCache.removeAll(keepingCapacity: true)
+                }
+            } else {
+                eval([hidden] + pendingCache)
+                pendingCache.removeAll(keepingCapacity: true)
+            }
         }
         if lastPositionOnly { hidden = hidden[0..., (hidden.dim(1) - 1)..., 0...] }
         return head(model.norm(hidden).asType(.float32)).asType(.float32)

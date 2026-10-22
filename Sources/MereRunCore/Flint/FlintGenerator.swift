@@ -70,7 +70,8 @@ public actor FlintGenerator: ChatGenerator {
             guard !prompt.isEmpty, prompt.count < context else {
                 throw ChatRequestIssue("max-context-tokens", "Flint prompt must fit with space for output; prompt truncation is not implicit.")
             }
-            let cache = model.makeCache()
+            let budget = min(request.maxTokens, context - prompt.count)
+            let cache = model.makeCache(maxTokens: prompt.count + budget)
             var lastLogits: MLXArray?
             for start in stride(from: 0, to: prompt.count, by: 32) {
                 try Task.checkCancellation()
@@ -82,7 +83,6 @@ public actor FlintGenerator: ChatGenerator {
             }
             guard let logits = lastLogits else { throw ChatRequestIssue("prompt", "Flint prompt is empty.") }
             let prefillSeconds = Date().timeIntervalSince(prefillStart)
-            let budget = min(request.maxTokens, context - prompt.count)
             let sampling = GenerationConfig(
                 maxTokens: budget, temperature: Float(request.temperature), topK: request.topK ?? 20,
                 topP: Float(request.topP), minP: Float(request.minP),

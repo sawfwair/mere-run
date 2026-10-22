@@ -73,6 +73,48 @@ final class FlintRuntimeTests: MLXTestCase {
         }
     }
 
+    func testFixedCapacityCacheMatchesReferenceAcrossSlidingBoundaries() throws {
+        struct Reference: Decodable { let tokens: [Int32]; let logits: [Float] }
+        let config = try configuration()
+        let reference = try JSONDecoder().decode(Reference.self, from: Data(contentsOf: fixtures.appendingPathComponent("reference.json")))
+        let model = try FlintCausalLM(config: config)
+        try model.update(parameters: .unflattened(loadArrays(url: fixtures.appendingPathComponent("weights.safetensors"))),
+                         verify: [.allModelKeysSet, .shapeMismatch])
+        let expected = MLXArray(reference.logits).reshaped(1, reference.tokens.count, config.vocabSize)
+        for chunkSize in [1, 3, 8, 13] {
+            let cache = model.makeCache(maxTokens: reference.tokens.count + 5)
+            var parts: [MLXArray] = []
+            for start in stride(from: 0, to: reference.tokens.count, by: chunkSize) {
+                let end = min(start + chunkSize, reference.tokens.count)
+                parts.append(model(MLXArray(Array(reference.tokens[start..<end])).reshaped(1, -1), cache: cache))
+                XCTAssertEqual(cache[0].keys?.dim(2), end)
+            }
+            XCTAssertLessThan(abs(concatenated(parts, axis: 1) - expected).max().item(Float.self), 2e-5)
+            XCTAssertEqual(cache[0].capacity, reference.tokens.count + 5)
+            XCTAssertNil(cache[1].capacity)
+            XCTAssertEqual(cache[1].keys?.dim(2), config.slidingWindow - 1)
+        }
+    }
+
+    func testAsynchronousDecodeMatchesLayerwiseEvaluation() throws {
+        let config = try configuration()
+        let model = try FlintCausalLM(config: config)
+        try model.update(parameters: .unflattened(loadArrays(url: fixtures.appendingPathComponent("weights.safetensors"))),
+                         verify: [.allModelKeysSet, .shapeMismatch])
+        let tokens: [Int32] = [1, 3, 2, 5, 1, 4, 2, 1]
+        let run = { (asynchronous: Bool) -> MLXArray in
+            model.asynchronousDecode = asynchronous
+            let cache = model.makeCache(maxTokens: tokens.count)
+            let parts = tokens.map { token in
+                let logits = model(MLXArray([token]).reshaped(1, 1), cache: cache)
+                eval(logits)
+                return logits
+            }
+            return concatenated(parts, axis: 1)
+        }
+        XCTAssertLessThan(abs(run(false) - run(true)).max().item(Float.self), 2e-5)
+    }
+
     func testSinkAddsOnlyToSoftmaxDenominator() throws {
         let config = try configuration()
         let attention = FlintAttention(config: config, index: 0)
@@ -102,6 +144,62 @@ final class FlintRuntimeTests: MLXTestCase {
         XCTAssertLessThan(abs(projection(input) - expected).max().item(Float.self), 1e-5)
         let bytes = weight.view(dtype: .uint8)
         XCTAssertEqual(bytes.view(dtype: .uint32).asArray(UInt32.self), weight.asArray(UInt32.self))
+    }
+
+    func testRoutedBF16QuantizedProjectionIsRepeatableOnGPU() throws {
+        try XCTSkipIf(Device.defaultDevice().deviceType != .gpu, "Exercises the GPU quantized matrix kernel.")
+        let projection = FlintProjection(input: 2048, output: 512, experts: 8,
+                                         policy: .init(bits: 4, groupSize: 64))
+        let dense = sin(MLXArray(0..<(8 * 512 * 2048)).asType(.float32) / 1000)
+            .reshaped(8, 512, 2048).asType(.bfloat16)
+        let (weight, scales, optionalBiases) = quantized(dense, groupSize: 64, bits: 4)
+        let biases = try XCTUnwrap(optionalBiases)
+        try projection.update(parameters: .unflattened(["weight": weight, "scales": scales, "biases": biases]),
+                              verify: [.allModelKeysSet, .shapeMismatch])
+        eval(weight, scales, biases)
+        let input = cos(MLXArray(0..<(5 * 2048)).asType(.float32) / 100)
+            .reshaped(1, 5, 1, 2048).asType(.bfloat16)
+        let indices = (MLXArray(0..<30) % 8).reshaped(1, 5, 6)
+        let expected = projection(input, indices: indices)
+        eval(expected)
+        for _ in 0..<20 {
+            let actual = projection(input, indices: indices)
+            eval(actual)
+            XCTAssertEqual(abs(actual - expected).max().item(Float.self), 0)
+        }
+    }
+
+    func testGPUBF16QuantizedProjectionAccumulatesCancellationInFloat32() throws {
+        try XCTSkipIf(Device.defaultDevice().deviceType != .gpu, "Exercises GPU quantized accumulation precision.")
+        let projection = FlintProjection(input: 2048, output: 8, policy: .init(bits: 4, groupSize: 64))
+        let weight = MLXArray(Array(repeating: UInt32(0x11111111), count: 8 * 256)).reshaped(8, 256)
+        try projection.update(parameters: .unflattened([
+            "weight": weight,
+            "scales": MLXArray.ones([8, 32], dtype: .bfloat16),
+            "biases": MLXArray.zeros([8, 32], dtype: .bfloat16)
+        ]), verify: [.allModelKeysSet, .shapeMismatch])
+        let phases: [Float] = [256, 1, -256, 1]
+        let values = phases.flatMap { Array(repeating: $0, count: 512) }
+        let input = MLXArray(values).reshaped(1, 2048).asType(.bfloat16)
+        // Each weight is one: 512 * (256 + 1 - 256 + 1) = 1024.
+        // BF16 partial sums round 256 + 1 to 256 and incorrectly return 512.
+        XCTAssertEqual(projection(input).asArray(Float.self), Array(repeating: Float(1024), count: 8))
+    }
+
+    func testGPUBF16AffineDequantizationRoundsAfterAddingBias() throws {
+        try XCTSkipIf(Device.defaultDevice().deviceType != .gpu, "Exercises GPU affine dequantization precision.")
+        let projection = FlintProjection(input: 2048, output: 128, policy: .init(bits: 4, groupSize: 64))
+        try projection.update(parameters: .unflattened([
+            "weight": MLXArray(Array(repeating: UInt32(0x77777777), count: 128 * 256)).reshaped(128, 256),
+            "scales": MLXArray(Array(repeating: Float(0.10009765625), count: 128 * 32)).reshaped(128, 32).asType(.bfloat16),
+            "biases": MLXArray(Array(repeating: Float(-0.69921875), count: 128 * 32)).reshaped(128, 32).asType(.bfloat16)
+        ]), verify: [.allModelKeysSet, .shapeMismatch])
+        for rows in [1, 16] {
+            let input = MLXArray.ones([rows, 2048], dtype: .bfloat16)
+            // 2048 * (7 * 0.10009765625 - 0.69921875) = 3 exactly.
+            // Rounding the product to BF16 before adding bias erases each weight.
+            XCTAssertEqual(projection(input).asArray(Float.self), Array(repeating: Float(3), count: rows * 128))
+        }
     }
 
     func testEveryPublishedINT4TensorMatchesNativeParameterLayout() throws {
