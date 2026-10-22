@@ -86,6 +86,8 @@ an effective overlay; they are not a second capability catalog.
 | `image` | `image-qwen-edit-2511` |
 | `image` | `image-qwen-edit-2511-lightning` |
 | `image` | `image-ideogram4-sdnq-uint4` |
+| `text-chat` | `text-chat-flint-4bit` |
+| `text-chat` | `text-chat-flint-bf16` |
 | `text-chat` | `text-chat-mebot` |
 | `text-chat` | `text-chat-psi-agent` |
 | `text-chat` | `text-chat-gemma4` |
@@ -2004,3 +2006,8 @@ NVFP4, and BF16 storage. The model materials use OpenMDW-1.1. The managed
 pull is explicit; the source weights do not require conversion. See
 [Native Nemotron Bolt](./runtime/nemotron-bolt.md) for supported inputs and
 qualification limits.
+
+## Recursive Flint
+
+[Run Recursive Flint](./runtime/flint.md) covers the pinned BF16 and MLX INT4
+checkpoints, native Swift/MLX execution, memory estimates, and qualification limits.

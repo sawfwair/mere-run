@@ -9,6 +9,7 @@ public enum NativeChatRuntime: Sendable {
     case textChatKlein(Flux2KleinGenerator, modelPath: String?, useStandalone: Bool)
     case textChatGemma4(Gemma4Generator, modelPath: String?)
     case textChatDiffusionGemma(DiffusionGemmaGenerator, modelPath: String?)
+    case textChatFlint(FlintGenerator, modelPath: String?)
     case textChatKolibri(KolibriGenerator, modelPath: String?)
     case textChatLaguna(LagunaGenerator, modelPath: String?)
     case textChatQ35(Q35Generator, modelPath: String?)
@@ -39,6 +40,8 @@ public enum NativeChatRuntime: Sendable {
         case .textChatGemma4(let generator, let modelPath):
             try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
         case .textChatDiffusionGemma(let generator, let modelPath):
+            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+        case .textChatFlint(let generator, let modelPath):
             try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
         case .textChatKolibri(let generator, let modelPath):
             try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
@@ -78,6 +81,8 @@ public enum NativeChatRuntime: Sendable {
             await generator.unload()
         case .textChatDiffusionGemma(let generator, _):
             await generator.unload()
+        case .textChatFlint(let generator, _):
+            await generator.unload()
         case .textChatKolibri(let generator, _):
             await generator.unload()
         case .textChatLaguna(let generator, _):
@@ -107,7 +112,7 @@ public enum NativeChatRuntime: Sendable {
             return await generator.prefixKVCacheStats()
         case .textChatLFM2(let generator, _):
             return await generator.prefixKVCacheStats()
-        case .textChatKolibri, .textChatPsi, .textChatInkling, .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatLaguna, .textChatDeepseekV4Flash,
+        case .textChatFlint, .textChatKolibri, .textChatPsi, .textChatInkling, .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatLaguna, .textChatDeepseekV4Flash,
              .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronBolt, .textChatNemotronOmni:
             return nil
         }
@@ -123,7 +128,7 @@ public enum NativeChatRuntime: Sendable {
             return await generator.continuousBatchingStats()
         case .textChatLFM2(let generator, _):
             return await generator.continuousBatchingStats()
-        case .textChatKolibri, .textChatPsi, .textChatInkling, .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatDeepseekV4Flash, .textChatMuseGlimmer,
+        case .textChatFlint, .textChatKolibri, .textChatPsi, .textChatInkling, .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatDeepseekV4Flash, .textChatMuseGlimmer,
              .textChatNemotronH, .textChatNemotronBolt, .textChatNemotronOmni:
             return nil
         }
@@ -133,7 +138,7 @@ public enum NativeChatRuntime: Sendable {
         switch self {
         case .textChatGemma4(let generator, _):
             return await generator.mtpStats()
-        case .textChatKolibri, .textChatPsi, .textChatInkling, .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatLaguna, .textChatQ35, .textChatLFM2,
+        case .textChatFlint, .textChatKolibri, .textChatPsi, .textChatInkling, .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatLaguna, .textChatQ35, .textChatLFM2,
              .textChatDeepseekV4Flash, .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronBolt,
              .textChatNemotronOmni:
             return nil
@@ -176,6 +181,8 @@ public enum NativeChatRuntime: Sendable {
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         case .textChatDiffusionGemma(let generator, let modelPath):
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
+        case .textChatFlint(let generator, let modelPath):
+            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         case .textChatKolibri(let generator, let modelPath):
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         case .textChatLaguna(let generator, let modelPath):
@@ -213,7 +220,7 @@ public enum NativeChatRuntime: Sendable {
                 modelPath: modelPath,
                 progressHandler: progressHandler
             )
-        case .textChatKolibri, .textChatPsi, .textChatInkling, .textCode, .textChatKlein, .textChatGemma4, .textChatDiffusionGemma, .textChatLaguna, .textChatQ35,
+        case .textChatFlint, .textChatKolibri, .textChatPsi, .textChatInkling, .textCode, .textChatKlein, .textChatGemma4, .textChatDiffusionGemma, .textChatLaguna, .textChatQ35,
              .textChatLFM2, .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronBolt,
              .textChatNemotronOmni:
             throw ChatRequestIssue("engine", "does not expose a raw chat proxy")

@@ -1,5 +1,15 @@
 [
   {
+    "topic": "handbook-flint",
+    "title": "Recursive Flint",
+    "category": "Text chat",
+    "models": [
+      "text-chat-flint-4bit",
+      "text-chat-flint-bf16"
+    ],
+    "resourceName": "handbook-flint.md"
+  },
+  {
     "topic": "handbook-flux2-klein",
     "title": "FLUX.2 Klein (Black Forest Labs)",
     "category": "Image",

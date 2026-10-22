@@ -393,6 +393,16 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 64
             ),
             descriptor(
+                FlintResources.modelID, "Recursive Flint INT4",
+                "Runs the pinned group-64 INT4 export through native Swift/MLX with BF16 attention caches.",
+                minimum: 48, recommended: 64
+            ),
+            descriptor(
+                FlintResources.bf16ModelID, "Recursive Flint BF16",
+                "Loads the original BF16 checkpoint through native Swift/MLX.",
+                minimum: 128, recommended: 128
+            ),
+            descriptor(
                 DiffusionGemmaResources.modelID,
                 "DiffusionGemma 26B-A4B OptiQ",
                 "Runs the mixed 4-bit and 8-bit DiffusionGemma checkpoint through native Swift/MLX parallel block denoising.",

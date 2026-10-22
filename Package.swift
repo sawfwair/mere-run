@@ -200,6 +200,7 @@ mereRunCoreDependencies.append("MereRunKVCache")
 mereRunCoreDependencies.append("MereRunDecode")
 mereRunCoreDependencies.append("MereRunQwenModel")
 mereRunCoreDependencies.append("MereRunKolibriModel")
+mereRunCoreDependencies.append("MereRunFlintModel")
 mereRunCoreDependencies.append("MereRunNemotronBoltModel")
 mereRunCoreDependencies.append("MereRunGemmaModel")
 mereRunCoreDependencies.append("MereRunCoreMLModel")
@@ -414,6 +415,25 @@ targets.append(
     dependencies: mereRunH3ModelDependencies,
     path: "Sources/MereRunH3Model",
     exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "MereRunFlintModel",
+    dependencies: ["MereRunTensor"] + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/MereRunFlintModel",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+targets.append(
+  .testTarget(
+    name: "FlintRuntimeTests",
+    dependencies: ["MereRunFlintModel", "MereRunMLXTestSupport"] + mlxDependency("MLX") + mlxDependency("MLXNN"),
+    path: "Tests/FlintRuntimeTests",
+    exclude: ["Fixtures"],
     swiftSettings: commonSwiftSettings
   )
 )
@@ -767,6 +787,7 @@ targets.append(
       "InstantMesh/README.md",
       "Krea2/README.md",
       "Laguna/README.md",
+      "Flint/README.md",
       "MuScriptor/README.md",
       "MuseGlimmer/README.md",
       "NemotronH/README.md",

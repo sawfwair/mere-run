@@ -379,6 +379,16 @@ extension MereRunModelManifest {
                 upstreamRepoId: Gemma4Resources.turboUpstreamModelId,
                 createdAt: createdAt
             )
+        case .flint4Bit, .flintBF16:
+            let quantized = modelID == .flint4Bit
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .flint, family: .flint, tier: .large,
+                variant: .standard, precision: quantized ? .int4 : .bf16,
+                quantization: quantized ? Quantization(bits: 4, groupSize: 64, scheme: "mlx-affine-int4-int8-embedding") : nil,
+                defaults: nil, supports: [.chat, .codeGeneration], components: gemma4TextComponents,
+                upstreamRepoId: quantized ? FlintResources.repository : FlintResources.bf16Repository,
+                createdAt: createdAt
+            )
         case .diffusionGemma26BOptiQ4Bit:
             return MereRunModelManifest(
                 id: modelID.rawValue,

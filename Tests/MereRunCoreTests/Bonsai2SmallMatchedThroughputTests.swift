@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 import MediaIO
 import MereRunAdmission
@@ -167,3 +168,4 @@ extension Q35Generator {
         }
     }
 }
+#endif

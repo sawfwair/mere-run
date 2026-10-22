@@ -160,10 +160,10 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Host to bind to.")
     var host: String = "127.0.0.1"
 
-    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-diffusiongemma, pass text-chat-diffusiongemma-26b-optiq-4bit or its installed MLX root. For --engine text-chat-kolibri, pass a converted native Kolibri checkpoint root. For --engine text-chat-laguna, pass text-chat-laguna-s-2-1, text-chat-laguna-xs-2-1, or an installed Laguna MLX root. For --engine text-chat-q36, pass a Qwen3.6 text chat model root. For --engine text-chat-lfm2, pass an LFM2 MLX model root or repo ID. For --engine text-chat-deepseek-v4-flash, pass a DS4 GGUF file or managed model root. For --engine text-chat-muse-glimmer, pass vision-chat-muse-glimmer-30b or an installed Muse Glimmer MLX root. For --engine text-chat-nemotron-omni, pass omni-chat-nemotron3-nano-30b-a3b-bf16 or its installed wrapper root.")
+    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-diffusiongemma, pass text-chat-diffusiongemma-26b-optiq-4bit or its installed MLX root. For --engine text-chat-flint, pass text-chat-flint-4bit, text-chat-flint-bf16, or a Flint checkpoint root. For --engine text-chat-kolibri, pass a converted native Kolibri checkpoint root. For --engine text-chat-laguna, pass text-chat-laguna-s-2-1, text-chat-laguna-xs-2-1, or an installed Laguna MLX root. For --engine text-chat-q36, pass a Qwen3.6 text chat model root. For --engine text-chat-lfm2, pass an LFM2 MLX model root or repo ID. For --engine text-chat-deepseek-v4-flash, pass a DS4 GGUF file or managed model root. For --engine text-chat-muse-glimmer, pass vision-chat-muse-glimmer-30b or an installed Muse Glimmer MLX root. For --engine text-chat-nemotron-omni, pass omni-chat-nemotron3-nano-30b-a3b-bf16 or its installed wrapper root.")
     var model: String?
 
-    @Option(name: [.long], help: "Serving engine: text-chat-q36 (default; serves text-chat-q36-nano), text-code, text-chat-klein, text-chat-gemma4, text-chat-diffusiongemma, text-chat-laguna, text-chat-kolibri, text-chat-lfm2, text-chat-deepseek-v4-flash, text-chat-muse-glimmer, text-chat-nemotron-h, or text-chat-nemotron-omni.")
+    @Option(name: [.long], help: "Serving engine: text-chat-q36 (default; serves text-chat-q36-nano), text-code, text-chat-klein, text-chat-gemma4, text-chat-diffusiongemma, text-chat-laguna, text-chat-flint, text-chat-kolibri, text-chat-lfm2, text-chat-deepseek-v4-flash, text-chat-muse-glimmer, text-chat-nemotron-h, or text-chat-nemotron-omni.")
     var engine: APIEngine = .textChatQ36
 
     @Option(name: [.long], help: "Default cataloged adapter id or local LoRA path for all requests.")
@@ -282,6 +282,8 @@ struct APIServe: AsyncParsableCommand {
             return ModelResolver.ModelID.gemma4.rawValue
         case .textChatDiffusionGemma:
             return DiffusionGemmaResources.modelID
+        case .textChatFlint:
+            return FlintResources.modelID
         case .textChatKolibri:
             return KolibriResources.mixedModelID
         case .textChatLaguna:
@@ -341,6 +343,13 @@ struct APIServe: AsyncParsableCommand {
             return ManagedModelResolver.resolveInstalledModel(
                 id: DiffusionGemmaResources.modelID
             )?.path
+        case .textChatFlint:
+            let requested = model ?? FlintResources.modelID
+            if let root = FlintResources.localModelRoot(for: requested) { return root }
+            guard let path = ManagedModelResolver.resolveInstalledModel(id: requested)?.path else {
+                throw ValidationError("Install \(requested) with 'mere.run model pull' or pass a Flint checkpoint directory.")
+            }
+            return path
         case .textChatKolibri:
             guard let model else {
                 throw ValidationError("Kolibri requires --model pointing to a converted native checkpoint directory.")
@@ -553,6 +562,7 @@ enum APIEngine: String, ExpressibleByArgument {
     case textChatGemma4 = "text-chat-gemma4"
     case textChatDiffusionGemma = "text-chat-diffusiongemma"
     case textChatLaguna = "text-chat-laguna"
+    case textChatFlint = "text-chat-flint"
     case textChatKolibri = "text-chat-kolibri"
     case textChatQ36 = "text-chat-q36"
     case textChatQ35 = "text-chat-q35"
@@ -572,6 +582,8 @@ enum APIEngine: String, ExpressibleByArgument {
             return .textChatGemma4
         case .textChatDiffusionGemma:
             return .textChatDiffusionGemma
+        case .textChatFlint:
+            return .textChatFlint
         case .textChatKolibri:
             return .textChatKolibri
         case .textChatLaguna:

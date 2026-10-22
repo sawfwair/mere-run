@@ -41,6 +41,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         /// LiquidAI LFM2 family via the native Swift runtime.
         case lfm2 = "lfm2"
         /// Poolside Laguna family via the native Swift runtime.
+        case flint
         case laguna = "laguna"
         /// Qwen3.5-family dense or MoE models with hybrid attention.
         case qwen35HybridMoE = "qwen3.5-hybrid-moe"
@@ -153,6 +154,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case ideogram
         case gemma
         case liquid
+        case flint
         case laguna
         case qwen
         case sam

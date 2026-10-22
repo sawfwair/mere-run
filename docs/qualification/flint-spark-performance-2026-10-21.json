@@ -1,0 +1,331 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-21",
+  "scope": "source-performance-diagnostic",
+  "runtime_source_revision": "9b03cb2a37975a4efea01f20ff69b1177f3681d1",
+  "checkpoint": {
+    "repository": "RecursiveSI/flint-int4",
+    "revision": "3b93f9053b530488405ae9fca51d4900d6ce21f0"
+  },
+  "environment": {
+    "gpu": "NVIDIA GB10",
+    "os": "Linux aarch64",
+    "swift": "6.3.3",
+    "cuda": "13.0",
+    "mlx_swift_revision": "001d1aa3e5655d7efc073fb9632f952f57cdf528",
+    "mlx_cpp_revision": "11da2b33a51772c023e2f7d7bc4ba9b3ff7e03ef",
+    "cmake_build_type": "Release",
+    "cuda_architecture": "121",
+    "scheduler_reservation_gib": 48
+  },
+  "link_method": "Captured SwiftPM release linker command, release package objects, matching-source optimized native bridge libraries.",
+  "cli_sha256": "3291d02743de0cf07259cc8c3f2d00bd7396adde23d1c99b86bb797fadeea909",
+  "setup_defects": [
+    "Missing MERERUN_MLX_CUDA_JIT_INCLUDE_PATH caused NVRTC CUTLASS include failure and dense fallback.",
+    "Reused CMake bridge had no optimized build type; release CLI still linked unoptimized native libraries."
+  ],
+  "publisher_reference": {
+    "url": "https://recursive.com/updates/introducing-recursive-flint",
+    "hardware": "RTX Spark N1X",
+    "weight_format": "NVFP4",
+    "short_context_tokens": 1024,
+    "short_context_tokens_per_second": 155.82,
+    "normalized_average_through_128k_tokens_per_second": 101.95,
+    "matched_hardware_format_and_protocol": false
+  },
+  "original_diagnostic": {
+    "decode_tokens_per_second": 4.3,
+    "build": "debug",
+    "dispatch": "dense fallback",
+    "generated_tokens": 47
+  },
+  "header_fixed_debug_arithmetic": {
+    "stats": {
+      "time": 19.23,
+      "load": 15.35,
+      "prefill": 0.61,
+      "decode": 3.07,
+      "tokens": 46.0,
+      "decode_tps": 15.0,
+      "e2e_tps": 2.39,
+      "ttft_s": 16.086,
+      "first_token_s": 0.131
+    },
+    "stdout_sha256": "7de1555df0c2700329e815b93b32c571c3ea54dc967b89e81ab73b9972b72d1d"
+  },
+  "benchmark": {
+    "prompt": "Write a numbered list of the integers from 1 to 1000, one per line.",
+    "temperature": 0,
+    "output_token_cap": 128,
+    "includes_reasoning_tokens": true,
+    "reported_rate_excludes_load_and_prefill": true,
+    "unoptimized_bridge_cohort": [
+      {
+        "stats": {
+          "time": 23.7,
+          "load": 14.65,
+          "prefill": 0.69,
+          "decode": 8.14,
+          "tokens": 128.0,
+          "decode_tps": 15.72,
+          "e2e_tps": 5.4,
+          "ttft_s": 15.475,
+          "first_token_s": 0.132
+        },
+        "stdout_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+      },
+      {
+        "stats": {
+          "time": 24.45,
+          "load": 14.96,
+          "prefill": 0.69,
+          "decode": 8.6,
+          "tokens": 128.0,
+          "decode_tps": 14.88,
+          "e2e_tps": 5.23,
+          "ttft_s": 15.794,
+          "first_token_s": 0.139
+        },
+        "stdout_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+      }
+    ],
+    "optimized_warmup": {
+      "stats": {
+        "time": 19.54,
+        "load": 14.25,
+        "prefill": 0.67,
+        "decode": 4.41,
+        "tokens": 128.0,
+        "decode_tps": 29.05,
+        "e2e_tps": 6.55,
+        "ttft_s": 15.025,
+        "first_token_s": 0.108
+      },
+      "stdout_sha256": "6f826364e056e98407a173a533eb5ada7c2c33198c611f9b6a075e5cf43ca4bc"
+    },
+    "optimized_cohort": [
+      {
+        "stats": {
+          "time": 19.86,
+          "load": 14.38,
+          "prefill": 0.66,
+          "decode": 4.62,
+          "tokens": 128.0,
+          "decode_tps": 27.71,
+          "e2e_tps": 6.44,
+          "ttft_s": 15.154,
+          "first_token_s": 0.113
+        },
+        "stdout_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+      },
+      {
+        "stats": {
+          "time": 19.68,
+          "load": 14.34,
+          "prefill": 0.69,
+          "decode": 4.46,
+          "tokens": 128.0,
+          "decode_tps": 28.73,
+          "e2e_tps": 6.51,
+          "ttft_s": 15.129,
+          "first_token_s": 0.106
+        },
+        "stdout_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+      }
+    ],
+    "no_compiler_jobs_during_optimized_cohort": true,
+    "fresh_run_visible_outputs_identical": true
+  },
+  "native_dispatch": "forced native for quantized_mm and gather_qmm; no dense fallback permitted",
+  "kernel_availability": {
+    "cases": 16,
+    "passed": 16,
+    "numerical_test": false
+  },
+  "optimized_gpu_scalar_fixture": {
+    "tokens": [
+      1,
+      3,
+      4,
+      2,
+      8,
+      9,
+      0,
+      5,
+      6,
+      1,
+      10,
+      7,
+      2
+    ],
+    "generated": [],
+    "device": "gpu",
+    "mode": "scalar-fixture",
+    "seconds": 0.681411862373352,
+    "peakBytes": 87160,
+    "maxError": 3.874302e-07
+  },
+  "optimized_released_checkpoint_probe": {
+    "device": "gpu",
+    "generated": [
+      16,
+      332,
+      260,
+      24613,
+      15328,
+      37257,
+      1870,
+      1507
+    ],
+    "peakBytes": 22765251136,
+    "mode": "released-int4",
+    "tokens": [
+      1,
+      33,
+      204,
+      1024,
+      42
+    ],
+    "seconds": 3.7439647912979126
+  },
+  "released_reference_comparisons": {
+    "full_logits": {
+      "maxAbs": 7.945216178894043,
+      "rms": 0.8630613684654236,
+      "cosine": 0.9986990690231323,
+      "argmax": [
+        [
+          3157,
+          10444,
+          332,
+          38403,
+          332
+        ]
+      ],
+      "referenceArgmax": [
+        [
+          3157,
+          10444,
+          332,
+          5023,
+          332
+        ]
+      ],
+      "argmaxMatch": [
+        [
+          true,
+          true,
+          true,
+          false,
+          true
+        ]
+      ]
+    },
+    "chunk_1_logits": {
+      "maxAbs": 19.46991539001465,
+      "rms": 2.023317575454712,
+      "cosine": 0.992994487285614,
+      "argmax": [
+        [
+          3157,
+          10444,
+          33,
+          5023,
+          332
+        ]
+      ],
+      "referenceArgmax": [
+        [
+          3157,
+          10444,
+          332,
+          5023,
+          332
+        ]
+      ],
+      "argmaxMatch": [
+        [
+          true,
+          true,
+          false,
+          true,
+          true
+        ]
+      ]
+    },
+    "chunk_3_logits": {
+      "maxAbs": 6.032121658325195,
+      "rms": 0.5847792029380798,
+      "cosine": 0.9994028210639954,
+      "argmax": [
+        [
+          3157,
+          10444,
+          332,
+          5023,
+          332
+        ]
+      ],
+      "referenceArgmax": [
+        [
+          3157,
+          10444,
+          332,
+          5023,
+          332
+        ]
+      ],
+      "argmaxMatch": [
+        [
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      ]
+    }
+  },
+  "api_regressions": {
+    "passed": true,
+    "cases": [
+      {
+        "case": "arithmetic",
+        "status": 200,
+        "seconds": 2.398753433022648
+      },
+      {
+        "case": "code",
+        "status": 200,
+        "seconds": 3.1574487229809165
+      },
+      {
+        "case": "tool-call",
+        "status": 200,
+        "seconds": 2.2557744060177356
+      },
+      {
+        "case": "tool-history",
+        "status": 200,
+        "seconds": 3.6133998970035464
+      },
+      {
+        "case": "unsupported-json",
+        "status": 400,
+        "seconds": 0.006088196067139506
+      }
+    ]
+  },
+  "post_run": {
+    "owner_services_ready": true,
+    "live_tickets": [],
+    "temporary_api_port_closed": true
+  },
+  "qualification": {
+    "publisher_performance_parity": false,
+    "broad_quality": false,
+    "released_weight_numerical_equivalence": false,
+    "packaged_distribution": false,
+    "full_macos_gate": "blocked by locked-session protected storage reads"
+  }
+}
