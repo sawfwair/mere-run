@@ -13,9 +13,10 @@ The format is based on Keep a Changelog.
   output, streaming, and the local `/v1/audio/speech` API. Load the pinned
   original safetensors directly in Swift/MLX. Spell out numbers, dates, units,
   and email addresses; text rewriting and voice cloning are unsupported.
-  Bounded released-checkpoint comparisons matched upstream transcripts on
-  20 prose cases. Warm M3 Max synthesis measured 25–26 times real time;
+  On an M3 Max, local ASR transcripts matched upstream on 20 prose cases.
+  Warm synthesis measured 25–26 times real time;
   upstream CPU F32 and Q8 paths were faster on the same host.
+  Fix non-finite Phonon audio on Linux CUDA by materializing attention projections.
 
 - Add native Nemotron 3.5 Bolt 74B-A9B-24GB text and image chat through
   `vision-chat-nemotron-35-bolt-24gb`, loading the original packed IQ2_XXS,

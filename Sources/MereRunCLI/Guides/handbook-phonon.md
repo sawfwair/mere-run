@@ -67,3 +67,9 @@ publisher's performance claims or blind listener preference. See
 `docs/architecture/phonon-native-qualification.json` and
 `scripts/phonon-qualification/README.md` for evidence and reproduction steps.
 The gated 40m checkpoints and multilingual models are not included.
+
+CUDA checkpoint comparisons use full F32 math with `MLX_ENABLE_TF32=0` and
+disable CUDA graphs with `MLX_USE_CUDA_GRAPHS=0`. Set these variables before
+launching the CLI. The recorded upstream numerical tolerances do not cover
+TF32 math. See `docs/qualification/phonon-cuda-2026-10-23.json` for the bounded
+Linux CUDA follow-up.
