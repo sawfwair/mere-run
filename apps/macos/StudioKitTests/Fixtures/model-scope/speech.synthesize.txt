@@ -24,6 +24,12 @@ custom-voice	composer.speak	validated	--model --speaker --voice
 custom-voice	console.speechSynthesize	emitted	--language --mode --model --output --progress-json --quiet --receipt --speaker --stream --stream-chunk-tokens --temperature --voice
 custom-voice	console.speechSynthesize	shown	--language --mode --model --output --progress-json --quiet --receipt --speaker --stream --stream-chunk-tokens --temperature --voice
 custom-voice	console.speechSynthesize	validated	--language --mode --model --output --progress-json --quiet --receipt --speaker --stream --stream-chunk-tokens --temperature --voice
+phonon	composer.speak	emitted	--model --output --seed --temperature
+phonon	composer.speak	shown	--mode --model --seed
+phonon	composer.speak	validated	--model --seed
+phonon	console.speechSynthesize	emitted	--language --model --output --progress-json --quiet --receipt --seed --stream --temperature
+phonon	console.speechSynthesize	shown	--language --mode --model --output --progress-json --quiet --receipt --seed --stream --temperature
+phonon	console.speechSynthesize	validated	--language --model --output --progress-json --quiet --receipt --seed --stream --temperature
 style	composer.speak	emitted	--model --output --temperature --voice
 style	composer.speak	shown	--mode --model --voice
 style	composer.speak	validated	--voice

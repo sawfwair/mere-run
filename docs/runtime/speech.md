@@ -10,7 +10,7 @@ the audio does not leave the machine.
 
 | Command | What it does |
 | --- | --- |
-| `mere.run speech synthesize` | Generate speech from text using Qwen3-TTS or Breeze TTS 2. |
+| `mere.run speech synthesize` | Generate speech from text using Qwen3-TTS, Breeze TTS 2, or Phonon 31m. |
 | `mere.run speech transcribe` | Transcribe or translate speech to text using native ASR backends. |
 | `mere.run speech diarize` | Identify speaker time ranges as versioned JSON or RTTM using native MLX diarization. |
 | `mere.run speech diarize-live` | Emit incremental Nemotron 3 speaker activity from a microphone or PCM stdin. |
@@ -25,6 +25,7 @@ the audio does not leave the machine.
 
 - `speech-tts-qwen3-nano`
 - `speech-tts-qwen3-customvoice`
+- `speech-tts-phonon-31m` (English; bundled voice; Apache 2.0)
 - `speech-tts-breeze-2` (English and Chinese; research and non-commercial use only)
 
 ### Speech-to-text
@@ -525,3 +526,23 @@ Fixture attribution and exact turn boundaries are in
   model-store conventions as the rest of the repository.
 
 See the [architecture map](../architecture.md) for a recommended reading order.
+
+## Phonon 31m
+
+Use the Apache-2.0 English checkpoint with its bundled voice:
+
+```bash
+mere.run model pull speech-tts-phonon-31m
+mere.run speech synthesize "Hello from mere run." --model speech-tts-phonon-31m --seed 42 -o phonon.wav
+```
+
+Phonon loads original safetensors through native Swift/MLX and produces 24 kHz
+mono audio. Add `--stream` for frame-by-frame audio. The managed download is
+about 103 MB; GGUF weight formats are not supported. The existing Qwen default
+is unchanged.
+
+Omit voice descriptions, named speakers, clone controls, and CFG guidance.
+Phonon accepts English at its native speaking rate. Spell out structured text
+such as numbers, dates, and email addresses; Gradium's rewrite pipeline is not
+included. See `mere.run guide handbook-phonon` for the checkpoint pin, chunk
+policy, API usage, and remaining audio-quality and performance qualification.

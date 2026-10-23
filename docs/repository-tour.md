@@ -348,3 +348,7 @@ graph execution, BF16 token lookup, and native tokenizer/media preprocessing.
 It runs on Apple Silicon macOS 15 or later, including macOS 26. Core owns
 installation and ordered input routing. See
 [EmbeddingGemma 2](./runtime/embeddinggemma2.md#apple-core-ml-export).
+
+Native Phonon 31m computation is owned by `Sources/AudioPhononModel/`.
+`Sources/AudioTTS/Phonon/PhononGenerator.swift` adapts it to shared speech
+synthesis, streaming, model resolution, and WAV publication.

@@ -406,3 +406,7 @@ The advanced image validator is intentionally separate from generation:
    then output.
 5. If you need implementation detail, continue to the larger model-definition
    files.
+
+Native Phonon 31m computation is owned by `Sources/AudioPhononModel/`.
+`Sources/AudioTTS/Phonon/PhononGenerator.swift` adapts it to shared speech
+synthesis, streaming, model resolution, and WAV publication.

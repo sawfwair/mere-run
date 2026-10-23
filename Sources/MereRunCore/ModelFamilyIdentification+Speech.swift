@@ -33,6 +33,7 @@ extension ModelFamilyIdentifier {
               let speakers = try? JSONDecoder().decode(Qwen3TTSSpeakerTable.self, from: data) else {
             return nil
         }
+        if modelType.modelType == "gradium_phonon_tts" { return .family("phonon") }
         if invocation.value("--mode") == "clone" {
             return .family(modelType.modelType == "breeze" ? "breeze-clone" : "clone")
         }

@@ -3,6 +3,21 @@ import Foundation
 extension ManagedModelCatalog {
     static let speechSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
+            id: ManagedModelID.phonon31m.rawValue,
+            category: .speechTTS,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: PhononResources.repository,
+                revision: PhononResources.revision,
+                patterns: ["README.md", "config.json", "model.safetensors", "tokenizer.json", "default-voice.safetensors"]
+            ),
+            upstreamRepoId: PhononResources.repository,
+            upstreamRevision: PhononResources.revision,
+            validationKind: .phononTTS,
+            estimatedDownloadBytes: 103_400_000,
+            defaultCLICommands: ["speech synthesize"]
+        ),
+        ManagedModelSpec(
             id: ManagedModelID.whistleASR.rawValue,
             category: .speechASR,
             installShape: .directoryRoot,

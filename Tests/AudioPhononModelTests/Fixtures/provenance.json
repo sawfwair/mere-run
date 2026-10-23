@@ -1,0 +1,14 @@
+{
+  "checkpoint_repository": "gradium/phonon-31m-en",
+  "checkpoint_revision": "92741c5b07d085ff840e26fea8ce43110b87852f",
+  "source_repository": "gradium-ai/xn-ptts",
+  "source_revision": "49b9033e44ab0fbb935973eca3213757644d1bbb",
+  "oracle": "Hugging Face tokenizers",
+  "oracle_version": "0.23.3",
+  "add_special_tokens": false,
+  "sha256": {
+    "tokenizer.json": "691a00068fa7b989f2f3e5ae5daa2d1a5bb319f2d5360deafcfb19a8bb6e7936",
+    "config.json": "b5d0f88353638370d94035b7d73d7d6577c0554d78f8d7ecfd40490aae39ae85",
+    "tokenizer-oracle.json": "ebac8d43b63874bf0671ed0ff7b5b37997a34d4aed168b7681b08980380dd324"
+  }
+}

@@ -1655,6 +1655,13 @@ extension MereRunModelManifest {
                 upstreamRepoId: "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
                 createdAt: createdAt
             )
+        case .phonon31m:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .phononTTS, family: .tts, tier: .nano,
+                variant: .standard, precision: .bf16, defaults: nil,
+                supports: [.speechSynthesis], components: genericTextComponents,
+                upstreamRepoId: "\(PhononResources.repository)@\(PhononResources.revision)", createdAt: createdAt
+            )
         case .breezeTTS2:
             return MereRunModelManifest(
                 id: modelID.rawValue,

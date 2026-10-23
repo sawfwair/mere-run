@@ -816,6 +816,11 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 16
             ),
             descriptor(
+                "speech-tts-phonon-31m", "Phonon 31m",
+                "Synthesizes English speech locally with Gradium Phonon and a precomputed voice.",
+                minimum: 4, recommended: 8
+            ),
+            descriptor(
                 "speech-tts-breeze-2",
                 "Breeze TTS 2",
                 "Synthesizes English and Chinese speech with voice design, cloning, and direction. Research and non-commercial use only.",

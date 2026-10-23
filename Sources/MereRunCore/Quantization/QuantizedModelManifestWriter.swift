@@ -78,7 +78,7 @@ public enum QuantizedModelManifestWriter {
             case .videoDepthAnything: return .depth
             case .marigoldV2: return .depth
             case .tripoSR, .instantMesh, .trellis2: return .threeD
-            case .qwen3TTS, .breezeTTS: return .tts
+            case .qwen3TTS, .breezeTTS, .phononTTS: return .tts
             case .qwen3ASR, .parakeetASR, .whistleASR: return .asr
             case .sortformer: return .asr
             case .qwen3Embedding, .embeddingGemma2, .embeddingGemma2CoreML, .pplxEmbedV2: return .embed
@@ -191,7 +191,7 @@ public enum QuantizedModelManifestWriter {
                     return [.imageTo3D, .meshGeneration]
                 case .instantMesh:
                     return [.multiViewReconstruction, .meshGeneration]
-                case .qwen3TTS, .breezeTTS:
+                case .qwen3TTS, .breezeTTS, .phononTTS:
                     return [.speechSynthesis]
                 case .qwen3ASR, .parakeetASR, .whistleASR:
                     return [.speechRecognition]
@@ -318,7 +318,7 @@ public enum QuantizedModelManifestWriter {
                  .videoDepthAnything, .depthAnything3, .marigoldV2,
                  .tripoSR, .instantMesh, .trellis2:
                 break
-            case .laya, .clef, .d1, .gliner25Decide, .qwen3TTS, .breezeTTS, .qwen3ASR, .parakeetASR, .whistleASR, .sortformer, .qwen3Embedding, .embeddingGemma2, .embeddingGemma2CoreML, .pplxEmbedV2, .openAIPrivacyFilter,
+            case .laya, .clef, .d1, .gliner25Decide, .qwen3TTS, .breezeTTS, .phononTTS, .qwen3ASR, .parakeetASR, .whistleASR, .sortformer, .qwen3Embedding, .embeddingGemma2, .embeddingGemma2CoreML, .pplxEmbedV2, .openAIPrivacyFilter,
                  .qwen3Coder, .northMiniCode, .lightOnOCR, .woosh, .mmaudio, .psiChat, .deepseekV4Flash,
                  .muScriptor, .roFormer, .apBWE, .univerSR, .auk, .inkling:
                 break

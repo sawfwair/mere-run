@@ -616,6 +616,26 @@ targets.append(
 
 targets.append(
   .target(
+    name: "AudioPhononModel",
+    dependencies: mlxDependency("MLX") + mlxDependency("MLXFast")
+      + mlxDependency("MLXNN") + mlxDependency("MLXRandom"),
+    path: "Sources/AudioPhononModel",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+targets.append(
+  .testTarget(
+    name: "AudioPhononModelTests",
+    dependencies: ["AudioPhononModel", "MereRunMLXTestSupport"],
+    path: "Tests/AudioPhononModelTests",
+    resources: [.copy("Fixtures")],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
     name: "AudioBreezeTTSModel",
     dependencies: [.target(name: "MereRunKVCache"), .target(name: "AudioQwen3TTSModel"),
                    .target(name: "MereRunDecode"), .target(name: "MereRunTensor"),
@@ -872,7 +892,7 @@ targets.append(
 targets.append(
   .target(
     name: "AudioTTS",
-    dependencies: audioRuntimeDependencies + ["AudioQwen3TTSModel", "AudioBreezeTTSModel"],
+    dependencies: audioRuntimeDependencies + ["AudioQwen3TTSModel", "AudioBreezeTTSModel", "AudioPhononModel"],
     path: "Sources/AudioTTS",
     exclude: [
       "Qwen3TTS/README.md"

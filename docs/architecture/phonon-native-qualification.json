@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "model_id": "speech-tts-phonon-31m",
+  "qualification": "local_implementation_only",
+  "checkpoint": {
+    "repository": "gradium/phonon-31m-en",
+    "revision": "92741c5b07d085ff840e26fea8ce43110b87852f",
+    "license": "Apache-2.0",
+    "format": "original mixed BF16/F32 safetensors"
+  },
+  "reference_source": {
+    "repository": "gradium-ai/xn-ptts",
+    "revision": "49b9033e44ab0fbb935973eca3213757644d1bbb",
+    "adapted_algorithms_license": "MIT"
+  },
+  "local_validation": {
+    "date": "2026-10-23",
+    "main_gate": "./scripts/check.sh",
+    "result": "passed",
+    "xctest": {
+      "executed": 5515,
+      "skipped": 458,
+      "failures": 0
+    },
+    "swift_testing": {
+      "executed": 195,
+      "failures": 0
+    },
+    "docs_build": "pnpm docs:build passed",
+    "package_policy_variants": [
+      "darwin",
+      "linux-source",
+      "linux-cuda-prebuilt"
+    ],
+    "swiftpm_options": [
+      "--disable-keychain",
+      "--disable-index-store"
+    ]
+  },
+  "evidence": {
+    "log_sha256": {
+      "local-gate.log": "26d6122f3b2e166c850c854c7d715a6a69cdd8824af6e15f13fc82755bad23d8",
+      "docs-build.log": "cca498efe4a6a12e4c513f9c0fbdd1735f0b5a5658f8ef3fe9bc94c409da36fb",
+      "focused-tests.log": "fb309eb075fb547302b35048973afa18a7b84be44afb339df6844d62dfd7bbed",
+      "studio-fixtures.log": "8510177a49fc72281569c0561ee253abb58c0261c82e3fa11b4c6bace95ce0fc",
+      "command-docs.log": "329001fb01f6b2ea96a0e332b8ce14f8e0df25a44c41fc9460cee482736210a6"
+    },
+    "source_file_sha256": {
+      "Package.swift": "a3caf4a93cc5f1a40be0d99c7452e0178545377a83f07fcdf7bb48f5c6e6c34e",
+      "Sources/AudioCore/AudioGeneration.swift": "b409979fdd3dedb7031e76c41c5e89c4f4216e4bfa71245d6f04ea8e32efc79e",
+      "Sources/AudioPhononModel/PhononConfig.swift": "b468b2c5298b6f4b50c86c781484d4a4d2cd0405e01d3d2f2df202876f848282",
+      "Sources/AudioPhononModel/PhononFlow.swift": "69894313a926d3aa78a0f68abdded54e5f5931791588a7d918b11ad8027578d8",
+      "Sources/AudioPhononModel/PhononLayers.swift": "bf5c23ec1ecf5294f162aedbaabca6bc0dbb5ea1f50b027afb98ae7d494c71bb",
+      "Sources/AudioPhononModel/PhononMimi.swift": "d124c85b43d31632e69c91f6541bc0c8a08b3703a661a0e0513624c901afbdd3",
+      "Sources/AudioPhononModel/PhononModel.swift": "8c2083d62956bf8fc764d55f3a898ab6fd4576ccad87ba79dfcff2ba95e50816",
+      "Sources/AudioPhononModel/PhononTokenizer.swift": "61210b5031ee0238b6237ca07ab1b25f518ef489120432967388ec6aedc28d33",
+      "Sources/AudioPhononModel/README.md": "399724f3c2603cd08027f1c76e39574958714c09cc1288d5fb503777f9fd0604",
+      "Sources/AudioTTS/Phonon/PhononGenerator.swift": "7bb989ddeda3f942a6cf4d612add8dae2a1ac52eb84c8c36cbb315ba33fd7d92",
+      "Sources/AudioTTS/Qwen3TTS/SpeechSynthesisModelSelection.swift": "a4c5e6d9e818338f26ae0ff0a0cddbaf71c7fa3a75b04945947422eab97eb8b5",
+      "Sources/MereRunCLI/Commands/SpeechSynthesizeCommand.swift": "8a37200bc1bbf8f68ec94be03d39bde1743f2189b82ef395e558ce338719b3be",
+      "Sources/MereRunCLI/Guides/handbook-phonon.md": "2e5d2986ce4d60be75edb49b275af3ae3bd175f72838ea4005f118b38b367191",
+      "Sources/MereRunCLI/Guides/model-guides.json": "41d07911cc96cb34f28f428a68cb94cc3aabfccf2903724216d77128b38989ef",
+      "Sources/MereRunCLI/Support/APIServerContract+Speech.swift": "2ec084405ed17e518fc82b9062fc21310bd60ab276de3a021b0a2ab11aeccf5c",
+      "Sources/MereRunCLI/Support/InstalledModelGateSupport.swift": "f6f39c6a8879a50ba06729e603dbb6126a8c3bbdd0277fdb30e53eb83998faa9",
+      "Sources/MereRunContract/CommandCapabilityCatalog+Speech.swift": "d742f945145af6552aa99ceab548e9aba88d9997200efbec6ad9c57be745096c",
+      "Sources/MereRunContract/CommandCapabilityCatalog+SpeechRouting.swift": "4461c1fcae872c7d657301cea6c04baf08faa698315d1cb8d8588d56e25c48b5",
+      "Sources/MereRunCore/ManagedModelCatalog+Speech.swift": "d86790fd05d3ec4034b8f98ce681cba430601fcd15a56a2988448c64c5fcc11c",
+      "Sources/MereRunCore/ManagedModelSpec+Validation.swift": "497ce54ec4a2ccc49f444064ebba37bc5511b6909240886ae5ecca4f39b66b93",
+      "Sources/MereRunCore/ManagedModelSpec.swift": "ab8a574b9adefa313798ac2accef9ffdc6a4c27d3382aea8a76d4dd145be9b64",
+      "Sources/MereRunCore/ManagedModelSupport.swift": "e2b892879c840b12dbaa80fa3c40236915d24be52ee97c600da18508dbb1bc88",
+      "Sources/MereRunCore/MereRunModelManifest+Templates.swift": "fa23f10e50451e68dfac6ca6b8f4b474187e5cd5db53e8d72a51591b9ec19cdd",
+      "Sources/MereRunCore/MereRunModelValidator.swift": "4f00fae56e6802e7cefcd0975b91cf091abfcc30049a23065e5347e43701814f",
+      "Sources/MereRunCore/ModelFamilyIdentification+Speech.swift": "f7b81f15d5f4a2969fbcd3f4f46b1a3a3e489c797ba8d1706862d9d722bbbefd",
+      "Sources/MereRunCore/PhononResources.swift": "22b1e3b4a82a74b42e6da268788b6e65d82b9c2e9b4581534902945f7249193b",
+      "Sources/MereRunCore/Quantization/QuantizedModelManifestWriter.swift": "7b9c1506ca6250aaa273c70d03d5c5de674f9f6b9c998647748bd266032d3c6f",
+      "Sources/MereRunCore/RuntimeModelSettings.swift": "1dca83c64b1ac6906a2b42a65bc32ed843d6b516d471cda304b8e227da475ec9",
+      "Sources/MereRunModelKit/ManagedModelID.swift": "7d7bcf712b85a29398e71be7ba6d9454603f844cb9f6b3d65693941b32b6d7b6",
+      "Sources/MereRunModelKit/MereRunModelManifest.swift": "9bf6649e6aefe1544da632300e5501581c81947ca6010f3c768b42a48995b1b8",
+      "Tests/AudioPhononModelTests/Fixtures/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "Tests/AudioPhononModelTests/Fixtures/config.json": "b5d0f88353638370d94035b7d73d7d6577c0554d78f8d7ecfd40490aae39ae85",
+      "Tests/AudioPhononModelTests/Fixtures/mini-config.json": "de95f0d207dfe9e77734d83576f883e1f444d8e25393f53dd54ca20e5edbf92b",
+      "Tests/AudioPhononModelTests/Fixtures/provenance.json": "2017b11a0fd425096ba1f56010d086483866b2c597c0cc9a0351a68f43a55ad8",
+      "Tests/AudioPhononModelTests/Fixtures/tokenizer-oracle.json": "ebac8d43b63874bf0671ed0ff7b5b37997a34d4aed168b7681b08980380dd324",
+      "Tests/AudioPhononModelTests/Fixtures/tokenizer.json": "691a00068fa7b989f2f3e5ae5daa2d1a5bb319f2d5360deafcfb19a8bb6e7936",
+      "Tests/AudioPhononModelTests/PhononModelTests.swift": "1e0c82567f89cbcc9a7b8f8c5a2cd6173bb6cc4b2934508ac8fef09885d128b4",
+      "Tests/AudioPhononModelTests/PhononNumericsTests.swift": "3d427a1ed88f410efc2e56967bf6e45421cf86d962a924b470111bf7e14227b7",
+      "scripts/package-policy.json": "f1b4c9369be794d7d9b96b48201e2edad0fbc48d674bb721b82bfcc7f06535f7"
+    },
+    "numerical_tests": [
+      "Unigram token IDs against Hugging Face tokenizers 0.23.3",
+      "causal attention across full and incremental passes with context trimming",
+      "causal convolution against scalar oracle",
+      "dense and depthwise transposed convolution overlap against scalar oracle",
+      "uncentered time-embedding RMS",
+      "synthetic whole-graph waveform, seeded nonzero sampling, state reset, voice shape and metadata rejection, and exact frame-budget failure"
+    ]
+  },
+  "remaining_qualification": {
+    "released_checkpoint_executed": false,
+    "released_checkpoint_audio_quality_qualified": false,
+    "released_checkpoint_numerical_parity_qualified": false,
+    "publisher_performance_parity_qualified": false,
+    "real_weight_memory_fit_qualified": false,
+    "gpu_latency_qualified": false,
+    "ios_build_qualified": false,
+    "linux_build_qualified": false,
+    "hosted_ci": "check pull request separately"
+  },
+  "feature_limits": [
+    "English Phonon 31m only",
+    "precomputed default voice; no raw-audio cloning or voice descriptions",
+    "no structured-text rewrite parity; spell out numbers and structured values",
+    "chunk grouping differs from the upstream sentence planner",
+    "no CFG, speaking-rate changes, or GGUF loading",
+    "streaming emits codec frames; no discrete token events"
+  ]
+}
