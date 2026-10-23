@@ -3132,3 +3132,22 @@ private struct ManagedModelCatalogDocRow: Equatable {
     let category: String
     let id: String
 }
+
+extension ManagedModelCatalogTests {
+    func testPhonon31mPinsAndRequiredVoice() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ManagedModelID.phonon31m.rawValue))
+        XCTAssertEqual(spec.validationKind, .phononTTS)
+        XCTAssertEqual(spec.upstreamRevision, "92741c5b07d085ff840e26fea8ce43110b87852f")
+        XCTAssertEqual(spec.upstreamRepoId, "gradium/phonon-31m-en")
+        XCTAssertNil(spec.usageRestriction)
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        for name in PhononResources.requiredFiles where name != "default-voice.safetensors" {
+            try Data([1]).write(to: root.appendingPathComponent(name))
+        }
+        XCTAssertEqual(spec.missingPaths(in: root).map(\.lastPathComponent), ["default-voice.safetensors"])
+        try Data([1]).write(to: root.appendingPathComponent("default-voice.safetensors"))
+        XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
+    }
+}

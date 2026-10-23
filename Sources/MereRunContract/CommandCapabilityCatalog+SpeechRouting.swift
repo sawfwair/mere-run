@@ -25,6 +25,7 @@ extension MereRunCapabilityCatalog {
         case style
         case customVoice = "custom-voice"
         case breeze
+        case phonon
         case breezeClone = "breeze-clone"
         case clone
     }
@@ -105,6 +106,10 @@ extension MereRunCapabilityCatalog {
             .init(
                 SpeechSynthesizeFamily.customVoice, title: "Qwen3-TTS CustomVoice",
                 models: ["speech-tts-qwen3-customvoice"], selectors: [.init(flag: "--mode", values: ["style"])]
+            ),
+            .init(
+                SpeechSynthesizeFamily.phonon, title: "Phonon 31m",
+                models: ["speech-tts-phonon-31m"]
             ),
             .init(
                 SpeechSynthesizeFamily.breeze, title: "Breeze TTS 2",

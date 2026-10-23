@@ -1726,3 +1726,40 @@ Managed pulls retain the upstream `LICENSE` and `NOTICE.txt` files. No model
 weights or upstream Python runtime are bundled in this repository. The Swift
 tied output implementation follows the signed Hadamard and affine packed
 weight contract documented by the packs' `runtime/runtime.py`.
+
+## Gradium Phonon
+
+`Sources/AudioPhononModel/PhononLayers.swift`, `PhononFlow.swift`,
+`PhononMimi.swift`, `PhononTextPlanner.swift`, and generation policy in `PhononModel.swift` adapt algorithms
+from Gradium's [xn-ptts](https://github.com/gradium-ai/xn-ptts/tree/49b9033e44ab0fbb935973eca3213757644d1bbb)
+at commit `49b9033e44ab0fbb935973eca3213757644d1bbb`, under its MIT license.
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+The managed `gradium/phonon-31m-en` checkpoint at
+`92741c5b07d085ff840e26fea8ce43110b87852f` distributes its weights, tokenizer,
+and bundled voice under Apache-2.0. The tokenizer and config fixtures in
+`Tests/AudioPhononModelTests/Fixtures` are from that revision. The 40m gated
+CC-BY-NC checkpoints are not included. Model assets are downloaded separately.

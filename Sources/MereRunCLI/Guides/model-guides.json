@@ -1,5 +1,14 @@
 [
   {
+    "topic": "handbook-phonon",
+    "title": "Phonon 31m (Gradium)",
+    "category": "Speech",
+    "models": [
+      "speech-tts-phonon-31m"
+    ],
+    "resourceName": "handbook-phonon.md"
+  },
+  {
     "topic": "handbook-flux2-klein",
     "title": "FLUX.2 Klein (Black Forest Labs)",
     "category": "Image",
