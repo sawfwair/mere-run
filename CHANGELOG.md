@@ -6,6 +6,25 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.65.0 - 2026-10-23
+
+- Add native Phonon 31m English speech synthesis through
+  `speech-tts-phonon-31m`, with the default voice, seeded sampling, 24 kHz WAV
+  output, streaming, and the local `/v1/audio/speech` API. Load the pinned
+  original safetensors directly in Swift/MLX. Spell out numbers, dates, units,
+  and email addresses; text rewriting and voice cloning are unsupported.
+  On an M3 Max, local ASR transcripts matched upstream on 20 prose cases.
+  Warm synthesis measured 25–26 times real time;
+  upstream CPU F32 and Q8 paths were faster on the same host.
+  Fix non-finite Phonon audio on Linux CUDA by materializing attention projections.
+
+- Add native Nemotron 3.5 Bolt 74B-A9B-24GB text and image chat through
+  `vision-chat-nemotron-35-bolt-24gb`, loading the original packed IQ2_XXS,
+  Q8_0, NVFP4, and BF16 weights directly. Support streamed responses, tools,
+  thinking controls, stop sequences, and log probabilities. Twelve bounded
+  text/image diagnostics passed on a 36 GiB M3 Max; broad quality, upstream
+  parity, and long contexts remain unqualified.
+
 - Add pinned Bonsai 2 Small 2B, 4B, and 9B vision chat packs to the native Swift/MLX runtime,
   including Hadamard-aware tied output embeddings for the 2B and 4B packs.
 
@@ -28,6 +47,10 @@ The format is based on Keep a Changelog.
 - Build bundled MLX shaders with Metal 3.2 and a macOS 15.0 deployment target,
   including the library link step, so Xcode 26 builds load on supported macOS 15
   systems. Validate both settings in the build and runtime provenance checks (#586).
+
+- Restore Linux CI image pulls through the official Docker Hub registry after
+  the ECR Public mirror reached its transfer limit. Prefer HTTPS Ubuntu package
+  downloads while retaining mirror failover and the pinned Swift toolchain.
 
 - Cache compiled Core ML embedding packages across processes, pack short text
   batches with bounded concurrent ANE predictions, and expose caller-owned warm

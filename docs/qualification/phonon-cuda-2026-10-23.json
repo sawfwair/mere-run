@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "qualification": "bounded_linux_cuda_checkpoint_followup",
+  "date": "2026-10-23",
+  "model_id": "speech-tts-phonon-31m",
+  "source_commit": "2421305bd36379fa8c7b856015b2cb9a1c5feac0",
+  "checkpoint": {
+    "repository": "gradium/phonon-31m-en",
+    "revision": "92741c5b07d085ff840e26fea8ce43110b87852f",
+    "weights_sha256": "8a04cf833cfe69b67c2ec968b2d31244655b9accc84ade9c0ebcc176f2074607",
+    "voice_sha256": "dc537478eaadc1a5257fcda2e3501ab81e14c111a5d95a5838f350db2afd0f1a"
+  },
+  "reference": {
+    "repository": "gradium-ai/xn-ptts",
+    "revision": "49b9033e44ab0fbb935973eca3213757644d1bbb",
+    "fixture": "Tests/AudioPhononModelTests/Fixtures/released-step-oracle.json"
+  },
+  "host": {
+    "os": "Ubuntu 24.04",
+    "architecture": "arm64",
+    "gpu": "NVIDIA GB10",
+    "driver": "580.159.03",
+    "compute_capability": "12.1"
+  },
+  "runtime": {
+    "mlx_swift_revision": "001d1aa3e5655d7efc073fb9632f952f57cdf528",
+    "mlx_core_revision": "11da2b33a51772c023e2f7d7bc4ba9b3ff7e03ef",
+    "environment": {
+      "MLX_ENABLE_TF32": "0",
+      "MLX_USE_CUDA_GRAPHS": "0"
+    },
+    "artifacts": [
+      {
+        "file": "Sources/AudioPhononModel/PhononLayers.swift",
+        "bytes": 5950,
+        "sha256": "e5030709f7a58a35aa08e70dbe8282140a5d69bf407ebde7689550daef90377a"
+      },
+      {
+        "file": ".build/native/linux-arm64/build/mlx-swift-cuda-smoke/libMLX.a",
+        "bytes": 3578712,
+        "sha256": "5d6140a17489ee4a033f129f32adf5131d095ef6bc3554999f8d61a58c8b47ca"
+      },
+      {
+        "file": ".build/native/linux-arm64/build/mlx-swift-cuda-smoke/_deps/mlx-build/libmlx.a",
+        "bytes": 514205530,
+        "sha256": "537fe07a859c0cc4fe8c792ca0012035e420d74a9122bb1e0db0056d9e34d24b"
+      },
+      {
+        "file": ".build/native/linux-arm64/build/mlx-swift-cuda-smoke/_deps/mlx-c-build/libmlxc.a",
+        "bytes": 7768664,
+        "sha256": "bc4f0cd347f6d5d4da259364a83328be5bd4321ce2b466213874d818e3358714"
+      }
+    ]
+  },
+  "correction": {
+    "before": "Strided split Q/K/V projections produced non-finite CUDA synthesis.",
+    "after": "Materialize head-major projections contiguously on Linux before attention.",
+    "metal_path_changed": false
+  },
+  "upstream_step_comparison": {
+    "cases": 4,
+    "steps": 24,
+    "result": "passed",
+    "latent_first_three_steps_tolerance": 2e-05,
+    "latent_later_steps_tolerance": 0.001,
+    "eos_tolerance": 0.0002,
+    "maximum_latent_abs_error": 0.0009061694,
+    "maximum_eos_abs_error": 6.4000000000064e-05
+  },
+  "linux_cpu_control": {
+    "cases": 4,
+    "steps": 24,
+    "result": "passed"
+  },
+  "packaged_cuda_smoke": {
+    "result": "passed",
+    "prompt": "The release smoke is running.",
+    "seed": 42,
+    "temperature": 0.6,
+    "samples": 49920,
+    "sample_rate": 24000,
+    "channels": 1,
+    "sample_width_bytes": 2,
+    "metal_control_pcm_correlation": 0.9999999952307254,
+    "asr_backend": "local Parakeet",
+    "asr_transcript": "The release smoke is running.",
+    "metal_control_transcript_matched": true,
+    "gate_wall_seconds": 1.2884441614151,
+    "wav_sha256": "2a885dfd6b4a620d5c263c676557a13009949e64fe8e1271c4105f2553bcb66a",
+    "asr_model_id": "speech-asr-parakeet"
+  },
+  "focused_tests": {
+    "mac_cpu": {
+      "executed": 10,
+      "failures": 0
+    },
+    "mac_metal": {
+      "executed": 10,
+      "failures": 0
+    }
+  },
+  "limits": [
+    "The CUDA numerical tolerances require the recorded full-F32 math configuration. TF32 math did not meet those tolerances.",
+    "Four six-step traces and one synthesized sentence do not establish broad Linux speech quality, listener preference, long-form stability, or upstream performance parity.",
+    "The source is an untagged release candidate. This receipt does not establish signed distribution or release publication."
+  ]
+}

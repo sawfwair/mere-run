@@ -21,3 +21,9 @@ using shared noise on a 24-case corpus. See
 and [`scripts/phonon-qualification`](../../scripts/phonon-qualification) for
 measurements, artifact hashes, reproduction steps, and scope. Numerical
 agreement and ASR intelligibility do not establish listener preference.
+
+On Linux, split attention projections are materialized in contiguous head-major
+layout before CUDA attention consumes them. Full F32 comparisons use
+`MLX_ENABLE_TF32=0` and `MLX_USE_CUDA_GRAPHS=0`; TF32 math does not meet the
+recorded upstream tolerances. See the bounded
+[`CUDA qualification`](../../docs/qualification/phonon-cuda-2026-10-23.json).

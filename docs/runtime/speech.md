@@ -546,3 +546,8 @@ Phonon accepts English at its native speaking rate. Spell out structured text
 such as numbers, dates, and email addresses; Gradium's rewrite pipeline is not
 included. See `mere.run guide handbook-phonon` for the checkpoint pin, chunk
 policy, API usage, and the bounded released-weight quality and speed comparison.
+
+For full F32 checkpoint comparisons on Linux CUDA, set `MLX_ENABLE_TF32=0`
+and `MLX_USE_CUDA_GRAPHS=0` before launching the CLI. The bounded
+[CUDA qualification](../qualification/phonon-cuda-2026-10-23.json) records
+the tested host and numerical tolerances.
