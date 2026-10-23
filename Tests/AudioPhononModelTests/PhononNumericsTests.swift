@@ -21,6 +21,29 @@ final class PhononNumericsTests: MLXTestCase {
         XCTAssertEqual(PhononTokenizer.prepare("one two three four five").tailFrames, 1)
     }
 
+    func testTextPlanningAgainstUpstreamOracle() throws {
+        struct Chunk: Decodable { let text: String; let tokens: [Int]; let tailFrames: Int }
+        struct Case: Decodable { let input: String; let chunks: [Chunk] }
+        struct Oracle: Decodable { let cases: [Case] }
+        let directory = try XCTUnwrap(Bundle.module.resourceURL).appendingPathComponent("Fixtures")
+        let tokenizer = try PhononTokenizer(url: directory.appendingPathComponent("tokenizer.json"))
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let oracle = try decoder.decode(Oracle.self, from: Data(contentsOf: directory.appendingPathComponent("planner-oracle.json")))
+        for item in oracle.cases {
+            let actual = try tokenizer.chunks(item.input)
+            XCTAssertEqual(actual.map(\.text), item.chunks.map(\.text), item.input)
+            XCTAssertEqual(actual.map(\.tokens), item.chunks.map(\.tokens), item.input)
+            XCTAssertEqual(actual.map(\.tailFrames), item.chunks.map(\.tailFrames), item.input)
+            XCTAssertTrue(actual.allSatisfy { $0.tokens.count <= 200 })
+        }
+        for text in ["Hello world.", "We stopped at the café.", "Emoji 🐈 and CJK 漢字."] {
+            XCTAssertEqual(try tokenizer.decode(tokenizer.encode(text)), text)
+        }
+        XCTAssertThrowsError(try tokenizer.decode([-1]))
+        XCTAssertThrowsError(try tokenizer.decode([tokenizer.vocabularySize]))
+    }
+
     func testCausalConvolutionStreamingMatchesScalarOracle() throws {
         let weights: [Float] = [1, -2, 3, 2, 1, -1]
         let conv = try PhononConv(PhononWeights(arrays: [

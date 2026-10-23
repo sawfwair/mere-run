@@ -88,19 +88,38 @@ public final class PhononModel {
     /// A deterministic seed is local to this request and does not change MLX's global RNG.
     public func generate(text: String, voice: MLXArray, temperature: Float = 0.8, seed: UInt64? = nil,
                          onFrame: ([Float]) throws -> Void) throws {
-        guard temperature.isFinite, (0...2).contains(temperature), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw PhononError.invalidRequest("Phonon requires nonempty text and a temperature between zero and two.")
+        guard temperature.isFinite, (0...2).contains(temperature) else {
+            throw PhononError.invalidRequest("Phonon requires a temperature between zero and two.")
+        }
+        var randomKey = seed.map { MLXRandom.key($0) } ?? MLXRandom.key(UInt64.random(in: .min ... .max))
+        try generate(text: text, voice: voice, noiseSampler: {
+            let keys = MLXRandom.split(key: randomKey)
+            randomKey = keys.0
+            return MLXRandom.normal([1, self.config.flowLm.ldim], key: keys.1) * sqrt(temperature)
+        }, onFrame: onFrame)
+    }
+
+    /// Injects recorded noise for cross-runtime numerical qualification. The product sampler
+    /// and this path share all model computation, chunking, and stopping behavior.
+    func generate(text: String, voice: MLXArray, noiseSampler: () -> MLXArray,
+                  onStep: ((MLXArray, MLXArray) -> Void)? = nil,
+                  onFrame: ([Float]) throws -> Void) throws {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw PhononError.invalidRequest("Phonon requires nonempty text.")
         }
         guard voice.ndim == 3, voice.dim(0) == 1, voice.dim(2) == config.flowLm.dModel else {
             throw PhononError.invalidAsset("invalid projected voice shape")
         }
-        var randomKey = seed.map { MLXRandom.key($0) } ?? MLXRandom.key(UInt64.random(in: .min ... .max))
-        for chunk in try chunks(text) {
+        let chunks = try tokenizer.chunks(text)
+        var voiceState = transformer.makeState()
+        // Gradium primes voice first, then text; sum conditions apply only to generated latents.
+        let voiceOutput = transformer(voice, state: &voiceState)
+        eval([voiceOutput] + voiceState.flatMap(\.arrays))
+        for chunk in chunks {
             try Task.checkCancellation()
-            var state = transformer.makeState(), decoderState = mimi.makeState()
-            // Gradium primes voice first, then text; sum conditions apply only to generated latents.
-            eval(transformer(voice, state: &state))
-            let tokens = try tokenizer.encode(chunk.text)
+            // MLX operations replace these arrays rather than mutating the shared prefix.
+            var state = voiceState, decoderState = mimi.makeState()
+            let tokens = chunk.tokens
             let embeddings = textEmbeddings[MLXArray(tokens.map(Int32.init))].reshaped(1, tokens.count, config.flowLm.dModel)
             eval(transformer(embeddings, state: &state))
             var previous = bos.reshaped(1, 1, config.flowLm.ldim)
@@ -111,13 +130,14 @@ public final class PhononModel {
                 try Task.checkCancellation()
                 let backbone = outputNorm(transformer(input(previous) + conditions, state: &state)).reshaped(1, config.flowLm.dModel)
                 let eosLogit = eos(backbone)
-                let keys = MLXRandom.split(key: randomKey)
-                randomKey = keys.0
-                let noise = MLXRandom.normal([1, config.flowLm.ldim], key: keys.1) * sqrt(temperature)
+                let noise = noiseSampler()
                 let latent = flow.sample(noise, condition: backbone, steps: config.lsdDecodeSteps)
                 previous = latent.reshaped(1, 1, config.flowLm.ldim)
                 let audio = mimi.decode(previous * std + mean, state: &decoderState)
-                eval(previous, eosLogit, audio)
+                // Materialize retained streaming state together with the outputs once per frame.
+                // Evaluating individual layers/convolutions serializes every GPU operation.
+                eval([previous, eosLogit, audio] + state.flatMap(\.arrays) + decoderState.arrays)
+                onStep?(previous, eosLogit)
                 let samples = audio.asArray(Float.self)
                 guard samples.allSatisfy(\.isFinite) else { throw PhononError.invalidAsset("non-finite generated audio") }
                 try onFrame(samples)
@@ -129,32 +149,5 @@ public final class PhononModel {
             }
             guard finished else { throw PhononError.frameBudgetExceeded }
         }
-    }
-
-    /// Fit at word boundaries, using at most the upstream 200-token per-chunk ceiling.
-    /// Sentence-ending punctuation is preferred once a chunk reaches 50 tokens.
-    private func chunks(_ text: String) throws -> [(text: String, tailFrames: Int)] {
-        var result: [(String, Int)] = [], words: [String] = []
-        for word in text.split(whereSeparator: \.isWhitespace).map(String.init) {
-            let trial = PhononTokenizer.prepare((words + [word]).joined(separator: " "))
-            if try tokenizer.encode(trial.text).count > 200 {
-                guard !words.isEmpty else { throw PhononError.invalidRequest("A word exceeds Phonon's 200-token chunk limit.") }
-                let prepared = PhononTokenizer.prepare(words.joined(separator: " "))
-                result.append((prepared.text, prepared.tailFrames)); words = []
-                guard try tokenizer.encode(PhononTokenizer.prepare(word).text).count <= 200 else {
-                    throw PhononError.invalidRequest("A word exceeds Phonon's 200-token chunk limit.")
-                }
-            }
-            words.append(word)
-            let prepared = PhononTokenizer.prepare(words.joined(separator: " "))
-            if let last = word.last, ".!?".contains(last), try tokenizer.encode(prepared.text).count >= 50 {
-                result.append((prepared.text, prepared.tailFrames)); words = []
-            }
-        }
-        if !words.isEmpty {
-            let prepared = PhononTokenizer.prepare(words.joined(separator: " "))
-            result.append((prepared.text, prepared.tailFrames))
-        }
-        return result
     }
 }

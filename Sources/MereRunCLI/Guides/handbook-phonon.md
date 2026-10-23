@@ -41,8 +41,9 @@ no instructions, and speed 1.
 Spell out numbers, dates, email addresses, and other structured values before
 synthesis. This implementation tokenizes and prepares English text but does
 not reproduce Gradium's structured-text rewrite rules. Long text is fitted to
-chunks of at most 200 tokens. Chunk grouping differs from Gradium's sentence
-planner. Each chunk starts with fresh voice, attention, and codec state. A
+sentence-aligned chunks of at most 200 tokens using Gradium's token-based
+planner. Each chunk starts from the voice prefix with fresh text, attention,
+and codec state. A
 frame-budget overrun is an error, so an incomplete utterance is not published
 as a successful WAV.
 
@@ -56,7 +57,13 @@ as a successful WAV.
 The managed download is about 103 MB. This runtime loads the original mixed BF16/F32 checkpoint and computes in
 F32. The launch-page footprint is not the download size of this snapshot. It does not load the GGUF files.
 
-Synthetic numerical tests and tokenizer checks do not qualify released-weight
-speech quality, intelligibility, streaming latency, memory fit, or publisher
-performance claims. Those checks remain required before release. The gated
-40m checkpoints and multilingual models are not included.
+Released-weight qualification compares a 24-case shared-noise corpus against
+the pinned upstream F32 runtime, including frame counts, waveform similarity,
+latent/EOS traces, local ASR intelligibility, and warmed release timings.
+Native Metal is faster than real time on the measured M3 Max, while upstream's
+optimized CPU paths remain faster in total generation time. The comparison
+records voice-caching and pipeline differences; it does not establish the
+publisher's performance claims or blind listener preference. See
+`docs/architecture/phonon-native-qualification.json` and
+`scripts/phonon-qualification/README.md` for evidence and reproduction steps.
+The gated 40m checkpoints and multilingual models are not included.

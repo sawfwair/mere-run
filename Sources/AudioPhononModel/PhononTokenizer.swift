@@ -28,6 +28,7 @@ public struct PhononTokenizer: Sendable {
     private struct Piece: Sendable { let id: Int; let bytes: [UInt8]; let score: Float }
     private let byFirstByte: [UInt8: [Piece]]
     private let byteIDs: [UInt8: Int]
+    private let vocabulary: [String]
     private let unknownScore: Float
     public let vocabularySize: Int
 
@@ -55,6 +56,7 @@ public struct PhononTokenizer: Sendable {
             }
         }
         guard byteIDs.count == 256 else { throw PhononError.invalidAsset("the tokenizer must contain all 256 byte fallback pieces") }
+        vocabulary = document.model.vocab.map(\.text)
         byFirstByte = grouped
         self.byteIDs = byteIDs
         unknownScore = (document.model.vocab.map(\.score).min() ?? 0) - 10
@@ -116,5 +118,25 @@ public struct PhononTokenizer: Sendable {
         if let first = result.first { result = first.uppercased() + result.dropFirst() }
         if result.last?.isLetter == true || result.last?.isNumber == true { result += "." }
         return (result, words.count <= 4 ? 3 : 1)
+    }
+}
+
+extension PhononTokenizer {
+    func decode(_ ids: [Int]) throws -> String {
+        var output = "", bytes: [UInt8] = [], first = true
+        func flush() { output += String(decoding: bytes, as: UTF8.self); bytes.removeAll(keepingCapacity: true) }
+        for id in ids {
+            guard vocabulary.indices.contains(id) else { throw PhononError.invalidAsset("token id outside vocabulary") }
+            var piece = vocabulary[id]
+            if piece.first == "\0" { continue }
+            if first, piece.hasPrefix("▁") { piece.removeFirst() }
+            first = false
+            piece = piece.replacingOccurrences(of: "▁", with: " ")
+            if piece.hasPrefix("<0x"), piece.hasSuffix(">"), piece.count == 6,
+               let byte = UInt8(piece.dropFirst(3).dropLast(), radix: 16) { bytes.append(byte) }
+            else { flush(); output += piece }
+        }
+        flush()
+        return output
     }
 }

@@ -9,6 +9,16 @@
   "sha256": {
     "tokenizer.json": "691a00068fa7b989f2f3e5ae5daa2d1a5bb319f2d5360deafcfb19a8bb6e7936",
     "config.json": "b5d0f88353638370d94035b7d73d7d6577c0554d78f8d7ecfd40490aae39ae85",
-    "tokenizer-oracle.json": "ebac8d43b63874bf0671ed0ff7b5b37997a34d4aed168b7681b08980380dd324"
+    "tokenizer-oracle.json": "ebac8d43b63874bf0671ed0ff7b5b37997a34d4aed168b7681b08980380dd324",
+    "planner-oracle.json": "50f7c1ab3de28daef8ad04f38c18a6a82ac045670ec1dd4840af52b6549ec78a",
+    "released-step-oracle.json": "8a61b69d5d635ededfe3d77663e0a8738894e7315927598686850ba9c1e88a2a"
+  },
+  "released_oracles": {
+    "source": "Gradium pinned F32 CpuDevice, Accelerate, 4 threads",
+    "normalization": "none",
+    "planner_cases": 29,
+    "step_cases": 4,
+    "steps_per_case": 6,
+    "noise": "NumPy 2.5.4 PCG64 default_rng(8291), normal(0,sqrt(0.8)), float32; cursor resets per request"
   }
 }

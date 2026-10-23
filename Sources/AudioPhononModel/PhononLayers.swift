@@ -46,6 +46,7 @@ struct PhononAttentionState {
     var keys: MLXArray?
     var values: MLXArray?
     var offset = 0
+    var arrays: [MLXArray] { [keys, values].compactMap { $0 } }
 }
 
 struct PhononTransformer {
@@ -111,7 +112,6 @@ struct PhononTransformer {
             state[index].keys = keys[0..., 0..., start..., 0...]
             state[index].values = values[0..., 0..., start..., 0...]
             state[index].offset += length
-            eval(keys, values)
         }
         return x
     }

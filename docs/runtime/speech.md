@@ -545,4 +545,4 @@ Omit voice descriptions, named speakers, clone controls, and CFG guidance.
 Phonon accepts English at its native speaking rate. Spell out structured text
 such as numbers, dates, and email addresses; Gradium's rewrite pipeline is not
 included. See `mere.run guide handbook-phonon` for the checkpoint pin, chunk
-policy, API usage, and remaining audio-quality and performance qualification.
+policy, API usage, and the bounded released-weight quality and speed comparison.

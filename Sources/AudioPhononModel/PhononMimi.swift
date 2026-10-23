@@ -36,7 +36,6 @@ struct PhononConv {
                 let end = result.dim(1) - overlap
                 let tail = result[0..., end..., 0...]
                 state = bias.map { tail - $0 } ?? tail
-                eval(state)
                 return result[0..., ..<end, 0...]
             }
             return result
@@ -46,7 +45,6 @@ struct PhononConv {
         if let bias { result = result + bias }
         if overlap > 0 {
             state = joined[0..., (joined.dim(1) - overlap)..., 0...]
-            eval(state)
         }
         return result
     }
@@ -60,6 +58,9 @@ struct PhononMimi {
         var upsample, first, last: MLXArray
         var blocks: [[MLXArray]]
         var attention: [PhononAttentionState]
+        var arrays: [MLXArray] {
+            [upsample, first, last] + blocks.flatMap { $0 } + attention.flatMap(\.arrays)
+        }
     }
     let projection: PhononLinear
     let upsample: PhononConv?

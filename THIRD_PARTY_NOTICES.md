@@ -1730,7 +1730,7 @@ weight contract documented by the packs' `runtime/runtime.py`.
 ## Gradium Phonon
 
 `Sources/AudioPhononModel/PhononLayers.swift`, `PhononFlow.swift`,
-`PhononMimi.swift`, and generation policy in `PhononModel.swift` adapt algorithms
+`PhononMimi.swift`, `PhononTextPlanner.swift`, and generation policy in `PhononModel.swift` adapt algorithms
 from Gradium's [xn-ptts](https://github.com/gradium-ai/xn-ptts/tree/49b9033e44ab0fbb935973eca3213757644d1bbb)
 at commit `49b9033e44ab0fbb935973eca3213757644d1bbb`, under its MIT license.
 
