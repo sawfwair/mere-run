@@ -33,7 +33,7 @@ public final class Drama3Model: Module {
     /// Prefill the tower using *next* prompt frames. All thirteen tower caches
     /// persist across acoustic time, rather than restarting for each codebook.
     public func generate(prompt: [[Int32]], maxFrames: Int = 750, temperature: Float = 1,
-                         seed: UInt64? = nil, onFrame: (([Int32]) throws -> Void)? = nil) throws -> [[Int32]] {
+                         seed: UInt64? = nil, onFrame: ([Int32]) throws -> Void = { _ in }) throws -> [[Int32]] {
         guard !prompt.isEmpty, prompt.allSatisfy({ $0.count == 11 }), maxFrames > 0,
               temperature.isFinite, temperature >= 0 else { throw Drama3Error.invalid("invalid generation parameters") }
         guard prompt.count + maxFrames <= config.text.maxPositionEmbeddings else {
@@ -57,6 +57,7 @@ public final class Drama3Model: Module {
             }
             lastHidden = hidden[0..., (hidden.dim(1) - 1)..<hidden.dim(1), 0...]
             MLX.eval(lastHidden!)
+            Memory.clearCache()
         }
         guard var hidden = lastHidden else { throw Drama3Error.invalid("missing prompt states") }
         var previous = prompt.last!
@@ -77,10 +78,13 @@ public final class Drama3Model: Module {
             if main == config.eos { completed = true; break }
             output.append(Array(next.dropFirst()))
             history.append(main)
-            try onFrame?(Array(next.dropFirst()))
+            try onFrame(Array(next.dropFirst()))
             let frames = MLXArray(next).reshaped(1, 1, 11)
             hidden = backbone(tower.backboneInput(frames, text: backbone.embeddings(frames[.ellipsis, 0])), cache: cache)
             MLX.eval(hidden)
+            // The checkpoint stays active; completed temporary projections do not
+            // need a RAM-sized allocator cache between acoustic frames.
+            Memory.clearCache()
             previous = next
         }
         guard completed else { throw Drama3Error.invalid("generation reached the acoustic frame limit; shorten the text") }

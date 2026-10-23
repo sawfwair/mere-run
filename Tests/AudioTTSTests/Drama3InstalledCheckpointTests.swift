@@ -52,13 +52,21 @@ final class Drama3InstalledCheckpointTests: XCTestCase {
         let request = TTSRequest(text: text, voiceDescription: "", temperature: 0.6, seed: 42,
             outputURL: paths.evidence.appendingPathComponent("native-speech.wav"))
         let started = Date()
+        let trace = MemoryTrace()
+        let traceURL = paths.evidence.appendingPathComponent("native-speech-stages.json")
         #if os(macOS)
         GPU.resetPeakMemory()
         #endif
         do {
             let audio = try await generator.generateAudio(request, modelPath: paths.root.path, progressHandler: { progress in
-                print("DRAMA-3 checkpoint: \(progress.message ?? String(describing: progress.stage))")
+                trace.append(progress)
+                print("DRAMA-3 checkpoint: \(progress.stage.rawValue) frames=\(progress.tokensGenerated) "
+                    + "active=\(Memory.activeMemory) cache=\(Memory.cacheMemory)")
             })
+            try trace.write(to: traceURL)
+            let decoding = try XCTUnwrap(trace.snapshot().first { $0.stage == TTSStage.decoding.rawValue })
+            XCTAssertLessThan(decoding.activeMLXBytes, 1_073_741_824,
+                "Batch generation must release the text/tower checkpoint before codec decoding.")
             XCTAssertGreaterThan(audio.duration, 0.5)
             XCTAssertTrue(audio.samples.allSatisfy(\.isFinite))
             let rms = sqrt(audio.samples.reduce(0.0) { $0 + Double($1) * Double($1) } / Double(audio.samples.count))
@@ -75,8 +83,45 @@ final class Drama3InstalledCheckpointTests: XCTestCase {
             print("DRAMA-3 checkpoint: \(audio.duration)s audio; peak MLX \(Memory.peakMemory) bytes")
             await generator.unload()
         } catch {
+            try trace.write(to: traceURL)
             await generator.unload()
             throw error
+        }
+    }
+
+    private struct StageMemory: Encodable {
+        let stage: String
+        let frames: Int
+        let activeMLXBytes: Int
+        let cachedMLXBytes: Int
+        let peakMLXBytes: Int
+        let physicalFootprintBytes: UInt64?
+    }
+
+    private final class MemoryTrace: @unchecked Sendable {
+        private let lock = NSLock()
+        private var events: [StageMemory] = []
+
+        func append(_ progress: TTSProgress) {
+            let event = StageMemory(stage: progress.stage.rawValue, frames: progress.tokensGenerated,
+                activeMLXBytes: Memory.activeMemory, cachedMLXBytes: Memory.cacheMemory,
+                peakMLXBytes: Memory.peakMemory,
+                physicalFootprintBytes: RuntimeMemorySample.current().physicalFootprintBytes)
+            lock.lock()
+            defer { lock.unlock() }
+            events.append(event)
+        }
+
+        func snapshot() -> [StageMemory] {
+            lock.lock()
+            defer { lock.unlock() }
+            return events
+        }
+
+        func write(to url: URL) throws {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try encoder.encode(snapshot()).write(to: url)
         }
     }
 

@@ -124,6 +124,23 @@ final class Drama3Tests: MLXTestCase {
         for (value, expected) in zip(serial, reference.output) { XCTAssertEqual(value, expected, accuracy: 3e-5) }
     }
 
+    func testFloatMaskPreservesBF16TowerComputation() throws {
+        let layer = try towerLayer()
+        try layer.update(parameters: ModuleParameters.unflattened(layer.parameters().flattened().map {
+            ($0.0, $0.1.asType(.bfloat16))
+        }), verify: .all)
+        let hidden = MLXArray.ones([1, 1, 16], dtype: .bfloat16)
+        let codes = MLXArray([Int32(3)]).reshaped(1, 1)
+        let floatMask = MLXArray.ones([1, 1], dtype: .float32)
+        let cache = Drama3Tower(try config()).makeCache()[0]
+        let output = layer(hidden, code: codes, semantic: floatMask, cache: cache)
+        XCTAssertEqual(output.dtype, .bfloat16)
+        XCTAssertTrue(output.asArray(Float.self).allSatisfy(\.isFinite))
+        let referenceCache = Drama3Tower(try config()).makeCache()[0]
+        let reference = layer(hidden, code: codes, semantic: floatMask.asType(.bfloat16), cache: referenceCache)
+        XCTAssertEqual(output.asArray(Float.self), reference.asArray(Float.self))
+    }
+
     func testCausalCodecConvolutionAndWeightNormalization() throws {
         let codec = try Drama3Codec(weights: [
             "test.weight_v": MLXArray([Float(3), 4]).reshaped(1, 1, 2),

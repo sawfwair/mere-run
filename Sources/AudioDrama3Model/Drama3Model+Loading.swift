@@ -9,7 +9,7 @@ extension Drama3Model {
         try validateLayout(source)
         let expected = Dictionary(uniqueKeysWithValues: parameters().flattened().filter {
             !$0.0.hasSuffix(".qkNormWeightBF16")
-        })
+        }.map { ($0.0, (shape: $0.1.shape, dtype: $0.1.dtype)) })
         var loaded = Set<String>()
         func install(_ key: String, _ value: MLXArray) throws {
             guard let target = expected[key], target.shape == value.shape,

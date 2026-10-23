@@ -14,7 +14,12 @@ Safetensor reads materialize one tensor at a time, including on removable
 volumes where Foundation's safe mapping option copies the entire file. The
 exporter and artifact hasher release temporary Foundation read buffers within
 each iteration. The codec's pinned SHA-256 is verified before restricted ZIP
-and pickle parsing; codec weights are materialized as FP32 before generation.
+and pickle parsing. Codec weights execute in FP32. Batch synthesis encodes any
+reference before loading the text/tower checkpoint, then releases that checkpoint
+before loading the codec for final waveform decoding. Streaming retains both
+graphs to emit waveform chunks during generation and needs separate capacity
+qualification. Tower masks use the embedding dtype to preserve BF16 computation;
+completed temporary Metal buffers are cleared between acoustic frames.
 
 Architecture reference: SGLang-Omni at
 `2cfb3b67becb437b70751defe37e63d3af4eedb0` (Apache-2.0).

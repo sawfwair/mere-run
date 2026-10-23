@@ -58,7 +58,9 @@ final class Drama3TowerLayer: Module {
     func callAsFunction(_ hidden: MLXArray, code: MLXArray, semantic: MLXArray,
                         extra: MLXArray? = nil, cache: KVCacheSimple) -> MLXArray {
         let c = config, count = hidden.dim(1)
-        var embedded = embedding(MLX.clip(code, min: 0, max: c.vocab - 1)) * semantic.expandedDimensions(axis: -1)
+        let tokens = embedding(MLX.clip(code, min: 0, max: c.vocab - 1))
+        // Masks must not promote the BF16 tower and its matrix products to FP32.
+        var embedded = tokens * semantic.asType(tokens.dtype).expandedDimensions(axis: -1)
         if let extra { embedded = embedded + extra }
         let mixed = projection(MLX.concatenated([enorm(embedded), hnorm(hidden)], axis: -1))
         let projected = qkv(inputNorm(mixed))

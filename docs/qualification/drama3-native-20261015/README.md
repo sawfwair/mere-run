@@ -62,5 +62,28 @@ MERERUN_TEST_DRAMA3_EVIDENCE=/path/to/evidence \
 The installed-checkpoint tests are opt-in and write artifacts outside the
 repository. Full speech qualification acquires the normal shared inference
 lease. Released-checkpoint speech, inference peak memory, and intelligibility
-remain pending while that probe waits for shared capacity. The catalog's
-32 GB minimum and 36 GB recommendation remain estimates.
+remain unqualified. The catalog's 32 GB minimum and 36 GB recommendation
+remain estimates.
+
+## Runtime memory follow-up
+
+The October 16, 2026 batch speech attempt passed normal admission and reached
+autoregressive generation. It peaked at 39,699,848,680 bytes of physical
+footprint. System swap grew to 23,754.94 MiB and internal disk headroom fell to
+7.7 GiB. The attempt was stopped below the existing 8 GiB disk floor, before
+producing a completed waveform or an ASR result. The Q4 export alone does not
+establish that the runtime fits a 36 GiB system.
+
+Batch synthesis now separates three phases: encode reference speech, generate
+integer acoustic codes, and decode those codes into a waveform. It releases the
+text/tower checkpoint and tokenizer before final codec loading. Streaming
+requires both graphs and has a separate memory boundary. Audio-tower masks
+preserve the loaded embedding dtype, avoiding promotion of BF16 matrix products
+to FP32. The runtime clears inactive Metal allocation buffers between frames.
+
+The opt-in speech probe writes `native-speech-stages.json`, recording active,
+cached, and peak MLX memory and process footprint at phase and frame progress
+events. It verifies that batch synthesis releases the text/tower checkpoint
+before codec decoding. Repeat the released-checkpoint probe through normal
+shared admission before claiming an improved measured peak or successful
+36 GiB qualification. The Q4 artifact and codec arithmetic remain unchanged.

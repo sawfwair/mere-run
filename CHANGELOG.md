@@ -10,6 +10,9 @@ The format is based on Keep a Changelog.
   tags, and causal audio streaming. `speech-tts-drama-3` pins the licensed source;
   `model optimize --output` exports expert-only affine Q4 for memory-constrained
   Macs. The runtime preserves BF16 nonexpert weights and the original DAC codec.
+  Batch synthesis releases the text/tower checkpoint before codec decoding;
+  audio-tower masks preserve BF16 computation and temporary Metal buffers are
+  cleared between acoustic frames.
   Component tests cover tensor layout, audio-tower numerics, prompts, and packing;
   full-checkpoint quality, peak memory, and throughput remain unqualified.
 
