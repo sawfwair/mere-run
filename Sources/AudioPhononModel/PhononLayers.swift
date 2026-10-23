@@ -87,7 +87,15 @@ struct PhononTransformer {
         for (index, layer) in layers.enumerated() {
             let projection = split(layer.inProjection(layer.norm1(x)), parts: 3, axis: -1)
             let offset = state[index].offset
-            let qkv = projection.map { $0.reshaped(1, length, heads, headWidth).transposed(0, 2, 1, 3) }
+            let qkv = projection.map {
+                let projected = $0.reshaped(1, length, heads, headWidth).transposed(0, 2, 1, 3)
+#if os(Linux)
+                // Materialize split projection views before CUDA attention consumes them.
+                return MLX.contiguous(projected)
+#else
+                return projected
+#endif
+            }
             let queries = MLXFast.RoPE(qkv[0], dimensions: headWidth, traditional: true, base: period, scale: 1, offset: offset)
             let newKeys = MLXFast.RoPE(qkv[1], dimensions: headWidth, traditional: true, base: period, scale: 1, offset: offset)
             let keys = state[index].keys.map { concatenated([$0, newKeys], axis: 2) } ?? newKeys

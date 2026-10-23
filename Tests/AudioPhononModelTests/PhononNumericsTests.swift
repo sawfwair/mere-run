@@ -126,6 +126,42 @@ final class PhononNumericsTests: MLXTestCase {
         assertClose(full[0..., ..<3, 0...].asArray(Float.self), output[0..., ..<3, 0...].asArray(Float.self), tolerance: 1e-5)
     }
 
+    func testLongPrefixAndShortCachedChunksMatchFullAttention() throws {
+        let width = 128, count = 2, length = 137
+        var tensors: [String: MLXArray] = [:]
+        for index in 0..<count {
+            let prefix = "t.layers.\(index)"
+            for name in ["norm1", "norm2"] {
+                tensors[prefix + ".\(name).weight"] = MLXArray.ones([width])
+                tensors[prefix + ".\(name).bias"] = MLXArray.zeros([width])
+            }
+            for (name, output, input) in [
+                ("self_attn.in_proj", 3 * width, width), ("self_attn.out_proj", width, width),
+                ("linear1", 2 * width, width), ("linear2", width, 2 * width)
+            ] {
+                tensors[prefix + ".\(name).weight"] = MLXArray(
+                    (0..<(output * input)).map { sin(Float($0 + index + 1)) * 0.025 }, [output, input]
+                )
+            }
+        }
+        let transformer = try PhononTransformer(PhononWeights(arrays: tensors), "t", width: width,
+                                                heads: 2, count: count, feedforward: 2 * width, period: 10000)
+        let input = MLXArray((0..<(length * width)).map { cos(Float($0) * 0.03) }, [1, length, width])
+        var fullState = transformer.makeState(), cachedState = transformer.makeState()
+        let full = transformer(input, state: &fullState)
+        eval([full] + fullState.flatMap(\.arrays))
+        var chunks: [MLXArray] = []
+        for range in [0..<125, 125..<136, 136..<137] {
+            let chunk = transformer(input[0..., range, 0...], state: &cachedState)
+            eval([chunk] + cachedState.flatMap(\.arrays))
+            chunks.append(chunk)
+        }
+        let actual = concatenated(chunks, axis: 1).asArray(Float.self)
+        XCTAssertTrue(actual.allSatisfy(\.isFinite))
+        assertClose(actual, full.asArray(Float.self), tolerance: 2e-5)
+        XCTAssertEqual(cachedState[0].offset, length)
+    }
+
     func testTimeEmbeddingUsesUncenteredRMS() throws {
         var tensors: [String: MLXArray] = [:]
         tensors["t.freqs"] = MLXArray.zeros([128])
