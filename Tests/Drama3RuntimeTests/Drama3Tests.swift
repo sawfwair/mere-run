@@ -141,6 +141,28 @@ final class Drama3Tests: MLXTestCase {
         XCTAssertEqual(output.asArray(Float.self), reference.asArray(Float.self))
     }
 
+    func testBF16PromptStaysBF16ThroughBothBackboneAttentionFamilies() throws {
+        let data = try String(contentsOf: fixtures.appendingPathComponent("tiny-config.json"), encoding: .utf8)
+            .replacingOccurrences(of: "\"hidden_size\": 16", with: "\"hidden_size\": 64")
+            .replacingOccurrences(of: "\"dim\": 16", with: "\"dim\": 64")
+        for attention in ["full_attention", "linear_attention"] {
+            let source = data.replacingOccurrences(of: "\"full_attention\"", with: "\"\(attention)\"")
+            let config = try JSONDecoder().decode(Drama3Config.self, from: Data(source.utf8))
+            let model = try Drama3Model(config: config)
+            try model.update(parameters: ModuleParameters.unflattened(model.parameters().flattened().map {
+                ($0.0, $0.1.dtype == .uint32 ? $0.1 : $0.1.asType(.bfloat16))
+            }), verify: .all)
+            let frames = MLXArray(Array(repeating: [Int32(config.semanticStart)] + Array(repeating: Int32(1), count: 10), count: 8)
+                .flatMap { $0 }).reshaped(1, 8, 11)
+            let embeddings = model.backbone.embeddings(frames[.ellipsis, 0])
+            let input = model.tower.backboneInput(frames, text: embeddings)
+            XCTAssertEqual(input.dtype, .bfloat16, attention)
+            let output = model.backbone(input, cache: model.backbone.makeCache())
+            MLX.eval(output)
+            XCTAssertEqual(output.dtype, .bfloat16, attention)
+        }
+    }
+
     func testCausalCodecConvolutionAndWeightNormalization() throws {
         let codec = try Drama3Codec(weights: [
             "test.weight_v": MLXArray([Float(3), 4]).reshaped(1, 1, 2),

@@ -58,11 +58,19 @@ package final class Drama3Backbone: Module {
         }
     }
 
+    @discardableResult
+    package func prepareFusedExperts(layer: Int) -> Bool {
+        layers[layer].mlp.prepareFusedSwitchGLU()
+    }
+
     package func callAsFunction(_ embeddings: MLXArray, cache: [Q35LayerCache]) -> MLXArray {
         var hidden = embeddings
         for (layer, state) in zip(layers, cache) {
             hidden = layer(hidden, cache: state)
             MLX.eval(hidden)
+            // A prompt crosses every expert bank before the outer chunk ends.
+            // Release completed layer temporaries within that pass as well.
+            Memory.clearCache()
         }
         return norm(hidden)
     }

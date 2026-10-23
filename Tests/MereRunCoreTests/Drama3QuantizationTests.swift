@@ -3,6 +3,7 @@ import Foundation
 import Crypto
 import MLX
 import MereRunTensor
+import MereRunQwenModel
 import XCTest
 @testable import MereRunCore
 
@@ -96,6 +97,14 @@ final class Drama3QuantizationTests: MereRunCoreTestCase {
         XCTAssertEqual(converted.quantization?.bits, 4)
         let loaded = try Drama3Model(config: converted)
         try loaded.load(root: output)
+        if Q35FusedSwitchGLUPolicy.enabled {
+            let resident = Dictionary(uniqueKeysWithValues: loaded.parameters().flattened())
+            for projection in ["gate_proj", "up_proj"] {
+                let key = "backbone.layers.0.mlp.switch_mlp.\(projection).weight"
+                XCTAssertEqual(try XCTUnwrap(resident[key]).size, 0,
+                    "Prepared fusion must release source expert banks instead of retaining both copies.")
+            }
+        }
         let native = try Drama3Weights(root: output)
         let base = "model.language_model.layers.0.mlp.experts.0.gate_proj"
         let restored = MLX.dequantized(try native.read(base + ".weight"), scales: try native.read(base + ".scales"),

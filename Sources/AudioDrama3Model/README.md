@@ -19,7 +19,10 @@ reference before loading the text/tower checkpoint, then releases that checkpoin
 before loading the codec for final waveform decoding. Streaming retains both
 graphs to emit waveform chunks during generation and needs separate capacity
 qualification. Tower masks use the embedding dtype to preserve BF16 computation;
-completed temporary Metal buffers are cleared between acoustic frames.
+completed temporary Metal buffers are cleared between acoustic frames and backbone
+layers. Loading prepares fused expert gate/up banks one layer at a time and
+releases their source banks before moving to the next layer. First-use fusion
+must not retain a second copy of those packed weights.
 
 Architecture reference: SGLang-Omni at
 `2cfb3b67becb437b70751defe37e63d3af4eedb0` (Apache-2.0).

@@ -87,3 +87,19 @@ events. It verifies that batch synthesis releases the text/tower checkpoint
 before codec decoding. Repeat the released-checkpoint probe through normal
 shared admission before claiming an improved measured peak or successful
 36 GiB qualification. The Q4 artifact and codec arithmetic remain unchanged.
+
+The October 23, 2026 follow-up passed admission but was stopped by the disk
+headroom guard after reaching 35,490,109,896 bytes of physical footprint. No
+completed waveform or ASR result exists for that attempt. Inspection found
+that first-use MoE fusion retained the original gate/up expert banks alongside
+the fused banks. For this checkpoint, retaining both forms can add 11.25 GiB
+of packed weights and quantization metadata.
+
+The DRAMA loader now uses the shared MoE ownership-transfer path: prepare the
+fused gate/up bank for one loaded layer, release its source banks, and clear
+inactive buffers before loading the next layer. Prompt processing also clears
+inactive buffers between backbone layers. A loader regression checks that the
+source banks are released, and a synthetic BF16 probe covers both attention
+families. Phase memory evidence is written after each progress event so a
+controlled stop retains the completed phase observations. The memory peak of
+this ownership fix still requires released-checkpoint qualification.

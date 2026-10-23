@@ -51,6 +51,10 @@ extension Drama3Model {
                 try install(base + ".biases", MLX.stacked(biases))
                 Memory.clearCache()
             }
+            // Prepare one fused bank while this layer is the only temporary
+            // duplicate. The shared MoE owner releases the original gate/up banks.
+            backbone.prepareFusedExperts(layer: layer)
+            Memory.clearCache()
         }
         guard loaded == Set(expected.keys) else {
             throw Drama3Error.invalid("checkpoint missing parameters: \(Set(expected.keys).subtracting(loaded).sorted().prefix(8))")

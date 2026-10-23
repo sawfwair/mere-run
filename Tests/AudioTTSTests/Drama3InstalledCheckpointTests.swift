@@ -52,8 +52,8 @@ final class Drama3InstalledCheckpointTests: XCTestCase {
         let request = TTSRequest(text: text, voiceDescription: "", temperature: 0.6, seed: 42,
             outputURL: paths.evidence.appendingPathComponent("native-speech.wav"))
         let started = Date()
-        let trace = MemoryTrace()
         let traceURL = paths.evidence.appendingPathComponent("native-speech-stages.json")
+        let trace = MemoryTrace(url: traceURL)
         #if os(macOS)
         GPU.resetPeakMemory()
         #endif
@@ -101,6 +101,10 @@ final class Drama3InstalledCheckpointTests: XCTestCase {
     private final class MemoryTrace: @unchecked Sendable {
         private let lock = NSLock()
         private var events: [StageMemory] = []
+        private let url: URL
+        private var writeError: Error?
+
+        init(url: URL) { self.url = url }
 
         func append(_ progress: TTSProgress) {
             let event = StageMemory(stage: progress.stage.rawValue, frames: progress.tokensGenerated,
@@ -110,6 +114,10 @@ final class Drama3InstalledCheckpointTests: XCTestCase {
             lock.lock()
             defer { lock.unlock() }
             events.append(event)
+            do {
+                // Preserve phase evidence even if a resource guard stops the process.
+                try Self.encode(events).write(to: url, options: .atomic)
+            } catch { writeError = error }
         }
 
         func snapshot() -> [StageMemory] {
@@ -119,9 +127,16 @@ final class Drama3InstalledCheckpointTests: XCTestCase {
         }
 
         func write(to url: URL) throws {
+            lock.lock()
+            defer { lock.unlock() }
+            if let writeError { throw writeError }
+            try Self.encode(events).write(to: url, options: .atomic)
+        }
+
+        private static func encode(_ events: [StageMemory]) throws -> Data {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            try encoder.encode(snapshot()).write(to: url)
+            return try encoder.encode(events)
         }
     }
 
