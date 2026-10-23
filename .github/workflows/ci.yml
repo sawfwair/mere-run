@@ -627,10 +627,11 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           # The Swift container does not inherit the host runner's Ubuntu mirrors.
-          # Match runner-images' failover instead of relying on the global HTTP archive.
+          # Prefer the HTTPS archive: Azure HTTP can trickle data until the step
+          # timeout without triggering APT's idle timeout and mirror failover.
           printf '%s\tpriority:%s\n' \
-            'http://azure.archive.ubuntu.com/ubuntu/' 1 \
-            'https://archive.ubuntu.com/ubuntu/' 2 \
+            'https://archive.ubuntu.com/ubuntu/' 1 \
+            'http://azure.archive.ubuntu.com/ubuntu/' 2 \
             'https://security.ubuntu.com/ubuntu/' 3 \
             > /etc/apt/apt-mirrors.txt
           sed -Ei \
