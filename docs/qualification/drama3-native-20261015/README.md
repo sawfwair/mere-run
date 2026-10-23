@@ -56,14 +56,14 @@ platforms were not verified in this run.
 mere.run model optimize /path/to/drama-3-source --output /path/to/drama-3-q4
 MERERUN_TEST_DRAMA3_ROOT=/path/to/drama-3-q4 \
 MERERUN_TEST_DRAMA3_EVIDENCE=/path/to/evidence \
-  swift test --filter Drama3InstalledCheckpointTests
+  swift test --filter Drama3InstalledCheckpointTests/testReleasedCheckpointSpeechAndMemory
 ```
 
 The installed-checkpoint tests are opt-in and write artifacts outside the
 repository. Full speech qualification acquires the normal shared inference
-lease. Released-checkpoint speech, inference peak memory, and intelligibility
-remain unqualified. The catalog's 32 GB minimum and 36 GB recommendation
-remain estimates.
+lease. The batch result below covers one short seeded English request on a
+36 GiB system. The catalog's 32 GB minimum and broader 36 GB recommendation
+remain estimates; other workflows need separate qualification.
 
 ## Runtime memory follow-up
 
@@ -102,4 +102,38 @@ inactive buffers between backbone layers. A loader regression checks that the
 source banks are released, and a synthetic BF16 probe covers both attention
 families. Phase memory evidence is written after each progress event so a
 controlled stop retains the completed phase observations. The memory peak of
-this ownership fix still requires released-checkpoint qualification.
+this ownership fix is measured in the following batch probe.
+
+## Released-checkpoint batch result
+
+The default fused-expert runtime at commit `4be05a235d27a56c365e2b63905e7249ca8065bf`
+completed the seeded English batch probe on October 23, 2026, through normal
+shared admission on a system with 38,654,705,664 bytes of physical RAM (36 GiB).
+The Q4 checkpoint and codec files were unchanged.
+
+- Input: `[excited] Hello! The native speech engine is running on this laptop.`
+  Temperature: `0.6`; seed: `42`.
+- Output: 81 acoustic frames, 165,888 mono samples at 44,100 Hz, or
+  3.761633 seconds of PCM16 audio. Sample peak: `0.494446`; clipped samples: zero.
+- Wall time: 105.52 seconds, including cold checkpoint loading and waveform
+  decoding. This is not a warm generation-throughput measurement.
+- Peak process physical footprint: 26,165,418,296 bytes (24.37 GiB), compared
+  with 39,699,848,680 bytes in the original stopped attempt. Peak MLX allocation:
+  25,796,160,132 bytes. Active MLX allocation before codec decoding fell to
+  20 bytes, verifying release of the text/tower checkpoint.
+- Sampled total system swap rose from 3.61 GiB to 6.89 GiB. These system totals
+  include other apps; this result does not establish operation without swap.
+- Native Parakeet returned the exact expected ten-word transcript: zero word
+  errors. Score the plain `--no-timestamps` transcript; the default export also
+  repeats text in timestamped alignment lines.
+
+This qualifies the short batch probe on the tested 36 GiB system. It does not
+establish broader speech quality, Q4 quality loss against the original weights,
+long requests, reference cloning, streaming capacity, or other-platform behavior.
+Batch requests release resident resources; subsequent calls reload the model.
+
+After the ownership fix, the full local gate passed 5,447 XCTest cases with
+451 skips and zero failures, plus 193 Swift Testing checks. The focused runtime
+and loader suite passed, and Metal tests preserved both BF16 attention paths
+and expert output before and after fusion. The documentation build passed.
+Hosted CI remains unverified.
