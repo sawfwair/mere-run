@@ -17,8 +17,11 @@ each iteration. The codec's pinned SHA-256 is verified before restricted ZIP
 and pickle parsing. Codec weights execute in FP32. Batch synthesis encodes any
 reference before loading the text/tower checkpoint, then releases that checkpoint
 before loading the codec for final waveform decoding. Streaming retains both
-graphs to emit waveform chunks during generation and needs separate capacity
-qualification. Tower masks use the embedding dtype to preserve BF16 computation;
+graphs to emit waveform chunks during generation. Bounded batch, reference,
+streaming, and cancellation probes pass on the tested 36 GiB system; see the
+[qualification record](../../docs/qualification/drama3-native-20261015/README.md)
+for measured peaks, cold latency, and remaining limits. Other workloads need
+separate capacity qualification. Tower masks use the embedding dtype to preserve BF16 computation;
 completed temporary Metal buffers are cleared between acoustic frames and backbone
 layers. Loading prepares fused expert gate/up banks one layer at a time and
 releases their source banks before moving to the next layer. First-use fusion

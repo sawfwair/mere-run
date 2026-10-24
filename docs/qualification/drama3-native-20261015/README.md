@@ -1,5 +1,10 @@
 # Native DRAMA-3 checkpoint qualification
 
+The latest bounded probes pass batch speech, reference conditioning, short and
+paragraph streaming, and cancellation on a 36 GiB system. See
+[extended results](#extended-results-after-the-sampler-correction) for scope,
+memory peaks, latency, and remaining quality limits.
+
 The released checkpoint is pinned to
 `fishaudio/drama-3@dd64a85cd82e9521f7202610ede97b367fc83946`.
 All 18 source files, totaling 41,502,593,827 bytes, were verified against the
@@ -156,3 +161,78 @@ now follows that correction, including the repetition-aware redraw. Acoustic
 heads retain top-k 30 and exclude the crossing token. The 750-frame limit and
 normal admission floors are unchanged. Deterministic regression probes check
 the semantic candidate range and both nucleus-filtering policies.
+
+## Extended results after the sampler correction
+
+All seven bounded probes passed through normal shared admission on the same
+36 GiB system. Runtime source: `cac7aa6fe72aa04e54eb0ee51537e7073e5d836e`.
+The original checkpoint and expert-only Q4 files were unchanged.
+The [structured receipt](./extended-results.json) records hashes, requests,
+transcripts, event counts, waveform comparisons, and memory measurements.
+
+| Probe | Audio (s) | Word errors | Peak footprint (GiB) | Wall time (s) |
+| --- | ---: | ---: | ---: | ---: |
+| Paragraph batch | 23.173515 | 0/57 | 25.70 | 142.21 |
+| Short batch | 4.365351 | 0/10 | 24.37 | 104.92 |
+| Reference clone batch | 5.804989 | 0/16 | 24.37 | 107.63 |
+| Short stream | 4.365351 | 0/10 | 27.94 | 105.98 |
+| Reference clone stream | 5.804989 | 0/16 | 28.35 | 131.21 |
+| Paragraph stream through CLI | 23.173515 | 0/57 | 32.86 | 183.52 |
+| Cancel after first chunk | None published | Cancelled | 26.92 | 133.15 |
+
+The paragraph contains 57 words and produces 499 acoustic frames. All 57 words,
+including the final sentence, are recovered exactly. The short baseline is
+regenerated after the sampling correction, and its audio plus exact ten-word
+transcript conditions the clone cases. The clone reads a different 16-word
+sentence. This synthetic reference verifies the conditioning path and content;
+it does not establish perceptual speaker identity or human-reference likeness.
+
+Both short streams and the paragraph stream preserve the seeded batch sample
+counts. Their cumulative chunk counts increase monotonically, and each final
+file matches its stream. Maximum sample differences against PCM16 batch exports
+are `0.00004119`, `0.00004208`, `0.00004709`, respectively,
+below the frozen `0.0002` threshold. Streaming WAVs retain float32 samples;
+batch exports use PCM16. All completed waveforms are finite and have zero
+clipped samples.
+
+Cold times to first audio are 96.93, 113.01, and 96.07 seconds
+for the short, clone, and paragraph streams. These runs include model loading
+in a fresh process; the filesystem cache was not flushed. They do not establish
+warm throughput or interactive latency.
+
+Cancellation after the first chunk releases the graphs in 3.716 seconds,
+leaving 32 bytes of active MLX allocation, no published WAV, and no temporary
+audio file. Batch phase traces verify model release before codec decoding.
+System swap remains in use: totals include other applications, so these results
+do not establish operation without swap.
+
+Reproduce an extended installed-checkpoint case with:
+
+```bash
+MERERUN_TEST_DRAMA3_ROOT=/path/to/drama-3-q4 \
+MERERUN_TEST_DRAMA3_EVIDENCE=/path/to/new-case-evidence \
+MERERUN_TEST_DRAMA3_CASE=paragraph \
+MERERUN_TEST_MLX_DEVICE=gpu \
+  swift test --disable-index-store --filter Drama3ExtendedCheckpointTests
+```
+
+Cases are `paragraph`, `clone`, `stream`, `cloneStream`, and `cancel`. Clone
+cases also require `MERERUN_TEST_DRAMA3_REFERENCE` pointing to the short baseline
+WAV with the transcript fixed in the test. Streaming cases accept
+`MERERUN_TEST_DRAMA3_COMPARISON` pointing to their matching seeded batch WAV.
+The public CLI paragraph probe uses `speech synthesize` with
+`--model speech-tts-drama-3 --seed 42 --temperature 0.6 --stream` and
+`--stream-chunk-tokens 25 --progress-json --receipt`, then independently checks
+its waveform, cumulative chunk counts, and plain native ASR transcript.
+
+The full local gate passed 5,450 XCTest cases with 452 expected skips and zero
+failures, plus 193 Swift Testing checks. Focused Metal sampling regressions and
+the documentation build passed. Hosted CI remains unverified because the
+review-checks connector requires an account connection. The PR remains a draft.
+
+These results qualify the recorded English requests, the tested synthetic
+reference, and their streaming paths. Requests that reach the 750-frame cap
+still fail without publishing a truncated final file. Broader languages,
+multi-speaker quality, perceptual voice similarity, quality loss against the
+original checkpoint, maximum-length references, and other-platform inference
+remain unqualified.
