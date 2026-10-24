@@ -40,7 +40,7 @@ extension MereRunCapabilityCatalog {
                 group: Group.inputs, tier: .standard, dependsOn: "--ref-audio"
             ).scoped(SpeechSynthesizeFamily.only(.clone, .breezeClone, .drama3Clone, ignoredBy: [.style, .breeze])),
             .init(flag: "--language", label: "Language", kind: .string, defaultValue: "auto", group: Group.prompt, tier: .standard)
-                .scoped(SpeechSynthesizeFamily.only(.style, .customVoice, .clone, .breeze, .breezeClone,
+                .scoped(SpeechSynthesizeFamily.only(.style, .customVoice, .clone, .breeze, .breezeClone, .phonon,
                     ignoredBy: [.drama3, .drama3Clone])),
             .init(
                 flag: "--save-profile", label: "Save profile", kind: .string,

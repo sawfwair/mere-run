@@ -360,8 +360,8 @@ private func temporaryFolder() throws -> URL {
 
 @Test func synthesizePhononScopesControlsBeforeLoading() throws {
     let valid = try report("speech", "synthesize", "Hello", "-o", "a.wav",
-                           "--model", "speech-tts-phonon-31m", "--seed", "42", "--stream")
-    #expect(valid.family == "phonon" && valid.violations.isEmpty)
+                           "--model", "speech-tts-phonon-31m", "--seed", "42", "--language", "en", "--stream")
+    #expect(valid.family == "phonon" && valid.violations.isEmpty && valid.warnings.isEmpty)
     for flags in [["--voice", "Whisper"], ["--mode", "clone"], ["--cfg-scale", "4"], ["--stream", "--stream-chunk-tokens", "8"]] {
         let value = try #require(CLICapabilityGate.evaluate(commandLine: ["speech", "synthesize", "Hello", "-o", "a.wav", "--model", "speech-tts-phonon-31m"] + flags)).report
         #expect(value.family == "phonon")
