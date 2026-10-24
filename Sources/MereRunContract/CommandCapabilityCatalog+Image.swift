@@ -23,24 +23,25 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--negative-prompt", aliases: ["-n"], label: "Negative prompt", kind: .string, group: Group.prompt, tier: .standard)
                 // FLUX.1 refuses a negative prompt with text in it; an empty one reads as omitted.
                 // Qwen-Image-Edit Lightning runs without guidance, so it never reads one.
-                .scoped(ImageF.except(.flux1, ignoredBy: [.flux2Dev, .krea, .qwenEditLightning, .ideogram])),
+                .scoped(ImageF.except(.flux1, .flux3, ignoredBy: [.flux2Dev, .krea, .qwenEditLightning, .ideogram])),
             .init(
                 flag: "--cfg", aliases: ["--cfg-scale"], label: "CFG scale", kind: .number,
                 group: Group.sampling, tier: .standard, range: .init(min: 0, max: 20, step: 0.5)
-            ).scoped(ImageF.except(ignoredBy: [.krea]), .rule(.qwenEditLightning, range: .init(min: 1, max: 1))),
+            ).scoped(ImageF.except(ignoredBy: [.krea]), .rule(.qwenEditLightning, range: .init(min: 1, max: 1)),
+                     .rule(.flux3, range: .init(min: 1, max: 1))),
             .init(
                 flag: "--sigma-shift", label: "Sigma shift", kind: .number,
                 group: Group.sampling, tier: .expert, range: .init(min: 0, max: 16, step: 0.1)
-            ).scoped(ImageF.except(.qwen21Turbo, ignoredBy: [.flux1, .hidream, .qwenEdit, .qwenEditLightning, .ideogram])),
+            ).scoped(ImageF.except(.qwen21Turbo, .flux3, ignoredBy: [.flux1, .hidream, .qwenEdit, .qwenEditLightning, .ideogram])),
             .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file, group: Group.output, tier: .standard),
             .init(
                 flag: "--width", aliases: ["-W"], label: "Width", kind: .integer,
                 defaultValue: "1024", group: Group.output, tier: .essential, range: .init(min: 256, max: 2_048, step: 16)
-            ),
+            ).scoped(ImageF.rule(.flux3, range: .init(min: 64, max: 4_096, step: 16))),
             .init(
                 flag: "--height", aliases: ["-H"], label: "Height", kind: .integer,
                 defaultValue: "1024", group: Group.output, tier: .essential, range: .init(min: 256, max: 2_048, step: 16)
-            ),
+            ).scoped(ImageF.rule(.flux3, range: .init(min: 64, max: 4_096, step: 16))),
             .init(
                 flag: "--steps", aliases: ["-s"], label: "Steps", kind: .integer,
                 group: Group.sampling, tier: .essential, range: .init(min: 1, max: 100, step: 1)
@@ -69,7 +70,7 @@ extension MereRunCapabilityCatalog {
                 .rule(.klein, maxCount: 4, severity: .warning),
                 .rule(.flux2Dev, maxCount: 4, severity: .warning),
                 // Qwen-Image-Edit's limit of three counts distinct files, so Core checks it.
-                .rule(.qwen21, maxCount: 10), .rule(.qwen21Turbo, maxCount: 10)
+                .rule(.qwen21, maxCount: 10), .rule(.qwen21Turbo, maxCount: 10), .rule(.flux3, maxCount: 10)
             ),
             .init(
                 flag: "--keep-original-aspect", label: "Keep original aspect", kind: .boolean,
@@ -79,7 +80,7 @@ extension MereRunCapabilityCatalog {
                 flag: "--strength", aliases: ["--str"], label: "Edit strength", kind: .number,
                 group: Group.inputs, tier: .standard, range: .init(min: 0, max: 1, step: 0.05)
             ).scoped(ImageF.except(
-                .qwen21, .qwen21Turbo,
+                .qwen21, .qwen21Turbo, .flux3,
                 ignoredBy: [.flux1, .hidream, .sensenova, .krea, .qwenEdit, .qwenEditLightning, .ideogram]
             )),
             .init(
@@ -88,7 +89,7 @@ extension MereRunCapabilityCatalog {
             ).scoped(
                 ImageF.only(
                     .flux1, .zimage, .krea, .ideogram,
-                    ignoredBy: [.klein, .flux2Dev, .hidream, .sensenova, .qwen21, .qwen21Turbo, .qwenEdit, .qwenEditLightning]
+                    ignoredBy: [.klein, .flux2Dev, .flux3, .hidream, .sensenova, .qwen21, .qwen21Turbo, .qwenEdit, .qwenEditLightning]
                 ),
                 // Longer values are clamped to what the text encoder reads.
                 .rule(.flux1, range: .init(max: 512), severity: .warning),

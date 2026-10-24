@@ -1,5 +1,14 @@
 [
   {
+    "topic": "handbook-phonon",
+    "title": "Phonon 31m (Gradium)",
+    "category": "Speech",
+    "models": [
+      "speech-tts-phonon-31m"
+    ],
+    "resourceName": "handbook-phonon.md"
+  },
+  {
     "topic": "handbook-flux2-klein",
     "title": "FLUX.2 Klein (Black Forest Labs)",
     "category": "Image",
@@ -88,6 +97,13 @@
       "image-krea2-turbo"
     ],
     "resourceName": "handbook-krea2.md"
+  },
+  {
+    "topic": "handbook-flux3-klein",
+    "title": "FLUX 3 Klein (Black Forest Labs)",
+    "category": "Image",
+    "models": ["image-flux3-klein"],
+    "resourceName": "handbook-flux3-klein.md"
   },
   {
     "topic": "handbook-qwen-image-21",
@@ -181,6 +197,15 @@
     "resourceName": "handbook-muse-glimmer.md"
   },
   {
+    "topic": "handbook-nemotron-bolt",
+    "title": "Nemotron 3.5 Bolt (NVIDIA)",
+    "category": "Text and multimodal",
+    "models": [
+      "vision-chat-nemotron-35-bolt-24gb"
+    ],
+    "resourceName": "handbook-nemotron-bolt.md"
+  },
+  {
     "topic": "handbook-nemotron-lightning",
     "title": "Nemotron 3.5 Lightning (NVIDIA)",
     "category": "Text and multimodal",
@@ -222,7 +247,10 @@
     "models": [
       "text-chat-bonsai-27b-1bit",
       "text-chat-bonsai-27b-2bit",
-      "text-chat-bonsai-2-27b-2bit"
+      "text-chat-bonsai-2-27b-2bit",
+      "text-chat-bonsai-2-2b-2bit",
+      "text-chat-bonsai-2-4b-2bit",
+      "text-chat-bonsai-2-9b-2bit"
     ],
     "resourceName": "handbook-bonsai-text.md"
   },
@@ -322,7 +350,8 @@
     "title": "EmbeddingGemma 2 multimodal embeddings (Google)",
     "category": "Text and multimodal",
     "models": [
-      "text-embed-embeddinggemma2"
+      "text-embed-embeddinggemma2",
+      "text-embed-embeddinggemma2-coreml"
     ],
     "resourceName": "handbook-embeddinggemma2.md"
   },

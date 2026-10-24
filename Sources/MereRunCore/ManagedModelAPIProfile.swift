@@ -318,6 +318,13 @@ public extension ManagedModelAPIProfile {
         )
     }
 
+    static func nemotronBolt() -> ManagedModelAPIProfile {
+        chat(servingEngine: .textChatNemotronH, inputModalities: [.text, .image],
+             contextWindow: NemotronBoltResources.defaultContextLength, maximumOutputTokens: 4_096,
+             thinkingLevels: [.off, .high], thinkingLevelMap: [.high: .high],
+             toolCall: true, supportsStopSequences: true, supportsLogprobs: true)
+    }
+
     static func nemotronH(
         contextWindow: Int = NemotronHResources.defaultContextLength
     ) -> ManagedModelAPIProfile {

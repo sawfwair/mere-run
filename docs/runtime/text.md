@@ -56,6 +56,9 @@ gate.
 - `vision-chat-q38-27b` (managed official Qwen3.8 27B BF16 vision-language snapshot)
 - `vision-chat-q38-27b-4bit` (managed MLX 4-bit target plus pinned MTP and official vision components)
 - `text-chat-bonsai-27b-1bit` (managed packed 1-bit dense Qwen3.6 27B vision/reasoning snapshot)
+- `text-chat-bonsai-2-2b-2bit` (Bonsai 2 Small Qwen3.5 2B with native Hadamard 2-bit loading)
+- `text-chat-bonsai-2-4b-2bit` (Bonsai 2 Small Qwen3.5 4B with native Hadamard 2-bit loading)
+- `text-chat-bonsai-2-9b-2bit` (Bonsai 2 Small Qwen3.5 9B with native Hadamard 2-bit loading)
 - `text-chat-bonsai-2-27b-2bit` (Bonsai 2 Qwen3.8 27B with native Hadamard 2-bit loading)
 - `text-chat-bonsai-27b-2bit` (managed packed 2-bit ternary dense Qwen3.6 27B vision/reasoning snapshot)
 - `text-chat-lfm25-2.6b-4bit` (managed LiquidAI LFM2.5 2.6B dense MLX 4-bit snapshot)
@@ -982,3 +985,9 @@ preflight report uses the same checks. During a tool conversation, the command
 retains one native runtime and unloads it after completion, failure, or
 cancellation. See [shared chat execution](../internals/chat-execution.md) for the
 request and runtime boundaries shared with the API.
+
+## Nemotron 3.5 Bolt
+
+[Nemotron 3.5 Bolt](./nemotron-bolt.md) loads the original mixed packed
+checkpoint through the native Swift/MLX runtime for text and image chat.
+Install `vision-chat-nemotron-35-bolt-24gb` explicitly before inference.

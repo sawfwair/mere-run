@@ -36,6 +36,7 @@ extension ModelFamilyIdentifier {
         if modelType.modelType == "fish_omni" {
             return .family(invocation.value("--mode") == "clone" ? "drama3-clone" : "drama3")
         }
+        if modelType.modelType == "gradium_phonon_tts" { return .family("phonon") }
         if invocation.value("--mode") == "clone" {
             return .family(modelType.modelType == "breeze" ? "breeze-clone" : "clone")
         }

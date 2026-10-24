@@ -189,6 +189,23 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertTrue(backend.contains("native MLX"))
     }
 
+    func testBonsai2SmallParsesAsNativeVisionWithBoundedContext() throws {
+        for id in [Q35Resources.bonsai2TwoBModelId, Q35Resources.bonsai2FourBModelId,
+                   Q35Resources.bonsai2NineBModelId] {
+            let command = try TextChat.parse([
+                "--model", id, "--prompt", "Describe this image", "--image", "photo.png",
+                "--context-size", "8192", "--kv-bits", "4", "--seed", "7",
+            ])
+            XCTAssertEqual(command.model, id)
+            XCTAssertEqual(command.contextSize, 8192)
+            XCTAssertTrue(TextChat.backendDescription(for: id).contains("native MLX"))
+            XCTAssertEqual(try command.resolveKVCacheMode(for: .q35VL), .affine4)
+            let report = try gate("--model", id, "--image", "photo.png", "--seed", "7")
+            XCTAssertEqual(report.family, "q35-vl")
+            XCTAssertEqual(report.violations, [])
+        }
+    }
+
     func testDenseLFM2ParsesAsNativeMLX() throws {
         let command = try TextChat.parse([
             "--model", LFM2Resources.denseModelId,
@@ -606,14 +623,16 @@ final class TextChatCommandParsingTests: XCTestCase {
             XCTAssertEqual(try gate("--model", model, "--image", "a.png").violations.count, 1, model)
         }
         for model in [Gemma4Resources.visionTwelveBModelId, LFM2Resources.visionModelId, Q35Resources.bonsai2ModelId,
-                      NemotronOmniResources.modelID] {
+                      Q35Resources.bonsai2TwoBModelId, Q35Resources.bonsai2FourBModelId,
+                      Q35Resources.bonsai2NineBModelId,
+                      NemotronOmniResources.modelID, NemotronBoltResources.modelID] {
             let report = try gate("--model", model, "--image", "a.png")
             XCTAssertEqual(report.violations, [], model)
             XCTAssertEqual(report.warnings, [], model)
         }
         XCTAssertEqual(
             try gate("--model", NemotronHResources.modelID, "--image", "a.png").warnings,
-            ["--image has no effect with Nemotron 3.5 Lightning. It applies to Gemma 4 12B vision, Muse Glimmer, Nemotron 3 Nano Omni, LFM2.5-VL, Qwen3.6 vision and Qwen3.8."]
+            ["--image has no effect with Nemotron 3.5 Lightning. It applies to Gemma 4 12B vision, Muse Glimmer, Nemotron 3.5 Bolt, Nemotron 3 Nano Omni, LFM2.5-VL, Qwen3.6 vision and Qwen3.8."]
         )
     }
 

@@ -30,6 +30,7 @@ extension ModelFamilyIdentifier {
         if MuseGlimmerResources.handles(modelSpec: model) {
             return .museGlimmer
         }
+        if NemotronBoltResources.handles(modelSpec: model) { return .nemotronBolt }
         if NemotronOmniResources.handles(modelSpec: model) {
             return .nemotronOmni
         }

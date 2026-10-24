@@ -118,6 +118,8 @@ public enum ImageGenerationOperation {
         progressHandler: (@Sendable (GenerationProgress) -> Void)?
     ) async throws -> GenerationResult {
         switch backend {
+        case .flux3:
+            return try await Flux3Generator().generate(request, progressHandler: progressHandler)
         case .flux1:
             let generator = Flux1Generator()
             return try await withCleanup {

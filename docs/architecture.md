@@ -131,6 +131,12 @@ Klein image generation:
   - `Sources/MereRunCore/Flux2Klein/Flux2KleinGenerator+Denoising.swift`
   - `Sources/MereRunCore/Flux2Klein/Flux2KleinGenerator+Output.swift`
 
+FLUX 3 Klein generation and reference editing:
+
+- Runtime entry point: `Sources/MereRunCore/Flux3/Flux3Generator.swift`
+- Transformer, latent packing, and sampling: `Sources/MereRunImageModels/Flux3/`
+- Text, autoencoder, and reference preprocessing: `Sources/MereRunCore/Flux3/`
+
 ZImage generation:
 
 - Runtime entry point: `Sources/MereRunCore/ZImageTurbo/ZImageTurboGenerator.swift`
@@ -400,3 +406,7 @@ The advanced image validator is intentionally separate from generation:
    then output.
 5. If you need implementation detail, continue to the larger model-definition
    files.
+
+Native Phonon 31m computation is owned by `Sources/AudioPhononModel/`.
+`Sources/AudioTTS/Phonon/PhononGenerator.swift` adapts it to shared speech
+synthesis, streaming, model resolution, and WAV publication.

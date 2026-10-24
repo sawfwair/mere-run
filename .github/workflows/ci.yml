@@ -597,7 +597,7 @@ jobs:
     runs-on: ubuntu-22.04
     # Use the identical official image through its public mirror, avoiding
     # Docker Hub anonymous pull limits before the job can check out the repo.
-    container: public.ecr.aws/docker/library/swift:6.1-jammy@sha256:19792fa7ef68fb0e0ca5763ec3dfd40d6461afca7c081eb689e2e374fa80c0be
+    container: docker.io/library/swift:6.1-jammy@sha256:19792fa7ef68fb0e0ca5763ec3dfd40d6461afca7c081eb689e2e374fa80c0be
     env:
       RUN_GATE: ${{ needs.changes.result == 'success' && needs.changes.outputs.code == 'true' && needs.changes.outputs.linux == 'true' }}
     steps:
@@ -627,10 +627,11 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           # The Swift container does not inherit the host runner's Ubuntu mirrors.
-          # Match runner-images' failover instead of relying on the global HTTP archive.
+          # Prefer the HTTPS archive: Azure HTTP can trickle data until the step
+          # timeout without triggering APT's idle timeout and mirror failover.
           printf '%s\tpriority:%s\n' \
-            'http://azure.archive.ubuntu.com/ubuntu/' 1 \
-            'https://archive.ubuntu.com/ubuntu/' 2 \
+            'https://archive.ubuntu.com/ubuntu/' 1 \
+            'http://azure.archive.ubuntu.com/ubuntu/' 2 \
             'https://security.ubuntu.com/ubuntu/' 3 \
             > /etc/apt/apt-mirrors.txt
           sed -Ei \

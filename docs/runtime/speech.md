@@ -10,7 +10,7 @@ the audio does not leave the machine.
 
 | Command | What it does |
 | --- | --- |
-| `mere.run speech synthesize` | Generate speech from text using Qwen3-TTS, Breeze TTS 2, or DRAMA-3. |
+| `mere.run speech synthesize` | Generate speech from text using Qwen3-TTS, Breeze TTS 2, Phonon 31m, or DRAMA-3. |
 | `mere.run speech transcribe` | Transcribe or translate speech to text using native ASR backends. |
 | `mere.run speech diarize` | Identify speaker time ranges as versioned JSON or RTTM using native MLX diarization. |
 | `mere.run speech diarize-live` | Emit incremental Nemotron 3 speaker activity from a microphone or PCM stdin. |
@@ -25,6 +25,7 @@ the audio does not leave the machine.
 
 - `speech-tts-qwen3-nano`
 - `speech-tts-qwen3-customvoice`
+- `speech-tts-phonon-31m` (English; bundled voice; Apache 2.0)
 - `speech-tts-breeze-2` (English and Chinese; research and non-commercial use only)
 - `speech-tts-drama-3` (CLI only; Fish Audio Community License; inline delivery and speaker tags)
 
@@ -577,10 +578,13 @@ mere.run model location bind speech-tts-drama-3 /Volumes/T7/drama-3-q4 \
   --accept-model-license
 ```
 
-The catalog declares a 32 GB minimum and recommends 36 GB. These are capacity
-estimates from the pinned tensor shapes, not measured peak memory or performance.
-Full-checkpoint audio quality, Q4 quality loss, and 36 GB hardware qualification
-remain separate validation gates.
+The catalog declares a 32 GB minimum and recommends 36 GB. The minimum remains
+an estimate. Seven bounded probes pass on the tested 36 GiB system: batch and
+streamed paragraphs, reference conditioning, and cancellation. Peak process
+footprint reaches 32.86 GiB for paragraph streaming, with system swap in use.
+Cold first audio takes 96–113 seconds. See the
+[qualification record](../qualification/drama3-native-20261015/README.md) for
+receipts and remaining quality limits.
 
 For cloning, supply a reference clip and its exact transcript:
 
@@ -597,3 +601,28 @@ DRAMA-3 infers language from text and doesn't use `--voice`, named `--speaker`
 values, or classifier-free guidance. `--stream` publishes causal waveform prefixes;
 its codec recomputes the accumulated prefix at each chunk. Reaching the acoustic
 frame limit fails the operation instead of publishing a truncated final WAV.
+
+## Phonon 31m
+
+Use the Apache-2.0 English checkpoint with its bundled voice:
+
+```bash
+mere.run model pull speech-tts-phonon-31m
+mere.run speech synthesize "Hello from mere run." --model speech-tts-phonon-31m --seed 42 -o phonon.wav
+```
+
+Phonon loads original safetensors through native Swift/MLX and produces 24 kHz
+mono audio. Add `--stream` for frame-by-frame audio. The managed download is
+about 103 MB; GGUF weight formats are not supported. The existing Qwen default
+is unchanged.
+
+Omit voice descriptions, named speakers, clone controls, and CFG guidance.
+Phonon accepts English at its native speaking rate. Spell out structured text
+such as numbers, dates, and email addresses; Gradium's rewrite pipeline is not
+included. See `mere.run guide handbook-phonon` for the checkpoint pin, chunk
+policy, API usage, and the bounded released-weight quality and speed comparison.
+
+For full F32 checkpoint comparisons on Linux CUDA, set `MLX_ENABLE_TF32=0`
+and `MLX_USE_CUDA_GRAPHS=0` before launching the CLI. The bounded
+[CUDA qualification](../qualification/phonon-cuda-2026-10-23.json) records
+the tested host and numerical tolerances.

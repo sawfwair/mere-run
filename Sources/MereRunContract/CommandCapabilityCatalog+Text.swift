@@ -24,7 +24,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--prompt", aliases: ["-p"], label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
             .init(flag: "--image", label: "Image", kind: .file, group: Group.inputs, tier: .standard, blankReadsAsOmitted: true)
                 .scoped(Chat.only(
-                    .gemma4Unified, .museGlimmer, .nemotronOmni, .lfm2VL, .q35VL, .q38,
+                    .gemma4Unified, .museGlimmer, .nemotronBolt, .nemotronOmni, .lfm2VL, .q35VL, .q38,
                     ignoredBy: [.laguna, .nemotronH, .gguf, .psi]
                 )),
             .init(flag: "--system", aliases: ["-s"], label: "System prompt", kind: .string, group: Group.prompt, tier: .standard),
@@ -105,7 +105,7 @@ extension MereRunCapabilityCatalog {
             ).scoped(
                 Chat.rule(.kolibri, values: ["text"]), Chat.rule(.diffusionGemma, values: ["text"]), .rule(.laguna, values: ["text"]),
                 .rule(.inkling, values: ["text"]), .rule(.museGlimmer, values: ["text"]),
-                .rule(.nemotronH, values: ["text"]), .rule(.nemotronOmni, values: ["text"]),
+                .rule(.nemotronBolt, values: ["text"]), .rule(.nemotronH, values: ["text"]), .rule(.nemotronOmni, values: ["text"]),
                 .rule(.lfm2, values: ["text"]), .rule(.lfm2A1B, values: ["text"]), .rule(.lfm2VL, values: ["text"]),
                 .rule(.gguf, values: ["text"]), .rule(.psi, values: ["text"])
             ),
@@ -126,7 +126,7 @@ extension MereRunCapabilityCatalog {
             ).scoped(Chat.only(
                 .gemma4, .gemma4Unified, .laguna, .inkling, .lfm2A1B,
                 ignoredBy: [
-                    .diffusionGemma, .museGlimmer, .nemotronH, .nemotronOmni, .lfm2, .lfm2VL, .q35, .q35VL, .q38, .gguf, .psi
+                    .diffusionGemma, .museGlimmer, .nemotronH, .nemotronBolt, .nemotronOmni, .lfm2, .lfm2VL, .q35, .q35VL, .q38, .gguf, .psi
                 ]
             )),
             .init(flag: "--thinking", aliases: ["--show-thinking"], label: "Show thinking", kind: .boolean, group: Group.sampling, tier: .standard),
@@ -187,7 +187,7 @@ extension MereRunCapabilityCatalog {
 
     /// Families whose runtime keeps its own KV cache whatever the KV options say.
     private static let kvCacheIgnoring: [Chat] = [
-        .kolibri, .diffusionGemma, .laguna, .museGlimmer, .nemotronH, .nemotronOmni, .gguf, .psi
+        .kolibri, .diffusionGemma, .laguna, .museGlimmer, .nemotronH, .nemotronBolt, .nemotronOmni, .gguf, .psi
     ]
 
     public static let textCode = MereRunCommandCapability(
@@ -240,22 +240,23 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
             .init(flag: "--image", label: "Images", kind: .file, repeatable: true)
-                .scoped(TextEmbedFamily.only(.embeddingGemma2, .pplxLate)),
+                .scoped(TextEmbedFamily.only(.embeddingGemma2CoreML, .embeddingGemma2, .pplxLate)),
             .init(flag: "--audio", label: "Audio", kind: .file, repeatable: true)
-                .scoped(TextEmbedFamily.only(.embeddingGemma2)),
+                .scoped(TextEmbedFamily.only(.embeddingGemma2CoreML, .embeddingGemma2)),
             .init(flag: "--video", label: "Videos", kind: .file, repeatable: true)
                 .scoped(TextEmbedFamily.only(.embeddingGemma2)),
             .init(flag: "--input-json", label: "Mixed inputs", kind: .file)
-                .scoped(TextEmbedFamily.only(.embeddingGemma2)),
+                .scoped(TextEmbedFamily.only(.embeddingGemma2CoreML, .embeddingGemma2)),
             .init(flag: "--task", label: "Embedding task", kind: .choice,
                   choices: ["raw", "query", "document", "code-retrieval", "question-answering", "fact-checking",
                             "classification", "clustering", "similarity"], defaultValue: "raw", choiceSpellings: .exact)
-                .scoped(TextEmbedFamily.only(.embeddingGemma2, .pplxLate, .pplxContext),
+                .scoped(TextEmbedFamily.only(.embeddingGemma2CoreML, .embeddingGemma2, .pplxLate, .pplxContext),
                         .rule(.pplxLate, values: ["query", "document"], defaultValue: "document"), .rule(.pplxContext, values: ["query", "document"], defaultValue: "document")),
             .init(flag: "--title", label: "Document title", kind: .string)
-                .scoped(TextEmbedFamily.only(.embeddingGemma2)),
+                .scoped(TextEmbedFamily.only(.embeddingGemma2CoreML, .embeddingGemma2)),
             .init(flag: "--dimensions", label: "Embedding dimensions", kind: .integer)
-                .scoped(TextEmbedFamily.only(.embeddingGemma2, .pplxLate, .pplxContext),
+                .scoped(TextEmbedFamily.only(.embeddingGemma2CoreML, .embeddingGemma2, .pplxLate, .pplxContext),
+                        .rule(.embeddingGemma2CoreML, values: ["128", "256", "512", "768"]),
                         .rule(.embeddingGemma2, values: ["128", "256", "512", "768"]),
                         .rule(.pplxLate, values: ["128"]), .rule(.pplxContext, values: ["1024", "2048"])),
             .init(flag: "--chunks-json", label: "Document chunks", kind: .file)

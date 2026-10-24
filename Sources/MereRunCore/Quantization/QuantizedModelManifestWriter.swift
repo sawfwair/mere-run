@@ -57,6 +57,7 @@ public enum QuantizedModelManifestWriter {
             switch engine {
             case .flux1: return .flux1
             case .flux2Klein: return .klein
+            case .flux3: return .flux3
             case .zimageTurbo: return .zimage
             case .hidreamO1: return .hidream
             case .senseNovaU15: return .senseNova
@@ -77,10 +78,10 @@ public enum QuantizedModelManifestWriter {
             case .videoDepthAnything: return .depth
             case .marigoldV2: return .depth
             case .tripoSR, .instantMesh, .trellis2: return .threeD
-            case .qwen3TTS, .breezeTTS, .drama3TTS: return .tts
+            case .qwen3TTS, .breezeTTS, .drama3TTS, .phononTTS: return .tts
             case .qwen3ASR, .parakeetASR, .whistleASR: return .asr
             case .sortformer: return .asr
-            case .qwen3Embedding, .embeddingGemma2, .pplxEmbedV2: return .embed
+            case .qwen3Embedding, .embeddingGemma2, .embeddingGemma2CoreML, .pplxEmbedV2: return .embed
             case .laya: return .laya
             case .d1: return .d1
             case .clef: return .clef
@@ -138,6 +139,8 @@ public enum QuantizedModelManifestWriter {
                     return [.txt2img]
                 case .qwenImage21:
                     return [.txt2img, .referenceEdit]
+                case .flux3:
+                    return [.txt2img, .referenceEdit]
                 case .qwenImageEdit:
                     return [.referenceEdit]
                 case .ideogram4:
@@ -188,13 +191,13 @@ public enum QuantizedModelManifestWriter {
                     return [.imageTo3D, .meshGeneration]
                 case .instantMesh:
                     return [.multiViewReconstruction, .meshGeneration]
-                case .qwen3TTS, .breezeTTS, .drama3TTS:
+                case .qwen3TTS, .breezeTTS, .drama3TTS, .phononTTS:
                     return [.speechSynthesis]
                 case .qwen3ASR, .parakeetASR, .whistleASR:
                     return [.speechRecognition]
                 case .sortformer:
                     return [.speakerDiarization]
-                case .qwen3Embedding, .embeddingGemma2, .pplxEmbedV2:
+                case .qwen3Embedding, .embeddingGemma2, .embeddingGemma2CoreML, .pplxEmbedV2:
                     return [.textEmbedding]
                 case .openAIPrivacyFilter:
                     return [.textAnonymization]
@@ -294,6 +297,8 @@ public enum QuantizedModelManifestWriter {
                 )
             case .qwenImage21:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 40, cfg: 1.0)
+            case .flux3:
+                manifest.defaults = MereRunModelManifest.Defaults(steps: 16, cfg: 1.0)
             case .qwenImageEdit:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 40, cfg: 4.0)
             case .ideogram4:
@@ -313,7 +318,7 @@ public enum QuantizedModelManifestWriter {
                  .videoDepthAnything, .depthAnything3, .marigoldV2,
                  .tripoSR, .instantMesh, .trellis2:
                 break
-            case .laya, .clef, .d1, .gliner25Decide, .qwen3TTS, .breezeTTS, .drama3TTS, .qwen3ASR, .parakeetASR, .whistleASR, .sortformer, .qwen3Embedding, .embeddingGemma2, .pplxEmbedV2, .openAIPrivacyFilter,
+            case .laya, .clef, .d1, .gliner25Decide, .qwen3TTS, .breezeTTS, .drama3TTS, .phononTTS, .qwen3ASR, .parakeetASR, .whistleASR, .sortformer, .qwen3Embedding, .embeddingGemma2, .embeddingGemma2CoreML, .pplxEmbedV2, .openAIPrivacyFilter,
                  .qwen3Coder, .northMiniCode, .lightOnOCR, .woosh, .mmaudio, .psiChat, .deepseekV4Flash,
                  .muScriptor, .roFormer, .apBWE, .univerSR, .auk, .inkling:
                 break

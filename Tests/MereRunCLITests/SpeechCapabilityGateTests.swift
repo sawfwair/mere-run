@@ -357,3 +357,14 @@ private func temporaryFolder() throws -> URL {
         && offline.warnings == ["--latency has no effect with Sortformer. It applies to Nemotron 3 Diarization."])
     #expect(try report("speech", "diarize", "a.wav", "--latency", "1.04").violations.count == 1)
 }
+
+@Test func synthesizePhononScopesControlsBeforeLoading() throws {
+    let valid = try report("speech", "synthesize", "Hello", "-o", "a.wav",
+                           "--model", "speech-tts-phonon-31m", "--seed", "42", "--stream")
+    #expect(valid.family == "phonon" && valid.violations.isEmpty)
+    for flags in [["--voice", "Whisper"], ["--mode", "clone"], ["--cfg-scale", "4"], ["--stream", "--stream-chunk-tokens", "8"]] {
+        let value = try #require(CLICapabilityGate.evaluate(commandLine: ["speech", "synthesize", "Hello", "-o", "a.wav", "--model", "speech-tts-phonon-31m"] + flags)).report
+        #expect(value.family == "phonon")
+        #expect(!value.violations.isEmpty, "\(flags)")
+    }
+}

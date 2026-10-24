@@ -13,8 +13,65 @@ The format is based on Keep a Changelog.
   Batch synthesis releases the text/tower checkpoint before codec decoding;
   audio-tower masks preserve BF16 computation and temporary Metal buffers are
   cleared between acoustic frames.
-  Component tests cover tensor layout, audio-tower numerics, prompts, and packing;
-  full-checkpoint quality, peak memory, and throughput remain unqualified.
+  Seven bounded released-checkpoint probes pass on a 36 GiB system, including
+  paragraph streaming and cancellation. Cold first audio takes 96–113 seconds;
+  perceptual quality and Q4 quality loss remain unqualified.
+
+## 0.65.0 - 2026-10-23
+
+- Add native Phonon 31m English speech synthesis through
+  `speech-tts-phonon-31m`, with the default voice, seeded sampling, 24 kHz WAV
+  output, streaming, and the local `/v1/audio/speech` API. Load the pinned
+  original safetensors directly in Swift/MLX. Spell out numbers, dates, units,
+  and email addresses; text rewriting and voice cloning are unsupported.
+  On an M3 Max, local ASR transcripts matched upstream on 20 prose cases.
+  Warm synthesis measured 25–26 times real time;
+  upstream CPU F32 and Q8 paths were faster on the same host.
+  Fix non-finite Phonon audio on Linux CUDA by materializing attention projections.
+
+- Add native Nemotron 3.5 Bolt 74B-A9B-24GB text and image chat through
+  `vision-chat-nemotron-35-bolt-24gb`, loading the original packed IQ2_XXS,
+  Q8_0, NVFP4, and BF16 weights directly. Support streamed responses, tools,
+  thinking controls, stop sequences, and log probabilities. Twelve bounded
+  text/image diagnostics passed on a 36 GiB M3 Max; broad quality, upstream
+  parity, and long contexts remain unqualified.
+
+- Add pinned Bonsai 2 Small 2B, 4B, and 9B vision chat packs to the native Swift/MLX runtime,
+  including Hadamard-aware tied output embeddings for the 2B and 4B packs.
+
+- Preserve Bonsai 2 checkpoint RMS scales and vision arithmetic, including
+  bicubic Small-pack image preprocessing, FP16 position interpolation, Conv3d
+  patch projection, and the upstream rotary-frequency formula. Add independent
+  checkpoint parity evidence for all three Small packs. Use the precise Metal
+  power intrinsic for vision rotary frequencies to match checkpoint rounding.
+
+- Add experimental native Swift/MLX FLUX 3 Klein generation and ordered reference
+  editing through `image-flux3-klein`, loading the pinned original BF16 package
+  directly. Use 16-step flow-map sampling at CFG 1, explicit gated downloads,
+  and the bundled FLUX Kommunity License notice.
+
+- Add durable relay workflow batches with immutable child IDs and seeds, resumable
+  shared-asset submission, bounded fleet admission, ordered verified results, and
+  `graph batch submit`, `inspect`, `watch`, `fetch`, `cancel`, and `retry` commands.
+  Each child executes its entire graph on one worker.
+
+- Build bundled MLX shaders with Metal 3.2 and a macOS 15.0 deployment target,
+  including the library link step, so Xcode 26 builds load on supported macOS 15
+  systems. Validate both settings in the build and runtime provenance checks (#586).
+
+- Restore Linux CI image pulls through the official Docker Hub registry after
+  the ECR Public mirror reached its transfer limit. Prefer HTTPS Ubuntu package
+  downloads while retaining mirror failover and the pinned Swift toolchain.
+
+- Cache compiled Core ML embedding packages across processes, pack short text
+  batches with bounded concurrent ANE predictions, and expose caller-owned warm
+  embedding sessions. Include full runtime license notices in macOS app bundles.
+- Add `text-embed-embeddinggemma2-coreml` for native Core ML text, image, audio,
+  and ordered mixed embeddings on Apple Silicon macOS 15 or later, including
+  macOS 26. The pinned export accepts 512 tokens and audio segments up to 10 seconds.
+  An optional local conversion expands context to 8,192 tokens and audio segments
+  to 30 seconds, using float32 GPU graphs for longer inputs.
+  The existing MLX model and default selections remain unchanged.
 
 ## 0.64.0 - 2026-10-10
 

@@ -14,6 +14,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
     public static let filename: String = "mererun_model.json"
 
     public enum Engine: String, Codable, CaseIterable, Hashable, Sendable {
+        case flux3 = "flux3-klein"
         case laya
         case clef
         case d1
@@ -73,6 +74,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case trellis2 = "trellis2"
         /// Qwen3 TTS family.
         case qwen3TTS = "qwen3-tts"
+        case phononTTS = "phonon-tts"
         case breezeTTS = "breeze-tts"
         case drama3TTS = "drama3-tts"
         /// Qwen3 ASR family.
@@ -85,6 +87,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         /// Qwen3 embeddings family.
         case qwen3Embedding = "qwen3-embedding"
         case pplxEmbedV2 = "pplx-embed-v2"
+        case embeddingGemma2CoreML = "embeddinggemma2-coreml"
         case embeddingGemma2 = "embeddinggemma2"
         /// OpenAI Privacy Filter token-classification family.
         case openAIPrivacyFilter = "openai-privacy-filter"
@@ -138,6 +141,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
     }
 
     public enum Family: String, Codable, CaseIterable, Hashable, Sendable {
+        case flux3
         case laya
         case clef
         case d1

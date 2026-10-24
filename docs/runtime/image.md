@@ -4,8 +4,17 @@ Use the image runtime to generate an image from a prompt, train a low-rank
 adaptation (LoRA) on your own pictures, replay a generation from a saved plan,
 or convert one photo into a textured three-dimensional (3D) mesh. The runtime
 supports local model families from compact ZImage checkpoints through FLUX.1
-Dev, FLUX.2 Dev and Klein, HiDream O1, SenseNova U1.5, Krea 2, Qwen Image Edit
+Dev, FLUX.2 Dev and Klein, FLUX 3 Klein, HiDream O1, SenseNova U1.5, Krea 2, Qwen Image Edit
 2511, and Ideogram 4.
+
+`image-flux3-klein` runs the distilled FLUX 3 model in native Swift and MLX,
+loading the original BF16 package directly. It defaults to 16 steps and CFG 1,
+and accepts up to 10 references. See
+[`guide image generate --model image-flux3-klein`](https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-flux3-klein.md)
+for installation and restrictions. The
+[checkpoint qualification report](../benchmarks/flux3-klein-native-qualification-2026-10-15.md)
+includes 512/1024 generation, one- and two-reference edits, output images,
+checksums, and the remaining qualification limits.
 
 ## Commands
 

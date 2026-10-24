@@ -202,6 +202,13 @@ public enum ManagedModelCapabilityCatalog {
     private static let descriptorsByID: [String: ManagedModelCapabilityDescriptor] = {
         let descriptors = [
             descriptor(
+                Flux3Resources.modelID,
+                "Image, FLUX 3 Klein",
+                "Installs experimental native BF16 FLUX 3 Klein generation and reference editing; released-checkpoint quality and memory remain unqualified.",
+                minimum: 32,
+                recommended: 48
+            ),
+            descriptor(
                 "image-klein-nano",
                 "Image, fast artistic",
                 "Creates fast FLUX.2 Klein images for prompts, drafts, and lightweight image workflows.",
@@ -494,6 +501,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 64
             ),
             descriptor(
+                NemotronBoltResources.modelID,
+                "Nemotron 3.5 Bolt 74B-A9B 24GB",
+                "Text and image chat from NVIDIA's original packed checkpoint. Full-checkpoint quality and peak memory remain unqualified.",
+                minimum: 32,
+                recommended: 48
+            ),
+            descriptor(
                 NemotronHResources.modelID,
                 "Nemotron 3.5 Lightning 30B-A3B",
                 "Runs NVIDIA's hybrid Nemotron-H NVFP4 checkpoint with its verified DSpark speculative companion through native Swift/MLX.",
@@ -577,6 +591,27 @@ public enum ManagedModelCapabilityCatalog {
                 "Runs Prism ML's dense Qwen3.6 27B reasoning and vision model from packed ternary 2-bit MLX weights.",
                 minimum: 16,
                 recommended: 24
+            ),
+            descriptor(
+                Q35Resources.bonsai2TwoBModelId,
+                "Ternary Bonsai 2 2B 2-bit vision chat",
+                "Runs Prism ML's Qwen3.5 2B vision model from Hadamard-transformed ternary 2-bit MLX weights.",
+                minimum: 8,
+                recommended: 12
+            ),
+            descriptor(
+                Q35Resources.bonsai2FourBModelId,
+                "Ternary Bonsai 2 4B 2-bit vision chat",
+                "Runs Prism ML's Qwen3.5 4B vision model from Hadamard-transformed ternary 2-bit MLX weights.",
+                minimum: 8,
+                recommended: 16
+            ),
+            descriptor(
+                Q35Resources.bonsai2NineBModelId,
+                "Ternary Bonsai 2 9B 2-bit vision chat",
+                "Runs Prism ML's Qwen3.5 9B vision model from Hadamard-transformed ternary 2-bit MLX weights.",
+                minimum: 12,
+                recommended: 16
             ),
             descriptor(
                 Q35Resources.bonsai2ModelId,
@@ -788,6 +823,11 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 36
             ),
             descriptor(
+                "speech-tts-phonon-31m", "Phonon 31m",
+                "Synthesizes English speech locally with Gradium Phonon and a precomputed voice.",
+                minimum: 4, recommended: 8
+            ),
+            descriptor(
                 "speech-tts-breeze-2",
                 "Breeze TTS 2",
                 "Synthesizes English and Chinese speech with voice design, cloning, and direction. Research and non-commercial use only.",
@@ -857,6 +897,11 @@ public enum ManagedModelCapabilityCatalog {
             descriptor(
                 EmbeddingGemma2Catalog.modelID, "EmbeddingGemma 2 text and code embeddings",
                 "Native bidirectional Gemma encoder with task prefixes and normalized 128/256/512/768-dimensional vectors.",
+                minimum: 8, recommended: 16
+            ),
+            descriptor(
+                EmbeddingGemma2CoreMLCatalog.modelID, "EmbeddingGemma 2 Core ML",
+                "Native Core ML text, image, and audio embeddings on macOS 15 or later; 512-token limit.",
                 minimum: 8, recommended: 16
             ),
             descriptor(

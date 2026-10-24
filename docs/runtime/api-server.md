@@ -892,7 +892,8 @@ whole-image conditioning rather than strict masked inpainting.
 - `voice`: OpenAI voice names are translated to speech style descriptions;
   custom descriptions are passed through
 - `speed`, `instructions`, and `temperature`
-- `seed` and `cfg_scale`: optional mere.run extensions for Breeze TTS 2 only;
+- `seed`: optional mere.run extension for Breeze TTS 2 and Phonon 31m.
+- `cfg_scale`: optional mere.run extension for Breeze TTS 2 only;
   CFG accepts finite values from 0 through 20 and defaults to 4
 - `response_format`: `wav`, `mp3`, `opus`, `aac`, or `flac`; non-WAV formats
   require `ffmpeg`

@@ -59,3 +59,27 @@ guide for the reproducible checks. Editorial review date: October 6, 2026.
 
 - [Google model card](https://huggingface.co/google/embeddinggemma-2/blob/914f7f89142e33e77833254d9c9b90c3cef7303b/README.md)
 - [Native usage guide](https://github.com/sawfwair/mere-run/blob/main/docs/runtime/embeddinggemma2.md)
+
+## Apple Core ML variant
+
+`text-embed-embeddinggemma2-coreml` is a separate preconverted install from
+FluidInference, pinned to `3f978ddf92cac9aa07eb2dcf6eb36cf450f3dba4`.
+It runs on Apple Silicon macOS 15 or later, including macOS 26.
+Download explicitly before inference:
+
+```bash
+mere.run model pull text-embed-embeddinggemma2-coreml
+mere.run text embed "find a sorting function" \
+  --model text-embed-embeddinggemma2-coreml --task query --dimensions 256
+mere.run text embed --image ./photo.png --audio ./clip.wav \
+  --model text-embed-embeddinggemma2-coreml
+```
+
+The export supports text, images, audio, and ordered mixed JSON with a 512-token
+budget. Text truncates while preserving BOS/EOS; mixed records reject overflow.
+Audio segments must be longer than 10 milliseconds and at most 10 seconds.
+Split longer recordings into separate inputs. Video requires the original MLX
+model. Outputs retain input indices, actual token usage, and normalized
+128/256/512/768 dimensions. Core ML compiles the downloaded packages locally;
+no conversion tools or Python process are required during inference.
+See the native usage guide for bounded validation results and limits.

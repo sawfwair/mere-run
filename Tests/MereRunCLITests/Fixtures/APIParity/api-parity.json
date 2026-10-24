@@ -14,7 +14,7 @@
       "evidence": "ImageGenerationPlan.issues has no Krea guidance check and Krea2Generator never reads guidance.",
       "branch": "warns",
       "warnings": [
-        "--cfg has no effect with Krea 2. It applies to FLUX.1-dev, FLUX.2 Klein, FLUX.2-dev, Z-Image, HiDream-O1, SenseNova U1.5, Qwen-Image 2.1, Qwen-Image 2.1 Turbo, Qwen-Image-Edit, Qwen-Image-Edit Lightning and Ideogram 4."
+        "--cfg has no effect with Krea 2. It applies to FLUX 3 Klein, FLUX.1-dev, FLUX.2 Klein, FLUX.2-dev, Z-Image, HiDream-O1, SenseNova U1.5, Qwen-Image 2.1, Qwen-Image 2.1 Turbo, Qwen-Image-Edit, Qwen-Image-Edit Lightning and Ideogram 4."
       ]
     },
     {
@@ -344,8 +344,8 @@
       "evidence": "The route accepts them for DiffusionGemma, whose generator reads neither.",
       "branch": "warns",
       "warnings": [
-        "--top-p has no effect with DiffusionGemma. It applies to Gemma 4, Gemma 4 12B vision, Kolibri 1, Laguna, Inkling-Small, Muse Glimmer, Nemotron 3.5 Lightning, Nemotron 3 Nano Omni, LFM2.5, LFM2.5 A1B 8-bit, LFM2.5-VL, Qwen3.6 text, Qwen3.6 vision, Qwen3.8, llama.cpp GGUF and Psi.",
-        "--top-k has no effect with DiffusionGemma. It applies to Kolibri 1, Laguna, Inkling-Small, Muse Glimmer, Nemotron 3.5 Lightning, Nemotron 3 Nano Omni, LFM2.5, LFM2.5 A1B 8-bit, LFM2.5-VL, Qwen3.6 text, Qwen3.6 vision and Qwen3.8."
+        "--top-p has no effect with DiffusionGemma. It applies to Gemma 4, Gemma 4 12B vision, Kolibri 1, Laguna, Inkling-Small, Muse Glimmer, Nemotron 3.5 Bolt, Nemotron 3.5 Lightning, Nemotron 3 Nano Omni, LFM2.5, LFM2.5 A1B 8-bit, LFM2.5-VL, Qwen3.6 text, Qwen3.6 vision, Qwen3.8, llama.cpp GGUF and Psi.",
+        "--top-k has no effect with DiffusionGemma. It applies to Kolibri 1, Laguna, Inkling-Small, Muse Glimmer, Nemotron 3.5 Bolt, Nemotron 3.5 Lightning, Nemotron 3 Nano Omni, LFM2.5, LFM2.5 A1B 8-bit, LFM2.5-VL, Qwen3.6 text, Qwen3.6 vision and Qwen3.8."
       ]
     },
     {

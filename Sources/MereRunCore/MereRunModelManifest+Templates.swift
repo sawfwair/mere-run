@@ -582,6 +582,16 @@ extension MereRunModelManifest {
                     "\(MuseGlimmerResources.assistantUpstreamRepoId)@\(MuseGlimmerResources.assistantUpstreamRevision)",
                 createdAt: createdAt
             )
+        case .nemotron35Bolt24GB:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .nemotronH, family: .nemotron,
+                tier: .latest, variant: .standard, precision: .int2,
+                quantization: Quantization(bits: 2, groupSize: 256, scheme: "ggml-iq2-xxs-q8-0-nvfp4-mixed"),
+                defaults: nil, supports: [.chat, .codeGeneration, .visionChat, .visionOCR],
+                components: genericTextComponents,
+                upstreamRepoId: "\(NemotronBoltResources.upstreamRepoID)@\(NemotronBoltResources.upstreamRevision)",
+                createdAt: createdAt
+            )
         case .nemotron35Lightning:
             return MereRunModelManifest(
                 id: modelID.rawValue,
@@ -795,7 +805,8 @@ extension MereRunModelManifest {
                     + "@\(Q35Resources.bonsai27B2BitUpstreamRevision)",
                 createdAt: createdAt
             )
-        case .bonsai2:
+        case .bonsai2, .bonsai2TwoB, .bonsai2FourB, .bonsai2NineB:
+            let profile = Q35Resources.profile(for: modelID.rawValue)!
             return MereRunModelManifest(
                 id: modelID.rawValue,
                 engine: .qwen35HybridMoE,
@@ -807,8 +818,7 @@ extension MereRunModelManifest {
                 defaults: nil,
                 supports: [.chat, .codeGeneration, .visionChat],
                 components: q35TextComponents,
-                upstreamRepoId: "\(Q35Resources.bonsai2UpstreamRepoId)"
-                    + "@\(Q35Resources.bonsai2UpstreamRevision)",
+                upstreamRepoId: "\(profile.upstreamRepoId)@\(profile.upstreamRevision)",
                 createdAt: createdAt
             )
         case .lfm25A1B8Bit:
@@ -1336,6 +1346,14 @@ extension MereRunModelManifest {
                 upstreamRepoId: "\(Krea2Resources.upstreamRepoId)@\(Krea2Resources.upstreamRevision)",
                 createdAt: createdAt
             )
+        case .flux3Klein:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .flux3, family: .flux3,
+                tier: .latest, variant: .distilled, precision: .bf16,
+                defaults: Defaults(steps: Flux3Sampling.defaultSteps, cfg: 1), supports: [.txt2img, .referenceEdit],
+                components: Components(tokenizer: .local(path: "text_encoder"), textEncoder: .local(path: "text_encoder"),
+                    transformer: .local(path: "."), vae: .local(path: "."), scheduler: nil),
+                upstreamRepoId: "\(Flux3Resources.repoID)@\(Flux3Resources.revision)", createdAt: createdAt)
         case .qwenImage21, .qwenImage21Turbo:
             let turbo = modelID == .qwenImage21Turbo
             return MereRunModelManifest(
@@ -1645,6 +1663,13 @@ extension MereRunModelManifest {
                 upstreamRepoId: "fishaudio/drama-3@dd64a85cd82e9521f7202610ede97b367fc83946",
                 createdAt: createdAt
             )
+        case .phonon31m:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .phononTTS, family: .tts, tier: .nano,
+                variant: .standard, precision: .bf16, defaults: nil,
+                supports: [.speechSynthesis], components: genericTextComponents,
+                upstreamRepoId: "\(PhononResources.repository)@\(PhononResources.revision)", createdAt: createdAt
+            )
         case .breezeTTS2:
             return MereRunModelManifest(
                 id: modelID.rawValue,
@@ -1776,6 +1801,14 @@ extension MereRunModelManifest {
                 precision: modelID == .pplxEmbedV2LateLargeMixed4Bit ? .int4 : modelID == .pplxEmbedV2Context8Bit ? .int8 : .fp32,
                 defaults: nil, supports: PPLXEmbedV2Catalog.isContextual(modelID.rawValue) ? [.textEmbedding] : [.textEmbedding, .multimodalEmbedding],
                 components: genericTextComponents, upstreamRepoId: PPLXEmbedV2Catalog.repository(modelID.rawValue), createdAt: createdAt
+            )
+        case .embeddingGemma2CoreML:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .embeddingGemma2CoreML, family: .embed,
+                tier: .small, variant: .standard, precision: .fp16,
+                defaults: nil, supports: [.textEmbedding, .multimodalEmbedding],
+                components: Components(tokenizer: .local(path: "."), textEncoder: .local(path: ".")),
+                upstreamRepoId: EmbeddingGemma2CoreMLCatalog.repository, createdAt: createdAt
             )
         case .embeddingGemma2:
             return MereRunModelManifest(

@@ -224,6 +224,23 @@ extension ManagedModelCatalog {
             apiProfile: .museGlimmer()
         ),
         ManagedModelSpec(
+            id: NemotronBoltResources.modelID,
+            category: .visionChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: NemotronBoltResources.upstreamRepoID,
+                revision: NemotronBoltResources.upstreamRevision,
+                patterns: NemotronBoltResources.snapshotPatterns
+            ),
+            upstreamRepoId: NemotronBoltResources.upstreamRepoID,
+            upstreamRevision: NemotronBoltResources.upstreamRevision,
+            validationKind: .nemotronBolt,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: NemotronBoltResources.estimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
+            apiProfile: .nemotronBolt()
+        ),
+        ManagedModelSpec(
             id: NemotronHResources.modelID,
             category: .textChat,
             installShape: .directoryRoot,
@@ -511,6 +528,42 @@ extension ManagedModelCatalog {
                 contextWindow: Q35Resources.bonsai27B2BitContextLength,
                 fixedReasoning: true
             )
+        ),
+        ManagedModelSpec(
+            id: Q35Resources.bonsai2TwoBModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(for: Q35Resources.bonsai2TwoBModelId)?.hubFallbackConfig,
+            upstreamRepoId: "prism-ml/Ternary-Bonsai-2-2B-mlx-2bit",
+            upstreamRevision: "1c6cbae21f8c38830ce337972b46fdae7b18eaaa",
+            validationKind: .q35,
+            estimatedDownloadBytes: 1_213_254_984,
+            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
+            apiProfile: .q36(contextWindow: Q35Resources.bonsai2ContextLength, fixedReasoning: true)
+        ),
+        ManagedModelSpec(
+            id: Q35Resources.bonsai2FourBModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(for: Q35Resources.bonsai2FourBModelId)?.hubFallbackConfig,
+            upstreamRepoId: "prism-ml/Ternary-Bonsai-2-4B-mlx-2bit",
+            upstreamRevision: "dff2caaa23fa8706164c44c10f1b58feb405f76a",
+            validationKind: .q35,
+            estimatedDownloadBytes: 1_884_421_442,
+            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
+            apiProfile: .q36(contextWindow: Q35Resources.bonsai2ContextLength, fixedReasoning: true)
+        ),
+        ManagedModelSpec(
+            id: Q35Resources.bonsai2NineBModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(for: Q35Resources.bonsai2NineBModelId)?.hubFallbackConfig,
+            upstreamRepoId: "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit",
+            upstreamRevision: "f4e28a59531731c41b6dfac88cf271bd58f0a287",
+            validationKind: .q35,
+            estimatedDownloadBytes: 3_475_209_704,
+            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
+            apiProfile: .q36(contextWindow: Q35Resources.bonsai2ContextLength, fixedReasoning: true)
         ),
         ManagedModelSpec(
             id: Q35Resources.bonsai2ModelId,

@@ -54,7 +54,14 @@ public final class Q35VisionTower: Module {
         self.patchSize = qwenVisionConfig.patchSize
         self.temporalPatchSize = qwenVisionConfig.temporalPatchSize
         self.spatialMergeSize = qwenVisionConfig.spatialMergeSize
-        self._visionTower.wrappedValue = QwenVisionTower(configuration: qwenVisionConfig)
+        let tower = QwenVisionTower(configuration: qwenVisionConfig)
+        if config.modelType == "prism_hadamard_qwen35" {
+            // Preserve rounding in the published FP16 vision operations.
+            tower.positionEmbeddingArithmetic = .embeddingDType
+            tower.useCheckpointPatchProjection()
+            tower.useCheckpointRotaryFrequencies()
+        }
+        self._visionTower.wrappedValue = tower
 
         if qwenVisionConfig.outHiddenDim != config.textConfig.hiddenSize {
             self._visionProjection.wrappedValue = Linear(
@@ -176,7 +183,7 @@ public final class Q35VisionTower: Module {
         return key
     }
 
-    private static func preparePatchInputs(
+    package static func preparePatchInputs(
         pixelValues: MLXArray,
         patchSize: Int,
         temporalPatchSize: Int,

@@ -31,6 +31,30 @@ final class MLXBundleSupportTests: XCTestCase {
     )
   }
 
+  func testVendoredMetallibBinaryTargetsMacOS15() throws {
+    let library = repositoryRoot.appendingPathComponent(
+      "vendor/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib"
+    )
+    let process = Process()
+    let output = Pipe()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+    process.arguments = ["metal-objdump", "--metallib", "--private-headers", library.path]
+    process.standardOutput = output
+    process.standardError = output
+    try process.run()
+    let data = output.fileHandleForReading.readDataToEndOfFile()
+    process.waitUntilExit()
+    let header = String(decoding: data, as: UTF8.self)
+
+    XCTAssertEqual(process.terminationStatus, 0, header)
+    XCTAssertTrue(header.contains("Platform: MACOS\n"), header)
+    XCTAssertTrue(header.contains("PlatformMajor: 15\n"), header)
+    // The linker header represents minor/patch zero as NUL characters.
+    let normalized = header.replacingOccurrences(of: "\u{0000}", with: "0")
+    XCTAssertTrue(normalized.contains("PlatformMinor: 0\n"), normalized)
+    XCTAssertTrue(normalized.contains("PlatformUpdate: 0\n"), normalized)
+  }
+
   func testMissingRevisionOrKernelHashIsUnstamped() {
     let status = MLXBundleSupport.stampStatus(
       contents: "mlx-core-version: \(MLXBundleSupport.expectedProvenance.coreVersion)\n"
@@ -44,6 +68,8 @@ final class MLXBundleSupportTests: XCTestCase {
         "mlx-upstream-revision",
         "mlx-swift-revision",
         "kernel-sources-sha256",
+        "metal-language-version",
+        "macos-deployment-target",
       ])
     )
   }
@@ -58,6 +84,8 @@ final class MLXBundleSupportTests: XCTestCase {
         mlx-upstream-revision: \(expected.upstreamRevision)
         mlx-swift-revision: \(String(repeating: "0", count: 40))
         kernel-sources-sha256: \(expected.kernelSourcesSHA256)
+        metal-language-version: \(expected.metalLanguageVersion)
+        macos-deployment-target: \(expected.macOSDeploymentTarget)
         """
     )
 
@@ -85,6 +113,8 @@ final class MLXBundleSupportTests: XCTestCase {
         mlx-upstream-revision: \(wrongUpstream)
         mlx-swift-revision: \(expected.swiftRevision)
         kernel-sources-sha256: \(expected.kernelSourcesSHA256)
+        metal-language-version: \(expected.metalLanguageVersion)
+        macos-deployment-target: \(expected.macOSDeploymentTarget)
         """
     )
 
@@ -111,6 +141,8 @@ final class MLXBundleSupportTests: XCTestCase {
         mlx-upstream-revision: \(expected.upstreamRevision)
         mlx-swift-revision: \(expected.swiftRevision)
         kernel-sources-sha256: \(String(repeating: "0", count: 64))
+        metal-language-version: \(expected.metalLanguageVersion)
+        macos-deployment-target: \(expected.macOSDeploymentTarget)
         """
     )
 
@@ -123,6 +155,43 @@ final class MLXBundleSupportTests: XCTestCase {
           expected: expected.kernelSourcesSHA256
         )
       ])
+    )
+  }
+
+  func testHostSDKMetallibIsRejectedDespiteMatchingKernelSources() throws {
+    let resources = repositoryRoot.appendingPathComponent(
+      "vendor/mlx-swift_Cmlx.bundle/Contents/Resources"
+    )
+    let contents = try String(
+      contentsOf: resources.appendingPathComponent("default.metallib.version"), encoding: .utf8
+    )
+    let incompatible = contents
+      .replacingOccurrences(of: "metal-language-version: 3.2", with: "metal-language-version: 4.0")
+      .replacingOccurrences(of: "macos-deployment-target: 15.0", with: "macos-deployment-target: 26.0")
+
+    XCTAssertEqual(
+      MLXBundleSupport.stampStatus(contents: incompatible),
+      .mismatched([
+        .init(field: "metal-language-version", stamped: "4.0", expected: "3.2"),
+        .init(field: "macos-deployment-target", stamped: "26.0", expected: "15.0"),
+      ])
+    )
+  }
+
+  func testStampWithoutCompatibilityFieldsIsUnstamped() throws {
+    let resources = repositoryRoot.appendingPathComponent(
+      "vendor/mlx-swift_Cmlx.bundle/Contents/Resources"
+    )
+    let contents = try String(
+      contentsOf: resources.appendingPathComponent("default.metallib.version"), encoding: .utf8
+    )
+    let legacy = contents.split(separator: "\n").filter {
+      !$0.hasPrefix("metal-language-version:") && !$0.hasPrefix("macos-deployment-target:")
+    }.joined(separator: "\n")
+
+    XCTAssertEqual(
+      MLXBundleSupport.stampStatus(contents: legacy),
+      .unstamped(missingFields: ["metal-language-version", "macos-deployment-target"])
     )
   }
 

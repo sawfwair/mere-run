@@ -2,6 +2,7 @@ import Foundation
 
 /// Canonical public model identities, independent of inference implementations.
 public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
+    case flux3Klein = "image-flux3-klein"
     case kleinNano = "image-klein-nano"
     case kleinMax = "image-klein-max"
     case klein9B = "image-klein-9b"
@@ -43,6 +44,7 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case museGlimmer30B = "vision-chat-muse-glimmer-30b"
     case museGlimmer30BDFlash2 = "vision-chat-muse-glimmer-30b-dflash2"
     case museGlimmer30BAssistant = "vision-chat-muse-glimmer-30b-assistant"
+    case nemotron35Bolt24GB = "vision-chat-nemotron-35-bolt-24gb"
     case nemotron35Lightning = "text-chat-nemotron-35-lightning"
     case nemotron35LightningDSpark = "text-chat-nemotron-35-lightning-dspark"
     case nemotron3NanoOmni30BA3BBF16 = "omni-chat-nemotron3-nano-30b-a3b-bf16"
@@ -56,6 +58,9 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case q38FlashNext4Bit = "vision-chat-q38-flash-next-4bit"
     case bonsai27B1Bit = "text-chat-bonsai-27b-1bit"
     case bonsai27B2Bit = "text-chat-bonsai-27b-2bit"
+    case bonsai2TwoB = "text-chat-bonsai-2-2b-2bit"
+    case bonsai2FourB = "text-chat-bonsai-2-4b-2bit"
+    case bonsai2NineB = "text-chat-bonsai-2-9b-2bit"
     case bonsai2 = "text-chat-bonsai-2-27b-2bit"
     case lfm25A1B8Bit = "text-chat-lfm25-a1b-8bit"
     case lfm25A1BBF16 = "text-chat-lfm25-a1b-bf16"
@@ -84,6 +89,7 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case deepseekV4Flash = "text-agent-deepseek-v4-flash"
     case qwen3TTSNano = "speech-tts-qwen3-nano"
     case qwen3TTSCustomVoice = "speech-tts-qwen3-customvoice"
+    case phonon31m = "speech-tts-phonon-31m"
     case breezeTTS2 = "speech-tts-breeze-2"
     case drama3TTS = "speech-tts-drama-3"
     case qwen3ASR = "speech-asr-qwen3"
@@ -98,6 +104,7 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case pplxEmbedV2Context = "text-embed-pplx-v2-context-9b-preview"
     case pplxEmbedV2LateLargeMixed4Bit = "text-embed-pplx-v2-late-9b-mixed-4bit"
     case pplxEmbedV2Context8Bit = "text-embed-pplx-v2-context-9b-preview-8bit"
+    case embeddingGemma2CoreML = "text-embed-embeddinggemma2-coreml"
     case embeddingGemma2 = "text-embed-embeddinggemma2"
     case privacyFilter = "text-anonymize-privacy-filter"
     case laya = "text-decide-laya"

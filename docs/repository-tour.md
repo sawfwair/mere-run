@@ -138,7 +138,7 @@ loading, tokenizer integration, generation, and paired-logprob export. See
 
 `Sources/MereRunTensor` owns checkpoint loading and shared tensor kernels.
 `Sources/MereRunTextEncoder` owns the shared Qwen text encoder and vision tower.
-`Sources/MereRunImageModels` owns FLUX.2 and ZImage transformer layers and the
+`Sources/MereRunImageModels` owns FLUX.2, FLUX 3, and ZImage transformer layers and the
 shared VAE. Core re-exports these libraries and owns generation orchestration.
 See [Image runtime boundaries](./internals/image-runtime-boundaries.md).
 
@@ -343,3 +343,13 @@ chunking, and result decoding. See
 SigLIP2 NaFlex vision, learned option heads, and FastConformer audio computation.
 `Sources/MereRunCore/D1` owns pinned checkpoint loading, ordered prompts, local
 media, preflight, and decision responses. See [Native D1 decisions](./runtime/d1.md).
+
+`Sources/MereRunCoreMLModel` is an internal target for EmbeddingGemma 2 Core ML
+graph execution, BF16 token lookup, and native tokenizer/media preprocessing.
+It runs on Apple Silicon macOS 15 or later, including macOS 26. Core owns
+installation and ordered input routing. See
+[EmbeddingGemma 2](./runtime/embeddinggemma2.md#apple-core-ml-export).
+
+Native Phonon 31m computation is owned by `Sources/AudioPhononModel/`.
+`Sources/AudioTTS/Phonon/PhononGenerator.swift` adapts it to shared speech
+synthesis, streaming, model resolution, and WAV publication.

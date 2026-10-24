@@ -1,0 +1,1199 @@
+{
+  "schema_version": 2,
+  "model_id": "speech-tts-phonon-31m",
+  "qualification": "released_checkpoint_bounded_comparison",
+  "checkpoint": {
+    "repository": "gradium/phonon-31m-en",
+    "revision": "92741c5b07d085ff840e26fea8ce43110b87852f",
+    "license": "Apache-2.0",
+    "format": "original mixed BF16/F32 safetensors",
+    "files": [
+      {
+        "file": "config.json",
+        "bytes": 4634,
+        "sha256": "b5d0f88353638370d94035b7d73d7d6577c0554d78f8d7ecfd40490aae39ae85",
+        "hub_lfs_sha256": null
+      },
+      {
+        "file": "model.safetensors",
+        "bytes": 102823920,
+        "sha256": "8a04cf833cfe69b67c2ec968b2d31244655b9accc84ade9c0ebcc176f2074607",
+        "hub_lfs_sha256": "8a04cf833cfe69b67c2ec968b2d31244655b9accc84ade9c0ebcc176f2074607"
+      },
+      {
+        "file": "model.q8.gguf",
+        "bytes": 64512352,
+        "sha256": "a7d9aad2cd6dc66473f24a08bc6d2939030ef4d751ef82349361fbef3272dbae",
+        "hub_lfs_sha256": "a7d9aad2cd6dc66473f24a08bc6d2939030ef4d751ef82349361fbef3272dbae"
+      },
+      {
+        "file": "tokenizer.json",
+        "bytes": 277967,
+        "sha256": "691a00068fa7b989f2f3e5ae5daa2d1a5bb319f2d5360deafcfb19a8bb6e7936",
+        "hub_lfs_sha256": null
+      },
+      {
+        "file": "default-voice.safetensors",
+        "bytes": 256136,
+        "sha256": "dc537478eaadc1a5257fcda2e3501ab81e14c111a5d95a5838f350db2afd0f1a",
+        "hub_lfs_sha256": "dc537478eaadc1a5257fcda2e3501ab81e14c111a5d95a5838f350db2afd0f1a"
+      },
+      {
+        "file": "README.md",
+        "bytes": 10478,
+        "sha256": "fc04467c0e5560e89cd5bbded052e9b7f6c23e2abcdd03a32a3a07a27a7ea3ed",
+        "hub_lfs_sha256": null
+      }
+    ]
+  },
+  "reference_source": {
+    "repository": "gradium-ai/xn-ptts",
+    "revision": "49b9033e44ab0fbb935973eca3213757644d1bbb",
+    "adapted_algorithms_license": "MIT"
+  },
+  "local_validation": {
+    "date": "2026-10-23",
+    "main_gate": "./scripts/check.sh",
+    "result": "passed",
+    "xctest": {
+      "executed": 5517,
+      "skipped": 459,
+      "failures": 0
+    },
+    "swift_testing": {
+      "executed": 195,
+      "failures": 0
+    },
+    "docs_build": "pnpm docs:build passed",
+    "package_policy_variants": [
+      "darwin",
+      "linux-source",
+      "linux-cuda-prebuilt"
+    ],
+    "swiftpm_options": [
+      "--disable-keychain",
+      "--disable-index-store"
+    ],
+    "released_checkpoint_opt_in": {
+      "xctest_executed": 12,
+      "failures": 0,
+      "swift_testing_executed": 1,
+      "failures_swift_testing": 0
+    }
+  },
+  "evidence": {
+    "log_sha256": {
+      "local-gate.log": "409e57e626630cf903c3a066c37591e6d7ecdb6b56d54b1af6b5d5781ddb4a61",
+      "docs-build.log": "813ba04a17f83e586202dde5f3bdb677c584b3328fc7739aaed8a221f4cacca7",
+      "focused-tests.log": "fb309eb075fb547302b35048973afa18a7b84be44afb339df6844d62dfd7bbed",
+      "studio-fixtures.log": "8510177a49fc72281569c0561ee253abb58c0261c82e3fa11b4c6bace95ce0fc",
+      "command-docs.log": "329001fb01f6b2ea96a0e332b8ce14f8e0df25a44c41fc9460cee482736210a6",
+      "released-tests.log": "252cd158fb5bfc7d5b38eafa9b795466f488dc56813bde85064db7819bf24b15",
+      "prepare.log": "4b27f63097c14dddd462e224394087a3e806ba37821b9603821878a1d01e0b10",
+      "native-benchmark.log": "d33ff91cbfbb92e5b56ecda81d910e8145a1bcc27e49410bb58f7d517692e355",
+      "upstream-benchmark.log": "379fb719cba3e2b689fde0483a69b2890581c8a08c7bb989659e3bbe8e97c1a4",
+      "managed-pull.log": "ce27ffdc78a6e7aca0219dabe908ce1478625e44526deb4b7c88e24c58bd403f",
+      "managed-info.log": "e350088b216957483e8aab7824f417662dcbd4248cc5e22056efc756cb48fe54",
+      "managed-stream.log": "7cea68ab8940a6ffb1988cb827d2c397411e530e48fc16572a02be84ed38dd0d"
+    },
+    "source_file_sha256": {
+      "Sources/AudioPhononModel/PhononConfig.swift": "b468b2c5298b6f4b50c86c781484d4a4d2cd0405e01d3d2f2df202876f848282",
+      "Sources/AudioPhononModel/PhononFlow.swift": "69894313a926d3aa78a0f68abdded54e5f5931791588a7d918b11ad8027578d8",
+      "Sources/AudioPhononModel/PhononLayers.swift": "6d233c0b25671eb49024eb71e58255beeeb74e88bfc254a35d63734ab0b5eba9",
+      "Sources/AudioPhononModel/PhononMimi.swift": "92c860cb50e881dd48d7f445b13f5ce0d570a2417d80111439cd8ef71678773c",
+      "Sources/AudioPhononModel/PhononModel.swift": "6f9dea79255e3a0ab0986393f17288d8856e9031e46f8dd87b2eb974912f0f7e",
+      "Sources/AudioPhononModel/PhononTextPlanner.swift": "353c634e98e1136929f74bbedc2f1332b28ffd8aa062b3a4104311cda2a63706",
+      "Sources/AudioPhononModel/PhononTokenizer.swift": "06f82b8e11590a65727ea3263ba2d2f9db52184d2f4258f0d22d85ce84142f35",
+      "Sources/AudioPhononModel/README.md": "e4f01e76a4d4140351b60ef7a9cfba221220475f08c94c65f10c30022c551788",
+      "Tests/AudioPhononModelTests/Fixtures/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "Tests/AudioPhononModelTests/Fixtures/config.json": "b5d0f88353638370d94035b7d73d7d6577c0554d78f8d7ecfd40490aae39ae85",
+      "Tests/AudioPhononModelTests/Fixtures/mini-config.json": "de95f0d207dfe9e77734d83576f883e1f444d8e25393f53dd54ca20e5edbf92b",
+      "Tests/AudioPhononModelTests/Fixtures/planner-oracle.json": "50f7c1ab3de28daef8ad04f38c18a6a82ac045670ec1dd4840af52b6549ec78a",
+      "Tests/AudioPhononModelTests/Fixtures/provenance.json": "5aa5724aa9460e3831cd9b7bd575b6a980ecef9a653bcbd0dd06a763d33a605a",
+      "Tests/AudioPhononModelTests/Fixtures/released-step-oracle.json": "8a61b69d5d635ededfe3d77663e0a8738894e7315927598686850ba9c1e88a2a",
+      "Tests/AudioPhononModelTests/Fixtures/tokenizer-oracle.json": "ebac8d43b63874bf0671ed0ff7b5b37997a34d4aed168b7681b08980380dd324",
+      "Tests/AudioPhononModelTests/Fixtures/tokenizer.json": "691a00068fa7b989f2f3e5ae5daa2d1a5bb319f2d5360deafcfb19a8bb6e7936",
+      "Tests/AudioPhononModelTests/PhononModelTests.swift": "1e0c82567f89cbcc9a7b8f8c5a2cd6173bb6cc4b2934508ac8fef09885d128b4",
+      "Tests/AudioPhononModelTests/PhononNumericsTests.swift": "1a597614acf84071677fd63cda657d494d2127fee83d94d0115dbc80c564c75d",
+      "Tests/AudioPhononModelTests/PhononReleasedCheckpointTests.swift": "e5b4a4a8dcd4535d149bc6acef98f5d570f919d0515da3c7de14b0d551396d3a",
+      "scripts/phonon-qualification/README.md": "88214f5c1090b8d4477694cba31696aace4f7cb947f137a45b25f9906353607a",
+      "scripts/phonon-qualification/benchmark.py": "08283512c235533cbda54b48e1f6f8dfe41f4fa0ba5de1663340ac8a9368f18b",
+      "scripts/phonon-qualification/compare.py": "bacb766182bd97fb12aa8104b2aa417358ad9db0429bdd863827cc553255c927",
+      "scripts/phonon-qualification/corpus.json": "0ff5524feeeb24d161da8c52ff0cb1419f04529cb138d6f199b3cfd30917387a",
+      "scripts/phonon-qualification/main.swift": "a223f2d49f878eae183dc0bbb5ef0fa08739aeaf6959b030287344d28921cf48",
+      "scripts/phonon-qualification/prepare.py": "c8cbe9d95f2f83e5eef59c5b9c2851849eb065ed04c8908416fe3bc5c3309d3b",
+      "scripts/phonon-qualification/score-asr.py": "c23f174c8472f66d792d7f7214187e7a98a514e84d62f4f2dc1f69779861c8f7",
+      "scripts/phonon-qualification/transcribe.py": "09401124001adb7b8c9c497f1436cb27eb9c961d7eedb5a1abc427494fbdce72",
+      "scripts/phonon-qualification/upstream.rs": "2162e1c6ced510397b81b12ec8572aa99180ca57ad0bd1ac5f808166d0d7bb1e"
+    },
+    "numerical_tests": [
+      "Unigram token IDs against Hugging Face tokenizers 0.23.3",
+      "causal attention across full and incremental passes with context trimming",
+      "causal convolution against scalar oracle",
+      "dense and depthwise transposed convolution overlap against scalar oracle",
+      "uncentered time-embedding RMS",
+      "synthetic whole-graph waveform, seeded nonzero sampling, state reset, voice shape and metadata rejection, and exact frame-budget failure",
+      "29 upstream chunk-plan fixtures including 200-token recursive fitting",
+      "released-checkpoint opt-in GPU trace: four prompts, first six frames"
+    ],
+    "artifacts_location": "Retained locally outside the repository; relative paths and hashes identify raw artifacts. Reproduce with scripts/phonon-qualification.",
+    "artifact_sha256": {
+      "released/native-final-replay/contractions.f32": "d27440eb39a3238f2e1c732aabba4398b0f56c98806c3a6290218ea3a3e4dbf7",
+      "released/native-final-replay/contractions.steps.json": "e0a352b574d624996e11d2c10d70eeab03c4a833e389c2222e22ae5e6aac20ab",
+      "released/native-final-replay/contrast.f32": "23df8c2ea1f08fbc53a787501f11f24f9d2ba6b503c448d4f564bab2a41905f8",
+      "released/native-final-replay/contrast.steps.json": "5d3ea864c0855a2cede54e60b3b1cd0a68e3bb5ec86929dbe0c0dfc8a4685e16",
+      "released/native-final-replay/currency-raw.f32": "8c8acec8fbf7c14d864453f10b61394dd94a3c745df089e09aa5dde744d7c4f4",
+      "released/native-final-replay/currency-raw.steps.json": "0de57b1001dc7c15c31b8d6eb3edd0a135febec5f5a2380de57c55cffeaeee2a",
+      "released/native-final-replay/currency-spoken.f32": "54f24d0baf3b87849c752750fee081a86fe117e6b2ece212bf630c64d1e383da",
+      "released/native-final-replay/currency-spoken.steps.json": "b1bbacbc95cae3d048a74e0cb727f0329c8abda84dbc120d3aec2ac9b25956fc",
+      "released/native-final-replay/date-spoken.f32": "8c2b24454c719039df129b11f987c2d4972a62768324febaf3613799e7ea9c0b",
+      "released/native-final-replay/date-spoken.steps.json": "d712c46b8c1daa7c4f1e36782289271b89f710d20c8bff56f14c79c344917dd3",
+      "released/native-final-replay/digits-spoken.f32": "81f10febfcd0a9eb980a654068af958c46b0a489cad95c430f48b7c458bd90a2",
+      "released/native-final-replay/digits-spoken.steps.json": "d37de8083298a367321f7314ef80d3ed566e252622fcf220d096da7e2a7b5bb7",
+      "released/native-final-replay/directions.f32": "ee29b7b748e16532d0239979b846aea211676499e463cb8debed77be5c33807d",
+      "released/native-final-replay/directions.steps.json": "ac9330a555547dd3690dc8e662a36e68fb1519c49fc7500b9239c2c5a81d9ace",
+      "released/native-final-replay/email-raw.f32": "50766041b2914f3e3f2a43d9e87601e16c2306ac0375b384d969f3968bc1cf6d",
+      "released/native-final-replay/email-raw.steps.json": "9576302260dd91481ac0993a4927cf91924bcd3422984f87adbf4841b0193507",
+      "released/native-final-replay/email-spoken.f32": "b651be5f5910096bcef116ccd17ba2bea49eee369408fa9b49a5138e190ff43c",
+      "released/native-final-replay/email-spoken.steps.json": "2b649edd4f6498f7aad99a95b4ac8c3d7776a54a6dd684b3a508c06d7e665cd4",
+      "released/native-final-replay/list.f32": "11e4c2b61d1ff62acbe7f152aa7d474dd2c4a9993bc428f4a2cc9cf23a41509f",
+      "released/native-final-replay/list.steps.json": "07f425188c2a58c2dae123a4d442358af5998fa54f7675e4ed58e2ff44640a15",
+      "released/native-final-replay/long-sentence.f32": "34c03f40183e8635d862936f52dd0ea3d1dfdb17eccc8791de20b31b89084f37",
+      "released/native-final-replay/long-sentence.steps.json": "de2ca3d510736aa81c41dedd49ebf22a17ca088b1f40d5f6f1f26502d8c15d75",
+      "released/native-final-replay/multi-sentence.f32": "8a0c91cc4d425318ad78700fa25dd2efcb9988c729ba0f3656ae9c0da6a60eec",
+      "released/native-final-replay/multi-sentence.steps.json": "e7fef639ae95feac56fd19910c10eb12750150ac6cd03bf6fb1228ee01c6301a",
+      "released/native-final-replay/negation.f32": "ca269d3a395dfe1db0637ff37d0de024a1d0bc90b811056b3510dd144cb8e019",
+      "released/native-final-replay/negation.steps.json": "867d1f0ef52fe6f744778785bd5a04d74edbd10cf4e3b5fccf361f295ca97fa2",
+      "released/native-final-replay/phone-raw.f32": "1dcf37d209a9cbc4e82c4a3931a316ae53c2a80efe853726b9800bdd2720317f",
+      "released/native-final-replay/phone-raw.steps.json": "75a49b0830c2164e04c7d17561036d2f8dc74ecb46d05a7277686c773bfe1bad",
+      "released/native-final-replay/question.f32": "d58e81545a15949e452273ba9c8fd7ceee65f18995ee011dc57846b5ebb31137",
+      "released/native-final-replay/question.steps.json": "cc3f4c7f87aa128e23466b8712f676d9b37a7dfb7eb88bf4ad1fc2538b61f5c0",
+      "released/native-final-replay/quoted.f32": "1f9a863bc688835c967c976ee4935b91628e8c5ffbceb99859b9fa0eb3facf5d",
+      "released/native-final-replay/quoted.steps.json": "815ca06cf213fae718dc7b8258a8eaa49ce9cc0b1b9538bd5b17de6ff6ef166a",
+      "released/native-final-replay/short-hello.f32": "1ffe8e4ec753cdc814282da051cafc28ba8d7b7ce338a48d2b7d0e64a231276e",
+      "released/native-final-replay/short-hello.steps.json": "c15d5ca9fa5889c8c6b0ec7f24dfba705027ca200425e6a0e6aff0c827bb1e09",
+      "released/native-final-replay/short-thanks.f32": "a10a3c27aa59842c0484b4c39e5d649e8e8873f401a9f965af5bfa35b225d1f9",
+      "released/native-final-replay/short-thanks.steps.json": "66c89fc9a0ee7c50301987745597c9e21b8a76575e3f3460481d0639ed12b7f9",
+      "released/native-final-replay/short-yes.f32": "16b85a1ca3354c88ac9d03b7a3f2dc87c26ce3c599c9bb07794ac074a3fc68a0",
+      "released/native-final-replay/short-yes.steps.json": "ab97c2c97a167d668c3036b9081de82c74a7af9cbcc5ca764b0d9ba411e4b27b",
+      "released/native-final-replay/story.f32": "cdecbe33a33d940d3c92fcee98f7d64667dd1ae48ebe3b1002f11e0654dd8c6a",
+      "released/native-final-replay/story.steps.json": "4cb3809bdbb2c5156268b0caee6e2bdeb5b6de0cc7b03901affb500cd407b690",
+      "released/native-final-replay/structured-raw.f32": "16faea817a5cf58eb4cef52e11ec77af4b806bc1d5802175504479ccb9eb3b89",
+      "released/native-final-replay/structured-raw.steps.json": "708fccb45514e4180f62f4e53282cabce06de67468a13d98dc6a36abe63d1704",
+      "released/native-final-replay/timings.json": "fc8d96211654a075ceb19b4bb7beed273c63c2015ea13bbe3478657b6478cdd9",
+      "released/native-final-replay/unicode.f32": "36660727fd9fb1d6601209b871fc4cd3dfd85850bfb8e745eee472124d3f277d",
+      "released/native-final-replay/unicode.steps.json": "7b06a44e970e5192c2855c04552c9d1f6e88bf12f7ca700cfa0eeaa59ae5846b",
+      "released/native-final-replay/unit-spoken.f32": "606439f161652b2934b8b19f8c63196caff1e9973da90de134801bce9960c9aa",
+      "released/native-final-replay/unit-spoken.steps.json": "227ba0862596ea63bceae9e58ec1ec92adc9c22db5249c5b01dee25b2645250c",
+      "released/native-final-replay/welcome.f32": "bad2e0d4d1adb755a39bc461d7b9425a6c1bf6566214ed232fcf8c3f31ad3338",
+      "released/native-final-replay/welcome.steps.json": "523bab4ac45efb74717b57c936d436ec8b106509f0013f8f43b24e326f3d21f7",
+      "released/upstream-final-replay/contractions.f32": "fb93e1b63e42d72fb717aed4ee7f985dc271a85b768915021843f10f8b778861",
+      "released/upstream-final-replay/contractions.steps.json": "4a84b29b1465b2a835d7374dd5308fdfa1d3be4ea6b1668515e37aaf44501ec6",
+      "released/upstream-final-replay/contrast.f32": "2b74548166e46016e5a17e8514d2ffc5a4c74fa49e8703f4eb6cc30d98ad76c2",
+      "released/upstream-final-replay/contrast.steps.json": "52150df5655e0bbbde4f0daba1ef15df76a904868b2b94240efad0b2c52e8629",
+      "released/upstream-final-replay/currency-raw.f32": "f9b75fe7ea93bbb7a625ba88c3ec39e1e6d489fbe33418687283a92a21ad564c",
+      "released/upstream-final-replay/currency-raw.steps.json": "21606d18db0fe0a6f8b316c1af425eda74487777304c87076d9acfa96bc4b570",
+      "released/upstream-final-replay/currency-spoken.f32": "fa607904294c747170f7729eb0f92ac7dec1d1ad4a429a617882771040b13db1",
+      "released/upstream-final-replay/currency-spoken.steps.json": "4486e0368534ab7bf00066d4513ffcd07677e141357aa3375fe92764082c5d84",
+      "released/upstream-final-replay/date-spoken.f32": "86a7b76a8b9a1e8e6bb4d16d93840a2cb6fcfa568ff97d1e8887592ebb021753",
+      "released/upstream-final-replay/date-spoken.steps.json": "e10d2f54f8499fcb88b9a488e9b10c700337b362b06f8a3058a35eac4fd58e66",
+      "released/upstream-final-replay/digits-spoken.f32": "c874840e53ee0f287eaa5a7a8969568b3d6a405fe8d35ce890d4ac172722bef7",
+      "released/upstream-final-replay/digits-spoken.steps.json": "227615a5beddd8a28f42950fb8b4eb80a553408007a77ba621de19f55174fb1a",
+      "released/upstream-final-replay/directions.f32": "4562bafbae236a04a7a730026ab684ab010783c5625b552a4b318ac1ff7feef6",
+      "released/upstream-final-replay/directions.steps.json": "54c37dd300b179d928b86bb8ba88b7c951e1d9afbb5debea4c7365574de0100a",
+      "released/upstream-final-replay/email-raw.f32": "00495ded059daed734b805ac19c28ebfadedd82c3d61da151314f756a9d6cb78",
+      "released/upstream-final-replay/email-raw.steps.json": "536e726dddecf38a0c8df81de46dbca0cd48c2faaf947329368bd60d034c3ab6",
+      "released/upstream-final-replay/email-spoken.f32": "793714250f4902ab384baf67a60df238045cd4128e6d194d66707c3f654e4fbb",
+      "released/upstream-final-replay/email-spoken.steps.json": "eadc224110cc8e8ac16d18f4e2effc32d863342b9a18b2ab351545adc0be2033",
+      "released/upstream-final-replay/list.f32": "0e9cd6bf315951957a7ec5762174e1b1dd73b594be64ce18c7ef16d52b4bf646",
+      "released/upstream-final-replay/list.steps.json": "f25d1c5aa3c632f8906762197d12053781a2b6d1b1b023c889c7037f718dff93",
+      "released/upstream-final-replay/long-sentence.f32": "a6de35ecdae888e7628dbcab618d82171a021172c1724a65515b6a6dc3dc3830",
+      "released/upstream-final-replay/long-sentence.steps.json": "3a4c74399093159f631d833673d11eb4d622ff7f882453c24598aafdfaa229c2",
+      "released/upstream-final-replay/multi-sentence.f32": "8bd63984124f5c1427eabfe24f5e02c773a83a7d5a0a06f25b2da62bc324ca3d",
+      "released/upstream-final-replay/multi-sentence.steps.json": "ec8c6417e28262cf0655a06ba4b9c41142809b6884def0cece857f310ea46fd5",
+      "released/upstream-final-replay/negation.f32": "af5254d101f30d6da950da0a5007013a78930a6767a94ff2cd91fbae6075374c",
+      "released/upstream-final-replay/negation.steps.json": "b7c8e781cde0d9e09943b0e53e25877b1907c75cafeb9d118511ba62debc3b56",
+      "released/upstream-final-replay/phone-raw.f32": "44d5d988083dc124db89deff1ce3bf47a38a57c94fb60feb7d6602a8c25ec265",
+      "released/upstream-final-replay/phone-raw.steps.json": "a7e6a25106528d11e98693e5df34b59d09892640a4778cacf9b360dad4e67e09",
+      "released/upstream-final-replay/question.f32": "e578f507ae22cc59b813722773f1081c5ddfc005143d4826bca01bc9ed66c08b",
+      "released/upstream-final-replay/question.steps.json": "b836b81a5a9e2ef3922940b2aa9f03ce975cb45a20f9f6d4ce663217d54ef306",
+      "released/upstream-final-replay/quoted.f32": "ea395d219dde865b742f92e94086e0fc1698cb9bdeacecf7d7b5b20f358deb2e",
+      "released/upstream-final-replay/quoted.steps.json": "15b999810df34bbf251615f49044d1dca59d42bded40f6be35a8897294b87452",
+      "released/upstream-final-replay/reference.json": "27a70a836fc923f2c1024840a97b08b7f9ee1f0eef00bf73644a3d46c0283e78",
+      "released/upstream-final-replay/short-hello.f32": "cb58547be0c14539b194de688ce3da40225e2c7e487226d44059f5f029da4206",
+      "released/upstream-final-replay/short-hello.steps.json": "7c54458cfce6f29d58c7bd127015ab914f77d821f8d4031b7d430a0ba232ccff",
+      "released/upstream-final-replay/short-thanks.f32": "9648af71ef69942729ca1ad5eca5c3cda6d3b83688ca339cc1583416820d1704",
+      "released/upstream-final-replay/short-thanks.steps.json": "0390c95bc2c1986c14fb9ceb827e3c6654b42795538a3c3dcfb45a66618bd857",
+      "released/upstream-final-replay/short-yes.f32": "90ae5bdc42c643b4e449bbe64cfd99ab3f716f0a417dd724d1cdbb9a19ba4601",
+      "released/upstream-final-replay/short-yes.steps.json": "7c1197d152d11d6d9f81d572a88e7d3fc975c658a0d84f8a496bdf3b6b791118",
+      "released/upstream-final-replay/story.f32": "c9d9ea965e3e82ac60cfa71012925e999ee84661c2fe8d4f5222b9c2e290946e",
+      "released/upstream-final-replay/story.steps.json": "0862a504bf4bf35f6f9a37562d269211157c83884df477413ba6d80e4ac589bc",
+      "released/upstream-final-replay/structured-raw.f32": "7ab2367e5c34bad9de1edc9acd66f7df1343aa8ecd3d57bde1008048621190a4",
+      "released/upstream-final-replay/structured-raw.steps.json": "ec2b566533dd609b693f784267abd6b057ecb8cd09813aa25c72b9d8f6be51ca",
+      "released/upstream-final-replay/unicode.f32": "3a2f838a37a235609e78f51726a1343c472238027a3fbdc9d814713dcd6f7d93",
+      "released/upstream-final-replay/unicode.steps.json": "b8b6796c9f7f03bbecc0801abd360517c94c297888087e38264995aef9d8393c",
+      "released/upstream-final-replay/unit-spoken.f32": "878df0c8bcd68567e5154db2c32a6e764cc7f38d125af86a99f9442079632ca4",
+      "released/upstream-final-replay/unit-spoken.steps.json": "9f8c591540fe9b051e51fd179a4d4c83913132d4c6e1c1082ae0535907d24d5c",
+      "released/upstream-final-replay/welcome.f32": "f7318982ddd81c0a5fbf6fe246ae12d130804def0daa87b4c505c445af9b5c1f",
+      "released/upstream-final-replay/welcome.steps.json": "fb38d19d74cddd040b1abc98a825ae54c2ae0c909661c0ecb31e0716ed3bb2f0",
+      "released/upstream-normalized/contractions.f32": "fb93e1b63e42d72fb717aed4ee7f985dc271a85b768915021843f10f8b778861",
+      "released/upstream-normalized/contractions.steps.json": "4a84b29b1465b2a835d7374dd5308fdfa1d3be4ea6b1668515e37aaf44501ec6",
+      "released/upstream-normalized/contrast.f32": "2b74548166e46016e5a17e8514d2ffc5a4c74fa49e8703f4eb6cc30d98ad76c2",
+      "released/upstream-normalized/contrast.steps.json": "52150df5655e0bbbde4f0daba1ef15df76a904868b2b94240efad0b2c52e8629",
+      "released/upstream-normalized/currency-raw.f32": "597119905bec7650209cafce99674da2504d1930abe43e259a602a401076d595",
+      "released/upstream-normalized/currency-raw.steps.json": "a1e02e97f7fa87d0f2eb937711177db9733f89d9413a1450ec8c1567f55d7adf",
+      "released/upstream-normalized/currency-spoken.f32": "fa607904294c747170f7729eb0f92ac7dec1d1ad4a429a617882771040b13db1",
+      "released/upstream-normalized/currency-spoken.steps.json": "4486e0368534ab7bf00066d4513ffcd07677e141357aa3375fe92764082c5d84",
+      "released/upstream-normalized/date-spoken.f32": "86a7b76a8b9a1e8e6bb4d16d93840a2cb6fcfa568ff97d1e8887592ebb021753",
+      "released/upstream-normalized/date-spoken.steps.json": "e10d2f54f8499fcb88b9a488e9b10c700337b362b06f8a3058a35eac4fd58e66",
+      "released/upstream-normalized/digits-spoken.f32": "c874840e53ee0f287eaa5a7a8969568b3d6a405fe8d35ce890d4ac172722bef7",
+      "released/upstream-normalized/digits-spoken.steps.json": "227615a5beddd8a28f42950fb8b4eb80a553408007a77ba621de19f55174fb1a",
+      "released/upstream-normalized/directions.f32": "4562bafbae236a04a7a730026ab684ab010783c5625b552a4b318ac1ff7feef6",
+      "released/upstream-normalized/directions.steps.json": "54c37dd300b179d928b86bb8ba88b7c951e1d9afbb5debea4c7365574de0100a",
+      "released/upstream-normalized/email-raw.f32": "21095bf4d277a1f7038f758f73a283f70f5c0bef3bf9ccb76d37bdf037539202",
+      "released/upstream-normalized/email-raw.steps.json": "aef04e85af6c149c84eeed31c33321e673c6156d5fe88920f762404ab4e4e545",
+      "released/upstream-normalized/email-spoken.f32": "793714250f4902ab384baf67a60df238045cd4128e6d194d66707c3f654e4fbb",
+      "released/upstream-normalized/email-spoken.steps.json": "eadc224110cc8e8ac16d18f4e2effc32d863342b9a18b2ab351545adc0be2033",
+      "released/upstream-normalized/list.f32": "0e9cd6bf315951957a7ec5762174e1b1dd73b594be64ce18c7ef16d52b4bf646",
+      "released/upstream-normalized/list.steps.json": "f25d1c5aa3c632f8906762197d12053781a2b6d1b1b023c889c7037f718dff93",
+      "released/upstream-normalized/long-sentence.f32": "a6de35ecdae888e7628dbcab618d82171a021172c1724a65515b6a6dc3dc3830",
+      "released/upstream-normalized/long-sentence.steps.json": "3a4c74399093159f631d833673d11eb4d622ff7f882453c24598aafdfaa229c2",
+      "released/upstream-normalized/multi-sentence.f32": "8bd63984124f5c1427eabfe24f5e02c773a83a7d5a0a06f25b2da62bc324ca3d",
+      "released/upstream-normalized/multi-sentence.steps.json": "ec8c6417e28262cf0655a06ba4b9c41142809b6884def0cece857f310ea46fd5",
+      "released/upstream-normalized/negation.f32": "af5254d101f30d6da950da0a5007013a78930a6767a94ff2cd91fbae6075374c",
+      "released/upstream-normalized/negation.steps.json": "b7c8e781cde0d9e09943b0e53e25877b1907c75cafeb9d118511ba62debc3b56",
+      "released/upstream-normalized/phone-raw.f32": "44d5d988083dc124db89deff1ce3bf47a38a57c94fb60feb7d6602a8c25ec265",
+      "released/upstream-normalized/phone-raw.steps.json": "a7e6a25106528d11e98693e5df34b59d09892640a4778cacf9b360dad4e67e09",
+      "released/upstream-normalized/question.f32": "e578f507ae22cc59b813722773f1081c5ddfc005143d4826bca01bc9ed66c08b",
+      "released/upstream-normalized/question.steps.json": "b836b81a5a9e2ef3922940b2aa9f03ce975cb45a20f9f6d4ce663217d54ef306",
+      "released/upstream-normalized/quoted.f32": "e7af8198ae9f2a80c7f22043325fce858bda37b171091f538e44d23bf0840e79",
+      "released/upstream-normalized/quoted.steps.json": "54783b94642c75c7647422bb78982b316d34ccb51885d66e7c4c63045023d4c9",
+      "released/upstream-normalized/reference.json": "b4eb13455ad524d6eea8c954d72795a3ccdbd2356aaf80cb8b3865354bd5aad6",
+      "released/upstream-normalized/short-hello.f32": "cb58547be0c14539b194de688ce3da40225e2c7e487226d44059f5f029da4206",
+      "released/upstream-normalized/short-hello.steps.json": "7c54458cfce6f29d58c7bd127015ab914f77d821f8d4031b7d430a0ba232ccff",
+      "released/upstream-normalized/short-thanks.f32": "9648af71ef69942729ca1ad5eca5c3cda6d3b83688ca339cc1583416820d1704",
+      "released/upstream-normalized/short-thanks.steps.json": "0390c95bc2c1986c14fb9ceb827e3c6654b42795538a3c3dcfb45a66618bd857",
+      "released/upstream-normalized/short-yes.f32": "90ae5bdc42c643b4e449bbe64cfd99ab3f716f0a417dd724d1cdbb9a19ba4601",
+      "released/upstream-normalized/short-yes.steps.json": "7c1197d152d11d6d9f81d572a88e7d3fc975c658a0d84f8a496bdf3b6b791118",
+      "released/upstream-normalized/story.f32": "c9d9ea965e3e82ac60cfa71012925e999ee84661c2fe8d4f5222b9c2e290946e",
+      "released/upstream-normalized/story.steps.json": "0862a504bf4bf35f6f9a37562d269211157c83884df477413ba6d80e4ac589bc",
+      "released/upstream-normalized/structured-raw.f32": "7ab2367e5c34bad9de1edc9acd66f7df1343aa8ecd3d57bde1008048621190a4",
+      "released/upstream-normalized/structured-raw.steps.json": "ec2b566533dd609b693f784267abd6b057ecb8cd09813aa25c72b9d8f6be51ca",
+      "released/upstream-normalized/unicode.f32": "3a2f838a37a235609e78f51726a1343c472238027a3fbdc9d814713dcd6f7d93",
+      "released/upstream-normalized/unicode.steps.json": "b8b6796c9f7f03bbecc0801abd360517c94c297888087e38264995aef9d8393c",
+      "released/upstream-normalized/unit-spoken.f32": "878df0c8bcd68567e5154db2c32a6e764cc7f38d125af86a99f9442079632ca4",
+      "released/upstream-normalized/unit-spoken.steps.json": "9f8c591540fe9b051e51fd179a4d4c83913132d4c6e1c1082ae0535907d24d5c",
+      "released/upstream-normalized/welcome.f32": "f7318982ddd81c0a5fbf6fe246ae12d130804def0daa87b4c505c445af9b5c1f",
+      "released/upstream-normalized/welcome.steps.json": "fb38d19d74cddd040b1abc98a825ae54c2ae0c909661c0ecb31e0716ed3bb2f0",
+      "released/native-final-benchmark/directions.f32": "c73157d34b94e7688c7e59391541855f3e6f03b9f05e1d12fb9fe3df0b95ec4b",
+      "released/native-final-benchmark/long-sentence.f32": "f2710df8031d4c8e38ed04610c440821ebcb35621fe2c61fb26ee88563e36570",
+      "released/native-final-benchmark/short-hello.f32": "4a91579a8611238953243497b642fcfd169490eb66a7c9813c354273f80c7a51",
+      "released/native-final-benchmark/timings.json": "cdf4148d4074c5487d1ce135a70c9b02c8f34d455fd57738f42620dccd816dba",
+      "released/upstream-final-benchmark/f32-directions.log": "72ee1c955d06a13d75031f2e1be9d0b5c41246822a3ac9f6d84c3d03ba165b0f",
+      "released/upstream-final-benchmark/f32-long-sentence.log": "c5d868fe93ebe5fb5371731d5bf253e872f8050f17381ff313ddab4ae7e65eda",
+      "released/upstream-final-benchmark/f32-short-hello.log": "b0ab9bb9433dd4f77f64c8efcb6582af758e11be15503f3c41e9d26b38208cfc",
+      "released/upstream-final-benchmark/q8-directions.log": "9ebd757a10f9ef6be90a19f2bca8e0af8aba8a4ec5767961fe24146a5cbede82",
+      "released/upstream-final-benchmark/q8-long-sentence.log": "e6be263fcc82d0ed879b84c0bf7ebd760db1371a0e9bf8d3a5f591e82b0db23d",
+      "released/upstream-final-benchmark/q8-short-hello.log": "130f86ae2bb19da5890d4a0cf4dc704dcb8fb9d5170bd56cf8ae254755e1a828",
+      "released/upstream-final-benchmark/timings.json": "a63ab18279b50824d62d4c7e62293a0fbe623030566e8435dd613f4ee8fff27f"
+    },
+    "tool_sha256": {
+      "native-harness/.build/release/PhononQualification": "bfcfceab223629d7dbb0c663265ce048ee54f896aa9e6b8d1a80598055d8db0f",
+      "upstream-target/release/examples/bench": "b45256f9a8c1a806632c6ce6d5b51c13f41e62255bd4bd38b92f96e03acf5717",
+      "upstream-target/release/examples/mere_qualify": "cb54f29cf09f89775d066c4eb1b90538c1081cac3fe3d4b7733923641c43c12e"
+    }
+  },
+  "remaining_qualification": {
+    "blind_listener_preference": false,
+    "publisher_performance_parity": false,
+    "other_apple_silicon_hardware": false,
+    "native_cpu_performance": "not qualified; an exploratory CPU run is excluded",
+    "ios_inference": "not qualified",
+    "linux_inference": "not qualified",
+    "hosted_ci": "check final PR head and merge-group independently"
+  },
+  "feature_limits": [
+    "English Phonon 31m only",
+    "precomputed default voice; no raw-audio cloning or voice descriptions",
+    "no structured-text rewrite parity; spell out numbers and structured values",
+    "no CFG, speaking-rate changes, or GGUF loading",
+    "streaming emits codec frames; no discrete token events"
+  ],
+  "host": {
+    "model": "Mac15,10",
+    "chip": "Apple M3 Max",
+    "unified_memory_bytes": 38654705664,
+    "os": "26.6.2",
+    "architecture": "arm64",
+    "swift": "6.3",
+    "upstream_cpu_threads": 4,
+    "native_device": "Metal GPU",
+    "native_compute_dtype": "F32"
+  },
+  "released_weight_validation": {
+    "date": "2026-10-23",
+    "corpus": "scripts/phonon-qualification/corpus.json",
+    "noise": {
+      "temperature": 0.8,
+      "generator": "NumPy 2.5.4 default_rng(8291), normal(0,sqrt(0.8)), float32",
+      "values": 65536,
+      "sha256": "7442c2fc9c3e1346b17c2dad93173321b6450a574b51cfbd03bb5d77b674d049",
+      "reset": "per request; continuous across chunks"
+    },
+    "original_weights_executed": true,
+    "cases": 24,
+    "supported_cases": 20,
+    "structured_diagnostics": 4,
+    "all_sample_and_frame_counts_match": true,
+    "native_final_pcm_byte_identical_to_asr_inputs": true,
+    "upstream_final_pcm_byte_identical_to_asr_inputs": true,
+    "numerical_results": [
+      {
+        "id": "short-hello",
+        "samples": 38400,
+        "frames": 20,
+        "chunks": 1,
+        "pcm_rmse": 6.817177906620118e-05,
+        "pcm_max_abs": 0.001344725489616394,
+        "pcm_snr_db": 59.72091857558786,
+        "correlation": 0.9999994668273708,
+        "latent_max_abs": 0.000802699999999934,
+        "eos_max_abs": 0.00017399999999945237
+      },
+      {
+        "id": "short-yes",
+        "samples": 30720,
+        "frames": 16,
+        "chunks": 1,
+        "pcm_rmse": 5.939137703582339e-06,
+        "pcm_max_abs": 0.0002009570598602295,
+        "pcm_snr_db": 74.10127291765525,
+        "correlation": 0.9999999805539148,
+        "latent_max_abs": 2.1820000000005724e-05,
+        "eos_max_abs": 9.820000000004825e-05
+      },
+      {
+        "id": "short-thanks",
+        "samples": 42240,
+        "frames": 22,
+        "chunks": 1,
+        "pcm_rmse": 5.391388093977125e-06,
+        "pcm_max_abs": 0.00010168179869651794,
+        "pcm_snr_db": 78.08672783312257,
+        "correlation": 0.9999999922364502,
+        "latent_max_abs": 3.5759999999995795e-05,
+        "eos_max_abs": 1.7299999999664806e-05
+      },
+      {
+        "id": "welcome",
+        "samples": 76800,
+        "frames": 40,
+        "chunks": 1,
+        "pcm_rmse": 1.54347026634954e-05,
+        "pcm_max_abs": 0.000334225594997406,
+        "pcm_snr_db": 71.29690823265199,
+        "correlation": 0.9999999629235424,
+        "latent_max_abs": 0.00026786999999994787,
+        "eos_max_abs": 9.299999999967667e-05
+      },
+      {
+        "id": "question",
+        "samples": 71040,
+        "frames": 37,
+        "chunks": 1,
+        "pcm_rmse": 9.72351254658301e-05,
+        "pcm_max_abs": 0.0035844556987285614,
+        "pcm_snr_db": 58.00620468773157,
+        "correlation": 0.9999992086860229,
+        "latent_max_abs": 0.0017678700000000047,
+        "eos_max_abs": 0.0006551999999997449
+      },
+      {
+        "id": "directions",
+        "samples": 117120,
+        "frames": 61,
+        "chunks": 1,
+        "pcm_rmse": 0.0002342430384768101,
+        "pcm_max_abs": 0.01113155484199524,
+        "pcm_snr_db": 48.63273677367517,
+        "correlation": 0.9999931498842249,
+        "latent_max_abs": 0.003003599999999995,
+        "eos_max_abs": 0.0012406999999998725
+      },
+      {
+        "id": "story",
+        "samples": 132480,
+        "frames": 69,
+        "chunks": 1,
+        "pcm_rmse": 9.829591084021666e-06,
+        "pcm_max_abs": 0.00036665797233581543,
+        "pcm_snr_db": 77.72470652180472,
+        "correlation": 0.9999999915577964,
+        "latent_max_abs": 0.00011950999999998935,
+        "eos_max_abs": 6.799999999884676e-05
+      },
+      {
+        "id": "contrast",
+        "samples": 92160,
+        "frames": 48,
+        "chunks": 1,
+        "pcm_rmse": 2.2873719011083548e-05,
+        "pcm_max_abs": 0.000594540499150753,
+        "pcm_snr_db": 68.44767723241803,
+        "correlation": 0.9999999285176511,
+        "latent_max_abs": 0.0002270700000000514,
+        "eos_max_abs": 0.00013700000000049783
+      },
+      {
+        "id": "negation",
+        "samples": 94080,
+        "frames": 49,
+        "chunks": 1,
+        "pcm_rmse": 4.084046485072558e-05,
+        "pcm_max_abs": 0.0010874513536691666,
+        "pcm_snr_db": 64.40186214644775,
+        "correlation": 0.999999818542837,
+        "latent_max_abs": 0.0007334900000000033,
+        "eos_max_abs": 0.00019499999999972317
+      },
+      {
+        "id": "contractions",
+        "samples": 99840,
+        "frames": 52,
+        "chunks": 1,
+        "pcm_rmse": 2.81300497053305e-05,
+        "pcm_max_abs": 0.0008624829351902008,
+        "pcm_snr_db": 66.45438454383029,
+        "correlation": 0.999999886881991,
+        "latent_max_abs": 0.00037680000000006597,
+        "eos_max_abs": 0.0001660000000001105
+      },
+      {
+        "id": "list",
+        "samples": 126720,
+        "frames": 66,
+        "chunks": 1,
+        "pcm_rmse": 7.221411380724204e-05,
+        "pcm_max_abs": 0.004606284201145172,
+        "pcm_snr_db": 57.72067215304943,
+        "correlation": 0.9999991549115834,
+        "latent_max_abs": 0.0003721730000000034,
+        "eos_max_abs": 0.0004585999999999757
+      },
+      {
+        "id": "quoted",
+        "samples": 84480,
+        "frames": 44,
+        "chunks": 1,
+        "pcm_rmse": 3.210887698134638e-05,
+        "pcm_max_abs": 0.0006884681060910225,
+        "pcm_snr_db": 66.92054748510304,
+        "correlation": 0.9999998983973887,
+        "latent_max_abs": 0.0005815000000000126,
+        "eos_max_abs": 0.0003251999999998034
+      },
+      {
+        "id": "unicode",
+        "samples": 78720,
+        "frames": 41,
+        "chunks": 1,
+        "pcm_rmse": 9.912263460571092e-05,
+        "pcm_max_abs": 0.003917451947927475,
+        "pcm_snr_db": 56.3766892399543,
+        "correlation": 0.9999988484062768,
+        "latent_max_abs": 0.0017321099999999812,
+        "eos_max_abs": 0.0006719999999997839
+      },
+      {
+        "id": "digits-spoken",
+        "samples": 119040,
+        "frames": 62,
+        "chunks": 1,
+        "pcm_rmse": 1.7825840967292294e-05,
+        "pcm_max_abs": 0.0005102045834064484,
+        "pcm_snr_db": 72.39881001859386,
+        "correlation": 0.9999999712216234,
+        "latent_max_abs": 0.0002309009999999917,
+        "eos_max_abs": 8.440000000042858e-05
+      },
+      {
+        "id": "date-spoken",
+        "samples": 101760,
+        "frames": 53,
+        "chunks": 1,
+        "pcm_rmse": 0.00023597870157707966,
+        "pcm_max_abs": 0.006901361048221588,
+        "pcm_snr_db": 51.20116067535921,
+        "correlation": 0.9999962081679666,
+        "latent_max_abs": 0.003042099999999992,
+        "eos_max_abs": 0.0012609999999995125
+      },
+      {
+        "id": "currency-spoken",
+        "samples": 80640,
+        "frames": 42,
+        "chunks": 1,
+        "pcm_rmse": 5.385908692480764e-06,
+        "pcm_max_abs": 0.0001256689429283142,
+        "pcm_snr_db": 81.51307657521238,
+        "correlation": 0.9999999964719603,
+        "latent_max_abs": 8.220000000000449e-05,
+        "eos_max_abs": 3.720000000040358e-05
+      },
+      {
+        "id": "email-spoken",
+        "samples": 82560,
+        "frames": 43,
+        "chunks": 1,
+        "pcm_rmse": 0.0003200270432120094,
+        "pcm_max_abs": 0.01374218612909317,
+        "pcm_snr_db": 46.98640021257088,
+        "correlation": 0.9999899923624249,
+        "latent_max_abs": 0.005835050000000008,
+        "eos_max_abs": 0.003910999999999554
+      },
+      {
+        "id": "unit-spoken",
+        "samples": 115200,
+        "frames": 60,
+        "chunks": 1,
+        "pcm_rmse": 3.491752732993167e-05,
+        "pcm_max_abs": 0.0011861277744174004,
+        "pcm_snr_db": 64.72530063709229,
+        "correlation": 0.9999998316693307,
+        "latent_max_abs": 0.0012506299999999748,
+        "eos_max_abs": 0.0004519999999992308
+      },
+      {
+        "id": "long-sentence",
+        "samples": 343680,
+        "frames": 179,
+        "chunks": 1,
+        "pcm_rmse": 0.00924881558374259,
+        "pcm_max_abs": 0.6425722539424896,
+        "pcm_snr_db": 19.59614271644767,
+        "correlation": 0.994507443726092,
+        "latent_max_abs": 0.38508149999999997,
+        "eos_max_abs": 0.07734499999999933
+      },
+      {
+        "id": "multi-sentence",
+        "samples": 391680,
+        "frames": 204,
+        "chunks": 2,
+        "pcm_rmse": 0.004710991250298572,
+        "pcm_max_abs": 0.27803511172533035,
+        "pcm_snr_db": 22.87123042533299,
+        "correlation": 0.9974187601071992,
+        "latent_max_abs": 0.08846480000000001,
+        "eos_max_abs": 0.02730949999999943
+      },
+      {
+        "id": "structured-raw",
+        "samples": 94080,
+        "frames": 49,
+        "chunks": 1,
+        "pcm_rmse": 9.346267983703088e-05,
+        "pcm_max_abs": 0.0029462426900863647,
+        "pcm_snr_db": 58.78656038162604,
+        "correlation": 0.9999993388287952,
+        "latent_max_abs": 0.002082125000000004,
+        "eos_max_abs": 0.0003680999999993162
+      },
+      {
+        "id": "currency-raw",
+        "samples": 69120,
+        "frames": 36,
+        "chunks": 1,
+        "pcm_rmse": 9.626751722419315e-05,
+        "pcm_max_abs": 0.00456433929502964,
+        "pcm_snr_db": 56.50881102930342,
+        "correlation": 0.999998882947968,
+        "latent_max_abs": 0.0024017999999998985,
+        "eos_max_abs": 0.0014864000000001099
+      },
+      {
+        "id": "email-raw",
+        "samples": 78720,
+        "frames": 41,
+        "chunks": 1,
+        "pcm_rmse": 7.693994476016934e-06,
+        "pcm_max_abs": 0.00014039874076843262,
+        "pcm_snr_db": 79.83037893006347,
+        "correlation": 0.999999994801233,
+        "latent_max_abs": 0.00016539999999998223,
+        "eos_max_abs": 4.4800000000400075e-05
+      },
+      {
+        "id": "phone-raw",
+        "samples": 96000,
+        "frames": 50,
+        "chunks": 1,
+        "pcm_rmse": 0.002363172100417108,
+        "pcm_max_abs": 0.0632997527718544,
+        "pcm_snr_db": 29.452388118059996,
+        "correlation": 0.9994327782028267,
+        "latent_max_abs": 0.0665872099999999,
+        "eos_max_abs": 0.015354000000000312
+      }
+    ],
+    "early_step_regression": {
+      "cases": 4,
+      "steps_per_case": 6,
+      "first_three_latent_absolute_tolerance": 2e-05,
+      "remaining_latent_absolute_tolerance": 0.001,
+      "eos_absolute_tolerance": 0.0002
+    },
+    "planner_regression": {
+      "cases": 29,
+      "includes": "multi-sentence grouping, long prose/clauses/words, Unicode scalar splitting, quoted punctuation"
+    },
+    "asr": {
+      "backend": "local Parakeet",
+      "identity": {
+        "model_id": "speech-asr-parakeet",
+        "repository": "mlx-community/parakeet-tdt-0.6b-v3",
+        "revision": "not pinned by installed manifest; identify by file hashes",
+        "files": [
+          {
+            "file": "config.json",
+            "bytes": 244093,
+            "sha256": "f320f1292511f34ec47f513755fe20fd01dbfc09a925d42730e66059a6e1ef4c"
+          },
+          {
+            "file": "mererun_model.json",
+            "bytes": 490,
+            "sha256": "4f1cbb0d23b774433c0a83b6878d1df5b038e08346736f9b8897e639ef860bdb"
+          },
+          {
+            "file": "model.safetensors",
+            "bytes": 2508288736,
+            "sha256": "05e01c7f396c298cf7d23f61da7b504adeab698f0aaeafd9c82d198625464592"
+          }
+        ]
+      },
+      "normalization": "NFKC, lowercase, punctuation removed; contractions retained; no number/abbreviation expansion",
+      "case_insensitive_supported_transcript_agreement": {
+        "native_vs_upstream_no_rewrites": "20/20",
+        "native_vs_upstream_english_rewrites": "20/20"
+      },
+      "summary": {
+        "native-replay": {
+          "cases": 20,
+          "reference_words": 276,
+          "edits": 20,
+          "wer": 0.07246376811594203
+        },
+        "upstream-replay": {
+          "cases": 20,
+          "reference_words": 276,
+          "edits": 20,
+          "wer": 0.07246376811594203
+        },
+        "upstream-normalized": {
+          "cases": 20,
+          "reference_words": 276,
+          "edits": 20,
+          "wer": 0.07246376811594203
+        }
+      },
+      "interpretation": "Equal scores. All 20 edits arise in spoken-value formatting (19) or cafe accent spelling (1), rather than a difference between runtimes. ASR is an intelligibility proxy, not listener preference.",
+      "transcripts": [
+        {
+          "runtime": "native-replay",
+          "id": "contractions",
+          "transcript": "I can't believe we've already finished. Let's take a short break."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "contrast",
+          "transcript": "I thought you said Tuesday, but the invitation says Thursday."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "currency-raw",
+          "transcript": "The total is twenty five dollars fifty."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "currency-spoken",
+          "transcript": "The total is $25.50."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "date-spoken",
+          "transcript": "Your appointment is on october twenty third at ten thirty in the morning."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "digits-spoken",
+          "transcript": "The code is 739024. Please repeat it slowly."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "directions",
+          "transcript": "Turn left at the next street, then continue straight ahead until you reach the bridge."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "email-raw",
+          "transcript": "Send the report to Alicexample.org."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "email-spoken",
+          "transcript": "Send the report to Alice at example.org."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "list",
+          "transcript": "We need bread, milk, apples, carrots, and a small bag of coffee."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "long-sentence",
+          "transcript": "Before leaving the house, please check that all the windows are closed, and that the kitchen light is switched off because the weather forecast says strong winds and heavy rain will arrive later this afternoon, and we would like to keep the rooms warm and dry until everyone returns home for dinner."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "multi-sentence",
+          "transcript": "The train arrived early. We found our seats and put the bags on the shelf. Outside, the city slowly disappeared behind green fields. A child pointed at a horse near the fence. Soon the conductor came to check our tickets. We settled back and enjoyed the quiet journey."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "negation",
+          "transcript": "Please do not turn off the power until the update is complete."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "phone-raw",
+          "transcript": "Call five five five zero one two four for help."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "question",
+          "transcript": "Could you please close the window before you leave?"
+        },
+        {
+          "runtime": "native-replay",
+          "id": "quoted",
+          "transcript": "she said, that is exactly what I was hoping for."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "short-hello",
+          "transcript": "Hello world"
+        },
+        {
+          "runtime": "native-replay",
+          "id": "short-thanks",
+          "transcript": "No, thank you."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "short-yes",
+          "transcript": "Yes."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "story",
+          "transcript": "The little fox waited beneath the old oak tree while the rain tapped softly on the leaves."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "structured-raw",
+          "transcript": "Your appointment is on october twenty third at ten thirty AM"
+        },
+        {
+          "runtime": "native-replay",
+          "id": "unicode",
+          "transcript": "We stopped at the cafe before visiting the museum."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "unit-spoken",
+          "transcript": "The package weighs 3.5 kg and is 20 cm wide."
+        },
+        {
+          "runtime": "native-replay",
+          "id": "welcome",
+          "transcript": "Welcome home. It is good to see you again."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "contractions",
+          "transcript": "I can't believe we've already finished. Let's take a short break."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "contrast",
+          "transcript": "I thought you said Tuesday, but the invitation says Thursday."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "currency-raw",
+          "transcript": "The total is twenty five dollars fifty."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "currency-spoken",
+          "transcript": "The total is $25.50."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "date-spoken",
+          "transcript": "Your appointment is on october twenty third at ten thirty in the morning."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "digits-spoken",
+          "transcript": "The code is 739024. Please repeat it slowly."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "directions",
+          "transcript": "Turn left at the next street, then continue straight ahead until you reach the bridge."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "email-raw",
+          "transcript": "Send the report to Alicexample.org."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "email-spoken",
+          "transcript": "Send the report to Alice at example.org."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "list",
+          "transcript": "We need bread, milk, apples, carrots, and a small bag of coffee."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "long-sentence",
+          "transcript": "Before leaving the house, please check that all the windows are closed, and that the kitchen light is switched off because the weather forecast says strong winds and heavy rain will arrive later this afternoon, and we would like to keep the rooms warm and dry until everyone returns home for dinner."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "multi-sentence",
+          "transcript": "The train arrived early. We found our seats and put the bags on the shelf. Outside, the city slowly disappeared behind green fields. A child pointed at a horse near the fence. Soon the conductor came to check our tickets. We settled back and enjoyed the quiet journey."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "negation",
+          "transcript": "Please do not turn off the power until the update is complete."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "phone-raw",
+          "transcript": "Call five five five zero one two four for help."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "question",
+          "transcript": "Could you please close the window before you leave?"
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "quoted",
+          "transcript": "she said, that is exactly what I was hoping for."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "short-hello",
+          "transcript": "Hello world"
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "short-thanks",
+          "transcript": "No, thank you."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "short-yes",
+          "transcript": "Yes."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "story",
+          "transcript": "The little fox waited beneath the old oak tree while the rain tapped softly on the leaves."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "structured-raw",
+          "transcript": "Your appointment is on october twenty third at ten thirty AM"
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "unicode",
+          "transcript": "We stopped at the cafe before visiting the museum."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "unit-spoken",
+          "transcript": "The package weighs 3.5 kg and is 20 cm wide."
+        },
+        {
+          "runtime": "upstream-replay",
+          "id": "welcome",
+          "transcript": "Welcome home. It is good to see you again."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "contractions",
+          "transcript": "I can't believe we've already finished. Let's take a short break."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "contrast",
+          "transcript": "I thought you said Tuesday, but the invitation says Thursday."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "currency-raw",
+          "transcript": "The total is $25.50."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "currency-spoken",
+          "transcript": "The total is $25.50."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "date-spoken",
+          "transcript": "Your appointment is on october twenty third at ten thirty in the morning."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "digits-spoken",
+          "transcript": "The code is 739024. Please repeat it slowly."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "directions",
+          "transcript": "Turn left at the next street, then continue straight ahead until you reach the bridge."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "email-raw",
+          "transcript": "Send the report to Alice atexample.org."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "email-spoken",
+          "transcript": "Send the report to Alice at example.org."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "list",
+          "transcript": "We need bread, milk, apples, carrots, and a small bag of coffee."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "long-sentence",
+          "transcript": "Before leaving the house, please check that all the windows are closed, and that the kitchen light is switched off because the weather forecast says strong winds and heavy rain will arrive later this afternoon, and we would like to keep the rooms warm and dry until everyone returns home for dinner."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "multi-sentence",
+          "transcript": "The train arrived early. We found our seats and put the bags on the shelf. Outside, the city slowly disappeared behind green fields. A child pointed at a horse near the fence. Soon the conductor came to check our tickets. We settled back and enjoyed the quiet journey."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "negation",
+          "transcript": "Please do not turn off the power until the update is complete."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "phone-raw",
+          "transcript": "Call five five five zero one two four for help."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "question",
+          "transcript": "Could you please close the window before you leave?"
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "quoted",
+          "transcript": "She said, that is exactly what I was hoping for."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "short-hello",
+          "transcript": "Hello world"
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "short-thanks",
+          "transcript": "No, thank you."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "short-yes",
+          "transcript": "Yes."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "story",
+          "transcript": "The little fox waited beneath the old oak tree while the rain tapped softly on the leaves."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "structured-raw",
+          "transcript": "Your appointment is on october twenty third at ten thirty AM"
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "unicode",
+          "transcript": "We stopped at the cafe before visiting the museum."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "unit-spoken",
+          "transcript": "The package weighs 3.5 kg and is 20 cm wide."
+        },
+        {
+          "runtime": "upstream-normalized",
+          "id": "welcome",
+          "transcript": "Welcome home. It is good to see you again."
+        }
+      ]
+    },
+    "managed_product_smoke": {
+      "pull": "passed; pinned files verified against independent asset hashes",
+      "model_info_is_valid": true,
+      "streaming": "passed; 39 frames of 1920 samples, 74880 samples, 3.12 seconds at 24000Hz",
+      "offline": "passed through public local-folder model selection"
+    },
+    "memory": {
+      "replay_peak_mlx_allocated_bytes": 238322045,
+      "first_public_cli_peak_footprint_bytes": 432276536,
+      "scope": "36 GiB M3 Max only; does not qualify the 4 GiB descriptor floor on a physical 4 GiB device",
+      "release_benchmark_peak_footprint_bytes": 843662272,
+      "release_benchmark_peak_mlx_allocated_bytes": 238281444
+    },
+    "performance": {
+      "temperature": 0,
+      "seed": 42,
+      "iterations": 10,
+      "native_warmups_per_prompt": 1,
+      "upstream_warmups_per_prompt": 3,
+      "native_boundary": "Release Swift/MLX GPU, serial flow/Mimi, includes per-request voice conditioning, text planning and first callback; excludes model/voice file loading.",
+      "upstream_boundary": "Official unmodified bench Synth::stream, 4 CPU threads, Accelerate/KleidiAI feature build, parallel flow/Mimi workers, cached voice prefix; excludes model loading and voice conditioning. M3 Max lacks SME2.",
+      "comparable_format": "Original safetensors F32 compute compared separately from upstream Q8.",
+      "results": [
+        {
+          "runtime": "native-metal-f32",
+          "id": "short-hello",
+          "iterations": 10,
+          "audio_seconds": 1.6,
+          "median_generation_seconds": 0.06375460416893475,
+          "median_rtf": 0.03984662760558422,
+          "realtime_multiple": 25.096226709531052,
+          "median_first_audio_ms": 6.685687498247717,
+          "min_rtf": 0.03969382812556432,
+          "max_rtf": 0.043179895833418414
+        },
+        {
+          "runtime": "native-metal-f32",
+          "id": "directions",
+          "iterations": 10,
+          "audio_seconds": 4.8,
+          "median_generation_seconds": 0.18681218750134576,
+          "median_rtf": 0.038919205729447036,
+          "realtime_multiple": 25.694255092245633,
+          "median_first_audio_ms": 7.190687498223269,
+          "min_rtf": 0.03827460937524545,
+          "max_rtf": 0.039358385415653174
+        },
+        {
+          "runtime": "native-metal-f32",
+          "id": "long-sentence",
+          "iterations": 10,
+          "audio_seconds": 14.24,
+          "median_generation_seconds": 0.5526104374985152,
+          "median_rtf": 0.03880691274568225,
+          "realtime_multiple": 25.76860485020835,
+          "median_first_audio_ms": 8.165937499143183,
+          "min_rtf": 0.038320625585226246,
+          "max_rtf": 0.03919295411966293
+        },
+        {
+          "runtime": "upstream-cpu-f32",
+          "id": "short-hello",
+          "iterations": 10,
+          "audio_seconds": 1.6,
+          "median_generation_seconds": 0.04758,
+          "median_rtf": 0.029737499999999997,
+          "realtime_multiple": 33.627574611181174,
+          "median_first_audio_ms": 7.135000000000001,
+          "min_rtf": 0.028749999999999998,
+          "max_rtf": 0.03089375
+        },
+        {
+          "runtime": "upstream-cpu-f32",
+          "id": "directions",
+          "iterations": 10,
+          "audio_seconds": 4.8,
+          "median_generation_seconds": 0.12388,
+          "median_rtf": 0.025808333333333336,
+          "realtime_multiple": 38.7471746851792,
+          "median_first_audio_ms": 7.945,
+          "min_rtf": 0.025583333333333333,
+          "max_rtf": 0.026327083333333338
+        },
+        {
+          "runtime": "upstream-cpu-f32",
+          "id": "long-sentence",
+          "iterations": 10,
+          "audio_seconds": 14.24,
+          "median_generation_seconds": 0.355085,
+          "median_rtf": 0.024935744382022472,
+          "realtime_multiple": 40.10307391188025,
+          "median_first_audio_ms": 11.649999999999999,
+          "min_rtf": 0.0240751404494382,
+          "max_rtf": 0.025143960674157306
+        },
+        {
+          "runtime": "upstream-cpu-q8",
+          "id": "short-hello",
+          "iterations": 10,
+          "audio_seconds": 1.6,
+          "median_generation_seconds": 0.031634999999999996,
+          "median_rtf": 0.019771875,
+          "realtime_multiple": 50.57689268215584,
+          "median_first_audio_ms": 3.93,
+          "min_rtf": 0.019624999999999997,
+          "max_rtf": 0.019975
+        },
+        {
+          "runtime": "upstream-cpu-q8",
+          "id": "directions",
+          "iterations": 10,
+          "audio_seconds": 4.8,
+          "median_generation_seconds": 0.08990000000000001,
+          "median_rtf": 0.01872916666666667,
+          "realtime_multiple": 53.39265850945495,
+          "median_first_audio_ms": 5.8149999999999995,
+          "min_rtf": 0.01806666666666667,
+          "max_rtf": 0.019075
+        },
+        {
+          "runtime": "upstream-cpu-q8",
+          "id": "long-sentence",
+          "iterations": 10,
+          "audio_seconds": 14.24,
+          "median_generation_seconds": 0.26156500000000005,
+          "median_rtf": 0.018368328651685393,
+          "realtime_multiple": 54.441534608988206,
+          "median_first_audio_ms": 10.99,
+          "min_rtf": 0.01766502808988764,
+          "max_rtf": 0.01847401685393258
+        }
+      ],
+      "interpretation": "Native Metal is about 25x real time, with 7-9ms median first audio. Upstream F32 and Q8 remain faster in total generation. These are measured paths with different scheduling/voice-cache boundaries, not a matched-kernel speed claim."
+    }
+  }
+}

@@ -1022,6 +1022,8 @@ limitations under the License.
   `3a6219917e4535575ce5bce2fc2ba27a483a709b`
 - generated-kernel and required core AOT source SHA-256:
   `36412403ff4f0117579f0bc4471a17083411422bfc446f9f11420614ddbeb9ee`
+- build compatibility: Metal Shading Language 3.2, macOS deployment target 15.0
+  for compilation and linking; rebuilt with Xcode 26.4 for macOS 15 support
 - license: MIT
 
 ```
@@ -1660,3 +1662,125 @@ Built with Fish Audio. The separately downloaded
 are governed by the [Fish Audio Community License, Version 1.0](https://huggingface.co/fishaudio/drama-3/blob/dd64a85cd82e9521f7202610ede97b367fc83946/LICENSE).
 The installer requires explicit acceptance. Standalone Q4 exports preserve the
 license and include the required attribution and a modification notice.
+
+## EmbeddingGemma 2 Core ML runtime and preprocessing
+
+`Sources/MereRunCoreMLModel/` contains tokenizer, image/audio decoding, bicubic
+resampling, audio resampling, and log-mel feature extraction adapted from
+[EverPaper/embeddinggemma-2-coreai](https://huggingface.co/EverPaper/embeddinggemma-2-coreai/tree/305fc2a96790d9343f38038aeca211dfca56d9a5/swift),
+revision `305fc2a96790d9343f38038aeca211dfca56d9a5`.
+
+Copyright 2026 Everpaper. Licensed under Apache-2.0. `LICENSE` and `NOTICE` in
+the target directory retain the license text and upstream image-preprocessing
+attributions, including ATen's bicubic resize arithmetic (BSD-3-Clause) and
+Pillow's CMYK conversion formula (MIT-CMU). The Core ML graph adapter, typed geometry, table lookup, and ordered
+input integration are implemented in this repository. Packed text prediction
+adapts `EmbeddingGemma2Manager.swift` from
+[FluidInference/FluidUse](https://github.com/FluidInference/FluidUse/tree/d278e17df85e39e8c21bb64a467da81c39576fcd),
+revision `d278e17df85e39e8c21bb64a467da81c39576fcd`, under Apache-2.0.
+The module's `LICENSE` and `NOTICE` retain this attribution and accompany the
+macOS app in `Contents/Resources/ThirdPartyLicenses/EmbeddingGemma2/`.
+
+The separately downloaded graph packages and BF16/FP16 tables come from
+[FluidInference/embeddinggemma-2-coreml](https://huggingface.co/FluidInference/embeddinggemma-2-coreml/tree/3f978ddf92cac9aa07eb2dcf6eb36cf450f3dba4),
+revision `3f978ddf92cac9aa07eb2dcf6eb36cf450f3dba4`, under the model card's
+Apache-2.0 license. The source model is Google's EmbeddingGemma 2. These model
+artifacts are not bundled with mere.run.
+
+`scripts/model-conversion/embeddinggemma2_export_text.py` and
+`embeddinggemma2_export_audio.py` adapt the same pinned EverPaper repository's
+Apache-2.0 `export/eg2_text.py` and `export/eg2_audio.py`. The expanded Core ML
+conversion replaces text attention with fused SDPA while retaining unit
+attention scaling and the bidirectional 512-distance local mask. It supplies
+token embeddings from the host, uses float32 long-input computation, and
+exports 1K/2K/4K/8K text functions and a 30-second audio function. The original
+Google checkpoint revision is `914f7f89142e33e77833254d9c9b90c3cef7303b`.
+License and original modification notices remain in
+`Sources/MereRunCoreMLModel/LICENSE` and `NOTICE`.
+
+### Nemotron 3.5 Bolt native runtime and IQ2 codebook
+
+- Model configuration and architecture reference:
+  [`nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB`](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB),
+  revision `96a5d63027ac013c8ef37fb438f3b4ec5fbd3ba6`.
+- Model materials: OpenMDW-1.1. Copyright (c) 2026 NVIDIA CORPORATION &
+  AFFILIATES. All rights reserved. The license is retained in
+  `Sources/MereRunNemotronBoltModel/LICENSE.OpenMDW-1.1`.
+- IQ2_XXS grid data: `ggml/src/ggml-common.h` from
+  [`ggml-org/llama.cpp`](https://github.com/ggml-org/llama.cpp), revision
+  `b76b13379d3b7d67ab0bc424516bb6fd2522bd8e`. Copyright (c) 2023-2026
+  The ggml authors. MIT license, retained in
+  `Sources/MereRunNemotronBoltModel/LICENSE.ggml`.
+- Integration: independent Swift/MLX execution of heterogeneous Mamba-2,
+  attention, latent MoE, and C-RADIO blocks; original packed weight formats.
+  The repository does not distribute the checkpoint weights.
+
+## FLUX 3 Image Klein reference implementation
+
+The native FLUX 3 transformer and sampling implementation follows Black Forest
+Labs' reference code at
+[`45e57c9fb06f9751cdced29a65c5d2171003be05`](https://github.com/black-forest-labs/flux-3-image-klein/tree/45e57c9fb06f9751cdced29a65c5d2171003be05).
+The Swift implementation changes the tensor backend to MLX, processes one sample
+per call, omits unobserved phantom reference tokens, and loads the original BF16
+tensor names with strict shape checks. The reference code is Apache-2.0; its
+license is preserved in `Sources/MereRunCore/Resources/ModelLicenses/Flux3-Klein-Code-LICENSE`.
+
+The model weights use the separate FLUX Kommunity License v1.0, preserved in
+`Sources/MereRunCore/Resources/ModelLicenses/Flux3-Klein-Weights-LICENSE.md`.
+Managed downloads require explicit local acceptance and Hugging Face access.
+The bundled Qwen3-VL text encoder uses Apache-2.0. The numerical test fixtures
+contain synthetic weights, not pretrained model parameters.
+
+## Bonsai 2 Small model packs
+
+The optional Bonsai 2 Small 2B, 4B, and 9B managed models use Prism ML's
+Apache-2.0 MLX packs derived from Alibaba Cloud's Apache-2.0 Qwen3.5 models.
+The pinned source repositories and revisions are listed in
+`docs/model-sources.md`. The configuration fixtures in
+`Tests/MereRunCoreTests/Fixtures/Bonsai2Small/` come from those revisions;
+`provenance.json` records their SHA-256 hashes and upstream weight identities.
+
+Copyright 2026-present Prism ML, Inc. Created using Bonsai by Prism ML.
+Qwen3.5: Copyright 2026 Alibaba Cloud.
+
+Managed pulls retain the upstream `LICENSE` and `NOTICE.txt` files. No model
+weights or upstream Python runtime are bundled in this repository. The Swift
+tied output implementation follows the signed Hadamard and affine packed
+weight contract documented by the packs' `runtime/runtime.py`.
+
+## Gradium Phonon
+
+`Sources/AudioPhononModel/PhononLayers.swift`, `PhononFlow.swift`,
+`PhononMimi.swift`, `PhononTextPlanner.swift`, and generation policy in `PhononModel.swift` adapt algorithms
+from Gradium's [xn-ptts](https://github.com/gradium-ai/xn-ptts/tree/49b9033e44ab0fbb935973eca3213757644d1bbb)
+at commit `49b9033e44ab0fbb935973eca3213757644d1bbb`, under its MIT license.
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+The managed `gradium/phonon-31m-en` checkpoint at
+`92741c5b07d085ff840e26fea8ce43110b87852f` distributes its weights, tokenizer,
+and bundled voice under Apache-2.0. The tokenizer and config fixtures in
+`Tests/AudioPhononModelTests/Fixtures` are from that revision. The 40m gated
+CC-BY-NC checkpoints are not included. Model assets are downloaded separately.

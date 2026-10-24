@@ -104,6 +104,7 @@ public enum MereRunModelValidator {
                 return false
             case .directoryRoot, .structuredRoot:
                 return spec.validationKind != .codegenGGUF
+                    && spec.validationKind != .embeddingGemma2CoreML
                     && spec.validationKind != .laya
                     && spec.validationKind != .roFormer
                     && spec.validationKind != .auk
@@ -157,10 +158,12 @@ public enum MereRunModelValidator {
             textEncoderDir = nil
             vaeDir = nil
             tokenizerDir = nil
-        } else if spec?.validationKind == .laya
+        } else if spec?.validationKind == .embeddingGemma2CoreML
+            || spec?.validationKind == .laya
             || spec?.validationKind == .clef
             || spec?.validationKind == .gliner25Decide
             || spec?.validationKind == .qwenImage21
+            || spec?.validationKind == .flux3
             || spec?.validationKind == .aceStep
             || spec?.validationKind == .aceStepLM
             || spec?.validationKind == .miniMaxMusic3
@@ -198,6 +201,7 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .tessera
             || spec?.validationKind == .olmoEarth
             || spec?.validationKind == .nemotronOmni
+            || spec?.validationKind == .nemotronBolt
             || spec?.validationKind == .inkling {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
             transformerDir = nil
@@ -457,6 +461,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=flux1 expects flux1.")
             case .klein where engine != .flux2Klein:
                 warnings.append("Manifest engine mismatch: family=klein expects flux2-klein.")
+            case .flux3 where engine != .flux3:
+                warnings.append("Manifest engine mismatch: family=flux3 expects flux3-klein.")
             case .zimage where engine != .zimageTurbo:
                 warnings.append("Manifest engine mismatch: family=zimage expects zimage-turbo.")
             case .hidream where engine != .hidreamO1:
@@ -489,12 +495,12 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=olmoearth expects olmoearth.")
             case .face where engine != .insightFace:
                 warnings.append("Manifest engine mismatch: family=face expects insightface.")
-            case .tts where engine != .qwen3TTS && engine != .breezeTTS && engine != .drama3TTS:
-                warnings.append("Manifest engine mismatch: family=tts expects qwen3-tts, breeze-tts, or drama3-tts.")
+            case .tts where engine != .qwen3TTS && engine != .breezeTTS && engine != .phononTTS && engine != .drama3TTS:
+                warnings.append("Manifest engine mismatch: family=tts expects qwen3-tts, breeze-tts, phonon-tts, or drama3-tts.")
             case .asr where engine != .qwen3ASR && engine != .parakeetASR && engine != .whistleASR && engine != .sortformer:
                 warnings.append("Manifest engine mismatch: family=asr expects qwen3-asr, parakeet-asr, whistle-asr, or sortformer.")
-            case .embed where engine != .qwen3Embedding && engine != .embeddingGemma2:
-                warnings.append("Manifest engine mismatch: family=embed expects qwen3-embedding or embeddinggemma2.")
+            case .embed where engine != .qwen3Embedding && engine != .embeddingGemma2 && engine != .embeddingGemma2CoreML:
+                warnings.append("Manifest engine mismatch: family=embed expects qwen3-embedding, embeddinggemma2, or embeddinggemma2-coreml.")
             case .privacy where engine != .openAIPrivacyFilter:
                 warnings.append("Manifest engine mismatch: family=privacy expects openai-privacy-filter.")
             case .code where engine != .qwen3Coder && engine != .northMiniCode && engine != .qwen35HybridMoE:
@@ -623,7 +629,9 @@ public enum MereRunModelValidator {
             errors.append("Manifest components missing unconditional_transformer.")
         }
         if supportsImagePipeline && !usesUnifiedImageTransformer && components.vae == nil { errors.append("Manifest components missing vae.") }
-        if supportsImagePipeline && !usesUnifiedImageTransformer && components.scheduler == nil { errors.append("Manifest components missing scheduler.") }
+        if supportsImagePipeline && !usesUnifiedImageTransformer && manifest.engine != .flux3 && components.scheduler == nil {
+            errors.append("Manifest components missing scheduler.")
+        }
     }
 
     private static func manifestIDIsCompatible(expected: String, actual: String) -> Bool {

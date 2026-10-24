@@ -1,18 +1,28 @@
 import Foundation
+import MereRunAdmission
 import MLX
 import XCTest
+@testable import MereRunCore
 @testable import MereRunQwenModel
 
 final class Bonsai2PerformanceTests: MereRunCoreTestCase {
-    func testInstalledProjectionProfile() throws {
+    func testInstalledProjectionProfile() async throws {
         guard let path = ProcessInfo.processInfo.environment["MERERUN_BONSAI2_PROFILE"] else {
             throw XCTSkip("Set MERERUN_BONSAI2_PROFILE to a checkpoint for the opt-in GPU profile")
         }
         guard Device.defaultDevice().deviceType == .gpu else {
             throw XCTSkip("The projection profile requires MERERUN_TEST_MLX_DEVICE=gpu")
         }
+        let coordinator = MachineInferenceCoordinator(stateDirectory:
+            MereRunModelPaths.applicationSupportBase.appendingPathComponent("admission", isDirectory: true))
+        let lease = try await coordinator.acquire(.init(label: "Bonsai packed projection profile", resourceClass: .standard))
+        defer { lease.release() }
+        let config = try JSONDecoder().decode(Q35PrismConfiguration.self,
+            from: Data(contentsOf: URL(fileURLWithPath: path).appendingPathComponent("config.json")))
         let arrays = try MLX.loadArrays(url: URL(fileURLWithPath: path).appendingPathComponent("model.safetensors"))
-        for name in ["model.layers.0.mlp.gate_proj", "model.layers.0.mlp.down_proj", "lm_head"] {
+        let head = config.modules.contains { $0.path == "lm_head" } ? "lm_head" : "model.embed_tokens"
+        for name in ["model.layers.0.mlp.gate_proj", "model.layers.0.mlp.down_proj", head] {
+            let block = try XCTUnwrap(config.modules.first { $0.path == name }).block
             let prefix = "language_model." + name
             let weight = try XCTUnwrap(arrays[prefix + ".weight"])
             let scales = try XCTUnwrap(arrays[prefix + ".scales"])
@@ -21,7 +31,7 @@ final class Bonsai2PerformanceTests: MereRunCoreTestCase {
             let width = weight.dim(1) * 16
             let input = MLXArray((0..<width).map { Float($0 % 19 - 9) / 16 })
                 .reshaped(1, 1, width).asType(.float16)
-            let rotated = Q35PrismTransform.apply(input, block: 1024, signs: signs)
+            let rotated = Q35PrismTransform.apply(input, block: block, signs: signs)
             var low = MLXArray.zeros(weight.shape, dtype: .uint32)
             var high = MLXArray.zeros(weight.shape, dtype: .uint32)
             for index in 0..<8 {
@@ -38,8 +48,8 @@ final class Bonsai2PerformanceTests: MereRunCoreTestCase {
             print("BONSAI_PROFILE \(name) expansion_max_error=\(difference)")
             for trial in 0..<3 {
                 let operations: [(String, () -> MLXArray)] = [
-                    ("reference_transform", { Q35PrismTransform.reference(input, block: 1024, signs: signs) }),
-                    ("transform", { Q35PrismTransform.apply(input, block: 1024, signs: signs) }),
+                    ("reference_transform", { Q35PrismTransform.reference(input, block: block, signs: signs) }),
+                    ("transform", { Q35PrismTransform.apply(input, block: block, signs: signs) }),
                     ("packed2", packedOp), ("expanded4", expandedOp),
                 ]
                 for (label, operation) in trial.isMultiple(of: 2) ? operations : operations.reversed() {

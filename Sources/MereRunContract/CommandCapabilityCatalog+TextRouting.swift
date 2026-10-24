@@ -7,6 +7,7 @@ extension MereRunCapabilityCatalog {
 
     enum TextEmbedFamily: String, MereRunFamilyID {
         case qwen3Embedding = "qwen3-embedding"
+        case embeddingGemma2CoreML = "embeddinggemma2-coreml"
         case embeddingGemma2 = "embeddinggemma2"
         case pplxLate = "pplx-late"
         case pplxContext = "pplx-context"
@@ -36,6 +37,7 @@ extension MereRunCapabilityCatalog {
         case laguna
         case inkling
         case museGlimmer = "muse-glimmer"
+        case nemotronBolt = "nemotron-bolt"
         case nemotronH = "nemotron-h"
         case nemotronOmni = "nemotron-omni"
         case lfm2
@@ -96,6 +98,7 @@ extension MereRunCapabilityCatalog {
             .init(TextChatFamily.laguna, title: "Laguna", models: ["text-chat-laguna-s-2-1", "text-chat-laguna-xs-2-1"]),
             .init(TextChatFamily.inkling, title: "Inkling-Small", models: ["text-chat-inkling-small"]),
             .init(TextChatFamily.museGlimmer, title: "Muse Glimmer", models: ["vision-chat-muse-glimmer-30b"]),
+            .init(TextChatFamily.nemotronBolt, title: "Nemotron 3.5 Bolt", models: ["vision-chat-nemotron-35-bolt-24gb"]),
             .init(TextChatFamily.nemotronH, title: "Nemotron 3.5 Lightning", models: ["text-chat-nemotron-35-lightning"]),
             .init(
                 TextChatFamily.nemotronOmni, title: "Nemotron 3 Nano Omni", models: ["omni-chat-nemotron3-nano-30b-a3b-bf16"]
@@ -125,6 +128,7 @@ extension MereRunCapabilityCatalog {
                 title: "Qwen3.6 vision",
                 models: [
                     "text-chat-bonsai-27b-1bit", "text-chat-bonsai-27b-2bit", "text-chat-bonsai-2-27b-2bit",
+                    "text-chat-bonsai-2-2b-2bit", "text-chat-bonsai-2-4b-2bit", "text-chat-bonsai-2-9b-2bit",
                     "text-agent-ornith-35b-mlx-4bit", "vision-chat-ornith-35b"
                 ]
             ),
@@ -220,6 +224,7 @@ extension MereRunCapabilityCatalog {
         families: [
             .init(TextEmbedFamily.qwen3Embedding, title: "Qwen3 Embedding", models: ["text-embed-qwen3-0.6b"]),
             .init(TextEmbedFamily.embeddingGemma2, title: "EmbeddingGemma 2", models: ["text-embed-embeddinggemma2"]),
+            .init(TextEmbedFamily.embeddingGemma2CoreML, title: "EmbeddingGemma 2 Core ML", models: ["text-embed-embeddinggemma2-coreml"]),
             .init(TextEmbedFamily.pplxLate, title: "PPLX v2 Late", models: ["text-embed-pplx-v2-late-0.6b", "text-embed-pplx-v2-late-9b", "text-embed-pplx-v2-late-9b-mixed-4bit"]),
             .init(TextEmbedFamily.pplxContext, title: "PPLX v2 Context", models: ["text-embed-pplx-v2-context-9b-preview", "text-embed-pplx-v2-context-9b-preview-8bit"])
         ]

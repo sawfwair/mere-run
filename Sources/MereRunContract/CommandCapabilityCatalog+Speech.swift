@@ -30,7 +30,7 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--mode", label: "Mode", kind: .choice, choices: ["style", "clone"],
                 defaultValue: "style", group: Group.inputs, tier: .standard, choiceSpellings: .exact
-            ),
+            ).scoped(SpeechSynthesizeFamily.rule(.phonon, values: ["style"])),
             .init(flag: "--profile", label: "Profile", kind: .string, group: Group.inputs, tier: .standard)
                 .scoped(SpeechSynthesizeFamily.only(.clone, .breezeClone, .drama3Clone, ignoredBy: [.style, .breeze])),
             .init(flag: "--ref-audio", label: "Reference audio", kind: .file, group: Group.inputs, tier: .standard)
@@ -52,7 +52,7 @@ extension MereRunCapabilityCatalog {
             ),
             .init(flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .expert,
                   range: .init(min: 0, max: 2_147_483_647, step: 1))
-                .scoped(SpeechSynthesizeFamily.only(.breeze, .breezeClone, .drama3, .drama3Clone)),
+                .scoped(SpeechSynthesizeFamily.only(.breeze, .breezeClone, .phonon, .drama3, .drama3Clone)),
             .init(flag: "--cfg-scale", label: "CFG scale", kind: .number,
                   group: Group.sampling, tier: .expert, range: .init(min: 0, max: 20, step: 0.1))
                 .scoped(SpeechSynthesizeFamily.only(.breeze, .breezeClone)),
@@ -60,7 +60,7 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--stream-chunk-tokens", label: "Chunk tokens", kind: .integer,
                 defaultValue: "25", group: Group.output, tier: .expert, range: .init(min: 1, max: 500, step: 1), dependsOn: "--stream"
-            ),
+            ).scoped(SpeechSynthesizeFamily.except(.phonon)),
             .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             progressJSONOption,
             receiptOption

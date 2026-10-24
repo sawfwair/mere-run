@@ -162,7 +162,20 @@ if !isLinuxPackage {
   products.append(.executable(name: "mere.run.app", targets: ["MereRunApp"]))
 }
 
-var targets: [Target] = []
+var targets: [Target] = [
+  .target(
+    name: "MereRunCoreMLModel",
+    path: "Sources/MereRunCoreMLModel",
+    exclude: ["README.md", "LICENSE", "NOTICE"],
+    linkerSettings: isLinuxPackage ? [] : [
+      .linkedFramework("CoreML", .when(platforms: [.macOS])),
+      .linkedFramework("Accelerate", .when(platforms: [.macOS])),
+      .linkedFramework("AVFoundation", .when(platforms: [.macOS])),
+      .linkedFramework("ImageIO", .when(platforms: [.macOS])),
+      .linkedFramework("CoreGraphics", .when(platforms: [.macOS]))
+    ]
+  )
+]
 var mereRunCoreDependencies: [Target.Dependency] = mlxDependency("MLX")
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXFast"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXFFT"))
@@ -187,7 +200,9 @@ mereRunCoreDependencies.append("MereRunKVCache")
 mereRunCoreDependencies.append("MereRunDecode")
 mereRunCoreDependencies.append("MereRunQwenModel")
 mereRunCoreDependencies.append("MereRunKolibriModel")
+mereRunCoreDependencies.append("MereRunNemotronBoltModel")
 mereRunCoreDependencies.append("MereRunGemmaModel")
+mereRunCoreDependencies.append("MereRunCoreMLModel")
 mereRunCoreDependencies.append("MereRunLTXModel")
 mereRunCoreDependencies.append("AudioCodecs")
 mereRunCoreDependencies.append("AudioDrama3Model")
@@ -312,6 +327,7 @@ if hasMediaIOTarget {
 
 var mereRunCoreTestDependencies: [Target.Dependency] = [
   "AudioDrama3Model",
+  "MereRunCoreMLModel",
   "MereRunLagunaModel",
   "MereRunH3Model",
   "MereRunAudioModels",
@@ -461,6 +477,26 @@ targets.append(
 
 targets.append(
   .target(
+    name: "MereRunNemotronBoltModel",
+    dependencies: ["MereRunTensor"] + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/MereRunNemotronBoltModel",
+    exclude: ["README.md", "LICENSE.ggml", "LICENSE.OpenMDW-1.1"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+targets.append(
+  .testTarget(
+    name: "NemotronBoltRuntimeTests",
+    dependencies: ["MereRunNemotronBoltModel", "MereRunMLXTestSupport"]
+      + mlxDependency("MLX") + mlxDependency("MLXNN") + mlxDependency("MLXRandom"),
+    path: "Tests/NemotronBoltRuntimeTests",
+    resources: [.copy("Fixtures")],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
     name: "MereRunKolibriModel",
     dependencies: ["MereRunTensor"] + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
     path: "Sources/MereRunKolibriModel",
@@ -597,6 +633,26 @@ targets.append(
       + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
     path: "Sources/AudioQwen3TTSModel",
     exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "AudioPhononModel",
+    dependencies: mlxDependency("MLX") + mlxDependency("MLXFast")
+      + mlxDependency("MLXNN") + mlxDependency("MLXRandom"),
+    path: "Sources/AudioPhononModel",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+targets.append(
+  .testTarget(
+    name: "AudioPhononModelTests",
+    dependencies: ["AudioPhononModel", "MereRunMLXTestSupport"],
+    path: "Tests/AudioPhononModelTests",
+    resources: [.copy("Fixtures")],
     swiftSettings: commonSwiftSettings
   )
 )
@@ -743,6 +799,7 @@ targets.append(
       "FalconPerception/README.md",
       "Flux1/README.md",
       "Flux2Klein/README.md",
+      "Flux3/README.md",
       "Gemma4/README.md",
       "Embeddings/README.md",
       "GLiNER/README.md",
@@ -756,6 +813,7 @@ targets.append(
       "MuScriptor/README.md",
       "MuseGlimmer/README.md",
       "NemotronH/README.md",
+      "NemotronBolt/README.md",
       "NemotronOmni/README.md",
       "LFM2/README.md",
       "LightOnOCR/README.md",
@@ -857,7 +915,7 @@ targets.append(
 targets.append(
   .target(
     name: "AudioTTS",
-    dependencies: audioRuntimeDependencies + ["AudioQwen3TTSModel", "AudioBreezeTTSModel", "AudioDrama3Model"],
+    dependencies: audioRuntimeDependencies + ["AudioQwen3TTSModel", "AudioBreezeTTSModel", "AudioPhononModel", "AudioDrama3Model"],
     path: "Sources/AudioTTS",
     exclude: [
       "Qwen3TTS/README.md"

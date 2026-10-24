@@ -59,6 +59,9 @@ if [[ ! -x "$mere_run_bin" ]]; then
 fi
 
 "$mere_run_bin" --help >/dev/null
+for batch_command in list submit inspect watch fetch cancel retry; do
+  "$mere_run_bin" graph batch "$batch_command" --help >/dev/null
+done
 "$mere_run_bin" guide --help >/dev/null
 "$mere_run_bin" image generate --help >/dev/null
 "$mere_run_bin" image validate --help >/dev/null

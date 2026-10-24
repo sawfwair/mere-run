@@ -8,18 +8,33 @@ final class Bonsai2FusionTests: MereRunCoreTestCase {
         guard Device.defaultDevice().deviceType == .gpu else {
             throw XCTSkip("Run with MERERUN_TEST_MLX_DEVICE=gpu for the fused Metal transform")
         }
-        for width in [1024, 5120, 17408] {
-            let signs = MLXArray((0..<width).map { $0 % 3 == 0 ? Float(-1) : Float(1) })
-            for dtype: DType in [.float16, .bfloat16, .float32] {
-                for inverse in [false, true] {
-                    let input = MLXArray((0..<(width * 3)).map { Float($0 % 127 - 63) / 65 })
-                        .reshaped(1, 3, width).asType(dtype)
-                    let actual = try XCTUnwrap(Q35PrismHadamard.apply(input, block: 1024, signs: signs, inverse: inverse))
-                    let reference = Q35PrismTransform.reference(input, block: 1024, signs: signs, inverse: inverse)
-                    XCTAssertEqual(MLX.max(MLX.abs(actual - reference)).item(Float.self), 0)
+        for block in [512, 1024] {
+            for width in [block, block * 5, block * 17] {
+                let signs = MLXArray((0..<width).map { $0 % 3 == 0 ? Float(-1) : Float(1) })
+                for dtype: DType in [.float16, .bfloat16, .float32] {
+                    for inverse in [false, true] {
+                        let input = MLXArray((0..<(width * 3)).map { Float($0 % 127 - 63) / 65 })
+                            .reshaped(1, 3, width).asType(dtype)
+                        let actual = try XCTUnwrap(Q35PrismHadamard.apply(input, block: block, signs: signs, inverse: inverse))
+                        let reference = Q35PrismTransform.reference(input, block: block, signs: signs, inverse: inverse)
+                        XCTAssertEqual(MLX.max(MLX.abs(actual - reference)).item(Float.self), 0)
+                    }
                 }
             }
         }
+    }
+
+    func testLongSmallPrefillAnd4096BlocksRetainReferenceTransform() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("Run with MERERUN_TEST_MLX_DEVICE=gpu for the transform dispatch check")
+        }
+        for block in [512, 4096] {
+            let input = MLXArray.ones([1, 16, block], dtype: .float16)
+            XCTAssertNil(Q35PrismHadamard.apply(input, block: block,
+                                               signs: MLXArray.ones([block]), inverse: false))
+        }
+        XCTAssertNil(Q35PrismHadamard.apply(MLXArray.ones([1, 3, 4096], dtype: .float16), block: 4096,
+                                           signs: MLXArray.ones([4096]), inverse: false))
     }
 
     private func projection(rows: Int, flipped: Bool = false, block: Int = 512) -> Q35PrismLinear {

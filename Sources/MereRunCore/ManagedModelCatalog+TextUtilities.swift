@@ -12,6 +12,14 @@ extension ManagedModelCatalog {
             defaultCLICommands: ["text embed"], apiAvailability: .cliOnly
         ),
         ManagedModelSpec(
+            id: EmbeddingGemma2CoreMLCatalog.modelID, category: .textEmbed, installShape: .directoryRoot,
+            hubFallback: EmbeddingGemma2CoreMLCatalog.hubFallback,
+            upstreamRepoId: EmbeddingGemma2CoreMLCatalog.repository, upstreamRevision: EmbeddingGemma2CoreMLCatalog.revision,
+            validationKind: .embeddingGemma2CoreML, runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 1_481_911_235,
+            defaultCLICommands: ["text embed"], apiAvailability: .cliOnly
+        ),
+        ManagedModelSpec(
             id: "text-code-qwen3",
             category: .textCode,
             installShape: .singleFile(relativePath: CodeGenResources.managedRelativePath),

@@ -122,10 +122,11 @@ public struct ImageGenerationIssue: Codable, LocalizedError, Equatable, Sendable
 }
 
 public enum ImageGenerationBackend: String, CaseIterable, Codable, Sendable {
-    case flux1, flux2Klein, zImageTurbo, hiDreamO1, senseNovaU15, krea2, ideogram4, qwenImageEdit, qwenImage21
+    case flux1, flux2Klein, flux3, zImageTurbo, hiDreamO1, senseNovaU15, krea2, ideogram4, qwenImageEdit, qwenImage21
 
     public init(manifest: MereRunModelManifest) throws {
         switch manifest.family {
+        case .flux3 where manifest.engine == .flux3: self = .flux3
         case .flux1: self = .flux1
         case .klein: self = .flux2Klein
         case .zimage: self = .zImageTurbo
