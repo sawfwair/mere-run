@@ -260,3 +260,20 @@ physical footprint is 26,165,549,392 bytes. The
 and local gate results. This repeats the short case on the integrated branch;
 the seven-probe receipts above retain their original source revision. Hosted
 checks and the protected merge queue remain separate delivery gates.
+
+
+## Public Q4 distribution
+
+The measured export is published as
+[Sawfwair/DRAMA-3-MLX-4bit](https://huggingface.co/Sawfwair/DRAMA-3-MLX-4bit/tree/543e9d0829856cc0657fa0fd6bb2903015c094fb)
+at immutable revision `543e9d0829856cc0657fa0fd6bb2903015c094fb`. All 104 publication
+files were verified by size and SHA-256 before public release, then verified
+anonymously at that revision. The bundle totals 27,408,247,610 bytes.
+The original 99-file measured export is unchanged on disk; publication preserves
+its README as `UPSTREAM_MODEL_CARD.md` and adds usage, modification, checksum,
+and qualification documents. No weights, tokenizer files, or codec bytes changed.
+
+The [publication receipt](./huggingface-publication.json) records every file's
+hash and size. The managed `speech-tts-drama-3` download uses this Q4 artifact,
+while source provenance and Fish Audio usage terms retain the upstream pin.
+This distribution check adds no speech-quality or inference-capacity claims.

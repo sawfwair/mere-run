@@ -153,6 +153,39 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertNil(quantized.defaultRuntimeServingEngine)
     }
 
+    func testDrama3DownloadIncludesEveryVerifiedPublicationFile() throws {
+        struct FileEntry: Decodable {
+            let bytes: Int64
+            let sha256: String
+        }
+        struct Publication: Decodable {
+            let repository: String
+            let revision: String
+            let bytes: Int64
+            let files: [String: FileEntry]
+        }
+        let repository = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let receipt = try JSONDecoder().decode(Publication.self, from: Data(contentsOf:
+            repository.appendingPathComponent("docs/qualification/drama3-native-20261015/huggingface-publication.json")))
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Drama3Resources.modelID))
+        let download = try XCTUnwrap(spec.hubFallback)
+        XCTAssertEqual(download.repoId, receipt.repository)
+        XCTAssertEqual(download.revision, receipt.revision)
+        XCTAssertEqual(spec.estimatedDownloadBytes, receipt.bytes)
+        XCTAssertEqual(receipt.files.count, 104)
+        XCTAssertEqual(receipt.files.values.reduce(Int64(0)) { $0 + $1.bytes }, receipt.bytes)
+        XCTAssertEqual(receipt.files.keys.filter { $0.hasSuffix(".safetensors") }.count, 88)
+        for (path, entry) in receipt.files {
+            XCTAssertTrue(HubSnapshot.matchesPath(path, patterns: download.patterns), path)
+            XCTAssertTrue(entry.sha256.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil, path)
+        }
+        XCTAssertEqual(receipt.files["codec.pth"]?.sha256, Drama3Resources.codecSHA256)
+        XCTAssertEqual(spec.upstreamRepoId, Drama3Resources.repository)
+        XCTAssertEqual(spec.upstreamRevision, Drama3Resources.revision)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+    }
+
     func testCompanionAPIProfilesComeFromCatalog() throws {
         let embedding = try XCTUnwrap(
             ManagedModelCatalog.apiProfile(for: ModelResolver.ModelID.qwen3Embedding.rawValue)

@@ -7,9 +7,10 @@ The format is based on Keep a Changelog.
 ## Unreleased
 
 - Add native DRAMA-3 speech synthesis, reference cloning, inline speaker and event
-  tags, and causal audio streaming. `speech-tts-drama-3` pins the licensed source;
-  `model optimize --output` exports expert-only affine Q4 for memory-constrained
-  Macs. The runtime preserves BF16 nonexpert weights and the original DAC codec.
+  tags, and causal audio streaming. `speech-tts-drama-3` downloads the pinned
+  `Sawfwair/DRAMA-3-MLX-4bit` expert-only Q4 export with license, checksums, and
+  qualification receipts. `model optimize --output` can also export from the
+  original source checkpoint. The runtime preserves BF16 nonexpert weights and the original DAC codec.
   Batch synthesis releases the text/tower checkpoint before codec decoding;
   audio-tower masks preserve BF16 computation and temporary Metal buffers are
   cleared between acoustic frames.

@@ -34,6 +34,16 @@ final class Drama3SynthesisTests: XCTestCase {
     func testPinnedLicensedCatalogAndMemoryAdmission() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "speech-tts-drama-3"))
         XCTAssertEqual(spec.upstreamRevision, "dd64a85cd82e9521f7202610ede97b367fc83946")
+        XCTAssertEqual(spec.hubFallback?.repoId, "Sawfwair/DRAMA-3-MLX-4bit")
+        XCTAssertEqual(spec.hubFallback?.revision, "543e9d0829856cc0657fa0fd6bb2903015c094fb")
+        XCTAssertEqual(spec.estimatedDownloadBytes, 27_408_247_610)
+        let patterns = Set(try XCTUnwrap(spec.hubFallback?.patterns))
+        XCTAssertTrue(patterns.contains("drama3-q4-*.safetensors"))
+        XCTAssertFalse(patterns.contains("model-*.safetensors"))
+        XCTAssertTrue(Set([
+            "LICENSE", "Notice", "SHA256SUMS", "drama3-quantization.json",
+            "model.safetensors.index.json", "codec.pth", "DRAMA3_EXTENDED_RESULTS.json"
+        ]).isSubset(of: patterns))
         XCTAssertEqual(spec.validationKind, .drama3TTS)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertNotNil(spec.usageRestriction)

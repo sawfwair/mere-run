@@ -8,6 +8,15 @@ public enum Drama3Resources {
     public static let modelID = "speech-tts-drama-3"
     public static let repository = "fishaudio/drama-3"
     public static let revision = "dd64a85cd82e9521f7202610ede97b367fc83946"
+    public static let quantizedRepository = "Sawfwair/DRAMA-3-MLX-4bit"
+    public static let quantizedRevision = "543e9d0829856cc0657fa0fd6bb2903015c094fb"
+    public static let quantizedDownloadBytes: Int64 = 27_408_247_610
+    public static let quantizedSnapshotPatterns = [
+        "LICENSE", "Notice", "README.md", "UPSTREAM_MODEL_CARD.md", "MODIFICATIONS.md", "SHA256SUMS",
+        "DRAMA3_EXTENDED_RESULTS.json", "DRAMA3_MAIN_INTEGRATION.json", "drama3-quantization.json",
+        "config.json", "tokenizer.json", "tokenizer_config.json", "special_tokens_map.json", "chat_template.jinja",
+        "model.safetensors.index.json", "drama3-q4-*.safetensors", "codec.pth"
+    ]
     public static let codecSHA256 = "74fc41c5a7151c6f350af8bd7e5d6e3accfcc7f3dfbfac23afd35af07052bb2f"
 
     public static func configuration(root: URL) throws -> Drama3Config {

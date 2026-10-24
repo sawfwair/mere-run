@@ -7,10 +7,8 @@ extension ManagedModelCatalog {
             category: .speechTTS,
             installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(
-                repoId: Drama3Resources.repository, revision: Drama3Resources.revision,
-                patterns: ["LICENSE", "README.md", "config.json", "tokenizer.json", "tokenizer_config.json",
-                           "special_tokens_map.json", "chat_template.jinja", "model.safetensors.index.json",
-                           "model-*.safetensors", "codec.pth"]
+                repoId: Drama3Resources.quantizedRepository, revision: Drama3Resources.quantizedRevision,
+                patterns: Drama3Resources.quantizedSnapshotPatterns
             ),
             upstreamRepoId: Drama3Resources.repository,
             upstreamRevision: Drama3Resources.revision,
@@ -22,7 +20,7 @@ extension ManagedModelCatalog {
             ),
             validationKind: .drama3TTS,
             runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: 41_466_000_000,
+            estimatedDownloadBytes: Drama3Resources.quantizedDownloadBytes,
             defaultCLICommands: ["speech synthesize"],
             apiAvailability: .cliOnly
         ),

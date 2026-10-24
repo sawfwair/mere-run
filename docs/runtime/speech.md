@@ -538,24 +538,34 @@ Review the [Fish Audio Community License](https://huggingface.co/fishaudio/drama
 before installing. The managed model requires explicit license acceptance and
 supports the local CLI. The API server excludes this model, including local paths.
 
-To install the pinned source checkpoint, reserve at least 42 GB for its files:
+The managed model downloads the [Sawfwair expert-only Q4 export](https://huggingface.co/Sawfwair/DRAMA-3-MLX-4bit)
+at immutable revision `543e9d0829856cc0657fa0fd6bb2903015c094fb`. Reserve at least 28 GB
+for the bundle, plus inference headroom. You don't need to download or convert
+the original source checkpoint:
 
 ```bash
 mere.run model pull speech-tts-drama-3 --accept-model-license
+mere.run speech synthesize '<|speaker:0|> [sighs] Fine. [laughs] That seems fair.' \
+  --model speech-tts-drama-3 --seed 42 --output ./scene.wav
 ```
 
-The loader packs only the routed experts as affine Q4 with groups of 64. It decodes
+The export packs only the routed experts as affine Q4 with groups of 64. It decodes
 the original FP8 experts using their 128 by 128 block scales. Attention, routing,
 embeddings, and audio-tower weights retain BF16. The codec file is preserved;
-native codec execution uses FP32.
-You don't need Python or an upstream serving process.
+native codec execution uses FP32. You don't need Python or an upstream serving
+process for inference.
 
-To avoid repacking experts at every load, export a standalone Q4 directory:
+The public bundle includes `LICENSE`, `Notice`, `SHA256SUMS`, the original export
+receipt, and bounded qualification receipts. The
+[publication receipt](../qualification/drama3-native-20261015/huggingface-publication.json)
+records every published file's SHA-256 and size. The Fish Audio source pin and
+license acknowledgment remain unchanged.
+
+If you already have the original `fishaudio/drama-3` checkpoint, the loader also
+accepts it directly. To export a standalone Q4 directory from that source:
 
 ```bash
-mere.run model optimize speech-tts-drama-3 --output ./drama-3-q4
-mere.run speech synthesize '<|speaker:0|> [sighs] Fine. [laughs] That seems fair.' \
-  --model ./drama-3-q4 --seed 42 --output ./scene.wav
+mere.run model optimize ./drama-3-source --output ./drama-3-q4
 ```
 
 The source tensors total 39,594,895,616 bytes, plus the 1,871,099,728-byte codec.
