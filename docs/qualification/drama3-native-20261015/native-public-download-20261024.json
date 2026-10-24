@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "source_commit": "db1d3af288bb6d9cc4bbe6ba6b574d057b117ba4",
+  "model_id": "speech-tts-drama-3",
+  "repository": "Sawfwair/DRAMA-3-MLX-4bit",
+  "revision": "543e9d0829856cc0657fa0fd6bb2903015c094fb",
+  "checked_at_utc": "2026-10-24T02:24:22.066011+00:00",
+  "clean_model_store": true,
+  "registered_locations_excluded": true,
+  "preflight_selected_public_quant": true,
+  "model_license_accepted": true,
+  "native_pull_exit_code": 0,
+  "verified_publication_files": 104,
+  "verified_publication_bytes": 27408247610,
+  "local_download_sha256": "all 104 files match the immutable publication receipt",
+  "full_local_gate": {
+    "xctest_cases": 5540,
+    "expected_skips": 462,
+    "failures": 0,
+    "swift_testing_checks": 195
+  },
+  "focused_catalog_and_cli_tests": 3,
+  "docs_build": "passed",
+  "scope": "Complete clean-store native download/install and file integrity; no additional speech-quality or inference-capacity claims.",
+  "installed": true,
+  "runtime_ready": true,
+  "additional_download_required": false,
+  "usage_terms_acknowledged": true
+}

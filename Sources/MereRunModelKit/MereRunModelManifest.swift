@@ -76,6 +76,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case qwen3TTS = "qwen3-tts"
         case phononTTS = "phonon-tts"
         case breezeTTS = "breeze-tts"
+        case drama3TTS = "drama3-tts"
         /// Qwen3 ASR family.
         case qwen3ASR = "qwen3-asr"
         /// Parakeet ASR family.

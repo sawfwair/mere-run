@@ -1642,6 +1642,27 @@ reference is the public [Whistle WebGPU port](https://huggingface.co/spaces/mrfa
 No ONNX graph or Cactus executable is included or executed by the native runtime.
 The publisher's Apache-2.0 license is retained in `licenses/whistle-APACHE-2.0.txt`.
 
+## DRAMA-3 architecture reference and model weights
+
+The native DRAMA-3 graph follows the SGLang-Omni implementation at
+`2cfb3b67becb437b70751defe37e63d3af4eedb0`, including prompt rows, codebook-MTP
+conditioning, and causal DAC topology. Semantic sampling follows the corrected
+main-token candidate range and nucleus boundary at
+[`444001b0e7bbf0f87a344a13b86a63da21b70395`](https://github.com/sgl-project/sglang-omni/blob/444001b0e7bbf0f87a344a13b86a63da21b70395/sglang_omni/models/fishaudio_drama3/sampling.py).
+SGLang-Omni is licensed
+under Apache-2.0. Copyright the SGLang-Omni contributors. See
+[the upstream license](https://github.com/sgl-project/sglang-omni/blob/2cfb3b67becb437b70751defe37e63d3af4eedb0/LICENSE).
+The codec uses the Descript Audio Codec residual vector quantizer and Snake
+activation topology. Descript Audio Codec is licensed under MIT; copyright
+Descript, Inc. See [the DAC license](https://github.com/descriptinc/descript-audio-codec/blob/main/LICENSE).
+No upstream Python implementation or model weights are bundled.
+
+Built with Fish Audio. The separately downloaded
+`fishaudio/drama-3@dd64a85cd82e9521f7202610ede97b367fc83946` weights and codec
+are governed by the [Fish Audio Community License, Version 1.0](https://huggingface.co/fishaudio/drama-3/blob/dd64a85cd82e9521f7202610ede97b367fc83946/LICENSE).
+The installer requires explicit acceptance. Standalone Q4 exports preserve the
+license and include the required attribution and a modification notice.
+
 ## EmbeddingGemma 2 Core ML runtime and preprocessing
 
 `Sources/MereRunCoreMLModel/` contains tokenizer, image/audio decoding, bicubic

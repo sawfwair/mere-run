@@ -42,7 +42,7 @@ public struct TTSRequest: Sendable, Hashable {
     public var language: String
     public var speed: Float
     public var temperature: Float
-    /// Optional Breeze TTS 2 or Phonon sampling seed. Other backends reject this control.
+    /// Optional sampling seed for Breeze TTS 2, Phonon 31m, or DRAMA-3.
     public var seed: UInt64?
     /// Optional Breeze TTS 2 classifier-free guidance scale.
     public var cfgScale: Float?

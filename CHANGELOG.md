@@ -6,6 +6,18 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add native DRAMA-3 speech synthesis, reference cloning, inline speaker and event
+  tags, and causal audio streaming. `speech-tts-drama-3` downloads the pinned
+  `Sawfwair/DRAMA-3-MLX-4bit` expert-only Q4 export with license, checksums, and
+  qualification receipts. `model optimize --output` can also export from the
+  original source checkpoint. The runtime preserves BF16 nonexpert weights and the original DAC codec.
+  Batch synthesis releases the text/tower checkpoint before codec decoding;
+  audio-tower masks preserve BF16 computation and temporary Metal buffers are
+  cleared between acoustic frames.
+  Seven bounded released-checkpoint probes pass on a 36 GiB system, including
+  paragraph streaming and cancellation. Cold first audio takes 96–113 seconds;
+  perceptual quality and Q4 quality loss remain unqualified.
+
 ## 0.65.0 - 2026-10-23
 
 - Add native Phonon 31m English speech synthesis through

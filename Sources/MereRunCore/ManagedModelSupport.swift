@@ -816,6 +816,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 16
             ),
             descriptor(
+                "speech-tts-drama-3",
+                "DRAMA-3 Q4 experts",
+                "Native multilingual and multi-speaker speech, event tags, and voice cloning. Built with Fish Audio.",
+                minimum: 32,
+                recommended: 36
+            ),
+            descriptor(
                 "speech-tts-phonon-31m", "Phonon 31m",
                 "Synthesizes English speech locally with Gradium Phonon and a precomputed voice.",
                 minimum: 4, recommended: 8

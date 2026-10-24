@@ -12,6 +12,30 @@ final class SpeechSynthesisModelSelectionTests: XCTestCase {
         }
     }
 
+    func testNativeFamiliesRemainDistinctForManagedAndLocalSelectors() throws {
+        struct Config: Encodable { let model_type: String }
+        let cases: [(id: String, type: String, backend: SpeechSynthesisModelSelection.Backend)] = [
+            ("speech-tts-drama-3", "fish_omni", .drama3),
+            ("speech-tts-phonon-31m", "gradium_phonon_tts", .phonon),
+            ("speech-tts-breeze-2", "breeze", .breeze)
+        ]
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        for fixture in cases {
+            let managed = try SpeechSynthesisModelSelection.resolve(fixture.id)
+            XCTAssertEqual(managed.backend, fixture.backend)
+            XCTAssertEqual(managed.modelID, fixture.id)
+            XCTAssertNil(managed.modelPath)
+            let local = root.appendingPathComponent(fixture.id, isDirectory: true)
+            try FileManager.default.createDirectory(at: local, withIntermediateDirectories: true)
+            try JSONEncoder().encode(Config(model_type: fixture.type)).write(to: local.appendingPathComponent("config.json"))
+            let selected = try SpeechSynthesisModelSelection.resolve(local.path)
+            XCTAssertEqual(selected.backend, fixture.backend)
+            XCTAssertEqual(selected.modelID, fixture.id)
+            XCTAssertEqual(selected.modelPath, local.path)
+        }
+    }
+
     func testLocalPathsRetainTheSharedDefaultIDAndNormalizedPath() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

@@ -374,6 +374,15 @@
     "resourceName": "handbook-privacy-filter.md"
   },
   {
+    "topic": "handbook-drama-3",
+    "title": "DRAMA-3 (Fish Audio)",
+    "category": "Speech",
+    "models": [
+      "speech-tts-drama-3"
+    ],
+    "resourceName": "handbook-drama-3.md"
+  },
+  {
     "topic": "handbook-breeze-tts-2",
     "title": "Breeze TTS 2 (BreezeBlue)",
     "category": "Speech",

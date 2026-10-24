@@ -88,6 +88,13 @@ func checkBoundary(_ manifest: PackageManifest) -> [String] {
         }
     }
     let runtimeBoundaries: [String: Set<String>] = [
+        "AudioDrama3Model": [
+            "MereRunQwenModel", "MereRunTensor", "MereRunModelKit", "MereRunKVCache", "MereRunTextEncoder"
+        ],
+        "Drama3RuntimeTests": [
+            "AudioDrama3Model", "MereRunQwenModel", "MereRunTensor", "MereRunModelKit", "MereRunKVCache",
+            "MereRunTextEncoder", "MereRunMLXTestSupport"
+        ],
         "MereRunDecode": [],
         "MereRunLTXModel": [],
         "MereRunAudioModels": [],

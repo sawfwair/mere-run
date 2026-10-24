@@ -10,7 +10,7 @@ the audio does not leave the machine.
 
 | Command | What it does |
 | --- | --- |
-| `mere.run speech synthesize` | Generate speech from text using Qwen3-TTS, Breeze TTS 2, or Phonon 31m. |
+| `mere.run speech synthesize` | Generate speech from text using Qwen3-TTS, Breeze TTS 2, Phonon 31m, or DRAMA-3. |
 | `mere.run speech transcribe` | Transcribe or translate speech to text using native ASR backends. |
 | `mere.run speech diarize` | Identify speaker time ranges as versioned JSON or RTTM using native MLX diarization. |
 | `mere.run speech diarize-live` | Emit incremental Nemotron 3 speaker activity from a microphone or PCM stdin. |
@@ -27,6 +27,7 @@ the audio does not leave the machine.
 - `speech-tts-qwen3-customvoice`
 - `speech-tts-phonon-31m` (English; bundled voice; Apache 2.0)
 - `speech-tts-breeze-2` (English and Chinese; research and non-commercial use only)
+- `speech-tts-drama-3` (CLI only; Fish Audio Community License; inline delivery and speaker tags)
 
 ### Speech-to-text
 
@@ -526,6 +527,90 @@ Fixture attribution and exact turn boundaries are in
   model-store conventions as the rest of the repository.
 
 See the [architecture map](../architecture.md) for a recommended reading order.
+
+## DRAMA-3 on a 36 GB Mac
+
+Use DRAMA-3 for multilingual scenes, inline speaker tags, vocal events, and voice
+cloning. The runtime uses Swift and MLX for the text backbone, ten-codebook audio
+tower, and 44.1 kHz DAC codec. Built with Fish Audio.
+
+Review the [Fish Audio Community License](https://huggingface.co/fishaudio/drama-3/blob/dd64a85cd82e9521f7202610ede97b367fc83946/LICENSE)
+before installing. The managed model requires explicit license acceptance and
+supports the local CLI. The API server excludes this model, including local paths.
+
+The managed model downloads the [Sawfwair expert-only Q4 export](https://huggingface.co/Sawfwair/DRAMA-3-MLX-4bit)
+at immutable revision `543e9d0829856cc0657fa0fd6bb2903015c094fb`. Reserve at least 28 GB
+for the bundle, plus inference headroom. You don't need to download or convert
+the original source checkpoint:
+
+```bash
+mere.run model pull speech-tts-drama-3 --accept-model-license
+mere.run speech synthesize '<|speaker:0|> [sighs] Fine. [laughs] That seems fair.' \
+  --model speech-tts-drama-3 --seed 42 --output ./scene.wav
+```
+
+The export packs only the routed experts as affine Q4 with groups of 64. It decodes
+the original FP8 experts using their 128 by 128 block scales. Attention, routing,
+embeddings, and audio-tower weights retain BF16. The codec file is preserved;
+native codec execution uses FP32. You don't need Python or an upstream serving
+process for inference.
+
+The public bundle includes `LICENSE`, `Notice`, `SHA256SUMS`, the original export
+receipt, and bounded qualification receipts. The
+[publication receipt](../qualification/drama3-native-20261015/huggingface-publication.json)
+records every published file's SHA-256 and size. The Fish Audio source pin and
+license acknowledgment remain unchanged.
+
+If you already have the original `fishaudio/drama-3` checkpoint, the loader also
+accepts it directly. To export a standalone Q4 directory from that source:
+
+```bash
+mere.run model optimize ./drama-3-source --output ./drama-3-q4
+```
+
+The source tensors total 39,594,895,616 bytes, plus the 1,871,099,728-byte codec.
+The Q4 model and codec total approximately 27,365,269,584 bytes (25.49 GiB), before
+tokenizer files, receipts, and runtime allocations. The exporter checks free space,
+preserves the source, refuses an existing destination, and records SHA-256 hashes
+for source and exported files in `drama3-quantization.json`. Preserve its `LICENSE`
+and `Notice` files when moving the checkpoint.
+
+The [released-checkpoint export](../qualification/drama3-native-20261015/README.md)
+produced 27,408,212,020 bytes across 99 files and peaked at 2.62 GB of physical
+memory during conversion. The reader uses bounded tensor reads on external
+volumes; conversion and hashing release temporary buffers within each iteration.
+These measurements describe export, not inference memory.
+
+To use an exported checkpoint on an external volume through the model ID:
+
+```bash
+mere.run model location bind speech-tts-drama-3 /Volumes/T7/drama-3-q4 \
+  --accept-model-license
+```
+
+The catalog declares a 32 GB minimum and recommends 36 GB. The minimum remains
+an estimate. Seven bounded probes pass on the tested 36 GiB system: batch and
+streamed paragraphs, reference conditioning, and cancellation. Peak process
+footprint reaches 32.86 GiB for paragraph streaming, with system swap in use.
+Cold first audio takes 96–113 seconds. See the
+[qualification record](../qualification/drama3-native-20261015/README.md) for
+receipts and remaining quality limits.
+
+For cloning, supply a reference clip and its exact transcript:
+
+```bash
+mere.run speech synthesize '<|speaker:0|> Welcome to the harbor.' \
+  --model ./drama-3-q4 --mode clone --ref-audio ./reference.wav \
+  --ref-text 'This is the exact reference transcript.' --output ./clone.wav
+```
+
+References must be nonempty and at most 30 seconds. The CLI accepts one reference;
+the native prompt builder also accepts multiple references. Use `<|speaker:0|>`
+through `<|speaker:15|>` and event tags such as `[sighs]` or `[laughs]` in the text.
+DRAMA-3 infers language from text and doesn't use `--voice`, named `--speaker`
+values, or classifier-free guidance. `--stream` publishes causal waveform prefixes;
+its codec recomputes the accumulated prefix at each chunk. Reaching the acoustic
+frame limit fails the operation instead of publishing a truncated final WAV.
 
 ## Phonon 31m
 

@@ -630,3 +630,33 @@ Use a write credential through standard Hub authentication or `--token-file`.
 `--prepare-only` stages the bundle without uploading. `--verify-only` checks an
 existing public release. Publication preserves the conversion manifest's
 `quality_qualified: false` and does not certify broad accuracy or Apple memory fit.
+
+
+## Publish the DRAMA-3 expert-only Q4 export
+
+`publish_drama3_mlx.py` publishes the qualified `drama3-experts-q4-g64-v1`
+export to `Sawfwair/DRAMA-3-MLX-4bit`. It verifies the original export receipt,
+all file hashes, and the 88-shard index closure. It stages hard links on the same
+volume, so it needs no second copy of the weights. The source export is unchanged.
+
+The publication includes the upstream model card, license, attribution notice,
+modification record, bounded qualification receipts, and `SHA256SUMS`.
+The publisher uploads an explicit file allowlist to a private repository, verifies
+the remote hashes, makes the repository public, and verifies the immutable
+revision anonymously. Its publication receipt records that revision and every
+published file's hash and size. SDK caches and credentials are excluded.
+
+Authenticate with `hf auth login` using a token that can write to Sawfwair. Run:
+
+```bash
+python scripts/model-conversion/publish_drama3_mlx.py \
+  --artifact /Volumes/T7/drama-3-q4 \
+  --staging /Volumes/T7/drama-3-publication \
+  --receipt /Volumes/T7/drama-3-publication.json
+```
+
+Keep the staging directory outside the source export on the same volume.
+Use `--prepare-only` to verify and stage without uploading, or `--verify-only`
+to verify an existing public release. An interrupted private upload resumes when
+you repeat the command. Publication preserves the qualification limits: bounded
+English probes establish neither broad speech quality nor perceptual voice identity.
