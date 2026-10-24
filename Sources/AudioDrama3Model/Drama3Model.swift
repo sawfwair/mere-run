@@ -19,15 +19,35 @@ public final class Drama3Model: Module {
     }
 
     public static func sample(_ logits: MLXArray, temperature: Float, topK: Int = 30, topP: Float = 0.9) -> Int {
+        draw(samplingCandidates(logits, temperature: temperature, topK: topK, topP: topP))
+    }
+
+    package static func semanticCandidates(_ logits: MLXArray, temperature: Float,
+                                           redraw: Bool = false) -> (ids: MLXArray, logits: MLXArray) {
+        // Upstream 444001b0: top-k 30 on the main draw can stall after the first
+        // phrase. Only the RAS redraw and acoustic heads retain that cap.
+        samplingCandidates(logits, temperature: redraw ? 1 : temperature,
+            topK: redraw ? 30 : logits.size, topP: redraw ? 0.95 : 0.9, keepCrossingToken: true)
+    }
+
+    package static func samplingCandidates(_ logits: MLXArray, temperature: Float, topK: Int = 30,
+                                           topP: Float = 0.9, keepCrossingToken: Bool = false)
+        -> (ids: MLXArray, logits: MLXArray) {
         let scaled = logits.asType(.float32) / max(temperature, 1e-5)
         let ids = MLX.argSort(-scaled)
         let ordered = scaled[ids]
         let probability = MLX.softmax(ordered)
+        let cumulative = MLX.cumsum(probability)
+        let cutoff = keepCrossingToken
+            ? MLX.concatenated([MLXArray.zeros([1]), cumulative[..<(logits.size - 1)]]) : cumulative
         let ranks = MLXArray(0..<logits.size)
-        let dropped = MLX.logicalAnd(ranks .> 0, MLX.logicalOr(MLX.cumsum(probability) .> topP, ranks .>= topK))
-        let filtered = MLX.where(dropped, MLXArray(-Float.infinity), ordered)
-        let choice = MLXRandom.categorical(filtered).item(Int.self)
-        return ids[choice].item(Int.self)
+        let dropped = MLX.logicalAnd(ranks .> 0, MLX.logicalOr(cutoff .> topP, ranks .>= topK))
+        return (ids, MLX.where(dropped, MLXArray(-Float.infinity), ordered))
+    }
+
+    private static func draw(_ candidates: (ids: MLXArray, logits: MLXArray)) -> Int {
+        let choice = MLXRandom.categorical(candidates.logits).item(Int.self)
+        return candidates.ids[choice].item(Int.self)
     }
 
     /// Prefill the tower using *next* prompt frames. All thirteen tower caches
@@ -68,8 +88,8 @@ public final class Drama3Model: Module {
         for _ in 0..<maxFrames {
             try Task.checkCancellation()
             let logits = head(hidden).reshaped(-1)[candidateIDs]
-            let first = candidates[Self.sample(logits, temperature: temperature)]
-            let redraw = candidates[Self.sample(logits, temperature: 1, topK: 30, topP: 0.95)]
+            let first = candidates[Self.draw(Self.semanticCandidates(logits, temperature: temperature))]
+            let redraw = candidates[Self.draw(Self.semanticCandidates(logits, temperature: temperature, redraw: true))]
             let main = history.suffix(16).contains(first) && (config.semanticStart...config.semanticEnd).contains(first)
                 ? redraw : first
             let input = MLXArray(previous).reshaped(1, 1, 11)

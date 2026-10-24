@@ -1644,7 +1644,10 @@ The publisher's Apache-2.0 license is retained in `licenses/whistle-APACHE-2.0.t
 
 The native DRAMA-3 graph follows the SGLang-Omni implementation at
 `2cfb3b67becb437b70751defe37e63d3af4eedb0`, including prompt rows, codebook-MTP
-conditioning, causal DAC topology, and sampling semantics. SGLang-Omni is licensed
+conditioning, and causal DAC topology. Semantic sampling follows the corrected
+main-token candidate range and nucleus boundary at
+[`444001b0e7bbf0f87a344a13b86a63da21b70395`](https://github.com/sgl-project/sglang-omni/blob/444001b0e7bbf0f87a344a13b86a63da21b70395/sglang_omni/models/fishaudio_drama3/sampling.py).
+SGLang-Omni is licensed
 under Apache-2.0. Copyright the SGLang-Omni contributors. See
 [the upstream license](https://github.com/sgl-project/sglang-omni/blob/2cfb3b67becb437b70751defe37e63d3af4eedb0/LICENSE).
 The codec uses the Descript Audio Codec residual vector quantizer and Snake

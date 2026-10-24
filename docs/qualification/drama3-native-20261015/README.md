@@ -137,3 +137,22 @@ After the ownership fix, the full local gate passed 5,447 XCTest cases with
 and loader suite passed, and Metal tests preserved both BF16 attention paths
 and expert output before and after fusion. The documentation build passed.
 Hosted CI remains unverified.
+
+
+## Extended qualification and semantic sampling
+
+The first 57-word paragraph probe reached the 750-frame acoustic limit and
+correctly published no final WAV. Its peak physical footprint was
+26,165,778,768 bytes; memory fit did not establish successful long-text synthesis.
+The same runtime completed a 16-word reference-conditioned request with zero
+word errors. Remaining old-sampler probes were stopped after identifying the
+upstream semantic sampling correction.
+
+The architecture pin used top-k 30 for the main semantic draw. Upstream revision
+`444001b0e7bbf0f87a344a13b86a63da21b70395` removes that default cap because it can
+make generation fall silent after its first phrase, and retains the token that
+crosses the nucleus threshold for semantic draws. The native implementation
+now follows that correction, including the repetition-aware redraw. Acoustic
+heads retain top-k 30 and exclude the crossing token. The 750-frame limit and
+normal admission floors are unchanged. Deterministic regression probes check
+the semantic candidate range and both nucleus-filtering policies.

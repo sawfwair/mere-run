@@ -11,6 +11,28 @@ final class Drama3Tests: MLXTestCase {
         try JSONDecoder().decode(Drama3Config.self, from: Data(contentsOf: fixtures.appendingPathComponent(file)))
     }
 
+    func testSemanticSamplingKeepsBroadMainCandidatesAndCapsRASAndAcousticHeads() {
+        let logits = MLXArray((0..<100).map { -Float($0) * 0.001 })
+        let main = Drama3Model.semanticCandidates(logits, temperature: 1)
+        let redraw = Drama3Model.semanticCandidates(logits, temperature: 0.6, redraw: true)
+        let acoustic = Drama3Model.samplingCandidates(logits, temperature: 1)
+        XCTAssertGreaterThan(main.logits.asArray(Float.self).filter(\.isFinite).count, 30)
+        XCTAssertEqual(redraw.logits.asArray(Float.self).filter(\.isFinite).count, 30)
+        XCTAssertEqual(acoustic.logits.asArray(Float.self).filter(\.isFinite).count, 30)
+    }
+
+    func testSemanticNucleusKeepsCrossingTokenWhileAcousticNucleusExcludesIt() {
+        // With masses .86, .11, .03, the second token crosses both .90 and .95.
+        let logits = MLXArray([Float(0.86), 0.11, 0.03].map { log($0) })
+        for redraw in [false, true] {
+            let semantic = Drama3Model.semanticCandidates(logits, temperature: 1, redraw: redraw)
+            XCTAssertEqual(semantic.ids.asArray(Int32.self), [0, 1, 2])
+            XCTAssertEqual(semantic.logits.asArray(Float.self).map(\.isFinite), [true, true, false])
+        }
+        let acoustic = Drama3Model.samplingCandidates(logits, temperature: 1)
+        XCTAssertEqual(acoustic.logits.asArray(Float.self).map(\.isFinite), [true, false, false])
+    }
+
     func testFP8DecodeKnownValues() {
         XCTAssertEqual(Drama3TensorArchive.decodeE4M3(0x38), 1)
         XCTAssertEqual(Drama3TensorArchive.decodeE4M3(0x7e), 448)

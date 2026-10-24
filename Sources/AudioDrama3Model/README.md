@@ -27,5 +27,10 @@ resident resources after synthesis; subsequent requests reload the model.
 
 Architecture reference: SGLang-Omni at
 `2cfb3b67becb437b70751defe37e63d3af4eedb0` (Apache-2.0).
+Semantic sampling follows upstream `444001b0e7bbf0f87a344a13b86a63da21b70395`:
+the main draw has no top-k cap; the repetition-aware redraw and acoustic heads
+retain top-k 30. Semantic nucleus filtering includes the crossing token, while
+acoustic heads exclude it. The 750-frame generation limit remains unchanged.
+
 Checkpoint: `fishaudio/drama-3@dd64a85cd82e9521f7202610ede97b367fc83946`.
 Built with Fish Audio. Weights remain subject to the Fish Audio Community License.
