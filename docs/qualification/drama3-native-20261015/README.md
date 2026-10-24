@@ -228,7 +228,8 @@ its waveform, cumulative chunk counts, and plain native ASR transcript.
 The full local gate passed 5,450 XCTest cases with 452 expected skips and zero
 failures, plus 193 Swift Testing checks. Focused Metal sampling regressions and
 the documentation build passed. Hosted CI remains unverified because the
-review-checks connector requires an account connection. The PR remains a draft.
+review-checks connector requires an account connection. Delivery follows the
+protected merge queue after the integration checks below.
 
 These results qualify the recorded English requests, the tested synthetic
 reference, and their streaming paths. Requests that reach the 750-frame cap
@@ -236,3 +237,26 @@ still fail without publishing a truncated final file. Broader languages,
 multi-speaker quality, perceptual voice similarity, quality loss against the
 original checkpoint, maximum-length references, and other-platform inference
 remain unqualified.
+
+## Integration with current main
+
+The branch integrates main at `5850dc4f75a9aede3a018647a5db29e4618da178`.
+Local integration source: `e1efec52091acac725b4778a15ba47120666ee13`.
+Conflict resolution preserves Phonon, Breeze, Qwen3-TTS, and DRAMA-3 for managed
+IDs and local paths. A regression checks those distinct routes; the Phonon
+language control remains available while DRAMA-3 ignores language hints.
+Canonical CLI inventories and Studio scope fixtures regenerate without drift.
+
+The full local gate passes 5,539 XCTest cases with 462 expected skips and zero
+failures, plus 195 Swift Testing checks. Three Metal probes cover semantic
+sampling and BF16 through both backbone attention families. The debug macOS app
+bundle builds and passes ad-hoc signature verification. The documentation build
+passes.
+
+The repeated released-checkpoint smoke produces the exact ten-word transcript
+and a byte-identical WAV to the corrected-sampler short baseline above. Its peak
+physical footprint is 26,165,549,392 bytes. The
+[integration receipt](./main-integration-20261023.json) records the matching hash
+and local gate results. This repeats the short case on the integrated branch;
+the seven-probe receipts above retain their original source revision. Hosted
+checks and the protected merge queue remain separate delivery gates.

@@ -1,0 +1,37 @@
+{
+  "source_commit": "e1efec52091acac725b4778a15ba47120666ee13",
+  "base_main_commit": "5850dc4f75a9aede3a018647a5db29e4618da178",
+  "qualification_run_id": "memory-20261024T014400Z",
+  "full_local_gate": {
+    "xctest_cases": 5539,
+    "expected_skips": 462,
+    "failures": 0,
+    "swift_testing_checks": 195
+  },
+  "focused_metal_tests": 3,
+  "macos_debug_app_bundle": "built and ad-hoc signature verified",
+  "canonical_cli_inventory": "regenerated; no drift",
+  "canonical_studio_scopes": "regenerated; no drift",
+  "retained_managed_and_local_backends": [
+    "qwen3",
+    "breeze",
+    "phonon",
+    "drama3"
+  ],
+  "speech_probe": {
+    "expected_transcript": "Hello! The native speech engine is running on this laptop.",
+    "recognized_transcript": "Hello! The native speech engine is running on this laptop.",
+    "word_errors": 0,
+    "reference_word_count": 10,
+    "word_error_rate": 0.0,
+    "peak_physical_footprint_bytes": 26165549392,
+    "process_seconds_including_admission_and_cold_load": 110.03
+  },
+  "waveform": {
+    "bytes": 385068,
+    "sha256": "b7324ca7da69738a486515afffb34cc736206439aabd6c46d0c2360e05e2420c"
+  },
+  "byte_identical_to_corrected_sampler_short_probe": true,
+  "normal_shared_admission": true,
+  "hosted_checks": "Separate protected merge-queue gate; not verified by this local receipt."
+}
