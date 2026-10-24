@@ -277,3 +277,13 @@ The [publication receipt](./huggingface-publication.json) records every file's
 hash and size. The managed `speech-tts-drama-3` download uses this Q4 artifact,
 while source provenance and Fish Audio usage terms retain the upstream pin.
 This distribution check adds no speech-quality or inference-capacity claims.
+
+
+A clean native `model pull speech-tts-drama-3` also completed from the public
+revision, using an empty model store and cache with registered locations excluded.
+All 104 downloaded publication files matched their expected sizes and SHA-256
+hashes. The [native download receipt](./native-public-download-20261024.json)
+records the source commit and full local gate: 5,540 XCTest cases, 462 expected
+skips, zero failures, and 195 Swift Testing checks. Three focused catalog and CLI
+tests and the documentation build also passed. This verifies distribution and
+installation; speech-quality and inference-capacity limits remain unchanged.
