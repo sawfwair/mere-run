@@ -1,0 +1,61 @@
+{
+  "repo": "LiquidAI/LFM2.5-24B-A2B",
+  "revision": "1769516ac588c4c558089c94f27d96b0dc67b183",
+  "tensor_count": 7610,
+  "total_size": 47943180288,
+  "all_shapes_and_dtypes_match": true,
+  "config_sha256": "b0c46662afe3881e49cf542e683bf5ea8a5e0b780a429b6141a48defc33531bf",
+  "index_sha256": "b3c3d025ee3b7e78ca3d6160d1be872d85ff03272c64b0c2b5fc85a6f36c622f",
+  "shards": [
+    {
+      "file": "model-00001-of-00010.safetensors",
+      "header_sha256": "36adea9504a19278c0b088cdb7fb9fbef3e7e276ad5c0649f933bcaa6868cdbe",
+      "tensor_count": 622
+    },
+    {
+      "file": "model-00002-of-00010.safetensors",
+      "header_sha256": "d4648bc2cb99bcf06499b94263e6efbb12e96ed0a581ac8512bd3b93611650cc",
+      "tensor_count": 799
+    },
+    {
+      "file": "model-00003-of-00010.safetensors",
+      "header_sha256": "c717be09b560f033952f4a3a62480fc568078e4310ab44e33bc5e57770784d7c",
+      "tensor_count": 799
+    },
+    {
+      "file": "model-00004-of-00010.safetensors",
+      "header_sha256": "c5e3fad2a69071ce59fefed8fcca7bb0872d9b83dffbfe6994beae6bee8b621d",
+      "tensor_count": 799
+    },
+    {
+      "file": "model-00005-of-00010.safetensors",
+      "header_sha256": "e100616c64a36992aef534e8869bc04704000f2bddda44a6396ac673724fca58",
+      "tensor_count": 799
+    },
+    {
+      "file": "model-00006-of-00010.safetensors",
+      "header_sha256": "c072c05daee5b6c69c2446c801124ecba3944249695f55e158596b93eed69b9d",
+      "tensor_count": 799
+    },
+    {
+      "file": "model-00007-of-00010.safetensors",
+      "header_sha256": "24dc208dde9e0ec898cf7abbb4336743782813c9daed531a07c73c9688d482ab",
+      "tensor_count": 799
+    },
+    {
+      "file": "model-00008-of-00010.safetensors",
+      "header_sha256": "ca9e439755b698ac7e137c98254cff5523ef8be50d22126c49dc42c3014aec68",
+      "tensor_count": 799
+    },
+    {
+      "file": "model-00009-of-00010.safetensors",
+      "header_sha256": "7920e853f7f610089f97b34d650b0d861411f0ee673628da01855c5cd0e038a4",
+      "tensor_count": 799
+    },
+    {
+      "file": "model-00010-of-00010.safetensors",
+      "header_sha256": "f48ce78b2d77a96ebce50e25e20fb986a8e3b1c1b960824b07cb0d7df1cc8e5b",
+      "tensor_count": 596
+    }
+  ]
+}
