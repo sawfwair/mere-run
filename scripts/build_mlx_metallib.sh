@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Build mlx-swift's AOT Metal kernel library (default.metallib) from the
-# CURRENT generated kernel tree plus required MLX core AOT sources, and stamp
-# it with the versions it was built from.
+# current generated kernel tree, and stamp it with its generated and core
+# source provenance.
 #
 # Why this exists: plain `swift build` never compiles the .metal sources —
 # there is no metallib rule in the SwiftPM manifest — yet the MLX runtime
@@ -39,7 +39,6 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 checkout="${MERERUN_MLX_SWIFT_CHECKOUT:-$repo_root/.build/checkouts/mlx-swift}"
 gen_dir="$checkout/Source/Cmlx/mlx-generated/metal"
 core_checkout="$checkout/Source/Cmlx/mlx"
-core_kernel_dir="$core_checkout/mlx/backend/metal/kernels"
 version_header="$checkout/Source/Cmlx/mlx/mlx/version.h"
 resolved="$repo_root/Package.resolved"
 stamp_name="default.metallib.version"
@@ -47,8 +46,8 @@ stamp_name="default.metallib.version"
 # defaults to Metal 4 and the host SDK's deployment target without these pins.
 metal_language_version="3.2"
 macos_deployment_target="15.0"
-upstream_tag="v0.32.1"
-upstream_revision="3a6219917e4535575ce5bce2fc2ba27a483a709b"
+upstream_tag="v0.32.4"
+upstream_revision="36969c094354086e15d2a327a9c50feb20b9cf11"
 core_aot_source_paths=(
   "mlx/backend/metal/kernels/dot.metal"
   "mlx/backend/metal/kernels/dot.h"
@@ -270,7 +269,7 @@ fi
 workdir="$(mktemp -d -t mlx-metallib)"
 trap 'rm -rf "$workdir"' EXIT
 
-metal_sources=("$gen_dir"/*.metal "$core_kernel_dir/dot.metal")
+metal_sources=("$gen_dir"/*.metal)
 if [[ ${#metal_sources[@]} -eq 0 ]]; then
   echo "error: no .metal sources in $gen_dir" >&2
   exit 1

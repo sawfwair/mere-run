@@ -76,7 +76,7 @@ final class Drama3InstalledCheckpointTests: XCTestCase {
                 durationSeconds: audio.duration, sampleRate: audio.sampleRate, rms: rms,
                 peakMLXBytes: Memory.peakMemory, activeMLXBytes: Memory.activeMemory,
                 physicalMemoryBytes: ProcessInfo.processInfo.physicalMemory,
-                device: Device.defaultDevice().deviceType?.rawValue ?? "unknown")
+                device: Device.defaultDevice().deviceType.rawValue)
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             try encoder.encode(report).write(to: paths.evidence.appendingPathComponent("native-speech-memory.json"))

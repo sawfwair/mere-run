@@ -11,7 +11,7 @@ public enum NativeMLXRuntime {
     }
 
     public static var defaultDeviceType: String {
-        Device.defaultDevice().deviceType?.rawValue ?? "unknown"
+        Device.defaultDevice().deviceType.rawValue
     }
 
     public static var backendDescription: String {
