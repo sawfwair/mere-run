@@ -1,7 +1,7 @@
 # mlx-swift fork policy and compiled-call overhead
 
 `mere.run` pins the public `sawfwair/mlx-swift` fork at
-`77bcb3992c6fb4bba207fbceeedf567f524bdd97`. It contains upstream
+`2fa99921932a2b0189718069c6bb60a80e9e1195`. It contains upstream
 `mlx-swift` through `19601207e9a0de51e03ee6ec0c3c5f3784275075`. The embedded
 `sawfwair/mlx` revision is
 `f27e127acca38047a7e37ea1f99bd50c3d45e460`, which contains the exact
@@ -47,7 +47,7 @@ baseline macOS 14 shader builds. mere.run's bundle targets macOS 15 and Metal 3.
 
 The [core patch inventory](https://github.com/sawfwair/mlx/blob/f27e127acca38047a7e37ea1f99bd50c3d45e460/FORK_PATCHES.md)
 classifies all 20 previous core commits. The
-[Swift inventory](https://github.com/sawfwair/mlx-swift/blob/77bcb3992c6fb4bba207fbceeedf567f524bdd97/FORK_PATCHES.md)
+[Swift inventory](https://github.com/sawfwair/mlx-swift/blob/2fa99921932a2b0189718069c6bb60a80e9e1195/FORK_PATCHES.md)
 classifies all 19 previous Swift commits. Shared upstream 1-bit CPU/Metal
 support and CUDA shutdown behavior replace overlapping implementations.
 NVFP4 staging retains the upstream global-scale path; the owned fast path
