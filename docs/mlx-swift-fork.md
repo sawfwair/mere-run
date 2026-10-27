@@ -1,17 +1,17 @@
 # mlx-swift fork policy and compiled-call overhead
 
 `mere.run` pins the public `sawfwair/mlx-swift` fork at
-`4382a34136fdefe93e12ddb7430d5a5ab0dfee21`. It contains upstream
+`508951990d5d1cfee749602243ccf92935696d85`. It contains upstream
 `mlx-swift` through `19601207e9a0de51e03ee6ec0c3c5f3784275075`. The embedded
 `sawfwair/mlx` revision is
-`9d094c52c4001a6afc0dec9a6c411c13ec59e4d5`, which contains the exact
+`735d48ca1436dc2648073c548715af3aea5d32c7`, which contains the exact
 upstream MLX v0.32.4 release commit
 `36969c094354086e15d2a327a9c50feb20b9cf11`.
 
 The owned patch stack carries the Linux/CUDA package bridge, executor-safe
 Swift streams, native affine 1-bit CUDA quantize/dequantize/QMV execution, the
 Metal affine 1-bit path, custom quantized-kernel headers, NVFP4 staging, the
-generation-17 NAX correctness gate, M4/H3 tuning, and executor-safe compile
+generation-17 quantized NAX correctness gate, M4/H3 tuning, and executor-safe compile
 cache bridging. The obsolete unaligned
 1-bit fast-kernel tail was not replayed because upstream now requires aligned
 fast dispatch; the fork instead tests matching host/kernel alignment directly.
@@ -25,6 +25,12 @@ a context to each active operation, synchronize it when the operation ends,
 and reuse it for a later operation. Callers must serialize graph construction
 and evaluation on each context; overlapping operations need distinct contexts.
 Released streams return to upstream's pool for later scopes.
+
+Floating-point matmul, attention, and gated delta follow upstream NAX device
+availability. The generation-17 workaround is local to quantized dispatch:
+ordinary, gathered, sorted-RHS, and alignment decisions all require generation
+18 or later. This preserves the previous quantized paths while restoring the
+floating-point paths used by original BF16 checkpoints.
 
 The pin also lets an MLXFast custom Metal kernel explicitly request
 the core quantized helper headers. The source marker
@@ -45,9 +51,9 @@ baseline macOS 14 shader builds. mere.run's bundle targets macOS 15 and Metal 3.
 
 ## v0.32.4 integration
 
-The [core patch inventory](https://github.com/sawfwair/mlx/blob/9d094c52c4001a6afc0dec9a6c411c13ec59e4d5/FORK_PATCHES.md)
+The [core patch inventory](https://github.com/sawfwair/mlx/blob/735d48ca1436dc2648073c548715af3aea5d32c7/FORK_PATCHES.md)
 classifies all 20 previous core commits. The
-[Swift inventory](https://github.com/sawfwair/mlx-swift/blob/4382a34136fdefe93e12ddb7430d5a5ab0dfee21/FORK_PATCHES.md)
+[Swift inventory](https://github.com/sawfwair/mlx-swift/blob/508951990d5d1cfee749602243ccf92935696d85/FORK_PATCHES.md)
 classifies all 19 previous Swift commits. Shared upstream 1-bit CPU/Metal
 support and CUDA shutdown behavior replace overlapping implementations.
 NVFP4 staging retains the upstream global-scale path; the owned fast path
@@ -62,27 +68,40 @@ remain unchanged. Its provenance revisions are updated while retaining the
 original build timestamp. The CPU spelling fix passes a fresh C++ build and
 all 298 tests.
 
-On an M5 Max, the final core passes 998 Python tests on Metal (57 skips),
-998 on a CPU-only build (151 skips), 298 Metal-enabled C++ tests, and 269
-CPU-only C++ tests. The full Swift Xcode test plan passes 1,063 tests with
-three skips and no failures, including reusable contexts, concurrent first
-traces, cross-thread cache erasure, lock ordering, and the NAX gate.
+On an M5 Max, the scoped fix passes 999 Python tests on Metal (56 skips),
+including all 60 quantization cases (one CUDA-only skip), and 298 C++ tests.
+The full Swift Xcode plan passes 1,064 tests with three skips and no failures,
+including reusable contexts, concurrent first traces, cross-thread cache
+erasure, lock ordering, and FP16/BF16 floating-point and quantized NAX checks.
+The Python runner, Xcode plan, and downstream `scripts/check.sh` select
+`MLX_ENABLE_TF32=0` for strict FP32 reference fixtures. Direct fixture runs
+should use the same setting; production inference defaults are unchanged.
 Regenerating the AOT sources and copied headers again produces identical bytes.
 Native BF16 qualification also passes all three installed tests and 48 GPU
 fixtures with no skips. Release API arithmetic, streaming completion, a tool
 round trip, and retrieval from 24,042 prompt tokens pass under a 32K budget.
 Plain streaming still exposes raw reasoning markup in `delta.content`.
 
-The exact 127,242-token retrieval probe still fails in the native release
-runtime with the same decoded reasoning, answer, and token counts as the
-previous pin. It also fails upstream MLX-LM using the refreshed core fork,
-while stock upstream MLX 0.32.4 passes. This points toward a difference in the retained fork or
-build configuration; the cause has not been isolated. The generation-17 NAX
-guard is preserved because its FP16/low-bit correctness purpose must be
-validated before replacement. The refresh does not qualify reliable 128K
-retrieval or broad numerical parity.
+The matched 127,242-token Python ablation isolates the former global NAX
+guard: disabling NAX reproduces the old failure token-for-token, while upstream
+availability returns the correct code twice with all 325 tokens matching
+stock upstream. The scoped guard preserves generation-17 quantized dispatch.
+Native release qualification still fails this exact prompt: it processes all
+127,242 input tokens, repeats `UNLIMITED` in reasoning, and exhausts the
+unchanged 2,048-token output budget without a final answer. Reliable native
+128K retrieval and broad numerical parity remain unqualified.
 
-All three downstream check modes complete. The standard core and installed
+The three installed native BF16 checks pass with production precision
+defaults. All 48 native LFM2 GPU fixtures pass with FP32 reference precision.
+The expanded 69-case application GPU run additionally includes quantized
+batching and binary-linear fixtures. Two batching tests fail ten bit-exact
+assertions; an isolated checkout of the previous 0.32.4 pin reproduces the
+same assertions and error values. These are an existing gap at that pin,
+not evidence that all application quantized behavior is qualified.
+
+The final downstream local gate passes 5,558 XCTest cases (475 skips) and
+all 196 Swift Testing cases. Earlier refresh runs also complete both E2E
+check modes. The standard core and installed
 runtime smoke presets are absent and skip six and eleven probes respectively;
 those skips do not replace the separately executed BF16 qualification above.
 CUDA execution and older Apple hardware/OS execution remain unvalidated on

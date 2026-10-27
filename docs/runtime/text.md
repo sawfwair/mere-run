@@ -247,12 +247,13 @@ display only. Omitted sampling uses temperature 0.1, top-k 50, and top-p 1.
 Use `--context-size` to set the operational context budget. Original weights
 load directly without conversion or Python. Native BF16 checks on a 128 GB
 M5 Max pass completed answers, a tool round trip, and exact retrieval from
-24,042 prompt tokens under a 32K context budget. On the refreshed owned MLX
-0.32.4 fork, a 127,242-token retrieval probe still completes with the wrong
-code. The identical probe passes stock upstream MLX 0.32.4 but also fails
-upstream Python using our core fork, so the remaining difference is not
-isolated to Swift. The declared 131,072-token context is not qualified for
-reliable retrieval; numerical parity and broader quality remain unqualified.
+24,042 prompt tokens under a 32K context budget. The MLX 0.32.4 fork now restores upstream NAX selection for floating-point
+operations and confines its generation-17 workaround to quantized dispatch.
+The identical 127,242-token Python probe passes with upstream NAX selection,
+but native release inference still exhausts its 2,048-token output budget in
+repetitive reasoning without returning the code. The declared 131,072-token
+context remains unqualified for reliable native retrieval; numerical parity
+and broader quality also remain unqualified.
 
 `text-chat-lfm25-1.2b-bf16`, `text-chat-lfm25-2.6b-bf16`, and
 `text-chat-lfm25-a1b-bf16` install exact pinned LiquidAI LFM2.5 checkpoints and

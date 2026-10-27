@@ -9,12 +9,14 @@ The format is based on Keep a Changelog.
 - Refresh the pinned MLX core to v0.32.4 and the Swift bridge through upstream
   0.32.3, preserving owned runtime patches and reusable request streams.
   Rebuild the Metal bundle and enforce the new dependency and kernel provenance.
+  Scope the generation-17 NAX workaround to quantized dispatch, restoring
+  upstream floating-point matmul and attention for original BF16 checkpoints.
 
 - Add `text-chat-lfm25-24b-a2b-bf16`, a pinned native reasoning MoE install
   that loads original LiquidAI safetensors. Expose its declared 131,072-token
   context and required reasoning profile without changing existing model IDs or defaults.
   Bounded answers, tools, and retrieval pass on an M5 Max; exact near-128K
-  retrieval still fails on the owned MLX fork and remains unqualified.
+  native retrieval still fails and remains unqualified after the NAX scope fix.
 - Correct LFM2 MoE routing, honor tokenizer `ignore_merges`, and align tool-history
   reasoning, JSON spacing, and Python scalar arguments with the upstream template.
 
