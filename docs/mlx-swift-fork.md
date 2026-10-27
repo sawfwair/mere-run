@@ -1,10 +1,10 @@
 # mlx-swift fork policy and compiled-call overhead
 
 `mere.run` pins the public `sawfwair/mlx-swift` fork at
-`2fa99921932a2b0189718069c6bb60a80e9e1195`. It contains upstream
+`4382a34136fdefe93e12ddb7430d5a5ab0dfee21`. It contains upstream
 `mlx-swift` through `19601207e9a0de51e03ee6ec0c3c5f3784275075`. The embedded
 `sawfwair/mlx` revision is
-`f27e127acca38047a7e37ea1f99bd50c3d45e460`, which contains the exact
+`9d094c52c4001a6afc0dec9a6c411c13ec59e4d5`, which contains the exact
 upstream MLX v0.32.4 release commit
 `36969c094354086e15d2a327a9c50feb20b9cf11`.
 
@@ -45,15 +45,22 @@ baseline macOS 14 shader builds. mere.run's bundle targets macOS 15 and Metal 3.
 
 ## v0.32.4 integration
 
-The [core patch inventory](https://github.com/sawfwair/mlx/blob/f27e127acca38047a7e37ea1f99bd50c3d45e460/FORK_PATCHES.md)
+The [core patch inventory](https://github.com/sawfwair/mlx/blob/9d094c52c4001a6afc0dec9a6c411c13ec59e4d5/FORK_PATCHES.md)
 classifies all 20 previous core commits. The
-[Swift inventory](https://github.com/sawfwair/mlx-swift/blob/2fa99921932a2b0189718069c6bb60a80e9e1195/FORK_PATCHES.md)
+[Swift inventory](https://github.com/sawfwair/mlx-swift/blob/4382a34136fdefe93e12ddb7430d5a5ab0dfee21/FORK_PATCHES.md)
 classifies all 19 previous Swift commits. Shared upstream 1-bit CPU/Metal
 support and CUDA shutdown behavior replace overlapping implementations.
 NVFP4 staging retains the upstream global-scale path; the owned fast path
 remains scoped to non-global-scale weights. The retained CPU 1-bit transposed
 matmul regression additionally requires float accumulation for FP16/BF16
 inputs, without changing wider affine arithmetic or test tolerances.
+
+Final Linux portability corrections exclude Metal-only cross-entropy and
+gated-delta host files and spell the dependent CPU reduction accumulator
+type with `typename`. Generated GPU sources and the bundled Metal binary
+remain unchanged. Its provenance revisions are updated while retaining the
+original build timestamp. The CPU spelling fix passes a fresh C++ build and
+all 298 tests.
 
 On an M5 Max, the final core passes 998 Python tests on Metal (57 skips),
 998 on a CPU-only build (151 skips), 298 Metal-enabled C++ tests, and 269
