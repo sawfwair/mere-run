@@ -303,7 +303,7 @@ Table 3 lists provider sources and local recipes for text and multimodal models.
     </tr>
     <tr>
       <td>LFM2.5 text (Liquid AI)</td>
-      <td><code>text-chat-lfm25-a1b-8bit</code>, <code>text-chat-lfm25-a1b-bf16</code>, <code>text-chat-lfm25-1.2b-bf16</code>, <code>text-chat-lfm25-1.2b-qad-4bit</code>, <code>text-chat-lfm25-2.6b-4bit</code>, <code>text-chat-lfm25-2.6b-qad-4bit</code>, <code>text-chat-lfm25-2.6b-bf16</code></td>
+      <td><code>text-chat-lfm25-a1b-8bit</code>, <code>text-chat-lfm25-a1b-bf16</code>, <code>text-chat-lfm25-24b-a2b-bf16</code>, <code>text-chat-lfm25-1.2b-bf16</code>, <code>text-chat-lfm25-1.2b-qad-4bit</code>, <code>text-chat-lfm25-2.6b-4bit</code>, <code>text-chat-lfm25-2.6b-qad-4bit</code>, <code>text-chat-lfm25-2.6b-bf16</code></td>
       <td>Guide. <a href="https://docs.liquid.ai/lfm/key-concepts/text-generation-and-prompting">Prompting guide</a></td>
       <td>Review roles, input and output examples, and response prefixes. Use exact model cards for sampling settings.</td>
       <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-lfm25-text.md">LFM2.5 text (Liquid AI) guide (draft)</a></td>

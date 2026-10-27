@@ -422,35 +422,22 @@ final class LFM2SwitchGLU: Module {
     @ModuleInfo(key: "up_proj") var upProj: LFM2SwitchLinear
     @ModuleInfo(key: "down_proj") var downProj: LFM2SwitchLinear
 
-    init(config: LFM2Config) {
-        let groupSize = config.quantization?.groupSize ?? 64
-        let bits = config.quantization?.bits ?? 8
-        let quantized = config.quantization != nil
-
-        self._gateProj.wrappedValue = LFM2SwitchLinear(
-            inputDims: config.hiddenSize,
-            outputDims: config.moeIntermediateSize,
-            numExperts: config.numExperts,
-            groupSize: groupSize,
-            bits: bits,
-            quantized: quantized
-        )
-        self._upProj.wrappedValue = LFM2SwitchLinear(
-            inputDims: config.hiddenSize,
-            outputDims: config.moeIntermediateSize,
-            numExperts: config.numExperts,
-            groupSize: groupSize,
-            bits: bits,
-            quantized: quantized
-        )
-        self._downProj.wrappedValue = LFM2SwitchLinear(
-            inputDims: config.moeIntermediateSize,
-            outputDims: config.hiddenSize,
-            numExperts: config.numExperts,
-            groupSize: groupSize,
-            bits: bits,
-            quantized: quantized
-        )
+    init(config: LFM2Config, layerIndex: Int) {
+        let prefix = "model.layers.\(layerIndex).feed_forward.switch_mlp."
+        func projection(_ name: String, input: Int, output: Int) -> LFM2SwitchLinear {
+            let quantization = config.moduleQuantization[prefix + name] ?? config.quantization
+            return LFM2SwitchLinear(
+                inputDims: input,
+                outputDims: output,
+                numExperts: config.numExperts,
+                groupSize: quantization?.groupSize ?? 64,
+                bits: quantization?.bits ?? 8,
+                quantized: quantization != nil
+            )
+        }
+        self._gateProj.wrappedValue = projection("gate_proj", input: config.hiddenSize, output: config.moeIntermediateSize)
+        self._upProj.wrappedValue = projection("up_proj", input: config.hiddenSize, output: config.moeIntermediateSize)
+        self._downProj.wrappedValue = projection("down_proj", input: config.moeIntermediateSize, output: config.hiddenSize)
         super.init()
     }
 
@@ -522,6 +509,7 @@ final class LFM2FeedForward: Module {
     private let usesDenseWeightNames: Bool
     private let topK: Int
     private let normTopKProb: Bool
+    private let routedScalingFactor: Float
 
     init(config: LFM2Config, layerIndex: Int) {
         self.usesDense = config.modelType == "lfm2" || layerIndex < config.numDenseLayers
@@ -531,6 +519,7 @@ final class LFM2FeedForward: Module {
             || (layerIndex < config.numDenseLayers && config.quantization == nil)
         self.topK = max(1, config.numExpertsPerTok)
         self.normTopKProb = config.normTopKProb
+        self.routedScalingFactor = config.routedScalingFactor
         if usesDenseWeightNames {
             self._w1.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
             self._w2.wrappedValue = Linear(config.intermediateSize, config.hiddenSize, bias: false)
@@ -541,7 +530,7 @@ final class LFM2FeedForward: Module {
             self._downProj.wrappedValue = Linear(config.intermediateSize, config.hiddenSize, bias: false)
         } else {
             self._gate.wrappedValue = Linear(config.hiddenSize, config.numExperts, bias: false)
-            self._switchMLP.wrappedValue = LFM2SwitchGLU(config: config)
+            self._switchMLP.wrappedValue = LFM2SwitchGLU(config: config, layerIndex: layerIndex)
             self._expertBias.wrappedValue = config.useExpertBias
                 ? MLXArray.zeros([config.numExperts])
                 : nil
@@ -560,21 +549,21 @@ final class LFM2FeedForward: Module {
         guard let gate, let switchMLP else {
             preconditionFailure("LFM2 sparse feed-forward modules were not initialized")
         }
-        var scores = softmax(gate(x).asType(.float32), axis: -1)
-        if let expertBias {
-            scores = scores + expertBias
-        }
+        let probabilities = sigmoid(gate(x))
+        // Bias balances expert selection; it must not change the mixture weights.
+        let selectionScores = expertBias.map { probabilities.asType(.float32) + $0 } ?? probabilities
 
         // Expert selection is discrete. Preserve gradients through the
         // selected scores, but do not request a VJP for integer indices.
+        // Match upstream's positive-score tail partition before reducing the mixture.
         let indices = stopGradient(
-            argPartition(-scores, kth: topK - 1, axis: -1)[.ellipsis, 0..<topK]
+            argPartition(selectionScores, kth: -topK, axis: -1)[.ellipsis, (-topK)...]
         )
-        scores = takeAlong(scores, indices, axis: -1)
-        if normTopKProb, topK > 1 {
-            scores = scores / (scores.sum(axis: -1, keepDims: true) + MLXArray(1e-20))
+        var scores = takeAlong(probabilities, indices, axis: -1)
+        if normTopKProb {
+            scores = scores / (scores.sum(axis: -1, keepDims: true) + MLXArray(1e-6))
         }
-        scores = scores.asType(x.dtype)
+        scores = (scores * routedScalingFactor).asType(x.dtype)
 
         let switched = switchMLP(
             x,
@@ -655,11 +644,13 @@ final class LFM2DecoderLayer: Module {
 }
 
 final class LFM2Transformer: Module {
+    private let useFP32Activations: Bool
     @ModuleInfo(key: "embed_tokens") var embedTokens: Embedding
     @ModuleInfo(key: "layers") var layers: [LFM2DecoderLayer]
     @ModuleInfo(key: "embedding_norm") var embeddingNorm: RMSNorm
 
     init(config: LFM2Config) {
+        self.useFP32Activations = config.useFP32Activations
         self._embedTokens.wrappedValue = Embedding(
             embeddingCount: config.vocabSize,
             dimensions: config.hiddenSize
@@ -698,6 +689,7 @@ final class LFM2Transformer: Module {
         useCustomKernels: Bool = true
     ) -> (hidden: MLXArray, captures: [Int: MLXArray]) {
         var hidden = inputEmbeddings ?? embeddings(for: inputIds)
+        if useFP32Activations { hidden = hidden.asType(.float32) }
         let attentionMask = createAttentionMask(h: hidden, cache: firstAttentionCache(from: cache))
         var captures: [Int: MLXArray] = [:]
 

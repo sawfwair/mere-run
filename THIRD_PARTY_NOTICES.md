@@ -1604,6 +1604,16 @@ untrained weights, exported by `scripts/fixtures/export-clef-omni-reference.py`.
 They contain no original checkpoint weights. The Apache-2.0 license is retained
 in `licenses/clef-APACHE-2.0.txt`.
 
+## LFM2.5 24B-A2B native integration
+
+- checkpoint: [LiquidAI/LFM2.5-24B-A2B](https://huggingface.co/LiquidAI/LFM2.5-24B-A2B/tree/1769516ac588c4c558089c94f27d96b0dc67b183)
+- publisher license: LFM Open License v1.0; weights are downloaded separately
+  after explicit license acknowledgement
+- local code: the existing native Swift/MLX runtime in `Sources/MereRunCore/LFM2`
+- changes: pinned managed-model metadata, declared context, reasoning defaults,
+  and sigmoid MoE routing with selection-only expert bias and routed scaling
+- no trained weights or tokenizer are bundled in this repository
+
 ## D1 native decision implementation
 
 - source: [LiquidAI/d1-3B](https://huggingface.co/LiquidAI/d1-3B/tree/da1fe36a861f24690f27f622dca1d8688503d113), revision `da1fe36a861f24690f27f622dca1d8688503d113`

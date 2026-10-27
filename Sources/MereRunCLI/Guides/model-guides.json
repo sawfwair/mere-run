@@ -302,6 +302,7 @@
     "models": [
       "text-chat-lfm25-a1b-8bit",
       "text-chat-lfm25-a1b-bf16",
+      "text-chat-lfm25-24b-a2b-bf16",
       "text-chat-lfm25-1.2b-bf16",
       "text-chat-lfm25-1.2b-qad-4bit",
       "text-chat-lfm25-2.6b-4bit",

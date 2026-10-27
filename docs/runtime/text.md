@@ -67,6 +67,7 @@ gate.
 - `text-chat-lfm25-1.2b-bf16` (managed LiquidAI LFM2.5 1.2B Instruct BF16 target plus DSpark)
 - `text-chat-lfm25-1.2b-qad-4bit` (managed QAD-trained LFM2.5 1.2B native MLX 4-bit conversion)
 - `text-chat-lfm25-a1b-8bit` (managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot)
+- `text-chat-lfm25-24b-a2b-bf16` — original LiquidAI 24B-A2B reasoning MoE safetensors
 - `text-chat-lfm25-a1b-bf16` (managed LiquidAI LFM2.5 8B-A1B BF16 target plus DSpark)
 - `vision-chat-lfm25-3b-8bit` (managed LiquidAI LFM2.5-VL 3B MLX 8-bit vision-language snapshot)
 - `vision-chat-lfm25-3b-bf16` (managed LiquidAI LFM2.5-VL 3B BF16 snapshot with DSpark)
@@ -238,6 +239,14 @@ GGUF. Its persistent DS4 server defaults to a 32K operational context, a
 1,024-token prefill chunk, and an 8 GiB disk-KV budget. A 128 GB Mac provides
 additional headroom. Close other memory-heavy workloads before using the model
 on a 96 GB machine.
+
+`text-chat-lfm25-24b-a2b-bf16` is a separate reasoning MoE install with
+original BF16 safetensors, a declared 131,072-token context, and no DSpark
+companion. Its template always starts reasoning; `--no-thinking` controls
+display only. Omitted sampling uses temperature 0.1, top-k 50, and top-p 1.
+Use `--context-size` to set the operational context budget. Original weights
+load directly without conversion or Python. Real-checkpoint output parity
+and long-context behavior have not been qualified.
 
 `text-chat-lfm25-1.2b-bf16`, `text-chat-lfm25-2.6b-bf16`, and
 `text-chat-lfm25-a1b-bf16` install exact pinned LiquidAI LFM2.5 checkpoints and
@@ -612,6 +621,13 @@ swift run mere.run text code \
   --model text-agent-ornith-35b \
   --prompt "Write a compact Swift Result helper."
 ```
+
+### Experimental LFM2.5 24B-A2B mixed precision
+
+The native LFM2 runtime can load the developer tool's `mixed6-8-quality` folder.
+This 23.94 GB derivative uses six- and eight-bit expert banks, FP16 affine
+metadata, an original-precision trunk, and explicit FP32 activations. It has no
+managed download. See the [conversion recipe and qualification limits](../benchmarks/lfm25-24b-a2b-integration-2026-10-13.md).
 
 ### Embeddings
 

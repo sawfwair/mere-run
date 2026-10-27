@@ -255,13 +255,15 @@ public extension ManagedModelAPIProfile {
 
     static func lfm2(
         inputModalities: [ManagedModelAPIModality] = [.text],
-        contextWindow: Int = LFM2Resources.defaultContextLength
+        contextWindow: Int = LFM2Resources.defaultContextLength,
+        thinkingLevels: [ManagedModelThinkingLevel] = []
     ) -> ManagedModelAPIProfile {
         chat(
             servingEngine: .textChatLFM2,
             inputModalities: inputModalities,
             contextWindow: contextWindow,
             maximumOutputTokens: 4_096,
+            thinkingLevels: thinkingLevels,
             toolCall: true
         )
     }

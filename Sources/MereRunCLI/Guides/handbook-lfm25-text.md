@@ -33,6 +33,23 @@ describes assistant prefill, which starts the response with supplied text. If
 the selected local interface supports prefill, you can use it. Don't insert raw
 role delimiters into ordinary text.
 
+The 24B-A2B BF16 variant is a separate managed install and loads the original
+safetensors directly. Its template always starts reasoning with `<think>`;
+`--no-thinking` hides reasoning output without disabling model reasoning.
+It declares a 131,072-token context, has no DSpark companion, and requires
+the same LFM Open License acknowledgement as other LFM targets.
+
+```bash
+mere.run model pull text-chat-lfm25-24b-a2b-bf16 --accept-model-license
+mere.run text chat --model text-chat-lfm25-24b-a2b-bf16 --prompt "What is 17 * 23?"
+```
+
+For an experimental local mixed 6/8-bit 24B-A2B folder, select the folder with
+`--model` and `--model-root`. Use temperature 0.1, top-p 1, top-k 50, and eight-bit
+KV. Start with an 8,192-token context and enough generation tokens for reasoning.
+The conversion preserves the non-expert trunk and uses explicit FP32 activations.
+It has bounded diagnostic evidence and is not a fully qualified managed release.
+
 ## Iterate and review
 
 If a small model misses a long requirement list, simplify the task and add one
@@ -77,6 +94,7 @@ save the prompt or input, model ID, parameters, and output together.
 This guide covers the following managed model IDs:
 
 - `text-chat-lfm25-a1b-8bit`
+- `text-chat-lfm25-24b-a2b-bf16` — original LiquidAI 24B-A2B reasoning MoE safetensors
 - `text-chat-lfm25-a1b-bf16`
 - `text-chat-lfm25-1.2b-bf16`
 - `text-chat-lfm25-1.2b-qad-4bit`

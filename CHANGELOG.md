@@ -6,6 +6,21 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Match upstream LFM2 expert partition ordering and add opt-in layer diagnostics
+  for native mixed-precision numerical qualification.
+- Add `text-chat-lfm25-24b-a2b-bf16`, a pinned native reasoning MoE install
+  that loads original LiquidAI safetensors. Expose its declared 131,072-token
+  context and required reasoning profile without changing existing model IDs or defaults.
+- Add developer tooling and native mixed-precision loading for an experimental
+  23.94 GB LFM2.5 24B-A2B local derivative. Preserve the non-expert trunk, use
+  selective 6/8-bit experts and explicit FP32 activations, and record reference
+  logprob comparisons and artifact hashes. Initial short-generation and 60-case
+  same-quant backend checks pass. Later backend and absolute quality gates fail;
+  all smaller candidates remain experimental, and full local context fit is unqualified.
+- Correct LFM2 MoE routing, honor tokenizer `ignore_merges`, and align tool-history
+  reasoning, JSON spacing, and Python scalar arguments with the upstream template.
+  Bound prefill scratch storage for high-precision local derivatives.
+
 - Add native DRAMA-3 speech synthesis, reference cloning, inline speaker and event
   tags, and causal audio streaming. `speech-tts-drama-3` downloads the pinned
   `Sawfwair/DRAMA-3-MLX-4bit` expert-only Q4 export with license, checksums, and

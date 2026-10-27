@@ -851,6 +851,21 @@ extension MereRunModelManifest {
                     "\(LFM2Resources.a1bBF16UpstreamRepoId)@\(LFM2Resources.a1bBF16UpstreamRevision)",
                 createdAt: createdAt
             )
+        case .lfm25A2B24BBF16:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .lfm2,
+                family: .liquid,
+                tier: .medium,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.chat],
+                components: q35TextComponents,
+                upstreamRepoId:
+                    "\(LFM2Resources.a2b24BUpstreamRepoId)@\(LFM2Resources.a2b24BUpstreamRevision)",
+                createdAt: createdAt
+            )
         case .lfm25Small1_2BBF16:
             return MereRunModelManifest(
                 id: modelID.rawValue,

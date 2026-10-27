@@ -22,9 +22,11 @@ public enum LFM2ToolParser {
                 .replacingOccurrences(of: "\r", with: "\\r")
             return "'\(escaped)'"
         }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        return String(decoding: try encoder.encode(value), as: UTF8.self)
+        switch value {
+        case .bool(let flag): return flag ? "True" : "False"
+        case .null: return "None"
+        default: return try LFM2PromptJSON.render(value)
+        }
     }
 
     public static func parseToolCalls(_ text: String) -> [ToolCall] {
@@ -103,7 +105,12 @@ public enum LFM2ToolParser {
             }
             guard depth == 0 else { return nil }
             let result = String(characters[start..<position]).trimmingCharacters(in: .whitespacesAndNewlines)
-            return result.isEmpty ? nil : result
+            switch result {
+            case "True": return "true"
+            case "False": return "false"
+            case "None": return "null"
+            default: return result.isEmpty ? nil : result
+            }
         }
 
         mutating func identifier() -> String? {

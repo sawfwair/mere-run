@@ -36,6 +36,7 @@ public struct LFM2Config: Decodable, Sendable, Hashable {
     public let numExperts: Int
     public let numExpertsPerTok: Int
     public let normTopKProb: Bool
+    public let routedScalingFactor: Float
     public let numAttentionHeads: Int
     public let numKeyValueHeads: Int
     public let maxPositionEmbeddings: Int
@@ -48,6 +49,8 @@ public struct LFM2Config: Decodable, Sendable, Hashable {
     public let ropeParameters: LFM2RopeParameters?
     public let layerTypes: [String]
     public let quantization: LFM2QuantizationConfig?
+    public let moduleQuantization: [String: LFM2QuantizationConfig]
+    public let useFP32Activations: Bool
     public let tieWordEmbeddings: Bool
 
     public var headDim: Int {
@@ -58,6 +61,26 @@ public struct LFM2Config: Decodable, Sendable, Hashable {
         Set(layerTypes.enumerated().compactMap { index, layerType in
             layerType == "full_attention" ? index : nil
         })
+    }
+
+    /// Identifies the released 24B-A2B layout, including local mixed-precision derivatives.
+    var isA2B24B: Bool {
+        modelType == "lfm2_moe" && hiddenSize == 2_048 && numHiddenLayers == 40
+            && numExperts == 64 && numExpertsPerTok == 4 && numDenseLayers == 2
+    }
+
+    /// Keeps high-precision derivatives within bounded prefill scratch storage.
+    func prefillChunkSize(promptTokens: Int) -> Int {
+        guard useFP32Activations else { return 512 }
+        return promptTokens > 32_768 ? 32 : 128
+    }
+
+    public func contextLength(requested: Int?, runtimeLimit: Int = LFM2Resources.defaultContextLength) throws -> Int {
+        let requested = requested ?? LFM2Resources.defaultContextLength
+        guard requested > 0 else {
+            throw LFM2Error.generationFailed("maxContextTokens must be greater than zero.")
+        }
+        return min(requested, runtimeLimit, maxPositionEmbeddings)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -77,6 +100,7 @@ public struct LFM2Config: Decodable, Sendable, Hashable {
         case numExperts = "num_experts"
         case numExpertsPerTok = "num_experts_per_tok"
         case normTopKProb = "norm_topk_prob"
+        case routedScalingFactor = "routed_scaling_factor"
         case numAttentionHeads = "num_attention_heads"
         case numKeyValueHeads = "num_key_value_heads"
         case maxPositionEmbeddings = "max_position_embeddings"
@@ -90,6 +114,8 @@ public struct LFM2Config: Decodable, Sendable, Hashable {
         case layerTypes = "layer_types"
         case quantization
         case quantizationConfig = "quantization_config"
+        case moduleQuantization = "mererun_quantization"
+        case useFP32Activations = "mererun_fp32_activations"
         case tieWordEmbeddings = "tie_word_embeddings"
     }
 
@@ -122,6 +148,7 @@ public struct LFM2Config: Decodable, Sendable, Hashable {
         self.numExperts = try container.decodeIfPresent(Int.self, forKey: .numExperts) ?? 0
         self.numExpertsPerTok = try container.decodeIfPresent(Int.self, forKey: .numExpertsPerTok) ?? 1
         self.normTopKProb = try container.decodeIfPresent(Bool.self, forKey: .normTopKProb) ?? true
+        self.routedScalingFactor = try container.decodeIfPresent(Float.self, forKey: .routedScalingFactor) ?? 1
         self.numAttentionHeads = try container.decode(Int.self, forKey: .numAttentionHeads)
         self.numKeyValueHeads = try container.decode(Int.self, forKey: .numKeyValueHeads)
         self.maxPositionEmbeddings = try container.decode(Int.self, forKey: .maxPositionEmbeddings)
@@ -135,6 +162,10 @@ public struct LFM2Config: Decodable, Sendable, Hashable {
         self.ropeParameters = try container.decodeIfPresent(LFM2RopeParameters.self, forKey: .ropeParameters)
         self.layerTypes = try container.decode([String].self, forKey: .layerTypes)
         self.tieWordEmbeddings = try container.decodeIfPresent(Bool.self, forKey: .tieWordEmbeddings) ?? true
+        self.useFP32Activations = try container.decodeIfPresent(Bool.self, forKey: .useFP32Activations) ?? false
+        self.moduleQuantization = try container.decodeIfPresent(
+            [String: LFM2QuantizationConfig].self, forKey: .moduleQuantization
+        ) ?? [:]
 
         if let direct = try? container.decodeIfPresent([Int].self, forKey: .eosTokenId) {
             self.eosTokenIds = direct

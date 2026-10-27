@@ -129,6 +129,7 @@ an effective overlay; they are not a second capability catalog.
 | `text-chat` | `text-agent-deepseek-v4-flash` |
 | `text-chat` | `text-chat-lfm25-a1b-8bit` |
 | `text-chat` | `text-chat-lfm25-a1b-bf16` |
+| `text-chat` | `text-chat-lfm25-24b-a2b-bf16` |
 | `text-chat` | `text-chat-lfm25-1.2b-bf16` |
 | `text-chat` | `text-chat-lfm25-1.2b-qad-4bit` |
 | `text-chat` | `text-chat-lfm25-2.6b-4bit` |
@@ -678,6 +679,19 @@ a text-only MLX 8-bit directory-root model with `config.json`,
 `tokenizer.json`, `tokenizer_config.json`, and sharded `*.safetensors` weights.
 mere.run runs it through the native Swift LFM2 runtime; no Python bridge is used.
 This quantized target does not attach the BF16-trained DSpark assistant.
+
+`text-chat-lfm25-24b-a2b-bf16` pins
+`LiquidAI/LFM2.5-24B-A2B` at revision
+`1769516ac588c4c558089c94f27d96b0dc67b183`. The native Swift LFM2 runtime
+loads its ten original BF16 safetensor shards directly, including 64 experts
+per sparse layer. No conversion or Python installation is required. The
+checkpoint declares a 131,072-token context and always starts assistant
+generation with `<think>`. It has no managed DSpark companion. The LFM Open
+License acceptance gate applies. An experimental 23.94 GB selective 6/8-bit
+local conversion is also available through the developer tooling. Strict GPU
+reference parity and bounded quantization results are recorded; native local
+checkpoint fit remains a separate gate. See the
+[integration evidence](./benchmarks/lfm25-24b-a2b-integration-2026-10-13.md).
 
 `text-chat-lfm25-a1b-bf16` uses `LiquidAI/LFM2.5-8B-A1B` at revision
 `b9aebfcbe28b6cb374042f495d733037550ab146`, the exact target for the managed

@@ -131,7 +131,6 @@ private final class LFM2BatchedDecodeRow: @unchecked Sendable {
 }
 
 public actor LFM2Generator: ChatGenerator {
-    private static let prefillChunkSize = 512
     private static let prefixKVCacheMaxEntries = 4
 
     static func prefillTokensPerSecond(
@@ -317,7 +316,7 @@ public actor LFM2Generator: ChatGenerator {
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading LFM2 tokenizer"))
         let tokenizer = try await LFM2TokenizerAndTemplate.load(
             from: normalizedRoot,
-            maxLengthOverride: min(LFM2Resources.defaultContextLength, config.maxPositionEmbeddings)
+            maxLengthOverride: config.maxPositionEmbeddings
         )
         try Task.checkCancellation()
         try requireCurrentResidency(loadEpoch)
@@ -510,14 +509,11 @@ public actor LFM2Generator: ChatGenerator {
         }
         let residencyEpoch = decodeLoopEpochState.residencyEpoch
 
-        let requestedContextLength = request.maxContextTokens ?? LFM2Resources.defaultContextLength
-        guard requestedContextLength > 0 else {
-            throw LFM2Error.generationFailed("maxContextTokens must be greater than zero.")
-        }
-        let effectiveContext = min(
-            LFM2Resources.defaultContextLength,
-            requestedContextLength,
-            loadedConfig.maxPositionEmbeddings
+        let contextLimit = ManagedModelCatalog.apiProfile(for: modelId)?.contextWindow
+            ?? (loadedConfig.isA2B24B ? LFM2Resources.a2b24BContextLength : LFM2Resources.defaultContextLength)
+        let effectiveContext = try loadedConfig.contextLength(
+            requested: request.maxContextTokens,
+            runtimeLimit: contextLimit
         )
 
         let prefillStart = Date()
@@ -884,7 +880,10 @@ public actor LFM2Generator: ChatGenerator {
                 tokenBudget: tokenBudget,
                 historySeedTokens: promptTokens
             ),
-            stepForward: { token in model(token, cache: layerCaches) },
+            stepForward: { token in
+                LFM2DecodeCachePolicy.clearIfNeeded(config: model.config)
+                return model(token, cache: layerCaches)
+            },
             decodeToken: { tokenizerAndTemplate.decode(token: $0) },
             emitPiece: { _, piece in
                 progressHandler?(ChatProgress(stage: .generating, message: piece))
@@ -1015,6 +1014,7 @@ public actor LFM2Generator: ChatGenerator {
     ) throws {
         let sampledRows = rows.filter(\.needsDecodeStep)
         guard !sampledRows.isEmpty else { return }
+        LFM2DecodeCachePolicy.clearIfNeeded(config: model.config)
 
         var tokenArrays: [MLXArray] = []
         tokenArrays.reserveCapacity(sampledRows.count)
@@ -1197,7 +1197,7 @@ public actor LFM2Generator: ChatGenerator {
             let end = RuntimePrefillCheckpointPlanner.nextEnd(
                 processed: offset,
                 total: promptTokens.count,
-                chunkSize: Self.prefillChunkSize,
+                chunkSize: model.config.prefillChunkSize(promptTokens: promptTokens.count),
                 checkpoints: checkpointTokenCounts
             )
             let chunk = Array(promptTokens[offset..<end])
@@ -1222,6 +1222,7 @@ public actor LFM2Generator: ChatGenerator {
             )
             logits = output.logits
             hidden = output.hidden
+            if model.config.useFP32Activations { MLX.Memory.clearCache() }
             offset = end
             if let modelPath,
                let priority = RuntimePrefillCheckpointPlanner.storagePriority(
