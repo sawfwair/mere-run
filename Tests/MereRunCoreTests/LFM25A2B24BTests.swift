@@ -13,32 +13,6 @@ final class LFM25A2B24BTests: MereRunCoreTestCase {
         )
     }
 
-    func testFP32A2BDecodeReclaimsUnusedCacheWithoutChangingOtherVariants() throws {
-        let fixtures = try XCTUnwrap(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
-        let source = try String(contentsOf: fixtures.appending(path: "LFM25A2B24B/config.json"), encoding: .utf8)
-        let configured = source.replacingOccurrences(
-            of: "\"model_type\"", with: "\"mererun_fp32_activations\":true,\"model_type\""
-        )
-        let fp32 = try JSONDecoder().decode(LFM2Config.self, from: Data(configured.utf8))
-        let bf16 = try checkpointConfig()
-        let gib = 1_024 * 1_024 * 1_024
-        XCTAssertFalse(LFM2DecodeCachePolicy.shouldClear(
-            config: bf16, activeMemory: 24 * gib, cacheMemory: 4 * gib, memoryLimit: 32 * gib
-        ))
-        XCTAssertFalse(LFM2DecodeCachePolicy.shouldClear(
-            config: fp32, activeMemory: 31 * gib, cacheMemory: 128 * 1_024 * 1_024, memoryLimit: 32 * gib
-        ))
-        XCTAssertFalse(LFM2DecodeCachePolicy.shouldClear(
-            config: fp32, activeMemory: 20 * gib, cacheMemory: gib / 2, memoryLimit: 32 * gib
-        ))
-        XCTAssertTrue(LFM2DecodeCachePolicy.shouldClear(
-            config: fp32, activeMemory: 20 * gib, cacheMemory: gib, memoryLimit: 32 * gib
-        ))
-        XCTAssertTrue(LFM2DecodeCachePolicy.shouldClear(
-            config: fp32, activeMemory: 29 * gib, cacheMemory: gib / 2, memoryLimit: 32 * gib
-        ))
-    }
-
     func testPinnedReleasedConfiguration() throws {
         let config = try checkpointConfig()
         XCTAssertEqual(config.modelType, "lfm2_moe")
@@ -59,18 +33,14 @@ final class LFM25A2B24BTests: MereRunCoreTestCase {
         XCTAssertTrue(config.useExpertBias)
         XCTAssertTrue(config.tieWordEmbeddings)
         XCTAssertNil(config.quantization)
-        XCTAssertFalse(config.useFP32Activations)
-        XCTAssertEqual(config.prefillChunkSize(promptTokens: 131_072), 512)
     }
 
-    func testLocalConvertedA2BCheckpointKeepsItsTextOnlyFamily() throws {
+    func testLocalBF16A2BCheckpointKeepsItsTextOnlyFamily() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "Checkpoint-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         let fixtures = try XCTUnwrap(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
-        var config = try String(contentsOf: fixtures.appending(path: "LFM25A2B24B/config.json"), encoding: .utf8)
-        config = config.replacingOccurrences(of: "\"model_type\"", with:
-            "\"quantization\":{\"bits\":8,\"group_size\":64,\"mode\":\"affine\"},\"model_type\"")
+        let config = try String(contentsOf: fixtures.appending(path: "LFM25A2B24B/config.json"), encoding: .utf8)
         try Data(config.utf8).write(to: root.appending(path: "config.json"))
         XCTAssertEqual(ModelFamilyIdentifier.textChatFamily(matching: root.path), .lfm2A2B)
         XCTAssertEqual(NativeChatRuntime.commandFamily(modelID: root.path), .lfm2A2B)

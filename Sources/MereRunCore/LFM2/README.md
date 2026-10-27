@@ -42,11 +42,6 @@ layouts:
 - sparse MoE feed-forward layers with sigmoid router top-k, selection-only
   `expert_bias`, routed scaling, and `SwitchGLU` expert projections
 
-Sparse routes use the upstream positive-score tail partition before reducing
-expert contributions. Nearly tied router scores can select different experts
-across FP32 backends. The [native routing investigation](../../../docs/benchmarks/lfm25-24b-a2b-native-routing-2026-10-16.md)
-separates implementation parity on Metal from comparison with saved CUDA logits.
-
 `LFM2VLModel.swift` adds the packed-patch SigLIP2 NaFlex encoder, resized
 positional embeddings, factor-2 pixel unshuffle, and multimodal projector used
 by LFM2.5-VL. `LFM2VLImageProcessor.swift` mirrors the checkpoint's smart
@@ -66,7 +61,7 @@ Convolution output projections and MoE expert matrices remain frozen. The
 training path turns off the inference-only fused affine-8 MoE kernel so that
 MLX can differentiate through the frozen base graph.
 
-For BF16 text and vision targets, the managed catalog also installs a matching
+For the smaller BF16 text and vision targets, the managed catalog also installs a matching
 pinned `*-dspark` companion. `LFM2DSpark.swift` projects hidden states captured
 at five configured target layers into the drafter. Text drafters have five
 attention layers and propose up to nine tokens per round. The vision drafter
@@ -116,14 +111,12 @@ fall back to MLX's portable gather path.
   and cancelled requests synchronize their submitted work before returning the
   context for reuse, so sequential requests do not accumulate backend streams.
 
-Mixed local conversions can declare `mererun_quantization` per projection and
-`mererun_fp32_activations`. The selective 6/8-bit conversion retains BF16 trunk
-weights, uses group-32 FP16 affine metadata, and bounds prefill scratch memory.
 The tokenizer adapter honors `ignore_merges`; tool schemas and reasoning history
-follow the upstream template. See the [qualification evidence](../../../docs/benchmarks/lfm25-24b-a2b-integration-2026-10-13.md)
-for numerical results and remaining trained-checkpoint gates.
+follow the upstream template. The 24B-A2B BF16 target has no DSpark companion.
 
-FP32 24B-A2B derivatives reclaim unused MLX allocator buffers during serial and
-continuous decoding when cached allocations reach one GiB or approach the device
-budget. This bounds retention from growing attention shapes while preserving
-live weights, prefix/KV state, numeric precision, and shared admission floors.
+The opt-in `LFM25A2BInstalledQualificationTests` exercise the original checkpoint
+through the production loader. Set `MERERUN_LFM25_A2B_BF16_ROOT` to its installed
+directory and `MERERUN_TEST_MLX_DEVICE=gpu`, then run `swift test --filter
+LFM25A2BInstalledQualificationTests`. These checks assert real tokenizer parity,
+completed answers, a tool round trip, and retrieval across chunked prefill.
+They require sufficient memory for the original approximately 48 GB weights.

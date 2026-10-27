@@ -49,8 +49,6 @@ public struct LFM2Config: Decodable, Sendable, Hashable {
     public let ropeParameters: LFM2RopeParameters?
     public let layerTypes: [String]
     public let quantization: LFM2QuantizationConfig?
-    public let moduleQuantization: [String: LFM2QuantizationConfig]
-    public let useFP32Activations: Bool
     public let tieWordEmbeddings: Bool
 
     public var headDim: Int {
@@ -63,16 +61,10 @@ public struct LFM2Config: Decodable, Sendable, Hashable {
         })
     }
 
-    /// Identifies the released 24B-A2B layout, including local mixed-precision derivatives.
+    /// Identifies the released 24B-A2B layout.
     var isA2B24B: Bool {
         modelType == "lfm2_moe" && hiddenSize == 2_048 && numHiddenLayers == 40
             && numExperts == 64 && numExpertsPerTok == 4 && numDenseLayers == 2
-    }
-
-    /// Keeps high-precision derivatives within bounded prefill scratch storage.
-    func prefillChunkSize(promptTokens: Int) -> Int {
-        guard useFP32Activations else { return 512 }
-        return promptTokens > 32_768 ? 32 : 128
     }
 
     public func contextLength(requested: Int?, runtimeLimit: Int = LFM2Resources.defaultContextLength) throws -> Int {
@@ -114,8 +106,6 @@ public struct LFM2Config: Decodable, Sendable, Hashable {
         case layerTypes = "layer_types"
         case quantization
         case quantizationConfig = "quantization_config"
-        case moduleQuantization = "mererun_quantization"
-        case useFP32Activations = "mererun_fp32_activations"
         case tieWordEmbeddings = "tie_word_embeddings"
     }
 
@@ -162,10 +152,6 @@ public struct LFM2Config: Decodable, Sendable, Hashable {
         self.ropeParameters = try container.decodeIfPresent(LFM2RopeParameters.self, forKey: .ropeParameters)
         self.layerTypes = try container.decode([String].self, forKey: .layerTypes)
         self.tieWordEmbeddings = try container.decodeIfPresent(Bool.self, forKey: .tieWordEmbeddings) ?? true
-        self.useFP32Activations = try container.decodeIfPresent(Bool.self, forKey: .useFP32Activations) ?? false
-        self.moduleQuantization = try container.decodeIfPresent(
-            [String: LFM2QuantizationConfig].self, forKey: .moduleQuantization
-        ) ?? [:]
 
         if let direct = try? container.decodeIfPresent([Int].self, forKey: .eosTokenId) {
             self.eosTokenIds = direct

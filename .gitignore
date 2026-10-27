@@ -42,6 +42,3 @@ live.wav
 # Local release/notarization credentials
 .notarize.local.env
 .upload_release.local.env
-
-# Python experiment caches
-__pycache__/

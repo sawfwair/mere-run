@@ -687,11 +687,8 @@ loads its ten original BF16 safetensor shards directly, including 64 experts
 per sparse layer. No conversion or Python installation is required. The
 checkpoint declares a 131,072-token context and always starts assistant
 generation with `<think>`. It has no managed DSpark companion. The LFM Open
-License acceptance gate applies. An experimental 23.94 GB selective 6/8-bit
-local conversion is also available through the developer tooling. Strict GPU
-reference parity and bounded quantization results are recorded; native local
-checkpoint fit remains a separate gate. See the
-[integration evidence](./benchmarks/lfm25-24b-a2b-integration-2026-10-13.md).
+License acceptance gate applies. Original weights occupy about 48 GB; the
+catalog requires at least 64 GB unified memory and recommends 96 GB.
 
 `text-chat-lfm25-a1b-bf16` uses `LiquidAI/LFM2.5-8B-A1B` at revision
 `b9aebfcbe28b6cb374042f495d733037550ab146`, the exact target for the managed

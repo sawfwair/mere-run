@@ -622,13 +622,6 @@ swift run mere.run text code \
   --prompt "Write a compact Swift Result helper."
 ```
 
-### Experimental LFM2.5 24B-A2B mixed precision
-
-The native LFM2 runtime can load the developer tool's `mixed6-8-quality` folder.
-This 23.94 GB derivative uses six- and eight-bit expert banks, FP16 affine
-metadata, an original-precision trunk, and explicit FP32 activations. It has no
-managed download. See the [conversion recipe and qualification limits](../benchmarks/lfm25-24b-a2b-integration-2026-10-13.md).
-
 ### Embeddings
 
 ```bash

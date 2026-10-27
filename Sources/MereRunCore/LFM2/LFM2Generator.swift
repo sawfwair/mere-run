@@ -131,6 +131,7 @@ private final class LFM2BatchedDecodeRow: @unchecked Sendable {
 }
 
 public actor LFM2Generator: ChatGenerator {
+    private static let prefillChunkSize = 512
     private static let prefixKVCacheMaxEntries = 4
 
     static func prefillTokensPerSecond(
@@ -880,10 +881,7 @@ public actor LFM2Generator: ChatGenerator {
                 tokenBudget: tokenBudget,
                 historySeedTokens: promptTokens
             ),
-            stepForward: { token in
-                LFM2DecodeCachePolicy.clearIfNeeded(config: model.config)
-                return model(token, cache: layerCaches)
-            },
+            stepForward: { token in model(token, cache: layerCaches) },
             decodeToken: { tokenizerAndTemplate.decode(token: $0) },
             emitPiece: { _, piece in
                 progressHandler?(ChatProgress(stage: .generating, message: piece))
@@ -1014,7 +1012,6 @@ public actor LFM2Generator: ChatGenerator {
     ) throws {
         let sampledRows = rows.filter(\.needsDecodeStep)
         guard !sampledRows.isEmpty else { return }
-        LFM2DecodeCachePolicy.clearIfNeeded(config: model.config)
 
         var tokenArrays: [MLXArray] = []
         tokenArrays.reserveCapacity(sampledRows.count)
@@ -1197,7 +1194,7 @@ public actor LFM2Generator: ChatGenerator {
             let end = RuntimePrefillCheckpointPlanner.nextEnd(
                 processed: offset,
                 total: promptTokens.count,
-                chunkSize: model.config.prefillChunkSize(promptTokens: promptTokens.count),
+                chunkSize: Self.prefillChunkSize,
                 checkpoints: checkpointTokenCounts
             )
             let chunk = Array(promptTokens[offset..<end])
@@ -1222,7 +1219,6 @@ public actor LFM2Generator: ChatGenerator {
             )
             logits = output.logits
             hidden = output.hidden
-            if model.config.useFP32Activations { MLX.Memory.clearCache() }
             offset = end
             if let modelPath,
                let priority = RuntimePrefillCheckpointPlanner.storagePriority(

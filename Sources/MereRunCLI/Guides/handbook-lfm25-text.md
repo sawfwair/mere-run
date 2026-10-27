@@ -44,12 +44,6 @@ mere.run model pull text-chat-lfm25-24b-a2b-bf16 --accept-model-license
 mere.run text chat --model text-chat-lfm25-24b-a2b-bf16 --prompt "What is 17 * 23?"
 ```
 
-For an experimental local mixed 6/8-bit 24B-A2B folder, select the folder with
-`--model` and `--model-root`. Use temperature 0.1, top-p 1, top-k 50, and eight-bit
-KV. Start with an 8,192-token context and enough generation tokens for reasoning.
-The conversion preserves the non-expert trunk and uses explicit FP32 activations.
-It has bounded diagnostic evidence and is not a fully qualified managed release.
-
 ## Iterate and review
 
 If a small model misses a long requirement list, simplify the task and add one
