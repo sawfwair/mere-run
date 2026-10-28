@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.66.0 - 2026-10-28
+
+- Refresh the bundled DwarfStar runtime to upstream `ee7e8405232c`, including
+  the Metal compressed-attention causality fix, DeepSeek V4.1 Flash engine
+  support, and CUDA SSD-streamed prefill improvements. Rebuild the macOS
+  executables for macOS 15 and the Apple M1 CPU baseline. The managed premier
+  tier remains the pinned V4 Flash 0731 checkpoint; V4.1 requires separate
+  weights and memory policy.
+
 - Add native Recursive Flint chat and tool-history support for the original BF16
   checkpoint and published MLX INT4 export, with pinned artifact verification
   and full/sliding attention caches. Ignore hidden filesystem metadata when
@@ -81,13 +90,6 @@ The format is based on Keep a Changelog.
   shared-asset submission, bounded fleet admission, ordered verified results, and
   `graph batch submit`, `inspect`, `watch`, `fetch`, `cancel`, and `retry` commands.
   Each child executes its entire graph on one worker.
-
-- Refresh the bundled DwarfStar runtime to upstream `ee7e8405232c`, including
-  the Metal compressed-attention causality fix, DeepSeek V4.1 Flash engine
-  support, and CUDA SSD-streamed prefill improvements. Rebuild the macOS
-  executables for macOS 15 and the Apple M1 CPU baseline. The managed premier
-  tier remains the pinned V4 Flash 0731 checkpoint; V4.1 requires separate
-  weights and memory policy.
 
 - Build bundled MLX shaders with Metal 3.2 and a macOS 15.0 deployment target,
   including the library link step, so Xcode 26 builds load on supported macOS 15
