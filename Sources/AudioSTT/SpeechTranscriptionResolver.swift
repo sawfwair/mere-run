@@ -28,11 +28,13 @@ public enum SpeechTranscriptionResolver {
         var plan: SpeechTranscriptionPlan
         switch decision.backend {
         case .nemotron:
+            let root = existingPath(from: effectiveOverride)
             plan = SpeechTranscriptionPlan(
                 request: request, decision: decision,
-                modelID: effectiveOverride.flatMap { NemotronTranscribeResources.handles($0) || existingPath(from: $0) != nil ? nil : $0 }
-                    ?? NemotronTranscribeResources.modelID,
-                modelPath: existingPath(from: effectiveOverride)?.path, provider: parakeetExecutionProvider
+                modelID: effectiveOverride.flatMap { NemotronTranscribeResources.managedModelID(for: $0) }
+                    ?? root.map(NemotronTranscribeResources.managedModelID(at:))
+                    ?? effectiveOverride ?? NemotronTranscribeResources.modelID,
+                modelPath: root?.path, provider: parakeetExecutionProvider
             )
         case .whistle:
             plan = SpeechTranscriptionPlan(

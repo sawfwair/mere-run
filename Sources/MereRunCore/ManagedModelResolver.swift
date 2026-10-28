@@ -228,6 +228,17 @@ public enum ManagedModelResolver {
         let spec = try requiredSpec(id: id)
         let modelDir = spec.managedInstallRootURL()
 
+        if spec.validationKind == .nemotronTranscribe {
+            let lock = try ModelStorageFileLock.acquire(
+                hubDirectory: HubSnapshot.resolvedDownloadBase(requested: hubCacheURL, fileManager: fileManager),
+                fileManager: fileManager
+            )
+            defer { lock.unlock() }
+            try NemotronTranscribeResources.preserveLegacyBF16Install(
+                modelsRoot: modelDir.deletingLastPathComponent(), fileManager: fileManager
+            )
+        }
+
         if !force, isManagedInstallComplete(spec: spec, at: modelDir, fileManager: fileManager) {
             let manifest = try? MereRunModelManifest.loadIfPresent(from: modelDir, fileManager: fileManager)
             return InstallResult(spec: spec, installURL: modelDir, manifest: manifest, wasAlreadyInstalled: true)

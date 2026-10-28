@@ -273,7 +273,7 @@ public extension ManagedModelSpec {
         case .parakeet:
             return Self.missingParakeetPaths(in: rootURL, fileManager: fileManager)
         case .nemotronTranscribe:
-            return Self.missingFiles(NemotronTranscribeResources.files, in: rootURL, fileManager: fileManager)
+            return NemotronTranscribeResources.missingFiles(modelID: id, root: rootURL, fileManager: fileManager)
         case .whistle:
             return Self.missingFiles(
                 ["config.json", "whistle.cact"], in: rootURL, fileManager: fileManager

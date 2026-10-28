@@ -140,6 +140,7 @@ an effective overlay; they are not a second capability catalog.
 | `vision-chat` | `vision-chat-lfm25-3b-8bit` |
 | `vision-chat` | `vision-chat-lfm25-3b-bf16` |
 | `speech-asr` | `speech-asr-nemotron-35-transcribe` |
+| `speech-asr` | `speech-asr-nemotron-35-transcribe-bf16` |
 | `speech-tts` | `speech-tts-drama-3` |
 | `speech-tts` | `speech-tts-phonon-31m` |
 | `speech-asr` | `speech-asr-whistle` |
@@ -243,6 +244,16 @@ an effective overlay; they are not a second capability catalog.
 | `vision-embed` | `vision-embed-olmoearth-v12-small` |
 | `vision-embed` | `vision-embed-olmoearth-v12-base` |
 <!-- managed-model-catalog:end -->
+
+`speech-asr-nemotron-35-transcribe` downloads the published
+[Sawfwair routed-expert INT4 conversion](https://huggingface.co/Sawfwair/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-MLX-4bit)
+at immutable revision `c20414875a76f4b9de213a4a084c9731069a29b3`.
+The 25.09 GB artifact retains original tensor precision outside the 46 routed
+expert projections. `speech-asr-nemotron-35-transcribe-bf16` retains NVIDIA's
+67.5 GB original at `ef905575a106fdad904f3b0ce661dccad654607d`.
+Both use OpenMDW-1.1 and require explicit installation/license acceptance.
+See [Nemotron Transcribe](./runtime/nemotron-transcribe.md) for usage,
+existing-install preservation, and the measured accuracy/memory tradeoff.
 
 ### Restricted model downloads
 

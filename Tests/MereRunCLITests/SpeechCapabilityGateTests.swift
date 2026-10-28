@@ -128,7 +128,8 @@ private func temporaryFolder() throws -> URL {
                             task: task, language: language, preferredBackend: backend, modelOverride: model
                         )
                     } catch let issue as SpeechTranscriptionIssue {
-                        #expect(backend == .whistle || backend == .nemotron || backend == .auto && (model == WhistleGenerator.modelID || model == NemotronTranscribeResources.modelID), "\(context)")
+                        #expect(backend == .whistle || backend == .nemotron || backend == .auto
+                            && (model == WhistleGenerator.modelID || model.map(NemotronTranscribeResources.handles) == true), "\(context)")
                         #expect(issue.code == "unsupported_task" || issue.code == "unsupported_language", "\(context)")
                         continue
                     }

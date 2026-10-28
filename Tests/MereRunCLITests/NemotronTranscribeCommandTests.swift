@@ -14,7 +14,8 @@ final class NemotronTranscribeCommandTests: XCTestCase {
     }
 
     func testCapabilityGateSupportsOfflineTranscriptionAndTranslation() throws {
-        for flags in [["--backend", "nemotron"], ["--model", NemotronTranscribeResources.modelID, "--task", "translate"]] {
+        for flags in [["--backend", "nemotron"], ["--model", NemotronTranscribeResources.modelID, "--task", "translate"],
+                      ["--model", NemotronTranscribeResources.bf16ModelID, "--task", "translate"]] {
             let report = try XCTUnwrap(CLICapabilityGate.evaluate(commandLine: ["speech", "transcribe", "audio.wav", "--no-timestamps"] + flags)).report
             XCTAssertEqual(report.family, "nemotron-transcribe")
             XCTAssertEqual(report.violations, [])
@@ -24,7 +25,8 @@ final class NemotronTranscribeCommandTests: XCTestCase {
     }
 
     func testRejectsStreamingBeforeLoading() {
-        for selection in [["--backend", "nemotron"], ["--model", NemotronTranscribeResources.modelID]] {
+        for selection in [["--backend", "nemotron"], ["--model", NemotronTranscribeResources.modelID],
+                          ["--model", NemotronTranscribeResources.bf16ModelID]] {
             XCTAssertThrowsError(try SpeechTranscribe.parse(["audio.wav", "--stream"] + selection))
         }
     }

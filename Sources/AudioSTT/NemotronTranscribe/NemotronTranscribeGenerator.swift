@@ -23,7 +23,8 @@ public actor NemotronTranscribeGenerator {
             throw SpeechTranscriptionIssue("invalid_max_tokens", "Maximum transcription tokens must be positive.")
         }
         let resolved = try await ManagedModelResolver.resolveForRuntime(
-            requestedModel: modelPath ?? modelID, defaultModelID: NemotronTranscribeResources.modelID)
+            requestedModel: modelPath ?? modelID,
+            defaultModelID: NemotronTranscribeResources.managedModelID(for: modelID) ?? NemotronTranscribeResources.modelID)
         return try await MLXRequestStreams.withStream(isolation: self) {
             await Task.yield()
             try Task.checkCancellation()

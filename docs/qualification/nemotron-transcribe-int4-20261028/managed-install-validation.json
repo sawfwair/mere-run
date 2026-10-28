@@ -1,0 +1,52 @@
+{
+  "status": "passed-transcription-receipt-check-blocked",
+  "repository": "Sawfwair/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-MLX-4bit",
+  "revision": "c20414875a76f4b9de213a4a084c9731069a29b3",
+  "publication_files": 46,
+  "published_bytes": 25085565732,
+  "installation": "Standard managed force-pull with payload reuse after resolution and verification of the public immutable Hub revision. All 45 installed published files except the locally rewritten manifest were SHA-256 verified again before transcription.",
+  "legacy_bf16_preserved": true,
+  "default_precision": "int4",
+  "bf16_model_id": "speech-asr-nemotron-35-transcribe-bf16",
+  "mlx_enable_tf32": "0",
+  "binary_sha256": "40e306b8e9cd55b699eee29f50a22bbd55cf706ed91f2ea4cd929fe13d05df23",
+  "cases": [
+    {
+      "case": "preserve-bf16",
+      "exit_code": 0,
+      "wall_seconds": 1.8772609579991695
+    },
+    {
+      "case": "pull-int4",
+      "exit_code": 0,
+      "wall_seconds": 10.414110124998842
+    },
+    {
+      "case": "default-int4",
+      "exit_code": 0,
+      "wall_seconds": 4.929847958001119,
+      "transcript": "The parcel arrived on time, but the glass inside was broken.",
+      "reference_words": 11,
+      "word_errors": 0,
+      "wer": 0,
+      "model_id": "speech-asr-nemotron-35-transcribe",
+      "durable_run_state": null,
+      "receipt_verified": false,
+      "receipt_verification_gap": "macOS completeUnlessOpen file protection while screen locked"
+    },
+    {
+      "case": "explicit-bf16",
+      "exit_code": 0,
+      "wall_seconds": 14.505485166000653,
+      "transcript": "The parcel arrived on time, but the glass inside was broken.",
+      "reference_words": 11,
+      "word_errors": 0,
+      "wer": 0,
+      "model_id": "speech-asr-nemotron-35-transcribe-bf16",
+      "durable_run_state": null,
+      "receipt_verified": false,
+      "receipt_verification_gap": "macOS completeUnlessOpen file protection while screen locked"
+    }
+  ],
+  "validation_gap": "Both real CLI transcriptions exited zero with exact text. The Mac locked during the check; final protected run receipts require unlock for rereading. The local full gate encountered the same protected-file read restriction. File protection was not modified."
+}

@@ -102,10 +102,10 @@ From the repository root (the comparison script requires Python 3.11 or later):
 ```bash
 swift build --build-system native -c release --product mere.run
 uv run scripts/model-conversion/quantize_nemotron_transcribe_experts.py \
-  --source "$HOME/Library/Application Support/MereRun/models/speech-asr-nemotron-35-transcribe" \
+  --source "$HOME/Library/Application Support/MereRun/models/speech-asr-nemotron-35-transcribe-bf16" \
   --output /absolute/path/to/experts-int4
 python3 scripts/validation/compare_nemotron_transcribe.py \
-  --bf16 "$HOME/Library/Application Support/MereRun/models/speech-asr-nemotron-35-transcribe" \
+  --bf16 "$HOME/Library/Application Support/MereRun/models/speech-asr-nemotron-35-transcribe-bf16" \
   --int4 /absolute/path/to/experts-int4 \
   --archive /absolute/path/to/dev-clean-2.tar.gz \
   --output /absolute/path/to/new-comparison --repeats 3
@@ -127,3 +127,26 @@ used only for selection/scoring, never provided in the model prompt.
 These small English cases do not establish general accuracy equivalence.
 No noisy/far-field speech, multilingual or translation accuracy, hour-long
 recordings, or minimum-memory hardware configuration was qualified.
+
+## Publication and managed-default integration
+
+The [public INT4 checkpoint](https://huggingface.co/Sawfwair/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-MLX-4bit)
+is pinned at `c20414875a76f4b9de213a4a084c9731069a29b3`.
+`huggingface-publication.json` records the verified public file closure:
+46 files, 25,085,565,732 bytes, with all weight and metadata SHA-256 values.
+
+The managed default is `speech-asr-nemotron-35-transcribe` (INT4), with
+`speech-asr-nemotron-35-transcribe-bf16` for the original checkpoint.
+A real managed force-pull resolved the public immutable revision and reused
+local payloads only after checking them against remote metadata. All 45
+installed published files except the locally rewritten consent manifest were
+SHA-256 verified again. The legacy BF16 install was preserved under its
+explicit ID before replacement. Both the default INT4 route and explicit BF16
+route exited zero and emitted the exact 11-word reference sentence.
+
+`managed-install-validation.json` records these integration checks separately
+from the earlier latency benchmark. The Mac locked during the check;
+`completeUnlessOpen` file protection then blocked rereading the private run
+receipts. The local full gate encountered the same protected-record read
+restriction in 30 persistence test cases. File protection was not modified.
+The PR's CI runs the standard full gate independently.

@@ -53,13 +53,16 @@ sentence. All 19 focused tests passed on Metal with the installed checkpoint.
 
 ## Reproduce
 
+The historical default ID in `report.json` selected BF16 when measured.
+Reproduction now uses the explicit BF16 model ID.
+
 ```bash
 swift build --build-system native -c release --product mere.run
-.build/release/mere.run model pull speech-asr-nemotron-35-transcribe --accept-model-license
+.build/release/mere.run model pull speech-asr-nemotron-35-transcribe-bf16 --accept-model-license
 .build/release/mere.run speech transcribe Tests/MereRunCoreTests/Fixtures/D1/released/speech.wav \
-  --backend nemotron --max-tokens 96 --run-dir ./asr-short-validation
+  --backend nemotron --model speech-asr-nemotron-35-transcribe-bf16 --max-tokens 96 --run-dir ./asr-short-validation
 .build/release/mere.run speech transcribe Tests/MereRunCoreTests/Fixtures/Nemotron3/returning-speaker.wav \
-  --backend nemotron --max-tokens 512 --run-dir ./asr-human-validation
+  --backend nemotron --model speech-asr-nemotron-35-transcribe-bf16 --max-tokens 512 --run-dir ./asr-human-validation
 ```
 
 Use new run directories for each invocation. The native SwiftPM build system
@@ -70,7 +73,7 @@ Run the installed-checkpoint and numerical regressions with:
 
 ```bash
 MLX_ENABLE_TF32=0 MERERUN_TEST_MLX_DEVICE=gpu \
-MERERUN_TEST_NEMOTRON_TRANSCRIBE_PATH="$HOME/Library/Application Support/MereRun/models/speech-asr-nemotron-35-transcribe" \
+MERERUN_TEST_NEMOTRON_TRANSCRIBE_PATH="$HOME/Library/Application Support/MereRun/models/speech-asr-nemotron-35-transcribe-bf16" \
   swift test --build-system native --filter NemotronTranscribe
 ```
 

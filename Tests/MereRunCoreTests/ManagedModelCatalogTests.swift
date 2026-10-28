@@ -243,6 +243,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "image-ideogram4-sdnq-uint4",
             Nemotron3DiarizationResources.modelID,
             NemotronTranscribeResources.modelID,
+            NemotronTranscribeResources.bf16ModelID,
             "text-chat-lfm25-a1b-8bit",
             "text-chat-lfm25-a1b-bf16",
             "text-chat-lfm25-24b-a2b-bf16",

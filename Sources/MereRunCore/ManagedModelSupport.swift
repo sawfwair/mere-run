@@ -861,7 +861,14 @@ public enum ManagedModelCapabilityCatalog {
             descriptor(
                 NemotronTranscribeResources.modelID,
                 "Nemotron 3.5 Transcribe",
-                "Native BF16 offline transcription and speech translation in 40 languages.",
+                "Native offline transcription and speech translation with 4-bit routed experts.",
+                minimum: 32,
+                recommended: 48
+            ),
+            descriptor(
+                NemotronTranscribeResources.bf16ModelID,
+                "Nemotron 3.5 Transcribe BF16",
+                "Original BF16 offline transcription and speech translation in 40 languages.",
                 minimum: 96,
                 recommended: 128
             ),
