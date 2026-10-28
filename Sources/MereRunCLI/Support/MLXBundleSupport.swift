@@ -35,7 +35,7 @@ enum MLXBundleSupport {
       coreRevision: "735d48ca1436dc2648073c548715af3aea5d32c7",
       upstreamTag: "v0.32.4",
       upstreamRevision: "36969c094354086e15d2a327a9c50feb20b9cf11",
-      swiftRevision: "508951990d5d1cfee749602243ccf92935696d85",
+      swiftRevision: "0fd8ba07f6fcc3540c2c02709592d7dfab52279c",
       kernelSourcesSHA256: "fa09ca655de6f70381043762d7d02bc20e9debe49996904624f5dae3d0f40b35",
       metalLanguageVersion: "3.2",
       macOSDeploymentTarget: "15.0"
