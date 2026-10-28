@@ -134,6 +134,17 @@ public actor LFM2Generator: ChatGenerator {
     private static let prefillChunkSize = 512
     private static let prefixKVCacheMaxEntries = 4
 
+    static func nextPrefillEnd(processed: Int, total: Int, checkpoints: Set<Int> = []) -> Int {
+        // Match upstream's one-token forward for the first generation logits.
+        let chunkTotal = processed < total - 1 ? total - 1 : total
+        return RuntimePrefillCheckpointPlanner.nextEnd(
+            processed: processed,
+            total: chunkTotal,
+            chunkSize: prefillChunkSize,
+            checkpoints: checkpoints
+        )
+    }
+
     static func prefillTokensPerSecond(
         promptTokenCount: Int,
         prefillSeconds: Double
@@ -317,7 +328,7 @@ public actor LFM2Generator: ChatGenerator {
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading LFM2 tokenizer"))
         let tokenizer = try await LFM2TokenizerAndTemplate.load(
             from: normalizedRoot,
-            maxLengthOverride: min(LFM2Resources.defaultContextLength, config.maxPositionEmbeddings)
+            maxLengthOverride: config.maxPositionEmbeddings
         )
         try Task.checkCancellation()
         try requireCurrentResidency(loadEpoch)
@@ -510,14 +521,11 @@ public actor LFM2Generator: ChatGenerator {
         }
         let residencyEpoch = decodeLoopEpochState.residencyEpoch
 
-        let requestedContextLength = request.maxContextTokens ?? LFM2Resources.defaultContextLength
-        guard requestedContextLength > 0 else {
-            throw LFM2Error.generationFailed("maxContextTokens must be greater than zero.")
-        }
-        let effectiveContext = min(
-            LFM2Resources.defaultContextLength,
-            requestedContextLength,
-            loadedConfig.maxPositionEmbeddings
+        let contextLimit = ManagedModelCatalog.apiProfile(for: modelId)?.contextWindow
+            ?? (loadedConfig.isA2B24B ? LFM2Resources.a2b24BContextLength : LFM2Resources.defaultContextLength)
+        let effectiveContext = try loadedConfig.contextLength(
+            requested: request.maxContextTokens,
+            runtimeLimit: contextLimit
         )
 
         let prefillStart = Date()
@@ -1194,10 +1202,9 @@ public actor LFM2Generator: ChatGenerator {
         while offset < promptTokens.count {
             try Task.checkCancellation()
             try requireCurrentResidency(residencyEpoch)
-            let end = RuntimePrefillCheckpointPlanner.nextEnd(
+            let end = Self.nextPrefillEnd(
                 processed: offset,
                 total: promptTokens.count,
-                chunkSize: Self.prefillChunkSize,
                 checkpoints: checkpointTokenCounts
             )
             let chunk = Array(promptTokens[offset..<end])

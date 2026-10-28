@@ -97,7 +97,8 @@ enum SmallBatchAffineQMV {
                         a1[m] = static_cast<float>(xv[1]);
                         a2[m] = static_cast<float>(xv[2]);
                         a3[m] = static_cast<float>(xv[3]);
-                        sums[m] += xv[0] + xv[1] + xv[2] + xv[3];
+                        // Match the FP32 bias sum in MLX's load_vector.
+                        sums[m] += a0[m] + a1[m] + a2[m] + a3[m];
                     }
                     for (int r = 0; r < rows_per_simd; r++) {
                         partial[r] +=

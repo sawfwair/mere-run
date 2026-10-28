@@ -51,7 +51,8 @@ swiftpm() {
 swiftpm build
 ./scripts/build_mlx_metallib.sh \
   --verify-only vendor/mlx-swift_Cmlx.bundle
-swiftpm test
+# Numerical fixtures compare against FP32 references, as in upstream MLX tests.
+MLX_ENABLE_TF32=0 swiftpm test
 mere_run_bin=".build/debug/mere.run"
 if [[ ! -x "$mere_run_bin" ]]; then
   echo "Expected built executable at $mere_run_bin after swift build." >&2

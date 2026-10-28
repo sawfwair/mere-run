@@ -6,6 +6,27 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Match serial MLX QMV arithmetic in small-batch affine-Q4 verification by
+  promoting BF16 inputs before summing the bias correction. Restore bit-exact
+  small and wide batching without changing comparison tolerances.
+
+- Refresh the pinned MLX core to v0.32.4 and the Swift bridge through upstream
+  0.32.3, preserving owned runtime patches and reusable request streams.
+  Rebuild the Metal bundle and enforce the new dependency and kernel provenance.
+  Keep the refreshed C-binding I/O diagnostics compatible with Ubuntu 22.04's
+  C++ library.
+  Scope the generation-17 NAX workaround to quantized dispatch, restoring
+  upstream floating-point matmul and attention for original BF16 checkpoints.
+
+- Add `text-chat-lfm25-24b-a2b-bf16`, a pinned native reasoning MoE install
+  that loads original LiquidAI safetensors. Expose its declared 131,072-token
+  context and required reasoning profile without changing existing model IDs or defaults.
+  Bounded answers, tools, and the exact 127,242-token native retrieval probe
+  pass on an M5 Max. Process the final LFM2 prompt token in a separate forward
+  to match upstream initialization of the first generation logits.
+- Correct LFM2 MoE routing, honor tokenizer `ignore_merges`, and align tool-history
+  reasoning, JSON spacing, and Python scalar arguments with the upstream template.
+
 - Add native DRAMA-3 speech synthesis, reference cloning, inline speaker and event
   tags, and causal audio streaming. `speech-tts-drama-3` downloads the pinned
   `Sawfwair/DRAMA-3-MLX-4bit` expert-only Q4 export with license, checksums, and

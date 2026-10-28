@@ -817,6 +817,30 @@ extension ManagedModelCatalog {
             apiProfile: .lfm2()
         ),
         ManagedModelSpec(
+            id: LFM2Resources.a2b24BBF16ModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: LFM2Resources.a2b24BUpstreamRepoId,
+                revision: LFM2Resources.a2b24BUpstreamRevision,
+                patterns: LFM2Resources.snapshotPatterns
+            ),
+            upstreamRepoId: LFM2Resources.a2b24BUpstreamRepoId,
+            upstreamRevision: LFM2Resources.a2b24BUpstreamRevision,
+            usageRestriction: usageRestriction(
+                summary: "LFM uses a custom open license; commercial use by entities with at least USD 10M annual revenue is not licensed under its community terms.",
+                license: "LFM Open License v1.0",
+                sourceRepoId: LFM2Resources.a2b24BUpstreamRepoId,
+                sourceRevision: LFM2Resources.a2b24BUpstreamRevision,
+                licenseURL: "https://huggingface.co/LiquidAI/LFM2.5-24B-A2B/blob/\(LFM2Resources.a2b24BUpstreamRevision)/LICENSE"
+            ),
+            validationKind: .lfm2,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: LFM2Resources.a2b24BEstimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve"],
+            apiProfile: .lfm2(contextWindow: LFM2Resources.a2b24BContextLength, thinkingLevels: [.high])
+        ),
+        ManagedModelSpec(
             id: LFM2Resources.smallModelId,
             category: .textChat,
             installShape: .directoryRoot,

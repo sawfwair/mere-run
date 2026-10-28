@@ -686,6 +686,13 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                LFM2Resources.a2b24BBF16ModelId,
+                "LFM2.5 24B-A2B BF16",
+                "Runs LiquidAI's reasoning and tool-use MoE directly from original BF16 safetensors.",
+                minimum: 64,
+                recommended: 96
+            ),
+            descriptor(
                 LFM2Resources.smallModelId,
                 "LFM2.5 1.2B BF16",
                 "Runs the compact LiquidAI LFM2.5 1.2B Instruct checkpoint with its optional native DSpark accelerator.",

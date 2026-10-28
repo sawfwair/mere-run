@@ -5,6 +5,7 @@ Native Swift MLX runtime for LiquidAI LFM2 text and vision-language checkpoints.
 ## Managed models
 
 - `text-chat-lfm25-a1b-8bit` — `LiquidAI/LFM2.5-8B-A1B-MLX-8bit`
+- `text-chat-lfm25-24b-a2b-bf16` — original LiquidAI 24B-A2B reasoning MoE safetensors
 - `text-chat-lfm25-a1b-bf16` — `LiquidAI/LFM2.5-8B-A1B` with DSpark
 - `text-chat-lfm25-1.2b-bf16` — `LiquidAI/LFM2.5-1.2B-Instruct`
 - `text-chat-lfm25-1.2b-qad-4bit` — deterministic native-MLX conversion of
@@ -18,7 +19,7 @@ Native Swift MLX runtime for LiquidAI LFM2 text and vision-language checkpoints.
 - `vision-chat-lfm25-3b-bf16` — `LiquidAI/LFM2.5-VL-3B-MLX-bf16` with DSpark
 - Serving engine: `text-chat-lfm2`
 
-The runtime loads MLX-converted directory-root snapshots with:
+The runtime loads original BF16 and MLX-quantized directory-root snapshots with:
 
 - `config.json`
 - `tokenizer.json`
@@ -38,8 +39,8 @@ layouts:
 - dense `w1`/`w2`/`w3` feed-forward layers for `Lfm2ForCausalLM`
 - dense `gate_proj`/`up_proj`/`down_proj` layers for the MoE model's configured
   dense prefix
-- sparse MoE feed-forward layers with router top-k, optional `expert_bias`, and
-  `SwitchGLU` expert projections
+- sparse MoE feed-forward layers with sigmoid router top-k, selection-only
+  `expert_bias`, routed scaling, and `SwitchGLU` expert projections
 
 `LFM2VLModel.swift` adds the packed-patch SigLIP2 NaFlex encoder, resized
 positional embeddings, factor-2 pixel unshuffle, and multimodal projector used
@@ -52,6 +53,9 @@ downloads through `ManagedModelResolver`, loads tokenizer/template resources,
 applies sharded safetensor weights with `HFSafetensorsWeightsLoader`, pre-fills
 in cancellable chunks, then uses either the pipelined serial loop or the
 row-compacting continuous decode scheduler selected by the serving runtime.
+The final prompt token uses a separate one-token forward, matching upstream
+initialization of the first generation logits. Prefix-cache resumes and
+semantic checkpoints keep the same terminal-token boundary.
 
 The A1B 8-bit text model also supports attention-only low-rank adaptation
 (LoRA) training and loading. `LFM2TextLoRAInjector.swift` wraps only the
@@ -60,7 +64,7 @@ Convolution output projections and MoE expert matrices remain frozen. The
 training path turns off the inference-only fused affine-8 MoE kernel so that
 MLX can differentiate through the frozen base graph.
 
-For BF16 text and vision targets, the managed catalog also installs a matching
+For the smaller BF16 text and vision targets, the managed catalog also installs a matching
 pinned `*-dspark` companion. `LFM2DSpark.swift` projects hidden states captured
 at five configured target layers into the drafter. Text drafters have five
 attention layers and propose up to nine tokens per round. The vision drafter
@@ -109,3 +113,13 @@ fall back to MLX's portable gather path.
   evaluating the model. Overlapping requests use separate contexts. Completed
   and cancelled requests synchronize their submitted work before returning the
   context for reuse, so sequential requests do not accumulate backend streams.
+
+The tokenizer adapter honors `ignore_merges`; tool schemas and reasoning history
+follow the upstream template. The 24B-A2B BF16 target has no DSpark companion.
+
+The opt-in `LFM25A2BInstalledQualificationTests` exercise the original checkpoint
+through the production loader. Set `MERERUN_LFM25_A2B_BF16_ROOT` to its installed
+directory and `MERERUN_TEST_MLX_DEVICE=gpu`, then run `swift test --filter
+LFM25A2BInstalledQualificationTests`. These checks assert real tokenizer parity,
+completed answers, a tool round trip, and retrieval across chunked prefill.
+They require sufficient memory for the original approximately 48 GB weights.

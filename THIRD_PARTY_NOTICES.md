@@ -1015,15 +1015,19 @@ limitations under the License.
 - purpose: bundled MLX Metal shader resources used by MLX-backed runtime paths
 - source project: [`sawfwair/mlx-swift`](https://github.com/sawfwair/mlx-swift),
   based on upstream [`ml-explore/mlx-swift`](https://github.com/ml-explore/mlx-swift)
-  0.32.1
-- pinned package revision: `001d1aa3e5655d7efc073fb9632f952f57cdf528`
-- embedded MLX revision: `11da2b33a51772c023e2f7d7bc4ba9b3ff7e03ef`
-- incorporated upstream MLX v0.32.1 revision:
-  `3a6219917e4535575ce5bce2fc2ba27a483a709b`
+  0.32.3
+- pinned package revision: `0fd8ba07f6fcc3540c2c02709592d7dfab52279c`
+- embedded MLX revision: `735d48ca1436dc2648073c548715af3aea5d32c7`
+- embedded C bindings: [`sawfwair/mlx-c`](https://github.com/sawfwair/mlx-c),
+  revision `dc502b106252d1899e93dd6f6da0a77a2366e80b`, based on upstream
+  `ml-explore/mlx-c` revision `57731b00e8bed710e0750e7356da9f18f8eb3e20`;
+  MIT license
+- incorporated upstream MLX v0.32.4 revision:
+  `36969c094354086e15d2a327a9c50feb20b9cf11`
 - generated-kernel and required core AOT source SHA-256:
-  `36412403ff4f0117579f0bc4471a17083411422bfc446f9f11420614ddbeb9ee`
+  `fa09ca655de6f70381043762d7d02bc20e9debe49996904624f5dae3d0f40b35`
 - build compatibility: Metal Shading Language 3.2, macOS deployment target 15.0
-  for compilation and linking; rebuilt with Xcode 26.4 for macOS 15 support
+  for compilation and linking; rebuilt for macOS 15 support
 - license: MIT
 
 ```
@@ -1603,6 +1607,16 @@ and Clef joint schema scoring. The synthetic fixtures under
 untrained weights, exported by `scripts/fixtures/export-clef-omni-reference.py`.
 They contain no original checkpoint weights. The Apache-2.0 license is retained
 in `licenses/clef-APACHE-2.0.txt`.
+
+## LFM2.5 24B-A2B native integration
+
+- checkpoint: [LiquidAI/LFM2.5-24B-A2B](https://huggingface.co/LiquidAI/LFM2.5-24B-A2B/tree/1769516ac588c4c558089c94f27d96b0dc67b183)
+- publisher license: LFM Open License v1.0; weights are downloaded separately
+  after explicit license acknowledgement
+- local code: the existing native Swift/MLX runtime in `Sources/MereRunCore/LFM2`
+- changes: pinned managed-model metadata, declared context, reasoning defaults,
+  and sigmoid MoE routing with selection-only expert bias and routed scaling
+- no trained weights or tokenizer are bundled in this repository
 
 ## D1 native decision implementation
 
