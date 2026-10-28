@@ -11,6 +11,7 @@ extension MereRunCapabilityCatalog {
     }
 
     enum SpeechTranscribeFamily: String, MereRunFamilyID {
+        case nemotronTranscribe = "nemotron-transcribe"
         case parakeet
         case whistle
         case qwen3ASR = "qwen3-asr"
@@ -44,6 +45,7 @@ extension MereRunCapabilityCatalog {
     static let speechTranscribeRouting = MereRunCapabilityRouting(
         modelFlags: ["--model"],
         defaultModels: [
+            .init(whenAny: [.init(flag: "--backend", values: ["nemotron"])], models: ["speech-asr-nemotron-35-transcribe"]),
             .init(whenAny: [.init(flag: "--backend", values: ["whistle"])], models: ["speech-asr-whistle"]),
             .init(
                 whenAny: [
@@ -56,6 +58,9 @@ extension MereRunCapabilityCatalog {
             .always("speech-asr-parakeet")
         ],
         families: [
+            .init(SpeechTranscribeFamily.nemotronTranscribe, title: "Nemotron 3.5 Transcribe",
+                  models: ["speech-asr-nemotron-35-transcribe"],
+                  selectors: [.init(flag: "--backend", values: ["auto", "nemotron"])]),
             .init(
                 SpeechTranscribeFamily.whistle, title: "Whistle", models: ["speech-asr-whistle"],
                 selectors: [.init(flag: "--backend", values: ["auto", "whistle"])]

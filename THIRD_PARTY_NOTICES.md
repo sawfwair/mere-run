@@ -1829,3 +1829,20 @@ The managed `gradium/phonon-31m-en` checkpoint at
 and bundled voice under Apache-2.0. The tokenizer and config fixtures in
 `Tests/AudioPhononModelTests/Fixtures` are from that revision. The 40m gated
 CC-BY-NC checkpoints are not included. Model assets are downloaded separately.
+
+### Nemotron 3.5 Transcribe native runtime
+
+- Model: [`nvidia/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B`](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B),
+  revision `ef905575a106fdad904f3b0ce661dccad654607d`, NVIDIA Corporation.
+- Model configuration and tensor inventory: OpenMDW-1.1, reproduced under
+  `Sources/AudioNemotronTranscribeModel/Resources/` and the runtime test fixtures.
+  License: `Sources/AudioNemotronTranscribeModel/LICENSE.OpenMDW-1.1`.
+- Architecture references: NVIDIA-NeMo/Speech revision
+  `1c1b25339ca2b31794ba4b299a5ea6a2c83c64b5`, specifically the Transformer
+  encoder, Parallel Expert Encoder, SALM chunking, and Nemotron 3.5 prompt
+  formatter, published under Apache-2.0. Native arithmetic is implemented in
+  Swift/MLX and reuses the repository's Mamba-2 recurrence and Nemotron
+  Sortformer branch. The scalar qualification fixture is independently
+  calculated by `scripts/reference-parity/nemotron_transcribe_reference.py`.
+- Runtime downloads retain the upstream license and third-party notices;
+  checkpoint weights are not redistributed in this source repository.

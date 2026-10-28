@@ -12,9 +12,11 @@ enum SpeechBackendOption: String, ExpressibleByArgument {
     case parakeet
     case qwen
     case whistle
+    case nemotron
 
     var backend: ASRBackend {
         switch self {
+        case .nemotron: return .nemotron
         case .whistle: return .whistle
         case .auto: return .auto
         case .parakeet: return .parakeet
@@ -45,7 +47,8 @@ struct SpeechTranscribe: AsyncParsableCommand {
         commandName: "transcribe",
         abstract: "Transcribe or translate speech to text using native ASR backends.",
         discussion: """
-        Supports native Parakeet, Qwen, and Whistle backends with policy routing.
+        Supports native Parakeet, Qwen, Whistle, and Nemotron Transcribe backends with policy routing.
+        Nemotron Transcribe supports offline BF16 transcription and English translation with explicit model installation.
         Whistle supports packed CQ2/CQ4 weights, beam search, word timestamps, and seven European languages.
         In auto mode, transcription prefers Parakeet while translation routes to Qwen.
 
@@ -71,7 +74,7 @@ struct SpeechTranscribe: AsyncParsableCommand {
     @Option(name: [.customShort("m"), .long], help: "Model ID or local model path override for the selected backend.")
     var model: String?
 
-    @Option(name: [.long], help: "ASR backend: auto, parakeet, qwen, or whistle.")
+    @Option(name: [.long], help: "ASR backend: auto, parakeet, qwen, whistle, or nemotron.")
     var backend: SpeechBackendOption = .auto
 
     @Option(
@@ -174,6 +177,11 @@ struct SpeechTranscribe: AsyncParsableCommand {
             throw ValidationError("--receipt is not available for raw streaming stdin ('-'); use --jsonl.")
         }
         if stream {
+            let route = try SpeechTranscriptionResolver.route(task: task.task, language: language,
+                                                             preferredBackend: backend.backend, modelOverride: model)
+            guard route.decision.backend != .nemotron else {
+                throw ValidationError("Nemotron Transcribe is an offline backend. Use a file input without --stream.")
+            }
             guard streamChunkMs > 0 else {
                 throw ValidationError("--stream-chunk-ms must be > 0.")
             }
@@ -500,6 +508,8 @@ struct SpeechTranscribe: AsyncParsableCommand {
         let configuration = Qwen3ASRLiveConfiguration(decodeIntervalMs: streamDecodeMs)
 
         switch route.decision.backend {
+        case .nemotron:
+            throw ValidationError("Nemotron Transcribe is an offline backend. Use a file input without --stream.")
         case .whistle:
             let generator = WhistleGenerator()
             var liveOptions = whistleOptions

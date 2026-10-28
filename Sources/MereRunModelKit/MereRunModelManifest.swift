@@ -83,6 +83,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         /// Parakeet ASR family.
         case parakeetASR = "parakeet-asr"
         case whistleASR = "whistle-asr"
+        case nemotronTranscribeASR = "nemotron-transcribe-asr"
         /// NVIDIA Sortformer speaker diarization family.
         case sortformer = "sortformer"
         /// Qwen3 embeddings family.

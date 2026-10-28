@@ -1,7 +1,7 @@
 # AudioSTT
 
 AudioSTT resolves and executes speech-recognition requests over the owned
-Parakeet, Qwen3-ASR, and Whistle runtime targets. AudioCore owns portable requests,
+Parakeet, Qwen3-ASR, Whistle, and Nemotron Transcribe runtime targets. AudioCore owns portable requests,
 results, routing policy, durable operation contracts, and live event types;
 AudioCodecs owns file decoding and resampling. Neural arithmetic stays in the
 runtime-family targets.
@@ -17,6 +17,8 @@ runtime-family targets.
   cancellation, and final events for resident file-oriented models. Parakeet's
   adapter retains overlapped-tail decoding; Whistle re-decodes whole utterances.
 - Qwen3-ASR owns its distinct live decoder/session implementation.
+- `NemotronTranscribe/` owns offline BF16 loading and transcription/English
+  translation over AudioNemotronTranscribeModel, with explicit installation.
 
 ## Whistle ownership and lifecycle
 

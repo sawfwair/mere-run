@@ -28,8 +28,8 @@ public struct SpeechTranscriptionPlan: Sendable, Hashable, Codable {
             throw SpeechTranscriptionIssue("invalid_max_tokens", "Maximum transcription tokens must be positive.")
         }
         if decision.backend == .whistle { try (request.whistle ?? WhistleOptions()).validate() }
-        guard request.task != .translate || decision.backend == .qwen else {
-            throw SpeechTranscriptionIssue("unsupported_task", "Translation requires the Qwen backend.")
+        guard request.task != .translate || decision.backend == .qwen || decision.backend == .nemotron else {
+            throw SpeechTranscriptionIssue("unsupported_task", "Translation requires the Qwen or Nemotron backend.")
         }
         if case .coreML = provider, decision.backend != .parakeet || request.task != .transcribe {
             throw SpeechTranscriptionIssue("incompatible_execution_provider", "Core ML execution requires Parakeet transcription.")
@@ -59,6 +59,11 @@ public struct SpeechTranscriptionIssue: Error, LocalizedError, Sendable, Equatab
 
 /// Supplies a native generator or borrows one from a resident runtime pool.
 public protocol SpeechTranscriptionExecutor: Sendable {
+    func transcribeNemotron(
+        request: ASRRequest, modelID: String, modelPath: String?,
+        progressHandler: (@Sendable (ASRProgress) -> Void)?
+    ) async throws -> ASRResult
+
     func transcribeWhistle(
         request: ASRRequest, modelID: String, modelPath: String?,
         progressHandler: (@Sendable (ASRProgress) -> Void)?
@@ -76,6 +81,13 @@ public protocol SpeechTranscriptionExecutor: Sendable {
 }
 
 extension SpeechTranscriptionExecutor {
+    public func transcribeNemotron(
+        request: ASRRequest, modelID: String, modelPath: String?,
+        progressHandler: (@Sendable (ASRProgress) -> Void)?
+    ) async throws -> ASRResult {
+        throw SpeechTranscriptionIssue("unsupported_backend", "This executor does not provide Nemotron Transcribe.")
+    }
+
     public func transcribeWhistle(
         request: ASRRequest, modelID: String, modelPath: String?,
         progressHandler: (@Sendable (ASRProgress) -> Void)?
@@ -131,6 +143,10 @@ public enum SpeechTranscriptionOperation {
             }
             let result: ASRResult
             switch plan.decision.backend {
+            case .nemotron:
+                result = try await executor.transcribeNemotron(
+                    request: plan.request, modelID: plan.modelID, modelPath: plan.modelPath, progressHandler: progress
+                )
             case .whistle:
                 result = try await executor.transcribeWhistle(
                     request: plan.request, modelID: plan.modelID, modelPath: plan.modelPath, progressHandler: progress

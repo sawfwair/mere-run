@@ -713,6 +713,17 @@ targets.append(
 
 targets.append(
   .target(
+    name: "AudioNemotronTranscribeModel",
+    dependencies: ["AudioSortformer"] + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/AudioNemotronTranscribeModel",
+    exclude: ["README.md", "LICENSE.OpenMDW-1.1"],
+    resources: [.process("Resources")],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
     name: "AudioQwen3ASRModel",
     dependencies: [.target(name: "MereRunKVCache")]
       + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
@@ -918,7 +929,7 @@ targets.append(
 targets.append(
   .target(
     name: "AudioSTT",
-    dependencies: audioRuntimeDependencies + ["AudioQwen3ASRModel", "AudioSortformer", "AudioParakeetModel", "AudioWhistleModel"],
+    dependencies: audioRuntimeDependencies + (hasMediaIOTarget ? ["MediaIO"] : []) + ["AudioNemotronTranscribeModel", "AudioQwen3ASRModel", "AudioSortformer", "AudioParakeetModel", "AudioWhistleModel"],
     path: "Sources/AudioSTT",
     exclude: [
       "README.md",
@@ -1288,6 +1299,19 @@ targets.append(
     name: "MereRunExecutionTests",
     dependencies: ["MereRunExecution"],
     path: "Tests/MereRunExecutionTests"
+  )
+)
+
+
+targets.append(
+  .testTarget(
+    name: "NemotronTranscribeRuntimeTests",
+    dependencies: ["AudioNemotronTranscribeModel", "MereRunMLXTestSupport"]
+      + mlxDependency("MLX") + mlxDependency("MLXNN"),
+    path: "Tests/NemotronTranscribeRuntimeTests",
+    resources: [.copy("Fixtures")],
+    swiftSettings: commonSwiftSettings,
+    linkerSettings: linuxNativeLinkerSettings
   )
 )
 

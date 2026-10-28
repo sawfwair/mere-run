@@ -27,6 +27,13 @@ public enum SpeechTranscriptionResolver {
         let effectiveOverride = route.modelOverride
         var plan: SpeechTranscriptionPlan
         switch decision.backend {
+        case .nemotron:
+            plan = SpeechTranscriptionPlan(
+                request: request, decision: decision,
+                modelID: effectiveOverride.flatMap { NemotronTranscribeResources.handles($0) || existingPath(from: $0) != nil ? nil : $0 }
+                    ?? NemotronTranscribeResources.modelID,
+                modelPath: existingPath(from: effectiveOverride)?.path, provider: parakeetExecutionProvider
+            )
         case .whistle:
             plan = SpeechTranscriptionPlan(
                 request: request, decision: decision,
@@ -81,6 +88,9 @@ public enum SpeechTranscriptionResolver {
             return inferredBackend
         }()
 
+        if effectivePreferredBackend == .nemotron {
+            _ = try NemotronTranscribeGenerator.validate(language: language)
+        }
         if effectivePreferredBackend == .whistle {
             _ = try WhistleGenerator.validate(task: task, language: language)
         }
@@ -97,7 +107,7 @@ public enum SpeechTranscriptionResolver {
             task: task,
             languageHint: routesByFolder ? nil : language,
             preferredBackend: effectivePreferredBackend,
-            availableBackends: ASRBackendAvailability(parakeetAvailable: true, qwenAvailable: true, whistleAvailable: true),
+            availableBackends: ASRBackendAvailability(parakeetAvailable: true, qwenAvailable: true, whistleAvailable: true, nemotronAvailable: true),
             parakeetSupportedLanguageCodes: parakeetCodes
         )
 
@@ -149,7 +159,8 @@ public enum SpeechTranscriptionResolver {
         _ modelOverride: String?, inferredBackend: ASRBackend, selectedBackend: ASRResolvedBackend
     ) throws -> String? {
         guard let modelOverride else { return nil }
-        let matches = inferredBackend == .qwen && selectedBackend == .qwen
+        let matches = inferredBackend == .nemotron && selectedBackend == .nemotron
+            || inferredBackend == .qwen && selectedBackend == .qwen
             || inferredBackend == .parakeet && selectedBackend == .parakeet
             || inferredBackend == .whistle && selectedBackend == .whistle
         guard !matches else { return modelOverride }
@@ -259,6 +270,7 @@ public enum SpeechTranscriptionResolver {
     private static func inferredBackendFromModelOverride(_ modelOverride: String?) -> ASRBackend {
         guard let modelOverride else { return .auto }
         if let existingPath = existingPath(from: modelOverride) {
+            if NemotronTranscribeResources.isLocalModel(existingPath) { return .nemotron }
             if FileManager.default.fileExists(atPath: existingPath.appendingPathComponent("whistle.cact").path) {
                 return .whistle
             }
@@ -276,6 +288,7 @@ public enum SpeechTranscriptionResolver {
             return .qwen
         }
 
+        if NemotronTranscribeResources.handles(modelOverride) { return .nemotron }
         let lowered = modelOverride.lowercased()
         if lowered == WhistleGenerator.modelID || lowered == "cactus-compute/whistle" { return .whistle }
         if lowered.contains("parakeet") {

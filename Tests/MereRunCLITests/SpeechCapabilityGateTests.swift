@@ -128,13 +128,16 @@ private func temporaryFolder() throws -> URL {
                             task: task, language: language, preferredBackend: backend, modelOverride: model
                         )
                     } catch let issue as SpeechTranscriptionIssue {
-                        #expect(backend == .whistle || backend == .auto && model == WhistleGenerator.modelID, "\(context)")
+                        #expect(backend == .whistle || backend == .nemotron || backend == .auto && (model == WhistleGenerator.modelID || model == NemotronTranscribeResources.modelID), "\(context)")
                         #expect(issue.code == "unsupported_task" || issue.code == "unsupported_language", "\(context)")
                         continue
                     }
                     let family: String
                     let defaultModel: String
                     switch route.decision.backend {
+                    case .nemotron:
+                        family = "nemotron-transcribe"
+                        defaultModel = NemotronTranscribeResources.modelID
                     case .whistle:
                         family = "whistle"
                         defaultModel = WhistleGenerator.modelID
