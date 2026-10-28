@@ -1,7 +1,7 @@
 # vendor/ds4
 
 Prebuilt DwarfStar inference binaries for DeepSeek V4 Flash vendored from
-[antirez/ds4](https://github.com/antirez/ds4.git) at commit `5379c1c9ac315f1540371b06a3db88491d4059ff`.
+[antirez/ds4](https://github.com/antirez/ds4.git) at commit `ee7e8405232c8971000cc7ba2b945b00bf6d20d3`.
 
 The macOS binaries target macOS 15.0 and the Apple M1 CPU baseline.
 

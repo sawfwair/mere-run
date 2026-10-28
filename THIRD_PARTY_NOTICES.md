@@ -1121,7 +1121,7 @@ limitations under the License.
 
 - purpose: packaged DeepSeek V4 Flash runtime used by the premier setup-agent tier
 - upstream project: [DwarfStar (`antirez/ds4`)](https://github.com/antirez/ds4)
-- pinned upstream commit: `5379c1c9ac315f1540371b06a3db88491d4059ff`
+- pinned upstream commit: `ee7e8405232c8971000cc7ba2b945b00bf6d20d3`
 - bundled Iris image decoders: MIT, copyright (c) 2026 Salvatore Sanfilippo;
   full notice: [`vendor/ds4/IRIS-LICENSE`](./vendor/ds4/IRIS-LICENSE)
 - rebuild note: regenerated with [`scripts/rebuild_ds4.sh`](./scripts/rebuild_ds4.sh)
