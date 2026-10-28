@@ -99,11 +99,13 @@ Broader long-context retrieval quality and numerical parity remain unqualified.
 The three installed native BF16 checks pass with production precision defaults.
 All 50 native LFM2 fixtures pass with FP32 reference precision, including
 terminal-token boundary, semantic-checkpoint, and resumed-prefill regressions.
-In the separate 21-case application quantized/binary-linear GPU run, two
-batching tests still fail ten bit-exact assertions. The previous 0.32.4 pin
-reproduces identical assertions and error values; this gap remains unchanged.
+All 22 application quantized/binary-linear GPU checks pass. The small-batch
+Q4 kernel promotes BF16 inputs to FP32 before adding the bias sum, matching
+upstream serial QMV arithmetic. This restores bit-exact small and wide batching;
+a cancellation regression covers positive and negative residuals across batch
+widths 2–9.
 
-The final downstream local gate passes 5,560 XCTest cases (475 skips) and
+The final downstream local gate passes 5,561 XCTest cases (476 skips) and
 all 196 Swift Testing cases. Earlier refresh runs also complete both E2E
 check modes. The standard core and installed
 runtime smoke presets are absent and skip six and eleven probes respectively;

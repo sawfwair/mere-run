@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Match serial MLX QMV arithmetic in small-batch affine-Q4 verification by
+  promoting BF16 inputs before summing the bias correction. Restore bit-exact
+  small and wide batching without changing comparison tolerances.
+
 - Refresh the pinned MLX core to v0.32.4 and the Swift bridge through upstream
   0.32.3, preserving owned runtime patches and reusable request streams.
   Rebuild the Metal bundle and enforce the new dependency and kernel provenance.
