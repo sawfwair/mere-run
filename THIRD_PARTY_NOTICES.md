@@ -35,6 +35,21 @@ Their upstream `NOTICE.txt` files identify additional bundled components.
 | [SwiftNIO Extras](https://github.com/apple/swift-nio-extras) | `1.35.1` | [License](https://github.com/apple/swift-nio-extras/blob/1.35.1/LICENSE.txt), [notices](https://github.com/apple/swift-nio-extras/blob/1.35.1/NOTICE.txt) |
 | [SwiftNIO HTTP/2](https://github.com/apple/swift-nio-http2) | `1.46.0` | [License](https://github.com/apple/swift-nio-http2/blob/1.46.0/LICENSE.txt), [notices](https://github.com/apple/swift-nio-http2/blob/1.46.0/NOTICE.txt) |
 
+## SwiftPM inference and server dependencies
+
+These resolved packages provide tokenization, chat templates, HTTP serving,
+cryptography, logging, and metrics. Each is licensed under Apache 2.0.
+Additional component notices are linked where the upstream package provides them.
+
+| Package | Resolved version | Upstream license and notices |
+| --- | --- | --- |
+| [Swift Transformers](https://github.com/huggingface/swift-transformers) | `1.3.5` | [License](https://github.com/huggingface/swift-transformers/blob/1.3.5/LICENSE) |
+| [Swift Jinja](https://github.com/huggingface/swift-jinja) | `2.5.2` | [License](https://github.com/huggingface/swift-jinja/blob/2.5.2/LICENSE) |
+| [Hummingbird](https://github.com/hummingbird-project/hummingbird) | `2.26.0` | [License](https://github.com/hummingbird-project/hummingbird/blob/2.26.0/LICENSE.txt), [notices](https://github.com/hummingbird-project/hummingbird/blob/2.26.0/NOTICE.txt) |
+| [Swift Crypto](https://github.com/apple/swift-crypto) | `4.5.2` | [License](https://github.com/apple/swift-crypto/blob/4.5.2/LICENSE.txt), [notices](https://github.com/apple/swift-crypto/blob/4.5.2/NOTICE.txt) |
+| [Swift Log](https://github.com/apple/swift-log) | `1.15.1` | [License](https://github.com/apple/swift-log/blob/1.15.1/LICENSE.txt), [notices](https://github.com/apple/swift-log/blob/1.15.1/NOTICE.txt) |
+| [Swift Metrics](https://github.com/apple/swift-metrics) | `2.11.0` | [License](https://github.com/apple/swift-metrics/blob/2.11.0/LICENSE.txt), [notices](https://github.com/apple/swift-metrics/blob/2.11.0/NOTICE.txt) |
+
 ## Binary package runtime dependencies
 
 ### Linux toolchain and math libraries
