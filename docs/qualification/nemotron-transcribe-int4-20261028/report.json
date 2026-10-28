@@ -1,0 +1,855 @@
+{
+  "schema_version": 1,
+  "binary_sha256": "3b2d6e5772defde1841dd1f3aec9dac0c535b39d51fb4f5b22caef89518bf645",
+  "mlx_enable_tf32": "0",
+  "source_sha256": {
+    "Sources/AudioNemotronTranscribeModel/TranscribeConfig.swift": "1c65948068b2281f46856be8bcab7a90f1722f7c23d51bff91b064ba9c3869c7",
+    "Sources/AudioNemotronTranscribeModel/TranscribeEncoder.swift": "b05e600b7a29e7730378c50b889578c34c1bdd697a176ca59a91f8cd822a7ec4",
+    "Sources/AudioNemotronTranscribeModel/TranscribeExpertQuantization.swift": "cf85317afdb50ff3d7826c9a68bf1d480cd1bb402aa2e82769a44258a192769e",
+    "Sources/AudioNemotronTranscribeModel/TranscribeLanguage.swift": "3bf36d28ee5694d7f2241684955b3a28d588f8a48c6c4f7348a45e45ab4900bb",
+    "Sources/AudioNemotronTranscribeModel/TranscribeModel.swift": "109f05fc48674c5c3406c92a443073ee33cfd80c9e736fd4006725a8bcf84fa9",
+    "Sources/AudioNemotronTranscribeModel/TranscribeSSM.swift": "c6bd7314a47f00e6402a7b19335f033d536edecf300cd86e6ba7ff1cd8db571c",
+    "Sources/AudioNemotronTranscribeModel/TranscribeWeights.swift": "46bd34a824c8518370522d011561f93bf21bf6fd85091291aaba171af27eacb3",
+    "Sources/AudioSTT/NemotronTranscribe/NemotronTranscribeGenerator.swift": "c3229a8a570f54cfaf0edba92cf2bd44ebbf68b3916497aaf56fc0e49280ec63"
+  },
+  "archive_md5": "6d7ab67ac6a1d2c993d050e16d61080d",
+  "cases": [
+    {
+      "id": "short",
+      "audio": "Tests/MereRunCoreTests/Fixtures/D1/released/speech.wav",
+      "reference": "The parcel arrived on time, but the glass inside was broken.",
+      "audio_sha256": "c480a95dd23dfb7529c7bb329dee7ba3986777c247439c31de9e0da946174fa0",
+      "duration_seconds": 3.5183125,
+      "max_tokens": 96,
+      "repeated": true
+    },
+    {
+      "id": "human",
+      "audio": "Tests/MereRunCoreTests/Fixtures/Nemotron3/returning-speaker.wav",
+      "reference": "THOSE OLD SOLDIERS HAD LONG LONG AGO FORGOTTEN ABOUT THAT OLD LAW OF THE LONG GONE PAST BUT JIM HAD TREASURED IT UP IN HIS MEMORY LO THESE MANY YEARS AND HE THOUGHT IT WOULD SERVE HIM NOW AS IT HAD NO DOUBT FREQUENTLY DONE IN THE PAST HAVING RETURNED TO THE ROYAL CAVERN KALIKO FIRST POUNDED THE GONG AND THEN SAT IN THE THRONE WEARING RUGGEDO'S DISCARDED RUBY CROWN AND HOLDING IN HIS HAND THE SCEPTRE WHICH RUGGEDO HAD SO OFTEN THROWN AT HIS HEAD HOW EVERY PULSE DID BEAT AND LEAP AND HOW EVERY HEART DID THROB WITH EMOTIONS OF JOY WHICH SEEMED NEARLY AKIN TO HEAVEN WHEN WE RECEIVED THE GLAD INTELLIGENCE OF OUR ONWARD MARCH TOWARD THE LAND OF PROMISE AND OF OUR LOVED ONES",
+      "audio_sha256": "042749dfa02b8f159228426d8aba1a7c3b6f8ee293a2c5349a770cd75b672189",
+      "duration_seconds": 46.57,
+      "max_tokens": 512,
+      "repeated": true
+    },
+    {
+      "id": "84-121550-0013",
+      "speaker": "84",
+      "audio": "SLR31/dev-clean-2/84-121550-0013.flac",
+      "reference": "AND I BEHELD THE FLAMELETS ONWARD GO LEAVING BEHIND THEMSELVES THE AIR DEPICTED AND THEY OF TRAILING PENNONS HAD THE SEMBLANCE SO THAT IT OVERHEAD REMAINED DISTINCT WITH SEVENFOLD LISTS ALL OF THEM OF THE COLOURS WHENCE THE SUN'S BOW IS MADE AND DELIA'S GIRDLE",
+      "audio_sha256": "ff8810a7734945876fe44ccf8e7b80bb44ca2a13e5a20e92019f3321a7d819ee",
+      "duration_seconds": 19.11,
+      "max_tokens": 256,
+      "repeated": false
+    },
+    {
+      "id": "174-168635-0002",
+      "speaker": "174",
+      "audio": "SLR31/dev-clean-2/174-168635-0002.flac",
+      "reference": "HIS SISTER AND HIS SISTER'S CHILDREN HAD LEFT HIM ONLY A VAGUE AND FAR OFF MEMORY WHICH HAD FINALLY ALMOST COMPLETELY VANISHED HE HAD MADE EVERY EFFORT TO FIND THEM AND NOT HAVING BEEN ABLE TO FIND THEM HE HAD FORGOTTEN THEM",
+      "audio_sha256": "9c6364899ed0575aa99d76a8a1834b7b7405acb3abcb6a4e263ed5803a2e7db2",
+      "duration_seconds": 15.86,
+      "max_tokens": 256,
+      "repeated": false
+    },
+    {
+      "id": "251-118436-0003",
+      "speaker": "251",
+      "audio": "SLR31/dev-clean-2/251-118436-0003.flac",
+      "reference": "AS YOU WELL KNOW THERE ARE TEN MEN AND TEN WOMEN WHOSE SOLE DUTY IS TO TASTE HIS FOOD AND WINE AND FIFTY ARMED WARRIORS GUARD HIS CHAMBER AS THEY GUARD IT NOW",
+      "audio_sha256": "2d6377ec7f350c09fb947aa1fc6ef3a07d477c0914bb0e901cd15f6f3e23cc03",
+      "duration_seconds": 11.02,
+      "max_tokens": 256,
+      "repeated": false
+    },
+    {
+      "id": "777-126732-0005",
+      "speaker": "777",
+      "audio": "SLR31/dev-clean-2/777-126732-0005.flac",
+      "reference": "WITH HIS ELBOW PRESENTING NO APPEARANCE OF A JOINT BUT MORE LIKE A BEND IN A DUMMY'S LIMB THROWN OVER THE BACK OF A CHAIR HE LEANED FORWARD SLIGHTLY OVER HIS SHORT AND ENORMOUS THIGHS TO SPIT INTO THE GRATE",
+      "audio_sha256": "b136883f21f170d0d2710f5245226191805f14f000332166018bb59751db55e6",
+      "duration_seconds": 11.12,
+      "max_tokens": 256,
+      "repeated": false
+    },
+    {
+      "id": "1462-170142-0005",
+      "speaker": "1462",
+      "audio": "SLR31/dev-clean-2/1462-170142-0005.flac",
+      "reference": "SHE CALLED HIS NAME ON THE THRESHOLD BUT IN HER SWIFT FLIGHT ACROSS THE ROOM SHE FELT A CHANGE IN HIM AND CAUGHT HERSELF UP SO DEFTLY THAT HE COULD NOT TELL JUST WHEN SHE DID IT",
+      "audio_sha256": "ba24b0b22a0b331ecfbf8787189133f2920cb49a5eaedb3c6b04b5b0ce7834e4",
+      "duration_seconds": 11.08,
+      "max_tokens": 256,
+      "repeated": false
+    },
+    {
+      "id": "1988-147956-0000",
+      "speaker": "1988",
+      "audio": "SLR31/dev-clean-2/1988-147956-0000.flac",
+      "reference": "FUCHS BROUGHT UP A SACK OF POTATOES AND A PIECE OF CURED PORK FROM THE CELLAR AND GRANDMOTHER PACKED SOME LOAVES OF SATURDAY'S BREAD A JAR OF BUTTER AND SEVERAL PUMPKIN PIES IN THE STRAW OF THE WAGON BOX",
+      "audio_sha256": "dd619997014d3a6d45b909f1295c847e81942193ef85c7366c2dade42244f102",
+      "duration_seconds": 14.95,
+      "max_tokens": 256,
+      "repeated": false
+    },
+    {
+      "id": "1993-147964-0005",
+      "speaker": "1993",
+      "audio": "SLR31/dev-clean-2/1993-147964-0005.flac",
+      "reference": "WHEN HE MOUNTED HIS HORSE AT THE DOOR I SAW THAT HE HAD A HATCHET SLUNG TO HIS BELT AND HE GAVE GRANDMOTHER A MEANING LOOK WHICH TOLD ME HE WAS PLANNING A SURPRISE FOR ME",
+      "audio_sha256": "032a5d02f43f66261cf832e1735ae4abc0b479d2623f61ebeb4b8899e2d0342e",
+      "duration_seconds": 10.515,
+      "max_tokens": 256,
+      "repeated": false
+    },
+    {
+      "id": "2035-147960-0000",
+      "speaker": "2035",
+      "audio": "SLR31/dev-clean-2/2035-147960-0000.flac",
+      "reference": "SHE WAS FOUR YEARS OLDER THAN I TO BE SURE AND HAD SEEN MORE OF THE WORLD BUT I WAS A BOY AND SHE WAS A GIRL AND I RESENTED HER PROTECTING MANNER",
+      "audio_sha256": "0ee6731694bcc55349cf4f70123aaff81a7779c782c4a3ec4579b243b1552748",
+      "duration_seconds": 9.02,
+      "max_tokens": 256,
+      "repeated": false
+    },
+    {
+      "id": "2412-153948-0000",
+      "speaker": "2412",
+      "audio": "SLR31/dev-clean-2/2412-153948-0000.flac",
+      "reference": "IF THE READER WILL EXCUSE ME I WILL SAY NOTHING OF MY ANTECEDENTS NOR OF THE CIRCUMSTANCES WHICH LED ME TO LEAVE MY NATIVE COUNTRY THE NARRATIVE WOULD BE TEDIOUS TO HIM AND PAINFUL TO MYSELF",
+      "audio_sha256": "47ced4dfe4fc60d8335cd37fb80d632039731679004d6568bf7430f007630b3a",
+      "duration_seconds": 11.66,
+      "max_tokens": 256,
+      "repeated": false
+    },
+    {
+      "id": "2428-83699-0000",
+      "speaker": "2428",
+      "audio": "SLR31/dev-clean-2/2428-83699-0000.flac",
+      "reference": "I IMAGINE THERE WERE SEVERAL KINDS OF OLD FASHIONED CHRISTMASES BUT IT COULD HARDLY BE WORSE THAN A CHOP IN MY CHAMBERS OR HORROR OF HORRORS AT THE CLUB OR MY COUSIN LUCY'S NOTION OF WHAT SHE CALLS THE FESTIVE SEASON",
+      "audio_sha256": "dbdfe7afcc75aa9229e7f888a060a909931215062aa7a87a3c2adccb6af35d2a",
+      "duration_seconds": 13.305,
+      "max_tokens": 256,
+      "repeated": false
+    }
+  ],
+  "records": [
+    {
+      "case": "short",
+      "format": "bf16",
+      "repeat": 0,
+      "transcript": "The parcel arrived on time, but the glass inside was broken.",
+      "word_errors": 0,
+      "reference_words": 11,
+      "wall_seconds": 17.565215917000387,
+      "max_rss_bytes": 50609094656,
+      "peak_memory_footprint_bytes": 65911814536,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "short",
+      "format": "int4",
+      "repeat": 0,
+      "transcript": "The parcel arrived on time, but the glass inside was broken.",
+      "word_errors": 0,
+      "reference_words": 11,
+      "wall_seconds": 3.4933958330002497,
+      "max_rss_bytes": 22652665856,
+      "peak_memory_footprint_bytes": 22792438632,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "human",
+      "format": "int4",
+      "repeat": 0,
+      "transcript": "Those old soldiers had long long ago forgotten about that old law of the long gone past, but Jim had treasured it up in his memory lo these many years, and he thought it would serve him now as it had no doubt frequently done in the past. Having returned to the royal cavern, Calico first pounded the gong and then sat in the throne, wearing Ruggedo's discarded ruby crown and holding in his hand the scepter which Ruggedo had so often thrown at his head. How every pulse did beat and leap, and how every heart did throb with emotions of joy, which seemed nearly akin to heaven, when we received the glad intelligence of our onward march toward the land of promise and of our loved ones.",
+      "word_errors": 2,
+      "reference_words": 129,
+      "wall_seconds": 6.4467367910001485,
+      "max_rss_bytes": 22654484480,
+      "peak_memory_footprint_bytes": 23436788968,
+      "durable_run_state": "succeeded",
+      "wer": 0.015503875968992248
+    },
+    {
+      "case": "human",
+      "format": "bf16",
+      "repeat": 0,
+      "transcript": "Those old soldiers had long long ago forgotten about that old law of the long gone past, but Jim had treasured it up in his memory lo these many years, and he thought it would serve him now as it had no doubt frequently done in the past. Having returned to the royal cavern, Kaliko first pounded the gong and then sat in the throne, wearing Ruggedo's discarded ruby crown and holding in his hand the scepter which Ruggedo had so often thrown at his head. How every pulse did beat and leap, and how every heart did throb with emotions of joy, which seemed nearly akin to heaven, when we received the glad intelligence of our onward march toward the land of promise and of our loved ones.",
+      "word_errors": 1,
+      "reference_words": 129,
+      "wall_seconds": 54.33396929199989,
+      "max_rss_bytes": 53127954432,
+      "peak_memory_footprint_bytes": 66163997400,
+      "durable_run_state": "succeeded",
+      "wer": 0.007751937984496124
+    },
+    {
+      "case": "84-121550-0013",
+      "format": "bf16",
+      "repeat": 0,
+      "transcript": "And I beheld the flamelets onward go, leaving behind themselves the air depicted, and they of trailing pennons had the semblance, so that it overhead remained distinct with sevenfold lists, all of them of the colours whence the sun's bow is made, and Delia's girdle.",
+      "word_errors": 0,
+      "reference_words": 45,
+      "wall_seconds": 25.163705334000042,
+      "max_rss_bytes": 54286319616,
+      "peak_memory_footprint_bytes": 65802484224,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "84-121550-0013",
+      "format": "int4",
+      "repeat": 0,
+      "transcript": "And I beheld the flamelets onward go, leaving behind themselves the air depicted, and they of trailing pennons had the semblance, so that it overhead remained distinct with sevenfold lists, all of them of the colours whence the sun's bow is made, and Delia's girdle.",
+      "word_errors": 0,
+      "reference_words": 45,
+      "wall_seconds": 4.626974124999833,
+      "max_rss_bytes": 22645751808,
+      "peak_memory_footprint_bytes": 22986916880,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "174-168635-0002",
+      "format": "int4",
+      "repeat": 0,
+      "transcript": "His sister and his sister's children had left him only a vague and far off memory, which had finally almost completely vanished. He had made every effort to find them, and not having been able to find them, he had forgotten them.",
+      "word_errors": 0,
+      "reference_words": 42,
+      "wall_seconds": 3.4522708330005116,
+      "max_rss_bytes": 22654943232,
+      "peak_memory_footprint_bytes": 23045145568,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "174-168635-0002",
+      "format": "bf16",
+      "repeat": 0,
+      "transcript": "His sister and his sister's children had left him only a vague and far off memory, which had finally almost completely vanished. He had made every effort to find them, and not having been able to find them, he had forgotten them.",
+      "word_errors": 0,
+      "reference_words": 42,
+      "wall_seconds": 23.597875333000047,
+      "max_rss_bytes": 52525219840,
+      "peak_memory_footprint_bytes": 65805515264,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "251-118436-0003",
+      "format": "bf16",
+      "repeat": 0,
+      "transcript": "as you well know there are ten men and ten women whose sole duty is to taste his food and wine and fifty armed warriors guard his chamber as they guard it now",
+      "word_errors": 0,
+      "reference_words": 33,
+      "wall_seconds": 20.573291833999974,
+      "max_rss_bytes": 53849899008,
+      "peak_memory_footprint_bytes": 65790671408,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "251-118436-0003",
+      "format": "int4",
+      "repeat": 0,
+      "transcript": "as you well know there are ten men and ten women whose sole duty is to taste his food and wine and fifty armed warriors guard his chamber as they guard it now",
+      "word_errors": 0,
+      "reference_words": 33,
+      "wall_seconds": 4.3704541660008545,
+      "max_rss_bytes": 22645440512,
+      "peak_memory_footprint_bytes": 22905750424,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "777-126732-0005",
+      "format": "int4",
+      "repeat": 0,
+      "transcript": "With his elbow presenting no appearance of a joint, but more like a bend in a dummy's limb thrown over the back of a chair, he leaned forward slightly over his short and enormous thighs to spit into the grate.",
+      "word_errors": 0,
+      "reference_words": 40,
+      "wall_seconds": 4.015073917000336,
+      "max_rss_bytes": 22649798656,
+      "peak_memory_footprint_bytes": 22929703928,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "777-126732-0005",
+      "format": "bf16",
+      "repeat": 0,
+      "transcript": "With his elbow presenting no appearance of a joint, but more like a bend in a dummy's limb thrown over the back of a chair, he leaned forward slightly over his short and enormous thighs to spit into the grate.",
+      "word_errors": 0,
+      "reference_words": 40,
+      "wall_seconds": 22.846603416999642,
+      "max_rss_bytes": 54440804352,
+      "peak_memory_footprint_bytes": 65794603496,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "1462-170142-0005",
+      "format": "bf16",
+      "repeat": 0,
+      "transcript": "She called his name on the threshold but in her swift flight across the room she felt a change in him, and caught herself up so deftly that he could not tell just when she did it.",
+      "word_errors": 0,
+      "reference_words": 37,
+      "wall_seconds": 26.74459408399889,
+      "max_rss_bytes": 53417902080,
+      "peak_memory_footprint_bytes": 65963047496,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "1462-170142-0005",
+      "format": "int4",
+      "repeat": 0,
+      "transcript": "She called his name on the threshold, but in her swift flight across the room she felt a change in him and caught herself up so deftly that he could not tell just when she did it.",
+      "word_errors": 0,
+      "reference_words": 37,
+      "wall_seconds": 4.238437999998496,
+      "max_rss_bytes": 22654697472,
+      "peak_memory_footprint_bytes": 22909453232,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "1988-147956-0000",
+      "format": "int4",
+      "repeat": 0,
+      "transcript": "Fuchs brought up a sack of potatoes and a piece of cured pork from the cellar, and grandmother packed some loaves of Saturday's bread, a jar of butter, and several pumpkin pies in the straw of the wagon box.",
+      "word_errors": 0,
+      "reference_words": 39,
+      "wall_seconds": 3.842299624999214,
+      "max_rss_bytes": 22655909888,
+      "peak_memory_footprint_bytes": 23012377568,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "1988-147956-0000",
+      "format": "bf16",
+      "repeat": 0,
+      "transcript": "Fuchs brought up a sack of potatoes and a piece of cured pork from the cellar, and grandmother packed some loaves of Saturday's bread, a jar of butter, and several pumpkin pies in the straw of the wagon box.",
+      "word_errors": 0,
+      "reference_words": 39,
+      "wall_seconds": 27.57430879200001,
+      "max_rss_bytes": 54528868352,
+      "peak_memory_footprint_bytes": 65859189320,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "1993-147964-0005",
+      "format": "bf16",
+      "repeat": 0,
+      "transcript": "When he mounted his horse at the door, I saw that he had a hatchet slung to his belt, and he gave grandmother a meaning look which told me he was planning a surprise for me.",
+      "word_errors": 0,
+      "reference_words": 36,
+      "wall_seconds": 22.017353791999994,
+      "max_rss_bytes": 53351022592,
+      "peak_memory_footprint_bytes": 65950661096,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "1993-147964-0005",
+      "format": "int4",
+      "repeat": 0,
+      "transcript": "When he mounted his horse at the door, I saw that he had a hatchet slung to his belt, and he gave grandmother a meaning look which told me he was planning a surprise for me.",
+      "word_errors": 0,
+      "reference_words": 36,
+      "wall_seconds": 4.276297041000362,
+      "max_rss_bytes": 22644490240,
+      "peak_memory_footprint_bytes": 22884287384,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "2035-147960-0000",
+      "format": "int4",
+      "repeat": 0,
+      "transcript": "She was four years older than I, to be sure, and had seen more of the world but I was a boy, and she was a girl, and I resented her protecting manner.",
+      "word_errors": 0,
+      "reference_words": 33,
+      "wall_seconds": 3.677347083999848,
+      "max_rss_bytes": 22654369792,
+      "peak_memory_footprint_bytes": 22903702520,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "2035-147960-0000",
+      "format": "bf16",
+      "repeat": 0,
+      "transcript": "She was four years older than I, to be sure, and had seen more of the world but I was a boy, and she was a girl, and I resented her protecting manner.",
+      "word_errors": 0,
+      "reference_words": 33,
+      "wall_seconds": 19.895577666000463,
+      "max_rss_bytes": 57602015232,
+      "peak_memory_footprint_bytes": 66294708712,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "2412-153948-0000",
+      "format": "bf16",
+      "repeat": 0,
+      "transcript": "If the reader will excuse me, I will say nothing of my antecedents, nor of the circumstances which led me to leave my native country the narrative would be tedious to him and painful to myself.",
+      "word_errors": 0,
+      "reference_words": 36,
+      "wall_seconds": 19.177554208999936,
+      "max_rss_bytes": 54523166720,
+      "peak_memory_footprint_bytes": 65738045952,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "2412-153948-0000",
+      "format": "int4",
+      "repeat": 0,
+      "transcript": "If the reader will excuse me, I will say nothing of my antecedents, or of the circumstances which led me to leave my native country. The narrative would be tedious to him, and painful to myself.",
+      "word_errors": 1,
+      "reference_words": 36,
+      "wall_seconds": 3.937301625001055,
+      "max_rss_bytes": 22653665280,
+      "peak_memory_footprint_bytes": 22923772872,
+      "durable_run_state": "succeeded",
+      "wer": 0.027777777777777776
+    },
+    {
+      "case": "2428-83699-0000",
+      "format": "int4",
+      "repeat": 0,
+      "transcript": "I imagine there were several kinds of old fashioned Christmases, but it could hardly be worse than a chop at my chambers, or 'Horror of horrors' at the club, or my cousin Lucy's notion of what she calls the festive season,",
+      "word_errors": 1,
+      "reference_words": 41,
+      "wall_seconds": 3.3577317079998465,
+      "max_rss_bytes": 22654369792,
+      "peak_memory_footprint_bytes": 22956917728,
+      "durable_run_state": "succeeded",
+      "wer": 0.024390243902439025
+    },
+    {
+      "case": "2428-83699-0000",
+      "format": "bf16",
+      "repeat": 0,
+      "transcript": "I imagine there were several kinds of old fashioned Christmases, but it could hardly be worse than a chop at my chambers, or 'Horror of horrors' at the club, or my cousin Lucy's notion of what she calls the festive season,",
+      "word_errors": 1,
+      "reference_words": 41,
+      "wall_seconds": 20.236207333000493,
+      "max_rss_bytes": 55413047296,
+      "peak_memory_footprint_bytes": 65750055400,
+      "durable_run_state": "succeeded",
+      "wer": 0.024390243902439025
+    },
+    {
+      "case": "short",
+      "format": "int4",
+      "repeat": 1,
+      "transcript": "The parcel arrived on time, but the glass inside was broken.",
+      "word_errors": 0,
+      "reference_words": 11,
+      "wall_seconds": 3.244671833001121,
+      "max_rss_bytes": 22641655808,
+      "peak_memory_footprint_bytes": 22788457248,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "short",
+      "format": "bf16",
+      "repeat": 1,
+      "transcript": "The parcel arrived on time, but the glass inside was broken.",
+      "word_errors": 0,
+      "reference_words": 11,
+      "wall_seconds": 14.935141750000184,
+      "max_rss_bytes": 54466035712,
+      "peak_memory_footprint_bytes": 65872853408,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "human",
+      "format": "bf16",
+      "repeat": 1,
+      "transcript": "Those old soldiers had long long ago forgotten about that old law of the long gone past, but Jim had treasured it up in his memory lo these many years, and he thought it would serve him now as it had no doubt frequently done in the past. Having returned to the royal cavern, Kaliko first pounded the gong and then sat in the throne, wearing Ruggedo's discarded ruby crown and holding in his hand the scepter which Ruggedo had so often thrown at his head. How every pulse did beat and leap, and how every heart did throb with emotions of joy, which seemed nearly akin to heaven, when we received the glad intelligence of our onward march toward the land of promise and of our loved ones.",
+      "word_errors": 1,
+      "reference_words": 129,
+      "wall_seconds": 46.73810187500021,
+      "max_rss_bytes": 55377117184,
+      "peak_memory_footprint_bytes": 66195733232,
+      "durable_run_state": "succeeded",
+      "wer": 0.007751937984496124
+    },
+    {
+      "case": "human",
+      "format": "int4",
+      "repeat": 1,
+      "transcript": "Those old soldiers had long long ago forgotten about that old law of the long gone past, but Jim had treasured it up in his memory lo these many years, and he thought it would serve him now as it had no doubt frequently done in the past. Having returned to the royal cavern, Calico first pounded the gong and then sat in the throne, wearing Ruggedo's discarded ruby crown and holding in his hand the scepter which Ruggedo had so often thrown at his head. How every pulse did beat and leap, and how every heart did throb with emotions of joy, which seemed nearly akin to heaven, when we received the glad intelligence of our onward march toward the land of promise and of our loved ones.",
+      "word_errors": 2,
+      "reference_words": 129,
+      "wall_seconds": 6.534346791999269,
+      "max_rss_bytes": 22650404864,
+      "peak_memory_footprint_bytes": 23329408184,
+      "durable_run_state": "succeeded",
+      "wer": 0.015503875968992248
+    },
+    {
+      "case": "short",
+      "format": "bf16",
+      "repeat": 2,
+      "transcript": "The parcel arrived on time, but the glass inside was broken.",
+      "word_errors": 0,
+      "reference_words": 11,
+      "wall_seconds": 12.05567633300052,
+      "max_rss_bytes": 58384990208,
+      "peak_memory_footprint_bytes": 65860549000,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "short",
+      "format": "int4",
+      "repeat": 2,
+      "transcript": "The parcel arrived on time, but the glass inside was broken.",
+      "word_errors": 0,
+      "reference_words": 11,
+      "wall_seconds": 3.276678083999286,
+      "max_rss_bytes": 22641344512,
+      "peak_memory_footprint_bytes": 22787441488,
+      "durable_run_state": "succeeded",
+      "wer": 0.0
+    },
+    {
+      "case": "human",
+      "format": "int4",
+      "repeat": 2,
+      "transcript": "Those old soldiers had long long ago forgotten about that old law of the long gone past, but Jim had treasured it up in his memory lo these many years, and he thought it would serve him now as it had no doubt frequently done in the past. Having returned to the royal cavern, Calico first pounded the gong and then sat in the throne, wearing Ruggedo's discarded ruby crown and holding in his hand the scepter which Ruggedo had so often thrown at his head. How every pulse did beat and leap, and how every heart did throb with emotions of joy, which seemed nearly akin to heaven, when we received the glad intelligence of our onward march toward the land of promise and of our loved ones.",
+      "word_errors": 2,
+      "reference_words": 129,
+      "wall_seconds": 5.704276208998635,
+      "max_rss_bytes": 22658580480,
+      "peak_memory_footprint_bytes": 23409935544,
+      "durable_run_state": "succeeded",
+      "wer": 0.015503875968992248
+    },
+    {
+      "case": "human",
+      "format": "bf16",
+      "repeat": 2,
+      "transcript": "Those old soldiers had long long ago forgotten about that old law of the long gone past, but Jim had treasured it up in his memory lo these many years, and he thought it would serve him now as it had no doubt frequently done in the past. Having returned to the royal cavern, Kaliko first pounded the gong and then sat in the throne, wearing Ruggedo's discarded ruby crown and holding in his hand the scepter which Ruggedo had so often thrown at his head. How every pulse did beat and leap, and how every heart did throb with emotions of joy, which seemed nearly akin to heaven, when we received the glad intelligence of our onward march toward the land of promise and of our loved ones.",
+      "word_errors": 1,
+      "reference_words": 129,
+      "wall_seconds": 42.880075958000816,
+      "max_rss_bytes": 58384449536,
+      "peak_memory_footprint_bytes": 66198797040,
+      "durable_run_state": "succeeded",
+      "wer": 0.007751937984496124
+    }
+  ],
+  "summary": {
+    "bf16": {
+      "unique_cases": 12,
+      "reference_words": 522,
+      "word_errors": 2,
+      "wer": 0.0038314176245210726,
+      "first_pass_wall_seconds": 299.7262570029998,
+      "max_peak_memory_footprint_bytes": 66294708712,
+      "max_rss_bytes": 58384990208,
+      "repeated_cases": {
+        "short": {
+          "runs": 3,
+          "wer_values": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "wall_seconds": [
+            17.565215917000387,
+            14.935141750000184,
+            12.05567633300052
+          ],
+          "median_wall_seconds": 14.935141750000184,
+          "median_peak_memory_footprint_bytes": 65872853408,
+          "max_peak_memory_footprint_bytes": 65911814536
+        },
+        "human": {
+          "runs": 3,
+          "wer_values": [
+            0.007751937984496124,
+            0.007751937984496124,
+            0.007751937984496124
+          ],
+          "wall_seconds": [
+            54.33396929199989,
+            46.73810187500021,
+            42.880075958000816
+          ],
+          "median_wall_seconds": 46.73810187500021,
+          "median_peak_memory_footprint_bytes": 66195733232,
+          "max_peak_memory_footprint_bytes": 66198797040
+        }
+      }
+    },
+    "int4": {
+      "unique_cases": 12,
+      "reference_words": 522,
+      "word_errors": 4,
+      "wer": 0.007662835249042145,
+      "first_pass_wall_seconds": 49.734320748000755,
+      "max_peak_memory_footprint_bytes": 23436788968,
+      "max_rss_bytes": 22658580480,
+      "repeated_cases": {
+        "short": {
+          "runs": 3,
+          "wer_values": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "wall_seconds": [
+            3.4933958330002497,
+            3.244671833001121,
+            3.276678083999286
+          ],
+          "median_wall_seconds": 3.276678083999286,
+          "median_peak_memory_footprint_bytes": 22788457248,
+          "max_peak_memory_footprint_bytes": 22792438632
+        },
+        "human": {
+          "runs": 3,
+          "wer_values": [
+            0.015503875968992248,
+            0.015503875968992248,
+            0.015503875968992248
+          ],
+          "wall_seconds": [
+            6.4467367910001485,
+            6.534346791999269,
+            5.704276208998635
+          ],
+          "median_wall_seconds": 6.4467367910001485,
+          "median_peak_memory_footprint_bytes": 23409935544,
+          "max_peak_memory_footprint_bytes": 23436788968
+        }
+      }
+    }
+  },
+  "timing_scope": "Fresh CLI processes, including loading, frontend, prefill, decode, durable publication; one warm-up per format; caches not cleared; alternating format order.",
+  "metric": "Word Levenshtein distance; lowercase, curly apostrophes normalized, punctuation ignored, no spelling equivalences. Aggregate counts each recording once (repeat 0).",
+  "date": "2026-10-28",
+  "environment": {
+    "chip": "Apple M5 Max",
+    "hardware_model": "Mac17,7",
+    "unified_memory_gib": 128,
+    "macos": "27.2",
+    "git_revision": "7ccf6f4d0efac9e46dba64a68ac12d6daeb7c868",
+    "worktree_dirty": true,
+    "build_command": "swift build --build-system native -c release --product mere.run",
+    "execution_device": "Metal GPU"
+  },
+  "conversion": {
+    "artifacts": [
+      {
+        "bytes": 704643202,
+        "filename": "model-00001-of-00029.safetensors",
+        "sha256": "1314493e33dc8268e34be56decd1b4e071aa228a8f37c3d78f8c59bf56e30bef"
+      },
+      {
+        "bytes": 782134377,
+        "filename": "model-00002-of-00029.safetensors",
+        "sha256": "84d69e910ffa0cebf2dd936440e903d7f8645d110db8538ab8f484aaa3a5b6dd"
+      },
+      {
+        "bytes": 759012481,
+        "filename": "model-00003-of-00029.safetensors",
+        "sha256": "a21702d2eb6f0d6983232dab7711b2a745623d859d63af2f94d127a775038f40"
+      },
+      {
+        "bytes": 883302308,
+        "filename": "model-00004-of-00029.safetensors",
+        "sha256": "37baa084d1c324126432224643944d445422d6e433e68fa2d14c62dacbb024b3"
+      },
+      {
+        "bytes": 836503627,
+        "filename": "model-00005-of-00029.safetensors",
+        "sha256": "7ed64d6fa8576848263ede4ee9adaa4c42d6e756b4e20528fe585fdd1dc72e0e"
+      },
+      {
+        "bytes": 836503635,
+        "filename": "model-00006-of-00029.safetensors",
+        "sha256": "a83586e75acf6d5d8b5941be1c4174fd7930d9109912ab50bad9d79d0c56b4f0"
+      },
+      {
+        "bytes": 960793492,
+        "filename": "model-00007-of-00029.safetensors",
+        "sha256": "83db2a4136024fdcb17801e96fc16bd6ec8336f3ac043d19229a15bb338b45c8"
+      },
+      {
+        "bytes": 836503663,
+        "filename": "model-00008-of-00029.safetensors",
+        "sha256": "29e1c2312b688121c898c0c18497ba2fcff99002c93da02992d9a7f83ab81078"
+      },
+      {
+        "bytes": 836503659,
+        "filename": "model-00009-of-00029.safetensors",
+        "sha256": "c1ba39c55493a7521418ef9de6cddb6ce50913416eaaf619a3993da4167209bd"
+      },
+      {
+        "bytes": 883302274,
+        "filename": "model-00010-of-00029.safetensors",
+        "sha256": "05fc60bf27c6106fe7cd76b674ef92452c03cf38cdcf960f99a1af76865c43b1"
+      },
+      {
+        "bytes": 836503679,
+        "filename": "model-00011-of-00029.safetensors",
+        "sha256": "8d2c948ddef9579d6db0733bbce770b20b226295f4af18733cd602d67ca4f6c6"
+      },
+      {
+        "bytes": 759012500,
+        "filename": "model-00012-of-00029.safetensors",
+        "sha256": "53f41ebe92702bff7604363bcebbea157850a1ee35c90be170e20b9aaa046c34"
+      },
+      {
+        "bytes": 836503664,
+        "filename": "model-00013-of-00029.safetensors",
+        "sha256": "c5de679a16298eb34571d83caf0360e5bf4bf54001e8be5ccebb239dd7125846"
+      },
+      {
+        "bytes": 883302318,
+        "filename": "model-00014-of-00029.safetensors",
+        "sha256": "3ec3a52d31d53919510e9266acbd1317c97f77185dfe9cf0189a876478fc6d72"
+      },
+      {
+        "bytes": 836503675,
+        "filename": "model-00015-of-00029.safetensors",
+        "sha256": "4fce99da2e5be26c14c30af36fcdeeed5ffd717e503f62bda96af439797da0d7"
+      },
+      {
+        "bytes": 836503677,
+        "filename": "model-00016-of-00029.safetensors",
+        "sha256": "5d20f197880237cf517dd27f0d3e5b3c182ecc1d66509ab943c768624d08ee11"
+      },
+      {
+        "bytes": 913994839,
+        "filename": "model-00017-of-00029.safetensors",
+        "sha256": "6c7f8a78507d6b4a79ff5e7ec994130ac46bbe36ea5cae7b2ea13c66b9dc0944"
+      },
+      {
+        "bytes": 883302300,
+        "filename": "model-00018-of-00029.safetensors",
+        "sha256": "eeab49657e7569b469b7d70ac61f5d78ff5afc1ba5e787e3610de73367fad45f"
+      },
+      {
+        "bytes": 836503687,
+        "filename": "model-00019-of-00029.safetensors",
+        "sha256": "073e2f450136e046e01656f96121efce9c595343540b73cd8a3bb0072ac23f1b"
+      },
+      {
+        "bytes": 836503653,
+        "filename": "model-00020-of-00029.safetensors",
+        "sha256": "49407d96d6493c4691021bb9a06c06973996285c4eabbde7b21c9276ab975101"
+      },
+      {
+        "bytes": 836503673,
+        "filename": "model-00021-of-00029.safetensors",
+        "sha256": "fa03b9d3b8904eff54a647e038036673e3f7573497aa09a8510bd133a7f04aef"
+      },
+      {
+        "bytes": 883302313,
+        "filename": "model-00022-of-00029.safetensors",
+        "sha256": "9e14f400a70f2ac62252e97c731f6adbd8e48ec51e19f6a0d6321507dd061e59"
+      },
+      {
+        "bytes": 759012502,
+        "filename": "model-00023-of-00029.safetensors",
+        "sha256": "5b61af312b4f90cb3ab12c16d37158091d9e0beb6ecbe1aa018adf2ba0d00a97"
+      },
+      {
+        "bytes": 836503647,
+        "filename": "model-00024-of-00029.safetensors",
+        "sha256": "2c3f113ce5d9ac0a175e0b522f68f340989934dd5250514477aba048130dc4ce"
+      },
+      {
+        "bytes": 912225685,
+        "filename": "model-00025-of-00029.safetensors",
+        "sha256": "349300c1fe74627a7fd2e629a111aad88e8f7ebaa1d3a66f8e73de1d5ebea743"
+      },
+      {
+        "bytes": 1277165724,
+        "filename": "model-00026-of-00029.safetensors",
+        "sha256": "adac2c97208daded30b463b5af0da19649303f9e958d956733fb35a38eb42e6d"
+      },
+      {
+        "bytes": 1277165731,
+        "filename": "model-00027-of-00029.safetensors",
+        "sha256": "a4e9e3168d9fe852b6774357f7456acaff56828a5082379a337f3a026b0e1683"
+      },
+      {
+        "bytes": 1067002010,
+        "filename": "model-00028-of-00029.safetensors",
+        "sha256": "7f82d3ca473bebf1adf349e5e48b5a2432228172352fc6960094f466c6499dbd"
+      },
+      {
+        "bytes": 440976945,
+        "filename": "model-00029-of-00029.safetensors",
+        "sha256": "c28842ccb296563f169d362d2947c0cab58f6029d9a879b286c1e846fcc89a54"
+      }
+    ],
+    "converter": "scripts/model-conversion/quantize_nemotron_transcribe_experts.py",
+    "converter_version": 1,
+    "inference_tensors": 1269,
+    "mlx_version": "0.32.0",
+    "output_tensors": 1361,
+    "quantization": {
+      "bits": 4,
+      "groupSize": 64,
+      "layout": "expert-output-input",
+      "mode": "affine",
+      "scope": "routed-experts",
+      "version": 1
+    },
+    "routed_matrices": 46,
+    "source": {
+      "repository": "nvidia/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B",
+      "revision": "ef905575a106fdad904f3b0ce661dccad654607d",
+      "weights_bytes": 67496013734,
+      "weights_sha256": "03142dde5176c1d4df21ee829642745a1d670ea4d79e1a4684c64d53195acff2"
+    },
+    "tensor_bytes": 25067519872
+  },
+  "non_quantized_preservation": {
+    "status": "passed",
+    "non_quantized_tensors_verified_bit_exact": 1223,
+    "bytes_verified": 8544190336
+  },
+  "verification": {
+    "metal_focused_tests": 23,
+    "installed_checkpoints": [
+      "BF16",
+      "routed-expert INT4"
+    ],
+    "cpu_and_metal_packed_kernel_tests": "passed",
+    "full_gate": {
+      "command": "./scripts/check.sh with native SwiftPM wrapper",
+      "exit_code": 0,
+      "xctest_cases": 5612,
+      "xctest_skipped": 470,
+      "xctest_failures": 0,
+      "swift_testing_cases": 196,
+      "lint_violations": 0
+    },
+    "documentation_build": "passed"
+  },
+  "limits": [
+    "Twelve English recordings (one synthetic sentence and eleven human recordings), 522 words and 177.73 seconds; this is a small comparison, not broad ASR accuracy equivalence.",
+    "Clean audiobook speech; no noisy, far-field, multilingual, translation, or one-hour workload qualification.",
+    "Single Apple M5 Max with 128 GiB unified memory; no minimum-memory hardware claim.",
+    "Fresh CLI processes include loading and durable output publication. File and shader caches were not cleared; no isolated throughput claim.",
+    "Packed prefill uses 128-position blocks, while BF16 uses four-position expert gathers; timings compare the complete native implementations."
+  ]
+}

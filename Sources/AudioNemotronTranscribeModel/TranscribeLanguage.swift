@@ -104,19 +104,19 @@ struct TranscribeLanguage {
     }
 
     private func experts(_ x: MLXArray, prefix: String) throws -> MLXArray {
-        // Four positions at a time keep BF16 selected-expert gathers within the Metal watchdog budget.
+        // BF16 gathers materialize selected matrices. Packed QMM keeps weights shared across positions.
         var pieces: [MLXArray] = []
-        for start in stride(from: 0, to: x.dim(1), by: 4) {
+        let chunkSize = weights.quantization == nil ? 4 : 128
+        for start in stride(from: 0, to: x.dim(1), by: chunkSize) {
             try Task.checkCancellation()
-            let input = x[0..., start..<min(start + 4, x.dim(1)), 0...]
+            let input = x[0..., start..<min(start + chunkSize, x.dim(1)), 0...]
             let route = Self.route(input, weight: weights[prefix + ".gate.weight"],
                                   bias: weights[prefix + ".gate.e_score_correction_bias"],
                                   topK: config.numExpertsPerTok, scale: config.routedScalingFactor)
-            // Original NeMo expert matrices are [expert, input, output]. Cast only the selected matrices.
-            let selectedUp = weights[prefix + ".experts.gate_and_up_projs"].take(route.0, axis: 0)
-            let up = matmul(input.expandedDimensions(axis: -2).expandedDimensions(axis: -2), selectedUp).squeezed(axis: -2)
-            let selectedDown = weights[prefix + ".experts.down_projs"].take(route.0, axis: 0)
-            let down = matmul(square(relu(up)).expandedDimensions(axis: -2), selectedDown).squeezed(axis: -2)
+            let up = weights.routedLinear(input.expandedDimensions(axis: -2).expandedDimensions(axis: -2),
+                indices: route.0, key: prefix + ".experts.gate_and_up_projs").squeezed(axis: -2)
+            let down = weights.routedLinear(square(relu(up)).expandedDimensions(axis: -2),
+                indices: route.0, key: prefix + ".experts.down_projs").squeezed(axis: -2)
             let routed = (down * route.1.expandedDimensions(axis: -1).asType(down.dtype)).sum(axis: -2)
             let shared = weights.linear(square(relu(weights.linear(input, prefix + ".shared_experts.up_proj"))), prefix + ".shared_experts.down_proj")
             let output = routed + shared

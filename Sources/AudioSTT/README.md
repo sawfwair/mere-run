@@ -17,7 +17,7 @@ runtime-family targets.
   cancellation, and final events for resident file-oriented models. Parakeet's
   adapter retains overlapped-tail decoding; Whistle re-decodes whole utterances.
 - Qwen3-ASR owns its distinct live decoder/session implementation.
-- `NemotronTranscribe/` owns offline BF16 loading and transcription/English
+- `NemotronTranscribe/` owns offline BF16/local routed-expert INT4 loading and transcription/English
   translation over AudioNemotronTranscribeModel, with explicit installation.
 
 ## Whistle ownership and lifecycle

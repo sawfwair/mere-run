@@ -1846,3 +1846,5 @@ CC-BY-NC checkpoints are not included. Model assets are downloaded separately.
   calculated by `scripts/reference-parity/nemotron_transcribe_reference.py`.
 - Runtime downloads retain the upstream license and third-party notices;
   checkpoint weights are not redistributed in this source repository.
+  The local routed-expert affine INT4 converter retains these notices and
+  model licenses in its derived artifact and records source/output hashes.

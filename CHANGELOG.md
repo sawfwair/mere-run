@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Support local affine 4-bit/group-64 Nemotron Transcribe routed experts,
+  with a pinned checkpoint converter, packed native expert multiplication,
+  and BF16 comparison of real transcription accuracy, latency, and memory.
+
 - Add native BF16 Nemotron 3.5 Transcribe file transcription and English
   translation through `speech transcribe --backend nemotron`, with pinned
   explicit installation and speaker-aware audio encoding. Qualify the original

@@ -28,7 +28,7 @@ public actor NemotronTranscribeGenerator {
             await Task.yield()
             try Task.checkCancellation()
             if loadedRoot != resolved.url {
-                progressHandler?(ASRProgress(stage: .loadingModel, message: "Loading native Nemotron Transcribe BF16 weights..."))
+                progressHandler?(ASRProgress(stage: .loadingModel, message: "Loading native Nemotron Transcribe weights..."))
                 let config = try NemotronTranscribeConfig.load(at: resolved.url)
                 let loadedTokenizer = try await AutoTokenizer.from(modelFolder: resolved.url)
                 guard loadedTokenizer.convertTokenToId("<|im_end|>") == config.eosTokenId.first,
