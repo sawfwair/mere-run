@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Update Swift Crypto to 4.5.2, Transformers to 1.3.5, and Jinja to 2.5.2.
+  Retain Hummingbird 2.21.1 and cap its range to preserve Swift 6.1 support.
+
 ## 0.66.1 - 2026-10-28
 
 - Fix wide-head NAX attention compilation in the pinned MLX JIT runtime,
