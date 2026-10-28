@@ -114,7 +114,7 @@ extension NativeChatRuntime {
             engine = .textChatNemotronOmni
         case .nemotronBolt, .nemotronH:
             engine = .textChatNemotronH
-        case .lfm2, .lfm2A1B, .lfm2VL:
+        case .lfm2, .lfm2A2B, .lfm2A1B, .lfm2VL:
             engine = .textChatLFM2
         case .q35, .q35VL, .q38:
             engine = .textChatQ35

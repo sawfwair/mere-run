@@ -696,6 +696,13 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                LFM2Resources.a2b24BBF16ModelId,
+                "LFM2.5 24B-A2B BF16",
+                "Runs LiquidAI's reasoning and tool-use MoE directly from original BF16 safetensors.",
+                minimum: 64,
+                recommended: 96
+            ),
+            descriptor(
                 LFM2Resources.smallModelId,
                 "LFM2.5 1.2B BF16",
                 "Runs the compact LiquidAI LFM2.5 1.2B Instruct checkpoint with its optional native DSpark accelerator.",
@@ -824,6 +831,18 @@ public enum ManagedModelCapabilityCatalog {
                 "Synthesizes speech as one of nine named speakers with Qwen3-TTS CustomVoice.",
                 minimum: 12,
                 recommended: 16
+            ),
+            descriptor(
+                "speech-tts-drama-3",
+                "DRAMA-3 Q4 experts",
+                "Native multilingual and multi-speaker speech, event tags, and voice cloning. Built with Fish Audio.",
+                minimum: 32,
+                recommended: 36
+            ),
+            descriptor(
+                "speech-tts-phonon-31m", "Phonon 31m",
+                "Synthesizes English speech locally with Gradium Phonon and a precomputed voice.",
+                minimum: 4, recommended: 8
             ),
             descriptor(
                 "speech-tts-breeze-2",

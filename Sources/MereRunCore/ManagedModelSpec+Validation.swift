@@ -256,6 +256,10 @@ public extension ManagedModelSpec {
             return Trellis2Resources.validate(rootURL: rootURL, fileManager: fileManager)
         case .qwen3TTS:
             return Self.missingQwen3TTSPaths(in: rootURL, fileManager: fileManager)
+        case .drama3TTS:
+            return Drama3Resources.missingFiles(root: rootURL, fileManager: fileManager)
+        case .phononTTS:
+            return Self.missingFiles(PhononResources.requiredFiles, in: rootURL, fileManager: fileManager)
         case .breezeTTS:
             return Self.missingFiles(
                 ["config.json", "model.safetensors.index.json", "model-00001-of-00002.safetensors",

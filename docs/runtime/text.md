@@ -67,6 +67,7 @@ gate.
 - `text-chat-lfm25-1.2b-bf16` (managed LiquidAI LFM2.5 1.2B Instruct BF16 target plus DSpark)
 - `text-chat-lfm25-1.2b-qad-4bit` (managed QAD-trained LFM2.5 1.2B native MLX 4-bit conversion)
 - `text-chat-lfm25-a1b-8bit` (managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot)
+- `text-chat-lfm25-24b-a2b-bf16` — original LiquidAI 24B-A2B reasoning MoE safetensors
 - `text-chat-lfm25-a1b-bf16` (managed LiquidAI LFM2.5 8B-A1B BF16 target plus DSpark)
 - `vision-chat-lfm25-3b-8bit` (managed LiquidAI LFM2.5-VL 3B MLX 8-bit vision-language snapshot)
 - `vision-chat-lfm25-3b-bf16` (managed LiquidAI LFM2.5-VL 3B BF16 snapshot with DSpark)
@@ -238,6 +239,22 @@ GGUF. Its persistent DS4 server defaults to a 32K operational context, a
 1,024-token prefill chunk, and an 8 GiB disk-KV budget. A 128 GB Mac provides
 additional headroom. Close other memory-heavy workloads before using the model
 on a 96 GB machine.
+
+`text-chat-lfm25-24b-a2b-bf16` is a separate reasoning MoE install with
+original BF16 safetensors, a declared 131,072-token context, and no DSpark
+companion. Its template always starts reasoning; `--no-thinking` controls
+display only. Omitted sampling uses temperature 0.1, top-k 50, and top-p 1.
+Use `--context-size` to set the operational context budget. Original weights
+load directly without conversion or Python. Native BF16 checks on a 128 GB
+M5 Max pass completed answers, a tool round trip, and exact retrieval from
+24,042 prompt tokens under a 32K context budget. The MLX 0.32.4 fork restores
+upstream NAX selection for floating-point operations and confines its
+generation-17 workaround to quantized dispatch. Native prefill processes the
+final prompt token separately, matching upstream's first generation logits.
+With both fixes, the exact 127,242-token retrieval probe returns the correct
+code and stops after 295 output tokens under the declared 131,072-token context
+and unchanged 2,048-token output budget. Broader retrieval quality and numerical
+parity remain unqualified.
 
 `text-chat-lfm25-1.2b-bf16`, `text-chat-lfm25-2.6b-bf16`, and
 `text-chat-lfm25-a1b-bf16` install exact pinned LiquidAI LFM2.5 checkpoints and

@@ -1,0 +1,502 @@
+{
+  "evidence_run_id": "extended-20261024T002848Z",
+  "schema_version": 1,
+  "source_commit": "cac7aa6fe72aa04e54eb0ee51537e7073e5d836e",
+  "checkpoint_revision": "dd64a85cd82e9521f7202610ede97b367fc83946",
+  "upstream_sampling_revision": "444001b0e7bbf0f87a344a13b86a63da21b70395",
+  "quantization": "drama3-experts-q4-g64-v1",
+  "physical_ram_bytes": 38654705664,
+  "seed": 42,
+  "temperature": 0.6,
+  "normal_shared_admission": true,
+  "memory_floor_bytes": 17179869184,
+  "disk_floor_bytes": 8589934592,
+  "maximum_acoustic_frames": 750,
+  "cli_sha256": "115680570b75027d5ef2c19f88c681ca128b04b9bfeecd81102b7b44ee58bbb6",
+  "test_binary_sha256": "67b1e31b4689bf667d0325b58ab3a79df67530f036bfa6fb279a288adceb2e8f",
+  "started_at": "2026-10-24T00:28:49.242917+00:00",
+  "finished_at": "2026-10-24T00:44:55.864298+00:00",
+  "reference": {
+    "case": "short",
+    "transcript": "Hello! The native speech engine is running on this laptop.",
+    "sha256": "b7324ca7da69738a486515afffb34cc736206439aabd6c46d0c2360e05e2420c"
+  },
+  "cases": {
+    "paragraph": {
+      "status": "passed",
+      "native_exit_code": 0,
+      "process_seconds_including_admission_and_cold_load": 142.21,
+      "peak_physical_footprint_bytes": 27597130272,
+      "maximum_resident_bytes": 9029451776,
+      "expected_transcript": "Today we are testing a longer paragraph on this laptop. The native speech engine should read every sentence clearly, preserve the pauses between ideas, and finish without losing the final words. After walking through the garden, we stopped beside the river and watched the evening light move across the water. This is the end of the recording.",
+      "recognized_transcript": "Today we are testing a longer paragraph on this laptop. The native speech engine should read every sentence clearly, preserve the pauses between ideas, and finish without losing the final words. After walking through the garden, we stopped beside the river and watched the evening light move across the water. This is the end of the recording.",
+      "reference_word_count": 57,
+      "word_errors": 0,
+      "word_error_rate": 0.0,
+      "initial_system_swap_bytes": 3742367744,
+      "peak_sampled_system_swap_bytes": 6424887296,
+      "waveform": {
+        "bytes": 2043948,
+        "sha256": "e1e100922e7b3f72ea50c958a14ba6355b0055e568abce8339e334452aa34a62",
+        "sample_count": 1021952,
+        "sample_rate": 44100,
+        "duration_seconds": 23.173514739229024,
+        "rms": 0.08176037668126572,
+        "peak": 0.593017578125,
+        "clipped_samples": 0,
+        "finite": true
+      },
+      "peak_mlx_bytes": 25796160132,
+      "unloaded_active_mlx_bytes": 32
+    },
+    "short": {
+      "status": "passed",
+      "native_exit_code": 0,
+      "process_seconds_including_admission_and_cold_load": 104.92,
+      "peak_physical_footprint_bytes": 26165369192,
+      "maximum_resident_bytes": 9025093632,
+      "expected_transcript": "Hello! The native speech engine is running on this laptop.",
+      "recognized_transcript": "Hello! The native speech engine is running on this laptop.",
+      "reference_word_count": 10,
+      "word_errors": 0,
+      "word_error_rate": 0.0,
+      "initial_system_swap_bytes": 3924882882,
+      "peak_sampled_system_swap_bytes": 5986970501,
+      "waveform": {
+        "bytes": 385068,
+        "sha256": "b7324ca7da69738a486515afffb34cc736206439aabd6c46d0c2360e05e2420c",
+        "sample_count": 192512,
+        "sample_rate": 44100,
+        "duration_seconds": 4.365351473922902,
+        "rms": 0.0901346151680657,
+        "peak": 0.3602294921875,
+        "clipped_samples": 0,
+        "finite": true
+      },
+      "native_metrics": {
+        "activeMLXBytes": 32,
+        "device": "gpu",
+        "durationSeconds": 4.365351473922902,
+        "elapsedSeconds": 104.6145271062851,
+        "peakMLXBytes": 25796160132,
+        "physicalMemoryBytes": 38654705664,
+        "rms": 0.09014726699988801,
+        "sampleRate": 44100,
+        "seed": 42,
+        "text": "[excited] Hello! The native speech engine is running on this laptop."
+      }
+    },
+    "clone": {
+      "status": "passed",
+      "native_exit_code": 0,
+      "process_seconds_including_admission_and_cold_load": 107.63,
+      "peak_physical_footprint_bytes": 26170562944,
+      "maximum_resident_bytes": 9163603968,
+      "expected_transcript": "The reference voice is now reading a different sentence, with clear words and a steady pace.",
+      "recognized_transcript": "The reference voice is now reading a different sentence, with clear words and a steady pace.",
+      "reference_word_count": 16,
+      "word_errors": 0,
+      "word_error_rate": 0.0,
+      "initial_system_swap_bytes": 3853191741,
+      "peak_sampled_system_swap_bytes": 6737300029,
+      "waveform": {
+        "bytes": 512044,
+        "sha256": "6fc6271551a1b0dd713e94afa075d4f37e5164479c020ca8374c1ca5cdfd9471",
+        "sample_count": 256000,
+        "sample_rate": 44100,
+        "duration_seconds": 5.804988662131519,
+        "rms": 0.06215639481097546,
+        "peak": 0.3919677734375,
+        "clipped_samples": 0,
+        "finite": true
+      },
+      "peak_mlx_bytes": 25796160144,
+      "unloaded_active_mlx_bytes": 44
+    },
+    "stream": {
+      "status": "passed",
+      "native_exit_code": 0,
+      "process_seconds_including_admission_and_cold_load": 105.98,
+      "peak_physical_footprint_bytes": 29997538744,
+      "maximum_resident_bytes": 10418536448,
+      "expected_transcript": "Hello! The native speech engine is running on this laptop.",
+      "recognized_transcript": "Hello! The native speech engine is running on this laptop.",
+      "reference_word_count": 10,
+      "word_errors": 0,
+      "word_error_rate": 0.0,
+      "first_chunk_seconds": 96.92579901218414,
+      "audio_chunk_count": 4,
+      "maximum_sample_error_vs_batch": 4.118680953979492e-05,
+      "initial_system_swap_bytes": 4031648890,
+      "peak_sampled_system_swap_bytes": 7004487680,
+      "waveform": {
+        "bytes": 770092,
+        "sha256": "cd5b1261cc83fa5ae568809d69ce55053593a5ced557fa3e41db220b2c3fb78c",
+        "sample_count": 192512,
+        "sample_rate": 44100,
+        "duration_seconds": 4.365351473922902,
+        "rms": 0.09014726628170369,
+        "peak": 0.3602445423603058,
+        "clipped_samples": 0,
+        "finite": true
+      },
+      "peak_mlx_bytes": 29652345926,
+      "unloaded_active_mlx_bytes": 32,
+      "batch_comparison_case": "short"
+    },
+    "cloneStream": {
+      "status": "passed",
+      "native_exit_code": 0,
+      "process_seconds_including_admission_and_cold_load": 131.21,
+      "peak_physical_footprint_bytes": 30441643448,
+      "maximum_resident_bytes": 10428530688,
+      "expected_transcript": "The reference voice is now reading a different sentence, with clear words and a steady pace.",
+      "recognized_transcript": "The reference voice is now reading a different sentence, with clear words and a steady pace.",
+      "reference_word_count": 16,
+      "word_errors": 0,
+      "word_error_rate": 0.0,
+      "first_chunk_seconds": 113.00548696517944,
+      "audio_chunk_count": 5,
+      "maximum_sample_error_vs_batch": 4.208087921142578e-05,
+      "initial_system_swap_bytes": 4006545981,
+      "peak_sampled_system_swap_bytes": 8821795717,
+      "waveform": {
+        "bytes": 1024044,
+        "sha256": "e1b83dfb87c320ada33585da4aeed1b166fd9b67f7246b1ef325ddd6c5b1a48a",
+        "sample_count": 256000,
+        "sample_rate": 44100,
+        "duration_seconds": 5.804988662131519,
+        "rms": 0.0621675976874582,
+        "peak": 0.39198383688926697,
+        "clipped_samples": 0,
+        "finite": true
+      },
+      "peak_mlx_bytes": 30451882246,
+      "unloaded_active_mlx_bytes": 32,
+      "batch_comparison_case": "clone"
+    },
+    "cancel": {
+      "status": "passed",
+      "native_exit_code": 0,
+      "process_seconds_including_admission_and_cold_load": 133.15,
+      "peak_physical_footprint_bytes": 28904201656,
+      "maximum_resident_bytes": 10415063040,
+      "expected_transcript": "Today we are testing a longer paragraph on this laptop. The native speech engine should read every sentence clearly, preserve the pauses between ideas, and finish without losing the final words. After walking through the garden, we stopped beside the river and watched the evening light move across the water. This is the end of the recording.",
+      "initial_system_swap_bytes": 4213304197,
+      "peak_sampled_system_swap_bytes": 8514699264,
+      "peak_mlx_bytes": 27979113318,
+      "unloaded_active_mlx_bytes": 32,
+      "cancellation_to_unloaded_seconds": 3.7159149646759033
+    },
+    "paragraphStream": {
+      "status": "passed",
+      "native_exit_code": 0,
+      "process_seconds_including_admission_and_cold_load": 183.52,
+      "peak_physical_footprint_bytes": 35286162824,
+      "maximum_resident_bytes": 10381803520,
+      "expected_transcript": "Today we are testing a longer paragraph on this laptop. The native speech engine should read every sentence clearly, preserve the pauses between ideas, and finish without losing the final words. After walking through the garden, we stopped beside the river and watched the evening light move across the water. This is the end of the recording.",
+      "recognized_transcript": "Today we are testing a longer paragraph on this laptop. The native speech engine should read every sentence clearly, preserve the pauses between ideas, and finish without losing the final words. After walking through the garden, we stopped beside the river and watched the evening light move across the water. This is the end of the recording.",
+      "reference_word_count": 57,
+      "word_errors": 0,
+      "word_error_rate": 0.0,
+      "first_chunk_seconds": 96.06952270799957,
+      "audio_chunk_count": 20,
+      "maximum_sample_error_vs_batch": 4.7087669372558594e-05,
+      "initial_system_swap_bytes": 4748539330,
+      "peak_sampled_system_swap_bytes": 7516192768,
+      "waveform": {
+        "bytes": 4087852,
+        "sha256": "48246068f273508c3bdbc7f25f4103ed7013ebc6079d8b7dc7ad36601c519c1b",
+        "sample_count": 1021952,
+        "sample_rate": 44100,
+        "duration_seconds": 23.173514739229024,
+        "rms": 0.08177178838181341,
+        "peak": 0.5930420756340027,
+        "clipped_samples": 0,
+        "finite": true
+      },
+      "cli_progress_events": [
+        {
+          "elapsedSeconds": 95.09240412500003,
+          "event": "progress",
+          "stage": "generating",
+          "step": 25,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 96.06952270799957,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 51200,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 98.46620845799953,
+          "event": "progress",
+          "stage": "generating",
+          "step": 50,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 98.6867935829996,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 102400,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 101.1481007909997,
+          "event": "progress",
+          "stage": "generating",
+          "step": 75,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 101.57922579099977,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 153600,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 104.19871433299977,
+          "event": "progress",
+          "stage": "generating",
+          "step": 100,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 104.62974595800006,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 204800,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 107.11738008299926,
+          "event": "progress",
+          "stage": "generating",
+          "step": 125,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 107.64892624999993,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 256000,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 110.15721483299967,
+          "event": "progress",
+          "stage": "generating",
+          "step": 150,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 110.69957779099968,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 307200,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 113.22048687499955,
+          "event": "progress",
+          "stage": "generating",
+          "step": 175,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 113.85631254100008,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 358400,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 116.38172720799957,
+          "event": "progress",
+          "stage": "generating",
+          "step": 200,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 117.13980366599935,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 409600,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 119.83708379099971,
+          "event": "progress",
+          "stage": "generating",
+          "step": 225,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 120.72692333299983,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 460800,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 123.37309866599935,
+          "event": "progress",
+          "stage": "generating",
+          "step": 250,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 124.35340474999975,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 512000,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 127.3021358749993,
+          "event": "progress",
+          "stage": "generating",
+          "step": 275,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 128.5005957909998,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 563200,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 131.86884324999937,
+          "event": "progress",
+          "stage": "generating",
+          "step": 300,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 133.16706854099994,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 614400,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 136.20127354099986,
+          "event": "progress",
+          "stage": "generating",
+          "step": 325,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 137.51182208299997,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 665600,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 140.46662929099966,
+          "event": "progress",
+          "stage": "generating",
+          "step": 350,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 142.00348383299934,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 716800,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 145.06707562499923,
+          "event": "progress",
+          "stage": "generating",
+          "step": 375,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 146.59791858299923,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 768000,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 149.6471491659995,
+          "event": "progress",
+          "stage": "generating",
+          "step": 400,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 151.2840424999995,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 819200,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 154.33194987499974,
+          "event": "progress",
+          "stage": "generating",
+          "step": 425,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 156.18211799999972,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 870400,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 159.65046350000011,
+          "event": "progress",
+          "stage": "generating",
+          "step": 450,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 162.09871291599939,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 921600,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 166.85128587500003,
+          "event": "progress",
+          "stage": "generating",
+          "step": 475,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 170.3759710409995,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 972800,
+          "total_steps": 0
+        },
+        {
+          "elapsedSeconds": 182.0140005409994,
+          "event": "progress",
+          "stage": "audioChunk",
+          "step": 1021952,
+          "total_steps": 0
+        }
+      ],
+      "normal_cli_admission": true,
+      "chunk_samples_monotonic": true,
+      "final_chunk_sample_count_matches_waveform": true,
+      "batch_comparison_case": "paragraph"
+    }
+  },
+  "limits": "Bounded English probes with one synthetic reference voice; ASR is content evidence, not a perceptual speaker-identity or prosody score. Original-weight Q4 quality loss and other platforms remain unqualified.",
+  "long_stream_evidence_run_id": "long-stream-20261024T004148Z",
+  "extended_suite_finished_at": "2026-10-24T00:41:43.317659+00:00"
+}

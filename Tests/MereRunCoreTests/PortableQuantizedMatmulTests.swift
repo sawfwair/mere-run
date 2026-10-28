@@ -29,6 +29,32 @@ final class PortableQuantizedMatmulTests: MereRunCoreTestCase {
         XCTAssertEqual(expected.asArray(Int.self), actual.asArray(Int.self))
     }
 
+    func testSmallBatchAffineQMVBiasSumPromotesBeforeCancellation() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("Affine QMV bias-sum parity requires MERERUN_TEST_MLX_DEVICE=gpu.")
+        }
+        let residual: Float = 1.0 / 256
+        let row = MLX.concatenated([
+            MLXArray([1, residual, -1, 0] as [Float]).asType(.bfloat16),
+            MLXArray.zeros([508], dtype: .bfloat16),
+        ])
+        let weight = MLXArray.zeros([8, 64], dtype: .uint32)
+        let scales = MLXArray.zeros([8, 8], dtype: .bfloat16)
+        let biases = MLXArray.ones([8, 8], dtype: .bfloat16)
+        for width in 2...9 {
+            let rows = (0..<width).map { $0.isMultiple(of: 2) ? row : -row }
+            let input = MLX.stacked(rows).reshaped(1, width, 512)
+            let actual = try XCTUnwrap(SmallBatchAffineQMV.matmul(
+                input, weight: weight, scales: scales, biases: biases,
+                groupSize: 64, bits: 4, mode: .affine
+            ))
+            let expected = (0..<width).flatMap {
+                Array(repeating: $0.isMultiple(of: 2) ? residual : -residual, count: 8)
+            }
+            XCTAssertEqual(actual.asType(.float32).asArray(Float.self), expected, "width \(width)")
+        }
+    }
+
     func testSmallBatchAffineQMVMatchesSerialRowsBitExactly() throws {
         guard Device.defaultDevice().deviceType == .gpu else {
             throw XCTSkip(

@@ -65,6 +65,11 @@ enum CLIInferenceAdmissionClassifier {
         switch topLevel {
         case "audio" where subcommand == "edit":
             return MachineInferenceRequest(label: label, resourceClass: managedModelClass("audio-auk-base"))
+        case "speech" where subcommand == "synthesize" && selectedModelIdentifiers.contains(where: {
+            ManagedModelCatalog.spec(for: $0)?.validationKind == .drama3TTS
+                || Drama3Resources.isDrama3(root: URL(fileURLWithPath: $0))
+        }):
+            return MachineInferenceRequest(label: label, resourceClass: .standard)
         case "speech", "audio":
             return MachineInferenceRequest(label: label, resourceClass: .small)
         case "image":

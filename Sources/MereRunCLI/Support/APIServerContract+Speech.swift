@@ -30,7 +30,11 @@ extension APIServerContract {
 
         func modelSelection() throws -> SpeechSynthesisModelSelection {
             do {
-                return try SpeechSynthesisModelSelection.resolve(modelID)
+                let selection = try SpeechSynthesisModelSelection.resolve(modelID)
+                guard selection.backend != .drama3 else {
+                    throw APIRequestValidationError.invalidField("model", "DRAMA-3 is available through the local speech synthesize CLI")
+                }
+                return selection
             } catch Qwen3TTSError.unsupportedModelId {
                 throw APIRequestValidationError.invalidField(
                     "model", "use a mere.run TTS model id or a local supported TTS model path"
@@ -54,7 +58,7 @@ extension APIServerContract {
         } catch SpeechSynthesisError.invalidInput(let field, let message) {
             throw APIRequestValidationError.invalidField(field == .text ? "input" : field.rawValue, message)
         }
-        let voiceDescription = voiceDescription(for: request.voice, instructions: request.instructions)
+        var voiceDescription = voiceDescription(for: request.voice, instructions: request.instructions)
         var promptUTF8Bytes = 0
         for component in [input, voiceDescription] {
             let componentBytes = component.utf8.count
@@ -67,15 +71,22 @@ extension APIServerContract {
             promptUTF8Bytes += componentBytes
         }
         let modelID = normalizedSpeechModelID(request.model)
-        if request.seed != nil || request.cfg_scale != nil {
+        if request.seed != nil || request.cfg_scale != nil || (try? SpeechSynthesisModelSelection.resolve(modelID).backend) == .phonon {
             let selection: SpeechSynthesisModelSelection
-            do {
-                selection = try SpeechSynthesisModelSelection.resolve(modelID)
-            } catch {
-                throw APIRequestValidationError.invalidField("model", "expected a supported Breeze TTS 2 model")
+            do { selection = try SpeechSynthesisModelSelection.resolve(modelID) }
+            catch { throw APIRequestValidationError.invalidField("model", "expected a supported TTS model") }
+            if request.seed != nil && selection.backend == .qwen3 {
+                throw APIRequestValidationError.invalidField("seed", "seed requires Breeze TTS 2 or Phonon 31m")
             }
-            guard selection.backend == .breeze else {
-                throw APIRequestValidationError.invalidField("model", "seed and cfg_scale require Breeze TTS 2")
+            if request.cfg_scale != nil && selection.backend != .breeze {
+                throw APIRequestValidationError.invalidField("cfg_scale", "cfg_scale requires Breeze TTS 2")
+            }
+            if selection.backend == .phonon {
+                guard request.voice == nil || request.voice == "default", normalizedOptional(request.instructions) == nil else {
+                    throw APIRequestValidationError.invalidField("voice", "Phonon accepts only its default precomputed voice without instructions")
+                }
+                voiceDescription = ""
+                guard speed == 1 else { throw APIRequestValidationError.invalidField("speed", "Phonon supports only its native speaking rate") }
             }
         }
         return SpeechPlan(

@@ -65,6 +65,13 @@ public enum ChatRequestResolver {
             topK = LagunaResources.recommendedTopK
             minP = LagunaResources.recommendedMinP
         }
+        if modelID == LFM2Resources.a2b24BBF16ModelId
+            || modelID == LFM2Resources.a2b24BUpstreamRepoId.lowercased() {
+            temperature = 0.1
+            topP = 1
+            topK = 50
+            thinking = true
+        }
         switch policy {
         case .command:
             if modelID == LFM2Resources.visionModelId

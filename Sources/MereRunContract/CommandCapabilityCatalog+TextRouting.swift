@@ -42,6 +42,7 @@ extension MereRunCapabilityCatalog {
         case nemotronH = "nemotron-h"
         case nemotronOmni = "nemotron-omni"
         case lfm2
+        case lfm2A2B = "lfm2-a2b-24b"
         /// The 8-bit LFM2.5 A1B mixture of experts: the one LFM2.5 runtime that loads text LoRA
         /// adapters.
         case lfm2A1B = "lfm2-a1b"
@@ -113,6 +114,7 @@ extension MereRunCapabilityCatalog {
                     "text-chat-lfm25-2.6b-4bit", "text-chat-lfm25-2.6b-qad-4bit", "text-chat-lfm25-2.6b-bf16"
                 ]
             ),
+            .init(TextChatFamily.lfm2A2B, title: "LFM2.5 24B-A2B", models: ["text-chat-lfm25-24b-a2b-bf16"]),
             .init(TextChatFamily.lfm2A1B, title: "LFM2.5 A1B 8-bit", models: ["text-chat-lfm25-a1b-8bit"]),
             .init(TextChatFamily.lfm2VL, title: "LFM2.5-VL", models: ["vision-chat-lfm25-3b-8bit", "vision-chat-lfm25-3b-bf16"]),
             // Checkpoints whose config carries no vision tower.

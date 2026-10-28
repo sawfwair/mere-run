@@ -861,6 +861,21 @@ extension MereRunModelManifest {
                     "\(LFM2Resources.a1bBF16UpstreamRepoId)@\(LFM2Resources.a1bBF16UpstreamRevision)",
                 createdAt: createdAt
             )
+        case .lfm25A2B24BBF16:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .lfm2,
+                family: .liquid,
+                tier: .medium,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.chat],
+                components: q35TextComponents,
+                upstreamRepoId:
+                    "\(LFM2Resources.a2b24BUpstreamRepoId)@\(LFM2Resources.a2b24BUpstreamRevision)",
+                createdAt: createdAt
+            )
         case .lfm25Small1_2BBF16:
             return MereRunModelManifest(
                 id: modelID.rawValue,
@@ -1664,6 +1679,21 @@ extension MereRunModelManifest {
                 components: genericTextComponents,
                 upstreamRepoId: "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
                 createdAt: createdAt
+            )
+        case .drama3TTS:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .drama3TTS, family: .tts,
+                tier: .latest, variant: .standard, precision: .unknown,
+                defaults: nil, supports: [.speechSynthesis], components: genericTextComponents,
+                upstreamRepoId: "fishaudio/drama-3@dd64a85cd82e9521f7202610ede97b367fc83946",
+                createdAt: createdAt
+            )
+        case .phonon31m:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .phononTTS, family: .tts, tier: .nano,
+                variant: .standard, precision: .bf16, defaults: nil,
+                supports: [.speechSynthesis], components: genericTextComponents,
+                upstreamRepoId: "\(PhononResources.repository)@\(PhononResources.revision)", createdAt: createdAt
             )
         case .breezeTTS2:
             return MereRunModelManifest(

@@ -1,0 +1,122 @@
+[
+  {
+    "id": "short-hello",
+    "text": "Hello world.",
+    "scope": "supported"
+  },
+  {
+    "id": "short-yes",
+    "text": "Yes.",
+    "scope": "supported"
+  },
+  {
+    "id": "short-thanks",
+    "text": "No, thank you.",
+    "scope": "supported"
+  },
+  {
+    "id": "welcome",
+    "text": "Welcome home. It is good to see you again.",
+    "scope": "supported"
+  },
+  {
+    "id": "question",
+    "text": "Could you please close the window before you leave?",
+    "scope": "supported"
+  },
+  {
+    "id": "directions",
+    "text": "Turn left at the next street, then continue straight ahead until you reach the bridge.",
+    "scope": "supported"
+  },
+  {
+    "id": "story",
+    "text": "The little fox waited beneath the old oak tree while the rain tapped softly on the leaves.",
+    "scope": "supported"
+  },
+  {
+    "id": "contrast",
+    "text": "I thought you said Tuesday, but the invitation says Thursday.",
+    "scope": "supported"
+  },
+  {
+    "id": "negation",
+    "text": "Please do not turn off the power until the update is complete.",
+    "scope": "supported"
+  },
+  {
+    "id": "contractions",
+    "text": "I can't believe we've already finished. Let's take a short break.",
+    "scope": "supported"
+  },
+  {
+    "id": "list",
+    "text": "We need bread, milk, apples, carrots, and a small bag of coffee.",
+    "scope": "supported"
+  },
+  {
+    "id": "quoted",
+    "text": "She said, \"That is exactly what I was hoping for!\"",
+    "scope": "supported"
+  },
+  {
+    "id": "unicode",
+    "text": "We stopped at the café before visiting the museum.",
+    "scope": "supported"
+  },
+  {
+    "id": "digits-spoken",
+    "text": "The code is seven three nine zero two four. Please repeat it slowly.",
+    "scope": "supported"
+  },
+  {
+    "id": "date-spoken",
+    "text": "Your appointment is on October twenty third at ten thirty in the morning.",
+    "scope": "supported"
+  },
+  {
+    "id": "currency-spoken",
+    "text": "The total is twenty five dollars and fifty cents.",
+    "scope": "supported"
+  },
+  {
+    "id": "email-spoken",
+    "text": "Send the report to Alice at example dot org.",
+    "scope": "supported"
+  },
+  {
+    "id": "unit-spoken",
+    "text": "The package weighs three point five kilograms and is twenty centimeters wide.",
+    "scope": "supported"
+  },
+  {
+    "id": "long-sentence",
+    "text": "Before leaving the house please check that all the windows are closed and that the kitchen light is switched off because the weather forecast says strong winds and heavy rain will arrive later this afternoon and we would like to keep the rooms warm and dry until everyone returns home for dinner.",
+    "scope": "supported"
+  },
+  {
+    "id": "multi-sentence",
+    "text": "The train arrived early. We found our seats and put the bags on the shelf. Outside, the city slowly disappeared behind green fields. A child pointed at a horse near the fence. Soon the conductor came to check our tickets. We settled back and enjoyed the quiet journey.",
+    "scope": "supported"
+  },
+  {
+    "id": "structured-raw",
+    "text": "Your appointment is on October 23 at 10:30 am.",
+    "scope": "diagnostic_structured"
+  },
+  {
+    "id": "currency-raw",
+    "text": "The total is $25.50.",
+    "scope": "diagnostic_structured"
+  },
+  {
+    "id": "email-raw",
+    "text": "Send the report to alice@example.org.",
+    "scope": "diagnostic_structured"
+  },
+  {
+    "id": "phone-raw",
+    "text": "Call 555-0124 for help.",
+    "scope": "diagnostic_structured"
+  }
+]

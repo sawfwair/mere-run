@@ -18,10 +18,10 @@ struct SpeechSynthesize: AsyncParsableCommand {
         commandName: "synthesize",
         abstract: "Generate speech from text using a native TTS model.",
         discussion: """
-        Converts text to speech using Qwen3-TTS or Breeze TTS 2.
+        Converts text to speech using Qwen3-TTS, Breeze TTS 2, Phonon 31m, or DRAMA-3.
         Qwen3-TTS is downloaded from Hugging Face on first use. Breeze TTS 2
-        requires an explicit license-reviewed model pull for research and
-        non-commercial use.
+        and DRAMA-3 require an explicit license-reviewed model pull.
+        DRAMA-3 uses inline event and speaker tags for delivery control.
 
         The CustomVoice checkpoint (speech-tts-qwen3-customvoice) also speaks as a named speaker in
         style mode: \(Qwen3TTSResources.customVoiceSpeakers.joined(separator: ", ")).
@@ -31,7 +31,9 @@ struct SpeechSynthesize: AsyncParsableCommand {
           mere.run speech synthesize "Hello, world!" -o hello.wav
           mere.run speech synthesize "Welcome to mere.run." --voice "A calm British male voice" -o welcome.wav
           mere.run speech synthesize "Welcome to mere.run." --model speech-tts-qwen3-customvoice --speaker ryan -o welcome.wav
+          mere.run speech synthesize "Hello." --model speech-tts-phonon-31m -o phonon.wav
           mere.run speech synthesize "Hello." --model speech-tts-breeze-2 --voice "A warm voice" -o breeze.wav
+          mere.run speech synthesize "[excited] Hello!" --model speech-tts-drama-3 --seed 42 -o drama.wav
         """
     )
 
@@ -41,7 +43,7 @@ struct SpeechSynthesize: AsyncParsableCommand {
     @Option(name: [.customShort("o"), .long], help: "Output WAV file path (required).")
     var output: String
 
-    @Option(name: [.customShort("m"), .long], help: "TTS model id (Qwen3 or speech-tts-breeze-2) or a local model path.")
+    @Option(name: [.customShort("m"), .long], help: "TTS model id (Qwen3, speech-tts-breeze-2, speech-tts-phonon-31m, or speech-tts-drama-3) or a local model path.")
     var model: String = Qwen3TTSResources.defaultModelId
 
     @Option(
@@ -74,7 +76,7 @@ struct SpeechSynthesize: AsyncParsableCommand {
     @Option(name: [.long], help: "Sampling temperature (default: 0.6).")
     var temperature: Float = TTSRequest.defaultTemperature
 
-    @Option(name: [.long], help: "Breeze TTS 2 sampling seed (unsigned integer).")
+    @Option(name: [.long], help: "Breeze TTS 2, Phonon, or DRAMA-3 sampling seed (unsigned integer).")
     var seed: UInt64?
 
     @Option(name: [.customLong("cfg-scale")], help: "Breeze TTS 2 voice guidance scale (0–20; default: 4).")
@@ -126,12 +128,18 @@ struct SpeechSynthesize: AsyncParsableCommand {
         try SpeechSynthesisPlan.validateStreamingOptions(streamingOptions)
         try SpeechSynthesisPlan.validateCFGScale(cfgScale)
         let selection = try SpeechSynthesisModelSelection.resolve(model)
-        if selection.backend != .breeze && (seed != nil || cfgScale != nil) {
-            throw ValidationError("--seed and --cfg-scale are supported only by Breeze TTS 2.")
+        if selection.backend == .qwen3 && seed != nil {
+            throw ValidationError("--seed requires Breeze TTS 2, Phonon 31m, or DRAMA-3.")
         }
-        if selection.backend == .breeze && mode == .clone
+        if selection.backend != .breeze && cfgScale != nil {
+            throw ValidationError("--cfg-scale is supported only by Breeze TTS 2.")
+        }
+        if selection.backend == .phonon {
+            try PhononGenerator.validate(synthesisPlan(outputURL: URL(fileURLWithPath: output)).request)
+        }
+        if (selection.backend == .breeze || selection.backend == .drama3) && mode == .clone
             && normalized(profile) == nil && normalized(refText) == nil {
-            throw ValidationError("Breeze TTS 2 cloning requires --ref-text with the exact reference transcript or a saved profile.")
+            throw ValidationError("This model requires --ref-text with the exact reference transcript or a saved profile.")
         }
         if Self.synthesizerOverride == nil {
             try MLXBundleSupport.ensureAvailable(quiet: quiet)
@@ -141,13 +149,13 @@ struct SpeechSynthesize: AsyncParsableCommand {
         let plan = try synthesisPlan(outputURL: outputURL, cloneReference: reference)
         try plan.validateForExecution()
         if let executor = Self.synthesizerOverride {
-            try await run(plan: plan, executor: executor, modelName: selection.backend == .breeze ? "Breeze TTS 2" : "Qwen3-TTS")
+            try await run(plan: plan, executor: executor, modelName: selection.displayName)
             return
         }
         let generator = selection.makeGenerator()
         do {
             try await run(plan: plan, executor: selection.executor(using: generator),
-                          modelName: selection.backend == .breeze ? "Breeze TTS 2" : "Qwen3-TTS")
+                          modelName: selection.displayName)
             await generator.unload()
         } catch {
             await generator.unload()

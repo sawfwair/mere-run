@@ -206,6 +206,7 @@ mereRunCoreDependencies.append("MereRunGemmaModel")
 mereRunCoreDependencies.append("MereRunCoreMLModel")
 mereRunCoreDependencies.append("MereRunLTXModel")
 mereRunCoreDependencies.append("AudioCodecs")
+mereRunCoreDependencies.append("AudioDrama3Model")
 mereRunCoreDependencies.append("AudioQwen3ASRModel")
 mereRunCoreDependencies.append(.product(name: "Crypto", package: "swift-crypto"))
 mereRunCoreDependencies.append(.product(name: "Transformers", package: "swift-transformers"))
@@ -326,6 +327,7 @@ if hasMediaIOTarget {
 }
 
 var mereRunCoreTestDependencies: [Target.Dependency] = [
+  "AudioDrama3Model",
   "MereRunCoreMLModel",
   "MereRunLagunaModel",
   "MereRunH3Model",
@@ -535,6 +537,27 @@ targets.append(
 
 targets.append(
   .target(
+    name: "AudioDrama3Model",
+    dependencies: ["MereRunQwenModel", "MereRunKVCache", "MereRunTensor"]
+      + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN") + mlxDependency("MLXRandom"),
+    path: "Sources/AudioDrama3Model",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+targets.append(
+  .testTarget(
+    name: "Drama3RuntimeTests",
+    dependencies: ["AudioDrama3Model", "MereRunMLXTestSupport", "MereRunTensor"]
+      + mlxDependency("MLX") + mlxDependency("MLXNN"),
+    path: "Tests/Drama3RuntimeTests",
+    exclude: ["Fixtures"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
     name: "MereRunDecode",
     dependencies: mlxDependency("MLX") + mlxDependency("MLXRandom"),
     path: "Sources/MereRunDecode",
@@ -630,6 +653,26 @@ targets.append(
       + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
     path: "Sources/AudioQwen3TTSModel",
     exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "AudioPhononModel",
+    dependencies: mlxDependency("MLX") + mlxDependency("MLXFast")
+      + mlxDependency("MLXNN") + mlxDependency("MLXRandom"),
+    path: "Sources/AudioPhononModel",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+targets.append(
+  .testTarget(
+    name: "AudioPhononModelTests",
+    dependencies: ["AudioPhononModel", "MereRunMLXTestSupport"],
+    path: "Tests/AudioPhononModelTests",
+    resources: [.copy("Fixtures")],
     swiftSettings: commonSwiftSettings
   )
 )
@@ -893,7 +936,7 @@ targets.append(
 targets.append(
   .target(
     name: "AudioTTS",
-    dependencies: audioRuntimeDependencies + ["AudioQwen3TTSModel", "AudioBreezeTTSModel"],
+    dependencies: audioRuntimeDependencies + ["AudioQwen3TTSModel", "AudioBreezeTTSModel", "AudioPhononModel", "AudioDrama3Model"],
     path: "Sources/AudioTTS",
     exclude: [
       "Qwen3TTS/README.md"
@@ -1208,7 +1251,7 @@ if !isLinuxPackage {
 var packageDependencies: [Package.Dependency] = (useLinuxPrebuiltMLX ? [] : [
   .package(
     url: "https://github.com/sawfwair/mlx-swift",
-    revision: "001d1aa3e5655d7efc073fb9632f952f57cdf528"
+    revision: "0fd8ba07f6fcc3540c2c02709592d7dfab52279c"
   )
 ]) + [
   .package(

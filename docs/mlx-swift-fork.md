@@ -1,30 +1,36 @@
 # mlx-swift fork policy and compiled-call overhead
 
 `mere.run` pins the public `sawfwair/mlx-swift` fork at
-`001d1aa3e5655d7efc073fb9632f952f57cdf528`. It contains upstream
-`mlx-swift` through `97cf19efeaa4e929415e75982e999adb34f62c0d`. The embedded
+`0fd8ba07f6fcc3540c2c02709592d7dfab52279c`. It contains upstream
+`mlx-swift` through `19601207e9a0de51e03ee6ec0c3c5f3784275075`. The embedded
 `sawfwair/mlx` revision is
-`11da2b33a51772c023e2f7d7bc4ba9b3ff7e03ef`, which contains the exact
-upstream MLX v0.32.1 release commit
-`3a6219917e4535575ce5bce2fc2ba27a483a709b`.
+`735d48ca1436dc2648073c548715af3aea5d32c7`, which contains the exact
+upstream MLX v0.32.4 release commit
+`36969c094354086e15d2a327a9c50feb20b9cf11`.
 
 The owned patch stack carries the Linux/CUDA package bridge, executor-safe
 Swift streams, native affine 1-bit CUDA quantize/dequantize/QMV execution, the
 Metal affine 1-bit path, custom quantized-kernel headers, NVFP4 staging, the
-generation-17 NAX correctness gate, M4/H3 tuning, and executor-safe compile
+generation-17 quantized NAX correctness gate, M4/H3 tuning, and executor-safe compile
 cache bridging. The obsolete unaligned
 1-bit fast-kernel tail was not replayed because upstream now requires aligned
 fast dispatch; the fork instead tests matching host/kernel alignment directly.
 Changes stay scoped to their bit width, group size, quantization mode, and
 backend so stock 2-bit and wider models keep their existing paths.
 
-The pin exposes `Stream.Context` and `Stream.withDefaultStream` for reusable
-task-local CPU and GPU streams. MLX retains backend streams until process exit.
-Long-running servers can lease a context to each active operation, synchronize
-it when the operation ends, and reuse it for a later operation. Callers must
-serialize graph construction and evaluation on each context; overlapping
-operations need distinct contexts. Existing `withNewDefaultStream` calls retain
-their allocation behavior.
+The pin exposes `Stream.Context` and `Stream.withDefaultStream` over upstream's
+pooled task-local CPU and GPU streams. Companion streams are created lazily,
+so CPU work does not require an available GPU. Long-running servers can lease
+a context to each active operation, synchronize it when the operation ends,
+and reuse it for a later operation. Callers must serialize graph construction
+and evaluation on each context; overlapping operations need distinct contexts.
+Released streams return to upstream's pool for later scopes.
+
+Floating-point matmul, attention, and gated delta follow upstream NAX device
+availability. The generation-17 workaround is local to quantized dispatch:
+ordinary, gathered, sorted-RHS, and alignment decisions all require generation
+18 or later. This preserves the previous quantized paths while restoring the
+floating-point paths used by original BF16 checkpoints.
 
 The pin also lets an MLXFast custom Metal kernel explicitly request
 the core quantized helper headers. The source marker
@@ -35,11 +41,84 @@ attention and gather-tile optimizations now live in MLX core source, so
 regenerating mlx-swift's AOT sources reproduces them instead of depending on
 generated-file-only commits.
 
-The vendored metallib also compiles MLX core's `dot.metal` directly. MLX 0.32.1
-does not copy that always-required source into `mlx-generated/metal`, while the
-host runtime still dispatches its FP32, FP16, and BF16 symbols. The provenance
-digest therefore covers the core source and its transitive headers in addition
-to the generated kernel tree, and `--verify-only` checks the resulting symbols.
+The refreshed generator copies `dot.metal` and the new gather-offset,
+attention-VJP, gated-delta, and fast-fence kernels into `mlx-generated/metal`.
+The bundle builder compiles each generated root source once. The provenance
+digest covers the generated kernel tree plus the original dot source and its
+transitive core headers; `--verify-only` checks the required FP32, FP16, and
+BF16 dot symbols. Fast-fence kernels are guarded by Metal 3.2 for the fork's
+baseline macOS 14 shader builds. mere.run's bundle targets macOS 15 and Metal 3.2.
+
+## v0.32.4 integration
+
+The [core patch inventory](https://github.com/sawfwair/mlx/blob/735d48ca1436dc2648073c548715af3aea5d32c7/FORK_PATCHES.md)
+classifies all 20 previous core commits. The
+[Swift inventory](https://github.com/sawfwair/mlx-swift/blob/0fd8ba07f6fcc3540c2c02709592d7dfab52279c/FORK_PATCHES.md)
+classifies all 19 previous Swift commits. Shared upstream 1-bit CPU/Metal
+support and CUDA shutdown behavior replace overlapping implementations.
+NVFP4 staging retains the upstream global-scale path; the owned fast path
+remains scoped to non-global-scale weights. The retained CPU 1-bit transposed
+matmul regression additionally requires float accumulation for FP16/BF16
+inputs, without changing wider affine arithmetic or test tolerances.
+
+The C bindings pin the [portable I/O patch](https://github.com/sawfwair/mlx-c/pull/1)
+at `dc502b106252d1899e93dd6f6da0a77a2366e80b`, based on upstream
+`57731b00e8bed710e0750e7356da9f18f8eb3e20`. Error-message construction uses
+`std::string` and `std::to_string`, preserving the diagnostics on Ubuntu
+22.04/Jammy without requiring newer C++ library formatting support. The Swift
+compile-cache bridge also omits an unused private umbrella header.
+
+Final Linux portability corrections exclude Metal-only cross-entropy and
+gated-delta host files and spell the dependent CPU reduction accumulator
+type with `typename`. Generated GPU sources and the bundled Metal binary
+remain unchanged. Its provenance revisions are updated while retaining the
+original build timestamp. The CPU spelling fix passes a fresh C++ build and
+all 298 tests.
+
+On an M5 Max, the scoped fix passes 999 Python tests on Metal (56 skips),
+including all 60 quantization cases (one CUDA-only skip), and 298 C++ tests.
+The full Swift Xcode plan passes 1,064 tests with three skips and no failures,
+including reusable contexts, concurrent first traces, cross-thread cache
+erasure, lock ordering, and FP16/BF16 floating-point and quantized NAX checks.
+The Python runner, Xcode plan, and downstream `scripts/check.sh` select
+`MLX_ENABLE_TF32=0` for strict FP32 reference fixtures. Direct fixture runs
+should use the same setting; production inference defaults are unchanged.
+Regenerating the AOT sources and copied headers again produces identical bytes.
+Native BF16 qualification also passes all three installed tests and 50 native
+LFM2 fixtures with no skips. Earlier release API arithmetic, streaming completion, a tool
+round trip, and retrieval from 24,042 prompt tokens pass under a 32K budget.
+Plain streaming still exposes raw reasoning markup in `delta.content`.
+
+The matched 127,242-token Python ablation isolates the former global NAX
+guard: disabling NAX reproduces the old failure token-for-token, while upstream
+availability returns the correct code twice with all 325 tokens matching
+stock upstream. The scoped guard preserves generation-17 quantized dispatch.
+A second mismatch was the terminal prompt-token forward: native prefill used
+the whole final chunk for the first generation logits, while upstream leaves
+one prompt token for a singleton forward. Substituting only the native
+boundary into the passing Python runner breaks retrieval. Matching upstream's
+boundary fixes the native release probe: all 127,242 prompt tokens are consumed,
+the answer is exactly `TANGERINE-4827`, and generation stops after 295 tokens
+within the unchanged 2,048-token budget. The run uses original BF16 weights,
+production precision defaults, and a fresh server with no reused prompt cache.
+Broader long-context retrieval quality and numerical parity remain unqualified.
+
+The three installed native BF16 checks pass with production precision defaults.
+All 50 native LFM2 fixtures pass with FP32 reference precision, including
+terminal-token boundary, semantic-checkpoint, and resumed-prefill regressions.
+All 22 application quantized/binary-linear GPU checks pass. The small-batch
+Q4 kernel promotes BF16 inputs to FP32 before adding the bias sum, matching
+upstream serial QMV arithmetic. This restores bit-exact small and wide batching;
+a cancellation regression covers positive and negative residuals across batch
+widths 2–9.
+
+The final downstream local gate passes 5,561 XCTest cases (476 skips) and
+all 196 Swift Testing cases. Earlier refresh runs also complete both E2E
+check modes. The standard core and installed
+runtime smoke presets are absent and skip six and eleven probes respectively;
+those skips do not replace the separately executed BF16 qualification above.
+CUDA execution and older Apple hardware/OS execution remain unvalidated on
+this host; the dependency refreshes remain draft PRs.
 
 ## Refresh procedure
 
@@ -76,8 +155,11 @@ security fix or a correctness/performance change in a path mere.run owns.
 The previously staged compiled-call optimization is included. MLX v0.32.1
 makes compile caches thread-local and cache erasure thread-safe, and the Swift
 bridge retains the originating cache identities across executors. With that
-core prerequisite in place, independent compiled functions no longer take the
-global Swift evaluation lock. The regression suite covers concurrent first
+core prerequisite in place, independent stateless compiled functions no longer
+take the global Swift evaluation lock. Stateful calls use upstream's recursive
+instance lock with the global evaluation lock acquired first. Namespaced C
+bridge functions retain every originating core cache for finalization across
+Swift executors, alongside the standard mlx-c compile API. The regression suite covers concurrent first
 traces, shape changes, numerical evaluation, and cross-thread cache erasure.
 
 An eight-worker, 2,000-call-per-worker comparison on the same machine isolates that

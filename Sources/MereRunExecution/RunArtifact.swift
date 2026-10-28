@@ -18,7 +18,16 @@ public struct RunArtifact: Codable, Hashable, Sendable {
         defer { try? handle.close() }
         var hash = SHA256()
         var byteCount: UInt64 = 0
-        while let bytes = try handle.read(upToCount: 1_048_576), !bytes.isEmpty {
+        // Foundation's autoreleased read buffers otherwise accumulate until
+        // the caller's pool drains when hashing multi-gigabyte checkpoints.
+        func readChunk() throws -> Data? {
+            #if canImport(ObjectiveC)
+            return try autoreleasepool { try handle.read(upToCount: 1_048_576) }
+            #else
+            return try handle.read(upToCount: 1_048_576)
+            #endif
+        }
+        while let bytes = try readChunk(), !bytes.isEmpty {
             hash.update(data: bytes)
             byteCount += UInt64(bytes.count)
         }

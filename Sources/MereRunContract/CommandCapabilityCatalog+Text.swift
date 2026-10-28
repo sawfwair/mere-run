@@ -33,12 +33,13 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "2048", group: Group.sampling, tier: .standard,
                 range: .init(min: 1, max: 131_072, step: 1)
             ),
-            // LFM2.5 caps the context at 32768 tokens whatever is asked for, and takes any smaller one.
+            // Existing LFM2.5 lanes retain their 32K operational cap; 24B-A2B declares 128K.
             .init(
                 flag: "--context-size", label: "Context size", kind: .integer,
                 group: Group.sampling, tier: .expert, range: .init(min: 512, max: 1_048_576, step: 1)
             ).scoped(
-                Chat.rule(.lfm2, range: .init(min: 1, max: 32_768, step: 1), severity: .warning),
+                Chat.rule(.lfm2A2B, range: .init(min: 1, max: 131_072, step: 1), severity: .warning),
+                .rule(.lfm2, range: .init(min: 1, max: 32_768, step: 1), severity: .warning),
                 .rule(.lfm2A1B, range: .init(min: 1, max: 32_768, step: 1), severity: .warning),
                 .rule(.lfm2VL, range: .init(min: 1, max: 32_768, step: 1), severity: .warning)
             ),
@@ -64,9 +65,10 @@ extension MereRunCapabilityCatalog {
                 flag: "--kv-bits", label: "KV bits", kind: .number,
                 group: Group.run, tier: .expert, range: .init(min: 2, max: 8, step: 0.5)
             ).scoped(
-                Chat.only(.gemma4, .gemma4Unified, .inkling, .lfm2, .lfm2A1B, .lfm2VL, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring),
+                Chat.only(.gemma4, .gemma4Unified, .inkling, .lfm2, .lfm2A2B, .lfm2A1B, .lfm2VL, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring),
                 .rule(.inkling, values: ["4", "8"], severity: .warning),
                 .rule(.lfm2, values: ["4", "8"], severity: .warning),
+                .rule(.lfm2A2B, values: ["4", "8"], severity: .warning),
                 .rule(.lfm2A1B, values: ["4", "8"], severity: .warning),
                 .rule(.lfm2VL, values: ["4", "8"], severity: .warning),
                 .rule(.q35, values: ["4", "8"]), .rule(.q35VL, values: ["4", "8"]), .rule(.q38, values: ["4", "8"])
@@ -80,7 +82,7 @@ extension MereRunCapabilityCatalog {
                 choices: ["uniform", "polar", "turboquant"],
                 group: Group.run, tier: .expert, choiceSpellings: .caseInsensitive
             ).scoped(
-                Chat.only(.gemma4, .gemma4Unified, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2A1B, .lfm2VL]),
+                Chat.only(.gemma4, .gemma4Unified, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2A2B, .lfm2A1B, .lfm2VL]),
                 .rule(.q35, values: ["uniform"]), .rule(.q35VL, values: ["uniform"]), .rule(.q38, values: ["uniform"])
             ),
             // The affine runtimes choose their own group size and start; Inkling and LFM2.5 never
@@ -88,11 +90,11 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--kv-group-size", label: "KV group size", kind: .integer,
                 group: Group.run, tier: .expert
-            ).scoped(Chat.only(.gemma4, .gemma4Unified, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2A1B, .lfm2VL])),
+            ).scoped(Chat.only(.gemma4, .gemma4Unified, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2A2B, .lfm2A1B, .lfm2VL])),
             .init(
                 flag: "--quantized-kv-start", label: "Quantized KV start", kind: .integer,
                 group: Group.run, tier: .expert, range: .init(min: 0, step: 1)
-            ).scoped(Chat.only(.gemma4, .gemma4Unified, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2A1B, .lfm2VL])),
+            ).scoped(Chat.only(.gemma4, .gemma4Unified, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2A2B, .lfm2A1B, .lfm2VL])),
             .init(flag: "--model-root", aliases: ["-m"], label: "Model root", kind: .directory, group: Group.modelAndAdapters, tier: .expert),
             .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             // Constrained JSON decoding runs on Gemma 4 and the Qwen-family runtimes only.
@@ -106,7 +108,7 @@ extension MereRunCapabilityCatalog {
                 Chat.rule(.flint, values: ["text"]), .rule(.kolibri, values: ["text"]), Chat.rule(.diffusionGemma, values: ["text"]), .rule(.laguna, values: ["text"]),
                 .rule(.inkling, values: ["text"]), .rule(.museGlimmer, values: ["text"]),
                 .rule(.nemotronBolt, values: ["text"]), .rule(.nemotronH, values: ["text"]), .rule(.nemotronOmni, values: ["text"]),
-                .rule(.lfm2, values: ["text"]), .rule(.lfm2A1B, values: ["text"]), .rule(.lfm2VL, values: ["text"]),
+                .rule(.lfm2, values: ["text"]), .rule(.lfm2A2B, values: ["text"]), .rule(.lfm2A1B, values: ["text"]), .rule(.lfm2VL, values: ["text"]),
                 .rule(.gguf, values: ["text"]), .rule(.psi, values: ["text"])
             ),
             .init(
@@ -126,7 +128,7 @@ extension MereRunCapabilityCatalog {
             ).scoped(Chat.only(
                 .gemma4, .gemma4Unified, .laguna, .inkling, .lfm2A1B,
                 ignoredBy: [
-                    .diffusionGemma, .museGlimmer, .nemotronH, .nemotronBolt, .nemotronOmni, .lfm2, .lfm2VL, .q35, .q35VL, .q38, .gguf, .psi
+                    .diffusionGemma, .museGlimmer, .nemotronH, .nemotronBolt, .nemotronOmni, .lfm2, .lfm2A2B, .lfm2VL, .q35, .q35VL, .q38, .gguf, .psi
                 ]
             )),
             .init(flag: "--thinking", aliases: ["--show-thinking"], label: "Show thinking", kind: .boolean, group: Group.sampling, tier: .standard),

@@ -522,6 +522,7 @@ final class LFM2FeedForward: Module {
     private let usesDenseWeightNames: Bool
     private let topK: Int
     private let normTopKProb: Bool
+    private let routedScalingFactor: Float
 
     init(config: LFM2Config, layerIndex: Int) {
         self.usesDense = config.modelType == "lfm2" || layerIndex < config.numDenseLayers
@@ -531,6 +532,7 @@ final class LFM2FeedForward: Module {
             || (layerIndex < config.numDenseLayers && config.quantization == nil)
         self.topK = max(1, config.numExpertsPerTok)
         self.normTopKProb = config.normTopKProb
+        self.routedScalingFactor = config.routedScalingFactor
         if usesDenseWeightNames {
             self._w1.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
             self._w2.wrappedValue = Linear(config.intermediateSize, config.hiddenSize, bias: false)
@@ -560,21 +562,21 @@ final class LFM2FeedForward: Module {
         guard let gate, let switchMLP else {
             preconditionFailure("LFM2 sparse feed-forward modules were not initialized")
         }
-        var scores = softmax(gate(x).asType(.float32), axis: -1)
-        if let expertBias {
-            scores = scores + expertBias
-        }
+        let probabilities = sigmoid(gate(x))
+        // Bias balances expert selection; it must not change the mixture weights.
+        let selectionScores = expertBias.map { probabilities.asType(.float32) + $0 } ?? probabilities
 
         // Expert selection is discrete. Preserve gradients through the
         // selected scores, but do not request a VJP for integer indices.
+        // Match upstream's positive-score tail partition before reducing the mixture.
         let indices = stopGradient(
-            argPartition(-scores, kth: topK - 1, axis: -1)[.ellipsis, 0..<topK]
+            argPartition(selectionScores, kth: -topK, axis: -1)[.ellipsis, (-topK)...]
         )
-        scores = takeAlong(scores, indices, axis: -1)
-        if normTopKProb, topK > 1 {
-            scores = scores / (scores.sum(axis: -1, keepDims: true) + MLXArray(1e-20))
+        var scores = takeAlong(probabilities, indices, axis: -1)
+        if normTopKProb {
+            scores = scores / (scores.sum(axis: -1, keepDims: true) + MLXArray(1e-6))
         }
-        scores = scores.asType(x.dtype)
+        scores = (scores * routedScalingFactor).asType(x.dtype)
 
         let switched = switchMLP(
             x,
