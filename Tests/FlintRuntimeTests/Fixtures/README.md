@@ -23,3 +23,9 @@ compare full and chunked execution across more than two sliding windows.
 These fixtures establish synthetic arithmetic and structural layout agreement.
 They do not establish released-weight inference parity, model quality, memory,
 throughput, or long-context accuracy.
+
+`FlintInstalledQualificationTests` separately exercises a released checkpoint
+through the production loader, chat template, decoder, and tool parser. Set
+`MERERUN_FLINT_CHECKPOINT_ROOT` and `MERERUN_TEST_MLX_DEVICE=gpu` to run it.
+It covers arithmetic, tool history, and retrieval beyond 1,024 prompt tokens.
+The large checkpoint assets and investigation receipts are not test fixtures.

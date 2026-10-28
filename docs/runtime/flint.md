@@ -70,44 +70,37 @@ sigmoid routing with selection-only probability bias, learned attention sinks,
 RoPE placement, and sliding-cache chunk boundaries. The fixture generator uses
 only the Python standard library and is test tooling; inference uses Swift/MLX.
 
-The [2026-10-21 Spark validation](../qualification/flint-spark-2026-10-21.md)
-ran the released INT4 checkpoint through the native Swift/MLX CUDA runtime.
-It covered bounded numerical comparisons, cached decoding, CLI generation,
-API requests, and a tool-call round trip. The initial 4.3-token/s sample used
-dense fallbacks because the source-build environment omitted CUDA JIT headers.
-The [corrected performance investigation](../qualification/flint-spark-performance-2026-10-21.md)
-measured 27.71 and 28.73 tokens/s with native quantized kernels and an optimized
-bridge. These are short diagnostics; performance parity with the publisher's
-NVFP4 engine remains unqualified.
+On an M5 Max with 128 GiB unified memory, both released checkpoints pass
+native Metal arithmetic, a typed `calculate` tool round trip, and retrieval of
+an exact access code from a prompt longer than 1,024 tokens. The BF16 run uses
+the original weights; all fifteen shard hashes match the pinned publisher
+metadata. INT4 uses the published weights and the production loader's pinned
+artifact verification. These runs use production precision defaults.
 
-The [CUDA kernel investigation](../qualification/flint-spark-kernels-2026-10-21.md)
-records a quantized matrix shared-memory race, BF16 accumulation loss, and the
-native preparation fixes. It also covers fixed-capacity caches, asynchronous
-decode submission, and the remaining 36 GB Mac qualification boundary.
+A five-token probe (`[1, 33, 204, 1024, 42]`) compares all 750,720 logits with an
+independent PyTorch 2.10 CPU implementation, first checked against the scalar
+fixture. Native full-sequence and chunk sizes 1, 3, and 5 agree with that
+reference on all five next-token choices for each checkpoint. Logits differ:
 
-### CUDA performance on Spark
+| Checkpoint | Full-sequence maximum absolute difference | RMS difference |
+| --- | --- | --- |
+| Original BF16 | 3.6158 | 0.6936 |
+| Published INT4 | 1.3944 | 0.3199 |
 
-The kernel and decode investigation measures approximately 55 tokens/s with
-standard CUDA graph limits and 74 tokens/s with the tested graph profile on GB10.
-The measured build uses CUDA 13, architecture 121, and release builds of both
-Swift and the native libraries. For a source build, set
-`MERERUN_CUDA_ARCHITECTURES=121` during native preparation and follow the
-[Linux setup instructions](../linux-quickstart.md) for exports and compilation.
+This establishes bounded greedy-choice agreement, not numerical equivalence,
+broad model quality, or qualification of the declared context limit.
 
-For a dedicated Flint CUDA process, apply the profile before starting the CLI:
+To repeat the installed functional regression, point it at either checkpoint:
 
 ```bash
-MERERUN_MLX_CUDA_NATIVE_QUANT=native MLX_ENABLE_TF32=0 \
-MLX_MAX_OPS_PER_BUFFER=256 MLX_MAX_MB_PER_BUFFER=2048 \
-mere.run api serve --engine text-chat-flint --model text-chat-flint-4bit
+MERERUN_TEST_MLX_DEVICE=gpu \
+MERERUN_FLINT_CHECKPOINT_ROOT=/path/to/flint-checkpoint \
+    swift test --filter FlintInstalledQualificationTests
 ```
 
-These settings control graph grouping for that process. They retain the catalog
-memory floor. The measurements use bounded 128- and 1,024-token requests and do
-not establish publisher performance parity or long-context throughput.
-
-Released-weight numerical equivalence, broad tool-use quality, long-context
-accuracy, and Metal execution remain unqualified. Keep the catalog's memory
-estimates: the Spark memory measurement used a short prompt and does not cover
-worst-case working memory. No publisher benchmark is a measurement of this
-implementation.
+Linux preparation includes the CUDA quantized-matrix synchronization and BF16
+accumulation corrections. Their patching tests cover source drift, repeat
+application, and SwiftPM's read-only checkout files. CUDA execution on the
+refreshed dependency pin still requires separate qualification. NVFP4 loading
+is not implemented. Publisher performance parity and broad long-context quality
+are outside this BF16/INT4 runtime's current validation claims.

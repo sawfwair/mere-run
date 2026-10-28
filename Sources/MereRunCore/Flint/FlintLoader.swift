@@ -22,7 +22,9 @@ enum FlintLoader {
         if config.quantization == nil, index == nil { throw FlintModelError.invalidWeights("BF16 requires its source index.") }
         let names = index.map { Set($0.weightMap.values).sorted() }
             ?? FlintArtifactVerification.hashes.keys.filter { $0.hasSuffix(".safetensors") }.sorted()
-        let actualShards = try FileManager.default.contentsOfDirectory(atPath: root.path).filter { $0.hasSuffix(".safetensors") }
+        let actualShards = try FileManager.default.contentsOfDirectory(
+            at: root, includingPropertiesForKeys: nil, options: .skipsHiddenFiles
+        ).map(\.lastPathComponent).filter { $0.hasSuffix(".safetensors") }
         guard Set(names) == Set(actualShards) else { throw FlintModelError.invalidWeights("Shard set differs from the checkpoint index.") }
         var loaded = Set<String>()
         var sourceKeys = Set<String>()

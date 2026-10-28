@@ -31,6 +31,15 @@ final class FlintIntegrationTests: MLXTestCase {
         XCTAssertLessThan(abs(logits - MLXArray(ref.logits).reshaped(logits.shape)).max().item(Float.self), 2e-5)
     }
 
+    func testLoaderIgnoresHiddenMetadataButRejectsUnindexedShards() throws {
+        let root = try checkpoint()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data("macOS metadata".utf8).write(to: root.appendingPathComponent("._source.safetensors"))
+        XCTAssertNoThrow(try FlintLoader.load(root: root))
+        try Data().write(to: root.appendingPathComponent("unindexed.safetensors"))
+        XCTAssertThrowsError(try FlintLoader.load(root: root))
+    }
+
     func testLoaderRejectsUnindexedAndMissingTensors() throws {
         let root = try checkpoint()
         defer { try? FileManager.default.removeItem(at: root) }

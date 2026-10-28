@@ -17,4 +17,5 @@ Only populated rows are exposed to attention. Single-token decoding submits
 four-layer blocks asynchronously and omits an unnecessary all-zero attention
 mask; the caller evaluates final logits before accepting a token. Prefill keeps
 layerwise evaluation. Linux preparation patches the pinned CUDA kernel race
-and BF16 accumulation policy; qualification receipts live in `docs/qualification/`.
+and BF16 accumulation policy. Validation boundaries are documented in
+`docs/runtime/flint.md`.

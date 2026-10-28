@@ -10,7 +10,8 @@ Use the native Swift/MLX runtime for text, reasoning, and tool conversations.
 Install `text-chat-flint-4bit`, then give the model a bounded coding task. Include
 the relevant source and the behavior that you expect. The published INT4 export
 uses approximately 22.6 GB of disk space. The catalog memory floor is 48 GB;
-released-checkpoint memory and quality remain unqualified for this runtime.
+this remains a conservative admission estimate. Both formats pass bounded
+released-checkpoint checks on an M5 Max with 128 GiB unified memory.
 
 ## Example to adapt
 
@@ -68,6 +69,8 @@ and [native runtime documentation](https://github.com/sawfwair/mere-run/blob/mai
 record the architecture, source revisions, and runtime limits. Source links
 require a network connection. The recipe itself is available offline.
 
-Synthetic arithmetic and contract tests do not qualify released-weight parity,
-long-context accuracy, tool-use quality, memory, or throughput. This recipe has
-not been validated with released-model inference.
+Released BF16 and INT4 checks cover arithmetic, a typed tool round trip, and
+retrieval from a prompt longer than 1,024 tokens. A five-token numerical probe
+agrees with an independent reference on next-token choices across the tested
+prefill chunk sizes; logits are not bit-identical. Broader quality, long-context
+limits, minimum-memory fit, and throughput remain unqualified.

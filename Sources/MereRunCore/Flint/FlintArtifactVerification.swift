@@ -17,7 +17,9 @@ enum FlintArtifactVerification {
     ]
 
     static func verify(root: URL) throws {
-        let shards = try FileManager.default.contentsOfDirectory(atPath: root.path).filter { $0.hasSuffix(".safetensors") }
+        let shards = try FileManager.default.contentsOfDirectory(
+            at: root, includingPropertiesForKeys: nil, options: .skipsHiddenFiles
+        ).map(\.lastPathComponent).filter { $0.hasSuffix(".safetensors") }
         guard Set(shards) == Set(hashes.keys.filter { $0.hasSuffix(".safetensors") }) else {
             throw ChatRequestIssue("checkpoint", "Flint INT4 shards must match the pinned export exactly.")
         }
