@@ -77,8 +77,8 @@ The Python runner, Xcode plan, and downstream `scripts/check.sh` select
 `MLX_ENABLE_TF32=0` for strict FP32 reference fixtures. Direct fixture runs
 should use the same setting; production inference defaults are unchanged.
 Regenerating the AOT sources and copied headers again produces identical bytes.
-Native BF16 qualification also passes all three installed tests and 48 GPU
-fixtures with no skips. Release API arithmetic, streaming completion, a tool
+Native BF16 qualification also passes all three installed tests and 50 native
+LFM2 fixtures with no skips. Earlier release API arithmetic, streaming completion, a tool
 round trip, and retrieval from 24,042 prompt tokens pass under a 32K budget.
 Plain streaming still exposes raw reasoning markup in `delta.content`.
 
@@ -86,20 +86,24 @@ The matched 127,242-token Python ablation isolates the former global NAX
 guard: disabling NAX reproduces the old failure token-for-token, while upstream
 availability returns the correct code twice with all 325 tokens matching
 stock upstream. The scoped guard preserves generation-17 quantized dispatch.
-Native release qualification still fails this exact prompt: it processes all
-127,242 input tokens, repeats `UNLIMITED` in reasoning, and exhausts the
-unchanged 2,048-token output budget without a final answer. Reliable native
-128K retrieval and broad numerical parity remain unqualified.
+A second mismatch was the terminal prompt-token forward: native prefill used
+the whole final chunk for the first generation logits, while upstream leaves
+one prompt token for a singleton forward. Substituting only the native
+boundary into the passing Python runner breaks retrieval. Matching upstream's
+boundary fixes the native release probe: all 127,242 prompt tokens are consumed,
+the answer is exactly `TANGERINE-4827`, and generation stops after 295 tokens
+within the unchanged 2,048-token budget. The run uses original BF16 weights,
+production precision defaults, and a fresh server with no reused prompt cache.
+Broader long-context retrieval quality and numerical parity remain unqualified.
 
-The three installed native BF16 checks pass with production precision
-defaults. All 48 native LFM2 GPU fixtures pass with FP32 reference precision.
-The expanded 69-case application GPU run additionally includes quantized
-batching and binary-linear fixtures. Two batching tests fail ten bit-exact
-assertions; an isolated checkout of the previous 0.32.4 pin reproduces the
-same assertions and error values. These are an existing gap at that pin,
-not evidence that all application quantized behavior is qualified.
+The three installed native BF16 checks pass with production precision defaults.
+All 50 native LFM2 fixtures pass with FP32 reference precision, including
+terminal-token boundary, semantic-checkpoint, and resumed-prefill regressions.
+In the separate 21-case application quantized/binary-linear GPU run, two
+batching tests still fail ten bit-exact assertions. The previous 0.32.4 pin
+reproduces identical assertions and error values; this gap remains unchanged.
 
-The final downstream local gate passes 5,558 XCTest cases (475 skips) and
+The final downstream local gate passes 5,560 XCTest cases (475 skips) and
 all 196 Swift Testing cases. Earlier refresh runs also complete both E2E
 check modes. The standard core and installed
 runtime smoke presets are absent and skip six and eleven probes respectively;

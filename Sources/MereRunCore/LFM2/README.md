@@ -53,6 +53,9 @@ downloads through `ManagedModelResolver`, loads tokenizer/template resources,
 applies sharded safetensor weights with `HFSafetensorsWeightsLoader`, pre-fills
 in cancellable chunks, then uses either the pipelined serial loop or the
 row-compacting continuous decode scheduler selected by the serving runtime.
+The final prompt token uses a separate one-token forward, matching upstream
+initialization of the first generation logits. Prefix-cache resumes and
+semantic checkpoints keep the same terminal-token boundary.
 
 The A1B 8-bit text model also supports attention-only low-rank adaptation
 (LoRA) training and loading. `LFM2TextLoRAInjector.swift` wraps only the

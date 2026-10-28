@@ -134,6 +134,17 @@ public actor LFM2Generator: ChatGenerator {
     private static let prefillChunkSize = 512
     private static let prefixKVCacheMaxEntries = 4
 
+    static func nextPrefillEnd(processed: Int, total: Int, checkpoints: Set<Int> = []) -> Int {
+        // Match upstream's one-token forward for the first generation logits.
+        let chunkTotal = processed < total - 1 ? total - 1 : total
+        return RuntimePrefillCheckpointPlanner.nextEnd(
+            processed: processed,
+            total: chunkTotal,
+            chunkSize: prefillChunkSize,
+            checkpoints: checkpoints
+        )
+    }
+
     static func prefillTokensPerSecond(
         promptTokenCount: Int,
         prefillSeconds: Double
@@ -1191,10 +1202,9 @@ public actor LFM2Generator: ChatGenerator {
         while offset < promptTokens.count {
             try Task.checkCancellation()
             try requireCurrentResidency(residencyEpoch)
-            let end = RuntimePrefillCheckpointPlanner.nextEnd(
+            let end = Self.nextPrefillEnd(
                 processed: offset,
                 total: promptTokens.count,
-                chunkSize: Self.prefillChunkSize,
                 checkpoints: checkpointTokenCounts
             )
             let chunk = Array(promptTokens[offset..<end])

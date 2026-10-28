@@ -15,8 +15,9 @@ The format is based on Keep a Changelog.
 - Add `text-chat-lfm25-24b-a2b-bf16`, a pinned native reasoning MoE install
   that loads original LiquidAI safetensors. Expose its declared 131,072-token
   context and required reasoning profile without changing existing model IDs or defaults.
-  Bounded answers, tools, and retrieval pass on an M5 Max; exact near-128K
-  native retrieval still fails and remains unqualified after the NAX scope fix.
+  Bounded answers, tools, and the exact 127,242-token native retrieval probe
+  pass on an M5 Max. Process the final LFM2 prompt token in a separate forward
+  to match upstream initialization of the first generation logits.
 - Correct LFM2 MoE routing, honor tokenizer `ignore_merges`, and align tool-history
   reasoning, JSON spacing, and Python scalar arguments with the upstream template.
 

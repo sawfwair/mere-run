@@ -995,6 +995,38 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         XCTAssertEqual(stats.maxBatchSize, 0)
     }
 
+    func testLFM2PrefillProcessesFinalPromptTokenSeparately() {
+        for (total, expected) in [
+            (1, [1]), (2, [1, 2]), (511, [510, 511]), (512, [511, 512]),
+            (513, [512, 513]), (1024, [512, 1023, 1024]), (1025, [512, 1024, 1025]),
+        ] {
+            var ends: [Int] = []
+            var processed = 0
+            while processed < total {
+                processed = LFM2Generator.nextPrefillEnd(processed: processed, total: total)
+                ends.append(processed)
+            }
+            XCTAssertEqual(ends, expected, "Prompt length \(total)")
+        }
+        XCTAssertEqual(LFM2Generator.nextPrefillEnd(processed: 126_976, total: 127_242), 127_241)
+        XCTAssertEqual(LFM2Generator.nextPrefillEnd(processed: 127_241, total: 127_242), 127_242)
+    }
+
+    func testLFM2PrefillCheckpointsAndResumeKeepFinalTokenSeparate() {
+        let checkpoints: Set<Int> = [64, 511, 512, 1023, 1024]
+        var processed = 0
+        var ends: [Int] = []
+        while processed < 1024 {
+            processed = LFM2Generator.nextPrefillEnd(
+                processed: processed, total: 1024, checkpoints: checkpoints
+            )
+            ends.append(processed)
+        }
+        XCTAssertEqual(ends, [64, 511, 512, 1023, 1024])
+        XCTAssertEqual(LFM2Generator.nextPrefillEnd(processed: 512, total: 1024), 1023)
+        XCTAssertEqual(LFM2Generator.nextPrefillEnd(processed: 1023, total: 1024), 1024)
+    }
+
     func testLFM2PrefillThroughputUsesPromptTokensAndNativeTiming() throws {
         let throughput = try XCTUnwrap(LFM2Generator.prefillTokensPerSecond(
             promptTokenCount: 5_902,
