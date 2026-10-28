@@ -2,7 +2,7 @@
 /// contract version floors, worker probes, and the built-in node catalog
 /// identity.
 public enum MereRunCLIVersion {
-    public static let current = "0.66.0"
+    public static let current = "0.66.1"
 }
 
 /// Lenient three-component version-floor comparison used by worker

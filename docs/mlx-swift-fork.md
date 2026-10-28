@@ -1,10 +1,10 @@
 # mlx-swift fork policy and compiled-call overhead
 
 `mere.run` pins the public `sawfwair/mlx-swift` fork at
-`0fd8ba07f6fcc3540c2c02709592d7dfab52279c`. It contains upstream
+`1e077ba968b291e0237d1ab522b271d433fa1713`. It contains upstream
 `mlx-swift` through `19601207e9a0de51e03ee6ec0c3c5f3784275075`. The embedded
 `sawfwair/mlx` revision is
-`735d48ca1436dc2648073c548715af3aea5d32c7`, which contains the exact
+`e3214809fa5ebd5aac5d6783e8101513b3d9a774`, which contains the exact
 upstream MLX v0.32.4 release commit
 `36969c094354086e15d2a327a9c50feb20b9cf11`.
 
@@ -32,6 +32,13 @@ ordinary, gathered, sorted-RHS, and alignment decisions all require generation
 18 or later. This preserves the previous quantized paths while restoring the
 floating-point paths used by original BF16 checkpoints.
 
+Wide-head attention uses the split kernel's own template signature when
+compiling through the JIT path. The ordinary kernel retains its separate
+value-head dimension for asymmetric attention. The correction passes the
+32-case core attention suite with JIT enabled (two platform skips) and the
+Swift FP16/BF16 D256 numerical regression. The generated shaders and AOT
+library bytes are unchanged.
+
 The pin also lets an MLXFast custom Metal kernel explicitly request
 the core quantized helper headers. The source marker
 `MLX_INCLUDE_FP_QUANTIZED_HEADERS` exposes the NVFP4 helpers, while
@@ -51,9 +58,9 @@ baseline macOS 14 shader builds. mere.run's bundle targets macOS 15 and Metal 3.
 
 ## v0.32.4 integration
 
-The [core patch inventory](https://github.com/sawfwair/mlx/blob/735d48ca1436dc2648073c548715af3aea5d32c7/FORK_PATCHES.md)
+The [core patch inventory](https://github.com/sawfwair/mlx/blob/e3214809fa5ebd5aac5d6783e8101513b3d9a774/FORK_PATCHES.md)
 classifies all 20 previous core commits. The
-[Swift inventory](https://github.com/sawfwair/mlx-swift/blob/0fd8ba07f6fcc3540c2c02709592d7dfab52279c/FORK_PATCHES.md)
+[Swift inventory](https://github.com/sawfwair/mlx-swift/blob/1e077ba968b291e0237d1ab522b271d433fa1713/FORK_PATCHES.md)
 classifies all 19 previous Swift commits. Shared upstream 1-bit CPU/Metal
 support and CUDA shutdown behavior replace overlapping implementations.
 NVFP4 staging retains the upstream global-scale path; the owned fast path

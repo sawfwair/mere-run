@@ -32,10 +32,10 @@ enum MLXBundleSupport {
 
     static let expectedProvenance = MetallibProvenance(
       coreVersion: "0.32.4",
-      coreRevision: "735d48ca1436dc2648073c548715af3aea5d32c7",
+      coreRevision: "e3214809fa5ebd5aac5d6783e8101513b3d9a774",
       upstreamTag: "v0.32.4",
       upstreamRevision: "36969c094354086e15d2a327a9c50feb20b9cf11",
-      swiftRevision: "0fd8ba07f6fcc3540c2c02709592d7dfab52279c",
+      swiftRevision: "1e077ba968b291e0237d1ab522b271d433fa1713",
       kernelSourcesSHA256: "fa09ca655de6f70381043762d7d02bc20e9debe49996904624f5dae3d0f40b35",
       metalLanguageVersion: "3.2",
       macOSDeploymentTarget: "15.0"

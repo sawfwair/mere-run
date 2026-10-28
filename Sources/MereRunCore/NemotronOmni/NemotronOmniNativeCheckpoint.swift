@@ -53,6 +53,7 @@ public enum NemotronOmniNativeCheckpoint {
     public static let manifestFilename = "mere-run-native-checkpoint.json"
 
     public static let supportFilenames = [
+        "README.md",
         "bias.md",
         "chat_template.jinja",
         "config.json",
