@@ -121,6 +121,7 @@ export default defineConfig({
         items: [
           { text: 'Image runtime', link: '/runtime/image' },
           { text: 'Text runtime', link: '/runtime/text' },
+          { text: 'Recursive Flint', link: '/runtime/flint' },
           { text: 'Nemotron 3.5 Bolt', link: '/runtime/nemotron-bolt' },
           { text: 'EmbeddingGemma 2', link: '/runtime/embeddinggemma2' },
           { text: 'PPLX Embed v2', link: '/runtime/pplx-embed-v2' },

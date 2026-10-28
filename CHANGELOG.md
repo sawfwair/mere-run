@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add native Recursive Flint chat and tool-history support for the original BF16
+  checkpoint and published MLX INT4 export, with pinned artifact verification
+  and full/sliding attention caches. Ignore hidden filesystem metadata when
+  validating checkpoint shard sets, while rejecting unindexed model shards.
+
 - Match serial MLX QMV arithmetic in small-batch affine-Q4 verification by
   promoting BF16 inputs before summing the bias correction. Restore bit-exact
   small and wide batching without changing comparison tolerances.

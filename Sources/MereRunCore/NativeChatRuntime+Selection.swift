@@ -32,6 +32,8 @@ extension NativeChatRuntime {
             )
         case .textChatDiffusionGemma:
             return .textChatDiffusionGemma(DiffusionGemmaGenerator(modelID: modelID), modelPath: modelPath)
+        case .textChatFlint:
+            return .textChatFlint(FlintGenerator(), modelPath: modelPath ?? FlintResources.localModelRoot(for: modelID) ?? ManagedModelResolver.resolveInstalledModel(id: modelID)?.path)
         case .textChatKolibri:
             return .textChatKolibri(KolibriGenerator(), modelPath: modelPath ?? KolibriResources.localModelRoot(for: modelID))
         case .textChatLaguna:
@@ -94,6 +96,8 @@ extension NativeChatRuntime {
             engine = .textChatDiffusionGemma
         case .gemma4, .gemma4Unified:
             engine = .textChatGemma4
+        case .flint:
+            engine = .textChatFlint
         case .kolibri:
             engine = .textChatKolibri
         case .laguna:

@@ -45,6 +45,7 @@ public enum ChatRequestResolver {
         _ request: ChatRequest, modelID: String, sampling: ChatSamplingOptions,
         policy: ChatDefaultPolicy, apiProfile: ManagedModelAPIProfile? = nil
     ) throws -> ChatRequest {
+        let flint = FlintResources.handles(modelSpec: modelID.trimmingCharacters(in: .whitespacesAndNewlines))
         let modelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let recommended = Q35Resources.recommendedSampling(forModelId: modelID)
         var temperature = recommended?.temperature ?? (policy == .command ? 0.7 : 1.0)
@@ -53,6 +54,11 @@ public enum ChatRequestResolver {
         var minP = 0.0
         var thinking = Q35Resources.thinkingDefault(forModelId: modelID)
 
+        if flint {
+            temperature = 1.0
+            topP = 0.95
+            topK = 20
+        }
         if LagunaResources.handles(modelSpec: modelID) {
             temperature = LagunaResources.recommendedTemperature
             topP = LagunaResources.recommendedTopP

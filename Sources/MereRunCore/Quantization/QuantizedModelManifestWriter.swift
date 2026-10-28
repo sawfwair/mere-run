@@ -66,6 +66,7 @@ public enum QuantizedModelManifestWriter {
             case .ideogram4: return .ideogram
             case .gemma4: return .gemma
             case .lfm2: return .liquid
+            case .flint: return .flint
             case .laguna: return .laguna
             case .qwen35HybridMoE: return .qwen
             case .samSegmentation: return .sam
@@ -145,6 +146,8 @@ public enum QuantizedModelManifestWriter {
                     return [.referenceEdit]
                 case .ideogram4:
                     return [.txt2img]
+                case .flint:
+                    return [.chat, .codeGeneration]
                 case .gemma4:
                     return [.chat]
                 case .museGlimmer:
@@ -303,7 +306,7 @@ public enum QuantizedModelManifestWriter {
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 40, cfg: 4.0)
             case .ideogram4:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 20, cfg: 7.0)
-            case .gemma4:
+            case .flint, .gemma4:
                 break
             case .museGlimmer, .nemotronH, .nemotronOmni:
                 break
