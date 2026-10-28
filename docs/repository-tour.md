@@ -353,3 +353,11 @@ installation and ordered input routing. See
 Native Phonon 31m computation is owned by `Sources/AudioPhononModel/`.
 `Sources/AudioTTS/Phonon/PhononGenerator.swift` adapts it to shared speech
 synthesis, streaming, model resolution, and WAV publication.
+
+## Nemotron Transcribe ownership
+
+`AudioNemotronTranscribeModel` owns the native BF16 ASR Transformer, speaker
+fusion, and hybrid Mamba/attention/MoE decoder. It depends on `AudioSortformer`
+for the eight-speaker neural branch. `AudioSTT/NemotronTranscribe` owns file
+decoding, tokenization, installed-model resolution, and transcription results.
+`NemotronTranscribeRuntimeTests` runs independent scalar numerical fixtures.

@@ -1737,6 +1737,14 @@ extension MereRunModelManifest {
                 upstreamRepoId: "mlx-community/Qwen3-ASR-1.7B-8bit",
                 createdAt: createdAt
             )
+        case .nemotronTranscribeASR:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .nemotronTranscribeASR, family: .asr, tier: .latest,
+                variant: .standard, precision: .bf16, defaults: nil,
+                supports: [.speechRecognition], components: genericTextComponents,
+                upstreamRepoId: NemotronTranscribeResources.repository + "@" + NemotronTranscribeResources.revision,
+                createdAt: createdAt
+            )
         case .whistleASR:
             return MereRunModelManifest(
                 id: modelID.rawValue, engine: .whistleASR, family: .asr, tier: .latest,

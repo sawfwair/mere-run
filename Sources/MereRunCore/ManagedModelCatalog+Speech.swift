@@ -3,6 +3,27 @@ import Foundation
 extension ManagedModelCatalog {
     static let speechSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
+            id: NemotronTranscribeResources.modelID,
+            category: .speechASR,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: NemotronTranscribeResources.repository, revision: NemotronTranscribeResources.revision,
+                patterns: NemotronTranscribeResources.files + ["README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "licenses/*.txt"]
+            ),
+            upstreamRepoId: NemotronTranscribeResources.repository,
+            upstreamRevision: NemotronTranscribeResources.revision,
+            usageRestriction: usageRestriction(
+                summary: "NVIDIA Nemotron 3.5 Transcribe is governed by OpenMDW-1.1; review its use and redistribution terms.",
+                license: "OpenMDW-1.1", sourceRepoId: NemotronTranscribeResources.repository,
+                sourceRevision: NemotronTranscribeResources.revision, licenseURL: "https://openmdw.ai/license/1-1/"
+            ),
+            validationKind: .nemotronTranscribe,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: NemotronTranscribeResources.weightBytes,
+            defaultCLICommands: ["speech transcribe"],
+            apiAvailability: .cliOnly
+        ),
+        ManagedModelSpec(
             id: Drama3Resources.modelID,
             category: .speechTTS,
             installShape: .directoryRoot,

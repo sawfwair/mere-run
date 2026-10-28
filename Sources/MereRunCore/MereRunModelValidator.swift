@@ -497,7 +497,7 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=face expects insightface.")
             case .tts where engine != .qwen3TTS && engine != .breezeTTS && engine != .phononTTS && engine != .drama3TTS:
                 warnings.append("Manifest engine mismatch: family=tts expects qwen3-tts, breeze-tts, phonon-tts, or drama3-tts.")
-            case .asr where engine != .qwen3ASR && engine != .parakeetASR && engine != .whistleASR && engine != .sortformer:
+            case .asr where engine != .qwen3ASR && engine != .parakeetASR && engine != .whistleASR && engine != .nemotronTranscribeASR && engine != .sortformer:
                 warnings.append("Manifest engine mismatch: family=asr expects qwen3-asr, parakeet-asr, whistle-asr, or sortformer.")
             case .embed where engine != .qwen3Embedding && engine != .embeddingGemma2 && engine != .embeddingGemma2CoreML:
                 warnings.append("Manifest engine mismatch: family=embed expects qwen3-embedding, embeddinggemma2, or embeddinggemma2-coreml.")
@@ -600,7 +600,7 @@ public enum MereRunModelValidator {
             switch manifest.engine {
             case .qwen3Coder?, .northMiniCode?, .inkling?, .deepseekV4Flash?, .aceStep?, .miniMaxMusic3?, .yue2?, .magentaRT2?, .muScriptor?, .roFormer?, .auk?, .apBWE?, .univerSR?, .woosh?, .mmaudio?, .ltxVideo?,
                  .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .marigoldV2?, .tripoSR?, .instantMesh?, .trellis2?,
-                 .insightFace?, .sortformer?, .whistleASR?, .terramindFlood?, .terramindFire?, .tessera?, .olmoEarth?:
+                 .insightFace?, .sortformer?, .whistleASR?, .nemotronTranscribeASR?, .terramindFlood?, .terramindFire?, .tessera?, .olmoEarth?:
                 return true
             default:
                 return false

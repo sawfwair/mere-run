@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-28",
+  "status": "passed",
+  "checkpoint": {
+    "model_id": "speech-asr-nemotron-35-transcribe",
+    "repository": "nvidia/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B",
+    "revision": "ef905575a106fdad904f3b0ce661dccad654607d",
+    "precision": "BF16",
+    "weights_bytes": 67496013734,
+    "weights_sha256": "03142dde5176c1d4df21ee829642745a1d670ea4d79e1a4684c64d53195acff2",
+    "installed_file_is_checksum_verified": true
+  },
+  "environment": {
+    "chip": "Apple M5 Max",
+    "hardware_model": "Mac17,7",
+    "unified_memory_gib": 128,
+    "macos": "27.2",
+    "build_command": "swift build --build-system native -c release --product mere.run",
+    "git_revision": "82d913acfbc9dc717b3ebe16672045e5b1d9ce2c",
+    "worktree_dirty": true,
+    "binary_sha256": "8c5288f38efd1a1923cbeb82aa0c75e6d46b139c65c6a6e0d0cf77f862dd51ea",
+    "mlx_enable_tf32": "unset (runtime default)",
+    "source_sha256": {
+      "Package.swift": "0c6362330ce35236da20422842b761b4d2456d9d337cf013da17cb4022d6028a",
+      "Sources/AudioNemotronTranscribeModel/Resources/config.json": "80b3a43fa9011eef5f45f797b1e6c76908279d7230158c360b08d4121203f581",
+      "Sources/AudioNemotronTranscribeModel/Resources/tensor-inventory.json": "791ca6ace214bcd4bfe8e8885cddf6405cb3358d5446ade4c5ac4da3f2b1696e",
+      "Sources/AudioNemotronTranscribeModel/TranscribeConfig.swift": "1c65948068b2281f46856be8bcab7a90f1722f7c23d51bff91b064ba9c3869c7",
+      "Sources/AudioNemotronTranscribeModel/TranscribeEncoder.swift": "b05e600b7a29e7730378c50b889578c34c1bdd697a176ca59a91f8cd822a7ec4",
+      "Sources/AudioNemotronTranscribeModel/TranscribeLanguage.swift": "c087a83298da75ffde13da9bf4cf1fa04a52bf343a6fb4b40a76a7bd37dbeb6a",
+      "Sources/AudioNemotronTranscribeModel/TranscribeModel.swift": "2a4b1c77d4ba4398de59fa2a7eee7a81a26d021f51769a908729a40bb9699abe",
+      "Sources/AudioNemotronTranscribeModel/TranscribeSSM.swift": "5fe05f1b7e5cf38e07bea47c4ca47d408d16aa27851003825c4d3355ccfde416",
+      "Sources/AudioNemotronTranscribeModel/TranscribeWeights.swift": "fce3b99d7e02b0d52fc9bb486462ab207f9862f38368f79604e8027030ddb34b",
+      "Sources/AudioSTT/NemotronTranscribe/NemotronTranscribeGenerator.swift": "00042ced9d4d92e6c74ae1b1c977e4e5e6712f654643660fda8c4e7118d65994",
+      "Sources/MereRunCore/NemotronTranscribeResources.swift": "3b0a50df40ff06a9f18f09feefe1070176d671e57909cb3509b528071b2c0930"
+    },
+    "source_note": "Source hashes identify the measured working tree; submission cleanup removes one trailing blank line from TranscribeSSM.swift."
+  },
+  "metric": "Word-level Levenshtein distance after lowercasing, normalizing curly apostrophes, and ignoring punctuation; apostrophes inside words are preserved. No spelling equivalence is applied.",
+  "timing_scope": "One fresh CLI process per case, including checkpoint loading, audio processing, prefill, decoding, and durable run publication. File and shader caches were not cleared; these are not isolated throughput benchmarks.",
+  "reference_archive_md5": "6d7ab67ac6a1d2c993d050e16d61080d",
+  "cases": [
+    {
+      "case": "short",
+      "audio": "Tests/MereRunCoreTests/Fixtures/D1/released/speech.wav",
+      "audio_sha256": "c480a95dd23dfb7529c7bb329dee7ba3986777c247439c31de9e0da946174fa0",
+      "audio_seconds": 3.5183125,
+      "max_tokens": 96,
+      "reference": "The parcel arrived on time, but the glass inside was broken.",
+      "transcript": "The parcel arrived on time, but the glass inside was broken.",
+      "reference_words": 11,
+      "word_errors": 0,
+      "wer": 0.0,
+      "differences": [],
+      "wall_seconds": 17.42614616600008,
+      "max_rss_bytes": 56395431936,
+      "peak_memory_footprint_bytes": 65854519688,
+      "exit_code": 0,
+      "durable_run_state": "succeeded"
+    },
+    {
+      "case": "human",
+      "audio": "Tests/MereRunCoreTests/Fixtures/Nemotron3/returning-speaker.wav",
+      "audio_sha256": "042749dfa02b8f159228426d8aba1a7c3b6f8ee293a2c5349a770cd75b672189",
+      "audio_seconds": 46.57,
+      "max_tokens": 512,
+      "reference": "THOSE OLD SOLDIERS HAD LONG LONG AGO FORGOTTEN ABOUT THAT OLD LAW OF THE LONG GONE PAST BUT JIM HAD TREASURED IT UP IN HIS MEMORY LO THESE MANY YEARS AND HE THOUGHT IT WOULD SERVE HIM NOW AS IT HAD NO DOUBT FREQUENTLY DONE IN THE PAST HAVING RETURNED TO THE ROYAL CAVERN KALIKO FIRST POUNDED THE GONG AND THEN SAT IN THE THRONE WEARING RUGGEDO'S DISCARDED RUBY CROWN AND HOLDING IN HIS HAND THE SCEPTRE WHICH RUGGEDO HAD SO OFTEN THROWN AT HIS HEAD HOW EVERY PULSE DID BEAT AND LEAP AND HOW EVERY HEART DID THROB WITH EMOTIONS OF JOY WHICH SEEMED NEARLY AKIN TO HEAVEN WHEN WE RECEIVED THE GLAD INTELLIGENCE OF OUR ONWARD MARCH TOWARD THE LAND OF PROMISE AND OF OUR LOVED ONES",
+      "transcript": "Those old soldiers had long long ago forgotten about that old law of the long gone past, but Jim had treasured it up in his memory lo these many years, and he thought it would serve him now as it had no doubt frequently done in the past. Having returned to the royal cavern, Calico first pounded the gong and then sat in the throne, wearing Ruggedo's discarded ruby crown and holding in his hand the scepter which Ruggedo had so often thrown at his head. How every pulse did beat and leap, and how every heart did throb with emotions of joy, which seemed nearly akin to heaven, when we received the glad intelligence of our onward march toward the land of promise and of our loved ones.",
+      "reference_words": 129,
+      "word_errors": 2,
+      "wer": 0.015503875968992248,
+      "differences": [
+        {
+          "kind": "replace",
+          "reference": [
+            "kaliko"
+          ],
+          "transcript": [
+            "calico"
+          ]
+        },
+        {
+          "kind": "replace",
+          "reference": [
+            "sceptre"
+          ],
+          "transcript": [
+            "scepter"
+          ]
+        }
+      ],
+      "wall_seconds": 49.39113941699998,
+      "max_rss_bytes": 52647854080,
+      "peak_memory_footprint_bytes": 66522626824,
+      "exit_code": 0,
+      "durable_run_state": "succeeded"
+    }
+  ],
+  "issue_fixed": {
+    "problem": "A float32 additive causal mask was incompatible with BF16 scaled-dot-product attention during real-checkpoint prefill.",
+    "fix": "Cast the causal mask to the activation dtype.",
+    "regression": "NemotronTranscribeTests.testBF16HybridPrefillAndCachedDecode"
+  },
+  "limits": [
+    "Two English recordings only; no multilingual or translation accuracy qualification.",
+    "No one-hour workload, broad accuracy benchmark, or isolated throughput claim.",
+    "CTC timestamps, live streaming, and speculative decoding remain outside this supported path."
+  ],
+  "header_validation": {
+    "checked_inference_tensors": 1269,
+    "header_bytes": 563016,
+    "header_sha256": "436ae654f8eefece53f310608c017eaf4a1a00b8c7561610c3c2b24bb2285c5c",
+    "status": "passed"
+  },
+  "validation_checks": {
+    "repository_gate": "passed using native SwiftPM",
+    "xctest_cases": 5608,
+    "xctest_skipped": 469,
+    "xctest_failures": 0,
+    "swift_testing_cases_passed": 196,
+    "focused_metal_and_installed_checkpoint_cases_passed": 19,
+    "documentation_build": "passed",
+    "package_policy_variants": [
+      "darwin",
+      "linux-source",
+      "linux-cuda-prebuilt"
+    ]
+  }
+}

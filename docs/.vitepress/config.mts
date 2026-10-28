@@ -132,6 +132,7 @@ export default defineConfig({
           { text: 'D1 decisions', link: '/runtime/d1' },
           { text: 'Speech runtime', link: '/runtime/speech' },
           { text: 'Native Whistle', link: '/runtime/whistle' },
+          { text: 'Nemotron Transcribe', link: '/runtime/nemotron-transcribe' },
           { text: 'Vision runtime', link: '/runtime/vision' },
           { text: 'Geospatial runtime', link: '/runtime/geo' },
           { text: 'Audio enhancement', link: '/runtime/audio' },

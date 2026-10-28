@@ -2,7 +2,7 @@
 
 Read text aloud, clone a voice from a short reference clip and save it for
 reuse, transcribe either a file or a live microphone, and identify who spoke
-when in a recording. Three automatic speech recognition (ASR) backends and two
+when in a recording. Four automatic speech recognition (ASR) backends and two
 speaker-diarization backends are available. These operations run locally, so
 the audio does not leave the machine.
 
@@ -33,6 +33,7 @@ the audio does not leave the machine.
 
 - `speech-asr-qwen3`
 - `speech-asr-parakeet`
+- [`speech-asr-nemotron-35-transcribe`](./nemotron-transcribe.md) (native BF16 offline transcription and English translation; explicit installation)
 - [`speech-asr-whistle`](./whistle.md) (native packed CQ2/CQ4 transcription in seven languages)
 
 ### Speaker diarization

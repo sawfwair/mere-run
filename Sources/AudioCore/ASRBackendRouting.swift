@@ -5,27 +5,31 @@ public enum ASRBackend: String, Sendable, Hashable, Codable, CaseIterable {
     case parakeet
     case qwen
     case whistle
+    case nemotron
 }
 
 public enum ASRResolvedBackend: String, Sendable, Hashable, Codable {
     case parakeet
     case qwen
     case whistle
+    case nemotron
 }
 
 public struct ASRBackendAvailability: Sendable, Hashable {
     public let parakeetAvailable: Bool
     public let qwenAvailable: Bool
+    public let nemotronAvailable: Bool
     public let whistleAvailable: Bool
 
-    public init(parakeetAvailable: Bool, qwenAvailable: Bool, whistleAvailable: Bool = false) {
+    public init(parakeetAvailable: Bool, qwenAvailable: Bool, whistleAvailable: Bool = false, nemotronAvailable: Bool = false) {
         self.parakeetAvailable = parakeetAvailable
         self.qwenAvailable = qwenAvailable
         self.whistleAvailable = whistleAvailable
+        self.nemotronAvailable = nemotronAvailable
     }
 
     public var hasAnyBackend: Bool {
-        parakeetAvailable || qwenAvailable || whistleAvailable
+        parakeetAvailable || qwenAvailable || whistleAvailable || nemotronAvailable
     }
 }
 
@@ -54,6 +58,11 @@ public enum ASRBackendRouting {
         parakeetSupportedLanguageCodes: Set<String>? = nil
     ) -> ASRBackendDecision {
         let normalizedHint = normalizeLanguageHint(languageHint)
+
+        if preferredBackend == .nemotron {
+            return pick(preferred: .nemotron, fallback: nil, availableBackends: availableBackends,
+                        reason: "preferred_nemotron", normalizedLanguageHint: normalizedHint)
+        }
 
         if preferredBackend == .whistle {
             return pick(preferred: .whistle, fallback: nil, availableBackends: availableBackends,
@@ -97,6 +106,9 @@ public enum ASRBackendRouting {
         }
 
         switch preferredBackend {
+        case .nemotron:
+            return pick(preferred: .nemotron, fallback: nil, availableBackends: availableBackends,
+                        reason: "preferred_nemotron", normalizedLanguageHint: normalizedHint)
         case .whistle:
             return pick(preferred: .whistle, fallback: nil, availableBackends: availableBackends,
                         reason: "preferred_whistle", normalizedLanguageHint: normalizedHint)
@@ -211,6 +223,7 @@ public enum ASRBackendRouting {
         in availability: ASRBackendAvailability
     ) -> Bool {
         switch backend {
+        case .nemotron: return availability.nemotronAvailable
         case .whistle: return availability.whistleAvailable
         case .parakeet: return availability.parakeetAvailable
         case .qwen: return availability.qwenAvailable

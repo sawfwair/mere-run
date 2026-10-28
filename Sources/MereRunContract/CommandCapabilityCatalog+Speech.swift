@@ -80,11 +80,11 @@ extension MereRunCapabilityCatalog {
         options: [
             .init(flag: "--run-dir", label: "Run directory", kind: .directory, group: Group.output, tier: .expert),
             .init(flag: "--timestamps", label: "Include timestamps", kind: .boolean)
-                .scoped(SpeechTranscribeFamily.only(.parakeet, .whistle, ignoredBy: [.qwen3ASR])),
+                .scoped(SpeechTranscribeFamily.only(.parakeet, .whistle, ignoredBy: [.qwen3ASR, .nemotronTranscribe])),
             .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file, group: Group.output, tier: .standard),
             .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .standard),
             .init(
-                flag: "--backend", label: "Backend", kind: .choice, choices: ["auto", "parakeet", "qwen", "whistle"],
+                flag: "--backend", label: "Backend", kind: .choice, choices: ["auto", "parakeet", "qwen", "whistle", "nemotron"],
                 defaultValue: "auto", group: Group.modelAndAdapters, tier: .essential, choiceSpellings: .exact
             ).scoped(SpeechTranscribeFamily.rule(.qwen3ASR, values: ["auto", "qwen"], severity: .warning)),
             .init(
@@ -92,8 +92,8 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "mlx", group: Group.modelAndAdapters, tier: .standard, choiceSpellings: .exact
             ).scoped(
                 // Qwen3-ASR always runs MLX: the default passes with no effect, Core ML is refused.
-                SpeechTranscribeFamily.only(.parakeet, ignoredBy: [.qwen3ASR, .whistle]),
-                .rule(.qwen3ASR, values: ["mlx"]), .rule(.whistle, values: ["mlx"])
+                SpeechTranscribeFamily.only(.parakeet, ignoredBy: [.qwen3ASR, .whistle, .nemotronTranscribe]),
+                .rule(.qwen3ASR, values: ["mlx"]), .rule(.whistle, values: ["mlx"]), .rule(.nemotronTranscribe, values: ["mlx"])
             ),
             .init(
                 flag: "--coreml-encoder", label: "Core ML artifact", kind: .directory,
@@ -111,7 +111,7 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--max-tokens", label: "Max tokens", kind: .integer,
                 defaultValue: "448", group: Group.sampling, tier: .standard, range: .init(min: 1, max: 8_192, step: 1)
-            ).scoped(SpeechTranscribeFamily.only(.qwen3ASR, .whistle, ignoredBy: [.parakeet])),
+            ).scoped(SpeechTranscribeFamily.only(.qwen3ASR, .whistle, .nemotronTranscribe, ignoredBy: [.parakeet])),
             .init(flag: "--whistle-weights", label: "Whistle weights", kind: .choice, choices: ["cactus", "fp32"],
                   defaultValue: "cactus", group: Group.modelAndAdapters, tier: .expert, choiceSpellings: .exact)
                 .scoped(SpeechTranscribeFamily.only(.whistle)),
@@ -128,22 +128,24 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--stream-chunk-ms", label: "Feed interval", kind: .integer,
                 defaultValue: "200", group: Group.run, tier: .expert, range: .init(min: 10, max: 5_000, step: 10), dependsOn: "--stream"
-            ),
+            ).scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle)),
             .init(
                 flag: "--stream-decode-ms", label: "Decode interval", kind: .integer,
                 defaultValue: "2000", group: Group.run, tier: .expert, range: .init(min: 100, max: 10_000, step: 100), dependsOn: "--stream"
-            ),
-            .init(flag: "--input-format", label: "Input format", kind: .string, group: Group.inputs, tier: .expert, dependsOn: "--stream"),
+            ).scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle)),
+            .init(flag: "--input-format", label: "Input format", kind: .string, group: Group.inputs, tier: .expert, dependsOn: "--stream")
+                .scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle)),
             // Raw stdin protocol v1 accepts exactly 16 kHz, so the range pins
             // the single value a shell may send rather than a span.
             .init(
                 flag: "--sample-rate", label: "Sample rate", kind: .integer,
                 group: Group.inputs, tier: .expert, range: .init(min: 16_000, max: 16_000, step: 1),
                 dependsOn: "--stream"
-            ),
-            .init(flag: "--jsonl", label: "JSON Lines", kind: .boolean, group: Group.output, tier: .expert, dependsOn: "--stream"),
+            ).scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle)),
+            .init(flag: "--jsonl", label: "JSON Lines", kind: .boolean, group: Group.output, tier: .expert, dependsOn: "--stream")
+                .scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle)),
             .init(flag: "--no-timestamps", label: "No timestamps", kind: .boolean, group: Group.output, tier: .standard)
-                .scoped(SpeechTranscribeFamily.only(.parakeet, .whistle, ignoredBy: [.qwen3ASR])),
+                .scoped(SpeechTranscribeFamily.only(.parakeet, .whistle, ignoredBy: [.qwen3ASR, .nemotronTranscribe])),
             .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             receiptOption
         ],

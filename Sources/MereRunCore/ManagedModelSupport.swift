@@ -859,6 +859,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 16
             ),
             descriptor(
+                NemotronTranscribeResources.modelID,
+                "Nemotron 3.5 Transcribe",
+                "Native BF16 offline transcription and speech translation in 40 languages.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
                 ModelResolver.ModelID.whistleASR.rawValue,
                 "Whistle speech recognition",
                 "Native packed CQ2/CQ4 transcription in seven European languages with beam search and live audio.",

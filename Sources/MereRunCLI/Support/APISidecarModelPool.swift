@@ -433,6 +433,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 },
                 make: {
                     switch key.backend {
+                    case .nemotron:
+                        throw SpeechTranscriptionIssue("unsupported_backend", "Nemotron Transcribe is available through speech transcribe only.")
                     case .whistle:
                         throw SpeechTranscriptionIssue("unsupported_backend", "Whistle is available through speech transcribe only.")
                     case .qwen:
