@@ -1262,8 +1262,8 @@ var packageDependencies: [Package.Dependency] = (useLinuxPrebuiltMLX ? [] : [
   .package(url: "https://github.com/huggingface/swift-jinja.git", from: "2.5.0"),
   .package(url: "https://github.com/apple/swift-crypto.git", "4.0.0"..<"5.0.0"),
   .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.4.0"),
-  // Hummingbird 2.22+ requires swift-log 1.11+, which needs Swift 6.2.
-  .package(url: "https://github.com/hummingbird-project/hummingbird.git", "2.0.0"..<"2.22.0")
+  // Hummingbird 2.27+ drops its Swift 6.1 manifest.
+  .package(url: "https://github.com/hummingbird-project/hummingbird.git", "2.0.0"..<"2.27.0")
 ]
 if !isLinuxPackage {
   packageDependencies.append(

@@ -6,8 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
-- Update Swift Crypto to 4.5.2, Transformers to 1.3.5, and Jinja to 2.5.2.
-  Retain Hummingbird 2.21.1 and cap its range to preserve Swift 6.1 support.
+- Update Swift Crypto to 4.5.2, Transformers to 1.3.5, Jinja to 2.5.2,
+  and Hummingbird to 2.26.0. Cap Hummingbird below 2.27 and retain compatible
+  logging and metrics pins to preserve Swift 6.1 support.
 
 ## 0.66.1 - 2026-10-28
 
