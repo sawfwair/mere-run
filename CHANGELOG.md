@@ -13,6 +13,8 @@ The format is based on Keep a Changelog.
 - Refresh the pinned MLX core to v0.32.4 and the Swift bridge through upstream
   0.32.3, preserving owned runtime patches and reusable request streams.
   Rebuild the Metal bundle and enforce the new dependency and kernel provenance.
+  Keep the refreshed C-binding I/O diagnostics compatible with Ubuntu 22.04's
+  C++ library.
   Scope the generation-17 NAX workaround to quantized dispatch, restoring
   upstream floating-point matmul and attention for original BF16 checkpoints.
 

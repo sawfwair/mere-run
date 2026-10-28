@@ -1,7 +1,7 @@
 # mlx-swift fork policy and compiled-call overhead
 
 `mere.run` pins the public `sawfwair/mlx-swift` fork at
-`508951990d5d1cfee749602243ccf92935696d85`. It contains upstream
+`834636e7dcdc8f78d581e1e946ec7e6a3fee7765`. It contains upstream
 `mlx-swift` through `19601207e9a0de51e03ee6ec0c3c5f3784275075`. The embedded
 `sawfwair/mlx` revision is
 `735d48ca1436dc2648073c548715af3aea5d32c7`, which contains the exact
@@ -53,13 +53,20 @@ baseline macOS 14 shader builds. mere.run's bundle targets macOS 15 and Metal 3.
 
 The [core patch inventory](https://github.com/sawfwair/mlx/blob/735d48ca1436dc2648073c548715af3aea5d32c7/FORK_PATCHES.md)
 classifies all 20 previous core commits. The
-[Swift inventory](https://github.com/sawfwair/mlx-swift/blob/508951990d5d1cfee749602243ccf92935696d85/FORK_PATCHES.md)
+[Swift inventory](https://github.com/sawfwair/mlx-swift/blob/834636e7dcdc8f78d581e1e946ec7e6a3fee7765/FORK_PATCHES.md)
 classifies all 19 previous Swift commits. Shared upstream 1-bit CPU/Metal
 support and CUDA shutdown behavior replace overlapping implementations.
 NVFP4 staging retains the upstream global-scale path; the owned fast path
 remains scoped to non-global-scale weights. The retained CPU 1-bit transposed
 matmul regression additionally requires float accumulation for FP16/BF16
 inputs, without changing wider affine arithmetic or test tolerances.
+
+The C bindings pin the [portable I/O patch](https://github.com/sawfwair/mlx-c/pull/1)
+at `dc502b106252d1899e93dd6f6da0a77a2366e80b`, based on upstream
+`57731b00e8bed710e0750e7356da9f18f8eb3e20`. Error-message construction uses
+`std::string` and `std::to_string`, preserving the diagnostics on Ubuntu
+22.04/Jammy without requiring newer C++ library formatting support. The Swift
+compile-cache bridge also omits an unused private umbrella header.
 
 Final Linux portability corrections exclude Metal-only cross-entropy and
 gated-delta host files and spell the dependent CPU reduction accumulator

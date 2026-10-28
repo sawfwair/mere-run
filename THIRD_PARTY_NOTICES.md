@@ -1016,8 +1016,12 @@ limitations under the License.
 - source project: [`sawfwair/mlx-swift`](https://github.com/sawfwair/mlx-swift),
   based on upstream [`ml-explore/mlx-swift`](https://github.com/ml-explore/mlx-swift)
   0.32.3
-- pinned package revision: `508951990d5d1cfee749602243ccf92935696d85`
+- pinned package revision: `834636e7dcdc8f78d581e1e946ec7e6a3fee7765`
 - embedded MLX revision: `735d48ca1436dc2648073c548715af3aea5d32c7`
+- embedded C bindings: [`sawfwair/mlx-c`](https://github.com/sawfwair/mlx-c),
+  revision `dc502b106252d1899e93dd6f6da0a77a2366e80b`, based on upstream
+  `ml-explore/mlx-c` revision `57731b00e8bed710e0750e7356da9f18f8eb3e20`;
+  MIT license
 - incorporated upstream MLX v0.32.4 revision:
   `36969c094354086e15d2a327a9c50feb20b9cf11`
 - generated-kernel and required core AOT source SHA-256:
