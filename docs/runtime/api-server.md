@@ -799,6 +799,11 @@ Engine compatibility:
 - `text-chat-lfm25-2.6b-4bit`: uses the same native LFM2 serving engine with
   LiquidAI's dense 2.6B MLX 4-bit weights, accepts function tools, and rejects
   image content parts.
+- `text-chat-lfm25-24b-a2b-bf16`: uses the native LFM2 serving engine with the
+  original BF16 weights and always generates reasoning. Non-streaming and
+  tool-buffered replies separate `reasoning_content` from the final answer.
+  Plain token streams currently include `<think>` markup and reasoning in
+  `delta.content`.
 - `vision-chat-lfm25-3b-8bit`: uses the native LFM2 serving engine with
   LiquidAI's dense language backbone, SigLIP2 vision tower, and multimodal
   projector. It accepts local-file and base64 image content parts; it does not
@@ -892,7 +897,8 @@ whole-image conditioning rather than strict masked inpainting.
 - `voice`: OpenAI voice names are translated to speech style descriptions;
   custom descriptions are passed through
 - `speed`, `instructions`, and `temperature`
-- `seed` and `cfg_scale`: optional mere.run extensions for Breeze TTS 2 only;
+- `seed`: optional mere.run extension for Breeze TTS 2 and Phonon 31m.
+- `cfg_scale`: optional mere.run extension for Breeze TTS 2 only;
   CFG accepts finite values from 0 through 20 and defaults to 4
 - `response_format`: `wav`, `mp3`, `opus`, `aac`, or `flac`; non-WAV formats
   require `ffmpeg`

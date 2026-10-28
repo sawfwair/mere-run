@@ -9,15 +9,29 @@ public final class LFM2TokenizerAndTemplate: @unchecked Sendable {
     public let imEndTokenId: Int?
     public let toolCallEndTokenId: Int?
     public let generationPromptSuffix: String
+    private let ignoreMergesEncoder: LFM2IgnoreMergesEncoder?
 
-    public init(
+    public convenience init(
+        tokenizer: any Tokenizer, maxLength: Int, eosTokenId: Int?,
+        imEndTokenId: Int?, toolCallEndTokenId: Int?, generationPromptSuffix: String
+    ) {
+        self.init(
+            tokenizer: tokenizer, maxLength: maxLength, eosTokenId: eosTokenId,
+            imEndTokenId: imEndTokenId, toolCallEndTokenId: toolCallEndTokenId,
+            generationPromptSuffix: generationPromptSuffix, ignoreMergesEncoder: nil
+        )
+    }
+
+    private init(
         tokenizer: any Tokenizer,
         maxLength: Int,
         eosTokenId: Int?,
         imEndTokenId: Int?,
         toolCallEndTokenId: Int?,
-        generationPromptSuffix: String
+        generationPromptSuffix: String,
+        ignoreMergesEncoder: LFM2IgnoreMergesEncoder?
     ) {
+        self.ignoreMergesEncoder = ignoreMergesEncoder
         self.tokenizer = tokenizer
         self.maxLength = maxLength
         self.eosTokenId = eosTokenId
@@ -43,7 +57,8 @@ public final class LFM2TokenizerAndTemplate: @unchecked Sendable {
             eosTokenId: tokenizer.eosTokenId,
             imEndTokenId: tokenizer.convertTokenToId("<|im_end|>"),
             toolCallEndTokenId: tokenizer.convertTokenToId("<|tool_call_end|>"),
-            generationPromptSuffix: generationPromptSuffix
+            generationPromptSuffix: generationPromptSuffix,
+            ignoreMergesEncoder: try LFM2IgnoreMergesEncoder.load(from: rootURL, fallback: tokenizer)
         )
     }
 
@@ -54,8 +69,8 @@ public final class LFM2TokenizerAndTemplate: @unchecked Sendable {
         includeThinking: Bool,
         maxLength: Int
     ) throws -> [Int] {
-        var encoded = tokenizer.encode(
-            text: try Self.renderPrompt(
+        var encoded = encodeRaw(
+            try Self.renderPrompt(
                 messages: messages,
                 tools: tools,
                 addGenerationPrompt: addGenerationPrompt,
@@ -76,7 +91,7 @@ public final class LFM2TokenizerAndTemplate: @unchecked Sendable {
     }
 
     public func encodeRaw(_ text: String, addSpecialTokens: Bool = false) -> [Int] {
-        tokenizer.encode(text: text, addSpecialTokens: addSpecialTokens)
+        ignoreMergesEncoder?.encode(text) ?? tokenizer.encode(text: text, addSpecialTokens: addSpecialTokens)
     }
 
     public func decode(token: Int) -> String {
@@ -129,7 +144,7 @@ public final class LFM2TokenizerAndTemplate: @unchecked Sendable {
                 systemPrompt += "\n"
             }
             systemPrompt += "List of tools: ["
-            systemPrompt += try tools.map { try $0.promptSchemaJSONString() }.joined(separator: ", ")
+            systemPrompt += try tools.map(LFM2PromptJSON.tool).joined(separator: ", ")
             systemPrompt += "]"
         }
 
@@ -146,7 +161,13 @@ public final class LFM2TokenizerAndTemplate: @unchecked Sendable {
 
             if message.role == .assistant {
                 var content = renderContent(for: message)
-                if !includeThinking, index <= lastUserIndex, let range = content.range(of: "</think>") {
+                // Always-reasoning templates strip prior-turn reasoning independently
+                // of display visibility and retain reasoning in the active tool round.
+                let keepThinking = index > lastUserIndex || (generationPromptSuffix.isEmpty && includeThinking)
+                if keepThinking, let reasoning = message.reasoningContent, !reasoning.isEmpty {
+                    prompt += "<think>\(reasoning)</think>"
+                }
+                if !keepThinking, let range = content.range(of: "</think>", options: .backwards) {
                     content = String(content[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
                 }
                 prompt += content

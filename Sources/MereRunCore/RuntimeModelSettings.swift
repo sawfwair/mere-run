@@ -5,6 +5,7 @@ public enum RuntimeServingEngine: String, Codable, CaseIterable, Hashable, Senda
     case textChatKlein = "text-chat-klein"
     case textChatGemma4 = "text-chat-gemma4"
     case textChatDiffusionGemma = "text-chat-diffusiongemma"
+    case textChatFlint = "text-chat-flint"
     case textChatKolibri = "text-chat-kolibri"
     case textChatLaguna = "text-chat-laguna"
     case textChatQ36 = "text-chat-q36"
@@ -423,7 +424,7 @@ public extension ManagedModelSpec {
     var isAPISidecarRuntimeModel: Bool {
         switch validationKind {
         case .flux1, .flux2Klein, .zimageTurbo, .hidreamO1, .krea2, .ideogram4SDNQ,
-             .qwen3TTS, .breezeTTS, .qwen3ASR, .parakeet, .qwen3Embedding:
+             .qwen3TTS, .breezeTTS, .drama3TTS, .phononTTS, .qwen3ASR, .parakeet, .qwen3Embedding:
             return true
         default:
             return false

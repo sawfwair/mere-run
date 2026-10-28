@@ -2,6 +2,59 @@ import Foundation
 import XCTest
 
 final class LinuxNativeBridgeTests: XCTestCase {
+    func testQuantizedKernelPatchIsIdempotentAndRejectsSourceDrift() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let kernel = root.appendingPathComponent("device/qmm_sm80.cuh")
+        let launcher = root.appendingPathComponent("quantized/qmm/qmm_sm80.cu")
+        let qmv = root.appendingPathComponent("quantized/qmm/qmv.cu")
+        try FileManager.default.createDirectory(at: kernel.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: launcher.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try "  // Epilogue.\n  copy(r2s_copy_c, r2s_tCrC, r2s_tCsC);\n".write(to: kernel, atomically: true, encoding: .utf8)
+        try "      \"qmm_sm80_tn_{}_m{}_b{}_g{}_{}\",\n".write(to: launcher, atomically: true, encoding: .utf8)
+        try "  cuda::std::conditional_t<(bits == 1 || bits >= 8), float, T>\n      sums[elems_per_thread] = {};\n"
+            .write(to: qmv, atomically: true, encoding: .utf8)
+        // SwiftPM dependency files are read-only even when their directories are writable.
+        for file in [kernel, launcher, qmv] {
+            try FileManager.default.setAttributes([.posixPermissions: 0o444], ofItemAtPath: file.path)
+        }
+        let script = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("scripts/patch-mlx-cuda-quantized.sh")
+        let apply = { () throws -> Int32 in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/bash")
+            process.arguments = [script.path, root.path]
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus
+        }
+        XCTAssertEqual(try apply(), 0)
+        let patched = try String(contentsOf: kernel, encoding: .utf8)
+        let wait = try XCTUnwrap(patched.range(of: "cp_async_wait<0>();"))
+        let barrier = try XCTUnwrap(patched.range(of: "__syncthreads();"))
+        let output = try XCTUnwrap(patched.range(of: "copy(r2s_copy_c"))
+        XCTAssertLessThan(wait.lowerBound, barrier.lowerBound)
+        XCTAssertLessThan(barrier.lowerBound, output.lowerBound)
+        let patchedLauncher = try String(contentsOf: launcher, encoding: .utf8)
+        let patchedQMV = try String(contentsOf: qmv, encoding: .utf8)
+        XCTAssertTrue(patchedQMV.contains("cuda::std::is_same_v<T, cutlass::bfloat16_t>"))
+        XCTAssertTrue(patchedQMV.contains("MERERUN_CUDA_BF16_QMV_FLOAT_ACCUMULATION"))
+        XCTAssertTrue(patchedLauncher.contains("mr_epilogue1"))
+        XCTAssertEqual(try apply(), 0)
+        XCTAssertEqual(try String(contentsOf: kernel, encoding: .utf8), patched)
+        XCTAssertEqual(try String(contentsOf: launcher, encoding: .utf8), patchedLauncher)
+        XCTAssertEqual(try String(contentsOf: qmv, encoding: .utf8), patchedQMV)
+
+        let changed = "  // Upstream layout changed.\n"
+        try changed.write(to: kernel, atomically: true, encoding: .utf8)
+        XCTAssertEqual(try apply(), 69)
+        XCTAssertEqual(try String(contentsOf: kernel, encoding: .utf8), changed)
+        XCTAssertEqual(try String(contentsOf: launcher, encoding: .utf8), patchedLauncher)
+        XCTAssertEqual(try String(contentsOf: qmv, encoding: .utf8), patchedQMV)
+    }
+
     func testPackageManifestCanConsumePrebuiltMlxSwiftCudaArtifacts() throws {
         let package = try readRepositoryFile("Package.swift")
 

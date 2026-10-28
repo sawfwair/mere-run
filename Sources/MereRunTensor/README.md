@@ -16,6 +16,10 @@ Checkpoint loading, quantized modules, and shared tensor kernels.
   Completed contexts survive generator replacement; concurrent operations and
   different selected default devices retain separate contexts.
 
+`SmallBatchAffineQMV` retains serial QMV arithmetic while sharing weight reads.
+Its bias sum promotes every BF16 input to FP32 before addition, matching MLX's
+`load_vector`; adding in BF16 first can lose a cancellation residual.
+
 This library depends on MLX and ModelKit. It does not resolve or download models.
 Keep path selection and model-specific compatibility mappings in the caller.
 Both quantized loading entry points use one array-application implementation.

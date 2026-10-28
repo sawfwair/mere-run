@@ -24,6 +24,24 @@ custom-voice	composer.speak	validated	--model --speaker --voice
 custom-voice	console.speechSynthesize	emitted	--language --mode --model --output --progress-json --quiet --receipt --speaker --stream --stream-chunk-tokens --temperature --voice
 custom-voice	console.speechSynthesize	shown	--language --mode --model --output --progress-json --quiet --receipt --speaker --stream --stream-chunk-tokens --temperature --voice
 custom-voice	console.speechSynthesize	validated	--language --mode --model --output --progress-json --quiet --receipt --speaker --stream --stream-chunk-tokens --temperature --voice
+drama3	composer.speak	emitted	--model --output --seed --temperature
+drama3	composer.speak	shown	--mode --model --seed
+drama3	composer.speak	validated	--model --seed
+drama3	console.speechSynthesize	emitted	--mode --model --output --progress-json --quiet --receipt --seed --stream --stream-chunk-tokens --temperature
+drama3	console.speechSynthesize	shown	--mode --model --output --progress-json --quiet --receipt --seed --stream --stream-chunk-tokens --temperature
+drama3	console.speechSynthesize	validated	--mode --model --output --progress-json --quiet --receipt --seed --stream --stream-chunk-tokens --temperature
+drama3-clone	composer.speak	emitted	--mode --model --output --profile --ref-audio --ref-text --save-profile --seed --temperature
+drama3-clone	composer.speak	shown	--mode --model --profile --ref-audio --ref-text --save-profile --seed
+drama3-clone	composer.speak	validated	--mode --model --profile --ref-audio --ref-text --save-profile --seed
+drama3-clone	console.speechSynthesize	emitted	--mode --model --output --profile --progress-json --quiet --receipt --ref-audio --ref-text --save-profile --seed --stream --stream-chunk-tokens --temperature
+drama3-clone	console.speechSynthesize	shown	--mode --model --output --profile --progress-json --quiet --receipt --ref-audio --ref-text --save-profile --seed --stream --stream-chunk-tokens --temperature
+drama3-clone	console.speechSynthesize	validated	--mode --model --output --profile --progress-json --quiet --receipt --ref-audio --ref-text --save-profile --seed --stream --stream-chunk-tokens --temperature
+phonon	composer.speak	emitted	--model --output --seed --temperature
+phonon	composer.speak	shown	--mode --model --seed
+phonon	composer.speak	validated	--model --seed
+phonon	console.speechSynthesize	emitted	--language --model --output --progress-json --quiet --receipt --seed --stream --temperature
+phonon	console.speechSynthesize	shown	--language --mode --model --output --progress-json --quiet --receipt --seed --stream --temperature
+phonon	console.speechSynthesize	validated	--language --model --output --progress-json --quiet --receipt --seed --stream --temperature
 style	composer.speak	emitted	--model --output --temperature --voice
 style	composer.speak	shown	--mode --model --voice
 style	composer.speak	validated	--voice

@@ -1,0 +1,426 @@
+{
+  "repository": "Sawfwair/DRAMA-3-MLX-4bit",
+  "revision": "543e9d0829856cc0657fa0fd6bb2903015c094fb",
+  "public": true,
+  "uploaded": true,
+  "bytes": 27408247610,
+  "source_revision": "dd64a85cd82e9521f7202610ede97b367fc83946",
+  "files": {
+    "LICENSE": {
+      "bytes": 19685,
+      "sha256": "733a32442087acbda12ecafe8e71eb8ee5890c89b50ce7ac4ea3777faa3c823e"
+    },
+    "Notice": {
+      "bytes": 374,
+      "sha256": "184d98381852d18601cc40747dc2234d326630c7abc99122c063b96c43d37dba"
+    },
+    "chat_template.jinja": {
+      "bytes": 7756,
+      "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+    },
+    "codec.pth": {
+      "bytes": 1871099728,
+      "sha256": "74fc41c5a7151c6f350af8bd7e5d6e3accfcc7f3dfbfac23afd35af07052bb2f"
+    },
+    "config.json": {
+      "bytes": 5602,
+      "sha256": "326d4583d3be03e35f7b31e658a9b256a29e70997ee75964498110eb199a164e"
+    },
+    "drama3-q4-0001.safetensors": {
+      "bytes": 268436241,
+      "sha256": "cb3508d2dd0f128c0504e5b1ce0bec2d523b14a44008cedbb09d183eb6f6a67f"
+    },
+    "drama3-q4-0002.safetensors": {
+      "bytes": 302028020,
+      "sha256": "e9ef08bb700e503223295eddb60422624fb3b02d5682f6aefd658b1f51976553"
+    },
+    "drama3-q4-0003.safetensors": {
+      "bytes": 272662266,
+      "sha256": "90a0df2cf5a33bb0e18990982fd33728e021a1cfddcf646cf9764c7bfa18bab8"
+    },
+    "drama3-q4-0004.safetensors": {
+      "bytes": 268477558,
+      "sha256": "14671daa18e05a3e7b96c41812203f9846e4da7d9d0217a95a0e3e059ab10a88"
+    },
+    "drama3-q4-0005.safetensors": {
+      "bytes": 276866265,
+      "sha256": "5848adb6eb649c261b90754bec5ca4e1af33953ec78363b7b28115d1114998c3"
+    },
+    "drama3-q4-0006.safetensors": {
+      "bytes": 272662264,
+      "sha256": "5252c9a6059714a803c55cb4ec080124371b07cbc943c91c96ac2139523d6f64"
+    },
+    "drama3-q4-0007.safetensors": {
+      "bytes": 268477638,
+      "sha256": "07e1dd6cbc0fa85783a62d91d52a4c2ba33c9081e94d2ac18f5ed84c6417842c"
+    },
+    "drama3-q4-0008.safetensors": {
+      "bytes": 276866416,
+      "sha256": "beefd5845f8b369e22df6d1a9ea94e32c67b49b468d173757f461035d5c70940"
+    },
+    "drama3-q4-0009.safetensors": {
+      "bytes": 1272479478,
+      "sha256": "a720e560e6156e8b74a1096d73b5a84c451f5ea89c3475ac05b5c2d6c2303552"
+    },
+    "drama3-q4-0010.safetensors": {
+      "bytes": 1033371789,
+      "sha256": "c170a185c5b011176f4a5ef41171fd7ccb75a449b2497ee6599a773070ad26bf"
+    },
+    "drama3-q4-0011.safetensors": {
+      "bytes": 268709468,
+      "sha256": "ab8103890e701c62cf564ca4daf44f2e388349d5d39e5ed2402e25dfec924054"
+    },
+    "drama3-q4-0012.safetensors": {
+      "bytes": 293262878,
+      "sha256": "c32c935399b2136b80a856c9646723aa1013ef4418cd656bb0999df4e3e6d9ed"
+    },
+    "drama3-q4-0013.safetensors": {
+      "bytes": 269055480,
+      "sha256": "cd140e3009c63bd904da0718c69628b1a92721b811f6aaf50c77d0cb3daea6c0"
+    },
+    "drama3-q4-0014.safetensors": {
+      "bytes": 275806953,
+      "sha256": "1960d2b5868e9dc0e9db6d8c0ac4bd75224734ea72b6cdf7fb56bdece15e2d56"
+    },
+    "drama3-q4-0015.safetensors": {
+      "bytes": 268806095,
+      "sha256": "f511dac0a6dfc3a5cc94256e1b16243fd0ef7af3a919721ef062909ba0430a39"
+    },
+    "drama3-q4-0016.safetensors": {
+      "bytes": 268824464,
+      "sha256": "344aa7766bc4655eead962ec79f73262f66f6ad1aee9d0d6a56eda1e20c94c40"
+    },
+    "drama3-q4-0017.safetensors": {
+      "bytes": 269144826,
+      "sha256": "ee55525527dd26f93c4711abc3b4377a7272583165f9e27c9f676889697b2526"
+    },
+    "drama3-q4-0018.safetensors": {
+      "bytes": 268612782,
+      "sha256": "cc4f076d4a8d1da23af604dc8067664b5c6fd176479af28dfffea0eda374c8ea"
+    },
+    "drama3-q4-0019.safetensors": {
+      "bytes": 269144957,
+      "sha256": "8b645d4d50fa8c822ef35cbd50397547d5483a789d9612a744332ab63a64c30f"
+    },
+    "drama3-q4-0020.safetensors": {
+      "bytes": 268976329,
+      "sha256": "8495f36fbb0664a8104aa73501c473c7cff9b1fd079a778381bdaccd4ed9f563"
+    },
+    "drama3-q4-0021.safetensors": {
+      "bytes": 269144948,
+      "sha256": "6332cdc4dba7e7f9d74b0307a27d9df63ef2a0a71375e807841bb305fde4ed53"
+    },
+    "drama3-q4-0022.safetensors": {
+      "bytes": 268976275,
+      "sha256": "979adaffe885a24e3b9a8556fc910c4ee5cc1a87bb30632d38b93e1971d01e53"
+    },
+    "drama3-q4-0023.safetensors": {
+      "bytes": 269145071,
+      "sha256": "a1193c5340bd904fae9e1639ac6f3ef314b8c2a698aa596c666b710372bdcf18"
+    },
+    "drama3-q4-0024.safetensors": {
+      "bytes": 268824430,
+      "sha256": "832db21d39ef0bb6583fdfbd5c6733168bd01b7262237dd0ead119c3db096f12"
+    },
+    "drama3-q4-0025.safetensors": {
+      "bytes": 269144623,
+      "sha256": "d613567643365e9fe49a9d360c59f9c5892208845bafe2ca7b4b7ed9c6339bf0"
+    },
+    "drama3-q4-0026.safetensors": {
+      "bytes": 268613021,
+      "sha256": "458f42e5f7ba67840a53735f8d6c7fc9b9bc2418f4b00749196ac1f08cafc797"
+    },
+    "drama3-q4-0027.safetensors": {
+      "bytes": 269144907,
+      "sha256": "0c0fd0e5698af90fa684c31460356b898753839b2370fe86aa9ef0d260384a65"
+    },
+    "drama3-q4-0028.safetensors": {
+      "bytes": 268976444,
+      "sha256": "f9c8e3c2183937e83427fe8a846b679fd9959d6252fcc33e9c23ebb45afc5f59"
+    },
+    "drama3-q4-0029.safetensors": {
+      "bytes": 269144830,
+      "sha256": "0befe9511c52be774d4f3ca8ab3b7fc3d3e759014e6ed29a5562d7d0736f4441"
+    },
+    "drama3-q4-0030.safetensors": {
+      "bytes": 268976438,
+      "sha256": "da2f0b777e642b08cf4d60243819dc39eace0fab13f8291ad5409f2624047467"
+    },
+    "drama3-q4-0031.safetensors": {
+      "bytes": 269144832,
+      "sha256": "9aadc797578f940d13048ac38e043d2fd8b20edbae1884c751d8ea0399168cea"
+    },
+    "drama3-q4-0032.safetensors": {
+      "bytes": 268824863,
+      "sha256": "7a852a8ac3734377b7ef251cfa0e9b1511649283671a258fd09f4117b67d64cf"
+    },
+    "drama3-q4-0033.safetensors": {
+      "bytes": 269144334,
+      "sha256": "8fe66dae1d5d459512d3baf061d157459b6f594481428755d421f801730862dc"
+    },
+    "drama3-q4-0034.safetensors": {
+      "bytes": 268612483,
+      "sha256": "a1d83eb1dc7a8deef259675909e9d94f14f2853ae82458d69389326a61c32e53"
+    },
+    "drama3-q4-0035.safetensors": {
+      "bytes": 269143224,
+      "sha256": "e8f86a964320b63beb017395e4f84aca6bcf4e18c074ca7ba6bdaeb0f3fff886"
+    },
+    "drama3-q4-0036.safetensors": {
+      "bytes": 268976724,
+      "sha256": "afbc9d887b52b6cd2331c7fa5c93a185b0c23c9f4f54be41d5d374c92403a53b"
+    },
+    "drama3-q4-0037.safetensors": {
+      "bytes": 269144531,
+      "sha256": "d4bda58e1aa00db952aa01f81a5e49cdd3be45a6f5502cc27936eeecefb3dfd8"
+    },
+    "drama3-q4-0038.safetensors": {
+      "bytes": 268977085,
+      "sha256": "8787890404b89b107694e3d93def1300cda1d2385357c54d581cdc832200e877"
+    },
+    "drama3-q4-0039.safetensors": {
+      "bytes": 269144475,
+      "sha256": "3b6c9e8c74f26c724a58d1f6b3bde7c683da7a3b8f47949333ee1ebbd8b9651c"
+    },
+    "drama3-q4-0040.safetensors": {
+      "bytes": 268976928,
+      "sha256": "6a2490da0c21957c5f24d1ead0f20d35fd840ff605cc1aa9f56e436d5bbef02f"
+    },
+    "drama3-q4-0041.safetensors": {
+      "bytes": 269144405,
+      "sha256": "afd5d38154835a867e81737b30e6ab3b867d20ee9508cdc516aee22fe9baca7b"
+    },
+    "drama3-q4-0042.safetensors": {
+      "bytes": 268825106,
+      "sha256": "fb19dd35a4f8ce8653db4f129c0743ba2f987f8e626c2745bd23b5909d0ae529"
+    },
+    "drama3-q4-0043.safetensors": {
+      "bytes": 285246618,
+      "sha256": "1b3c832c02d831e6d105a9390fd5e810fa6ee6bb9308743a2ffd4cbb7d707640"
+    },
+    "drama3-q4-0044.safetensors": {
+      "bytes": 269037210,
+      "sha256": "536127ce9ec7c0239d58887a598afd694347d49d62824a6b46c1ec3aeb12f47c"
+    },
+    "drama3-q4-0045.safetensors": {
+      "bytes": 295034501,
+      "sha256": "41039400f96347409d20f0216814ad09c19274cd43be03916d0426e14b0cf548"
+    },
+    "drama3-q4-0046.safetensors": {
+      "bytes": 269056924,
+      "sha256": "8e3bec43ed983fff93a4ccceafdaba1a81f9ba9efeedd7a4995540498266f8d2"
+    },
+    "drama3-q4-0047.safetensors": {
+      "bytes": 275807706,
+      "sha256": "c7a35b88acec7c3a8917f571762cd81d75faf1947f73fcc1cb7655ccc24e16d7"
+    },
+    "drama3-q4-0048.safetensors": {
+      "bytes": 268805967,
+      "sha256": "b4663c5c3ebe8091c4aea5697cedfbb4ab3c8e0e9028699124fdc8347e7d8d61"
+    },
+    "drama3-q4-0049.safetensors": {
+      "bytes": 268824592,
+      "sha256": "420bb8fe874fcb181d6c0a31b3b32bedf98ccdfc0bd6752f002e7f133f4116dc"
+    },
+    "drama3-q4-0050.safetensors": {
+      "bytes": 269144924,
+      "sha256": "36e0da8b8f61fc78ef8f2793d74c4c00d989fabd487e0a413d6d20906d4c7a12"
+    },
+    "drama3-q4-0051.safetensors": {
+      "bytes": 268612986,
+      "sha256": "a78a96c21831e693176fd86831e90ff050749a703a1a100267fe89193b1ceb79"
+    },
+    "drama3-q4-0052.safetensors": {
+      "bytes": 269145063,
+      "sha256": "313958dd99de01f2a70bb37930a0a30577a585e0c7a1180bda87f977eda4919a"
+    },
+    "drama3-q4-0053.safetensors": {
+      "bytes": 268976037,
+      "sha256": "bfecd48aec2826e0e23cafb74f02851d8ebc01a73a847d3a50a81b5b34b57783"
+    },
+    "drama3-q4-0054.safetensors": {
+      "bytes": 269144886,
+      "sha256": "1a26ab2860de7c44415f3075ba7086687b634a7b39c1c903f23367768a250b13"
+    },
+    "drama3-q4-0055.safetensors": {
+      "bytes": 268823948,
+      "sha256": "8c24f875d94a35f2c3581aa3e7baaded2cc29f14ced4ba3b36ef465bf0f964ce"
+    },
+    "drama3-q4-0056.safetensors": {
+      "bytes": 269143345,
+      "sha256": "4efda4a4986a29a8f9e3340ca9e4090398cb452439e4d894e28b50c2d5a2139b"
+    },
+    "drama3-q4-0057.safetensors": {
+      "bytes": 268612384,
+      "sha256": "0685532a87eb11fa3b2697072233b9ebd4138659373bf293b978131f2f79b520"
+    },
+    "drama3-q4-0058.safetensors": {
+      "bytes": 269144934,
+      "sha256": "1b2d1f0eb57a2a3508c10980e401ee33a71f5084b87fec530e324bb6d53c92be"
+    },
+    "drama3-q4-0059.safetensors": {
+      "bytes": 268824521,
+      "sha256": "8e37c98a407c92b04c097443cd7538fc216bad371d2e449d2d87f5d0677422f8"
+    },
+    "drama3-q4-0060.safetensors": {
+      "bytes": 269144445,
+      "sha256": "70b19e1048dcf792a4940538f5c0c3ba45a0f998d359f12ccc366189b274f208"
+    },
+    "drama3-q4-0061.safetensors": {
+      "bytes": 268613201,
+      "sha256": "28fa368f90f650ad6f5b78065ec1aa7d3829c5413fe71992cf1d38ceaee0e8d8"
+    },
+    "drama3-q4-0062.safetensors": {
+      "bytes": 269144797,
+      "sha256": "02147b7199d03ec452949abf6d4c1e944fc7d0fe6ec516af6d3a8876747089dc"
+    },
+    "drama3-q4-0063.safetensors": {
+      "bytes": 268976488,
+      "sha256": "b21210d2e72dbef4a425f77f7fa54c0ec8e729e9434f9123f2be1c244a0a24b8"
+    },
+    "drama3-q4-0064.safetensors": {
+      "bytes": 269144666,
+      "sha256": "8d4d8558234083e87273361e5c04884e24049ee17366d0a243c3fa9239c94d31"
+    },
+    "drama3-q4-0065.safetensors": {
+      "bytes": 268976478,
+      "sha256": "267379a86974259e67841a7b805ccc48b0bbd9aea95735e5dced720c263548e1"
+    },
+    "drama3-q4-0066.safetensors": {
+      "bytes": 269144579,
+      "sha256": "346a14fa98bb9d3ab96efb844586f37cc06de2b7218ed543a2fc77b5c5ef2bb6"
+    },
+    "drama3-q4-0067.safetensors": {
+      "bytes": 268824830,
+      "sha256": "172aa4e61107683f84f73feb507fe5a05494a2faba6e3e6e600ba25140e30460"
+    },
+    "drama3-q4-0068.safetensors": {
+      "bytes": 268748808,
+      "sha256": "15d4ce566fb31b87f320ad4df1388771a8850587b40a58e9d20479143f26e159"
+    },
+    "drama3-q4-0069.safetensors": {
+      "bytes": 269008866,
+      "sha256": "a315a3ce0195d04cf88016120112e45b5bb0821f157206f49534fafce86acc49"
+    },
+    "drama3-q4-0070.safetensors": {
+      "bytes": 269144539,
+      "sha256": "94f52232a4a98cef7a6da29f6bffcceba00dbaa638a7a3eef3d738089328e556"
+    },
+    "drama3-q4-0071.safetensors": {
+      "bytes": 268976946,
+      "sha256": "e61519173984cbf46b1014603df502ef14c9f77080799dc84a11515ddfa8f27a"
+    },
+    "drama3-q4-0072.safetensors": {
+      "bytes": 269144391,
+      "sha256": "3874f705aac038bd5bae946b1dd06969966ba0029c93af2ed6a1ac9adfab1c58"
+    },
+    "drama3-q4-0073.safetensors": {
+      "bytes": 268976731,
+      "sha256": "f41e6c6f38949b769ffebb00a9834428f9d404e7e6590ae759b00a89860644b8"
+    },
+    "drama3-q4-0074.safetensors": {
+      "bytes": 269144363,
+      "sha256": "fa9f64459d80ddb02a1fc246723a9b6830ab0508f13101af395e40acf6427fd7"
+    },
+    "drama3-q4-0075.safetensors": {
+      "bytes": 268825113,
+      "sha256": "b7f7bc77a5a43dc581ec089d4fdfd95dea6bd9623182b82a1acf2850e02dc59e"
+    },
+    "drama3-q4-0076.safetensors": {
+      "bytes": 272851853,
+      "sha256": "9e049c04926e3959825068ed26f755ade9f65a7be86d432ce54b3a72653638e7"
+    },
+    "drama3-q4-0077.safetensors": {
+      "bytes": 269036036,
+      "sha256": "81bad8b990e794b237b8be77e038d28695a2efa8c5a775c451dc7030be343ea9"
+    },
+    "drama3-q4-0078.safetensors": {
+      "bytes": 295033610,
+      "sha256": "a926e39f60275637009ce6f2f0b6ae5641f073d4dc298a197b1faf5f21f63610"
+    },
+    "drama3-q4-0079.safetensors": {
+      "bytes": 269055662,
+      "sha256": "b03aa25ce2c8765fd782bfc1a84448d7b4869f6ca94e90eae5bbccfb8d2f0b4b"
+    },
+    "drama3-q4-0080.safetensors": {
+      "bytes": 275806927,
+      "sha256": "e979d7edc094b2da0d484505ff9e6bd49729742bd11ccf24a0350b8ac4024be6"
+    },
+    "drama3-q4-0081.safetensors": {
+      "bytes": 268804874,
+      "sha256": "1c95d43b492c53dc62d32c4c7bb42193014e610a677710d36abcbd76fdc31653"
+    },
+    "drama3-q4-0082.safetensors": {
+      "bytes": 268823164,
+      "sha256": "35a508fbcd4c06d6a58d30b5eb58784c5d7841eed23353639441aef0cb29bb83"
+    },
+    "drama3-q4-0083.safetensors": {
+      "bytes": 269143466,
+      "sha256": "b263e5b3973681ad405703aa98c30707aafba34311021b789687c324093cf093"
+    },
+    "drama3-q4-0084.safetensors": {
+      "bytes": 268612016,
+      "sha256": "9f3ee686af1df23b9bfc11202413fa8552114aa8670909345de209a0e61720af"
+    },
+    "drama3-q4-0085.safetensors": {
+      "bytes": 269143641,
+      "sha256": "9bd7dc0e1bf0d095b09beb08a9ce686553178f71698984de61a8021ed1db3b52"
+    },
+    "drama3-q4-0086.safetensors": {
+      "bytes": 268975328,
+      "sha256": "8a664c5ec5d70819f1b0a01d40a5790e2e1d12071d9b42c9e125e0efbfdfdedf"
+    },
+    "drama3-q4-0087.safetensors": {
+      "bytes": 269143658,
+      "sha256": "8039b2c640b94fdfe30a64a1e5e12bf5e3af31484f23cbaf944c4cde92bd3734"
+    },
+    "drama3-q4-0088.safetensors": {
+      "bytes": 166123145,
+      "sha256": "db9a3cfd67212301bc4eea2dcb51cd577b2ce246a617156adb8ba79b0e3b6836"
+    },
+    "model.safetensors.index.json": {
+      "bytes": 9353854,
+      "sha256": "8710519ea2b60f697fcee2d279e28d65622649b693baa4a3c10ad925eb746c2f"
+    },
+    "special_tokens_map.json": {
+      "bytes": 102779,
+      "sha256": "08aed9e321dc05275ac68cf883bfa96006b3fc09ff5cccadf262b6bce0873adb"
+    },
+    "tokenizer.json": {
+      "bytes": 20791070,
+      "sha256": "0e9b9db76b2f0389b04b6ef057a2ac3b89100b7e96f2dd7034d19580a09654d6"
+    },
+    "tokenizer_config.json": {
+      "bytes": 103580,
+      "sha256": "00e800279d8436c324b924e97872c7eacd2b19406aa0fe71eeb557b4cd53aa3e"
+    },
+    "drama3-quantization.json": {
+      "bytes": 18698,
+      "sha256": "9ea062ef693d8f8217479a6cdc6ad3ad6258a3ff8f9f6b874d49a5bd4b14fcdb"
+    },
+    "UPSTREAM_MODEL_CARD.md": {
+      "bytes": 7583,
+      "sha256": "611b5578a019b0b2bd67f9b5133cf54f462861dab5bcdd3b5789d4de9acb3990"
+    },
+    "README.md": {
+      "bytes": 5992,
+      "sha256": "b14cfa0a94dbde1c76f9200f9a454592bbeeec7b379f45d99fe21d54e209200a"
+    },
+    "DRAMA3_EXTENDED_RESULTS.json": {
+      "bytes": 18093,
+      "sha256": "55eb252ab65a370f0ef6e803abdb8741b4b3e5b3ba63e60c2de651aac1c18d69"
+    },
+    "DRAMA3_MAIN_INTEGRATION.json": {
+      "bytes": 1335,
+      "sha256": "168061ceb29ab3dc522739671d1314673146c14ef36ae7e0e360767ee6d89e7d"
+    },
+    "MODIFICATIONS.md": {
+      "bytes": 716,
+      "sha256": "1db6e89ebb072ed9b7151ee17f8c8775a8a8e5eeb6a146095510c96f1e7bd153"
+    },
+    "SHA256SUMS": {
+      "bytes": 9454,
+      "sha256": "96f2404b1feeae7c48e044b3e7fa0be231eb3b553e972f31bd86205b19fa842f"
+    }
+  }
+}

@@ -6,6 +6,63 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add native Recursive Flint chat and tool-history support for the original BF16
+  checkpoint and published MLX INT4 export, with pinned artifact verification
+  and full/sliding attention caches. Ignore hidden filesystem metadata when
+  validating checkpoint shard sets, while rejecting unindexed model shards.
+
+- Match serial MLX QMV arithmetic in small-batch affine-Q4 verification by
+  promoting BF16 inputs before summing the bias correction. Restore bit-exact
+  small and wide batching without changing comparison tolerances.
+
+- Refresh the pinned MLX core to v0.32.4 and the Swift bridge through upstream
+  0.32.3, preserving owned runtime patches and reusable request streams.
+  Rebuild the Metal bundle and enforce the new dependency and kernel provenance.
+  Keep the refreshed C-binding I/O diagnostics compatible with Ubuntu 22.04's
+  C++ library.
+  Scope the generation-17 NAX workaround to quantized dispatch, restoring
+  upstream floating-point matmul and attention for original BF16 checkpoints.
+
+- Add `text-chat-lfm25-24b-a2b-bf16`, a pinned native reasoning MoE install
+  that loads original LiquidAI safetensors. Expose its declared 131,072-token
+  context and required reasoning profile without changing existing model IDs or defaults.
+  Bounded answers, tools, and the exact 127,242-token native retrieval probe
+  pass on an M5 Max. Process the final LFM2 prompt token in a separate forward
+  to match upstream initialization of the first generation logits.
+- Correct LFM2 MoE routing, honor tokenizer `ignore_merges`, and align tool-history
+  reasoning, JSON spacing, and Python scalar arguments with the upstream template.
+
+- Add native DRAMA-3 speech synthesis, reference cloning, inline speaker and event
+  tags, and causal audio streaming. `speech-tts-drama-3` downloads the pinned
+  `Sawfwair/DRAMA-3-MLX-4bit` expert-only Q4 export with license, checksums, and
+  qualification receipts. `model optimize --output` can also export from the
+  original source checkpoint. The runtime preserves BF16 nonexpert weights and the original DAC codec.
+  Batch synthesis releases the text/tower checkpoint before codec decoding;
+  audio-tower masks preserve BF16 computation and temporary Metal buffers are
+  cleared between acoustic frames.
+  Seven bounded released-checkpoint probes pass on a 36 GiB system, including
+  paragraph streaming and cancellation. Cold first audio takes 96–113 seconds;
+  perceptual quality and Q4 quality loss remain unqualified.
+
+## 0.65.0 - 2026-10-23
+
+- Add native Phonon 31m English speech synthesis through
+  `speech-tts-phonon-31m`, with the default voice, seeded sampling, 24 kHz WAV
+  output, streaming, and the local `/v1/audio/speech` API. Load the pinned
+  original safetensors directly in Swift/MLX. Spell out numbers, dates, units,
+  and email addresses; text rewriting and voice cloning are unsupported.
+  On an M3 Max, local ASR transcripts matched upstream on 20 prose cases.
+  Warm synthesis measured 25–26 times real time;
+  upstream CPU F32 and Q8 paths were faster on the same host.
+  Fix non-finite Phonon audio on Linux CUDA by materializing attention projections.
+
+- Add native Nemotron 3.5 Bolt 74B-A9B-24GB text and image chat through
+  `vision-chat-nemotron-35-bolt-24gb`, loading the original packed IQ2_XXS,
+  Q8_0, NVFP4, and BF16 weights directly. Support streamed responses, tools,
+  thinking controls, stop sequences, and log probabilities. Twelve bounded
+  text/image diagnostics passed on a 36 GiB M3 Max; broad quality, upstream
+  parity, and long contexts remain unqualified.
+
 - Add pinned Bonsai 2 Small 2B, 4B, and 9B vision chat packs to the native Swift/MLX runtime,
   including Hadamard-aware tied output embeddings for the 2B and 4B packs.
 
@@ -34,6 +91,10 @@ The format is based on Keep a Changelog.
 - Build bundled MLX shaders with Metal 3.2 and a macOS 15.0 deployment target,
   including the library link step, so Xcode 26 builds load on supported macOS 15
   systems. Validate both settings in the build and runtime provenance checks (#586).
+
+- Restore Linux CI image pulls through the official Docker Hub registry after
+  the ECR Public mirror reached its transfer limit. Prefer HTTPS Ubuntu package
+  downloads while retaining mirror failover and the pinned Swift toolchain.
 
 - Cache compiled Core ML embedding packages across processes, pack short text
   batches with bounded concurrent ANE predictions, and expose caller-owned warm

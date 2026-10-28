@@ -1,7 +1,6 @@
 # mere.run codebase map
 
-`mere.run` provides local inference on Apple Silicon. Its optional macOS GUI, `mere.run.app`, runs the
-CLI. `MereRunCore` owns inference; `MereRunModelKit` owns metadata and installed
+`mere.run` provides local inference on Apple Silicon. `mere.run.app` runs the CLI. `MereRunCore` owns inference; `MereRunModelKit` owns metadata and installed
 lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 `AudioTTS` own speech orchestration. `MereRunCLI` owns command presentation.
 
@@ -34,8 +33,8 @@ lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 - `Sources/MereRunCore/SCAIL2/`: native SCAIL-2 transformer, OpenCLIP, masks,
   Wan 2.1 VAE loading, segmented generation, and MP4 orchestration
 - `Sources/MereRunCore/LoRA/`: LoRA checkpoint, artifact, and compatibility logic
-- `Sources/AudioQwen3ASRModel/`, `Sources/AudioQwen3TTSModel/`, `Sources/AudioBreezeTTSModel/`, `Sources/AudioParakeetModel/`, `Sources/AudioSortformer/`, and `Sources/MereRunKVCache/`: speech models, diarization, and attention caches
-- `Sources/AudioTTS/Qwen3TTS/` and `Sources/AudioTTS/BreezeTTS/`: TTS loading, prompts, and generation
+- `Sources/AudioPhononModel/`, `Sources/AudioQwen3ASRModel/`, `Sources/AudioQwen3TTSModel/`, `Sources/AudioBreezeTTSModel/`, `Sources/AudioParakeetModel/`, `Sources/AudioSortformer/`, and `Sources/MereRunKVCache/`: speech models, diarization, and attention caches
+- `Sources/AudioTTS/Qwen3TTS/`, `Sources/AudioTTS/Phonon/`, and `Sources/AudioTTS/BreezeTTS/`: TTS loading, prompts, and generation
 - `Tests/MereRunCoreTests/`: most behavior and compatibility coverage
 - `Tests/MereRunCLITests/`: parsing and CLI contract coverage
 

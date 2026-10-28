@@ -2,6 +2,7 @@ import XCTest
 import AudioCore
 import AudioTTS
 import MereRunCore
+import MereRunContract
 @testable import MereRunCLI
 
 final class SpeechSynthesizeCommandParsingTests: XCTestCase {
@@ -195,5 +196,46 @@ final class SpeechSynthesizeCommandParsingTests: XCTestCase {
                 "--hf-hub-cache", "/tmp/hf/hub",
             ])
         )
+    }
+}
+
+extension SpeechSynthesizeCommandParsingTests {
+    func testPhononSelectionAndAPIControls() throws {
+        let selected = try SpeechSynthesisModelSelection.resolve("speech-tts-phonon-31m")
+        XCTAssertEqual(selected.backend, .phonon)
+        let plan = try APIServerContract.speechPlan(from: OpenAIAudioSpeechRequest(model: selected.modelID, input: "Hello", seed: 42))
+        XCTAssertEqual(try plan.modelSelection().backend, .phonon)
+        let output = URL(fileURLWithPath: "/tmp/phonon-test.wav")
+        XCTAssertNoThrow(try PhononGenerator.validate(plan.synthesisPlan(outputURL: output).request))
+        for request in [
+            OpenAIAudioSpeechRequest(model: selected.modelID, input: "Hello", voice: "alloy"),
+            OpenAIAudioSpeechRequest(model: selected.modelID, input: "Hello", instructions: "Speak softly"),
+            OpenAIAudioSpeechRequest(model: selected.modelID, input: "Hello", speed: 2),
+            OpenAIAudioSpeechRequest(model: selected.modelID, input: "Hello", cfg_scale: 4)
+        ] { XCTAssertThrowsError(try APIServerContract.speechPlan(from: request)) }
+        var request = TTSRequest(text: "Hello", outputURL: output)
+        XCTAssertNoThrow(try PhononGenerator.validate(request))
+        request.language = "fr"
+        XCTAssertThrowsError(try PhononGenerator.validate(request))
+        request.language = "en"; request.voiceDescription = "Whisper"
+        XCTAssertThrowsError(try PhononGenerator.validate(request))
+        request.voiceDescription = ""; request.speaker = "ryan"
+        XCTAssertThrowsError(try PhononGenerator.validate(request))
+        request.speaker = nil; request.voiceMode = .clone
+        XCTAssertThrowsError(try PhononGenerator.validate(request))
+    }
+
+    func testLocalPhononConfigRoutesToPhonon() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data(#"{"model_type":"gradium_phonon_tts"}"#.utf8).write(to: root.appendingPathComponent("config.json"))
+        let selected = try SpeechSynthesisModelSelection.resolve(root.path)
+        XCTAssertEqual(selected.backend, .phonon)
+        XCTAssertEqual(selected.modelPath, root.path)
+        let capability = MereRunCapabilityCatalog.speechSynthesize
+        let invocation = MereRunCommandInvocation(capability: capability, arguments: ["Hello", "--model", root.path, "-o", "/tmp/a.wav"])
+        let family = ModelFamilyIdentifier.identify(capabilityID: capability.id, model: root.path, invocation: invocation)
+        XCTAssertEqual(family, .family("phonon"))
     }
 }

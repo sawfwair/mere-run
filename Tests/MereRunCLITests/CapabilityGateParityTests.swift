@@ -192,3 +192,14 @@ private func expectRuns(
     }
     #expect(try report(["text", "chat", "-p", "hi", "--model", "text-chat-lfm25-1.2b-bf16", "--context-size", "65536"]).warnings.count == 1)
 }
+
+@Test func lfm24BA2BUsesDeclaredContextAndRejectsUnsupportedOptions() throws {
+    let command = ["text", "chat", "-p", "hi", "--model", "text-chat-lfm25-24b-a2b-bf16"]
+    try expectRuns(command + ["--context-size", "131072", "--kv-bits", "8"], family: "lfm2-a2b-24b", warnings: 0)
+    #expect(try report(command + ["--context-size", "131073"]).warnings.count == 1)
+    #expect(try report(command + ["--lora", "adapter.safetensors"]).violations.count == 1)
+    #expect(try report(command + ["--image", "image.png"]).violations.count == 1)
+    #expect(try report(command + ["--kv-bits", "3"]).warnings.count == 1)
+    let parsed = try TextChat.parse(["--prompt", "hi", "--model", "text-chat-lfm25-24b-a2b-bf16", "--kv-bits", "8"])
+    #expect(try parsed.resolveKVCacheMode(for: .lfm2A2B) == .affine8)
+}

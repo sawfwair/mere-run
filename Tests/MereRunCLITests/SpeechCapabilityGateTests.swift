@@ -193,7 +193,7 @@ private func temporaryFolder() throws -> URL {
     let style = try report("speech", "synthesize", "Hi", "-o", "a.wav", "--voice", "calm", "--profile", "narrator")
     #expect(style.family == "style" && style.model == "speech-tts-qwen3-nano" && style.violations.isEmpty)
     #expect(style.warnings == [
-        "--profile has no effect with Qwen3-TTS style. It applies to Breeze TTS 2 clone and direction and Qwen3-TTS clone."
+        "--profile has no effect with Qwen3-TTS style. It applies to Breeze TTS 2 clone and direction, DRAMA-3 clone and Qwen3-TTS clone."
     ])
 
     let clone = try report("speech", "synthesize", "Hi", "-o", "a.wav", "--mode", "clone", "-v", "calm",
@@ -356,4 +356,15 @@ private func temporaryFolder() throws -> URL {
     #expect(offline.family == "sortformer" && offline.violations.isEmpty
         && offline.warnings == ["--latency has no effect with Sortformer. It applies to Nemotron 3 Diarization."])
     #expect(try report("speech", "diarize", "a.wav", "--latency", "1.04").violations.count == 1)
+}
+
+@Test func synthesizePhononScopesControlsBeforeLoading() throws {
+    let valid = try report("speech", "synthesize", "Hello", "-o", "a.wav",
+                           "--model", "speech-tts-phonon-31m", "--seed", "42", "--language", "en", "--stream")
+    #expect(valid.family == "phonon" && valid.violations.isEmpty && valid.warnings.isEmpty)
+    for flags in [["--voice", "Whisper"], ["--mode", "clone"], ["--cfg-scale", "4"], ["--stream", "--stream-chunk-tokens", "8"]] {
+        let value = try #require(CLICapabilityGate.evaluate(commandLine: ["speech", "synthesize", "Hello", "-o", "a.wav", "--model", "speech-tts-phonon-31m"] + flags)).report
+        #expect(value.family == "phonon")
+        #expect(!value.violations.isEmpty, "\(flags)")
+    }
 }

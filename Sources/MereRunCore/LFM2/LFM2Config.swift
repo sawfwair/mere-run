@@ -36,6 +36,7 @@ public struct LFM2Config: Decodable, Sendable, Hashable {
     public let numExperts: Int
     public let numExpertsPerTok: Int
     public let normTopKProb: Bool
+    public let routedScalingFactor: Float
     public let numAttentionHeads: Int
     public let numKeyValueHeads: Int
     public let maxPositionEmbeddings: Int
@@ -60,6 +61,20 @@ public struct LFM2Config: Decodable, Sendable, Hashable {
         })
     }
 
+    /// Identifies the released 24B-A2B layout.
+    var isA2B24B: Bool {
+        modelType == "lfm2_moe" && hiddenSize == 2_048 && numHiddenLayers == 40
+            && numExperts == 64 && numExpertsPerTok == 4 && numDenseLayers == 2
+    }
+
+    public func contextLength(requested: Int?, runtimeLimit: Int = LFM2Resources.defaultContextLength) throws -> Int {
+        let requested = requested ?? LFM2Resources.defaultContextLength
+        guard requested > 0 else {
+            throw LFM2Error.generationFailed("maxContextTokens must be greater than zero.")
+        }
+        return min(requested, runtimeLimit, maxPositionEmbeddings)
+    }
+
     private enum CodingKeys: String, CodingKey {
         case architectures
         case bosTokenId = "bos_token_id"
@@ -77,6 +92,7 @@ public struct LFM2Config: Decodable, Sendable, Hashable {
         case numExperts = "num_experts"
         case numExpertsPerTok = "num_experts_per_tok"
         case normTopKProb = "norm_topk_prob"
+        case routedScalingFactor = "routed_scaling_factor"
         case numAttentionHeads = "num_attention_heads"
         case numKeyValueHeads = "num_key_value_heads"
         case maxPositionEmbeddings = "max_position_embeddings"
@@ -122,6 +138,7 @@ public struct LFM2Config: Decodable, Sendable, Hashable {
         self.numExperts = try container.decodeIfPresent(Int.self, forKey: .numExperts) ?? 0
         self.numExpertsPerTok = try container.decodeIfPresent(Int.self, forKey: .numExpertsPerTok) ?? 1
         self.normTopKProb = try container.decodeIfPresent(Bool.self, forKey: .normTopKProb) ?? true
+        self.routedScalingFactor = try container.decodeIfPresent(Float.self, forKey: .routedScalingFactor) ?? 1
         self.numAttentionHeads = try container.decode(Int.self, forKey: .numAttentionHeads)
         self.numKeyValueHeads = try container.decode(Int.self, forKey: .numKeyValueHeads)
         self.maxPositionEmbeddings = try container.decode(Int.self, forKey: .maxPositionEmbeddings)

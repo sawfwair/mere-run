@@ -228,7 +228,7 @@ Public Qwen ASR, Parakeet, and Sortformer types are re-exported from their ownin
 ### Speech model libraries
 
 `Sources/AudioQwen3ASRModel`, `Sources/AudioQwen3TTSModel`,
-`Sources/AudioBreezeTTSModel`, and `Sources/AudioParakeetModel` own configuration
+`Sources/AudioBreezeTTSModel`, `Sources/AudioDrama3Model`, and `Sources/AudioParakeetModel` own configuration
 and tensor computation.
 `Sources/AudioSortformer` owns the diarization runtime. These libraries build
 without `MereRunCore`, audio codecs, or model downloads. Qwen uses the same
@@ -242,6 +242,7 @@ Text-to-speech orchestration, audio-input adapters, and compatibility exports.
 
 - `Qwen3TTS/`: native Qwen TTS loading, prompts, token generation, and audio output
 - `BreezeTTS/`: native Breeze TTS 2 loading, reference audio, and stream orchestration
+- `Drama3/`: native DRAMA-3 loading, reference-code prompts, and causal audio streaming
 - `TTS/`: shared TTS support types
 
 ## Tests
@@ -348,3 +349,7 @@ graph execution, BF16 token lookup, and native tokenizer/media preprocessing.
 It runs on Apple Silicon macOS 15 or later, including macOS 26. Core owns
 installation and ordered input routing. See
 [EmbeddingGemma 2](./runtime/embeddinggemma2.md#apple-core-ml-export).
+
+Native Phonon 31m computation is owned by `Sources/AudioPhononModel/`.
+`Sources/AudioTTS/Phonon/PhononGenerator.swift` adapts it to shared speech
+synthesis, streaming, model resolution, and WAV publication.

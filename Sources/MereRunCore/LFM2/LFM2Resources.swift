@@ -9,6 +9,11 @@ public struct LFM2Resources: Sendable, Hashable {
     public static let a1bBF16UpstreamRepoId = "LiquidAI/LFM2.5-8B-A1B"
     public static let a1bBF16UpstreamRevision = "b9aebfcbe28b6cb374042f495d733037550ab146"
     public static let a1bBF16EstimatedDownloadBytes: Int64 = 16_936_006_912
+    public static let a2b24BBF16ModelId = "text-chat-lfm25-24b-a2b-bf16"
+    public static let a2b24BUpstreamRepoId = "LiquidAI/LFM2.5-24B-A2B"
+    public static let a2b24BUpstreamRevision = "1769516ac588c4c558089c94f27d96b0dc67b183"
+    public static let a2b24BEstimatedDownloadBytes: Int64 = 47_943_180_288
+    public static let a2b24BContextLength = 131_072
     public static let smallModelId = "text-chat-lfm25-1.2b-bf16"
     public static let smallUpstreamRepoId = "LiquidAI/LFM2.5-1.2B-Instruct"
     public static let smallUpstreamRevision = "df58c174f05ff733f83f8cae10ea9298224c8006"
@@ -103,6 +108,7 @@ public struct LFM2Resources: Sendable, Hashable {
     public static let managedModelIds = [
         defaultModelId,
         a1bBF16ModelId,
+        a2b24BBF16ModelId,
         smallModelId,
         smallQADModelId,
         denseModelId,
@@ -114,6 +120,7 @@ public struct LFM2Resources: Sendable, Hashable {
     public static let upstreamRepoIds = [
         upstreamRepoId,
         a1bBF16UpstreamRepoId,
+        a2b24BUpstreamRepoId,
         smallUpstreamRepoId,
         smallQADRepoId,
         denseUpstreamRepoId,

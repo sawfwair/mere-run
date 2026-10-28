@@ -86,6 +86,8 @@ an effective overlay; they are not a second capability catalog.
 | `image` | `image-qwen-edit-2511` |
 | `image` | `image-qwen-edit-2511-lightning` |
 | `image` | `image-ideogram4-sdnq-uint4` |
+| `text-chat` | `text-chat-flint-4bit` |
+| `text-chat` | `text-chat-flint-bf16` |
 | `text-chat` | `text-chat-mebot` |
 | `text-chat` | `text-chat-psi-agent` |
 | `text-chat` | `text-chat-gemma4` |
@@ -129,6 +131,7 @@ an effective overlay; they are not a second capability catalog.
 | `text-chat` | `text-agent-deepseek-v4-flash` |
 | `text-chat` | `text-chat-lfm25-a1b-8bit` |
 | `text-chat` | `text-chat-lfm25-a1b-bf16` |
+| `text-chat` | `text-chat-lfm25-24b-a2b-bf16` |
 | `text-chat` | `text-chat-lfm25-1.2b-bf16` |
 | `text-chat` | `text-chat-lfm25-1.2b-qad-4bit` |
 | `text-chat` | `text-chat-lfm25-2.6b-4bit` |
@@ -136,6 +139,8 @@ an effective overlay; they are not a second capability catalog.
 | `text-chat` | `text-chat-lfm25-2.6b-bf16` |
 | `vision-chat` | `vision-chat-lfm25-3b-8bit` |
 | `vision-chat` | `vision-chat-lfm25-3b-bf16` |
+| `speech-tts` | `speech-tts-drama-3` |
+| `speech-tts` | `speech-tts-phonon-31m` |
 | `speech-asr` | `speech-asr-whistle` |
 | `speech-tts` | `speech-tts-breeze-2` |
 | `speech-tts` | `speech-tts-qwen3-nano` |
@@ -676,6 +681,16 @@ a text-only MLX 8-bit directory-root model with `config.json`,
 `tokenizer.json`, `tokenizer_config.json`, and sharded `*.safetensors` weights.
 mere.run runs it through the native Swift LFM2 runtime; no Python bridge is used.
 This quantized target does not attach the BF16-trained DSpark assistant.
+
+`text-chat-lfm25-24b-a2b-bf16` pins
+`LiquidAI/LFM2.5-24B-A2B` at revision
+`1769516ac588c4c558089c94f27d96b0dc67b183`. The native Swift LFM2 runtime
+loads its ten original BF16 safetensor shards directly, including 64 experts
+per sparse layer. No conversion or Python installation is required. The
+checkpoint declares a 131,072-token context and always starts assistant
+generation with `<think>`. It has no managed DSpark companion. The LFM Open
+License acceptance gate applies. Original weights occupy about 48 GB; the
+catalog requires at least 64 GB unified memory and recommends 96 GB.
 
 `text-chat-lfm25-a1b-bf16` uses `LiquidAI/LFM2.5-8B-A1B` at revision
 `b9aebfcbe28b6cb374042f495d733037550ab146`, the exact target for the managed
@@ -2004,3 +2019,8 @@ NVFP4, and BF16 storage. The model materials use OpenMDW-1.1. The managed
 pull is explicit; the source weights do not require conversion. See
 [Native Nemotron Bolt](./runtime/nemotron-bolt.md) for supported inputs and
 qualification limits.
+
+## Recursive Flint
+
+[Run Recursive Flint](./runtime/flint.md) covers the pinned BF16 and MLX INT4
+checkpoints, native Swift/MLX execution, memory estimates, and qualification limits.

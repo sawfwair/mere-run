@@ -1,5 +1,24 @@
 [
   {
+    "topic": "handbook-flint",
+    "title": "Recursive Flint",
+    "category": "Text chat",
+    "models": [
+      "text-chat-flint-4bit",
+      "text-chat-flint-bf16"
+    ],
+    "resourceName": "handbook-flint.md"
+  },
+  {
+    "topic": "handbook-phonon",
+    "title": "Phonon 31m (Gradium)",
+    "category": "Speech",
+    "models": [
+      "speech-tts-phonon-31m"
+    ],
+    "resourceName": "handbook-phonon.md"
+  },
+  {
     "topic": "handbook-flux2-klein",
     "title": "FLUX.2 Klein (Black Forest Labs)",
     "category": "Image",
@@ -293,6 +312,7 @@
     "models": [
       "text-chat-lfm25-a1b-8bit",
       "text-chat-lfm25-a1b-bf16",
+      "text-chat-lfm25-24b-a2b-bf16",
       "text-chat-lfm25-1.2b-bf16",
       "text-chat-lfm25-1.2b-qad-4bit",
       "text-chat-lfm25-2.6b-4bit",
@@ -363,6 +383,15 @@
       "text-anonymize-privacy-filter"
     ],
     "resourceName": "handbook-privacy-filter.md"
+  },
+  {
+    "topic": "handbook-drama-3",
+    "title": "DRAMA-3 (Fish Audio)",
+    "category": "Speech",
+    "models": [
+      "speech-tts-drama-3"
+    ],
+    "resourceName": "handbook-drama-3.md"
   },
   {
     "topic": "handbook-breeze-tts-2",

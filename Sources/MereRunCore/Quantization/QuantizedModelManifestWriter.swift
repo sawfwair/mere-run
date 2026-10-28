@@ -66,6 +66,7 @@ public enum QuantizedModelManifestWriter {
             case .ideogram4: return .ideogram
             case .gemma4: return .gemma
             case .lfm2: return .liquid
+            case .flint: return .flint
             case .laguna: return .laguna
             case .qwen35HybridMoE: return .qwen
             case .samSegmentation: return .sam
@@ -78,7 +79,7 @@ public enum QuantizedModelManifestWriter {
             case .videoDepthAnything: return .depth
             case .marigoldV2: return .depth
             case .tripoSR, .instantMesh, .trellis2: return .threeD
-            case .qwen3TTS, .breezeTTS: return .tts
+            case .qwen3TTS, .breezeTTS, .drama3TTS, .phononTTS: return .tts
             case .qwen3ASR, .parakeetASR, .whistleASR: return .asr
             case .sortformer: return .asr
             case .qwen3Embedding, .embeddingGemma2, .embeddingGemma2CoreML, .pplxEmbedV2: return .embed
@@ -145,6 +146,8 @@ public enum QuantizedModelManifestWriter {
                     return [.referenceEdit]
                 case .ideogram4:
                     return [.txt2img]
+                case .flint:
+                    return [.chat, .codeGeneration]
                 case .gemma4:
                     return [.chat]
                 case .museGlimmer:
@@ -191,7 +194,7 @@ public enum QuantizedModelManifestWriter {
                     return [.imageTo3D, .meshGeneration]
                 case .instantMesh:
                     return [.multiViewReconstruction, .meshGeneration]
-                case .qwen3TTS, .breezeTTS:
+                case .qwen3TTS, .breezeTTS, .drama3TTS, .phononTTS:
                     return [.speechSynthesis]
                 case .qwen3ASR, .parakeetASR, .whistleASR:
                     return [.speechRecognition]
@@ -303,7 +306,7 @@ public enum QuantizedModelManifestWriter {
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 40, cfg: 4.0)
             case .ideogram4:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 20, cfg: 7.0)
-            case .gemma4:
+            case .flint, .gemma4:
                 break
             case .museGlimmer, .nemotronH, .nemotronOmni:
                 break
@@ -318,7 +321,7 @@ public enum QuantizedModelManifestWriter {
                  .videoDepthAnything, .depthAnything3, .marigoldV2,
                  .tripoSR, .instantMesh, .trellis2:
                 break
-            case .laya, .clef, .d1, .gliner25Decide, .qwen3TTS, .breezeTTS, .qwen3ASR, .parakeetASR, .whistleASR, .sortformer, .qwen3Embedding, .embeddingGemma2, .embeddingGemma2CoreML, .pplxEmbedV2, .openAIPrivacyFilter,
+            case .laya, .clef, .d1, .gliner25Decide, .qwen3TTS, .breezeTTS, .drama3TTS, .phononTTS, .qwen3ASR, .parakeetASR, .whistleASR, .sortformer, .qwen3Embedding, .embeddingGemma2, .embeddingGemma2CoreML, .pplxEmbedV2, .openAIPrivacyFilter,
                  .qwen3Coder, .northMiniCode, .lightOnOCR, .woosh, .mmaudio, .psiChat, .deepseekV4Flash,
                  .muScriptor, .roFormer, .apBWE, .univerSR, .auk, .inkling:
                 break

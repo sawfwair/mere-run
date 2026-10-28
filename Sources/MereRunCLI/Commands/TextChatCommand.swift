@@ -53,6 +53,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-lfm25-1.2b-qad-4bit (LiquidAI LFM2.5 1.2B QAD 4-bit native MLX)
           - text-chat-lfm25-2.6b-bf16 (LiquidAI LFM2.5 2.6B BF16 with DSpark)
           - text-chat-lfm25-2.6b-qad-4bit (LiquidAI LFM2.5 2.6B QAD 4-bit native MLX)
+          - text-chat-lfm25-24b-a2b-bf16 (LiquidAI LFM2.5 24B-A2B reasoning MoE, native BF16)
           - text-chat-lfm25-a1b-bf16 (LiquidAI LFM2.5 8B-A1B BF16 with DSpark)
           - text-chat-lfm25-2.6b-4bit (LiquidAI LFM2.5 2.6B dense MLX 4-bit native Swift runtime)
           - text-chat-lfm25-a1b-8bit (LiquidAI LFM2.5 8B-A1B MLX 8-bit native Swift runtime)
@@ -60,9 +61,10 @@ struct TextChat: AsyncParsableCommand {
           - vision-chat-lfm25-3b-bf16 (LiquidAI LFM2.5-VL 3B BF16 native vision-language runtime with DSpark)
           - text-chat-psi-agent
         Models are cached under ~/Library/Application Support/MereRun/models/<model-id>.
-        Thinking output is hidden by default; pass --thinking to include it.
+        Thinking visibility follows the selected model; use --thinking to include it.
         Bonsai and R1-style lanes (text-agent-ornith-*) generate with thinking enabled even
-        when it is hidden; pass --no-thinking to disable reasoning generation.
+        when it is hidden; pass --no-thinking to disable reasoning generation where supported.
+        LFM2.5 24B-A2B always reasons; --no-thinking hides its reasoning output.
         Use --models-root or MERERUN_MODELS_DIR to override the model store path.
         """
     )
@@ -170,7 +172,7 @@ struct TextChat: AsyncParsableCommand {
     @Flag(
         name: [.customLong("thinking"), .customLong("show-thinking")],
         inversion: .prefixedNo,
-        help: "Show model reasoning output. Bonsai and R1-style lanes (text-agent-ornith-*) generate with thinking enabled by default; pass --no-thinking to disable reasoning generation."
+        help: "Show model reasoning output. Bonsai and R1-style lanes (text-agent-ornith-*) generate with thinking enabled by default; pass --no-thinking to disable reasoning generation where supported. LFM2.5 24B-A2B always reasons; --no-thinking hides its reasoning output."
     )
     var thinking: Bool?
 
@@ -549,7 +551,10 @@ struct TextChat: AsyncParsableCommand {
 
     var normalizedModelIdentifier: String {
         let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
-        return KolibriResources.localModelRoot(for: trimmed) == nil ? trimmed.lowercased() : trimmed
+        let local = FlintResources.localModelRoot(for: trimmed) != nil
+            || KolibriResources.localModelRoot(for: trimmed) != nil
+            || ModelFamilyIdentifier.lfm2Family(folder: trimmed) != nil
+        return local ? trimmed : trimmed.lowercased()
     }
 
     private func resolvedInstalledModelPath(modelID: String) -> String? {
@@ -557,7 +562,12 @@ struct TextChat: AsyncParsableCommand {
             let url = URL(fileURLWithPath: modelRoot).standardizedFileURL
             return FileManager.default.fileExists(atPath: url.path) ? url.path : nil
         }
-        return KolibriResources.localModelRoot(for: modelID) ?? ManagedModelResolver.resolveInstalledModel(id: modelID)?.path
+        if ModelFamilyIdentifier.lfm2Family(folder: modelID) != nil {
+            return LFM2Resources.normalizedRootURL(
+                URL(fileURLWithPath: (modelID as NSString).expandingTildeInPath)
+            ).path
+        }
+        return FlintResources.localModelRoot(for: modelID) ?? KolibriResources.localModelRoot(for: modelID) ?? ManagedModelResolver.resolveInstalledModel(id: modelID)?.path
     }
 
     private static func resolveLocalMediaReference(
@@ -603,14 +613,16 @@ struct TextChat: AsyncParsableCommand {
         resourceDiagnostics: [PreflightDiagnostic] = []
     ) -> TextChatPreflightReport {
         var diagnostics = resourceDiagnostics
+        let flint = FlintResources.localModelRoot(for: modelID) != nil
         let kolibri = KolibriResources.handles(modelSpec: modelID)
+        let localLFM2 = ModelFamilyIdentifier.lfm2Family(folder: modelID) != nil && installedModelPath != nil
         if kolibri, installedModelPath == nil {
             diagnostics.append(.init(
                 id: "text_chat_kolibri_root_required", severity: .blocker,
                 title: "Kolibri checkpoint is required",
                 message: "Pass a converted native Kolibri directory through --model or --model-root."
             ))
-        } else if !kolibri, modelID.isEmpty || ManagedModelCatalog.spec(for: modelID) == nil {
+        } else if !kolibri, !flint, !localLFM2, modelID.isEmpty || ManagedModelCatalog.spec(for: modelID) == nil {
             diagnostics.append(.init(
                 id: "text_chat_model_unknown",
                 severity: .blocker,
@@ -618,7 +630,7 @@ struct TextChat: AsyncParsableCommand {
                 message: "No managed model is cataloged as '\(modelID)'."
             ))
         }
-        if requireInstalled, installedModelPath == nil, !kolibri {
+        if requireInstalled, installedModelPath == nil, !kolibri, !flint {
             diagnostics.append(.init(
                 id: "text_chat_model_not_installed",
                 severity: .blocker,
@@ -814,7 +826,7 @@ struct TextChat: AsyncParsableCommand {
                 return nil
             }
             return kvBits == 4 ? .affine4 : .affine8
-        case .inkling, .lfm2, .lfm2A1B, .lfm2VL:
+        case .inkling, .lfm2, .lfm2A2B, .lfm2A1B, .lfm2VL:
             switch kvBits {
             case 4: return .affine4
             case 8: return .affine8

@@ -3,6 +3,43 @@ import Foundation
 extension ManagedModelCatalog {
     static let speechSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
+            id: Drama3Resources.modelID,
+            category: .speechTTS,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: Drama3Resources.quantizedRepository, revision: Drama3Resources.quantizedRevision,
+                patterns: Drama3Resources.quantizedSnapshotPatterns
+            ),
+            upstreamRepoId: Drama3Resources.repository,
+            upstreamRevision: Drama3Resources.revision,
+            usageRestriction: usageRestriction(
+                summary: "Built with Fish Audio. Review the Community License revenue, hosted-service, attribution, and voice-consent terms.",
+                license: "Fish Audio Community License 1.0",
+                sourceRepoId: Drama3Resources.repository, sourceRevision: Drama3Resources.revision,
+                licenseURL: "https://huggingface.co/fishaudio/drama-3/blob/\(Drama3Resources.revision)/LICENSE"
+            ),
+            validationKind: .drama3TTS,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: Drama3Resources.quantizedDownloadBytes,
+            defaultCLICommands: ["speech synthesize"],
+            apiAvailability: .cliOnly
+        ),
+        ManagedModelSpec(
+            id: ManagedModelID.phonon31m.rawValue,
+            category: .speechTTS,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: PhononResources.repository,
+                revision: PhononResources.revision,
+                patterns: ["README.md", "config.json", "model.safetensors", "tokenizer.json", "default-voice.safetensors"]
+            ),
+            upstreamRepoId: PhononResources.repository,
+            upstreamRevision: PhononResources.revision,
+            validationKind: .phononTTS,
+            estimatedDownloadBytes: 103_400_000,
+            defaultCLICommands: ["speech synthesize"]
+        ),
+        ManagedModelSpec(
             id: ManagedModelID.whistleASR.rawValue,
             category: .speechASR,
             installShape: .directoryRoot,

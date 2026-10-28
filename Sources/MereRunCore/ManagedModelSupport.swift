@@ -393,6 +393,16 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 64
             ),
             descriptor(
+                FlintResources.modelID, "Recursive Flint INT4",
+                "Runs the pinned group-64 INT4 export through native Swift/MLX with BF16 attention caches.",
+                minimum: 48, recommended: 64
+            ),
+            descriptor(
+                FlintResources.bf16ModelID, "Recursive Flint BF16",
+                "Loads the original BF16 checkpoint through native Swift/MLX.",
+                minimum: 128, recommended: 128
+            ),
+            descriptor(
                 DiffusionGemmaResources.modelID,
                 "DiffusionGemma 26B-A4B OptiQ",
                 "Runs the mixed 4-bit and 8-bit DiffusionGemma checkpoint through native Swift/MLX parallel block denoising.",
@@ -686,6 +696,13 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                LFM2Resources.a2b24BBF16ModelId,
+                "LFM2.5 24B-A2B BF16",
+                "Runs LiquidAI's reasoning and tool-use MoE directly from original BF16 safetensors.",
+                minimum: 64,
+                recommended: 96
+            ),
+            descriptor(
                 LFM2Resources.smallModelId,
                 "LFM2.5 1.2B BF16",
                 "Runs the compact LiquidAI LFM2.5 1.2B Instruct checkpoint with its optional native DSpark accelerator.",
@@ -814,6 +831,18 @@ public enum ManagedModelCapabilityCatalog {
                 "Synthesizes speech as one of nine named speakers with Qwen3-TTS CustomVoice.",
                 minimum: 12,
                 recommended: 16
+            ),
+            descriptor(
+                "speech-tts-drama-3",
+                "DRAMA-3 Q4 experts",
+                "Native multilingual and multi-speaker speech, event tags, and voice cloning. Built with Fish Audio.",
+                minimum: 32,
+                recommended: 36
+            ),
+            descriptor(
+                "speech-tts-phonon-31m", "Phonon 31m",
+                "Synthesizes English speech locally with Gradium Phonon and a precomputed voice.",
+                minimum: 4, recommended: 8
             ),
             descriptor(
                 "speech-tts-breeze-2",

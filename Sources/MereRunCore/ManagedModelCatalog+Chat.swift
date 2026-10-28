@@ -3,6 +3,20 @@ import Foundation
 extension ManagedModelCatalog {
     static let chatSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
+            id: FlintResources.modelID, category: .textChat, installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(repoId: FlintResources.repository, revision: FlintResources.revision, patterns: FlintResources.snapshotPatterns),
+            upstreamRepoId: FlintResources.repository, upstreamRevision: FlintResources.revision,
+            validationKind: .flint, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 22_580_000_000,
+            defaultCLICommands: ["text chat", "api serve"], apiProfile: .flint()
+        ),
+        ManagedModelSpec(
+            id: FlintResources.bf16ModelID, category: .textChat, installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(repoId: FlintResources.bf16Repository, revision: FlintResources.bf16Revision, patterns: FlintResources.snapshotPatterns),
+            upstreamRepoId: FlintResources.bf16Repository, upstreamRevision: FlintResources.bf16Revision,
+            validationKind: .flint, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 79_590_000_000,
+            defaultCLICommands: ["text chat", "api serve"], apiProfile: .flint()
+        ),
+        ManagedModelSpec(
             id: "text-chat-mebot",
             category: .textChat,
             installShape: .directoryRoot,
@@ -815,6 +829,30 @@ extension ManagedModelCatalog {
             defaultCLICommands: ["text chat", "api serve"],
             companionModelIDs: [LFM2Resources.defaultDSparkModelId],
             apiProfile: .lfm2()
+        ),
+        ManagedModelSpec(
+            id: LFM2Resources.a2b24BBF16ModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: LFM2Resources.a2b24BUpstreamRepoId,
+                revision: LFM2Resources.a2b24BUpstreamRevision,
+                patterns: LFM2Resources.snapshotPatterns
+            ),
+            upstreamRepoId: LFM2Resources.a2b24BUpstreamRepoId,
+            upstreamRevision: LFM2Resources.a2b24BUpstreamRevision,
+            usageRestriction: usageRestriction(
+                summary: "LFM uses a custom open license; commercial use by entities with at least USD 10M annual revenue is not licensed under its community terms.",
+                license: "LFM Open License v1.0",
+                sourceRepoId: LFM2Resources.a2b24BUpstreamRepoId,
+                sourceRevision: LFM2Resources.a2b24BUpstreamRevision,
+                licenseURL: "https://huggingface.co/LiquidAI/LFM2.5-24B-A2B/blob/\(LFM2Resources.a2b24BUpstreamRevision)/LICENSE"
+            ),
+            validationKind: .lfm2,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: LFM2Resources.a2b24BEstimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve"],
+            apiProfile: .lfm2(contextWindow: LFM2Resources.a2b24BContextLength, thinkingLevels: [.high])
         ),
         ManagedModelSpec(
             id: LFM2Resources.smallModelId,

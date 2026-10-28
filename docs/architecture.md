@@ -406,3 +406,14 @@ The advanced image validator is intentionally separate from generation:
    then output.
 5. If you need implementation detail, continue to the larger model-definition
    files.
+
+Native Phonon 31m computation is owned by `Sources/AudioPhononModel/`.
+`Sources/AudioTTS/Phonon/PhononGenerator.swift` adapts it to shared speech
+synthesis, streaming, model resolution, and WAV publication.
+
+## Recursive Flint
+
+For install commands and validation scope, read [Run Recursive Flint](./runtime/flint.md).
+Core orchestration lives in `Sources/MereRunCore/Flint/`. Model computation lives
+in `Sources/MereRunFlintModel/`, including learned attention sinks, mixed attention,
+and sigmoid MoE routing.

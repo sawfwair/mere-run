@@ -37,10 +37,10 @@ Changes confined to `Sources/MereRunCLI/**` and `Tests/MereRunCLITests/**`
 still run the full macOS and Linux gates but do not run iOS, which does not
 link the CLI target. A mixed change that reaches Core still runs iOS.
 
-The Linux job pulls the official Swift 6.1 Jammy image from ECR Public, pinned
-to the same immutable image digest served by Docker Hub. This avoids anonymous
-Docker Hub pull limits before checkout. Verify the upstream digest when changing
-the image; a registry-only update must preserve the toolchain.
+The Linux job pulls the official Swift 6.1 Jammy image from Docker Hub, pinned
+to an immutable image digest. Package downloads prefer the HTTPS Ubuntu archive,
+with mirror failover for transient outages. Verify the upstream digest when
+changing the image; a registry-only update must preserve the toolchain.
 
 ## Merge queue
 

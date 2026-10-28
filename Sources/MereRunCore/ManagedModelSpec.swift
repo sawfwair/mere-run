@@ -48,6 +48,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case qwenImageEdit
     case ideogram4SDNQ
     case gemma4
+    case flint
     case diffusionGemma
     case gemma4Unified
     case gemma4MTPAssistant
@@ -66,6 +67,8 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case nemotronOmni
     case qwen3TTS
     case breezeTTS
+    case drama3TTS
+    case phononTTS
     case qwen3ASR
     case parakeet
     case whistle
