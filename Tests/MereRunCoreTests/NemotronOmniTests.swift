@@ -444,6 +444,7 @@ final class NemotronOmniTests: MereRunCoreTestCase {
         )
 
         XCTAssertEqual(NemotronOmniResources.validationMessages(rootURL: root), [])
+        XCTAssertEqual(NemotronOmniResources.missingTargetFiles(rootURL: root), [])
     }
 
     func testNativeExporterRejectsAnAlreadyNativeSource() throws {

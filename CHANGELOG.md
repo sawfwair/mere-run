@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.66.1 - 2026-10-28
+
+- Fix wide-head NAX attention compilation in the pinned MLX JIT runtime,
+  including the BF16 attention route used by LTX 2.5. Preserve the ordinary
+  attention signature and quantized dispatch policy.
+- Include the source README in lossless Nemotron Omni native exports so the
+  standalone checkpoint passes installed-model discovery and loading.
+
 ## 0.66.0 - 2026-10-28
 
 - Refresh the bundled DwarfStar runtime to upstream `ee7e8405232c`, including
