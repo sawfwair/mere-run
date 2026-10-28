@@ -3,7 +3,7 @@ mlx-core-revision: 735d48ca1436dc2648073c548715af3aea5d32c7
 mlx-upstream-tag: v0.32.4
 mlx-upstream-revision: 36969c094354086e15d2a327a9c50feb20b9cf11
 mlx-swift-version: unknown
-mlx-swift-revision: 834636e7dcdc8f78d581e1e946ec7e6a3fee7765
+mlx-swift-revision: 0fd8ba07f6fcc3540c2c02709592d7dfab52279c
 kernel-sources-sha256: fa09ca655de6f70381043762d7d02bc20e9debe49996904624f5dae3d0f40b35
 metal-language-version: 3.2
 macos-deployment-target: 15.0
