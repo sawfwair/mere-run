@@ -72,7 +72,8 @@ elif ! awk '
   exit 69
 fi
 
-cmp -s "$kernel_tmp" "$kernel" || cat "$kernel_tmp" >"$kernel"
-cmp -s "$launcher_tmp" "$launcher" || cat "$launcher_tmp" >"$launcher"
-cmp -s "$qmv_tmp" "$qmv" || cat "$qmv_tmp" >"$qmv"
+# Replace files rather than writing through SwiftPM's read-only checkout modes.
+cmp -s "$kernel_tmp" "$kernel" || mv -f "$kernel_tmp" "$kernel"
+cmp -s "$launcher_tmp" "$launcher" || mv -f "$launcher_tmp" "$launcher"
+cmp -s "$qmv_tmp" "$qmv" || mv -f "$qmv_tmp" "$qmv"
 echo '[prepare-linux-native] patched MLX quantized synchronization, PTX cache key, and BF16 accumulation.'

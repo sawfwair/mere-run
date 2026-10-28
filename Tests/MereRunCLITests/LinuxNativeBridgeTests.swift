@@ -14,6 +14,10 @@ final class LinuxNativeBridgeTests: XCTestCase {
         try "      \"qmm_sm80_tn_{}_m{}_b{}_g{}_{}\",\n".write(to: launcher, atomically: true, encoding: .utf8)
         try "  cuda::std::conditional_t<(bits == 1 || bits >= 8), float, T>\n      sums[elems_per_thread] = {};\n"
             .write(to: qmv, atomically: true, encoding: .utf8)
+        // SwiftPM dependency files are read-only even when their directories are writable.
+        for file in [kernel, launcher, qmv] {
+            try FileManager.default.setAttributes([.posixPermissions: 0o444], ofItemAtPath: file.path)
+        }
         let script = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("scripts/patch-mlx-cuda-quantized.sh")
         let apply = { () throws -> Int32 in
