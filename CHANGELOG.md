@@ -82,6 +82,13 @@ The format is based on Keep a Changelog.
   `graph batch submit`, `inspect`, `watch`, `fetch`, `cancel`, and `retry` commands.
   Each child executes its entire graph on one worker.
 
+- Refresh the bundled DwarfStar runtime to upstream `ee7e8405232c`, including
+  the Metal compressed-attention causality fix, DeepSeek V4.1 Flash engine
+  support, and CUDA SSD-streamed prefill improvements. Rebuild the macOS
+  executables for macOS 15 and the Apple M1 CPU baseline. The managed premier
+  tier remains the pinned V4 Flash 0731 checkpoint; V4.1 requires separate
+  weights and memory policy.
+
 - Build bundled MLX shaders with Metal 3.2 and a macOS 15.0 deployment target,
   including the library link step, so Xcode 26 builds load on supported macOS 15
   systems. Validate both settings in the build and runtime provenance checks (#586).

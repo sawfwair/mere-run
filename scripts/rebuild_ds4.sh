@@ -19,7 +19,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENDOR_DIR="${ROOT_DIR}/vendor/ds4"
-DS4_COMMIT="${DS4_COMMIT:-b6af0adf8ca97c89145c9f9c15be70c9fd6c4507}"
+DS4_COMMIT="${DS4_COMMIT:-ee7e8405232c8971000cc7ba2b945b00bf6d20d3}"
 DS4_URL="${DS4_URL:-https://github.com/antirez/ds4.git}"
 DS4_LOCAL_SOURCE="${DS4_LOCAL_SOURCE:-}"
 DS4_CODESIGN_IDENTITY="${DS4_CODESIGN_IDENTITY:-}"
@@ -70,7 +70,13 @@ fi
 echo "[ds4] building at commit ${resolved_commit}"
 (
   cd "${source_dir}"
-  make -j ds4 ds4-server ds4-bench
+  if [[ "$UNAME_S" == "Darwin" ]]; then
+    # Ship binaries for every supported Apple Silicon Mac, independent of the
+    # build host's CPU and SDK defaults. Rebuild local objects with these flags.
+    MACOSX_DEPLOYMENT_TARGET=15.0 make -B -j4 NATIVE_CPU_FLAG=-mcpu=apple-m1 ds4 ds4-server ds4-bench
+  else
+    make -j4 ds4 ds4-server ds4-bench
+  fi
 )
 
 echo "[ds4] replacing ${VENDOR_DIR}"
@@ -114,6 +120,8 @@ cat > "${VENDOR_DIR}/README.md" <<EOF
 Prebuilt DwarfStar inference binaries for DeepSeek V4 Flash vendored from
 [antirez/ds4](${DS4_URL}) at commit \`${resolved_commit}\`.
 
+The macOS binaries target macOS 15.0 and the Apple M1 CPU baseline.
+
 Rebuild with:
 
     scripts/rebuild_ds4.sh
@@ -133,7 +141,12 @@ vendored. mere.run lazy-downloads it from
 tier is used on a 96 GB+ Apple Silicon Mac.
 
 The binaries include Iris image decoders. Their MIT notice is in
-\`IRIS-LICENSE\`. Model support exposed by mere.run remains DeepSeek V4 Flash.
+\`IRIS-LICENSE\`.
+
+This runtime includes upstream DeepSeek V4.1 Flash support. The managed
+mere.run tier remains V4 Flash 0731: V4.1 requires a separate checkpoint,
+about 341 GiB on disk and 152 GiB of main weights for Q2, and SSD streaming
+on a single 128 GB machine. It is not a drop-in replacement for this tier.
 EOF
 
 echo "[ds4] vendored binaries:"
