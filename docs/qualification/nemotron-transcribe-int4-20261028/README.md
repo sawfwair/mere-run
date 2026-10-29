@@ -145,8 +145,10 @@ explicit ID before replacement. Both the default INT4 route and explicit BF16
 route exited zero and emitted the exact 11-word reference sentence.
 
 `managed-install-validation.json` records these integration checks separately
-from the earlier latency benchmark. The Mac locked during the check;
-`completeUnlessOpen` file protection then blocked rereading the private run
-receipts. The local full gate encountered the same protected-record read
-restriction in 30 persistence test cases. File protection was not modified.
-The PR's CI runs the standard full gate independently.
+from the earlier latency benchmark. Both private durable run receipts were
+verified as `succeeded`, with the expected effective model IDs. The final
+`./scripts/check.sh` gate passed with native SwiftPM: 5,617 XCTest cases
+(470 optional skips), zero failures, and 196 Swift Testing cases passed.
+All 13 focused Metal tests passed, including both installed checkpoints and
+the five preservation/completeness regressions. Documentation build and
+example checks passed.

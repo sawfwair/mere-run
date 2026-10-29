@@ -1,5 +1,5 @@
 {
-  "status": "passed-transcription-receipt-check-blocked",
+  "status": "passed",
   "repository": "Sawfwair/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-MLX-4bit",
   "revision": "c20414875a76f4b9de213a4a084c9731069a29b3",
   "publication_files": 46,
@@ -30,9 +30,9 @@
       "word_errors": 0,
       "wer": 0,
       "model_id": "speech-asr-nemotron-35-transcribe",
-      "durable_run_state": null,
-      "receipt_verified": false,
-      "receipt_verification_gap": "macOS completeUnlessOpen file protection while screen locked"
+      "durable_run_state": "succeeded",
+      "receipt_verified": true,
+      "model_id_verified": true
     },
     {
       "case": "explicit-bf16",
@@ -43,10 +43,21 @@
       "word_errors": 0,
       "wer": 0,
       "model_id": "speech-asr-nemotron-35-transcribe-bf16",
-      "durable_run_state": null,
-      "receipt_verified": false,
-      "receipt_verification_gap": "macOS completeUnlessOpen file protection while screen locked"
+      "durable_run_state": "succeeded",
+      "receipt_verified": true,
+      "model_id_verified": true
     }
   ],
-  "validation_gap": "Both real CLI transcriptions exited zero with exact text. The Mac locked during the check; final protected run receipts require unlock for rereading. The local full gate encountered the same protected-file read restriction. File protection was not modified."
+  "receipt_verification_note": "Both private durable run receipts were verified as succeeded with the expected effective model IDs.",
+  "verification": {
+    "command": "./scripts/check.sh with native SwiftPM wrapper",
+    "tested_code_commit": "0dacb6887a1907bcaf7d5f08de59114f5799f51d",
+    "exit_code": 0,
+    "xctest_cases": 5617,
+    "xctest_skipped": 470,
+    "xctest_failures": 0,
+    "swift_testing_cases": 196,
+    "focused_metal_tests": 13,
+    "docs_build": "passed"
+  }
 }
