@@ -48,7 +48,7 @@ struct SpeechTranscribe: AsyncParsableCommand {
         abstract: "Transcribe or translate speech to text using native ASR backends.",
         discussion: """
         Supports native Parakeet, Qwen, Whistle, and Nemotron Transcribe backends with policy routing.
-        Nemotron Transcribe supports offline BF16 transcription and English translation with explicit model installation.
+        Nemotron Transcribe defaults to 4-bit routed experts, with an explicit BF16 option for offline transcription and English translation.
         Whistle supports packed CQ2/CQ4 weights, beam search, word timestamps, and seven European languages.
         In auto mode, transcription prefers Parakeet while translation routes to Qwen.
 

@@ -1737,12 +1737,16 @@ extension MereRunModelManifest {
                 upstreamRepoId: "mlx-community/Qwen3-ASR-1.7B-8bit",
                 createdAt: createdAt
             )
-        case .nemotronTranscribeASR:
+        case .nemotronTranscribeASR, .nemotronTranscribeBF16ASR:
+            let bf16 = modelID == .nemotronTranscribeBF16ASR
             return MereRunModelManifest(
                 id: modelID.rawValue, engine: .nemotronTranscribeASR, family: .asr, tier: .latest,
-                variant: .standard, precision: .bf16, defaults: nil,
+                variant: .standard, precision: bf16 ? .bf16 : .int4,
+                quantization: bf16 ? nil : Quantization(bits: 4, groupSize: 64, scheme: "mlx-affine-routed-experts"), defaults: nil,
                 supports: [.speechRecognition], components: genericTextComponents,
-                upstreamRepoId: NemotronTranscribeResources.repository + "@" + NemotronTranscribeResources.revision,
+                upstreamRepoId: bf16
+                    ? NemotronTranscribeResources.repository + "@" + NemotronTranscribeResources.revision
+                    : NemotronTranscribeResources.quantizedRepository + "@" + NemotronTranscribeResources.quantizedRevision,
                 createdAt: createdAt
             )
         case .whistleASR:

@@ -416,7 +416,7 @@
     "topic": "handbook-nemotron-transcribe",
     "title": "Nemotron 3.5 Transcribe (NVIDIA)",
     "category": "Speech",
-    "models": ["speech-asr-nemotron-35-transcribe"],
+    "models": ["speech-asr-nemotron-35-transcribe", "speech-asr-nemotron-35-transcribe-bf16"],
     "resourceName": "handbook-nemotron-transcribe.md"
   },
   {

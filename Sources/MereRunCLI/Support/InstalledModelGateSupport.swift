@@ -919,7 +919,7 @@ extension GateRunner {
                 timeout: 1_800
             )
         }
-        let backend = model == NemotronTranscribeResources.modelID ? "nemotron" : model == "speech-asr-whistle" ? "whistle" : model.contains("qwen") ? "qwen" : "parakeet"
+        let backend = NemotronTranscribeResources.handles(model) ? "nemotron" : model == "speech-asr-whistle" ? "whistle" : model.contains("qwen") ? "qwen" : "parakeet"
         let run = try await exec(
             [
                 "speech", "transcribe", input.path,

@@ -3,7 +3,7 @@ import MLX
 import MLXNN
 import AudioSortformer
 
-/// Native inference over NVIDIA's original BF16 checkpoint. Confine instances to one request stream.
+/// Native inference over original BF16 or locally quantized routed experts. Confine instances to one request stream.
 public final class NemotronTranscribeModel {
     public let config: NemotronTranscribeConfig
     private let weights: TranscribeWeights

@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Make the published Nemotron Transcribe routed-expert INT4 checkpoint the
+  managed default, retain original weights as `speech-asr-nemotron-35-transcribe-bf16`,
+  and preserve existing BF16 installs when pulling either variant.
+
+- Support local affine 4-bit/group-64 Nemotron Transcribe routed experts,
+  with a pinned checkpoint converter, packed native expert multiplication,
+  and BF16 comparison of real transcription accuracy, latency, and memory.
+
 - Add native BF16 Nemotron 3.5 Transcribe file transcription and English
   translation through `speech transcribe --backend nemotron`, with pinned
   explicit installation and speaker-aware audio encoding. Qualify the original

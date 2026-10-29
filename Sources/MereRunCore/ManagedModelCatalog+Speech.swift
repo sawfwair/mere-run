@@ -7,6 +7,27 @@ extension ManagedModelCatalog {
             category: .speechASR,
             installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(
+                repoId: NemotronTranscribeResources.quantizedRepository, revision: NemotronTranscribeResources.quantizedRevision,
+                patterns: NemotronTranscribeResources.quantizedSnapshotPatterns
+            ),
+            upstreamRepoId: NemotronTranscribeResources.quantizedRepository,
+            upstreamRevision: NemotronTranscribeResources.quantizedRevision,
+            usageRestriction: usageRestriction(
+                summary: "NVIDIA Nemotron 3.5 Transcribe is governed by OpenMDW-1.1; review its use and redistribution terms.",
+                license: "OpenMDW-1.1", sourceRepoId: NemotronTranscribeResources.repository,
+                sourceRevision: NemotronTranscribeResources.revision, licenseURL: "https://openmdw.ai/license/1-1/"
+            ),
+            validationKind: .nemotronTranscribe,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: NemotronTranscribeResources.quantizedDownloadBytes,
+            defaultCLICommands: ["speech transcribe"],
+            apiAvailability: .cliOnly
+        ),
+        ManagedModelSpec(
+            id: NemotronTranscribeResources.bf16ModelID,
+            category: .speechASR,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
                 repoId: NemotronTranscribeResources.repository, revision: NemotronTranscribeResources.revision,
                 patterns: NemotronTranscribeResources.files + ["README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "licenses/*.txt"]
             ),

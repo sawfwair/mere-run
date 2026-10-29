@@ -1,0 +1,63 @@
+{
+  "status": "passed",
+  "repository": "Sawfwair/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-MLX-4bit",
+  "revision": "c20414875a76f4b9de213a4a084c9731069a29b3",
+  "publication_files": 46,
+  "published_bytes": 25085565732,
+  "installation": "Standard managed force-pull with payload reuse after resolution and verification of the public immutable Hub revision. All 45 installed published files except the locally rewritten manifest were SHA-256 verified again before transcription.",
+  "legacy_bf16_preserved": true,
+  "default_precision": "int4",
+  "bf16_model_id": "speech-asr-nemotron-35-transcribe-bf16",
+  "mlx_enable_tf32": "0",
+  "binary_sha256": "40e306b8e9cd55b699eee29f50a22bbd55cf706ed91f2ea4cd929fe13d05df23",
+  "cases": [
+    {
+      "case": "preserve-bf16",
+      "exit_code": 0,
+      "wall_seconds": 1.8772609579991695
+    },
+    {
+      "case": "pull-int4",
+      "exit_code": 0,
+      "wall_seconds": 10.414110124998842
+    },
+    {
+      "case": "default-int4",
+      "exit_code": 0,
+      "wall_seconds": 4.929847958001119,
+      "transcript": "The parcel arrived on time, but the glass inside was broken.",
+      "reference_words": 11,
+      "word_errors": 0,
+      "wer": 0,
+      "model_id": "speech-asr-nemotron-35-transcribe",
+      "durable_run_state": "succeeded",
+      "receipt_verified": true,
+      "model_id_verified": true
+    },
+    {
+      "case": "explicit-bf16",
+      "exit_code": 0,
+      "wall_seconds": 14.505485166000653,
+      "transcript": "The parcel arrived on time, but the glass inside was broken.",
+      "reference_words": 11,
+      "word_errors": 0,
+      "wer": 0,
+      "model_id": "speech-asr-nemotron-35-transcribe-bf16",
+      "durable_run_state": "succeeded",
+      "receipt_verified": true,
+      "model_id_verified": true
+    }
+  ],
+  "receipt_verification_note": "Both private durable run receipts were verified as succeeded with the expected effective model IDs.",
+  "verification": {
+    "command": "./scripts/check.sh with native SwiftPM wrapper",
+    "tested_code_commit": "0dacb6887a1907bcaf7d5f08de59114f5799f51d",
+    "exit_code": 0,
+    "xctest_cases": 5617,
+    "xctest_skipped": 470,
+    "xctest_failures": 0,
+    "swift_testing_cases": 196,
+    "focused_metal_tests": 13,
+    "docs_build": "passed"
+  }
+}

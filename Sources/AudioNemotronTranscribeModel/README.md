@@ -13,6 +13,17 @@ experts use the original stacked `[expert, input, output]` matrices, sigmoid
 scores, unbiased normalized mixing weights, and squared ReLU activations.
 Prefill evaluates small expert gathers and each layer to bound Metal graphs.
 
+Local W4A16 conversion quantizes the 46 main-decoder routed expert matrices
+with MLX affine 4-bit groups of 64 and BF16 scales/biases. The converter
+transposes `[expert, input, output]` to `[expert, output, input]` before packing;
+`gatherQuantizedMM` consumes those weights directly without expanding entire
+expert banks. Packed prefill can process 128 positions together. All tensors
+outside those 46 matrices retain their original dtype, including routers,
+shared experts, Mamba projections, audio encoders, and unused MTP tensors.
+`expert-quantization.json` versions the exact layout; the loader validates
+all packed shapes/dtypes and shard-index membership. This format is distinct
+from NVIDIA's NVFP4 release.
+
 `Resources/config.json` records inference fields from the pinned configuration;
 `tensor-inventory.json` records original tensor shapes and dtypes. Loading
 rejects architecture drift and incompatible parameters. Embedded CTC and extra
@@ -43,3 +54,8 @@ Use `MLX_ENABLE_TF32=0` for numerical reference comparisons. The recorded
 2026-10-28 CLI qualification also covers the 46.57-second returning-speaker
 fixture across the encoder chunk boundary; see
 `docs/qualification/nemotron-transcribe-native-20261028/README.md`.
+Set `MERERUN_TEST_NEMOTRON_TRANSCRIBE_INT4_PATH` to the converted directory
+to exercise the same installed-checkpoint regression with 4-bit experts.
+The twelve-recording BF16/INT4 comparison, including all transcripts, WER,
+timing repetitions, and peak memory measurements, is recorded in
+`docs/qualification/nemotron-transcribe-int4-20261028/README.md`.

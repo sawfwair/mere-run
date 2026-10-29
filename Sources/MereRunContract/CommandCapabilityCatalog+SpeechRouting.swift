@@ -59,7 +59,7 @@ extension MereRunCapabilityCatalog {
         ],
         families: [
             .init(SpeechTranscribeFamily.nemotronTranscribe, title: "Nemotron 3.5 Transcribe",
-                  models: ["speech-asr-nemotron-35-transcribe"],
+                  models: ["speech-asr-nemotron-35-transcribe", "speech-asr-nemotron-35-transcribe-bf16"],
                   selectors: [.init(flag: "--backend", values: ["auto", "nemotron"])]),
             .init(
                 SpeechTranscribeFamily.whistle, title: "Whistle", models: ["speech-asr-whistle"],

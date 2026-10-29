@@ -33,7 +33,7 @@ the audio does not leave the machine.
 
 - `speech-asr-qwen3`
 - `speech-asr-parakeet`
-- [`speech-asr-nemotron-35-transcribe`](./nemotron-transcribe.md) (native BF16 offline transcription and English translation; explicit installation)
+- [`speech-asr-nemotron-35-transcribe`](./nemotron-transcribe.md) (native INT4-default offline transcription and English translation; BF16 option; explicit installation)
 - [`speech-asr-whistle`](./whistle.md) (native packed CQ2/CQ4 transcription in seven languages)
 
 ### Speaker diarization

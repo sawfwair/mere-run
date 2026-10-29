@@ -1832,6 +1832,10 @@ CC-BY-NC checkpoints are not included. Model assets are downloaded separately.
 
 ### Nemotron 3.5 Transcribe native runtime
 
+- Managed INT4 default: [`Sawfwair/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-MLX-4bit`](https://huggingface.co/Sawfwair/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-MLX-4bit),
+  revision `c20414875a76f4b9de213a4a084c9731069a29b3`, derived from the NVIDIA
+  source below under OpenMDW-1.1. Published artifacts retain upstream licenses,
+  model card, notices, modification details, and qualification receipts.
 - Model: [`nvidia/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B`](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B),
   revision `ef905575a106fdad904f3b0ce661dccad654607d`, NVIDIA Corporation.
 - Model configuration and tensor inventory: OpenMDW-1.1, reproduced under
@@ -1846,3 +1850,5 @@ CC-BY-NC checkpoints are not included. Model assets are downloaded separately.
   calculated by `scripts/reference-parity/nemotron_transcribe_reference.py`.
 - Runtime downloads retain the upstream license and third-party notices;
   checkpoint weights are not redistributed in this source repository.
+  The local routed-expert affine INT4 converter retains these notices and
+  model licenses in its derived artifact and records source/output hashes.
