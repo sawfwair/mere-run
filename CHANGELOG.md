@@ -6,23 +6,32 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
-- Make the published Nemotron Transcribe routed-expert INT4 checkpoint the
-  managed default, retain original weights as `speech-asr-nemotron-35-transcribe-bf16`,
-  and preserve existing BF16 installs when pulling either variant.
+## 0.67.0 - 2026-10-28
 
-- Support local affine 4-bit/group-64 Nemotron Transcribe routed experts,
-  with a pinned checkpoint converter, packed native expert multiplication,
-  and BF16 comparison of real transcription accuracy, latency, and memory.
+- Add native Nemotron 3.5 Transcribe 30B-A4B file transcription and speech
+  translation to English through `speech transcribe --backend nemotron`.
+  Load the audio encoders and hybrid Mamba/attention/MoE decoder directly in
+  Swift/MLX, with speaker-aware audio encoding and corrected BF16 causal masks.
+  Live ASR, timestamps, and speaker timelines are unsupported.
 
-- Add native BF16 Nemotron 3.5 Transcribe file transcription and English
-  translation through `speech transcribe --backend nemotron`, with pinned
-  explicit installation and speaker-aware audio encoding. Qualify the original
-  checkpoint on short and two-speaker English recordings, and fix BF16 causal
-  mask handling during prefill.
+- Make the published routed-expert INT4 checkpoint the explicitly installed
+  `speech-asr-nemotron-35-transcribe` default, with a pinned 25.09 GB download.
+  Keep original BF16 as `speech-asr-nemotron-35-transcribe-bf16` and preserve
+  existing BF16 installs when pulling either variant. Retain automatic backend
+  preferences for Parakeet transcription and Qwen3-ASR translation.
+
+- Support local affine 4-bit/group-64 Nemotron Transcribe expert conversion
+  and packed native expert multiplication. On twelve English recordings with
+  522 reference words, BF16 measured 0.38% WER and INT4 0.77% WER. On the
+  46.57-second recording, median CLI time fell from 46.74 to 6.45 seconds;
+  the largest observed process footprint fell from 61.74 to 21.83 GiB across
+  the comparison. These M5 Max 128 GiB results do not qualify broad accuracy,
+  multilingual/translation accuracy, or minimum-memory hardware.
 
 - Update Swift Crypto to 4.5.2, Transformers to 1.3.5, Jinja to 2.5.2,
-  and Hummingbird to 2.26.0. Cap Hummingbird below 2.27 and retain compatible
-  logging and metrics pins to preserve Swift 6.1 support.
+  Hummingbird to 2.26.0, Swift Log to 1.15.1, and Swift Metrics to 2.11.0,
+  including their license notices. Cap Hummingbird below 2.27 and retain
+  compatible logging and metrics pins to preserve Swift 6.1 support.
 
 ## 0.66.1 - 2026-10-28
 
