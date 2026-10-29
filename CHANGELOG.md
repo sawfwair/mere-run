@@ -6,7 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
-## 0.67.0 - 2026-10-28
+## 0.67.1 - 2026-10-29
+
+- Complete selected full-precision checkpoint reads on the CPU before GPU
+  inference, preserving shard ownership and existing precision conversions.
+  Prevent Muse Glimmer and its DFlash companion from timing out during GPU
+  warm-up when checkpoint reads are still pending on external storage.
 
 - Add native Nemotron 3.5 Transcribe 30B-A4B file transcription and speech
   translation to English through `speech transcribe --backend nemotron`.

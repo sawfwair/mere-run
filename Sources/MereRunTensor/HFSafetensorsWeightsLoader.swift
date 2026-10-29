@@ -123,16 +123,25 @@ public enum HFSafetensorsWeightsLoader {
         let arrays = try MLX.loadArrays(url: url)
         var updates: [(String, MLXArray)] = []
         updates.reserveCapacity(arrays.count)
+        var sourceArrays: [MLXArray] = []
+        sourceArrays.reserveCapacity(arrays.count)
 
         for (key, rawValue) in arrays {
             let value = castIfNeeded(rawValue, dtype: dtype)
-            updates.append(contentsOf: mapper(key, value))
+            let mapped = mapper(key, value)
+            if !mapped.isEmpty {
+                sourceArrays.append(rawValue)
+                updates.append(contentsOf: mapped)
+            }
         }
 
         if updates.isEmpty {
             return
         }
 
+        // Safetensors reads are lazy CPU operations. Finish selected reads before
+        // GPU casts or inference can make a command buffer wait on disk I/O.
+        MLX.eval(sourceArrays)
         try model.update(parameters: ModuleParameters.unflattened(updates), verify: verify)
     }
 
