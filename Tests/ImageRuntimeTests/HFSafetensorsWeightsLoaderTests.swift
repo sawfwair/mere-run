@@ -7,6 +7,34 @@ import MereRunMLXTestSupport
 @testable import MereRunImageModels
 
 final class HFSafetensorsWeightsLoaderTests: MLXTestCase {
+    func testAppliedWeightsRetainLoadedValuesAfterCheckpointChanges() throws {
+        for dtype in [DType.float32, .bfloat16] {
+            let root = try makeTempDirectory()
+            defer { try? FileManager.default.removeItem(at: root) }
+            let weights = root.appendingPathComponent("model.safetensors")
+            try MLX.save(
+                arrays: ["weight": MLXArray(Array(repeating: Float(1), count: 4_096), [64, 64])],
+                url: weights
+            )
+            let model = Linear(64, 64, bias: false)
+
+            try HFSafetensorsWeightsLoader.applyWeights(url: weights, to: model, dtype: dtype)
+
+            let writer = try FileHandle(forWritingTo: weights)
+            let end = try writer.seekToEnd()
+            try writer.seek(toOffset: end - UInt64(MemoryLayout<UInt32>.size))
+            var replacement = Float(9).bitPattern.littleEndian
+            try writer.write(contentsOf: withUnsafeBytes(of: &replacement) { Data($0) })
+            try writer.close()
+
+            XCTAssertEqual(model.weight.dtype, dtype)
+            XCTAssertEqual(
+                model.weight.asType(.float32).asArray(Float.self).last, 1,
+                "Applied weights must finish checkpoint reads before returning (\(dtype))"
+            )
+        }
+    }
+
     func testShardedArraysRespectIndexOwnershipAndExcludeUnindexedTensors() throws {
         let root = try makeTempDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
