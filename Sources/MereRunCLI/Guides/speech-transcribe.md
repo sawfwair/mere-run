@@ -10,7 +10,7 @@ Transcribe or translate speech from a WAV file using native ASR backends. Auto m
   artifact replaces it when `--provider coreml` is selected.
 - `speech-asr-qwen3` for quality-first transcription and translation.
 - `speech-asr-whistle` for native packed CQ2/CQ4 transcription in seven European languages.
-- `speech-asr-nemotron-35-transcribe` for offline Nemotron 3.5 Transcribe with
+- `speech-asr-nemotron-35-transcribe` for Nemotron 3.5 Transcribe with
   4-bit routed experts (25.09 GB). `speech-asr-nemotron-35-transcribe-bf16` is
   the original BF16 checkpoint (67.5 GB). Both require `--accept-model-license`.
 

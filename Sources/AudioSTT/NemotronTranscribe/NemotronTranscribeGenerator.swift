@@ -18,49 +18,74 @@ public actor NemotronTranscribeGenerator {
         _ request: ASRRequest, modelID: String = NemotronTranscribeResources.modelID, modelPath: String? = nil,
         progressHandler: (@Sendable (ASRProgress) -> Void)? = nil
     ) async throws -> ASRResult {
-        let language = try Self.validate(language: request.language)
+        _ = try Self.validate(language: request.language)
         guard request.maxTokens > 0 else {
             throw SpeechTranscriptionIssue("invalid_max_tokens", "Maximum transcription tokens must be positive.")
         }
+        try await prepare(modelID: modelID, modelPath: modelPath, progressHandler: progressHandler)
+        try Task.checkCancellation()
+        progressHandler?(ASRProgress(stage: .loadingAudio, message: "Reading audio at 16 kHz..."))
+        let audio = try MediaAudioIO.decode(request.audioURL, targetSampleRate: 16_000, channels: 1)
+        return try await transcribePrepared(samples: audio.samples, language: request.language, task: request.task,
+                                            maxTokens: request.maxTokens, progressHandler: progressHandler)
+    }
+
+    /// Loads the checkpoint once. Later calls for the same root reuse the resident model.
+    public func prepare(
+        modelID: String = NemotronTranscribeResources.modelID, modelPath: String? = nil,
+        progressHandler: (@Sendable (ASRProgress) -> Void)? = nil
+    ) async throws {
         let resolved = try await ManagedModelResolver.resolveForRuntime(
             requestedModel: modelPath ?? modelID,
             defaultModelID: NemotronTranscribeResources.managedModelID(for: modelID) ?? NemotronTranscribeResources.modelID)
-        return try await MLXRequestStreams.withStream(isolation: self) {
+        try await MLXRequestStreams.withStream(isolation: self) {
             await Task.yield()
             try Task.checkCancellation()
-            if loadedRoot != resolved.url {
-                progressHandler?(ASRProgress(stage: .loadingModel, message: "Loading native Nemotron Transcribe weights..."))
-                let config = try NemotronTranscribeConfig.load(at: resolved.url)
-                let loadedTokenizer = try await AutoTokenizer.from(modelFolder: resolved.url)
-                guard loadedTokenizer.convertTokenToId("<|im_end|>") == config.eosTokenId.first,
-                      loadedTokenizer.convertTokenToId("<|audio|>") == 131_072 else {
-                    throw SpeechTranscriptionIssue("invalid_tokenizer", "Tokenizer does not match the released Nemotron Transcribe checkpoint.")
-                }
-                let loadedModel = try NemotronTranscribeModel(root: resolved.url)
-                model = loadedModel
-                tokenizer = loadedTokenizer
-                loadedRoot = resolved.url
+            guard loadedRoot != resolved.url else { return }
+            progressHandler?(ASRProgress(stage: .loadingModel, message: "Loading native Nemotron Transcribe weights..."))
+            let config = try NemotronTranscribeConfig.load(at: resolved.url)
+            let loadedTokenizer = try await AutoTokenizer.from(modelFolder: resolved.url)
+            guard loadedTokenizer.convertTokenToId("<|im_end|>") == config.eosTokenId.first,
+                  loadedTokenizer.convertTokenToId("<|audio|>") == 131_072 else {
+                throw SpeechTranscriptionIssue("invalid_tokenizer", "Tokenizer does not match the released Nemotron Transcribe checkpoint.")
             }
-            try Task.checkCancellation()
-            progressHandler?(ASRProgress(stage: .loadingAudio, message: "Reading audio at 16 kHz..."))
-            let audio = try MediaAudioIO.decode(request.audioURL, targetSampleRate: 16_000, channels: 1)
-            return try generate(samples: audio.samples, request: request, language: language, progressHandler: progressHandler)
+            let loadedModel = try NemotronTranscribeModel(root: resolved.url)
+            model = loadedModel
+            tokenizer = loadedTokenizer
+            loadedRoot = resolved.url
         }
     }
 
-    private func generate(samples: [Float], request: ASRRequest, language: String?,
+    public func transcribePrepared(
+        samples: [Float], language: String? = nil, task: ASRTask = .transcribe, maxTokens: Int = 448,
+        progressHandler: (@Sendable (ASRProgress) -> Void)? = nil
+    ) async throws -> ASRResult {
+        let language = try Self.validate(language: language)
+        guard maxTokens > 0 else {
+            throw SpeechTranscriptionIssue("invalid_max_tokens", "Maximum transcription tokens must be positive.")
+        }
+        return try await MLXRequestStreams.withStream(isolation: self) {
+            await Task.yield()
+            try Task.checkCancellation()
+            return try generate(samples: samples, task: task, language: language, maxTokens: maxTokens, progressHandler: progressHandler)
+        }
+    }
+
+    private func generate(samples: [Float], task: ASRTask, language: String?, maxTokens: Int,
                           progressHandler: (@Sendable (ASRProgress) -> Void)?) throws -> ASRResult {
-        guard let model, let tokenizer else { preconditionFailure("Model must be loaded before generation") }
+        guard let model, let tokenizer else {
+            throw SpeechTranscriptionIssue("model_not_prepared", "Prepare Nemotron Transcribe before decoding audio.")
+        }
         defer { Memory.clearCache() }
         progressHandler?(ASRProgress(stage: .extractingFeatures, message: "Encoding audio and speaker features..."))
         let audio = try model.encodeAudio(samples) { completed, total in
             progressHandler?(ASRProgress(stage: .extractingFeatures, message: "Encoded audio chunk \(completed)/\(total)."))
         }
-        let prompt = Self.prompt(task: request.task, language: language)
+        let prompt = Self.prompt(task: task, language: language)
         let prefix = tokenizer.encode(text: prompt.prefix, addSpecialTokens: false)
         let suffix = tokenizer.encode(text: prompt.suffix, addSpecialTokens: false)
         let inputCount = prefix.count + audio.dim(1) + suffix.count
-        guard inputCount + request.maxTokens <= NemotronTranscribeConfig.maximumContext else {
+        guard inputCount + maxTokens <= NemotronTranscribeConfig.maximumContext else {
             throw SpeechTranscriptionIssue("context_exceeded", "Audio, prompt, and requested output exceed the 65,536-token context.")
         }
         let embeddings = concatenated([model.inputEmbeddings(prefix), audio, model.inputEmbeddings(suffix)], axis: 1)
@@ -68,7 +93,7 @@ public actor NemotronTranscribeGenerator {
         progressHandler?(ASRProgress(stage: .transcribing, message: "Decoding transcript..."))
         var logits = try model.prefill(embeddings: embeddings, cache: cache)
         var generated: [Int] = []
-        for step in 0..<request.maxTokens {
+        for step in 0..<maxTokens {
             try Task.checkCancellation()
             let token = argMax(logits.reshaped(-1), axis: -1).item(Int.self)
             if model.config.eosTokenId.contains(token) { break }
@@ -76,11 +101,11 @@ public actor NemotronTranscribeGenerator {
             if (step + 1).isMultiple(of: 10) {
                 progressHandler?(ASRProgress(stage: .transcribing, tokensGenerated: generated.count))
             }
-            if step + 1 < request.maxTokens { logits = try model.decode(token: token, cache: cache) }
+            if step + 1 < maxTokens { logits = try model.decode(token: token, cache: cache) }
         }
         try Task.checkCancellation()
         return ASRResult(text: tokenizer.decode(tokens: generated, skipSpecialTokens: false).trimmingCharacters(in: .whitespacesAndNewlines),
-                         language: request.task == .translate ? "en" : language, duration: Double(samples.count) / 16_000)
+                         language: task == .translate ? "en" : language, duration: Double(samples.count) / 16_000)
     }
 
     public func unload() {

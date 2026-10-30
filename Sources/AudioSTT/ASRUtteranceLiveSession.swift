@@ -152,7 +152,9 @@ public actor ASRUtteranceLiveSession {
         let decodeIntervalSamples = request.sampleRate * configuration.decodeIntervalMs / 1_000
         if (redecodeWholeUtterance || decodeCount == 0),
            utteranceSamples.count >= minimumSamples,
-           utteranceSamples.count - lastDecodeSampleCount >= decodeIntervalSamples {
+           utteranceSamples.count - lastDecodeSampleCount >= decodeIntervalSamples,
+           pendingSamples.count < decodeIntervalSamples {
+            // A model behind the microphone skips partials; the commit still decodes everything.
             try await decodePartial()
         }
 

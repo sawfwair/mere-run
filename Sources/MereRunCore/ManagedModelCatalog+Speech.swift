@@ -20,7 +20,7 @@ extension ManagedModelCatalog {
             validationKind: .nemotronTranscribe,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: NemotronTranscribeResources.quantizedDownloadBytes,
-            defaultCLICommands: ["speech transcribe"],
+            defaultCLICommands: ["speech transcribe", "speech listen"],
             apiAvailability: .cliOnly
         ),
         ManagedModelSpec(
@@ -41,7 +41,7 @@ extension ManagedModelCatalog {
             validationKind: .nemotronTranscribe,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: NemotronTranscribeResources.weightBytes,
-            defaultCLICommands: ["speech transcribe"],
+            defaultCLICommands: ["speech transcribe", "speech listen"],
             apiAvailability: .cliOnly
         ),
         ManagedModelSpec(

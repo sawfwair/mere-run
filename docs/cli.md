@@ -55,7 +55,7 @@ against the CLI and fails if they disagree.
   - `mere.run speech transcribe` — Transcribe or translate speech to text using native ASR backends.
   - `mere.run speech diarize` — Identify who spoke when in an audio file with native MLX diarization.
   - `mere.run speech diarize-live` — Stream Nemotron 3 speaker activity from a microphone or raw PCM stdin.
-  - `mere.run speech listen` — Transcribe a macOS microphone with live Qwen, Parakeet, or Whistle ASR.
+  - `mere.run speech listen` — Transcribe a macOS microphone with live Qwen, Parakeet, Whistle, or Nemotron ASR.
   - `mere.run speech profile` — Manage saved voice clone profiles.
     - `mere.run speech profile list` — List saved speech voice profiles.
     - `mere.run speech profile create` — Create a speech profile from reference audio.
@@ -1686,8 +1686,8 @@ Key options:
 
 ### `mere.run speech listen`
 
-Capture a macOS input device and transcribe it in real time with Qwen3-ASR or
-Whistle.
+Capture a macOS input device and transcribe it with Qwen3-ASR by default. `--model`
+also selects Parakeet, Whistle, or Nemotron Transcribe.
 
 ```bash
 swift run mere.run speech listen [options]
@@ -1702,6 +1702,11 @@ the partial decode cadence, and `--silence-ms` (default 900) the silence that
 commits an utterance. `--jsonl` emits the same protocol-v1 event stream as raw
 stdin, and `--quiet` suppresses diagnostics and interactive partials. Ctrl-C
 flushes the active utterance before exiting.
+
+Nemotron Transcribe has no incremental decoder, so text arrives per utterance
+after a pause, and an utterance is cut at 30 seconds. Use the INT4 default live;
+the BF16 variant falls far behind. See
+[Nemotron 3.5 Transcribe](./runtime/nemotron-transcribe.md).
 
 ### `mere.run speech profile`
 

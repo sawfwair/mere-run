@@ -2,6 +2,7 @@ import Foundation
 
 extension MereRunCapabilityCatalog {
     enum SpeechListenFamily: String, MereRunFamilyID {
+        case nemotronTranscribe = "nemotron-transcribe"
         case whistle
         case parakeet
         case qwen3ASR = "qwen3-asr"
@@ -145,12 +146,10 @@ extension MereRunCapabilityCatalog {
         families: [
             .init(SpeechListenFamily.qwen3ASR, title: "Qwen3-ASR", models: ["speech-asr-qwen3"]),
             .init(SpeechListenFamily.parakeet, title: "Parakeet", models: ["speech-asr-parakeet"]),
-            .init(SpeechListenFamily.whistle, title: "Whistle", models: ["speech-asr-whistle"])
+            .init(SpeechListenFamily.whistle, title: "Whistle", models: ["speech-asr-whistle"]),
+            .init(SpeechListenFamily.nemotronTranscribe, title: "Nemotron 3.5 Transcribe",
+                  models: ["speech-asr-nemotron-35-transcribe", "speech-asr-nemotron-35-transcribe-bf16"])
         ],
-        excludedModels: .models(
-            ["speech-asr-nemotron-35-transcribe", "speech-asr-nemotron-35-transcribe-bf16"],
-            reason: "Nemotron Transcribe is an offline backend; use `speech transcribe` with a file input."
-        ),
         listingFlags: ["--list-devices"]
     )
 

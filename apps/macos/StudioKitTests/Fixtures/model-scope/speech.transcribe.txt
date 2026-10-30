@@ -3,9 +3,9 @@
 nemotron-transcribe	composer.listen	emitted	--backend --language --model --output --task
 nemotron-transcribe	composer.listen	shown	--backend --language --model
 nemotron-transcribe	composer.listen	validated	--language --model
-nemotron-transcribe	console.speechTranscribe	emitted	--backend --language --max-tokens --model --output --quiet --receipt --run-dir
-nemotron-transcribe	console.speechTranscribe	shown	--backend --language --max-tokens --model --output --quiet --receipt --run-dir --task
-nemotron-transcribe	console.speechTranscribe	validated	--backend --language --max-tokens --model --output --quiet --receipt --run-dir
+nemotron-transcribe	console.speechTranscribe	emitted	--backend --input-format --jsonl --language --max-tokens --model --output --quiet --receipt --run-dir --sample-rate --stream --stream-chunk-ms --stream-decode-ms
+nemotron-transcribe	console.speechTranscribe	shown	--backend --input-format --jsonl --language --max-tokens --model --output --quiet --receipt --run-dir --sample-rate --stream --stream-chunk-ms --stream-decode-ms --task
+nemotron-transcribe	console.speechTranscribe	validated	--backend --input-format --jsonl --language --max-tokens --model --output --quiet --receipt --run-dir --sample-rate --stream --stream-chunk-ms --stream-decode-ms
 parakeet	composer.listen	emitted	--backend --language --model --no-timestamps --output --task
 parakeet	composer.listen	shown	--backend --language --model --no-timestamps
 parakeet	composer.listen	validated	--backend --language --model --no-timestamps

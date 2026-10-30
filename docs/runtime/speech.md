@@ -10,8 +10,9 @@ Two ASR backends have their own pages:
 
 - [Native Whistle](./whistle.md) covers the compact seven-language model,
   beam search, keyword biasing, and live transcription.
-- [Nemotron 3.5 Transcribe](./nemotron-transcribe.md) covers the large offline
-  model, its INT4 default and BF16 option, and its measured tradeoffs.
+- [Nemotron 3.5 Transcribe](./nemotron-transcribe.md) covers the large
+  file and per-utterance live model, its INT4 default and BF16 option, and its
+  measured tradeoffs.
 
 ## Commands
 
@@ -21,7 +22,7 @@ Two ASR backends have their own pages:
 | `mere.run speech transcribe` | Transcribe or translate speech to text using native ASR backends. |
 | `mere.run speech diarize` | Identify speaker time ranges as versioned JSON or RTTM using native MLX diarization. |
 | `mere.run speech diarize-live` | Emit incremental Nemotron 3 speaker activity from a microphone or PCM stdin. |
-| `mere.run speech listen` | Transcribe a macOS microphone with live Qwen3-ASR, Parakeet, or Whistle. |
+| `mere.run speech listen` | Transcribe a macOS microphone with live Qwen3-ASR, Parakeet, Whistle, or Nemotron Transcribe. |
 | `mere.run speech profile create` | Create a reusable voice profile from reference audio. |
 | `mere.run speech profile list` | List saved speech voice profiles. |
 | `mere.run speech profile delete` | Delete a speech profile by id. |
@@ -42,8 +43,9 @@ Two ASR backends have their own pages:
 - `speech-asr-qwen3` (translation and languages Parakeet doesn't recognize)
 - [`speech-asr-whistle`](./whistle.md) (packed CQ2/CQ4 transcription in seven
   languages; about 17 MB)
-- [`speech-asr-nemotron-35-transcribe`](./nemotron-transcribe.md) (offline
-  transcription and English translation with 4-bit routed experts; 25.09 GB;
+- [`speech-asr-nemotron-35-transcribe`](./nemotron-transcribe.md) (file and
+  per-utterance live transcription and English translation with 4-bit routed
+  experts; 25.09 GB;
   explicit installation)
 - [`speech-asr-nemotron-35-transcribe-bf16`](./nemotron-transcribe.md) (the
   original BF16 checkpoint; 67.5 GB; explicit installation)
@@ -207,8 +209,8 @@ swift run mere.run speech listen --device <core-audio-uid>
 `--model speech-asr-parakeet` selects Parakeet's live session, and
 `--model speech-asr-whistle` selects Whistle with the same decoding controls
 as `speech transcribe`. Unsupported Parakeet language hints select Qwen3-ASR,
-as they do for streamed transcription. Nemotron Transcribe is an offline
-backend and is rejected by `speech listen`; use file transcription instead.
+as they do for streamed transcription. `--model speech-asr-nemotron-35-transcribe`
+selects Nemotron Transcribe, which commits text per utterance after a pause.
 `--list-devices` lists inputs for `speech listen` and `speech diarize-live`
 before any model is read.
 

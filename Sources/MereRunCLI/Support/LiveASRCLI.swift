@@ -11,6 +11,37 @@ struct CLILiveASRSession {
     let cancel: @Sendable () async -> Void
 }
 
+/// Runs Nemotron Transcribe over VAD utterances. The model has no incremental decoder, so each
+/// partial and commit re-decodes the bounded utterance.
+enum CLINemotronLiveSession {
+    /// The encoder refuses anything shorter; a stream can end on a shorter speech window.
+    private static let minimumSamples = 320
+    /// Room for one maximum-length utterance to decode while the next one queues, on BF16 too.
+    private static let maxQueuedAudioMs = 60_000
+
+    static func make(
+        model: String?, request: ASRStreamingRequest, configuration: ASRLiveConfiguration,
+        progressHandler: (@Sendable (ASRProgress) -> Void)?
+    ) async throws -> CLILiveASRSession {
+        let generator = NemotronTranscribeGenerator()
+        try await generator.prepare(modelPath: model, progressHandler: progressHandler)
+        // The first decode is several times slower than later ones. Spend it before audio arrives.
+        _ = try await generator.transcribePrepared(samples: [Float](repeating: 0, count: 32_000), maxTokens: 8)
+        var bounded = configuration
+        bounded.maxUtteranceMs = min(bounded.maxUtteranceMs, 30_000)
+        bounded.maxQueuedAudioMs = max(bounded.maxQueuedAudioMs, maxQueuedAudioMs)
+        let live = ASRUtteranceLiveSession(request: request, configuration: bounded, redecodeWholeUtterance: true) { samples, language in
+            guard samples.count >= minimumSamples else {
+                return ASRResult(text: "", language: language, duration: Double(samples.count) / 16_000)
+            }
+            return try await generator.transcribePrepared(samples: samples, language: language, task: request.task, maxTokens: request.maxTokens)
+        }
+        return CLILiveASRSession(backend: .nemotron, events: live.events,
+                                 feed: { try await live.feed(samples: $0) }, finish: { try await live.finish(reason: $0) },
+                                 cancel: { await live.cancel() })
+    }
+}
+
 struct PCM16LittleEndianDecoder {
     private var trailingByte: UInt8?
 

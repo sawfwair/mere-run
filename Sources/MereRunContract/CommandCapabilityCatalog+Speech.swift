@@ -124,26 +124,26 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--keyword", label: "Keyword bias", kind: .string, repeatable: true, group: Group.prompt, tier: .expert)
                 .scoped(SpeechTranscribeFamily.only(.whistle)),
             .init(flag: "--stream", label: "Stream", kind: .boolean, group: Group.run, tier: .expert)
-                .scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle)),
+                .scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle, .nemotronTranscribe)),
             .init(
                 flag: "--stream-chunk-ms", label: "Feed interval", kind: .integer,
                 defaultValue: "200", group: Group.run, tier: .expert, range: .init(min: 10, max: 5_000, step: 10), dependsOn: "--stream"
-            ).scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle)),
+            ).scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle, .nemotronTranscribe)),
             .init(
                 flag: "--stream-decode-ms", label: "Decode interval", kind: .integer,
                 defaultValue: "2000", group: Group.run, tier: .expert, range: .init(min: 100, max: 10_000, step: 100), dependsOn: "--stream"
-            ).scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle)),
+            ).scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle, .nemotronTranscribe)),
             .init(flag: "--input-format", label: "Input format", kind: .string, group: Group.inputs, tier: .expert, dependsOn: "--stream")
-                .scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle)),
+                .scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle, .nemotronTranscribe)),
             // Raw stdin protocol v1 accepts exactly 16 kHz, so the range pins
             // the single value a shell may send rather than a span.
             .init(
                 flag: "--sample-rate", label: "Sample rate", kind: .integer,
                 group: Group.inputs, tier: .expert, range: .init(min: 16_000, max: 16_000, step: 1),
                 dependsOn: "--stream"
-            ).scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle)),
+            ).scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle, .nemotronTranscribe)),
             .init(flag: "--jsonl", label: "JSON Lines", kind: .boolean, group: Group.output, tier: .expert, dependsOn: "--stream")
-                .scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle)),
+                .scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle, .nemotronTranscribe)),
             .init(flag: "--no-timestamps", label: "No timestamps", kind: .boolean, group: Group.output, tier: .standard)
                 .scoped(SpeechTranscribeFamily.only(.parakeet, .whistle, ignoredBy: [.qwen3ASR, .nemotronTranscribe])),
             .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
@@ -260,7 +260,7 @@ extension MereRunCapabilityCatalog {
         id: "speech.listen",
         command: ["speech", "listen"],
         title: "Live transcription",
-        summary: "Transcribe a macOS microphone with live Qwen, Parakeet, or Whistle ASR.",
+        summary: "Transcribe a macOS microphone with live Qwen, Parakeet, Whistle, or Nemotron ASR.",
         options: [
             .init(flag: "--device", label: "Input device", kind: .string, group: Group.inputs, tier: .standard),
             .init(flag: "--list-devices", label: "List devices", kind: .boolean, group: Group.run, tier: .expert),
