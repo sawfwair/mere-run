@@ -61,9 +61,16 @@ levels and mappings, context/output limits, and OpenAI compatibility behavior.
 project from that profile. Runtime aliases and configured limits are applied as
 an effective overlay; they are not a second capability catalog.
 
+The `text-chat-gemma4-26b-a4b-bf16` entry pins the
+[MLX Community BF16 export](https://huggingface.co/mlx-community/gemma-4-26b-a4b-it-bf16)
+at revision `e13fae2a81ec07e3092a3ebb70c80970b640dc3c`. It is a separate
+26B-A4B MoE checkpoint from the dense 31B aliases and the NVFP4 turbo export.
+Use `mere.run guide --model text-chat-gemma4-26b-a4b-bf16` for its text workflow.
+
 <!-- managed-model-catalog:start -->
 | Catalog category | Model ID |
 | --- | --- |
+| `image` | `image-cosmos3-super-t2i-4step` |
 | `image` | `image-flux3-klein` |
 | `image` | `image-klein-nano` |
 | `image` | `image-klein-max` |
@@ -95,6 +102,7 @@ an effective overlay; they are not a second capability catalog.
 | `text-chat` | `text-chat-gemma4` |
 | `text-chat` | `text-chat-diffusiongemma-26b-optiq-4bit` |
 | `text-chat` | `text-chat-gemma4-turbo` |
+| `text-chat` | `text-chat-gemma4-26b-a4b-bf16` |
 | `text-chat` | `text-chat-gemma4-12b` |
 | `text-chat` | `text-chat-gemma4-12b-4bit` |
 | `vision-chat` | `vision-chat-gemma4-12b` |
@@ -1810,6 +1818,29 @@ SHA-256 `8833bd4fd7c8eabebf0bc8ee5cfaf47f4f310ce116928a02c1adf8941dd4b0f1`,
 and stores it outside git under the managed adapter directory. The upstream
 model card declares Apache-2.0. The Wan 2.2 adapters are deliberately rejected
 for SCAIL-2 because they target the incompatible Wan 2.2 MoE base.
+
+### `image-cosmos3-super-t2i-4step`
+
+The managed image entry installs
+[`Sawfwair/Cosmos3-Super-Text2Image-4Step-MLX-4bit`](https://huggingface.co/Sawfwair/Cosmos3-Super-Text2Image-4Step-MLX-4bit)
+at revision `4ef3565cbc05bf3e2867ced9c2cb761df52c6105`, a 37.03 GB
+MLX affine INT4/group-64 export of NVIDIA's four-step text-to-image checkpoint.
+It includes generation assets without the Edge reasoner or vision encoder.
+Use the native Cosmos3 command:
+
+```bash
+mere.run model pull image-cosmos3-super-t2i-4step
+mere.run video cosmos3 "A red cube on a clean neutral background" \
+  --model image-cosmos3-super-t2i-4step --mode text-to-image \
+  --width 768 --height 768 --steps 4 --guidance-scale 1 --output cosmos3-super.png
+mere.run guide --model image-cosmos3-super-t2i-4step
+```
+
+The converted artifact uses OpenMDW-1.1. This entry is CLI-only; `image generate`
+and the image API do not serve it. Its four-step schedule and guidance scale 1
+come from the distilled checkpoint. Video, reference images, actions, sound,
+reasoning, and custom schedules are unsupported by this export. See the bundled
+model handbook for the published 768 × 768 qualification and memory limits.
 
 ### `video-cosmos3-edge-mlx`
 

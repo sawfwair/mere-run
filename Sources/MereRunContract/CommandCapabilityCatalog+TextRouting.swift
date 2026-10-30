@@ -91,7 +91,7 @@ extension MereRunCapabilityCatalog {
                 title: "Gemma 4",
                 models: [
                     "text-chat-gemma4", "text-chat-gemma4-turbo", "text-chat-gemma4-12b", "text-chat-gemma4-12b-4bit",
-                    "text-chat-gemma4-nano", "text-chat-gemma4-max"
+                    "text-chat-gemma4-nano", "text-chat-gemma4-max", "text-chat-gemma4-26b-a4b-bf16"
                 ]
             ),
             .init(TextChatFamily.gemma4Unified, title: "Gemma 4 12B vision", models: ["vision-chat-gemma4-12b"]),
@@ -192,7 +192,7 @@ extension MereRunCapabilityCatalog {
                 title: "Gemma 4",
                 models: [
                     "text-chat-gemma4", "text-chat-gemma4-turbo", "text-chat-gemma4-12b", "text-chat-gemma4-12b-4bit",
-                    "text-chat-gemma4-nano", "text-chat-gemma4-max"
+                    "text-chat-gemma4-nano", "text-chat-gemma4-max", "text-chat-gemma4-26b-a4b-bf16"
                 ]
             ),
             .init(TextTrainLoRAFamily.gemma4VLM, title: "Gemma 4 12B vision", models: ["vision-chat-gemma4-12b"]),

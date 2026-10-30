@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add the pinned Gemma 4 26B-A4B MLX BF16 export as a separate managed text-chat
+  model, with native chat, API, and LoRA routing and its existing Gemma handbook.
+
+- Add Cosmos3-Super 4-Step MLX INT4 to the image catalog, pinned to the published
+  converted checkpoint. Validate its generation assets without requiring Edge
+  reasoner files, and route it through `video cosmos3 --mode text-to-image`.
+
 - Serve `speech-asr-nemotron-35-transcribe`, its BF16 variant, and
   `speech-asr-whistle` from `api serve` `/v1/audio/transcriptions`. These
   requests previously reached the Qwen3-ASR route and failed.

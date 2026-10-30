@@ -430,6 +430,13 @@ public struct Cosmos3Resources: Hashable, Sendable {
     public static let officialRevision = "6f58f6b4c91288838e60b6bcb2cc45d997e961de"
     public static let superTextToImageRepository = "nvidia/Cosmos3-Super-Text2Image-4Step"
     public static let superTextToImageRevision = "aa0d5a57b7b045d68daa60fbacd84ec723c7cb7b"
+    public static let superTextToImageModelID = "image-cosmos3-super-t2i-4step"
+    public static let superTextToImageMLXRepository = "Sawfwair/Cosmos3-Super-Text2Image-4Step-MLX-4bit"
+    public static let superTextToImageMLXRevision = "4ef3565cbc05bf3e2867ced9c2cb761df52c6105"
+    public static let superTextToImageSnapshotPatterns = [
+        "LICENSE*", "README.md", "CONVERSION.json", "model_index.json", "modular_model_index.json",
+        "scheduler/*", "text_tokenizer/*", "transformer/*", "vae/*",
+    ]
     public static let snapshotPatterns = [
         "LICENSE*",
         "README.md",
@@ -537,6 +544,30 @@ public struct Cosmos3Resources: Hashable, Sendable {
             ))
         }
         return missing
+    }
+
+    /// The Super image export omits Edge's language head, vision encoder, and reasoner assets.
+    public func validateSuperTextToImage(fileManager: FileManager = .default) -> [URL] {
+        validate(fileManager: fileManager)
+            + [modularModelIndexURL].filter { !fileManager.fileExists(atPath: $0.path) }
+    }
+
+    public func superTextToImageValidationIssues() throws -> [String] {
+        let configuration = try loadTransformerConfiguration()
+        _ = try loadVAEConfiguration()
+        guard let distilled = try loadDistilledConfiguration(), distilled.sigmas.count == 4 else {
+            return ["Cosmos3-Super 4-Step requires a distilled four-step sigma schedule."]
+        }
+        guard configuration.quantization == Cosmos3QuantizationConfiguration(bits: 4, groupSize: 64, mode: "affine") else {
+            return ["Cosmos3-Super MLX 4-bit requires affine INT4/group-64 transformer weights."]
+        }
+        guard !configuration.includesLanguageModelHead,
+              !configuration.generatesActions, !configuration.generatesSound,
+              configuration.feedForwardActivation == .siluGated,
+              configuration.hiddenSize == 5_120, configuration.layerCount == 64 else {
+            return ["Expected the Cosmos3-Super text-to-image-only transformer configuration."]
+        }
+        return []
     }
 
     public func validateReasoner(fileManager: FileManager = .default) -> [URL] {

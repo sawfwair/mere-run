@@ -3,6 +3,23 @@ import Foundation
 extension ManagedModelCatalog {
     static let imageSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
+            id: Cosmos3Resources.superTextToImageModelID,
+            category: .image,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: Cosmos3Resources.superTextToImageMLXRepository,
+                revision: Cosmos3Resources.superTextToImageMLXRevision,
+                patterns: Cosmos3Resources.superTextToImageSnapshotPatterns
+            ),
+            upstreamRepoId: Cosmos3Resources.superTextToImageMLXRepository,
+            upstreamRevision: Cosmos3Resources.superTextToImageMLXRevision,
+            validationKind: .cosmos3SuperTextToImage,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 37_032_673_013,
+            defaultCLICommands: ["video cosmos3 --mode text-to-image"],
+            apiAvailability: .cliOnly
+        ),
+        ManagedModelSpec(
             id: Flux3Resources.modelID, category: .image, installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(repoId: Flux3Resources.repoID, revision: Flux3Resources.revision,
                 patterns: Flux3Resources.patterns),
