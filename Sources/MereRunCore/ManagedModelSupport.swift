@@ -1011,6 +1011,13 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                UnlimitedOCRResources.modelID,
+                "Unlimited-OCR-2",
+                "Native BF16 document OCR with ordered pages and learned sparse reference attention.",
+                minimum: 16,
+                recommended: 24
+            ),
+            descriptor(
                 Q35Resources.lightOnOCR3SmallModelId,
                 "LightOnOCR 3 0.8B",
                 "Fast native Qwen3.5 OCR with optional document grounding.",

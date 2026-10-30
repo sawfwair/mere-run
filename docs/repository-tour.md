@@ -158,6 +158,7 @@ family.
 | `MereRunImageModels` | FLUX.2, FLUX 3, and ZImage transformer layers and the shared VAE | [Image runtime boundaries](./internals/image-runtime-boundaries.md) |
 | `MereRunKolibriModel` | Kolibri attention, sigmoid expert routing, stacked projections, and decoder arithmetic | [Native Kolibri-1](./runtime/kolibri.md) |
 | `MereRunFlintModel` | Recursive Flint attention, sigmoid routing, and expert projections | [Run Recursive Flint](./runtime/flint.md) |
+| `MereRunUnlimitedOCRModel` | Unlimited-OCR-2 SAM/CLIP vision, DeepSeek MoE, and page-aware DASH attention | [Unlimited-OCR-2](./runtime/unlimited-ocr-2.md) |
 | `MereRunNemotronBoltModel` | Nemotron Bolt packed IQ2, Q8, and NVFP4 weights, hybrid blocks, and C-RADIO vision | [Nemotron Bolt](./runtime/nemotron-bolt.md) |
 | `MereRunLayaModel` | Native ModernBERT and Laya decision heads | [Laya decisions](./runtime/laya.md) |
 | `MereRunGLiNERModel` | Native DeBERTa and the GLiNER2.5 classification, count, and span heads | [GLiNER2.5 Decide](./runtime/gliner25-decide.md) |

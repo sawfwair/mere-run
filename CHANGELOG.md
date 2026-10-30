@@ -6,6 +6,34 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Trace Unlimited-OCR-2's first receipt layout split with causal activation
+  substitutions and identical-input BF16 projection probes. The first SAM
+  convolution drift changes the coordinate; exact upstream parity remains open.
+- Match upstream DASH router scalar promotion for Unlimited-OCR-2. Add exact
+  PyTorch FP32 goldens and same-prefix price diagnostics. Verified receipt
+  comparisons retain the remaining `9.00` versus `9.000` transcription gap.
+
+- Bind MLX Metal provenance stamps to their compiled binaries and refresh
+  same-size compatibility copies by content. Correct XCTest's library placement
+  and add a real receipt comparison with the public CLI. This removes a kernel
+  artifact mismatch that made CLI and XCTest OCR output differ.
+
+- Add native Unlimited-OCR-2 document OCR through `vision ocr --backend unlimited`,
+  with pinned BF16 checkpoint installation, ordered pages, dynamic image tiles,
+  learned sparse reference attention, and the upstream serving repetition
+  constraint. Include full-checkpoint Metal document tests and pinned upstream
+  comparisons; see `docs/runtime/unlimited-ocr-2.md` for results and memory limits.
+
+- Match upstream Unlimited-OCR-2 activation, scalar, rotary, positional-grid,
+  letterbox centering, and prefill/decode precision boundaries. Add isolated
+  tensor diagnostics and retain price, box, and layout comparisons alongside
+  the Metal document tests.
+
+- Match Pillow JPEG samples for Unlimited-OCR-2 with a private static
+  libjpeg-turbo 3.2.0 decoder. Add independent RGB, chroma-subsampling,
+  progressive, grayscale, and CMYK goldens, malformed-input checks, and repeated
+  Metal receipt comparisons. Other image formats retain their platform decoder.
+
 - Add the pinned Gemma 4 26B-A4B MLX BF16 export as a separate managed text-chat
   model, with native chat, API, and LoRA routing and its existing Gemma handbook.
 

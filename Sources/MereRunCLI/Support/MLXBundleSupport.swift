@@ -4,6 +4,7 @@ import MereRunCore
 
 #if canImport(Darwin)
   import Darwin
+  import CryptoKit
 #endif
 
 enum MLXBundleSupport {
@@ -12,6 +13,9 @@ enum MLXBundleSupport {
   #else
     private static let bundleName = "mlx-swift_Cmlx.bundle"
     private static let stampName = "default.metallib.version"
+    // Compatibility for the shipped artifact predating binary-bound stamps.
+    // A copied legacy sidecar must not bless an independently generated binary.
+    static let legacyMetallibSHA256 = "64431ed485178f63a8dc870c8231ba021090c3356218c607a726821a7b6abb82"
 
     struct MetallibProvenance: Equatable {
       let coreVersion: String
@@ -121,13 +125,14 @@ enum MLXBundleSupport {
       )
     }
 
-    private static func validateFlatResources(
+    static func validateFlatResources(
       resourcesURL: URL,
       executableDir: URL,
       quiet _: Bool
     ) throws {
       switch stampStatus(resourcesURL: resourcesURL) {
       case .matched:
+        try installCompatibilityMetallibs(resourcesURL: resourcesURL, executableDir: executableDir)
         return
 
       case .unstamped(let missingFields):
@@ -271,7 +276,17 @@ enum MLXBundleSupport {
       guard let contents = try? String(contentsOf: stampURL, encoding: .utf8) else {
         return .unstamped(missingFields: [stampName])
       }
-      return stampStatus(contents: contents)
+      let status = stampStatus(contents: contents)
+      guard status == .matched else { return status }
+      let library = resourcesURL.appendingPathComponent("default.metallib")
+      guard let bytes = try? Data(contentsOf: library, options: .mappedIfSafe) else {
+        return .unstamped(missingFields: ["default.metallib"])
+      }
+      let expected = stampField("metallib-sha256", in: contents) ?? legacyMetallibSHA256
+      let actual = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+      return actual == expected ? .matched : .mismatched([
+        MetallibMismatch(field: "metallib-sha256", stamped: actual, expected: expected)
+      ])
     }
 
     static func stampStatus(contents: String) -> MetallibStamp {
@@ -450,11 +465,15 @@ enum MLXBundleSupport {
     }
 
     private static func installCompatibilityMetallibs(bundleURL: URL, executableDir: URL) throws {
-      let fm = FileManager.default
       let bundleResources =
         bundleURL
         .appendingPathComponent("Contents", isDirectory: true)
         .appendingPathComponent("Resources", isDirectory: true)
+      try installCompatibilityMetallibs(resourcesURL: bundleResources, executableDir: executableDir)
+    }
+
+    private static func installCompatibilityMetallibs(resourcesURL bundleResources: URL, executableDir: URL) throws {
+      let fm = FileManager.default
       let sourceMetallib = bundleResources.appendingPathComponent(
         "default.metallib", isDirectory: false)
 
@@ -481,18 +500,12 @@ enum MLXBundleSupport {
       }
     }
 
-    /// Copies `source` over `destination` unless the destination already has
-    /// the same size. (The previous skip-if-exists behaviour let stale flat
-    /// copies outlive bundle updates forever.) The copy goes through a temp
+    /// Copies `source` over `destination` unless their bytes match. Equal-size
+    /// builds can contain different kernels. The copy goes through a temp
     /// file + rename so concurrent CLI startups never observe a torn file.
-    private static func refreshCopy(from source: URL, to destination: URL) throws {
+    static func refreshCopy(from source: URL, to destination: URL) throws {
       let fm = FileManager.default
-      if let sourceSize = fileSize(source),
-        let destinationSize = fileSize(destination),
-        sourceSize == destinationSize
-      {
-        return
-      }
+      if fm.contentsEqual(atPath: source.path, andPath: destination.path) { return }
 
       let tmp =
         destination
@@ -510,7 +523,7 @@ enum MLXBundleSupport {
       } catch {
         try? fm.removeItem(at: tmp)
         // Tolerate races with a concurrent startup that produced the file.
-        if fm.fileExists(atPath: destination.path) {
+        if fm.contentsEqual(atPath: source.path, andPath: destination.path) {
           return
         }
         throw error
@@ -571,15 +584,6 @@ enum MLXBundleSupport {
         }
         throw error
       }
-    }
-
-    private static func fileSize(_ url: URL) -> Int64? {
-      guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
-        let size = attributes[.size] as? Int64
-      else {
-        return nil
-      }
-      return size
     }
 
     private static func executableDirectory() -> URL {

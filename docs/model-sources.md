@@ -181,6 +181,7 @@ Use `mere.run guide --model text-chat-gemma4-26b-a4b-bf16` for its text workflow
 | `text-decide` | `text-decide-clef-4bit` |
 | `text-decide` | `text-decide-clef-flash-4bit` |
 | `text-decide` | `text-decide-clef-omni` |
+| `vision-ocr` | `vision-ocr-unlimited-2` |
 | `vision-ocr` | `vision-ocr-infinity-pro` |
 | `vision-ocr` | `vision-ocr-infinity-pro-int8` |
 | `vision-ocr` | `vision-ocr-lighton` |
@@ -2114,6 +2115,7 @@ review the upstream repository's license before you use the weights.
 | `text-decide-clef-4bit` | `mlx-community/clef-4bit` | 16.31 GB | Not required |
 | `text-decide-clef-flash-4bit` | `mlx-community/clef-flash-4bit` | 6.21 GB | Not required |
 | `text-decide-clef-omni` | `Cloudflare/clef-omni` | 70.80 GB | Not required |
+| `vision-ocr-unlimited-2` | `baidu/Unlimited-OCR-2` | 6.70 GB | Not required |
 | `vision-ocr-infinity-pro` | `infly/Infinity-Parser2-Pro` | 140.66 GB | Not required |
 | `vision-ocr-infinity-pro-int8` | `Sawfwair/Infinity-Parser2-Pro-Int8` | 40.80 GB | Not required |
 | `vision-ocr-lighton` | `lightonai/LightOnOCR-3-1B` | 2.02 GB | Not required |

@@ -90,14 +90,31 @@ extension MereRunCapabilityCatalog {
             id: "vision.ocr",
             command: ["vision", "ocr"],
             title: "OCR",
-            summary: "Extract text with native LightOn/Infinity or external GLM/Infinity runtimes.",
+            summary: "Extract text with native LightOn, Infinity, or Unlimited OCR, or external GLM/Infinity runtimes.",
             arguments: [.init(name: "images", label: "Images", kind: .file, required: true, repeatable: true)],
             options: [
                 .init(
-                    flag: "--backend", aliases: ["-b"], label: "Backend", kind: .choice, choices: ["lighton", "glm", "infinity"],
+                    flag: "--backend", aliases: ["-b"], label: "Backend", kind: .choice, choices: ["lighton", "glm", "infinity", "unlimited"],
                     defaultValue: "lighton", group: Group.modelAndAdapters, tier: .essential
                 ),
-                .init(flag: "--compare", label: "Compare", kind: .boolean, group: Group.run, tier: .expert),
+                .init(flag: "--compare", label: "Compare", kind: .boolean, group: Group.run, tier: .expert)
+                    .scoped(.init(families: F.allCases.filter { $0 != .unlimited }, ignoredBy: [])),
+                .init(
+                    flag: "--unlimited-model", label: "Unlimited model", kind: .string,
+                    defaultValue: "vision-ocr-unlimited-2", group: Group.modelAndAdapters, tier: .standard
+                ).scoped(F.usedBy([.unlimited])),
+                .init(
+                    flag: "--unlimited-no-repeat-ngram-size", label: "Unlimited n-gram size", kind: .integer,
+                    defaultValue: "35", group: Group.sampling, tier: .expert, range: .init(min: 0, step: 1)
+                ).scoped(F.usedBy([.unlimited])),
+                .init(
+                    flag: "--unlimited-ngram-window", label: "Unlimited n-gram window", kind: .integer,
+                    group: Group.sampling, tier: .expert, range: .init(min: 1, step: 1)
+                ).scoped(F.usedBy([.unlimited])),
+                .init(
+                    flag: "--unlimited-crop", label: "Unlimited image views", kind: .choice,
+                    choices: ["auto", "base", "tiles"], defaultValue: "auto", group: Group.run, tier: .standard
+                ).scoped(F.usedBy([.unlimited])),
                 .init(
                     flag: "--model", aliases: ["-m"], label: "LightOn model", kind: .string,
                     defaultValue: "vision-ocr-lighton", group: Group.modelAndAdapters, tier: .standard
@@ -171,11 +188,12 @@ extension MereRunCapabilityCatalog {
                 .init(
                     flag: "--max-tokens", label: "Max tokens", kind: .integer,
                     defaultValue: "4096", group: Group.sampling, tier: .standard, range: .init(min: 1, max: 16_384, step: 1)
-                ).scoped(F.usedBy(F.lightOnRuns + [.infinityNative])),
+                ).scoped(F.usedBy(F.lightOnRuns + [.infinityNative, .unlimited]),
+                         .rule(.unlimited, range: .init(min: 1, max: 131_071, step: 1))),
                 .init(
                     flag: "--temperature", label: "Temperature", kind: .number,
                     defaultValue: "0.2", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 2, step: 0.05)
-                ).scoped(F.usedBy(F.lightOnRuns + [.infinityNative])),
+                ).scoped(F.usedBy(F.lightOnRuns + [.infinityNative, .unlimited])),
                 .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
             ],
             output: .init(kind: .text, flag: "--output-dir", optional: true),

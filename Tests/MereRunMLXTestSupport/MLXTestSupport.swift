@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(CryptoKit)
+import CryptoKit
+#endif
 
 public enum MLXTestSupport {
     /// Ensure MLX can locate its Metal library when running under `swift test`.
@@ -26,7 +29,10 @@ public enum MLXTestSupport {
 
         let sourceBundle: URL?
         do {
-            sourceBundle = try findCmlxBundle(executableURL: executableURL, arguments: arguments, fileManager: fm)
+            sourceBundle = try findCmlxBundle(
+                executableURL: executableURL, arguments: arguments, fileManager: fm,
+                workspaceRoots: candidateWorkspaceRoots(executableURL: executableURL, arguments: arguments, fileManager: fm)
+            )
         } catch {
             if debugEnabled {
                 print("[MLXTestSupport] Failed to resolve Cmlx bundle: \(error)")
@@ -48,7 +54,7 @@ public enum MLXTestSupport {
         let sourceMetallib = sourceBundle.appendingPathComponent("Contents/Resources/default.metallib")
         if fm.fileExists(atPath: sourceMetallib.path) {
             installColocatedMetallib(
-                executableURL: executableURL,
+                binaryDirectory: linkedBinaryDirectory(executableURL: executableURL, arguments: arguments),
                 sourceMetallib: sourceMetallib,
                 fileManager: fm,
                 debugEnabled: debugEnabled
@@ -67,14 +73,13 @@ public enum MLXTestSupport {
     }
 
     private static func installColocatedMetallib(
-        executableURL: URL,
+        binaryDirectory: URL,
         sourceMetallib: URL,
         fileManager: FileManager,
         debugEnabled: Bool
     ) {
-        let binaryDir = executableURL.deletingLastPathComponent()
-        guard fileManager.isWritableFile(atPath: binaryDir.path) else { return }
-        let destination = binaryDir.appendingPathComponent("mlx.metallib")
+        guard fileManager.isWritableFile(atPath: binaryDirectory.path) else { return }
+        let destination = binaryDirectory.appendingPathComponent("mlx.metallib")
         // Replace rather than skip: a leftover link/copy from an earlier run
         // can point at a stale metallib, which silently corrupts kernels
         // (see scripts/build_mlx_metallib.sh). A symlink already pointing at
@@ -192,17 +197,29 @@ public enum MLXTestSupport {
         return nil
     }
 
-    private static func findCmlxBundle(
+    package static func linkedBinaryDirectory(executableURL: URL, arguments: [String]) -> URL {
+        // MLX uses dladdr on its linked code, so an XCTest bundle loads beside
+        // its own Mach-O image, not beside the Xcode test runner executable.
+        if let bundle = resolveXCTestBundleURL(executableURL: executableURL, arguments: arguments) {
+            return bundle.appendingPathComponent("Contents/MacOS", isDirectory: true)
+        }
+        return executableURL.deletingLastPathComponent()
+    }
+
+    package static func findCmlxBundle(
         executableURL: URL,
         arguments: [String],
-        fileManager: FileManager
+        fileManager: FileManager,
+        workspaceRoots: [URL]
     ) throws -> URL? {
-        let workspaceRoots = candidateWorkspaceRoots(
-            executableURL: executableURL,
-            arguments: arguments,
-            fileManager: fileManager
-        )
-
+        let currentProduct = resolveXCTestBundleURL(executableURL: executableURL, arguments: arguments)?
+            .deletingLastPathComponent().appendingPathComponent("mlx-swift_Cmlx.bundle", isDirectory: true)
+        // An explicit rebuild binds the sidecar to its binary. A replaced
+        // product resource can retain an unrelated sidecar.
+        if let currentProduct, binaryBoundStampMatches(currentProduct) { return currentProduct }
+        // The repository artifact is built with the pinned deployment target
+        // and IEEE flags. Regeneration can replace a product binary while leaving
+        // a copied version sidecar in place.
         for root in workspaceRoots {
             let vendoredBundle = root
                 .appendingPathComponent("vendor", isDirectory: true)
@@ -214,13 +231,7 @@ public enum MLXTestSupport {
 
         // Fast path: for SwiftPM test runs, the products directory is usually the
         // parent of the `.xctest` bundle and contains `mlx-swift_Cmlx.bundle`.
-        if let testBundleURL = resolveXCTestBundleURL(executableURL: executableURL, arguments: arguments) {
-            let productsDir = testBundleURL.deletingLastPathComponent()
-            let direct = productsDir.appendingPathComponent("mlx-swift_Cmlx.bundle", isDirectory: true)
-            if fileManager.fileExists(atPath: direct.path) {
-                return direct
-            }
-        }
+        if let currentProduct, fileManager.fileExists(atPath: currentProduct.path) { return currentProduct }
 
         for root in workspaceRoots {
             let xcodeProductsDir = root
@@ -243,6 +254,22 @@ public enum MLXTestSupport {
         }
 
         return nil
+    }
+
+    private static func binaryBoundStampMatches(_ bundle: URL) -> Bool {
+        #if canImport(CryptoKit)
+        let resources = bundle.appendingPathComponent("Contents/Resources")
+        guard let stamp = try? String(contentsOf: resources.appendingPathComponent("default.metallib.version"), encoding: .utf8),
+              let line = stamp.split(separator: "\n").first(where: { $0.hasPrefix("metallib-sha256: ") }),
+              let bytes = try? Data(contentsOf: resources.appendingPathComponent("default.metallib"), options: .mappedIfSafe) else {
+            return false
+        }
+        let expected = line.dropFirst("metallib-sha256: ".count)
+        let actual = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+        return actual == expected
+        #else
+        return false
+        #endif
     }
 
     private static func candidateWorkspaceRoots(

@@ -111,12 +111,15 @@ package enum MereRunTheme {
             roots.append(hostBundle.bundleURL.deletingLastPathComponent())
             if let hostResources = hostBundle.resourceURL { roots.append(hostResources) }
             for root in roots {
-                let candidate = root
-                    .appendingPathComponent(bundleName, isDirectory: true)
-                    .appendingPathComponent("Fonts", isDirectory: true)
-                    .appendingPathComponent(fontFileName, isDirectory: false)
-                    .appendingPathExtension("ttf")
-                if FileManager.default.fileExists(atPath: candidate.path) { return candidate }
+                // SwiftPM's native builder uses a flat bundle; Xcode uses macOS bundle resources.
+                for resources in ["Fonts", "Contents/Resources/Fonts"] {
+                    let candidate = root
+                        .appendingPathComponent(bundleName, isDirectory: true)
+                        .appendingPathComponent(resources, isDirectory: true)
+                        .appendingPathComponent(fontFileName, isDirectory: false)
+                        .appendingPathExtension("ttf")
+                    if FileManager.default.fileExists(atPath: candidate.path) { return candidate }
+                }
             }
             return nil
         }

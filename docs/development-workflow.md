@@ -74,7 +74,13 @@ To rebuild shaders from the pinned MLX sources, use the Xcode Metal toolchain:
 
 The script installs the library into the local build directories and refreshes
 its vendored copy when source revisions or compatibility settings change.
-The provenance sidecar records the language version and deployment target.
+The provenance sidecar records the language version, deployment target, and
+SHA-256 of the compiled library. Validation checks the binary against its stamp;
+copying a matching source-version stamp onto another library doesn't validate it.
+The legacy stamp shipped in `vendor/` is accepted only for that exact pinned
+binary. Compatibility copies are refreshed by content, including equal-size
+rebuilds. XCTest installs the library beside its linked test image, matching
+MLX's lookup order.
 Build verification and the CLI reject missing or mismatched compatibility fields.
 If you update the vendored library, update `THIRD_PARTY_NOTICES.md` in the same change.
 A build or test on macOS 26 does not establish runtime compatibility on macOS 15;

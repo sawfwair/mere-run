@@ -528,6 +528,9 @@ extension CommandFlags {
         package static let command = ["vision", "ocr"]
         package static let defaultValues = [
             "--backend": "lighton",
+            "--unlimited-model": "vision-ocr-unlimited-2",
+            "--unlimited-no-repeat-ngram-size": "35",
+            "--unlimited-crop": "auto",
             "--model": "vision-ocr-lighton",
             "--lighton-mode": "plain",
             "--glmocr-cli": "glmocr",
@@ -548,6 +551,10 @@ extension CommandFlags {
 
         package static let backend = "--backend"
         package static let compare = "--compare"
+        package static let unlimitedModel = "--unlimited-model"
+        package static let unlimitedNoRepeatNgramSize = "--unlimited-no-repeat-ngram-size"
+        package static let unlimitedNgramWindow = "--unlimited-ngram-window"
+        package static let unlimitedCrop = "--unlimited-crop"
         package static let model = "--model"
         package static let lightonMode = "--lighton-mode"
         package static let glmocrCli = "--glmocr-cli"

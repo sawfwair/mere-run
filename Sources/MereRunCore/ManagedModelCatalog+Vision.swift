@@ -3,6 +3,22 @@ import Foundation
 extension ManagedModelCatalog {
     static let visionSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
+            id: UnlimitedOCRResources.modelID,
+            category: .visionOCR,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: UnlimitedOCRResources.repository,
+                revision: UnlimitedOCRResources.revision,
+                patterns: UnlimitedOCRResources.files
+            ),
+            upstreamRepoId: UnlimitedOCRResources.repository,
+            upstreamRevision: UnlimitedOCRResources.revision,
+            validationKind: .unlimitedOCR,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 6_700_000_000,
+            defaultCLICommands: ["vision ocr"]
+        ),
+        ManagedModelSpec(
             id: Q35Resources.infinityParser2ProModelId,
             category: .visionOCR,
             installShape: .directoryRoot,

@@ -154,6 +154,7 @@ extension MereRunCapabilityCatalog {
     enum OCRFamily: String, MereRunFamilyID {
         case lightOn = "lighton"
         case glm
+        case unlimited
         case infinityNative = "infinity-native"
         case infinityExternal = "infinity-external"
         case compareGLM = "compare-glm"
@@ -190,11 +191,14 @@ extension MereRunCapabilityCatalog {
         return MereRunCapabilityRouting(
             modelFlags: [],
             defaultModels: F.lightOnRuns.map { MereRunDefaultModelRule(models: [lightOnOCRModel], family: $0.rawValue) }
-                + [MereRunDefaultModelRule(models: [infinityOCRModels[0]], family: F.infinityNative.rawValue)],
+                + [MereRunDefaultModelRule(models: [infinityOCRModels[0]], family: F.infinityNative.rawValue),
+                   MereRunDefaultModelRule(models: ["vision-ocr-unlimited-2"], family: F.unlimited.rawValue)],
             families: [
                 .init(F.lightOn, title: "LightOnOCR", models: lightOnOCRModels,
                       selectors: [single, .init(flag: "--backend", values: ["lighton"])], modelFlag: "--model"),
                 .init(F.glm, title: "GLM-OCR", models: [], selectors: [single, .init(flag: "--backend", values: ["glm"])]),
+                .init(F.unlimited, title: "Unlimited-OCR-2 native", models: ["vision-ocr-unlimited-2"],
+                      selectors: [single, .init(flag: "--backend", values: ["unlimited"])], modelFlag: "--unlimited-model"),
                 .init(F.infinityNative, title: "Infinity-Parser2 native", models: infinityOCRModels,
                       selectors: [single, infinity, native], modelFlag: "--infinity-model"),
                 .init(F.infinityExternal, title: "Infinity-Parser2 external", models: [],

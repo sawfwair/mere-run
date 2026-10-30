@@ -427,6 +427,10 @@ enum InstalledModelSmokePlans {
             return direct(spec, route: "vision ocr") { runner in
                 try await runner.installedOCRCheck(model: spec.id)
             }
+        case .unlimitedOCR:
+            return direct(spec, route: "vision ocr --backend unlimited") { runner in
+                try await runner.installedOCRCheck(model: spec.id)
+            }
 
         case .sam31:
             return direct(spec, route: "vision segment") { runner in
@@ -1151,7 +1155,10 @@ extension GateRunner {
         let image = workDirectory.appendingPathComponent("installed-ocr-page.png")
         _ = try GateTextPageRenderer.render(to: image)
         let arguments: [String]
-        if model.contains("infinity") {
+        if model == UnlimitedOCRResources.modelID {
+            arguments = ["vision", "ocr", image.path, "--backend", "unlimited", "--unlimited-model", model,
+                         "--temperature", "0", "--max-tokens", "128", "--quiet"]
+        } else if model.contains("infinity") {
             arguments = [
                 "vision", "ocr", image.path,
                 "--backend", "infinity",
