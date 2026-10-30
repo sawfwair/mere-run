@@ -1,0 +1,10 @@
+{
+  "bf16" : {
+    "maximum" : 0.03125,
+    "unequal" : 11
+  },
+  "fp32" : {
+    "maximum" : 0.03125,
+    "unequal" : 11
+  }
+}

@@ -1,0 +1,87 @@
+[MereRunCoreTestCase] invokeTest UnlimitedOCRRuntimeTests -[UnlimitedOCRRuntimeTests testBF16AttentionPreservesUpstreamOutputDType]
+[MLXTestSupport] exe=/Applications/Xcode.app/Contents/Developer/usr/bin/xctest
+[MLXTestSupport] xctest=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest
+[MLXTestSupport] cmlxBundle=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle
+[MLXTestSupport] Symlinked /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/MacOS/mlx.metallib -> /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib
+[MLXTestSupport] xctestResources=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/Resources
+[MLXTestSupport] Symlinked bundle /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/Resources/mlx-swift_Cmlx.bundle -> /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle
+[MereRunCoreTestCase] invokeTest UnlimitedOCRRuntimeTests -[UnlimitedOCRRuntimeTests testBF16SparsePrefillAndDecodeMatchUpstreamPrecisionBoundaries]
+[MLXTestSupport] exe=/Applications/Xcode.app/Contents/Developer/usr/bin/xctest
+[MLXTestSupport] xctest=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest
+[MLXTestSupport] cmlxBundle=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle
+[MLXTestSupport] xctestResources=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/Resources
+[MereRunCoreTestCase] invokeTest UnlimitedOCRRuntimeTests -[UnlimitedOCRRuntimeTests testDASHRouterUsesGemmaNormOffsetAndFP32AffineMath]
+[MLXTestSupport] exe=/Applications/Xcode.app/Contents/Developer/usr/bin/xctest
+[MLXTestSupport] xctest=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest
+[MLXTestSupport] cmlxBundle=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle
+[MLXTestSupport] xctestResources=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/Resources
+[MereRunCoreTestCase] invokeTest UnlimitedOCRRuntimeTests -[UnlimitedOCRRuntimeTests testEntmaxAgainstAnalyticProbabilities]
+[MLXTestSupport] exe=/Applications/Xcode.app/Contents/Developer/usr/bin/xctest
+[MLXTestSupport] xctest=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest
+[MLXTestSupport] cmlxBundle=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle
+[MLXTestSupport] xctestResources=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/Resources
+[MereRunCoreTestCase] invokeTest UnlimitedOCRRuntimeTests -[UnlimitedOCRRuntimeTests testIntrinsicActivationsMatchPyTorchBF16Rounding]
+[MLXTestSupport] exe=/Applications/Xcode.app/Contents/Developer/usr/bin/xctest
+[MLXTestSupport] xctest=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest
+[MLXTestSupport] cmlxBundle=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle
+[MLXTestSupport] xctestResources=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/Resources
+[MereRunCoreTestCase] invokeTest UnlimitedOCRRuntimeTests -[UnlimitedOCRRuntimeTests testMoEMixtureAccumulatesInFP32WithoutRoundingRouterProbabilities]
+[MLXTestSupport] exe=/Applications/Xcode.app/Contents/Developer/usr/bin/xctest
+[MLXTestSupport] xctest=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest
+[MLXTestSupport] cmlxBundle=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle
+[MLXTestSupport] xctestResources=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/Resources
+[MereRunCoreTestCase] invokeTest UnlimitedOCRRuntimeTests -[UnlimitedOCRRuntimeTests testPageCoordinatesContinueAcrossPromptAndResponse]
+[MLXTestSupport] exe=/Applications/Xcode.app/Contents/Developer/usr/bin/xctest
+[MLXTestSupport] xctest=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest
+[MLXTestSupport] cmlxBundle=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle
+[MLXTestSupport] xctestResources=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/Resources
+[MereRunCoreTestCase] invokeTest UnlimitedOCRRuntimeTests -[UnlimitedOCRRuntimeTests testPageRotaryParityAndScalarAngles]
+[MLXTestSupport] exe=/Applications/Xcode.app/Contents/Developer/usr/bin/xctest
+[MLXTestSupport] xctest=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest
+[MLXTestSupport] cmlxBundle=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle
+[MLXTestSupport] xctestResources=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/Resources
+[MereRunCoreTestCase] invokeTest UnlimitedOCRRuntimeTests -[UnlimitedOCRRuntimeTests testPositionalGridUsesUpstreamAntialiasedHorizontalThenVerticalPasses]
+[MLXTestSupport] exe=/Applications/Xcode.app/Contents/Developer/usr/bin/xctest
+[MLXTestSupport] xctest=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest
+[MLXTestSupport] cmlxBundle=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle
+[MLXTestSupport] xctestResources=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/Resources
+[MereRunCoreTestCase] invokeTest UnlimitedOCRRuntimeTests -[UnlimitedOCRRuntimeTests testQuickGELUKeepsTheScalarInFP32AndRoundsAtUpstreamBoundaries]
+[MLXTestSupport] exe=/Applications/Xcode.app/Contents/Developer/usr/bin/xctest
+[MLXTestSupport] xctest=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest
+[MLXTestSupport] cmlxBundle=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle
+[MLXTestSupport] xctestResources=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/Resources
+[MereRunCoreTestCase] invokeTest UnlimitedOCRRuntimeTests -[UnlimitedOCRRuntimeTests testReleasedConfigurationAndCheckpointShapes]
+[MLXTestSupport] exe=/Applications/Xcode.app/Contents/Developer/usr/bin/xctest
+[MLXTestSupport] xctest=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest
+[MLXTestSupport] cmlxBundle=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle
+[MLXTestSupport] xctestResources=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/Resources
+[MereRunCoreTestCase] invokeTest UnlimitedOCRRuntimeTests -[UnlimitedOCRRuntimeTests testSAMAttentionKeepsSpatialIndicesIntegral]
+[MLXTestSupport] exe=/Applications/Xcode.app/Contents/Developer/usr/bin/xctest
+[MLXTestSupport] xctest=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest
+[MLXTestSupport] cmlxBundle=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle
+[MLXTestSupport] xctestResources=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/Resources
+[MereRunCoreTestCase] invokeTest UnlimitedOCRRuntimeTests -[UnlimitedOCRRuntimeTests testSAMRelativePositionInterpolationAgainstScalarValues]
+[MLXTestSupport] exe=/Applications/Xcode.app/Contents/Developer/usr/bin/xctest
+[MLXTestSupport] xctest=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest
+[MLXTestSupport] cmlxBundle=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle
+[MLXTestSupport] xctestResources=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/Resources
+[MereRunCoreTestCase] invokeTest UnlimitedOCRRuntimeTests -[UnlimitedOCRRuntimeTests testSparseAttentionAgainstIndependentScalarReference]
+[MLXTestSupport] exe=/Applications/Xcode.app/Contents/Developer/usr/bin/xctest
+[MLXTestSupport] xctest=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest
+[MLXTestSupport] cmlxBundle=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle
+[MLXTestSupport] xctestResources=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/Resources
+[MereRunCoreTestCase] invokeTest UnlimitedOCRRuntimeTests -[UnlimitedOCRRuntimeTests testTinyMoEDecoderAgainstIndependentScalarReferenceAndCachedSteps]
+[MLXTestSupport] exe=/Applications/Xcode.app/Contents/Developer/usr/bin/xctest
+[MLXTestSupport] xctest=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest
+[MLXTestSupport] cmlxBundle=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle
+[MLXTestSupport] xctestResources=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/Resources
+[MereRunCoreTestCase] invokeTest UnlimitedOCRRuntimeTests -[UnlimitedOCRRuntimeTests testVisionLinearFusesBiasBeforeBF16OutputRounding]
+[MLXTestSupport] exe=/Applications/Xcode.app/Contents/Developer/usr/bin/xctest
+[MLXTestSupport] xctest=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest
+[MLXTestSupport] cmlxBundle=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle
+[MLXTestSupport] xctestResources=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/Resources
+[MereRunCoreTestCase] invokeTest UnlimitedOCRRuntimeTests -[UnlimitedOCRRuntimeTests testVisionNormsPreserveTheirDistinctBF16Rounding]
+[MLXTestSupport] exe=/Applications/Xcode.app/Contents/Developer/usr/bin/xctest
+[MLXTestSupport] xctest=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest
+[MLXTestSupport] cmlxBundle=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle
+[MLXTestSupport] xctestResources=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/UnlimitedOCRRuntimeTests.xctest/Contents/Resources

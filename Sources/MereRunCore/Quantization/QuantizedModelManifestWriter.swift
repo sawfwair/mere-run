@@ -90,7 +90,7 @@ public enum QuantizedModelManifestWriter {
             case .gliner25Decide: return .gliner
             case .openAIPrivacyFilter: return .privacy
             case .qwen3Coder, .northMiniCode: return .code
-            case .lightOnOCR: return .ocr
+            case .lightOnOCR, .unlimitedOCR: return .ocr
             case .aceStep, .miniMaxMusic3, .yue2, .magentaRT2, .muScriptor, .roFormer: return .music
             case .apBWE, .univerSR, .auk: return .audio
             case .woosh, .mmaudio: return .sfx
@@ -211,7 +211,7 @@ public enum QuantizedModelManifestWriter {
                     return [.textClassification, .textExtraction]
                 case .qwen3Coder, .northMiniCode:
                     return [.chat, .codeGeneration]
-                case .lightOnOCR:
+                case .lightOnOCR, .unlimitedOCR:
                     return [.visionOCR]
                 case .aceStep, .miniMaxMusic3, .yue2, .magentaRT2:
                     return [.musicGeneration]
@@ -325,7 +325,7 @@ public enum QuantizedModelManifestWriter {
                  .tripoSR, .instantMesh, .trellis2:
                 break
             case .laya, .clef, .d1, .gliner25Decide, .qwen3TTS, .breezeTTS, .drama3TTS, .phononTTS, .qwen3ASR, .parakeetASR, .whistleASR, .nemotronTranscribeASR, .sortformer, .qwen3Embedding, .embeddingGemma2, .embeddingGemma2CoreML, .pplxEmbedV2, .openAIPrivacyFilter,
-                 .qwen3Coder, .northMiniCode, .lightOnOCR, .woosh, .mmaudio, .psiChat, .deepseekV4Flash,
+                 .qwen3Coder, .northMiniCode, .lightOnOCR, .unlimitedOCR, .woosh, .mmaudio, .psiChat, .deepseekV4Flash,
                  .muScriptor, .roFormer, .apBWE, .univerSR, .auk, .inkling:
                 break
             case .aceStep, .magentaRT2, .ltxVideo:

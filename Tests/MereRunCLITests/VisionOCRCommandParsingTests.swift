@@ -3,6 +3,28 @@ import XCTest
 @testable import MereRunCore
 
 final class VisionOCRCommandParsingTests: XCTestCase {
+    func testUnlimitedOCRParsesOrderedDocumentAndLocalCheckpoint() throws {
+        let command = try VisionOCR.parse(["page-2.png", "page-1.png", "--backend", "unlimited",
+                                           "--unlimited-model", "/tmp/uocr", "--unlimited-crop", "base",
+                                           "--temperature", "0", "--max-tokens", "16000"])
+        XCTAssertEqual(command.backend, .unlimited)
+        XCTAssertEqual(command.images, ["page-2.png", "page-1.png"])
+        XCTAssertEqual(command.unlimitedModel, "/tmp/uocr")
+        XCTAssertEqual(command.unlimitedCrop.crop, false)
+        XCTAssertEqual(command.plan, .single(.unlimited))
+        XCTAssertEqual(command.unlimitedNoRepeatNgramSize, 35)
+        XCTAssertNil(command.unlimitedNgramWindow)
+        let disabled = try VisionOCR.parse(["page.png", "--backend", "unlimited", "--unlimited-no-repeat-ngram-size", "0",
+                                           "--unlimited-ngram-window", "256"])
+        XCTAssertEqual(disabled.unlimitedNoRepeatNgramSize, 0)
+        XCTAssertEqual(disabled.unlimitedNgramWindow, 256)
+        XCTAssertThrowsError(try VisionOCR.parse(["page.png", "--unlimited-no-repeat-ngram-size", "-1"]))
+        XCTAssertThrowsError(try VisionOCR.parse(["page.png", "--unlimited-ngram-window", "0"]))
+        XCTAssertThrowsError(try VisionOCR.parse(["page.png", "--backend", "unlimited", "--compare"]))
+        XCTAssertThrowsError(try VisionOCR.parse(["page.png", "--max-tokens", "0"]))
+        XCTAssertThrowsError(try VisionOCR.parse(["page.png", "--temperature", "nan"]))
+    }
+
     func testVisionOCRParsesManagedDefaultModel() throws {
         let cmd = try VisionOCR.parse([
             "/tmp/image.png",

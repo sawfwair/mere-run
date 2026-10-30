@@ -1,0 +1,383 @@
+{
+  "torch": "2.13.0",
+  "oracle": "CPU FP64 dot products, then BF16 round-to-nearest-even",
+  "note": "Sampled differing cells; backend agreement is not a correctness oracle.",
+  "projections": {
+    "layer.0.mlp.gate_proj": [
+      {
+        "position": 2439,
+        "fp64": 0.0026931783941108733,
+        "nearestBF16": 0.0027008056640625,
+        "native": 0.0027008056640625,
+        "upstream": 0.002685546875,
+        "nativeNearest": true,
+        "upstreamNearest": false
+      }
+    ],
+    "layer.0.mlp.up_proj": [
+      {
+        "position": 6803,
+        "fp64": 0.09643554508511443,
+        "nearestBF16": 0.0966796875,
+        "native": 0.09619140625,
+        "upstream": 0.0966796875,
+        "nativeNearest": false,
+        "upstreamNearest": true
+      }
+    ],
+    "prefill.sam.patch": {
+      "unequal": 94,
+      "total": 3145728,
+      "samples": [
+        {
+          "position": [
+            0,
+            0,
+            33,
+            751
+          ],
+          "fp64": -8.944817818701267e-05,
+          "nearestBF16": -8.96453857421875e-05,
+          "native": -8.916854858398438e-05,
+          "upstream": -8.96453857421875e-05,
+          "nativeNearest": false,
+          "upstreamNearest": true
+        },
+        {
+          "position": [
+            0,
+            0,
+            45,
+            484
+          ],
+          "fp64": -0.17822276466176845,
+          "nearestBF16": -0.1787109375,
+          "native": -0.177734375,
+          "upstream": -0.1787109375,
+          "nativeNearest": false,
+          "upstreamNearest": true
+        },
+        {
+          "position": [
+            0,
+            1,
+            54,
+            56
+          ],
+          "fp64": -0.0002313700970262289,
+          "nearestBF16": -0.00023174285888671875,
+          "native": -0.0002307891845703125,
+          "upstream": -0.00023174285888671875,
+          "nativeNearest": false,
+          "upstreamNearest": true
+        },
+        {
+          "position": [
+            0,
+            2,
+            19,
+            652
+          ],
+          "fp64": -0.00047779944725334644,
+          "nearestBF16": -0.0004787445068359375,
+          "native": -0.000476837158203125,
+          "upstream": -0.0004787445068359375,
+          "nativeNearest": false,
+          "upstreamNearest": true
+        },
+        {
+          "position": [
+            0,
+            2,
+            25,
+            757
+          ],
+          "fp64": 1.7929689412703738,
+          "nearestBF16": 1.796875,
+          "native": 1.796875,
+          "upstream": 1.7890625,
+          "nativeNearest": true,
+          "upstreamNearest": false
+        },
+        {
+          "position": [
+            0,
+            2,
+            35,
+            370
+          ],
+          "fp64": -0.05163552542217076,
+          "nearestBF16": -0.051513671875,
+          "native": -0.0517578125,
+          "upstream": -0.051513671875,
+          "nativeNearest": false,
+          "upstreamNearest": true
+        },
+        {
+          "position": [
+            0,
+            2,
+            41,
+            24
+          ],
+          "fp64": -1.7070321387145668,
+          "nearestBF16": -1.7109375,
+          "native": -1.703125,
+          "upstream": -1.7109375,
+          "nativeNearest": false,
+          "upstreamNearest": true
+        },
+        {
+          "position": [
+            0,
+            2,
+            43,
+            545
+          ],
+          "fp64": 4.600733518600464e-07,
+          "nearestBF16": 4.600733518600464e-07,
+          "native": 3.5762786865234375e-07,
+          "upstream": 4.76837158203125e-07,
+          "nativeNearest": false,
+          "upstreamNearest": false
+        }
+      ]
+    },
+    "prefill.sam.patch.chw": {
+      "unequal": 483,
+      "total": 3145728,
+      "samples": [
+        {
+          "position": [
+            0,
+            0,
+            45,
+            484
+          ],
+          "fp64": -0.17822276466176845,
+          "nearestBF16": -0.1787109375,
+          "native": -0.177734375,
+          "upstream": -0.1787109375,
+          "nativeNearest": false,
+          "upstreamNearest": true
+        },
+        {
+          "position": [
+            0,
+            0,
+            45,
+            526
+          ],
+          "fp64": -0.0012323129922151566,
+          "nearestBF16": -0.0012359619140625,
+          "native": -0.00122833251953125,
+          "upstream": -0.0012359619140625,
+          "nativeNearest": false,
+          "upstreamNearest": true
+        },
+        {
+          "position": [
+            0,
+            0,
+            62,
+            646
+          ],
+          "fp64": -0.006210301071405411,
+          "nearestBF16": -0.006195068359375,
+          "native": -0.0062255859375,
+          "upstream": -0.006195068359375,
+          "nativeNearest": false,
+          "upstreamNearest": true
+        },
+        {
+          "position": [
+            0,
+            1,
+            23,
+            407
+          ],
+          "fp64": 0.1469727719668299,
+          "nearestBF16": 0.1474609375,
+          "native": 0.1474609375,
+          "upstream": 0.146484375,
+          "nativeNearest": true,
+          "upstreamNearest": false
+        },
+        {
+          "position": [
+            0,
+            1,
+            38,
+            23
+          ],
+          "fp64": -0.3115235499572009,
+          "nearestBF16": -0.3125,
+          "native": -0.310546875,
+          "upstream": -0.3125,
+          "nativeNearest": false,
+          "upstreamNearest": true
+        },
+        {
+          "position": [
+            0,
+            1,
+            39,
+            606
+          ],
+          "fp64": -0.04504433811962372,
+          "nearestBF16": -0.045166015625,
+          "native": -0.045166015625,
+          "upstream": -0.044921875,
+          "nativeNearest": true,
+          "upstreamNearest": false
+        },
+        {
+          "position": [
+            0,
+            1,
+            52,
+            70
+          ],
+          "fp64": 0.04479982960037887,
+          "nearestBF16": 0.044921875,
+          "native": 0.044677734375,
+          "upstream": 0.044921875,
+          "nativeNearest": false,
+          "upstreamNearest": true
+        },
+        {
+          "position": [
+            0,
+            1,
+            53,
+            126
+          ],
+          "fp64": -0.0003881135635310784,
+          "nearestBF16": -0.0003871917724609375,
+          "native": -0.00038909912109375,
+          "upstream": -0.0003871917724609375,
+          "nativeNearest": false,
+          "upstreamNearest": true
+        }
+      ]
+    },
+    "prefill.sam.patch.hwc": {
+      "unequal": 94,
+      "total": 3145728,
+      "samples": [
+        {
+          "position": [
+            0,
+            0,
+            33,
+            751
+          ],
+          "fp64": -8.944817818701267e-05,
+          "nearestBF16": -8.96453857421875e-05,
+          "native": -8.916854858398438e-05,
+          "upstream": -8.96453857421875e-05,
+          "nativeNearest": false,
+          "upstreamNearest": true
+        },
+        {
+          "position": [
+            0,
+            0,
+            45,
+            484
+          ],
+          "fp64": -0.17822276466176845,
+          "nearestBF16": -0.1787109375,
+          "native": -0.177734375,
+          "upstream": -0.1787109375,
+          "nativeNearest": false,
+          "upstreamNearest": true
+        },
+        {
+          "position": [
+            0,
+            1,
+            54,
+            56
+          ],
+          "fp64": -0.0002313700970262289,
+          "nearestBF16": -0.00023174285888671875,
+          "native": -0.0002307891845703125,
+          "upstream": -0.00023174285888671875,
+          "nativeNearest": false,
+          "upstreamNearest": true
+        },
+        {
+          "position": [
+            0,
+            2,
+            19,
+            652
+          ],
+          "fp64": -0.00047779944725334644,
+          "nearestBF16": -0.0004787445068359375,
+          "native": -0.000476837158203125,
+          "upstream": -0.0004787445068359375,
+          "nativeNearest": false,
+          "upstreamNearest": true
+        },
+        {
+          "position": [
+            0,
+            2,
+            25,
+            757
+          ],
+          "fp64": 1.7929689412703738,
+          "nearestBF16": 1.796875,
+          "native": 1.796875,
+          "upstream": 1.7890625,
+          "nativeNearest": true,
+          "upstreamNearest": false
+        },
+        {
+          "position": [
+            0,
+            2,
+            35,
+            370
+          ],
+          "fp64": -0.05163552542217076,
+          "nearestBF16": -0.051513671875,
+          "native": -0.0517578125,
+          "upstream": -0.051513671875,
+          "nativeNearest": false,
+          "upstreamNearest": true
+        },
+        {
+          "position": [
+            0,
+            2,
+            41,
+            24
+          ],
+          "fp64": -1.7070321387145668,
+          "nearestBF16": -1.7109375,
+          "native": -1.703125,
+          "upstream": -1.7109375,
+          "nativeNearest": false,
+          "upstreamNearest": true
+        },
+        {
+          "position": [
+            0,
+            2,
+            43,
+            545
+          ],
+          "fp64": 4.600733518600464e-07,
+          "nearestBF16": 4.600733518600464e-07,
+          "native": 3.5762786865234375e-07,
+          "upstream": 4.76837158203125e-07,
+          "nativeNearest": false,
+          "upstreamNearest": false
+        }
+      ]
+    }
+  }
+}

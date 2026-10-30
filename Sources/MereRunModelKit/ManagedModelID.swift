@@ -123,6 +123,7 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case clefOmni = "text-decide-clef-omni"
     case gliner25Decide = "text-classify-gliner25-decide"
     case lightOnOCR = "vision-ocr-lighton"
+    case unlimitedOCR2 = "vision-ocr-unlimited-2"
     case lightOnOCR3Small = "vision-ocr-lighton-3-0.8b"
     case lightOnOCR3FourB = "vision-ocr-lighton-3-4b"
     case infinityParser2Pro = "vision-ocr-infinity-pro"

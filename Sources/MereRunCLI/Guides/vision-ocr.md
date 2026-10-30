@@ -3,11 +3,23 @@
 ## Purpose
 
 Extract text from one or more images using LightOnOCR, native Infinity-Parser2,
-or external comparison CLIs, with optional backend comparison.
+native Unlimited-OCR-2, or external comparison CLIs, with optional backend comparison.
 
 ## Required Models
 
 Default managed LightOn id: `vision-ocr-lighton` (LightOnOCR 3-1B).
+
+For Unlimited-OCR-2, run `mere.run model pull vision-ocr-unlimited-2`, then
+`mere.run vision ocr page-01.png page-02.png --backend unlimited --temperature 0 --max-tokens 16384`.
+Image arguments form one document in the supplied order. `--unlimited-model`
+accepts the managed ID or an original BF16 checkpoint directory.
+`--unlimited-crop auto` tiles a single page and uses global views for multiple
+pages; `base` disables tiles and `tiles` tiles every page. Output preserves
+`<PAGE>` markers. This backend doesn't support `--compare`. It retains the
+document KV cache and requires prompt plus output to fit 131,072 tokens.
+Its 35-token no-repeat constraint uses a 128-token generated window for one
+page or 1,024 for multiple pages. Use `--unlimited-no-repeat-ngram-size 0`
+to disable it, or `--unlimited-ngram-window` to override the window.
 
 LightOnOCR 3 uses `--lighton-mode plain` by default. Use
 `--lighton-mode grounding` for labeled boxes in 0–1000 page coordinates,

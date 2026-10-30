@@ -30,3 +30,7 @@ lighton	composer.readImage.ocr	validated	--model
 lighton	console.visionOCR	emitted	--backend --lighton-mode --max-tokens --model --output-dir --quiet --temperature
 lighton	console.visionOCR	shown	--backend --compare --lighton-mode --max-tokens --model --output-dir --quiet --temperature
 lighton	console.visionOCR	validated	--backend --lighton-mode --max-tokens --model --output-dir --quiet --temperature
+unlimited	composer.readImage.ocr	unreachable
+unlimited	console.visionOCR	emitted	--backend --max-tokens --output-dir --quiet --temperature --unlimited-crop --unlimited-model --unlimited-ngram-window --unlimited-no-repeat-ngram-size
+unlimited	console.visionOCR	shown	--backend --max-tokens --output-dir --quiet --temperature --unlimited-crop --unlimited-model --unlimited-ngram-window --unlimited-no-repeat-ngram-size
+unlimited	console.visionOCR	validated	--backend --max-tokens --output-dir --quiet --temperature --unlimited-crop --unlimited-model --unlimited-ngram-window --unlimited-no-repeat-ngram-size

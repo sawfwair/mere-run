@@ -1,0 +1,13 @@
+{
+  "width": 463,
+  "height": 463,
+  "bitsPerComponent": 8,
+  "bitsPerPixel": 32,
+  "bytesPerRow": 1852,
+  "alphaInfo": "noneSkipLast",
+  "colorSpace": "sRGB",
+  "nativeFastPath": "Direct ImageIO provider byte copy; no CGContext color conversion",
+  "rawProviderVsPillowMaximum": 41,
+  "rawProviderVsPillowMean": 0.6918008923530579,
+  "rawProviderSHA256": "664631c298495073f0e1d807405a78f68dfdefd4a9424f42fd7baf55e6afc247"
+}

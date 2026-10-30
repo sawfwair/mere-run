@@ -262,6 +262,9 @@ erase bridge and the concurrency regressions.
 - The vendored Metal library is accepted only when its stamp matches the exact
   mlx-swift revision, MLX core version and revision, incorporated upstream
   release, and generated-kernel source hash compiled into `mere.run`.
+  New stamps also bind to the compiled library's SHA-256; the existing legacy
+  stamp accepts only its pinned binary. A retained sidecar doesn't validate a
+  regenerated product artifact. The CLI refreshes compatibility copies by bytes.
   `scripts/check.sh` recomputes the same provenance and release ancestry from
   the clean pinned checkout.
 - Don't edit `.build/checkouts/` to change dependency behavior. Checkout

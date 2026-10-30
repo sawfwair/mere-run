@@ -1,0 +1,21 @@
+{
+  "checkpointRevision": "c14071b549f4fcab10909f3c4acc6a2edb366947",
+  "modelMathChanged": false,
+  "captureInstrumentationInFinalGenerator": false,
+  "device": "Apple M5 Max",
+  "physicalMemoryBytes": 137438953472,
+  "sourceSHA256": {
+    "Sources/MereRunCLI/Support/MLXBundleSupport.swift": "526c47df0b00586178682910cff192dac300fb31a91bef56e4c9a4568f783419",
+    "Tests/MereRunMLXTestSupport/MLXTestSupport.swift": "fcb15697bfd54c7062480b06a9b5238c101eeb61179dc5eb1ab6c52242275d69",
+    "Tests/MereRunCLITests/MLXBundleSupportTests.swift": "f77a4ecfc79e7ffa10d3a86c856c1d227dfe37e696e36a09f78a6e62f9611a62",
+    "Tests/MereRunCoreTests/MLXTestLibrarySelectionTests.swift": "33649d5e32fc12e6691329f70db4269e122699670b202c355defc26087553154",
+    "Tests/MereRunCoreTests/UnlimitedOCRCheckpointTests.swift": "4838e2b96243971e8019512b54ef75af7e014ab587ac061670648d6f1c02e4ba",
+    "Sources/MereRunCore/UnlimitedOCR/UnlimitedOCRGenerator.swift": "7db6e54cce1f093ca90cb248770ccd424860761fed6b89a63386a76675d9bc4c",
+    "scripts/build_mlx_metallib.sh": "4a9f38495a0f10f7fb8235c06875c47a817d889a82031268c58f7cdfb96360d7"
+  },
+  "vendorModified": false,
+  "mlxDependencyCheckoutsModified": false,
+  "sourceArtifacts": "Original BF16 safetensors; pinned receipt JPEG and canonical Pillow PNG from the parent report.",
+  "timingLimit": "Debug qualification, not an isolated throughput benchmark",
+  "knownLimit": "Both verified profiles emit 9.00; exact upstream price/geometry parity is not established."
+}

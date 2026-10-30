@@ -68,6 +68,7 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
     let cases: [([String], String?)] = [
         ([], "lighton"),
         (["--backend", "glm"], "glm"),
+        (["--backend", "unlimited"], "unlimited"),
         (["-b", "infinity"], "infinity-native"),
         (["--backend", "infinity", "--infinity-runtime", "external"], "infinity-external"),
         (["--compare"], "compare-glm"),
@@ -79,6 +80,7 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
         let result = try report(["vision", "ocr", "page.png"] + arguments)
         #expect(result.family == family && result.violations.isEmpty && result.warnings.isEmpty, "\(arguments): \(result)")
     }
+    #expect(try report("vision", "ocr", "page.png", "--backend", "unlimited", "--max-tokens", "32768").violations.isEmpty)
 
     #expect(try report("vision", "ocr", "page.png", "--model", "vision-ocr-infinity-pro-int8").violations == [
         "vision-ocr-infinity-pro-int8 runs on Infinity-Parser2 native, not LightOnOCR; change the model or the selector flags."
@@ -90,7 +92,7 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
     #expect(glm.violations.isEmpty && glm.warnings == [
         "--infinity-batch-size has no effect with GLM-OCR. It applies to Infinity-Parser2 external and "
             + "LightOnOCR vs Infinity-Parser2 external.",
-        "--temperature has no effect with GLM-OCR. It applies to LightOnOCR, Infinity-Parser2 native, "
+        "--temperature has no effect with GLM-OCR. It applies to LightOnOCR, Unlimited-OCR-2 native, Infinity-Parser2 native, "
             + "LightOnOCR vs GLM-OCR, LightOnOCR vs Infinity-Parser2 native and LightOnOCR vs Infinity-Parser2 external."
     ])
     let local = try report("vision", "ocr", "page.png", "--model", "/models/lighton")
@@ -103,6 +105,7 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
     for backend in OCRBackend.allCases {
         for runtime in InfinityParserRuntime.allCases {
             for compare in [false, true] {
+                if backend == .unlimited && compare { continue }
                 let arguments = ["page.png", "--backend", backend.rawValue, "--infinity-runtime", runtime.rawValue]
                     + (compare ? ["--compare"] : [])
                 let plan = try VisionOCR.parse(arguments).plan

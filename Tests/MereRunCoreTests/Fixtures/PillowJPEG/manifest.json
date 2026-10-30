@@ -1,0 +1,55 @@
+{
+  "pillow": "13.0.0",
+  "libjpegTurbo": "3.2.0",
+  "cases": [
+    {
+      "name": "rgb-0",
+      "width": 17,
+      "height": 13,
+      "jpegSHA256": "7d590ea34991ded07f1093a3499215d0e737c8717493c13956a8377437c37c14",
+      "rgbSHA256": "a8e1ba1bcf9ce6db93f89b4fb2eea1f3f25ba458b3175b9628b5bbe101aac7f7"
+    },
+    {
+      "name": "rgb-1",
+      "width": 17,
+      "height": 13,
+      "jpegSHA256": "e1074edc573bc370b16e37c611d19694adeac89612e56333c19c9436f297b13b",
+      "rgbSHA256": "2921b4288771729ca1279cbecd30144c797cf1075efdd9d2c6822f8843e6b7dd"
+    },
+    {
+      "name": "rgb-2",
+      "width": 17,
+      "height": 13,
+      "jpegSHA256": "361aede438f7b97351b51af69072310d888f8d2ebb90e48dc69c6e6a4709786b",
+      "rgbSHA256": "5ed25fb2314b21369a2248f807efc814b84ee209a976b8297c7120393bb60fea"
+    },
+    {
+      "name": "progressive-420",
+      "width": 17,
+      "height": 13,
+      "jpegSHA256": "ab2485a48a79a4b8a3b8135b7d9ba4b92fa73306c660769136f878d1f65dcd58",
+      "rgbSHA256": "5ed25fb2314b21369a2248f807efc814b84ee209a976b8297c7120393bb60fea"
+    },
+    {
+      "name": "grayscale",
+      "width": 17,
+      "height": 13,
+      "jpegSHA256": "a7059481f98c1725598ccf6b3a0dee603240869f394ad8304950f2396b7c9863",
+      "rgbSHA256": "d00a82410bdfd7ea30453031f49a757a326b17ca5712610e3305d152b48a01d4"
+    },
+    {
+      "name": "cmyk",
+      "width": 17,
+      "height": 13,
+      "jpegSHA256": "8cf416ff0215021482abb5d01f5600a5b48611823e02d10939bcf841857cd21b",
+      "rgbSHA256": "e231edc7faf1af979cf8af234ce1fdd90da9099af65b2973c62fb5c3c9019b83"
+    },
+    {
+      "name": "rgb-coded",
+      "width": 17,
+      "height": 13,
+      "jpegSHA256": "4d972d4473a3986738bc13357f2c409493b1d51d00f5e18cd1c5a2e47819f2b1",
+      "rgbSHA256": "5784397be6b8de8089716a6a6efed765afa4832b21999adafcdd1217bb4922fd"
+    }
+  ]
+}

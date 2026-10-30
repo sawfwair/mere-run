@@ -1,0 +1,5 @@
+[MereRunCoreTestCase] invokeTest UnlimitedOCRCheckpointTests -[UnlimitedOCRCheckpointTests testFullCheckpointDocumentsOnMetal]
+[MLXTestSupport] exe=/Applications/Xcode.app/Contents/Developer/usr/bin/xctest
+[MLXTestSupport] xctest=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/MereRunCoreTests.xctest
+[MLXTestSupport] cmlxBundle=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/vendor/mlx-swift_Cmlx.bundle
+[MLXTestSupport] xctestResources=/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/MereRunCoreTests.xctest/Contents/Resources

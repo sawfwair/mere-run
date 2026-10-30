@@ -1,0 +1,3080 @@
+[
+  {
+    "expected" : 128827,
+    "expectedScore" : 25.875,
+    "score00" : -2.03125,
+    "score000" : 0.013244629,
+    "step" : 0,
+    "winner" : 128827,
+    "winnerScore" : 25.875
+  },
+  {
+    "expected" : 128828,
+    "expectedScore" : 26,
+    "score00" : 6.375,
+    "score000" : 2.71875,
+    "step" : 1,
+    "winner" : 128828,
+    "winnerScore" : 26
+  },
+  {
+    "expected" : 10253,
+    "expectedScore" : 25.375,
+    "score00" : 0.88671875,
+    "score000" : 2.796875,
+    "step" : 2,
+    "winner" : 10253,
+    "winnerScore" : 25.375
+  },
+  {
+    "expected" : 61,
+    "expectedScore" : 25.375,
+    "score00" : 0.12695312,
+    "score000" : 1.1796875,
+    "step" : 3,
+    "winner" : 61,
+    "winnerScore" : 25.375
+  },
+  {
+    "expected" : 9049,
+    "expectedScore" : 26.125,
+    "score00" : 14.125,
+    "score000" : 13.25,
+    "step" : 4,
+    "winner" : 9049,
+    "winnerScore" : 26.125
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 54.75,
+    "score00" : -0.93359375,
+    "score000" : -7.875,
+    "step" : 5,
+    "winner" : 14,
+    "winnerScore" : 54.75
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 39.75,
+    "score00" : -29.75,
+    "score000" : -31.125,
+    "step" : 6,
+    "winner" : 223,
+    "winnerScore" : 39.75
+  },
+  {
+    "expected" : 18,
+    "expectedScore" : 32.25,
+    "score00" : 18.125,
+    "score000" : 15.125,
+    "step" : 7,
+    "winner" : 18,
+    "winnerScore" : 32.25
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 41.25,
+    "score00" : -4.28125,
+    "score000" : -10.625,
+    "step" : 8,
+    "winner" : 14,
+    "winnerScore" : 41.25
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 59,
+    "score00" : -4.84375,
+    "score000" : -5.75,
+    "step" : 9,
+    "winner" : 223,
+    "winnerScore" : 59
+  },
+  {
+    "expected" : 30864,
+    "expectedScore" : 28,
+    "score00" : 14.0625,
+    "score000" : 17.25,
+    "step" : 10,
+    "winner" : 30864,
+    "winnerScore" : 28
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 39.5,
+    "score00" : 4.21875,
+    "score000" : 0.28515625,
+    "step" : 11,
+    "winner" : 14,
+    "winnerScore" : 39.5
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 34.25,
+    "score00" : -4.3125,
+    "score000" : 2.28125,
+    "step" : 12,
+    "winner" : 223,
+    "winnerScore" : 34.25
+  },
+  {
+    "expected" : 1977,
+    "expectedScore" : 35,
+    "score00" : 23.5,
+    "score000" : 20.5,
+    "step" : 13,
+    "winner" : 1977,
+    "winnerScore" : 35
+  },
+  {
+    "expected" : 63,
+    "expectedScore" : 48.25,
+    "score00" : 4.25,
+    "score000" : -0.94921875,
+    "step" : 14,
+    "winner" : 63,
+    "winnerScore" : 48.25
+  },
+  {
+    "expected" : 128829,
+    "expectedScore" : 37,
+    "score00" : -7.75,
+    "score000" : -11.3125,
+    "step" : 15,
+    "winner" : 128829,
+    "winnerScore" : 37
+  },
+  {
+    "expected" : 201,
+    "expectedScore" : 21.25,
+    "score00" : 3.8125,
+    "score000" : 4.6875,
+    "step" : 16,
+    "winner" : 201,
+    "winnerScore" : 21.25
+  },
+  {
+    "expected" : 128828,
+    "expectedScore" : 26.25,
+    "score00" : 5.65625,
+    "score000" : 3.4375,
+    "step" : 17,
+    "winner" : 128828,
+    "winnerScore" : 26.25
+  },
+  {
+    "expected" : 2067,
+    "expectedScore" : 28.5,
+    "score00" : -0.16796875,
+    "score000" : 0.7890625,
+    "step" : 18,
+    "winner" : 2067,
+    "winnerScore" : 28.5
+  },
+  {
+    "expected" : 61,
+    "expectedScore" : 42.75,
+    "score00" : -3.625,
+    "score000" : -6.03125,
+    "step" : 19,
+    "winner" : 61,
+    "winnerScore" : 42.75
+  },
+  {
+    "expected" : 7336,
+    "expectedScore" : 31.25,
+    "score00" : 18.875,
+    "score000" : 17,
+    "step" : 20,
+    "winner" : 7336,
+    "winnerScore" : 31.25
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 59,
+    "score00" : -6.9375,
+    "score000" : -14.375,
+    "step" : 21,
+    "winner" : 14,
+    "winnerScore" : 59
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 43,
+    "score00" : -45,
+    "score000" : -47.75,
+    "step" : 22,
+    "winner" : 223,
+    "winnerScore" : 43
+  },
+  {
+    "expected" : 7331,
+    "expectedScore" : 32.5,
+    "score00" : 19,
+    "score000" : 16.25,
+    "step" : 23,
+    "winner" : 7331,
+    "winnerScore" : 32.5
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 49,
+    "score00" : -6.21875,
+    "score000" : -13.6875,
+    "step" : 24,
+    "winner" : 14,
+    "winnerScore" : 49
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 45.25,
+    "score00" : -1.1171875,
+    "score000" : -0.71875,
+    "step" : 25,
+    "winner" : 223,
+    "winnerScore" : 45.25
+  },
+  {
+    "expected" : 25196,
+    "expectedScore" : 37,
+    "score00" : 24.375,
+    "score000" : 27.125,
+    "step" : 26,
+    "winner" : 25196,
+    "winnerScore" : 37
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 34.5,
+    "score00" : -3.1875,
+    "score000" : -4.09375,
+    "step" : 27,
+    "winner" : 14,
+    "winnerScore" : 34.5
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 29.125,
+    "score00" : -0.21582031,
+    "score000" : 1.8828125,
+    "step" : 28,
+    "winner" : 223,
+    "winnerScore" : 29.125
+  },
+  {
+    "expected" : 5895,
+    "expectedScore" : 32.75,
+    "score00" : 17.5,
+    "score000" : 16.375,
+    "step" : 29,
+    "winner" : 5895,
+    "winnerScore" : 32.75
+  },
+  {
+    "expected" : 63,
+    "expectedScore" : 38.5,
+    "score00" : 0.984375,
+    "score000" : -3.921875,
+    "step" : 30,
+    "winner" : 63,
+    "winnerScore" : 38.5
+  },
+  {
+    "expected" : 128829,
+    "expectedScore" : 36.75,
+    "score00" : -8.125,
+    "score000" : -11.375,
+    "step" : 31,
+    "winner" : 128829,
+    "winnerScore" : 36.75
+  },
+  {
+    "expected" : 28318,
+    "expectedScore" : 20.125,
+    "score00" : 2.765625,
+    "score000" : 2.90625,
+    "step" : 32,
+    "winner" : 28318,
+    "winnerScore" : 20.125
+  },
+  {
+    "expected" : 3011,
+    "expectedScore" : 22.5,
+    "score00" : -1.640625,
+    "score000" : -4.34375,
+    "step" : 33,
+    "winner" : 3011,
+    "winnerScore" : 22.5
+  },
+  {
+    "expected" : 1313,
+    "expectedScore" : 19.75,
+    "score00" : -1.8828125,
+    "score000" : -2.6875,
+    "step" : 34,
+    "winner" : 1313,
+    "winnerScore" : 19.75
+  },
+  {
+    "expected" : 44614,
+    "expectedScore" : 21.625,
+    "score00" : 1.6171875,
+    "score000" : -0.122558594,
+    "step" : 35,
+    "winner" : 44614,
+    "winnerScore" : 21.625
+  },
+  {
+    "expected" : 13407,
+    "expectedScore" : 20.625,
+    "score00" : 3.140625,
+    "score000" : 1.1015625,
+    "step" : 36,
+    "winner" : 13407,
+    "winnerScore" : 20.625
+  },
+  {
+    "expected" : 26612,
+    "expectedScore" : 22,
+    "score00" : 2.5,
+    "score000" : 2.046875,
+    "step" : 37,
+    "winner" : 26612,
+    "winnerScore" : 22
+  },
+  {
+    "expected" : 3663,
+    "expectedScore" : 20.5,
+    "score00" : 10.5625,
+    "score000" : 4.3125,
+    "step" : 38,
+    "winner" : 3663,
+    "winnerScore" : 20.5
+  },
+  {
+    "expected" : 201,
+    "expectedScore" : 22.625,
+    "score00" : -1.796875,
+    "score000" : -0.91015625,
+    "step" : 39,
+    "winner" : 201,
+    "winnerScore" : 22.625
+  },
+  {
+    "expected" : 128828,
+    "expectedScore" : 22.125,
+    "score00" : 0.6796875,
+    "score000" : -0.32421875,
+    "step" : 40,
+    "winner" : 128828,
+    "winnerScore" : 22.125
+  },
+  {
+    "expected" : 2067,
+    "expectedScore" : 29.375,
+    "score00" : -3.390625,
+    "score000" : -3,
+    "step" : 41,
+    "winner" : 2067,
+    "winnerScore" : 29.375
+  },
+  {
+    "expected" : 61,
+    "expectedScore" : 42.75,
+    "score00" : -7.65625,
+    "score000" : -11.625,
+    "step" : 42,
+    "winner" : 61,
+    "winnerScore" : 42.75
+  },
+  {
+    "expected" : 7336,
+    "expectedScore" : 33,
+    "score00" : 14.75,
+    "score000" : 12.9375,
+    "step" : 43,
+    "winner" : 7336,
+    "winnerScore" : 33
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 63.5,
+    "score00" : -6.78125,
+    "score000" : -14.875,
+    "step" : 44,
+    "winner" : 14,
+    "winnerScore" : 63.5
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 51.25,
+    "score00" : -32,
+    "score000" : -36.5,
+    "step" : 45,
+    "winner" : 223,
+    "winnerScore" : 51.25
+  },
+  {
+    "expected" : 9146,
+    "expectedScore" : 33.25,
+    "score00" : 19.875,
+    "score000" : 19.125,
+    "step" : 46,
+    "winner" : 9146,
+    "winnerScore" : 33.25
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 43.5,
+    "score00" : -6.96875,
+    "score000" : -12.125,
+    "step" : 47,
+    "winner" : 14,
+    "winnerScore" : 43.5
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 32.75,
+    "score00" : 1.0546875,
+    "score000" : 1.4921875,
+    "step" : 48,
+    "winner" : 223,
+    "winnerScore" : 32.75
+  },
+  {
+    "expected" : 29341,
+    "expectedScore" : 38.75,
+    "score00" : 22.75,
+    "score000" : 22.375,
+    "step" : 49,
+    "winner" : 29341,
+    "winnerScore" : 38.75
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 36.25,
+    "score00" : -6.125,
+    "score000" : -8.5,
+    "step" : 50,
+    "winner" : 14,
+    "winnerScore" : 36.25
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 36.5,
+    "score00" : -5.5625,
+    "score000" : -2,
+    "step" : 51,
+    "winner" : 223,
+    "winnerScore" : 36.5
+  },
+  {
+    "expected" : 14972,
+    "expectedScore" : 32,
+    "score00" : 16.625,
+    "score000" : 16.125,
+    "step" : 52,
+    "winner" : 14972,
+    "winnerScore" : 32
+  },
+  {
+    "expected" : 63,
+    "expectedScore" : 47.75,
+    "score00" : -2,
+    "score000" : -6.375,
+    "step" : 53,
+    "winner" : 63,
+    "winnerScore" : 47.75
+  },
+  {
+    "expected" : 128829,
+    "expectedScore" : 36.75,
+    "score00" : -8.625,
+    "score000" : -11.6875,
+    "step" : 54,
+    "winner" : 128829,
+    "winnerScore" : 36.75
+  },
+  {
+    "expected" : 7778,
+    "expectedScore" : 21.125,
+    "score00" : 1.78125,
+    "score000" : 1.0703125,
+    "step" : 55,
+    "winner" : 7778,
+    "winnerScore" : 21.125
+  },
+  {
+    "expected" : 1313,
+    "expectedScore" : 23,
+    "score00" : -1.4296875,
+    "score000" : -4.09375,
+    "step" : 56,
+    "winner" : 1313,
+    "winnerScore" : 23
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 21.125,
+    "score00" : -3.3125,
+    "score000" : -7.21875,
+    "step" : 57,
+    "winner" : 223,
+    "winnerScore" : 21.125
+  },
+  {
+    "expected" : 1069,
+    "expectedScore" : 26,
+    "score00" : 6.09375,
+    "score000" : -0.11767578,
+    "step" : 58,
+    "winner" : 1069,
+    "winnerScore" : 26
+  },
+  {
+    "expected" : 17,
+    "expectedScore" : 23.75,
+    "score00" : -6.25,
+    "score000" : -6.875,
+    "step" : 59,
+    "winner" : 17,
+    "winnerScore" : 23.75
+  },
+  {
+    "expected" : 736,
+    "expectedScore" : 26.25,
+    "score00" : 5.0625,
+    "score000" : 0.265625,
+    "step" : 60,
+    "winner" : 736,
+    "winnerScore" : 26.25
+  },
+  {
+    "expected" : 17,
+    "expectedScore" : 22.75,
+    "score00" : -5.1875,
+    "score000" : -5.59375,
+    "step" : 61,
+    "winner" : 17,
+    "winnerScore" : 22.75
+  },
+  {
+    "expected" : 643,
+    "expectedScore" : 23.75,
+    "score00" : 7.6875,
+    "score000" : 3.25,
+    "step" : 62,
+    "winner" : 643,
+    "winnerScore" : 23.75
+  },
+  {
+    "expected" : 26,
+    "expectedScore" : 25.375,
+    "score00" : 5.375,
+    "score000" : 3.78125,
+    "step" : 63,
+    "winner" : 26,
+    "winnerScore" : 25.375
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 18.75,
+    "score00" : -6.875,
+    "score000" : -8.1875,
+    "step" : 64,
+    "winner" : 223,
+    "winnerScore" : 18.75
+  },
+  {
+    "expected" : 26,
+    "expectedScore" : 24.375,
+    "score00" : 11.75,
+    "score000" : 6.46875,
+    "step" : 65,
+    "winner" : 26,
+    "winnerScore" : 24.375
+  },
+  {
+    "expected" : 28,
+    "expectedScore" : 22.25,
+    "score00" : -9.375,
+    "score000" : -10.3125,
+    "step" : 66,
+    "winner" : 28,
+    "winnerScore" : 22.25
+  },
+  {
+    "expected" : 907,
+    "expectedScore" : 24.125,
+    "score00" : 9.5,
+    "score000" : 1.453125,
+    "step" : 67,
+    "winner" : 907,
+    "winnerScore" : 24.125
+  },
+  {
+    "expected" : 28,
+    "expectedScore" : 21.25,
+    "score00" : -7.5,
+    "score000" : -9.5625,
+    "step" : 68,
+    "winner" : 28,
+    "winnerScore" : 21.25
+  },
+  {
+    "expected" : 2116,
+    "expectedScore" : 23.375,
+    "score00" : 11.9375,
+    "score000" : 1.515625,
+    "step" : 69,
+    "winner" : 2116,
+    "winnerScore" : 23.375
+  },
+  {
+    "expected" : 4748,
+    "expectedScore" : 25.25,
+    "score00" : -0.484375,
+    "score000" : -5.28125,
+    "step" : 70,
+    "winner" : 4748,
+    "winnerScore" : 25.25
+  },
+  {
+    "expected" : 201,
+    "expectedScore" : 23.5,
+    "score00" : 0.5859375,
+    "score000" : -0.15136719,
+    "step" : 71,
+    "winner" : 201,
+    "winnerScore" : 23.5
+  },
+  {
+    "expected" : 128828,
+    "expectedScore" : 22.75,
+    "score00" : 3.015625,
+    "score000" : 0.7265625,
+    "step" : 72,
+    "winner" : 128828,
+    "winnerScore" : 22.75
+  },
+  {
+    "expected" : 2067,
+    "expectedScore" : 30.625,
+    "score00" : -3.859375,
+    "score000" : -3.65625,
+    "step" : 73,
+    "winner" : 2067,
+    "winnerScore" : 30.625
+  },
+  {
+    "expected" : 61,
+    "expectedScore" : 40.5,
+    "score00" : -6.1875,
+    "score000" : -10,
+    "step" : 74,
+    "winner" : 61,
+    "winnerScore" : 40.5
+  },
+  {
+    "expected" : 7336,
+    "expectedScore" : 33,
+    "score00" : 12.625,
+    "score000" : 11,
+    "step" : 75,
+    "winner" : 7336,
+    "winnerScore" : 33
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 56.25,
+    "score00" : -6.40625,
+    "score000" : -13.1875,
+    "step" : 76,
+    "winner" : 14,
+    "winnerScore" : 56.25
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 56.5,
+    "score00" : -44.75,
+    "score000" : -49.75,
+    "step" : 77,
+    "winner" : 223,
+    "winnerScore" : 56.5
+  },
+  {
+    "expected" : 17227,
+    "expectedScore" : 33.5,
+    "score00" : 17.875,
+    "score000" : 15.8125,
+    "step" : 78,
+    "winner" : 17227,
+    "winnerScore" : 33.5
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 37.5,
+    "score00" : -4.21875,
+    "score000" : -8.4375,
+    "step" : 79,
+    "winner" : 14,
+    "winnerScore" : 37.5
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 45.75,
+    "score00" : -1.7734375,
+    "score000" : -1.625,
+    "step" : 80,
+    "winner" : 223,
+    "winnerScore" : 45.75
+  },
+  {
+    "expected" : 24496,
+    "expectedScore" : 39.25,
+    "score00" : 24.5,
+    "score000" : 24.875,
+    "step" : 81,
+    "winner" : 24496,
+    "winnerScore" : 39.25
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 34.75,
+    "score00" : -4.09375,
+    "score000" : -7.03125,
+    "step" : 82,
+    "winner" : 14,
+    "winnerScore" : 34.75
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 36.75,
+    "score00" : -8.3125,
+    "score000" : -4.9375,
+    "step" : 83,
+    "winner" : 223,
+    "winnerScore" : 36.75
+  },
+  {
+    "expected" : 18731,
+    "expectedScore" : 36.75,
+    "score00" : 21.625,
+    "score000" : 22,
+    "step" : 84,
+    "winner" : 18731,
+    "winnerScore" : 36.75
+  },
+  {
+    "expected" : 63,
+    "expectedScore" : 49.5,
+    "score00" : -2.03125,
+    "score000" : -7.96875,
+    "step" : 85,
+    "winner" : 63,
+    "winnerScore" : 49.5
+  },
+  {
+    "expected" : 128829,
+    "expectedScore" : 36.5,
+    "score00" : -9.25,
+    "score000" : -12.0625,
+    "step" : 86,
+    "winner" : 128829,
+    "winnerScore" : 36.5
+  },
+  {
+    "expected" : 68917,
+    "expectedScore" : 23.875,
+    "score00" : -0.66015625,
+    "score000" : -1.1953125,
+    "step" : 87,
+    "winner" : 68917,
+    "winnerScore" : 23.875
+  },
+  {
+    "expected" : 1374,
+    "expectedScore" : 21.25,
+    "score00" : -2.171875,
+    "score000" : -1.609375,
+    "step" : 88,
+    "winner" : 1374,
+    "winnerScore" : 21.25
+  },
+  {
+    "expected" : 1313,
+    "expectedScore" : 21.25,
+    "score00" : -1.875,
+    "score000" : -2.84375,
+    "step" : 89,
+    "winner" : 1313,
+    "winnerScore" : 21.25
+  },
+  {
+    "expected" : 33212,
+    "expectedScore" : 24.625,
+    "score00" : -0.21972656,
+    "score000" : -3.921875,
+    "step" : 90,
+    "winner" : 33212,
+    "winnerScore" : 24.625
+  },
+  {
+    "expected" : 2907,
+    "expectedScore" : 21.5,
+    "score00" : 0.8046875,
+    "score000" : -1.8125,
+    "step" : 91,
+    "winner" : 2907,
+    "winnerScore" : 21.5
+  },
+  {
+    "expected" : 201,
+    "expectedScore" : 23.125,
+    "score00" : -0.053955078,
+    "score000" : 1.171875,
+    "step" : 92,
+    "winner" : 201,
+    "winnerScore" : 23.125
+  },
+  {
+    "expected" : 128828,
+    "expectedScore" : 23.5,
+    "score00" : 2.03125,
+    "score000" : 0.68359375,
+    "step" : 93,
+    "winner" : 128828,
+    "winnerScore" : 23.5
+  },
+  {
+    "expected" : 2067,
+    "expectedScore" : 27.75,
+    "score00" : -3.328125,
+    "score000" : -2.03125,
+    "step" : 94,
+    "winner" : 2067,
+    "winnerScore" : 27.75
+  },
+  {
+    "expected" : 61,
+    "expectedScore" : 40.25,
+    "score00" : -5.0625,
+    "score000" : -8.8125,
+    "step" : 95,
+    "winner" : 61,
+    "winnerScore" : 40.25
+  },
+  {
+    "expected" : 7336,
+    "expectedScore" : 32.5,
+    "score00" : 12.625,
+    "score000" : 11.0625,
+    "step" : 96,
+    "winner" : 7336,
+    "winnerScore" : 32.5
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 46.5,
+    "score00" : -2.078125,
+    "score000" : -9.0625,
+    "step" : 97,
+    "winner" : 14,
+    "winnerScore" : 46.5
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 57.5,
+    "score00" : -45.75,
+    "score000" : -52.25,
+    "step" : 98,
+    "winner" : 223,
+    "winnerScore" : 57.5
+  },
+  {
+    "expected" : 17998,
+    "expectedScore" : 35.25,
+    "score00" : 16.875,
+    "score000" : 15.75,
+    "step" : 99,
+    "winner" : 17998,
+    "winnerScore" : 35.25
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 41,
+    "score00" : -4.9375,
+    "score000" : -12.5625,
+    "step" : 100,
+    "winner" : 14,
+    "winnerScore" : 41
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 28.625,
+    "score00" : -1.46875,
+    "score000" : -1.3203125,
+    "step" : 101,
+    "winner" : 223,
+    "winnerScore" : 28.625
+  },
+  {
+    "expected" : 16326,
+    "expectedScore" : 36.75,
+    "score00" : 23.125,
+    "score000" : 25.25,
+    "step" : 102,
+    "winner" : 16326,
+    "winnerScore" : 36.75
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 35.25,
+    "score00" : -1.671875,
+    "score000" : -5.40625,
+    "step" : 103,
+    "winner" : 14,
+    "winnerScore" : 35.25
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 36.5,
+    "score00" : -3.484375,
+    "score000" : -1.2421875,
+    "step" : 104,
+    "winner" : 223,
+    "winnerScore" : 36.5
+  },
+  {
+    "expected" : 19966,
+    "expectedScore" : 35.75,
+    "score00" : 19,
+    "score000" : 18.5,
+    "step" : 105,
+    "winner" : 19966,
+    "winnerScore" : 35.75
+  },
+  {
+    "expected" : 63,
+    "expectedScore" : 48.75,
+    "score00" : 0.82421875,
+    "score000" : -5.40625,
+    "step" : 106,
+    "winner" : 63,
+    "winnerScore" : 48.75
+  },
+  {
+    "expected" : 128829,
+    "expectedScore" : 36.75,
+    "score00" : -8.5,
+    "score000" : -11.625,
+    "step" : 107,
+    "winner" : 128829,
+    "winnerScore" : 36.75
+  },
+  {
+    "expected" : 27283,
+    "expectedScore" : 21.375,
+    "score00" : -2.1875,
+    "score000" : -1.515625,
+    "step" : 108,
+    "winner" : 27283,
+    "winnerScore" : 21.375
+  },
+  {
+    "expected" : 15392,
+    "expectedScore" : 23.75,
+    "score00" : -0.59375,
+    "score000" : -2.65625,
+    "step" : 109,
+    "winner" : 15392,
+    "winnerScore" : 23.75
+  },
+  {
+    "expected" : 128828,
+    "expectedScore" : 23.875,
+    "score00" : 2.71875,
+    "score000" : -0.6953125,
+    "step" : 110,
+    "winner" : 128828,
+    "winnerScore" : 23.875
+  },
+  {
+    "expected" : 10212,
+    "expectedScore" : 27.625,
+    "score00" : 1.4765625,
+    "score000" : 3.09375,
+    "step" : 111,
+    "winner" : 10212,
+    "winnerScore" : 27.625
+  },
+  {
+    "expected" : 30,
+    "expectedScore" : 22.875,
+    "score00" : 0.53125,
+    "score000" : 1.3828125,
+    "step" : 112,
+    "winner" : 30,
+    "winnerScore" : 22.875
+  },
+  {
+    "expected" : 114086,
+    "expectedScore" : 35,
+    "score00" : -2.671875,
+    "score000" : -2.75,
+    "step" : 113,
+    "winner" : 114086,
+    "winnerScore" : 35
+  },
+  {
+    "expected" : 19,
+    "expectedScore" : 23,
+    "score00" : 3.15625,
+    "score000" : 1.875,
+    "step" : 114,
+    "winner" : 19,
+    "winnerScore" : 23
+  },
+  {
+    "expected" : 86594,
+    "expectedScore" : 42,
+    "score00" : -12.9375,
+    "score000" : -9.0625,
+    "step" : 115,
+    "winner" : 86594,
+    "winnerScore" : 42
+  },
+  {
+    "expected" : 17726,
+    "expectedScore" : 39,
+    "score00" : 23.25,
+    "score000" : 20.625,
+    "step" : 116,
+    "winner" : 17726,
+    "winnerScore" : 39
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 56.75,
+    "score00" : -6.40625,
+    "score000" : -13.5,
+    "step" : 117,
+    "winner" : 14,
+    "winnerScore" : 56.75
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 50,
+    "score00" : -41,
+    "score000" : -46.75,
+    "step" : 118,
+    "winner" : 223,
+    "winnerScore" : 50
+  },
+  {
+    "expected" : 21625,
+    "expectedScore" : 39,
+    "score00" : 19.375,
+    "score000" : 18.25,
+    "step" : 119,
+    "winner" : 21625,
+    "winnerScore" : 39
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 59.25,
+    "score00" : -6.625,
+    "score000" : -14.875,
+    "step" : 120,
+    "winner" : 14,
+    "winnerScore" : 59.25
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 32.5,
+    "score00" : -1.25,
+    "score000" : -1.21875,
+    "step" : 121,
+    "winner" : 223,
+    "winnerScore" : 32.5
+  },
+  {
+    "expected" : 28833,
+    "expectedScore" : 43,
+    "score00" : 22,
+    "score000" : 24.625,
+    "step" : 122,
+    "winner" : 28833,
+    "winnerScore" : 43
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 36.25,
+    "score00" : -6.84375,
+    "score000" : -6.8125,
+    "step" : 123,
+    "winner" : 14,
+    "winnerScore" : 36.25
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 34.25,
+    "score00" : -8.1875,
+    "score000" : -6.75,
+    "step" : 124,
+    "winner" : 223,
+    "winnerScore" : 34.25
+  },
+  {
+    "expected" : 21391,
+    "expectedScore" : 36.25,
+    "score00" : 16.875,
+    "score000" : 16.375,
+    "step" : 125,
+    "winner" : 21391,
+    "winnerScore" : 36.25
+  },
+  {
+    "expected" : 63,
+    "expectedScore" : 50.25,
+    "score00" : -1.1484375,
+    "score000" : -7.125,
+    "step" : 126,
+    "winner" : 63,
+    "winnerScore" : 50.25
+  },
+  {
+    "expected" : 128829,
+    "expectedScore" : 36.75,
+    "score00" : -9.4375,
+    "score000" : -12.125,
+    "step" : 127,
+    "winner" : 128829,
+    "winnerScore" : 36.75
+  },
+  {
+    "expected" : 37,
+    "expectedScore" : 25.375,
+    "score00" : 2.0625,
+    "score000" : 1.53125,
+    "step" : 128,
+    "winner" : 37,
+    "winnerScore" : 25.375
+  },
+  {
+    "expected" : 28824,
+    "expectedScore" : 27.375,
+    "score00" : -0.7421875,
+    "score000" : -0.47460938,
+    "step" : 129,
+    "winner" : 28824,
+    "winnerScore" : 27.375
+  },
+  {
+    "expected" : 406,
+    "expectedScore" : 28.5,
+    "score00" : -8.25,
+    "score000" : -9.6875,
+    "step" : 130,
+    "winner" : 406,
+    "winnerScore" : 28.5
+  },
+  {
+    "expected" : 19274,
+    "expectedScore" : 26.375,
+    "score00" : 2.875,
+    "score000" : 0.34375,
+    "step" : 131,
+    "winner" : 19274,
+    "winnerScore" : 26.375
+  },
+  {
+    "expected" : 201,
+    "expectedScore" : 23,
+    "score00" : -0.98046875,
+    "score000" : -1.4453125,
+    "step" : 132,
+    "winner" : 201,
+    "winnerScore" : 23
+  },
+  {
+    "expected" : 128828,
+    "expectedScore" : 25,
+    "score00" : 1.9765625,
+    "score000" : 1.171875,
+    "step" : 133,
+    "winner" : 128828,
+    "winnerScore" : 25
+  },
+  {
+    "expected" : 2067,
+    "expectedScore" : 27.25,
+    "score00" : -1.3359375,
+    "score000" : 0.31445312,
+    "step" : 134,
+    "winner" : 2067,
+    "winnerScore" : 27.25
+  },
+  {
+    "expected" : 61,
+    "expectedScore" : 44.75,
+    "score00" : -4.1875,
+    "score000" : -4.65625,
+    "step" : 135,
+    "winner" : 61,
+    "winnerScore" : 44.75
+  },
+  {
+    "expected" : 1683,
+    "expectedScore" : 29.125,
+    "score00" : 16.375,
+    "score000" : 15,
+    "step" : 136,
+    "winner" : 1683,
+    "winnerScore" : 29.125
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 45.25,
+    "score00" : -1.8046875,
+    "score000" : -8.4375,
+    "step" : 137,
+    "winner" : 14,
+    "winnerScore" : 45.25
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 55.25,
+    "score00" : -38.25,
+    "score000" : -43.5,
+    "step" : 138,
+    "winner" : 223,
+    "winnerScore" : 55.25
+  },
+  {
+    "expected" : 26192,
+    "expectedScore" : 39,
+    "score00" : 22,
+    "score000" : 24.5,
+    "step" : 139,
+    "winner" : 26192,
+    "winnerScore" : 39
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 48.25,
+    "score00" : -9.3125,
+    "score000" : -13.6875,
+    "step" : 140,
+    "winner" : 14,
+    "winnerScore" : 48.25
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 72.5,
+    "score00" : 2.578125,
+    "score000" : 3.71875,
+    "step" : 141,
+    "winner" : 223,
+    "winnerScore" : 72.5
+  },
+  {
+    "expected" : 16326,
+    "expectedScore" : 35,
+    "score00" : 19.625,
+    "score000" : 24.375,
+    "step" : 142,
+    "winner" : 16326,
+    "winnerScore" : 35
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 40.5,
+    "score00" : -5.21875,
+    "score000" : -6.375,
+    "step" : 143,
+    "winner" : 14,
+    "winnerScore" : 40.5
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 37.5,
+    "score00" : -3.65625,
+    "score000" : -4.125,
+    "step" : 144,
+    "winner" : 223,
+    "winnerScore" : 37.5
+  },
+  {
+    "expected" : 27314,
+    "expectedScore" : 41.5,
+    "score00" : 26.875,
+    "score000" : 28.125,
+    "step" : 145,
+    "winner" : 27314,
+    "winnerScore" : 41.5
+  },
+  {
+    "expected" : 63,
+    "expectedScore" : 52,
+    "score00" : -3.4375,
+    "score000" : -5.34375,
+    "step" : 146,
+    "winner" : 63,
+    "winnerScore" : 52
+  },
+  {
+    "expected" : 128829,
+    "expectedScore" : 36.75,
+    "score00" : -9.6875,
+    "score000" : -12.5625,
+    "step" : 147,
+    "winner" : 128829,
+    "winnerScore" : 36.75
+  },
+  {
+    "expected" : 83552,
+    "expectedScore" : 25.875,
+    "score00" : 5.03125,
+    "score000" : 3.640625,
+    "step" : 148,
+    "winner" : 83552,
+    "winnerScore" : 25.875
+  },
+  {
+    "expected" : 19716,
+    "expectedScore" : 28.25,
+    "score00" : -4.46875,
+    "score000" : -4.03125,
+    "step" : 149,
+    "winner" : 19716,
+    "winnerScore" : 28.25
+  },
+  {
+    "expected" : 76604,
+    "expectedScore" : 21.75,
+    "score00" : -1.96875,
+    "score000" : -0.3828125,
+    "step" : 150,
+    "winner" : 76604,
+    "winnerScore" : 21.75
+  },
+  {
+    "expected" : 201,
+    "expectedScore" : 21,
+    "score00" : 2.96875,
+    "score000" : 3.34375,
+    "step" : 151,
+    "winner" : 201,
+    "winnerScore" : 21
+  },
+  {
+    "expected" : 128828,
+    "expectedScore" : 21.5,
+    "score00" : 0.35742188,
+    "score000" : 0.29882812,
+    "step" : 152,
+    "winner" : 128828,
+    "winnerScore" : 21.5
+  },
+  {
+    "expected" : 2067,
+    "expectedScore" : 29.375,
+    "score00" : -2.234375,
+    "score000" : -0.06298828,
+    "step" : 153,
+    "winner" : 2067,
+    "winnerScore" : 29.375
+  },
+  {
+    "expected" : 61,
+    "expectedScore" : 42.5,
+    "score00" : -2.171875,
+    "score000" : -3.703125,
+    "step" : 154,
+    "winner" : 61,
+    "winnerScore" : 42.5
+  },
+  {
+    "expected" : 11065,
+    "expectedScore" : 36.25,
+    "score00" : 23.625,
+    "score000" : 22.375,
+    "step" : 155,
+    "winner" : 11065,
+    "winnerScore" : 36.25
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 53.75,
+    "score00" : -10.125,
+    "score000" : -14.25,
+    "step" : 156,
+    "winner" : 14,
+    "winnerScore" : 53.75
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 60,
+    "score00" : -49.75,
+    "score000" : -54.75,
+    "step" : 157,
+    "winner" : 223,
+    "winnerScore" : 60
+  },
+  {
+    "expected" : 25353,
+    "expectedScore" : 38.25,
+    "score00" : 21.375,
+    "score000" : 22.375,
+    "step" : 158,
+    "winner" : 25353,
+    "winnerScore" : 38.25
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 40.5,
+    "score00" : -7,
+    "score000" : -12.5,
+    "step" : 159,
+    "winner" : 14,
+    "winnerScore" : 40.5
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 59,
+    "score00" : 1.875,
+    "score000" : 2.625,
+    "step" : 160,
+    "winner" : 223,
+    "winnerScore" : 59
+  },
+  {
+    "expected" : 13635,
+    "expectedScore" : 34,
+    "score00" : 19.125,
+    "score000" : 20.5,
+    "step" : 161,
+    "winner" : 13635,
+    "winnerScore" : 34
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 38.25,
+    "score00" : -4.3125,
+    "score000" : -7.71875,
+    "step" : 162,
+    "winner" : 14,
+    "winnerScore" : 38.25
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 36.5,
+    "score00" : -9.3125,
+    "score000" : -11.75,
+    "step" : 163,
+    "winner" : 223,
+    "winnerScore" : 36.5
+  },
+  {
+    "expected" : 25403,
+    "expectedScore" : 38,
+    "score00" : 19.5,
+    "score000" : 20.5,
+    "step" : 164,
+    "winner" : 25403,
+    "winnerScore" : 38
+  },
+  {
+    "expected" : 63,
+    "expectedScore" : 54.5,
+    "score00" : -0.625,
+    "score000" : -6.1875,
+    "step" : 165,
+    "winner" : 63,
+    "winnerScore" : 54.5
+  },
+  {
+    "expected" : 128829,
+    "expectedScore" : 36.5,
+    "score00" : -9.4375,
+    "score000" : -12.4375,
+    "step" : 166,
+    "winner" : 128829,
+    "winnerScore" : 36.5
+  },
+  {
+    "expected" : 51,
+    "expectedScore" : 22.5,
+    "score00" : 5.71875,
+    "score000" : 4.84375,
+    "step" : 167,
+    "winner" : 51,
+    "winnerScore" : 22.5
+  },
+  {
+    "expected" : 44587,
+    "expectedScore" : 23,
+    "score00" : 2.5625,
+    "score000" : 2.75,
+    "step" : 168,
+    "winner" : 44587,
+    "winnerScore" : 23
+  },
+  {
+    "expected" : 201,
+    "expectedScore" : 22.125,
+    "score00" : 3.78125,
+    "score000" : 1.03125,
+    "step" : 169,
+    "winner" : 201,
+    "winnerScore" : 22.125
+  },
+  {
+    "expected" : 128828,
+    "expectedScore" : 23.5,
+    "score00" : 2.78125,
+    "score000" : 2.25,
+    "step" : 170,
+    "winner" : 128828,
+    "winnerScore" : 23.5
+  },
+  {
+    "expected" : 2067,
+    "expectedScore" : 28.75,
+    "score00" : -3.25,
+    "score000" : -1.5078125,
+    "step" : 171,
+    "winner" : 2067,
+    "winnerScore" : 28.75
+  },
+  {
+    "expected" : 61,
+    "expectedScore" : 41.75,
+    "score00" : -4.34375,
+    "score000" : -7.71875,
+    "step" : 172,
+    "winner" : 61,
+    "winnerScore" : 41.75
+  },
+  {
+    "expected" : 22627,
+    "expectedScore" : 40,
+    "score00" : 25.625,
+    "score000" : 22.75,
+    "step" : 173,
+    "winner" : 22627,
+    "winnerScore" : 40
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 47.75,
+    "score00" : -4.5625,
+    "score000" : -10.25,
+    "step" : 174,
+    "winner" : 14,
+    "winnerScore" : 47.75
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 57.75,
+    "score00" : -40.5,
+    "score000" : -46.25,
+    "step" : 175,
+    "winner" : 223,
+    "winnerScore" : 57.75
+  },
+  {
+    "expected" : 26192,
+    "expectedScore" : 36.25,
+    "score00" : 17.625,
+    "score000" : 19,
+    "step" : 176,
+    "winner" : 26192,
+    "winnerScore" : 36.25
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 39.25,
+    "score00" : -5.875,
+    "score000" : -13.625,
+    "step" : 177,
+    "winner" : 14,
+    "winnerScore" : 39.25
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 53.25,
+    "score00" : 0.14160156,
+    "score000" : -0.328125,
+    "step" : 178,
+    "winner" : 223,
+    "winnerScore" : 53.25
+  },
+  {
+    "expected" : 24206,
+    "expectedScore" : 33,
+    "score00" : 17.25,
+    "score000" : 17,
+    "step" : 179,
+    "winner" : 24206,
+    "winnerScore" : 33
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 38.5,
+    "score00" : -8.75,
+    "score000" : -11,
+    "step" : 180,
+    "winner" : 14,
+    "winnerScore" : 38.5
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 38.5,
+    "score00" : -9.0625,
+    "score000" : -11.3125,
+    "step" : 181,
+    "winner" : 223,
+    "winnerScore" : 38.5
+  },
+  {
+    "expected" : 26760,
+    "expectedScore" : 29.25,
+    "score00" : 15.0625,
+    "score000" : 15.0625,
+    "step" : 182,
+    "winner" : 26760,
+    "winnerScore" : 29.25
+  },
+  {
+    "expected" : 63,
+    "expectedScore" : 43.5,
+    "score00" : -2.1875,
+    "score000" : -6.4375,
+    "step" : 183,
+    "winner" : 63,
+    "winnerScore" : 43.5
+  },
+  {
+    "expected" : 128829,
+    "expectedScore" : 36.5,
+    "score00" : -10.5,
+    "score000" : -13.0625,
+    "step" : 184,
+    "winner" : 128829,
+    "winnerScore" : 36.5
+  },
+  {
+    "expected" : 10750,
+    "expectedScore" : 18.75,
+    "score00" : 3.1875,
+    "score000" : 3.140625,
+    "step" : 185,
+    "winner" : 10750,
+    "winnerScore" : 18.75
+  },
+  {
+    "expected" : 18768,
+    "expectedScore" : 21.875,
+    "score00" : -0.3671875,
+    "score000" : -1.2265625,
+    "step" : 186,
+    "winner" : 18768,
+    "winnerScore" : 21.875
+  },
+  {
+    "expected" : 201,
+    "expectedScore" : 21.375,
+    "score00" : 2.078125,
+    "score000" : 1.4453125,
+    "step" : 187,
+    "winner" : 201,
+    "winnerScore" : 21.375
+  },
+  {
+    "expected" : 128828,
+    "expectedScore" : 21.5,
+    "score00" : 1.1953125,
+    "score000" : 1.5703125,
+    "step" : 188,
+    "winner" : 128828,
+    "winnerScore" : 21.5
+  },
+  {
+    "expected" : 2067,
+    "expectedScore" : 29.125,
+    "score00" : -2.625,
+    "score000" : -1.4609375,
+    "step" : 189,
+    "winner" : 2067,
+    "winnerScore" : 29.125
+  },
+  {
+    "expected" : 61,
+    "expectedScore" : 44,
+    "score00" : -3.375,
+    "score000" : -4.96875,
+    "step" : 190,
+    "winner" : 61,
+    "winnerScore" : 44
+  },
+  {
+    "expected" : 26300,
+    "expectedScore" : 35.75,
+    "score00" : 18.25,
+    "score000" : 17.5,
+    "step" : 191,
+    "winner" : 26300,
+    "winnerScore" : 35.75
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 50.25,
+    "score00" : -11.375,
+    "score000" : -14.875,
+    "step" : 192,
+    "winner" : 14,
+    "winnerScore" : 50.25
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 58.75,
+    "score00" : -49,
+    "score000" : -54.5,
+    "step" : 193,
+    "winner" : 223,
+    "winnerScore" : 58.75
+  },
+  {
+    "expected" : 25353,
+    "expectedScore" : 35.75,
+    "score00" : 18,
+    "score000" : 19.5,
+    "step" : 194,
+    "winner" : 25353,
+    "winnerScore" : 35.75
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 36.5,
+    "score00" : -7.84375,
+    "score000" : -12.5,
+    "step" : 195,
+    "winner" : 14,
+    "winnerScore" : 36.5
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 52.75,
+    "score00" : 0.84765625,
+    "score000" : 1.5,
+    "step" : 196,
+    "winner" : 223,
+    "winnerScore" : 52.75
+  },
+  {
+    "expected" : 26760,
+    "expectedScore" : 32.75,
+    "score00" : 14.375,
+    "score000" : 14.625,
+    "step" : 197,
+    "winner" : 26760,
+    "winnerScore" : 32.75
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 38.5,
+    "score00" : -7.8125,
+    "score000" : -12.3125,
+    "step" : 198,
+    "winner" : 14,
+    "winnerScore" : 38.5
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 35.75,
+    "score00" : -13,
+    "score000" : -15.5625,
+    "step" : 199,
+    "winner" : 223,
+    "winnerScore" : 35.75
+  },
+  {
+    "expected" : 27409,
+    "expectedScore" : 35.5,
+    "score00" : 15.75,
+    "score000" : 14.75,
+    "step" : 200,
+    "winner" : 27409,
+    "winnerScore" : 35.5
+  },
+  {
+    "expected" : 63,
+    "expectedScore" : 44.5,
+    "score00" : -2.6875,
+    "score000" : -4.96875,
+    "step" : 201,
+    "winner" : 63,
+    "winnerScore" : 44.5
+  },
+  {
+    "expected" : 128829,
+    "expectedScore" : 36.5,
+    "score00" : -11.6875,
+    "score000" : -14,
+    "step" : 202,
+    "winner" : 128829,
+    "winnerScore" : 36.5
+  },
+  {
+    "expected" : 47351,
+    "expectedScore" : 15.6875,
+    "score00" : 4.40625,
+    "score000" : 4.25,
+    "step" : 203,
+    "winner" : 47351,
+    "winnerScore" : 15.6875
+  },
+  {
+    "expected" : 201,
+    "expectedScore" : 22.125,
+    "score00" : 3.8125,
+    "score000" : 1.8125,
+    "step" : 204,
+    "winner" : 201,
+    "winnerScore" : 22.125
+  },
+  {
+    "expected" : 128828,
+    "expectedScore" : 23.375,
+    "score00" : 2.734375,
+    "score000" : 2.421875,
+    "step" : 205,
+    "winner" : 128828,
+    "winnerScore" : 23.375
+  },
+  {
+    "expected" : 2067,
+    "expectedScore" : 29,
+    "score00" : -2.453125,
+    "score000" : -1.4375,
+    "step" : 206,
+    "winner" : 2067,
+    "winnerScore" : 29
+  },
+  {
+    "expected" : 61,
+    "expectedScore" : 41,
+    "score00" : -4.75,
+    "score000" : -7.0625,
+    "step" : 207,
+    "winner" : 61,
+    "winnerScore" : 41
+  },
+  {
+    "expected" : 28835,
+    "expectedScore" : 32,
+    "score00" : 18.875,
+    "score000" : 18.625,
+    "step" : 208,
+    "winner" : 28835,
+    "winnerScore" : 32
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 58,
+    "score00" : -5.09375,
+    "score000" : -12.9375,
+    "step" : 209,
+    "winner" : 14,
+    "winnerScore" : 58
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 61,
+    "score00" : -40.25,
+    "score000" : -46.5,
+    "step" : 210,
+    "winner" : 223,
+    "winnerScore" : 61
+  },
+  {
+    "expected" : 26192,
+    "expectedScore" : 33.25,
+    "score00" : 15.625,
+    "score000" : 16.375,
+    "step" : 211,
+    "winner" : 26192,
+    "winnerScore" : 33.25
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 34.5,
+    "score00" : -10.8125,
+    "score000" : -17.375,
+    "step" : 212,
+    "winner" : 14,
+    "winnerScore" : 34.5
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 53.25,
+    "score00" : -0.62109375,
+    "score000" : -0.91015625,
+    "step" : 213,
+    "winner" : 223,
+    "winnerScore" : 53.25
+  },
+  {
+    "expected" : 28763,
+    "expectedScore" : 33.5,
+    "score00" : 16.125,
+    "score000" : 16.625,
+    "step" : 214,
+    "winner" : 28763,
+    "winnerScore" : 33.5
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 39.75,
+    "score00" : -7.5625,
+    "score000" : -9.5625,
+    "step" : 215,
+    "winner" : 14,
+    "winnerScore" : 39.75
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 33,
+    "score00" : -4.1875,
+    "score000" : -8.4375,
+    "step" : 216,
+    "winner" : 223,
+    "winnerScore" : 33
+  },
+  {
+    "expected" : 26760,
+    "expectedScore" : 32.75,
+    "score00" : 11.4375,
+    "score000" : 10.6875,
+    "step" : 217,
+    "winner" : 26760,
+    "winnerScore" : 32.75
+  },
+  {
+    "expected" : 63,
+    "expectedScore" : 30.25,
+    "score00" : -2.5625,
+    "score000" : -6.96875,
+    "step" : 218,
+    "winner" : 63,
+    "winnerScore" : 30.25
+  },
+  {
+    "expected" : 128829,
+    "expectedScore" : 37.25,
+    "score00" : -10.125,
+    "score000" : -13.1875,
+    "step" : 219,
+    "winner" : 128829,
+    "winnerScore" : 37.25
+  },
+  {
+    "expected" : 29422,
+    "expectedScore" : 16.125,
+    "score00" : 2.953125,
+    "score000" : 2.625,
+    "step" : 220,
+    "winner" : 29422,
+    "winnerScore" : 16.125
+  },
+  {
+    "expected" : 201,
+    "expectedScore" : 20.5,
+    "score00" : 3.515625,
+    "score000" : 1.5625,
+    "step" : 221,
+    "winner" : 201,
+    "winnerScore" : 20.5
+  },
+  {
+    "expected" : 128828,
+    "expectedScore" : 21.875,
+    "score00" : 2.875,
+    "score000" : 3.359375,
+    "step" : 222,
+    "winner" : 128828,
+    "winnerScore" : 21.875
+  },
+  {
+    "expected" : 2067,
+    "expectedScore" : 27.25,
+    "score00" : -1.375,
+    "score000" : -0.24511719,
+    "step" : 223,
+    "winner" : 2067,
+    "winnerScore" : 27.25
+  },
+  {
+    "expected" : 61,
+    "expectedScore" : 42.25,
+    "score00" : -2.984375,
+    "score000" : -7.3125,
+    "step" : 224,
+    "winner" : 61,
+    "winnerScore" : 42.25
+  },
+  {
+    "expected" : 22073,
+    "expectedScore" : 30.125,
+    "score00" : 16.625,
+    "score000" : 12.375,
+    "step" : 225,
+    "winner" : 22073,
+    "winnerScore" : 30.125
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 48.25,
+    "score00" : -11.0625,
+    "score000" : -12.8125,
+    "step" : 226,
+    "winner" : 14,
+    "winnerScore" : 48.25
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 58.75,
+    "score00" : -40.75,
+    "score000" : -46.75,
+    "step" : 227,
+    "winner" : 223,
+    "winnerScore" : 58.75
+  },
+  {
+    "expected" : 26192,
+    "expectedScore" : 34.25,
+    "score00" : 17.75,
+    "score000" : 18.25,
+    "step" : 228,
+    "winner" : 26192,
+    "winnerScore" : 34.25
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 38.25,
+    "score00" : -7.9375,
+    "score000" : -14.75,
+    "step" : 229,
+    "winner" : 14,
+    "winnerScore" : 38.25
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 46.5,
+    "score00" : -2.15625,
+    "score000" : -3.96875,
+    "step" : 230,
+    "winner" : 223,
+    "winnerScore" : 46.5
+  },
+  {
+    "expected" : 33269,
+    "expectedScore" : 33.25,
+    "score00" : 14.75,
+    "score000" : 17.5,
+    "step" : 231,
+    "winner" : 33269,
+    "winnerScore" : 33.25
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 41.25,
+    "score00" : -7.59375,
+    "score000" : -9.4375,
+    "step" : 232,
+    "winner" : 14,
+    "winnerScore" : 41.25
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 35,
+    "score00" : -9.5625,
+    "score000" : -17.125,
+    "step" : 233,
+    "winner" : 223,
+    "winnerScore" : 35
+  },
+  {
+    "expected" : 26760,
+    "expectedScore" : 29.875,
+    "score00" : 11.9375,
+    "score000" : 11.75,
+    "step" : 234,
+    "winner" : 26760,
+    "winnerScore" : 29.875
+  },
+  {
+    "expected" : 63,
+    "expectedScore" : 32.75,
+    "score00" : 0.10498047,
+    "score000" : -5.34375,
+    "step" : 235,
+    "winner" : 63,
+    "winnerScore" : 32.75
+  },
+  {
+    "expected" : 128829,
+    "expectedScore" : 37.25,
+    "score00" : -10.625,
+    "score000" : -14.0625,
+    "step" : 236,
+    "winner" : 128829,
+    "winnerScore" : 37.25
+  },
+  {
+    "expected" : 4130,
+    "expectedScore" : 18.875,
+    "score00" : 1.625,
+    "score000" : 3.671875,
+    "step" : 237,
+    "winner" : 4130,
+    "winnerScore" : 18.875
+  },
+  {
+    "expected" : 49,
+    "expectedScore" : 18.625,
+    "score00" : 4.5625,
+    "score000" : 3.5,
+    "step" : 238,
+    "winner" : 49,
+    "winnerScore" : 18.625
+  },
+  {
+    "expected" : 25642,
+    "expectedScore" : 19.875,
+    "score00" : 2.53125,
+    "score000" : 1.59375,
+    "step" : 239,
+    "winner" : 25642,
+    "winnerScore" : 19.875
+  },
+  {
+    "expected" : 201,
+    "expectedScore" : 17.5,
+    "score00" : 0.19335938,
+    "score000" : -2.5625,
+    "step" : 240,
+    "winner" : 201,
+    "winnerScore" : 17.5
+  },
+  {
+    "expected" : 128828,
+    "expectedScore" : 20.375,
+    "score00" : 2.46875,
+    "score000" : 2.375,
+    "step" : 241,
+    "winner" : 128828,
+    "winnerScore" : 20.375
+  },
+  {
+    "expected" : 2067,
+    "expectedScore" : 27.375,
+    "score00" : -1.1875,
+    "score000" : -0.21679688,
+    "step" : 242,
+    "winner" : 2067,
+    "winnerScore" : 27.375
+  },
+  {
+    "expected" : 61,
+    "expectedScore" : 40.25,
+    "score00" : -1.75,
+    "score000" : -5.625,
+    "step" : 243,
+    "winner" : 61,
+    "winnerScore" : 40.25
+  },
+  {
+    "expected" : 30598,
+    "expectedScore" : 33.75,
+    "score00" : 20,
+    "score000" : 19.75,
+    "step" : 244,
+    "winner" : 30598,
+    "winnerScore" : 33.75
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 50.5,
+    "score00" : -6.21875,
+    "score000" : -13.375,
+    "step" : 245,
+    "winner" : 14,
+    "winnerScore" : 50.5
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 56.5,
+    "score00" : -40.25,
+    "score000" : -45.75,
+    "step" : 246,
+    "winner" : 223,
+    "winnerScore" : 56.5
+  },
+  {
+    "expected" : 25353,
+    "expectedScore" : 36.5,
+    "score00" : 16.25,
+    "score000" : 17,
+    "step" : 247,
+    "winner" : 25353,
+    "winnerScore" : 36.5
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 36,
+    "score00" : -11.375,
+    "score000" : -14.9375,
+    "step" : 248,
+    "winner" : 14,
+    "winnerScore" : 36
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 52.75,
+    "score00" : -5.6875,
+    "score000" : -5.1875,
+    "step" : 249,
+    "winner" : 223,
+    "winnerScore" : 52.75
+  },
+  {
+    "expected" : 22610,
+    "expectedScore" : 34.5,
+    "score00" : 14.3125,
+    "score000" : 15.75,
+    "step" : 250,
+    "winner" : 22610,
+    "winnerScore" : 34.5
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 30,
+    "score00" : -4.03125,
+    "score000" : -8.1875,
+    "step" : 251,
+    "winner" : 14,
+    "winnerScore" : 30
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 34,
+    "score00" : -5.28125,
+    "score000" : -11.125,
+    "step" : 252,
+    "winner" : 223,
+    "winnerScore" : 34
+  },
+  {
+    "expected" : 27409,
+    "expectedScore" : 35.75,
+    "score00" : 13.125,
+    "score000" : 13,
+    "step" : 253,
+    "winner" : 27409,
+    "winnerScore" : 35.75
+  },
+  {
+    "expected" : 63,
+    "expectedScore" : 39.25,
+    "score00" : -2.53125,
+    "score000" : -4.8125,
+    "step" : 254,
+    "winner" : 63,
+    "winnerScore" : 39.25
+  },
+  {
+    "expected" : 128829,
+    "expectedScore" : 35.25,
+    "score00" : -9.8125,
+    "score000" : -13.5625,
+    "step" : 255,
+    "winner" : 128829,
+    "winnerScore" : 35.25
+  },
+  {
+    "expected" : 47351,
+    "expectedScore" : 16.25,
+    "score00" : 5.03125,
+    "score000" : 4.375,
+    "step" : 256,
+    "winner" : 47351,
+    "winnerScore" : 16.25
+  },
+  {
+    "expected" : 201,
+    "expectedScore" : 22.25,
+    "score00" : 2.78125,
+    "score000" : 1.859375,
+    "step" : 257,
+    "winner" : 201,
+    "winnerScore" : 22.25
+  },
+  {
+    "expected" : 128828,
+    "expectedScore" : 23.5,
+    "score00" : 4.875,
+    "score000" : 4.84375,
+    "step" : 258,
+    "winner" : 128828,
+    "winnerScore" : 23.5
+  },
+  {
+    "expected" : 2067,
+    "expectedScore" : 27.625,
+    "score00" : -1.453125,
+    "score000" : -0.95703125,
+    "step" : 259,
+    "winner" : 2067,
+    "winnerScore" : 27.625
+  },
+  {
+    "expected" : 61,
+    "expectedScore" : 43.25,
+    "score00" : -6.40625,
+    "score000" : -10.5625,
+    "step" : 260,
+    "winner" : 61,
+    "winnerScore" : 43.25
+  },
+  {
+    "expected" : 3661,
+    "expectedScore" : 30.25,
+    "score00" : 15.75,
+    "score000" : 13.6875,
+    "step" : 261,
+    "winner" : 3661,
+    "winnerScore" : 30.25
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 57,
+    "score00" : -8.6875,
+    "score000" : -15.5,
+    "step" : 262,
+    "winner" : 14,
+    "winnerScore" : 57
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 51,
+    "score00" : -51.25,
+    "score000" : -56,
+    "step" : 263,
+    "winner" : 223,
+    "winnerScore" : 51
+  },
+  {
+    "expected" : 27772,
+    "expectedScore" : 37.75,
+    "score00" : 19.375,
+    "score000" : 19,
+    "step" : 264,
+    "winner" : 27772,
+    "winnerScore" : 37.75
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 45.25,
+    "score00" : -8.125,
+    "score000" : -15.9375,
+    "step" : 265,
+    "winner" : 14,
+    "winnerScore" : 45.25
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 50.5,
+    "score00" : -4.96875,
+    "score000" : -4.15625,
+    "step" : 266,
+    "winner" : 223,
+    "winnerScore" : 50.5
+  },
+  {
+    "expected" : 18460,
+    "expectedScore" : 32.5,
+    "score00" : 20.5,
+    "score000" : 21.5,
+    "step" : 267,
+    "winner" : 18460,
+    "winnerScore" : 32.5
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 41.75,
+    "score00" : -2.984375,
+    "score000" : -6.15625,
+    "step" : 268,
+    "winner" : 14,
+    "winnerScore" : 41.75
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 31.25,
+    "score00" : -9.1875,
+    "score000" : -12.25,
+    "step" : 269,
+    "winner" : 223,
+    "winnerScore" : 31.25
+  },
+  {
+    "expected" : 24969,
+    "expectedScore" : 35.25,
+    "score00" : 15.375,
+    "score000" : 15.4375,
+    "step" : 270,
+    "winner" : 24969,
+    "winnerScore" : 35.25
+  },
+  {
+    "expected" : 63,
+    "expectedScore" : 48.25,
+    "score00" : -1.453125,
+    "score000" : -5,
+    "step" : 271,
+    "winner" : 63,
+    "winnerScore" : 48.25
+  },
+  {
+    "expected" : 128829,
+    "expectedScore" : 35,
+    "score00" : -12.375,
+    "score000" : -14.4375,
+    "step" : 272,
+    "winner" : 128829,
+    "winnerScore" : 35
+  },
+  {
+    "expected" : 31906,
+    "expectedScore" : 19.625,
+    "score00" : 2.359375,
+    "score000" : 4.40625,
+    "step" : 273,
+    "winner" : 31906,
+    "winnerScore" : 19.625
+  },
+  {
+    "expected" : 29627,
+    "expectedScore" : 20.5,
+    "score00" : 7.5,
+    "score000" : 5.4375,
+    "step" : 274,
+    "winner" : 29627,
+    "winnerScore" : 20.5
+  },
+  {
+    "expected" : 2225,
+    "expectedScore" : 18.75,
+    "score00" : 10.625,
+    "score000" : 3.59375,
+    "step" : 275,
+    "winner" : 2225,
+    "winnerScore" : 18.75
+  },
+  {
+    "expected" : 15,
+    "expectedScore" : 15.3125,
+    "score00" : -5.0625,
+    "score000" : -3.578125,
+    "step" : 276,
+    "winner" : 15,
+    "winnerScore" : 15.3125
+  },
+  {
+    "expected" : 13407,
+    "expectedScore" : 17.75,
+    "score00" : 10.25,
+    "score000" : 8.125,
+    "step" : 277,
+    "winner" : 13407,
+    "winnerScore" : 17.75
+  },
+  {
+    "expected" : 26,
+    "expectedScore" : 20.625,
+    "score00" : 6.0625,
+    "score000" : 1.984375,
+    "step" : 278,
+    "winner" : 26,
+    "winnerScore" : 20.625
+  },
+  {
+    "expected" : 201,
+    "expectedScore" : 20.375,
+    "score00" : -2.890625,
+    "score000" : -5.21875,
+    "step" : 279,
+    "winner" : 201,
+    "winnerScore" : 20.375
+  },
+  {
+    "expected" : 128828,
+    "expectedScore" : 20.875,
+    "score00" : 2.5,
+    "score000" : 1.3828125,
+    "step" : 280,
+    "winner" : 128828,
+    "winnerScore" : 20.875
+  },
+  {
+    "expected" : 2067,
+    "expectedScore" : 27.5,
+    "score00" : -2.875,
+    "score000" : -1.34375,
+    "step" : 281,
+    "winner" : 2067,
+    "winnerScore" : 27.5
+  },
+  {
+    "expected" : 61,
+    "expectedScore" : 40,
+    "score00" : -6.6875,
+    "score000" : -9.4375,
+    "step" : 282,
+    "winner" : 61,
+    "winnerScore" : 40
+  },
+  {
+    "expected" : 11249,
+    "expectedScore" : 38,
+    "score00" : 23.625,
+    "score000" : 24.375,
+    "step" : 283,
+    "winner" : 11249,
+    "winnerScore" : 38
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 64.5,
+    "score00" : -9.1875,
+    "score000" : -15,
+    "step" : 284,
+    "winner" : 14,
+    "winnerScore" : 64.5
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 63.25,
+    "score00" : -46.5,
+    "score000" : -52.25,
+    "step" : 285,
+    "winner" : 223,
+    "winnerScore" : 63.25
+  },
+  {
+    "expected" : 26602,
+    "expectedScore" : 36,
+    "score00" : 19,
+    "score000" : 17.875,
+    "step" : 286,
+    "winner" : 26602,
+    "winnerScore" : 36
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 42.75,
+    "score00" : -6.15625,
+    "score000" : -13.9375,
+    "step" : 287,
+    "winner" : 14,
+    "winnerScore" : 42.75
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 40.75,
+    "score00" : -2.9375,
+    "score000" : -2.875,
+    "step" : 288,
+    "winner" : 223,
+    "winnerScore" : 40.75
+  },
+  {
+    "expected" : 9186,
+    "expectedScore" : 37,
+    "score00" : 24.875,
+    "score000" : 26.625,
+    "step" : 289,
+    "winner" : 9186,
+    "winnerScore" : 37
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 40.75,
+    "score00" : -12.75,
+    "score000" : -12.5,
+    "step" : 290,
+    "winner" : 14,
+    "winnerScore" : 40.75
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 42.5,
+    "score00" : -6.5,
+    "score000" : -8.875,
+    "step" : 291,
+    "winner" : 223,
+    "winnerScore" : 42.5
+  },
+  {
+    "expected" : 25168,
+    "expectedScore" : 34.25,
+    "score00" : 13.3125,
+    "score000" : 13.5,
+    "step" : 292,
+    "winner" : 25168,
+    "winnerScore" : 34.25
+  },
+  {
+    "expected" : 63,
+    "expectedScore" : 44,
+    "score00" : -2.78125,
+    "score000" : -6.5,
+    "step" : 293,
+    "winner" : 63,
+    "winnerScore" : 44
+  },
+  {
+    "expected" : 128829,
+    "expectedScore" : 36.75,
+    "score00" : -10.3125,
+    "score000" : -13.3125,
+    "step" : 294,
+    "winner" : 128829,
+    "winnerScore" : 36.75
+  },
+  {
+    "expected" : 19,
+    "expectedScore" : 17.75,
+    "score00" : 2.1875,
+    "score000" : 1.921875,
+    "step" : 295,
+    "winner" : 19,
+    "winnerScore" : 17.75
+  },
+  {
+    "expected" : 13248,
+    "expectedScore" : 19.5,
+    "score00" : -0.42773438,
+    "score000" : -3.96875,
+    "step" : 296,
+    "winner" : 13248,
+    "winnerScore" : 19.5
+  },
+  {
+    "expected" : 201,
+    "expectedScore" : 21.875,
+    "score00" : 2.421875,
+    "score000" : 0.34375,
+    "step" : 297,
+    "winner" : 201,
+    "winnerScore" : 21.875
+  },
+  {
+    "expected" : 128828,
+    "expectedScore" : 22.75,
+    "score00" : 5.03125,
+    "score000" : 3.25,
+    "step" : 298,
+    "winner" : 128828,
+    "winnerScore" : 22.75
+  },
+  {
+    "expected" : 2067,
+    "expectedScore" : 25.5,
+    "score00" : -0.94140625,
+    "score000" : 0.51953125,
+    "step" : 299,
+    "winner" : 2067,
+    "winnerScore" : 25.5
+  },
+  {
+    "expected" : 61,
+    "expectedScore" : 40.75,
+    "score00" : -8.0625,
+    "score000" : -11,
+    "step" : 300,
+    "winner" : 61,
+    "winnerScore" : 40.75
+  },
+  {
+    "expected" : 19533,
+    "expectedScore" : 37.25,
+    "score00" : 25.375,
+    "score000" : 26.75,
+    "step" : 301,
+    "winner" : 19533,
+    "winnerScore" : 37.25
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 60,
+    "score00" : -7.875,
+    "score000" : -10.5,
+    "step" : 302,
+    "winner" : 14,
+    "winnerScore" : 60
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 44.25,
+    "score00" : -46.5,
+    "score000" : -50.75,
+    "step" : 303,
+    "winner" : 223,
+    "winnerScore" : 44.25
+  },
+  {
+    "expected" : 27772,
+    "expectedScore" : 32,
+    "score00" : 16.125,
+    "score000" : 16.75,
+    "step" : 304,
+    "winner" : 27772,
+    "winnerScore" : 32
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 37.5,
+    "score00" : -8.8125,
+    "score000" : -13.375,
+    "step" : 305,
+    "winner" : 14,
+    "winnerScore" : 37.5
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 52.75,
+    "score00" : 0.059570312,
+    "score000" : 0.040771484,
+    "step" : 306,
+    "winner" : 223,
+    "winnerScore" : 52.75
+  },
+  {
+    "expected" : 26553,
+    "expectedScore" : 30.875,
+    "score00" : 19.875,
+    "score000" : 22.875,
+    "step" : 307,
+    "winner" : 26553,
+    "winnerScore" : 30.875
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 41.5,
+    "score00" : -8.0625,
+    "score000" : -10.1875,
+    "step" : 308,
+    "winner" : 14,
+    "winnerScore" : 41.5
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 36.25,
+    "score00" : -9.625,
+    "score000" : -8.125,
+    "step" : 309,
+    "winner" : 223,
+    "winnerScore" : 36.25
+  },
+  {
+    "expected" : 24969,
+    "expectedScore" : 31.625,
+    "score00" : 15.0625,
+    "score000" : 15.25,
+    "step" : 310,
+    "winner" : 24969,
+    "winnerScore" : 31.625
+  },
+  {
+    "expected" : 63,
+    "expectedScore" : 51,
+    "score00" : -2.5625,
+    "score000" : -4.4375,
+    "step" : 311,
+    "winner" : 63,
+    "winnerScore" : 51
+  },
+  {
+    "expected" : 128829,
+    "expectedScore" : 36,
+    "score00" : -9.375,
+    "score000" : -12.5625,
+    "step" : 312,
+    "winner" : 128829,
+    "winnerScore" : 36
+  },
+  {
+    "expected" : 83163,
+    "expectedScore" : 16.625,
+    "score00" : 2.84375,
+    "score000" : 1.7578125,
+    "step" : 313,
+    "winner" : 83163,
+    "winnerScore" : 16.625
+  },
+  {
+    "expected" : 109070,
+    "expectedScore" : 21,
+    "score00" : -0.625,
+    "score000" : -3.65625,
+    "step" : 314,
+    "winner" : 109070,
+    "winnerScore" : 21
+  },
+  {
+    "expected" : 4951,
+    "expectedScore" : 18.625,
+    "score00" : -3.375,
+    "score000" : -5.90625,
+    "step" : 315,
+    "winner" : 4951,
+    "winnerScore" : 18.625
+  },
+  {
+    "expected" : 89335,
+    "expectedScore" : 23.125,
+    "score00" : -5.65625,
+    "score000" : -8.5,
+    "step" : 316,
+    "winner" : 89335,
+    "winnerScore" : 23.125
+  },
+  {
+    "expected" : 59,
+    "expectedScore" : 23.25,
+    "score00" : -0.21289062,
+    "score000" : -1.546875,
+    "step" : 317,
+    "winner" : 59,
+    "winnerScore" : 23.25
+  },
+  {
+    "expected" : 657,
+    "expectedScore" : 21.125,
+    "score00" : -0.2734375,
+    "score000" : -0.765625,
+    "step" : 318,
+    "winner" : 657,
+    "winnerScore" : 21.125
+  },
+  {
+    "expected" : 2518,
+    "expectedScore" : 23.5,
+    "score00" : 1.6640625,
+    "score000" : 4.90625,
+    "step" : 319,
+    "winner" : 2518,
+    "winnerScore" : 23.5
+  },
+  {
+    "expected" : 87786,
+    "expectedScore" : 23.75,
+    "score00" : -2.078125,
+    "score000" : -2.71875,
+    "step" : 320,
+    "winner" : 87786,
+    "winnerScore" : 23.75
+  },
+  {
+    "expected" : 447,
+    "expectedScore" : 21.25,
+    "score00" : -5.78125,
+    "score000" : -8.875,
+    "step" : 321,
+    "winner" : 447,
+    "winnerScore" : 21.25
+  },
+  {
+    "expected" : 29621,
+    "expectedScore" : 24.25,
+    "score00" : -0.921875,
+    "score000" : -2.453125,
+    "step" : 322,
+    "winner" : 29621,
+    "winnerScore" : 24.25
+  },
+  {
+    "expected" : 201,
+    "expectedScore" : 21.375,
+    "score00" : 0.53125,
+    "score000" : -0.85546875,
+    "step" : 323,
+    "winner" : 201,
+    "winnerScore" : 21.375
+  },
+  {
+    "expected" : 128828,
+    "expectedScore" : 20.625,
+    "score00" : 3.671875,
+    "score000" : 2.9375,
+    "step" : 324,
+    "winner" : 128828,
+    "winnerScore" : 20.625
+  },
+  {
+    "expected" : 2067,
+    "expectedScore" : 25.375,
+    "score00" : -3.015625,
+    "score000" : -1.2265625,
+    "step" : 325,
+    "winner" : 2067,
+    "winnerScore" : 25.375
+  },
+  {
+    "expected" : 61,
+    "expectedScore" : 40.75,
+    "score00" : -5.5625,
+    "score000" : -9.125,
+    "step" : 326,
+    "winner" : 61,
+    "winnerScore" : 40.75
+  },
+  {
+    "expected" : 23587,
+    "expectedScore" : 36.5,
+    "score00" : 21.875,
+    "score000" : 21.875,
+    "step" : 327,
+    "winner" : 23587,
+    "winnerScore" : 36.5
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 50.25,
+    "score00" : -7.0625,
+    "score000" : -13.3125,
+    "step" : 328,
+    "winner" : 14,
+    "winnerScore" : 50.25
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 63.25,
+    "score00" : -42,
+    "score000" : -48.25,
+    "step" : 329,
+    "winner" : 223,
+    "winnerScore" : 63.25
+  },
+  {
+    "expected" : 26602,
+    "expectedScore" : 34,
+    "score00" : 17.75,
+    "score000" : 17.125,
+    "step" : 330,
+    "winner" : 26602,
+    "winnerScore" : 34
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 42.75,
+    "score00" : -6.875,
+    "score000" : -15,
+    "step" : 331,
+    "winner" : 14,
+    "winnerScore" : 42.75
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 42.25,
+    "score00" : 0.46875,
+    "score000" : 0.83984375,
+    "step" : 332,
+    "winner" : 223,
+    "winnerScore" : 42.25
+  },
+  {
+    "expected" : 26760,
+    "expectedScore" : 28.5,
+    "score00" : 14.875,
+    "score000" : 15.3125,
+    "step" : 333,
+    "winner" : 26760,
+    "winnerScore" : 28.5
+  },
+  {
+    "expected" : 14,
+    "expectedScore" : 36.75,
+    "score00" : -4.53125,
+    "score000" : -9.375,
+    "step" : 334,
+    "winner" : 14,
+    "winnerScore" : 36.75
+  },
+  {
+    "expected" : 223,
+    "expectedScore" : 30.75,
+    "score00" : -8.125,
+    "score000" : -8.5625,
+    "step" : 335,
+    "winner" : 223,
+    "winnerScore" : 30.75
+  },
+  {
+    "expected" : 25168,
+    "expectedScore" : 29.5,
+    "score00" : 12.5625,
+    "score000" : 12.4375,
+    "step" : 336,
+    "winner" : 25168,
+    "winnerScore" : 29.5
+  },
+  {
+    "expected" : 63,
+    "expectedScore" : 34.75,
+    "score00" : -1.0078125,
+    "score000" : -5.71875,
+    "step" : 337,
+    "winner" : 63,
+    "winnerScore" : 34.75
+  },
+  {
+    "expected" : 128829,
+    "expectedScore" : 37,
+    "score00" : -9.875,
+    "score000" : -12.875,
+    "step" : 338,
+    "winner" : 128829,
+    "winnerScore" : 37
+  },
+  {
+    "expected" : 27,
+    "expectedScore" : 17,
+    "score00" : 5.4375,
+    "score000" : 6.8125,
+    "step" : 339,
+    "winner" : 27,
+    "winnerScore" : 17
+  },
+  {
+    "expected" : 16,
+    "expectedScore" : 19.625,
+    "score00" : -2.65625,
+    "score000" : -1.7890625,
+    "step" : 340,
+    "winner" : 16,
+    "winnerScore" : 19.625
+  },
+  {
+    "expected" : 504,
+    "expectedScore" : 20,
+    "score00" : 20,
+    "score000" : 20,
+    "step" : 341,
+    "winner" : 504,
+    "winnerScore" : 20
+  }
+]

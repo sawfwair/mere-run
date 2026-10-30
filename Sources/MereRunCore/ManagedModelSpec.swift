@@ -87,6 +87,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case codegenGGUF
     case deepseekV4FlashIMatrixGGUF
     case lightOnOCR
+    case unlimitedOCR
     case sam31
     case falconPerception
     case terramindFlood

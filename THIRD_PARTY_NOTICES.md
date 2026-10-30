@@ -1,5 +1,55 @@
 # Third-Party Notices
 
+## libjpeg-turbo
+
+`Sources/CMereRunJPEG/libjpeg/src/` contains the scalar decoder source closure
+of libjpeg-turbo 3.2.0, pinned to
+`c85e6b905bf237038faa936dab160ebfc5da0344` from
+<https://github.com/libjpeg-turbo/libjpeg-turbo>. The original source files are
+unmodified. Generated configuration, translation-unit selectors, and private
+symbol prefixes adapt the static build to SwiftPM. This software is based in
+part on the work of the Independent JPEG Group. The IJG, modified BSD, and zlib
+license terms are retained in `Sources/CMereRunJPEG/LICENSE.md` and
+`Sources/CMereRunJPEG/README.ijg`. Source hashes are in `upstream.json` alongside
+those files.
+
+## Unlimited-OCR-2 native runtime
+
+`Sources/MereRunUnlimitedOCRModel/` and `Sources/MereRunCore/UnlimitedOCR/`
+implement the architecture and inference equations from
+[`baidu/Unlimited-OCR-2`](https://huggingface.co/baidu/Unlimited-OCR-2/tree/c14071b549f4fcab10909f3c4acc6a2edb366947),
+revision `c14071b549f4fcab10909f3c4acc6a2edb366947`.
+The model card declares MIT licensing. The configuration fixture and checkpoint
+shape contract derive from that release. Model weights aren't bundled.
+
+The upstream `_sparse_base_impl.py` retains copyright 2023 DeepSeek-AI and
+The HuggingFace Inc. and the Apache License 2.0 notice. The decoder, RMSNorm,
+MoE routing, and page-position implementation follow those equations. The
+Apache License 2.0 text is included in this file's YuE2 notice.
+The vision implementation follows upstream `deepencoder.py`, including the
+SAM image encoder and CLIP blocks. RGB resizing uses the existing Pillow
+resampler credited in the Pillow notice in this file.
+
+MIT permission notice for the Unlimited-OCR portions:
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
 This repository ships a small number of vendored third-party runtime artifacts
 so a clean checkout can build and run the public `mere.run` package without an
 extra bootstrap step.

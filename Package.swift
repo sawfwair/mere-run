@@ -201,6 +201,7 @@ mereRunCoreDependencies.append("MereRunDecode")
 mereRunCoreDependencies.append("MereRunQwenModel")
 mereRunCoreDependencies.append("MereRunKolibriModel")
 mereRunCoreDependencies.append("MereRunFlintModel")
+mereRunCoreDependencies.append("MereRunUnlimitedOCRModel")
 mereRunCoreDependencies.append("MereRunNemotronBoltModel")
 mereRunCoreDependencies.append("MereRunGemmaModel")
 mereRunCoreDependencies.append("MereRunCoreMLModel")
@@ -224,11 +225,21 @@ if !isLinuxPackage {
 }
 
 if hasMediaIOTarget {
+  targets.append(
+    .target(
+      name: "CMereRunJPEG",
+      path: "Sources/CMereRunJPEG",
+      exclude: ["README.md", "LICENSE.md", "README.ijg", "upstream.json", "libjpeg"],
+      sources: ["decode.c", "compile"],
+      publicHeadersPath: "include",
+      cSettings: [.headerSearchPath("libjpeg"), .headerSearchPath("libjpeg/src")]
+    )
+  )
   products.append(.library(name: "MediaIO", targets: ["MediaIO"]))
   targets.append(
     .target(
       name: "MediaIO",
-      dependencies: [],
+      dependencies: ["CMereRunJPEG"],
       path: "Sources/MediaIO",
       exclude: [
         "README.md"
@@ -422,6 +433,26 @@ targets.append(
   )
 )
 
+targets.append(
+  .target(
+    name: "MereRunUnlimitedOCRModel",
+    dependencies: mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/MereRunUnlimitedOCRModel",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings,
+    linkerSettings: prebuiltMLXLinkerSettings
+  )
+)
+targets.append(
+  .testTarget(
+    name: "UnlimitedOCRRuntimeTests",
+    dependencies: ["MereRunUnlimitedOCRModel", "MereRunMLXTestSupport"] + mlxDependency("MLX") + mlxDependency("MLXFast"),
+    path: "Tests/UnlimitedOCRRuntimeTests",
+    exclude: ["Fixtures"],
+    swiftSettings: commonSwiftSettings,
+    linkerSettings: prebuiltMLXLinkerSettings
+  )
+)
 targets.append(
   .target(
     name: "MereRunFlintModel",
@@ -851,6 +882,7 @@ targets.append(
       "NemotronOmni/README.md",
       "LFM2/README.md",
       "LightOnOCR/README.md",
+      "UnlimitedOCR/README.md",
       "LTX/README.md",
       "LoRA/README.md",
       "MagentaRT2/README.md",

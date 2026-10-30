@@ -20,6 +20,11 @@ minus-one-to-one normalization. Clef uses multiplication by its processor's
 factor to retain reference rounding at BF16 boundaries; `rgbCHWFloat` keeps
 its existing division arithmetic for other callers.
 
+`decodeWithPillowJPEG` opts into the private, statically linked libjpeg-turbo
+decoder for 8-bit JPEG inputs. It matches Pillow's full-resolution RGB sample
+decoding, including chroma upsampling and CMYK conversion. Unlimited-OCR-2 uses
+this entry point; `decode` and non-JPEG formats retain their platform behavior.
+
 Linux users can override executable discovery with `MERERUN_FFMPEG` and
 `MERERUN_FFPROBE`.
 

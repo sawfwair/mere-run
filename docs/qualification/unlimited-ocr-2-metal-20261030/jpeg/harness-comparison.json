@@ -1,0 +1,215 @@
+{
+  "beforeImageIO": {
+    "nativeBlocks": 25,
+    "upstreamBlocks": 25,
+    "exactTextAndTypeMatches": 24,
+    "unambiguousCoordinatePairs": 17,
+    "duplicateBodyGroupsExcluded": [
+      {
+        "type": "text",
+        "body": "0.00",
+        "nativeCount": 2,
+        "upstreamCount": 2
+      },
+      {
+        "type": "text",
+        "body": "9.00",
+        "nativeCount": 4,
+        "upstreamCount": 3
+      },
+      {
+        "type": "text",
+        "body": "RM",
+        "nativeCount": 2,
+        "upstreamCount": 2
+      }
+    ],
+    "exactBoxesAmongUnambiguousPairs": 2,
+    "meanAbsoluteCoordinateDelta": 0.75,
+    "maximumAbsoluteCoordinateDelta": 6,
+    "nativeBlockTypes": {
+      "image": 1,
+      "text": 23,
+      "title<LEVEL1>": 1
+    },
+    "upstreamBlockTypes": {
+      "image": 1,
+      "text": 23,
+      "title<LEVEL1>": 1
+    },
+    "nativeOnly": [
+      {
+        "type": "text",
+        "body": "9.00"
+      }
+    ],
+    "upstreamOnly": [
+      {
+        "type": "text",
+        "body": "9.000"
+      }
+    ],
+    "nativeExactPrice9000": 0,
+    "upstreamExactPrice9000": 1
+  },
+  "nativeJPEG": {
+    "nativeBlocks": 25,
+    "upstreamBlocks": 25,
+    "exactTextAndTypeMatches": 24,
+    "unambiguousCoordinatePairs": 17,
+    "duplicateBodyGroupsExcluded": [
+      {
+        "type": "text",
+        "body": "0.00",
+        "nativeCount": 2,
+        "upstreamCount": 2
+      },
+      {
+        "type": "text",
+        "body": "9.00",
+        "nativeCount": 4,
+        "upstreamCount": 3
+      },
+      {
+        "type": "text",
+        "body": "RM",
+        "nativeCount": 2,
+        "upstreamCount": 2
+      }
+    ],
+    "exactBoxesAmongUnambiguousPairs": 10,
+    "meanAbsoluteCoordinateDelta": 0.4411764705882353,
+    "maximumAbsoluteCoordinateDelta": 6,
+    "nativeBlockTypes": {
+      "image": 1,
+      "text": 23,
+      "title<LEVEL1>": 1
+    },
+    "upstreamBlockTypes": {
+      "image": 1,
+      "text": 23,
+      "title<LEVEL1>": 1
+    },
+    "nativeOnly": [
+      {
+        "type": "text",
+        "body": "9.00"
+      }
+    ],
+    "upstreamOnly": [
+      {
+        "type": "text",
+        "body": "9.000"
+      }
+    ],
+    "nativeExactPrice9000": 0,
+    "upstreamExactPrice9000": 1
+  },
+  "pairedJPEG": {
+    "nativeBlocks": 25,
+    "upstreamBlocks": 25,
+    "exactTextAndTypeMatches": 24,
+    "unambiguousCoordinatePairs": 17,
+    "duplicateBodyGroupsExcluded": [
+      {
+        "type": "text",
+        "body": "0.00",
+        "nativeCount": 2,
+        "upstreamCount": 2
+      },
+      {
+        "type": "text",
+        "body": "9.00",
+        "nativeCount": 4,
+        "upstreamCount": 3
+      },
+      {
+        "type": "text",
+        "body": "RM",
+        "nativeCount": 2,
+        "upstreamCount": 2
+      }
+    ],
+    "exactBoxesAmongUnambiguousPairs": 10,
+    "meanAbsoluteCoordinateDelta": 0.4411764705882353,
+    "maximumAbsoluteCoordinateDelta": 6,
+    "nativeBlockTypes": {
+      "image": 1,
+      "text": 23,
+      "title<LEVEL1>": 1
+    },
+    "upstreamBlockTypes": {
+      "image": 1,
+      "text": 23,
+      "title<LEVEL1>": 1
+    },
+    "nativeOnly": [
+      {
+        "type": "text",
+        "body": "9.00"
+      }
+    ],
+    "upstreamOnly": [
+      {
+        "type": "text",
+        "body": "9.000"
+      }
+    ],
+    "nativeExactPrice9000": 0,
+    "upstreamExactPrice9000": 1
+  },
+  "pairedPNG": {
+    "nativeBlocks": 25,
+    "upstreamBlocks": 25,
+    "exactTextAndTypeMatches": 24,
+    "unambiguousCoordinatePairs": 17,
+    "duplicateBodyGroupsExcluded": [
+      {
+        "type": "text",
+        "body": "0.00",
+        "nativeCount": 2,
+        "upstreamCount": 2
+      },
+      {
+        "type": "text",
+        "body": "9.00",
+        "nativeCount": 4,
+        "upstreamCount": 3
+      },
+      {
+        "type": "text",
+        "body": "RM",
+        "nativeCount": 2,
+        "upstreamCount": 2
+      }
+    ],
+    "exactBoxesAmongUnambiguousPairs": 10,
+    "meanAbsoluteCoordinateDelta": 0.4411764705882353,
+    "maximumAbsoluteCoordinateDelta": 6,
+    "nativeBlockTypes": {
+      "image": 1,
+      "text": 23,
+      "title<LEVEL1>": 1
+    },
+    "upstreamBlockTypes": {
+      "image": 1,
+      "text": 23,
+      "title<LEVEL1>": 1
+    },
+    "nativeOnly": [
+      {
+        "type": "text",
+        "body": "9.00"
+      }
+    ],
+    "upstreamOnly": [
+      {
+        "type": "text",
+        "body": "9.000"
+      }
+    ],
+    "nativeExactPrice9000": 0,
+    "upstreamExactPrice9000": 1
+  },
+  "pairedOutputsIdentical": true
+}

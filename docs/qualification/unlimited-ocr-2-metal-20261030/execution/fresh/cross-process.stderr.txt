@@ -1,0 +1,11 @@
+Test Suite 'Selected tests' started at 2026-10-30 15:51:48.534.
+Test Suite 'MereRunCoreTests.xctest' started at 2026-10-30 15:51:48.535.
+Test Suite 'UnlimitedOCRCheckpointTests' started at 2026-10-30 15:51:48.535.
+Test Case '-[MereRunCoreTests.UnlimitedOCRCheckpointTests testReceiptMatchesPublicCLIOnMetal]' started.
+Test Case '-[MereRunCoreTests.UnlimitedOCRCheckpointTests testReceiptMatchesPublicCLIOnMetal]' passed (80.759 seconds).
+Test Suite 'UnlimitedOCRCheckpointTests' passed at 2026-10-30 15:53:09.294.
+	 Executed 1 test, with 0 failures (0 unexpected) in 80.759 (80.759) seconds
+Test Suite 'MereRunCoreTests.xctest' passed at 2026-10-30 15:53:09.294.
+	 Executed 1 test, with 0 failures (0 unexpected) in 80.759 (80.759) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:53:09.294.
+	 Executed 1 test, with 0 failures (0 unexpected) in 80.759 (80.760) seconds

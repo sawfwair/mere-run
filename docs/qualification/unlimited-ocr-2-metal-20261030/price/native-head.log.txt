@@ -1,0 +1,11 @@
+Test Suite 'Selected tests' started at 2026-10-30 16:14:56.767.
+Test Suite 'UnlimitedOCRRuntimeTests.xctest' started at 2026-10-30 16:14:56.783.
+Test Suite 'UnlimitedOCRPriceDiagnostics' started at 2026-10-30 16:14:56.783.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRPriceDiagnostics testIsolatedOutputProjection]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRPriceDiagnostics testIsolatedOutputProjection]' passed (0.091 seconds).
+Test Suite 'UnlimitedOCRPriceDiagnostics' passed at 2026-10-30 16:14:56.875.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.091 (0.092) seconds
+Test Suite 'UnlimitedOCRRuntimeTests.xctest' passed at 2026-10-30 16:14:56.875.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.091 (0.092) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:14:56.875.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.091 (0.108) seconds

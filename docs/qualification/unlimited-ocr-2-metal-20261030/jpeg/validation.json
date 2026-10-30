@@ -1,0 +1,53 @@
+{
+  "checks": [
+    {
+      "name": "repository-gate",
+      "exitCode": 0,
+      "logSHA256": "8be55a8ca74363d88cf45a1f79bd9a129e2146a5ff89bea68323aa4337fb33c5",
+      "logBytes": 1929183
+    },
+    {
+      "name": "docs-build",
+      "exitCode": 0,
+      "logSHA256": "1f086d4b85456165675d265334fe1cf8f033aa25c19af9ea18e20e6e18b4b881",
+      "logBytes": 625
+    },
+    {
+      "name": "codec-fixtures",
+      "exitCode": 0,
+      "logSHA256": "d51f4bd2732778d40a7cbd1a0c822d7a06bf2fc4b7839ce2a2ab52668b1d8b51",
+      "logBytes": 96609
+    },
+    {
+      "name": "sanitizers",
+      "exitCode": 0,
+      "logSHA256": "4e837481b22a0f02395f47c80914102a44a85e298f61fe76cfa4f3ef96648de6",
+      "logBytes": 55
+    },
+    {
+      "name": "strict-receipt-pixels",
+      "exitCode": 0,
+      "logSHA256": "44b62c2665124e43138267aba3880133ccada09ee70f9d5c4d171783f67dd419",
+      "logBytes": 971
+    },
+    {
+      "name": "harness-jpeg-png-pair",
+      "exitCode": 0,
+      "logSHA256": "88bcb29f9c58d68fab0bccff8b11db9d9946e224251d26fe703edb8a9ff4aa8d",
+      "logBytes": 1512
+    },
+    {
+      "name": "public-cli-receipts",
+      "exitCode": 0,
+      "logSHA256": "f9c4b5811822ec3b11f2888c7465143fa26b9f70a0b1b7c72d1f19aa83f8684d",
+      "logBytes": 59
+    },
+    {
+      "name": "original-receipt-spelling-anchors",
+      "exitCode": 1,
+      "logSHA256": "4b7f3a2bfe2de66a6770f720bea89a3bb2b8c2fb350c9e86856b2d9ebbad5e80",
+      "logBytes": 2217
+    }
+  ],
+  "knownFailure": "Two receipt MODELLING CLAY anchors fail, shared with upstream; no acceptance criteria changed."
+}

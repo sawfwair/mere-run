@@ -1,0 +1,170 @@
+[
+  {
+    "file": "Package.swift",
+    "sha256": "3774a856493c505299d61635920b206cccf81c425c9ddffd4e170da2ae4b4286"
+  },
+  {
+    "file": "Sources/MereRunCLI/Commands/VisionOCRCommand.swift",
+    "sha256": "c01412208c24c935d77d357d792f73ef1d00cb81777cacda7617887ea3f2c107"
+  },
+  {
+    "file": "Sources/MereRunCLI/Guides/handbook-unlimited-ocr-2.md",
+    "sha256": "ebe77d76825550f58e9abf204eaeb8793fa8137cb72d2249d827e1ca33930ea7"
+  },
+  {
+    "file": "Sources/MereRunCLI/Guides/model-guides.json",
+    "sha256": "cd736b6064c9202063a173314110465eb09d26d38d606c2e61ac3375a5d5e2f7"
+  },
+  {
+    "file": "Sources/MereRunCLI/Guides/vision-ocr.md",
+    "sha256": "7b7955b087070e2e724720ad6e92cea66430150efeab7e195182ec17f9858d6f"
+  },
+  {
+    "file": "Sources/MereRunCLI/Support/InstalledModelGateSupport.swift",
+    "sha256": "7168d005462b46e36eb9193d08861372593190ddaf10d958fe17b93c08ff9f15"
+  },
+  {
+    "file": "Sources/MereRunContract/CommandCapabilityCatalog+Vision.swift",
+    "sha256": "5a04ebc57b47219a3cc06f984176884512a5b7f42151c581cedd517d381443a7"
+  },
+  {
+    "file": "Sources/MereRunContract/CommandCapabilityCatalog+VisionRouting.swift",
+    "sha256": "a1eefc7d75fa5e675dc7f42a62d78a32585bb7c2903c84c13674971422eb88df"
+  },
+  {
+    "file": "Sources/MereRunCore/ManagedModelCatalog+Vision.swift",
+    "sha256": "a6f379ec18517603921c2509ced27a9cf97f6080baecfaf0bb87bacec448aa04"
+  },
+  {
+    "file": "Sources/MereRunCore/ManagedModelSpec+Validation.swift",
+    "sha256": "6cb2e4a7bbde7b038a1ba23239613ca6c66de0dda69efdeeb4c5ddceeb0d96f5"
+  },
+  {
+    "file": "Sources/MereRunCore/ManagedModelSpec.swift",
+    "sha256": "5f84f513a87d9784d9a9137b6d70dfd5186a55475c916566aa974bd262d7bead"
+  },
+  {
+    "file": "Sources/MereRunCore/ManagedModelSupport.swift",
+    "sha256": "8fd2d0ff49826cf90ebd79ad7b469c27ffaca3e600bf5368915207e1948cadbb"
+  },
+  {
+    "file": "Sources/MereRunCore/MereRunModelManifest+Templates.swift",
+    "sha256": "058021b4af41144a96d0ad58796aec7c6143a24908205e3c4a485293dde4a66a"
+  },
+  {
+    "file": "Sources/MereRunCore/MereRunModelValidator.swift",
+    "sha256": "f09e41fea00f32322107d2b0e608e28c86cde480a61c4ce9b17751cd91863f54"
+  },
+  {
+    "file": "Sources/MereRunCore/Quantization/QuantizedModelManifestWriter.swift",
+    "sha256": "119cf2b26b06c56877a6928124935a52c65790cba59f36acd84be94f185a8f89"
+  },
+  {
+    "file": "Sources/MereRunCore/UnlimitedOCR/README.md",
+    "sha256": "0ab15708cbb38b6391dbc3ce5fee074929e95fa2ebbcf1e57ef65503cf8cf743"
+  },
+  {
+    "file": "Sources/MereRunCore/UnlimitedOCR/UnlimitedOCRGenerator.swift",
+    "sha256": "7db6e54cce1f093ca90cb248770ccd424860761fed6b89a63386a76675d9bc4c"
+  },
+  {
+    "file": "Sources/MereRunCore/UnlimitedOCR/UnlimitedOCRImage.swift",
+    "sha256": "6e0e95dbcf9282e5cbaf443b3dcfa2cf0d0a64a391856bb4d260fdc38e225c54"
+  },
+  {
+    "file": "Sources/MereRunCore/UnlimitedOCR/UnlimitedOCRResources.swift",
+    "sha256": "0caab1cbdab0fdb277d7b8f4b4378b6d98889c1087040600c612418234cd1631"
+  },
+  {
+    "file": "Sources/MereRunDecode/NoRepeatNGram.swift",
+    "sha256": "fb489edf15c1ba87454411e6116697394f0ae46ef298f40d2eaef5ad591a142f"
+  },
+  {
+    "file": "Sources/MereRunDecode/README.md",
+    "sha256": "18fb6ca44c787628d0d21f6db4620a41d070369071519bb166fe068d968ec076"
+  },
+  {
+    "file": "Sources/MereRunModelKit/ManagedModelID.swift",
+    "sha256": "999bb95d569a9ab8a3f2c501180afa6480017e07f784759157aaaa26c634874e"
+  },
+  {
+    "file": "Sources/MereRunModelKit/MereRunModelManifest.swift",
+    "sha256": "943f3d6d85c5a2ad0ac7f91634f2575a16689f426eaa20c7a3a6291724b48b54"
+  },
+  {
+    "file": "Sources/MereRunUnlimitedOCRModel/README.md",
+    "sha256": "8a8d9b3a908e3f72e13fe20151cb4087917a304e4ac3045dadacd789411e1df3"
+  },
+  {
+    "file": "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRAttention.swift",
+    "sha256": "b4e30389650072aea96ef40b7bc228a732f04e2d038b881d36a2640e330b5eaa"
+  },
+  {
+    "file": "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRCheckpoint.swift",
+    "sha256": "8ee3df35ca195ce39dcb65f69fc1dfb6d431265aec9f0ddb62fdb87fe4a4ea82"
+  },
+  {
+    "file": "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRConfiguration.swift",
+    "sha256": "6616d9886d7111ece62c4488d48d7e90ddc0f6167daa260920c3f22e52dbe9f6"
+  },
+  {
+    "file": "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRDecoder.swift",
+    "sha256": "4d5cb2b60e09ec657db238a83d7fa263255684f6859bd575c692328835d5aa07"
+  },
+  {
+    "file": "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRMath.swift",
+    "sha256": "d6d927a3d201cb95e2cb497d7b1031423d8db4060f5a7fd03371bf7732a4ebc7"
+  },
+  {
+    "file": "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRVision.swift",
+    "sha256": "973d9198d661a1adacbde41ddff6e54197104608fdb543f7c34415295c90de29"
+  },
+  {
+    "file": "Tests/DecodeRuntimeTests/NoRepeatNGramTests.swift",
+    "sha256": "9e4355cae6bbca23adfa057f955b70f103799eb43b6a2187ce59012f19937e22"
+  },
+  {
+    "file": "Tests/MereRunCLITests/AudioSFXOCRCapabilityGateTests.swift",
+    "sha256": "38b01678a9faa3f0070caf030581de83a3ffc862aa972ac95e30dc44aaf7287b"
+  },
+  {
+    "file": "Tests/MereRunCLITests/VisionOCRCommandParsingTests.swift",
+    "sha256": "ba1b9fb0588bd699ae49f77efa5c57d0ea8842b7122de8498ecd70057f06d307"
+  },
+  {
+    "file": "Tests/MereRunCoreTests/UnlimitedOCRCheckpointTests.swift",
+    "sha256": "a51416eadb7cda6c0d092b8daa2b2351c88063e2b121351484d13de82cbb7af1"
+  },
+  {
+    "file": "Tests/MereRunCoreTests/UnlimitedOCRTests.swift",
+    "sha256": "1138672f24576fb1088cbc0283aa29a5943aac8040230bff7066fbb3998fbcb0"
+  },
+  {
+    "file": "Tests/UnlimitedOCRRuntimeTests/Fixtures/README.md",
+    "sha256": "e764bab1ac845e2481d042438b49d3266f0513784d2756c83b79d02a324660b0"
+  },
+  {
+    "file": "Tests/UnlimitedOCRRuntimeTests/Fixtures/attention.json",
+    "sha256": "52e9ef993eafdd6aba98b56bac9caa3d05d1138982b13af42537c8437d311ec5"
+  },
+  {
+    "file": "Tests/UnlimitedOCRRuntimeTests/Fixtures/config.json",
+    "sha256": "607d130a70d5af5a35329aa237acd68651f45504c62cc7ced981066f4e781126"
+  },
+  {
+    "file": "Tests/UnlimitedOCRRuntimeTests/Fixtures/decoder.json",
+    "sha256": "73dfe789cb33ea57da03cc5524503b7d7a7bc1ddccc89b03e847a75e5ed29f88"
+  },
+  {
+    "file": "Tests/UnlimitedOCRRuntimeTests/Fixtures/generate_reference.py",
+    "sha256": "92bce860c95da63e3498ffcd9db6169eb496f208936d1090406d5d966f1afa1e"
+  },
+  {
+    "file": "Tests/UnlimitedOCRRuntimeTests/UnlimitedOCRRuntimeTests.swift",
+    "sha256": "384be647c680174bdb63826c87b68153c2b99dc8be079059e381ffe3a4b97008"
+  },
+  {
+    "file": "scripts/package-policy.json",
+    "sha256": "a4c068b46518947bf4d6f07c1224feec548d786bce91cbb3678d7fb47f63bdf7"
+  }
+]

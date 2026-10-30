@@ -7,6 +7,7 @@ MLXRandom. It does not load models or tokenize prompts.
 - `GenerationConfig.swift` defines the sampling policy.
 - `Sampling.swift` selects tokens and constructs exact policy distributions.
 - `SamplingPenalties.swift` applies repetition, presence, and frequency penalties.
+- `NoRepeatNGram.swift` computes generated-token n-gram bans within an explicit window.
 - `SamplingLogprobs.swift` measures raw and policy distributions through opt-in
   host readbacks. `ChatLogprobTypes.swift` defines the diagnostic payloads.
 - `AutoregressiveDecodeTypes.swift` defines loop inputs and results.

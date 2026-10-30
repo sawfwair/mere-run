@@ -1,0 +1,12 @@
+Test Suite 'Selected tests' started at 2026-10-30 15:04:05.426.
+Test Suite 'MereRunCoreTests.xctest' started at 2026-10-30 15:04:05.427.
+Test Suite 'UnlimitedOCRImageParityTests' started at 2026-10-30 15:04:05.427.
+Test Case '-[MereRunCoreTests.UnlimitedOCRImageParityTests testDecodedAndResizedPixelsAgainstUpstream]' started.
+[parity] decoded RGB: max=0.0, mean=0.0; normalized pixels: max=0.0, mean=0.0
+Test Case '-[MereRunCoreTests.UnlimitedOCRImageParityTests testDecodedAndResizedPixelsAgainstUpstream]' passed (2.812 seconds).
+Test Suite 'UnlimitedOCRImageParityTests' passed at 2026-10-30 15:04:08.239.
+	 Executed 1 test, with 0 failures (0 unexpected) in 2.812 (2.812) seconds
+Test Suite 'MereRunCoreTests.xctest' passed at 2026-10-30 15:04:08.239.
+	 Executed 1 test, with 0 failures (0 unexpected) in 2.812 (2.812) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:04:08.239.
+	 Executed 1 test, with 0 failures (0 unexpected) in 2.812 (2.813) seconds

@@ -1,0 +1,243 @@
+[
+  {
+    "caseID": "receipt-base",
+    "before": {
+      "nativeBlocks": 25,
+      "upstreamBlocks": 25,
+      "exactTextAndTypeMatches": 24,
+      "unambiguousCoordinatePairs": 17,
+      "duplicateBodyGroupsExcluded": [
+        {
+          "type": "text",
+          "body": "0.00",
+          "nativeCount": 2,
+          "upstreamCount": 2
+        },
+        {
+          "type": "text",
+          "body": "9.00",
+          "nativeCount": 4,
+          "upstreamCount": 3
+        },
+        {
+          "type": "text",
+          "body": "RM",
+          "nativeCount": 2,
+          "upstreamCount": 2
+        }
+      ],
+      "exactBoxesAmongUnambiguousPairs": 4,
+      "meanAbsoluteCoordinateDelta": 0.6323529411764706,
+      "maximumAbsoluteCoordinateDelta": 6,
+      "nativeBlockTypes": {
+        "image": 1,
+        "text": 23,
+        "title<LEVEL1>": 1
+      },
+      "upstreamBlockTypes": {
+        "image": 1,
+        "text": 23,
+        "title<LEVEL1>": 1
+      },
+      "nativeOnly": [
+        {
+          "type": "text",
+          "body": "9.00"
+        }
+      ],
+      "upstreamOnly": [
+        {
+          "type": "text",
+          "body": "9.000"
+        }
+      ],
+      "nativeExactPrice9000": 0,
+      "upstreamExactPrice9000": 1
+    },
+    "after": {
+      "nativeBlocks": 25,
+      "upstreamBlocks": 25,
+      "exactTextAndTypeMatches": 24,
+      "unambiguousCoordinatePairs": 17,
+      "duplicateBodyGroupsExcluded": [
+        {
+          "type": "text",
+          "body": "0.00",
+          "nativeCount": 2,
+          "upstreamCount": 2
+        },
+        {
+          "type": "text",
+          "body": "9.00",
+          "nativeCount": 4,
+          "upstreamCount": 3
+        },
+        {
+          "type": "text",
+          "body": "RM",
+          "nativeCount": 2,
+          "upstreamCount": 2
+        }
+      ],
+      "exactBoxesAmongUnambiguousPairs": 2,
+      "meanAbsoluteCoordinateDelta": 0.75,
+      "maximumAbsoluteCoordinateDelta": 6,
+      "nativeBlockTypes": {
+        "image": 1,
+        "text": 23,
+        "title<LEVEL1>": 1
+      },
+      "upstreamBlockTypes": {
+        "image": 1,
+        "text": 23,
+        "title<LEVEL1>": 1
+      },
+      "nativeOnly": [
+        {
+          "type": "text",
+          "body": "9.00"
+        }
+      ],
+      "upstreamOnly": [
+        {
+          "type": "text",
+          "body": "9.000"
+        }
+      ],
+      "nativeExactPrice9000": 0,
+      "upstreamExactPrice9000": 1
+    },
+    "referenceNoRepeatSize": 0,
+    "nativeNoRepeatSize": 35,
+    "referenceChosenTokensBannedBy35TokenConstraint": []
+  },
+  {
+    "caseID": "w9-form-base",
+    "before": {
+      "nativeBlocks": 28,
+      "upstreamBlocks": 29,
+      "exactTextAndTypeMatches": 24,
+      "unambiguousCoordinatePairs": 24,
+      "duplicateBodyGroupsExcluded": [],
+      "exactBoxesAmongUnambiguousPairs": 8,
+      "meanAbsoluteCoordinateDelta": 0.3333333333333333,
+      "maximumAbsoluteCoordinateDelta": 4,
+      "nativeBlockTypes": {
+        "header": 1,
+        "title": 6,
+        "text": 16,
+        "table": 3,
+        "footer": 2
+      },
+      "upstreamBlockTypes": {
+        "header": 1,
+        "title": 6,
+        "text": 18,
+        "table": 2,
+        "footer": 2
+      },
+      "nativeOnly": [
+        {
+          "type": "table",
+          "body": "<table><tr><td rowspan=\"8\">See Section 4 for the purpose of Form W-9.</td><td colspan=\"2\">1 Name of entity/individual. An entry is required. (For a sole proprietor or disregarded entity, enter the owner&#x27;s name on line 1, and enter the business/disregarded entity&#x27;s name on line 2.)</td></tr><tr><td colspan=\"2\">2 Business name/disregarded entity name, if different from above.</td></tr><tr>"
+        },
+        {
+          "type": "table",
+          "body": "<table><tr><td>Sign Here</td><td>Signature of U.S. person</td><td>Date</td></tr></table>"
+        },
+        {
+          "type": "text",
+          "body": "Line 3a has been modified to clarify how a disregarded entity completes this line. An LLC that is a disregarded entity should check the appropriate box for the tax classification of its owner. Otherwise, it should check the \"LLC\" box and enter its appropriate tax classification."
+        },
+        {
+          "type": "text",
+          "body": "New line 3b has been added to this form. A flow-through entity is required to complete this line to indicate that it has direct or indirect foreign partners, owners, or beneficiaries when it provides the Form W-9 to another flow-through entity in which it has an ownership interest. This change is intended to provide a flow-through entity with information regarding the status of its indirect foreig"
+        }
+      ],
+      "upstreamOnly": [
+        {
+          "type": "table",
+          "body": "<table><tr><td rowspan=\"7\">See Section 4 for the purpose of Form W-9.</td><td colspan=\"2\">1 Name of entity/individual. An entry is required. (For a sole proprietor or disregarded entity, enter the owner&#x27;s name on line 1, and enter the business/disregarded entity&#x27;s name on line 2.)</td></tr><tr><td colspan=\"2\">2 Business name/disregarded entity name, if different from above.</td></tr><tr>"
+        },
+        {
+          "type": "text",
+          "body": "Date"
+        },
+        {
+          "type": "text",
+          "body": "Line 3a has been modified to clarify how a disregarded entity completes this line. An LLC that is a disregarded entity should check the appropriate box for the tax classification of its owner. Otherwise, it should check the \"LLC\" box and enter its appropriate tax classification. New line 3b has been added to this form. A flow-through entity is required to complete this line to indicate that it has"
+        },
+        {
+          "type": "text",
+          "body": "Sign Here"
+        },
+        {
+          "type": "text",
+          "body": "Signature of U.S. person"
+        }
+      ],
+      "nativeExactPrice9000": 0,
+      "upstreamExactPrice9000": 0
+    },
+    "after": {
+      "nativeBlocks": 28,
+      "upstreamBlocks": 29,
+      "exactTextAndTypeMatches": 25,
+      "unambiguousCoordinatePairs": 25,
+      "duplicateBodyGroupsExcluded": [],
+      "exactBoxesAmongUnambiguousPairs": 10,
+      "meanAbsoluteCoordinateDelta": 0.21,
+      "maximumAbsoluteCoordinateDelta": 3,
+      "nativeBlockTypes": {
+        "header": 1,
+        "title": 6,
+        "text": 17,
+        "table": 2,
+        "footer": 2
+      },
+      "upstreamBlockTypes": {
+        "header": 1,
+        "title": 6,
+        "text": 18,
+        "table": 2,
+        "footer": 2
+      },
+      "nativeOnly": [
+        {
+          "type": "table",
+          "body": "<table><tr><td rowspan=\"8\">See Section 4 for the purpose of Form W-9.</td><td colspan=\"2\">1 Name of entity/individual. An entry is required. (For a sole proprietor or disregarded entity, enter the owner&#x27;s name on line 1, and enter the business/disregarded entity&#x27;s name on line 2.)</td></tr><tr><td colspan=\"2\">2 Business name/disregarded entity name, if different from above.</td></tr><tr>"
+        },
+        {
+          "type": "text",
+          "body": "Line 3a has been modified to clarify how a disregarded entity completes this line. An LLC that is a disregarded entity should check the appropriate box for the tax classification of its owner. Otherwise, it should check the \"LLC\" box and enter its appropriate tax classification. New line 3b has been added to this form. A flow-through entity is required to complete this line to indicate that it has"
+        },
+        {
+          "type": "text",
+          "body": "Sign Here Signature of U.S. person"
+        }
+      ],
+      "upstreamOnly": [
+        {
+          "type": "table",
+          "body": "<table><tr><td rowspan=\"7\">See Section 4 for the purpose of Form W-9.</td><td colspan=\"2\">1 Name of entity/individual. An entry is required. (For a sole proprietor or disregarded entity, enter the owner&#x27;s name on line 1, and enter the business/disregarded entity&#x27;s name on line 2.)</td></tr><tr><td colspan=\"2\">2 Business name/disregarded entity name, if different from above.</td></tr><tr>"
+        },
+        {
+          "type": "text",
+          "body": "Line 3a has been modified to clarify how a disregarded entity completes this line. An LLC that is a disregarded entity should check the appropriate box for the tax classification of its owner. Otherwise, it should check the \"LLC\" box and enter its appropriate tax classification. New line 3b has been added to this form. A flow-through entity is required to complete this line to indicate that it has"
+        },
+        {
+          "type": "text",
+          "body": "Sign Here"
+        },
+        {
+          "type": "text",
+          "body": "Signature of U.S. person"
+        }
+      ],
+      "nativeExactPrice9000": 0,
+      "upstreamExactPrice9000": 0
+    },
+    "referenceNoRepeatSize": 35,
+    "nativeNoRepeatSize": 35
+  }
+]

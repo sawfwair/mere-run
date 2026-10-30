@@ -15,6 +15,21 @@ enum OCRBackend: String, ExpressibleByArgument, CaseIterable {
     case lighton
     case glm
     case infinity
+    case unlimited
+}
+
+enum UnlimitedOCRCrop: String, ExpressibleByArgument, CaseIterable {
+    case auto
+    case base
+    case tiles
+
+    var crop: Bool? {
+        switch self {
+        case .auto: nil
+        case .base: false
+        case .tiles: true
+        }
+    }
 }
 
 /// What one `vision ocr` command line runs.
@@ -58,7 +73,7 @@ enum InfinityParserOutputFormat: String, ExpressibleByArgument, CaseIterable {
 struct VisionOCR: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "ocr",
-        abstract: "Extract text from images using LightOnOCR, GLM-OCR, or Infinity-Parser2.",
+        abstract: "Extract text from images using LightOnOCR, GLM-OCR, Infinity-Parser2, or Unlimited-OCR-2.",
         discussion: """
         Performs OCR on one or more images and outputs the extracted text.
 
@@ -74,14 +89,31 @@ struct VisionOCR: AsyncParsableCommand {
         evals that can tolerate substantially higher memory use. Use
         --infinity-runtime external only when comparing against the upstream
         `infinity_parser2` Python CLI or an already-started vLLM server.
+
+        Unlimited-OCR-2 runs natively and treats all image arguments as one
+        document in page order. Install vision-ocr-unlimited-2 first, then use
+        --backend unlimited. Auto cropping uses tiles for a single page and a
+        global view per page for multiple pages. Output retains <PAGE> markers.
         """
     )
 
     @Argument(help: "One or more image file paths.")
     var images: [String] = []
 
-    @Option(name: [.customShort("b"), .long], help: "OCR backend: lighton | glm | infinity (default: lighton).")
+    @Option(name: [.customShort("b"), .long], help: "OCR backend: lighton | glm | infinity | unlimited (default: lighton).")
     var backend: OCRBackend = .lighton
+
+    @Option(name: .long, help: "Unlimited-OCR-2 managed model id or original BF16 checkpoint directory.")
+    var unlimitedModel: String = UnlimitedOCRResources.modelID
+
+    @Option(name: .long, help: "Unlimited-OCR-2 image views: auto | base | tiles.")
+    var unlimitedCrop: UnlimitedOCRCrop = .auto
+
+    @Option(name: .long, help: "Unlimited-OCR-2 no-repeat n-gram size; 0 disables it (upstream serving default: 35).")
+    var unlimitedNoRepeatNgramSize: Int = 35
+
+    @Option(name: .long, help: "Unlimited-OCR-2 generated-token n-gram window; defaults to 128 for one page or 1024 for multiple pages.")
+    var unlimitedNgramWindow: Int?
 
     @Flag(name: [.long], help: "Compare LightOn against the selected secondary backend; defaults to GLM when --backend lighton.")
     var compare: Bool = false
@@ -150,6 +182,15 @@ struct VisionOCR: AsyncParsableCommand {
     var quiet: Bool = false
 
     func validate() throws {
+        guard unlimitedNoRepeatNgramSize >= 0, unlimitedNgramWindow.map({ $0 > 0 }) ?? true else {
+            throw ValidationError("--unlimited-no-repeat-ngram-size must be nonnegative and --unlimited-ngram-window must be positive.")
+        }
+        guard maxTokens > 0, temperature.isFinite, temperature >= 0 else {
+            throw ValidationError("--max-tokens must be positive and --temperature must be finite and nonnegative.")
+        }
+        if backend == .unlimited && compare {
+            throw ValidationError("--backend unlimited parses one ordered document and doesn't support --compare.")
+        }
         guard infinityBatchSize > 0 else {
             throw ValidationError("--infinity-batch-size must be greater than zero.")
         }
@@ -185,6 +226,11 @@ struct VisionOCR: AsyncParsableCommand {
 
         guard !images.isEmpty else {
             throw ValidationError("Provide at least one image path.")
+        }
+
+        if backend == .unlimited {
+            try await runUnlimited()
+            return
         }
 
         let plan = plan
@@ -304,6 +350,36 @@ struct VisionOCR: AsyncParsableCommand {
             return NamedOCRResult(name: "GLM-OCR", text: result.text, json: result.json)
         case .infinity:
             return try await infinityResult(imageURL: imageURL, externalCLI: infinity)
+        case .unlimited:
+            throw ValidationError("Unlimited-OCR-2 requires the document input route.")
+        }
+    }
+
+    private func runUnlimited() async throws {
+        let urls = images.map { URL(fileURLWithPath: $0).standardizedFileURL }
+        for url in urls where !FileManager.default.fileExists(atPath: url.path) {
+            throw ValidationError("Image not found: \(url.path)")
+        }
+        let resolved = try await ManagedModelResolver.resolveForRuntime(
+            requestedModel: unlimitedModel, defaultModelID: UnlimitedOCRResources.modelID
+        )
+        let result = try await UnlimitedOCRGenerator().ocr(
+            imageURLs: urls, modelPath: resolved.url.path, maxTokens: maxTokens,
+            temperature: temperature, crop: unlimitedCrop.crop,
+            noRepeatNgramSize: unlimitedNoRepeatNgramSize, ngramWindow: unlimitedNgramWindow
+        )
+        if let outputDir {
+            let directory = URL(fileURLWithPath: outputDir).standardizedFileURL
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let name = urls.count == 1 ? urls[0].deletingPathExtension().lastPathComponent : "document"
+            let output = directory.appendingPathComponent(name + ".txt")
+            try (result.text + "\n").write(to: output, atomically: true, encoding: .utf8)
+            if !quiet { CLIStderr.write("Saved \(output.path)") }
+        } else {
+            print(result.text)
+        }
+        if result.reachedTokenLimit {
+            CLIStderr.write("Unlimited-OCR-2 reached --max-tokens; output can be incomplete (\(result.pagesGenerated)/\(urls.count) page markers).")
         }
     }
 

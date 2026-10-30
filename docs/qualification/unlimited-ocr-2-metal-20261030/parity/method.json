@@ -1,0 +1,26 @@
+{
+  "revision": "c14071b549f4fcab10909f3c4acc6a2edb366947",
+  "prefill": "BF16 Q/K/V and mask for original BF16 checkpoint",
+  "decode": "FP32 Q/K/V and mask, then restore BF16 output",
+  "vision": "BF16 SDPA; FP32 intrinsic activations with explicit upstream rounding boundaries",
+  "sourceSHA256": {
+    "Package.swift": "2b9ac375ce7a470e7ab7973ce1f4573bafedaa6453377c7824f7248d75af1607",
+    "Sources/MereRunCore/UnlimitedOCR/UnlimitedOCRImage.swift": "05f09edfa4931018c70267c1299e7ffc3f8268ce00a40af487bf4563a6a997d5",
+    "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRAttention.swift": "f4391731ffef8225968548a69506a3bc2e1717e4109511bb72bdc92af62d7af2",
+    "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRCheckpoint.swift": "8ee3df35ca195ce39dcb65f69fc1dfb6d431265aec9f0ddb62fdb87fe4a4ea82",
+    "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRConfiguration.swift": "6616d9886d7111ece62c4488d48d7e90ddc0f6167daa260920c3f22e52dbe9f6",
+    "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRDecoder.swift": "0a0b05fa95691f821d84864cd33324419c92113fa27d0b896c150fda507b41bc",
+    "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRMath.swift": "e0bed087901dd5d5c5503f7e87dabbeffb8b4e8e6352f7dc221a717cd5adac36",
+    "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRVision.swift": "be6a3bd79003bcccd6811118a4d01ba0567aa6bab2b1436e50bd6fd7ec19bfc4",
+    "Tests/MereRunCoreTests/UnlimitedOCRImageParityTests.swift": "31f3302d59cf0c82414d4118338725906d76cf7d17025c7be5efb63f7fbd3ac6",
+    "Tests/MereRunCoreTests/UnlimitedOCRTests.swift": "d8cc391c6c887c2a12cafe9a6c6db6af1ac655f5416c33aa91541581c1699077",
+    "Tests/UnlimitedOCRRuntimeTests/Fixtures/precision.json": "adbc7a4f157b93801c70467257a4b695db3c714051100a2b73821d9ae6bfb92f",
+    "Tests/UnlimitedOCRRuntimeTests/UnlimitedOCRParityTests.swift": "42662b2fb2bc292fc632cc87a9ff965f907bd9a22b700fe93ee136eda41a99d1",
+    "Tests/UnlimitedOCRRuntimeTests/UnlimitedOCRRuntimeTests.swift": "e4db18ef2bb1c615c8d37a62300b7a0d88a09d68b802e62ef04e07e233843b84",
+    "scripts/package-policy.json": "aab2de29c5942c47aa140b8e517f881fc145ec53c0df4f70049cc6c06f30eb23"
+  },
+  "captureSHA256": "5d5c1867955ff38a5bfc956abf563b444809465245f3bdf59b25f1084fa7d7fa",
+  "standardGate": "passed",
+  "gpuNumericalTests": 17,
+  "gpuNumericalTestsPassed": true
+}

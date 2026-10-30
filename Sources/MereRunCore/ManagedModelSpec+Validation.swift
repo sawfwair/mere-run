@@ -316,6 +316,8 @@ public extension ManagedModelSpec {
             return Self.missingDeepseekV4FlashIMatrixPaths(in: rootURL, fileManager: fileManager)
         case .lightOnOCR:
             return Self.missingLightOnOCRPaths(in: rootURL, fileManager: fileManager)
+        case .unlimitedOCR:
+            return UnlimitedOCRResources.missingFiles(root: rootURL, fileManager: fileManager)
         case .aceStep:
             return Self.missingACEStepPaths(modelID: id, in: rootURL, fileManager: fileManager)
         case .aceStepLM:

@@ -1,0 +1,23 @@
+[
+  {
+    "profile": "previousCLI",
+    "sha256": "1802f1eba2f0997d4eb0e538b64b261dd21e7fd7f3847b955361f272f4bbf69f",
+    "bytes": 4716496,
+    "actualMacOSTarget": "14.0",
+    "stamp": "mlx-core-version: 0.32.4\nmlx-core-revision: e3214809fa5ebd5aac5d6783e8101513b3d9a774\nmlx-upstream-tag: v0.32.4\nmlx-upstream-revision: 36969c094354086e15d2a327a9c50feb20b9cf11\nmlx-swift-version: unknown\nmlx-swift-revision: 1e077ba968b291e0237d1ab522b271d433fa1713\nkernel-sources-sha256: fa09ca655de6f70381043762d7d02bc20e9debe49996904624f5dae3d0f40b35\nmetal-language-version: 3.2\nmacos-deployment-target: 15.0\nbuilt-at: 2026-10-28T15:22:55Z\nmetal-compiler: Apple metal version 32023.921 (metalfe-32023.921.6)\n"
+  },
+  {
+    "profile": "repository",
+    "sha256": "64431ed485178f63a8dc870c8231ba021090c3356218c607a726821a7b6abb82",
+    "bytes": 3644520,
+    "actualMacOSTarget": "15.0",
+    "stamp": "mlx-core-version: 0.32.4\nmlx-core-revision: e3214809fa5ebd5aac5d6783e8101513b3d9a774\nmlx-upstream-tag: v0.32.4\nmlx-upstream-revision: 36969c094354086e15d2a327a9c50feb20b9cf11\nmlx-swift-version: unknown\nmlx-swift-revision: 1e077ba968b291e0237d1ab522b271d433fa1713\nkernel-sources-sha256: fa09ca655de6f70381043762d7d02bc20e9debe49996904624f5dae3d0f40b35\nmetal-language-version: 3.2\nmacos-deployment-target: 15.0\nbuilt-at: 2026-10-28T15:22:55Z\nmetal-compiler: Apple metal version 32023.921 (metalfe-32023.921.6)\n"
+  },
+  {
+    "profile": "freshIEEE",
+    "sha256": "f2ad3eaf3f4f6ed8a9fef6fbd9f362ed8108063ecfcd958e88e8195cc335350a",
+    "bytes": 3644520,
+    "actualMacOSTarget": "15.0",
+    "stamp": "mlx-core-version: 0.32.4\nmlx-core-revision: e3214809fa5ebd5aac5d6783e8101513b3d9a774\nmlx-upstream-tag: v0.32.4\nmlx-upstream-revision: 36969c094354086e15d2a327a9c50feb20b9cf11\nmlx-swift-version: unknown\nmlx-swift-revision: 1e077ba968b291e0237d1ab522b271d433fa1713\nkernel-sources-sha256: fa09ca655de6f70381043762d7d02bc20e9debe49996904624f5dae3d0f40b35\nmetal-language-version: 3.2\nmacos-deployment-target: 15.0\nmetallib-sha256: f2ad3eaf3f4f6ed8a9fef6fbd9f362ed8108063ecfcd958e88e8195cc335350a\nbuilt-at: 2026-10-30T18:44:43Z\nmetal-compiler: Apple metal version 32023.922 (metalfe-32023.922.4)\n"
+  }
+]

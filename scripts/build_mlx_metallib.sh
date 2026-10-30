@@ -43,6 +43,9 @@ core_kernel_dir="$core_checkout/mlx/backend/metal/kernels"
 version_header="$checkout/Source/Cmlx/mlx/mlx/version.h"
 resolved="$repo_root/Package.resolved"
 stamp_name="default.metallib.version"
+# The committed artifact predates the binary digest field. Bind legacy stamps
+# to that exact artifact instead of accepting arbitrary replacement binaries.
+legacy_metallib_sha256="64431ed485178f63a8dc870c8231ba021090c3356218c607a726821a7b6abb82"
 # Match Package.swift and the macOS app's LSMinimumSystemVersion. Xcode 26
 # defaults to Metal 4 and the host SDK's deployment target without these pins.
 metal_language_version="3.2"
@@ -251,6 +254,13 @@ if [[ "$mode" == "verify" ]]; then
     echo "STALE: no default.metallib next to $sidecar" >&2
     status=1
   else
+    stamped_binary_hash="$(stamp_field "metallib-sha256" "$sidecar")"
+    expected_binary_hash="${stamped_binary_hash:-$legacy_metallib_sha256}"
+    actual_binary_hash="$(shasum -a 256 "$metallib" | cut -d' ' -f1)"
+    if [[ "$actual_binary_hash" != "$expected_binary_hash" ]]; then
+      echo "STALE: metallib binary hash $actual_binary_hash != stamped $expected_binary_hash" >&2
+      status=1
+    fi
     for symbol in "${required_aot_kernel_symbols[@]}"; do
       if ! xcrun metal-nm "$metallib" \
         | awk -v required="$symbol" '$2 == "T" && $3 == required { found = 1 } END { exit(found ? 0 : 1) }'; then
@@ -310,6 +320,7 @@ xcrun -sdk macosx metal -mmacosx-version-min="$macos_deployment_target" \
   "$workdir"/*.air -o "$workdir/default.metallib"
 
 metal_compiler="$(xcrun -sdk macosx metal --version 2>/dev/null | head -1 || echo unknown)"
+binary_hash="$(shasum -a 256 "$workdir/default.metallib" | cut -d' ' -f1)"
 cat > "$workdir/$stamp_name" <<EOF
 mlx-core-version: $core_version
 mlx-core-revision: $core_revision
@@ -320,6 +331,7 @@ mlx-swift-revision: $swift_pin_revision
 kernel-sources-sha256: $sources_hash
 metal-language-version: $metal_language_version
 macos-deployment-target: $macos_deployment_target
+metallib-sha256: $binary_hash
 built-at: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 metal-compiler: $metal_compiler
 EOF

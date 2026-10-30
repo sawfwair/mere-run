@@ -1,0 +1,5 @@
+{
+  "noRepeatNgramSize": 0,
+  "stoppedDuring": "w9-form-auto",
+  "reason": "w9-form-base repeated a dotted line to its 4096-token cap"
+}

@@ -1,0 +1,4 @@
+Package policy regression fixtures passed (11).
+Package policy passed for darwin: 81 targets, 30 products.
+Package policy passed for linux-source: 72 targets, 29 products.
+Package policy passed for linux-cuda-prebuilt: 72 targets, 29 products.

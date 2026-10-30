@@ -1,0 +1,59 @@
+--- a/Sources/MereRunCore/UnlimitedOCR/UnlimitedOCRGenerator.swift
++++ b/Sources/MereRunCore/UnlimitedOCR/UnlimitedOCRGenerator.swift
+@@ -32,6 +32,18 @@
+         progress: (@Sendable (String) -> Void)? = nil
+     ) async throws -> Result {
+         try await MLXRequestStreams.withStream(isolation: self) {
++            let capture = ProcessInfo.processInfo.environment["MERERUN_UNLIMITED_OCR_CAPTURE"].map { URL(fileURLWithPath: $0) }
++            if let capture { try FileManager.default.createDirectory(at: capture, withIntermediateDirectories: true) }
++            func saveCapture(_ name: String, _ array: MLXArray) throws {
++                if let capture { try MLX.save(arrays: [name: array], url: capture.appendingPathComponent(name + ".safetensors")) }
++            }
++            if let capture {
++                let env = ProcessInfo.processInfo.environment
++                let settings = ["device": String(describing: Device.defaultDevice()),
++                                "metallibOverride": GPU.metallib?.path ?? "none"]
++                    .merging(env.filter { $0.key.hasPrefix("MLX_") || $0.key.hasPrefix("MTL_") }) { first, _ in first }
++                try JSONEncoder().encode(settings).write(to: capture.appendingPathComponent("settings.json"))
++            }
+             let window = ngramWindow ?? (imageURLs.count > 1 ? 1024 : 128)
+             guard !imageURLs.isEmpty, maxTokens > 0, temperature.isFinite, temperature >= 0,
+                   noRepeatNgramSize >= 0, window > 0 else {
+@@ -50,11 +62,13 @@
+             for (index, url) in imageURLs.enumerated() {
+                 try Task.checkCancellation()
+                 let page = try UnlimitedOCRImage.prepare(url, crop: crop ?? (imageURLs.count == 1))
++                try saveCapture("pixels.\(index)", page.global)
+                 progress?("Encoding page \(index + 1)/\(imageURLs.count): \(page.tiles.count) tiles, \(page.tokenCount) visual tokens")
+                 let marker = decoder.config.sparseAttentionConfig.pageTokenId
+                 ids.append(marker)
+                 pieces.append(decoder.embeddings([marker]))
+                 let features = vision.page(global: page.global, tiles: page.tiles, columns: page.columns, rows: page.rows)
++                try saveCapture("features.\(index)", features)
+                 guard features.dim(0) == page.tokenCount else { throw UnlimitedOCRError.invalidInput("Image token count mismatch.") }
+                 pieces.append(features)
+                 ids += [Int](repeating: decoder.config.sparseAttentionConfig.imageTokenId, count: page.tokenCount)
+@@ -72,6 +86,7 @@
+             let prefillStart = Date()
+             var logits = decoder.forward(concatenated(pieces, axis: 0), state: state, cache: cache)
+             eval(logits)
++            try saveCapture("prefill", logits)
+             let prefillSeconds = Date().timeIntervalSince(prefillStart)
+             progress?("Decoding")
+             let decodeStart = Date()
+@@ -94,6 +109,7 @@
+                 }
+                 let token = temperature == 0 ? argMax(logits).item(Int.self)
+                     : MLXRandom.categorical(logits / temperature).item(Int.self)
++                if capture != nil && step < 2 { try saveCapture("decode.\(step)", logits) }
+                 if token == eos { stopped = true; break }
+                 output.append(token)
+                 if output.count.isMultiple(of: 256) { progress?("Decoded \(output.count) tokens") }
+@@ -104,6 +120,7 @@
+                 }
+                 if Memory.cacheMemory >= 1_073_741_824 { Memory.clearCache() }
+             }
++            if let capture { try JSONEncoder().encode(output).write(to: capture.appendingPathComponent("tokens.json")) }
+             return Result(text: tokenizer.decode(tokens: output, skipSpecialTokens: false),
+                           tokensGenerated: output.count, pagesGenerated: pages, reachedTokenLimit: !stopped,
+                           loadSeconds: loadSeconds, visionSeconds: visionSeconds, prefillSeconds: prefillSeconds,

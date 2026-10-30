@@ -1,0 +1,2 @@
+[CodeStamp] warmup-window-page-switches-v4 sha256=86da9c563870 mtime=2026-10-30 13:03:11 switches=local_window:1,page_prefill:0 file=/private/tmp/unlimited-ocr-upstream/model/_sparse_base_impl.py
+{'original': [20.25, 20.0], 'promoted': [20.25, 20.0], 'unequal': 14}

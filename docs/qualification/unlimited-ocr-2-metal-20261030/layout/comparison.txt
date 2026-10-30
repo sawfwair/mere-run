@@ -1,0 +1,3 @@
+jpeg-base 0 40.47s
+jpeg-auto 0 40.00s
+png-base 0 37.64s

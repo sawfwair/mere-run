@@ -1970,6 +1970,26 @@ extension MereRunModelManifest {
                 upstreamRepoId: "lightonai/LightOnOCR-3-1B@\(LightOnOCRResources.oneBRevision)",
                 createdAt: createdAt
             )
+        case .unlimitedOCR2:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .unlimitedOCR,
+                family: .ocr,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.visionOCR],
+                components: Components(
+                    tokenizer: .local(path: "."),
+                    textEncoder: .local(path: "."),
+                    transformer: nil,
+                    vae: nil,
+                    scheduler: nil
+                ),
+                upstreamRepoId: "\(UnlimitedOCRResources.repository)@\(UnlimitedOCRResources.revision)",
+                createdAt: createdAt
+            )
         case .aceStep, .aceStepXLBase, .aceStepXLSFT, .aceStepXLTurbo, .aceStepXLTurboLM4B:
             let isBase = modelID == .aceStepXLBase
             let isSFT = modelID == .aceStepXLSFT

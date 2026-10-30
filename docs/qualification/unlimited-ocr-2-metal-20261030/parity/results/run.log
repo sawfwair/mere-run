@@ -1,0 +1,118 @@
+Test Suite 'Selected tests' started at 2026-10-30 14:20:04.623.
+Test Suite 'MereRunCoreTests.xctest' started at 2026-10-30 14:20:04.624.
+Test Suite 'UnlimitedOCRCheckpointTests' started at 2026-10-30 14:20:04.624.
+Test Case '-[MereRunCoreTests.UnlimitedOCRCheckpointTests testFullCheckpointDocumentsOnMetal]' started.
+[unlimited-ocr] document-control: Loading checkpoint
+[unlimited-ocr] document-control: Encoding page 1/1: 0 tiles, 273 visual tokens
+[unlimited-ocr] document-control: Prefilling 279 tokens
+[unlimited-ocr] document-control: Decoding
+[unlimited-ocr] document-control: Decoded 256 tokens
+[unlimited-ocr] document-control: 31.38409996032715s, 424 tokens, pages=1, missing=[[]], peak=9688842240
+[unlimited-ocr] receipt-base: Loading checkpoint
+[unlimited-ocr] receipt-base: Encoding page 1/1: 0 tiles, 273 visual tokens
+[unlimited-ocr] receipt-base: Prefilling 279 tokens
+[unlimited-ocr] receipt-base: Decoding
+[unlimited-ocr] receipt-base: Decoded 256 tokens
+[unlimited-ocr] receipt-base: 32.04926800727844s, 495 tokens, pages=1, missing=[["MODELLING CLAY"]], peak=7089143040
+[unlimited-ocr] receipt-auto: Loading checkpoint
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Tests/MereRunCoreTests/UnlimitedOCRCheckpointTests.swift:67: error: -[MereRunCoreTests.UnlimitedOCRCheckpointTests testFullCheckpointDocumentsOnMetal] : XCTAssertTrue failed - receipt-base: missing page anchors [["MODELLING CLAY"]]
+[unlimited-ocr] receipt-auto: Encoding page 1/1: 0 tiles, 273 visual tokens
+[unlimited-ocr] receipt-auto: Prefilling 279 tokens
+[unlimited-ocr] receipt-auto: Decoding
+[unlimited-ocr] receipt-auto: Decoded 256 tokens
+[unlimited-ocr] receipt-auto: 29.975584030151367s, 495 tokens, pages=1, missing=[["MODELLING CLAY"]], peak=7089143040
+[unlimited-ocr] w9-form-base: Loading checkpoint
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Tests/MereRunCoreTests/UnlimitedOCRCheckpointTests.swift:67: error: -[MereRunCoreTests.UnlimitedOCRCheckpointTests testFullCheckpointDocumentsOnMetal] : XCTAssertTrue failed - receipt-auto: missing page anchors [["MODELLING CLAY"]]
+[unlimited-ocr] w9-form-base: Encoding page 1/1: 0 tiles, 273 visual tokens
+[unlimited-ocr] w9-form-base: Prefilling 279 tokens
+[unlimited-ocr] w9-form-base: Decoding
+[unlimited-ocr] w9-form-base: Decoded 256 tokens
+[unlimited-ocr] w9-form-base: Decoded 512 tokens
+[unlimited-ocr] w9-form-base: Decoded 768 tokens
+[unlimited-ocr] w9-form-base: Decoded 1024 tokens
+[unlimited-ocr] w9-form-base: Decoded 1280 tokens
+[unlimited-ocr] w9-form-base: Decoded 1536 tokens
+[unlimited-ocr] w9-form-base: Decoded 1792 tokens
+[unlimited-ocr] w9-form-base: 142.49679505825043s, 1878 tokens, pages=1, missing=[[]], peak=7089143040
+[unlimited-ocr] w9-form-auto: Loading checkpoint
+[unlimited-ocr] w9-form-auto: Encoding page 1/1: 12 tiles, 1513 visual tokens
+[unlimited-ocr] w9-form-auto: Prefilling 1519 tokens
+[unlimited-ocr] w9-form-auto: Decoding
+[unlimited-ocr] w9-form-auto: Decoded 256 tokens
+[unlimited-ocr] w9-form-auto: Decoded 512 tokens
+[unlimited-ocr] w9-form-auto: Decoded 768 tokens
+[unlimited-ocr] w9-form-auto: Decoded 1024 tokens
+[unlimited-ocr] w9-form-auto: Decoded 1280 tokens
+[unlimited-ocr] w9-form-auto: Decoded 1536 tokens
+[unlimited-ocr] w9-form-auto: Decoded 1792 tokens
+[unlimited-ocr] w9-form-auto: 171.44783902168274s, 1958 tokens, pages=1, missing=[[]], peak=7148125440
+[unlimited-ocr] w9-instructions-base: Loading checkpoint
+[unlimited-ocr] w9-instructions-base: Encoding page 1/1: 0 tiles, 273 visual tokens
+[unlimited-ocr] w9-instructions-base: Prefilling 279 tokens
+[unlimited-ocr] w9-instructions-base: Decoding
+[unlimited-ocr] w9-instructions-base: Decoded 256 tokens
+[unlimited-ocr] w9-instructions-base: Decoded 512 tokens
+[unlimited-ocr] w9-instructions-base: Decoded 768 tokens
+[unlimited-ocr] w9-instructions-base: Decoded 1024 tokens
+[unlimited-ocr] w9-instructions-base: Decoded 1280 tokens
+[unlimited-ocr] w9-instructions-base: Decoded 1536 tokens
+[unlimited-ocr] w9-instructions-base: Decoded 1792 tokens
+[unlimited-ocr] w9-instructions-base: Decoded 2048 tokens
+[unlimited-ocr] w9-instructions-base: Decoded 2304 tokens
+[unlimited-ocr] w9-instructions-base: Decoded 2560 tokens
+[unlimited-ocr] w9-instructions-base: 146.23254799842834s, 2609 tokens, pages=1, missing=[[]], peak=7089143040
+[unlimited-ocr] w9-two-page-base: Loading checkpoint
+[unlimited-ocr] w9-two-page-base: Encoding page 1/2: 0 tiles, 273 visual tokens
+[unlimited-ocr] w9-two-page-base: Encoding page 2/2: 0 tiles, 273 visual tokens
+[unlimited-ocr] w9-two-page-base: Prefilling 553 tokens
+[unlimited-ocr] w9-two-page-base: Decoding
+[unlimited-ocr] w9-two-page-base: Decoded 256 tokens
+[unlimited-ocr] w9-two-page-base: Decoded 512 tokens
+[unlimited-ocr] w9-two-page-base: Decoded 768 tokens
+[unlimited-ocr] w9-two-page-base: Decoded 1024 tokens
+[unlimited-ocr] w9-two-page-base: Decoded 1280 tokens
+[unlimited-ocr] w9-two-page-base: Decoded 1536 tokens
+[unlimited-ocr] w9-two-page-base: Decoded 1792 tokens
+[unlimited-ocr] w9-two-page-base: Decoded 2048 tokens
+[unlimited-ocr] w9-two-page-base: Decoded 2304 tokens
+[unlimited-ocr] w9-two-page-base: Decoded 2560 tokens
+[unlimited-ocr] w9-two-page-base: Decoded 2816 tokens
+[unlimited-ocr] w9-two-page-base: Decoded 3072 tokens
+[unlimited-ocr] w9-two-page-base: Decoded 3328 tokens
+[unlimited-ocr] w9-two-page-base: Decoded 3584 tokens
+[unlimited-ocr] w9-two-page-base: Decoded 3840 tokens
+[unlimited-ocr] w9-two-page-base: Decoded 4096 tokens
+[unlimited-ocr] w9-two-page-base: Decoded 4352 tokens
+[unlimited-ocr] w9-two-page-base: Decoded 4608 tokens
+[unlimited-ocr] w9-two-page-base: 326.3085290193558s, 4641 tokens, pages=2, missing=[[], []], peak=7089847556
+[unlimited-ocr] w9-reversed-base: Loading checkpoint
+[unlimited-ocr] w9-reversed-base: Encoding page 1/2: 0 tiles, 273 visual tokens
+[unlimited-ocr] w9-reversed-base: Encoding page 2/2: 0 tiles, 273 visual tokens
+[unlimited-ocr] w9-reversed-base: Prefilling 553 tokens
+[unlimited-ocr] w9-reversed-base: Decoding
+[unlimited-ocr] w9-reversed-base: Decoded 256 tokens
+[unlimited-ocr] w9-reversed-base: Decoded 512 tokens
+[unlimited-ocr] w9-reversed-base: Decoded 768 tokens
+[unlimited-ocr] w9-reversed-base: Decoded 1024 tokens
+[unlimited-ocr] w9-reversed-base: Decoded 1280 tokens
+[unlimited-ocr] w9-reversed-base: Decoded 1536 tokens
+[unlimited-ocr] w9-reversed-base: Decoded 1792 tokens
+[unlimited-ocr] w9-reversed-base: Decoded 2048 tokens
+[unlimited-ocr] w9-reversed-base: Decoded 2304 tokens
+[unlimited-ocr] w9-reversed-base: Decoded 2560 tokens
+[unlimited-ocr] w9-reversed-base: Decoded 2816 tokens
+[unlimited-ocr] w9-reversed-base: Decoded 3072 tokens
+[unlimited-ocr] w9-reversed-base: Decoded 3328 tokens
+[unlimited-ocr] w9-reversed-base: Decoded 3584 tokens
+[unlimited-ocr] w9-reversed-base: Decoded 3840 tokens
+[unlimited-ocr] w9-reversed-base: Decoded 4096 tokens
+[unlimited-ocr] w9-reversed-base: Decoded 4352 tokens
+[unlimited-ocr] w9-reversed-base: Decoded 4608 tokens
+[unlimited-ocr] w9-reversed-base: 323.9362189769745s, 4654 tokens, pages=2, missing=[[], []], peak=7089847556
+Test Case '-[MereRunCoreTests.UnlimitedOCRCheckpointTests testFullCheckpointDocumentsOnMetal]' failed (1203.899 seconds).
+Test Suite 'UnlimitedOCRCheckpointTests' failed at 2026-10-30 14:40:08.524.
+	 Executed 1 test, with 2 failures (0 unexpected) in 1203.899 (1203.899) seconds
+Test Suite 'MereRunCoreTests.xctest' failed at 2026-10-30 14:40:08.524.
+	 Executed 1 test, with 2 failures (0 unexpected) in 1203.899 (1203.900) seconds
+Test Suite 'Selected tests' failed at 2026-10-30 14:40:08.524.
+	 Executed 1 test, with 2 failures (0 unexpected) in 1203.899 (1203.900) seconds

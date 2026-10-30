@@ -99,6 +99,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case northMiniCode = "north-mini-code"
         /// LightOn OCR family.
         case lightOnOCR = "lighton-ocr"
+        case unlimitedOCR = "unlimited-ocr"
         /// ACE-Step music family.
         case aceStep = "ace-step"
         /// MiniMax Music 3 autoregressive and flow-matching music family.

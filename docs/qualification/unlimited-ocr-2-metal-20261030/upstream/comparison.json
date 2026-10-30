@@ -1,0 +1,67 @@
+[
+  {
+    "caseID": "receipt-base",
+    "noRepeatNgramSize": 0,
+    "nativeRecord": "baseline-without-ngram/receipt-base.json",
+    "upstreamRecord": "upstream/receipt-base-bfloat16-ngram0.json",
+    "exactTextMatch": false,
+    "nativeMissingAnchors": [
+      "MODELLING CLAY"
+    ],
+    "nativeLongestDottedLine": 0,
+    "upstreamMissingAnchors": [
+      "MODELLING CLAY"
+    ],
+    "upstreamLongestDottedLine": 0,
+    "nativeTokens": 495,
+    "upstreamTokens": 495,
+    "nativeReachedCap": false,
+    "upstreamFinishReason": "stop",
+    "upstreamMaxTokens": 1024,
+    "nativeMaxTokens": 1024
+  },
+  {
+    "caseID": "w9-form-base",
+    "noRepeatNgramSize": 0,
+    "nativeRecord": "baseline-without-ngram/w9-form-base.json",
+    "upstreamRecord": "upstream/w9-form-base-bfloat16-ngram0.json",
+    "exactTextMatch": false,
+    "nativeMissingAnchors": [
+      "Social security number",
+      "Certification instructions",
+      "General Instructions",
+      "What's New"
+    ],
+    "nativeLongestDottedLine": 3693,
+    "upstreamMissingAnchors": [
+      "Social security number",
+      "Certification instructions",
+      "General Instructions",
+      "What's New"
+    ],
+    "upstreamLongestDottedLine": 621,
+    "nativeTokens": 4096,
+    "upstreamTokens": 1024,
+    "nativeReachedCap": true,
+    "upstreamFinishReason": "length",
+    "upstreamMaxTokens": 1024,
+    "nativeMaxTokens": 4096
+  },
+  {
+    "caseID": "w9-form-base",
+    "noRepeatNgramSize": 35,
+    "nativeRecord": "results/w9-form-base.json",
+    "upstreamRecord": "upstream/w9-form-base-bfloat16-ngram35.json",
+    "exactTextMatch": false,
+    "nativeMissingAnchors": [],
+    "nativeLongestDottedLine": 35,
+    "upstreamMissingAnchors": [],
+    "upstreamLongestDottedLine": 35,
+    "nativeTokens": 1889,
+    "upstreamTokens": 1894,
+    "nativeReachedCap": false,
+    "upstreamFinishReason": "stop",
+    "upstreamMaxTokens": 4096,
+    "nativeMaxTokens": 4096
+  }
+]

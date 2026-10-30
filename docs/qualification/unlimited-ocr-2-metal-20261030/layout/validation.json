@@ -1,0 +1,101 @@
+{
+  "standardGate": {
+    "command": "./scripts/check.sh",
+    "exitCode": 0,
+    "logSHA256": "b5cbc7ea060d884214ce68265ec949fd616932f1f8d452e7cc5b3f56d486d316",
+    "xctestCases": 5675,
+    "xctestSkipped": 477,
+    "xctestFailures": 0,
+    "swiftTestingCases": 197
+  },
+  "gpuNumericalTests": {
+    "tests": 18,
+    "failures": 0,
+    "exitCode": 0
+  },
+  "boundaryDiagnostic": {
+    "tests": 1,
+    "failures": 0,
+    "exitCode": 0
+  },
+  "prefillDiagnostic": {
+    "tests": 1,
+    "failures": 0,
+    "exitCode": 0
+  },
+  "documentationBuild": {
+    "command": "corepack pnpm docs:build",
+    "exitCode": 0,
+    "logSHA256": "ad4659e75bc98d7c5020cea8fd8978d6409f7d03bc2f29b94480096b823e4c1a"
+  },
+  "kernelVerification": {
+    "command": "scripts/build_mlx_metallib.sh --verify-only vendor/mlx-swift_Cmlx.bundle/Contents/Resources",
+    "exitCode": 0
+  },
+  "receiptComparison": {
+    "exitCode": 0,
+    "runs": 6,
+    "allOutputsIdentical": true,
+    "unchangedFromPriceInvestigation": true
+  },
+  "upstreamRerun": {
+    "exitCode": 0,
+    "tokensGenerated": 495,
+    "sameTokenIDsAsPreviousReference": true,
+    "comparison": {
+      "nativeBlocks": 25,
+      "upstreamBlocks": 25,
+      "exactTextAndTypeMatches": 24,
+      "unambiguousCoordinatePairs": 17,
+      "duplicateBodyGroupsExcluded": [
+        {
+          "type": "text",
+          "body": "0.00",
+          "nativeCount": 2,
+          "upstreamCount": 2
+        },
+        {
+          "type": "text",
+          "body": "9.00",
+          "nativeCount": 4,
+          "upstreamCount": 3
+        },
+        {
+          "type": "text",
+          "body": "RM",
+          "nativeCount": 2,
+          "upstreamCount": 2
+        }
+      ],
+      "exactBoxesAmongUnambiguousPairs": 2,
+      "meanAbsoluteCoordinateDelta": 1.1764705882352942,
+      "maximumAbsoluteCoordinateDelta": 4,
+      "nativeBlockTypes": {
+        "image": 1,
+        "text": 23,
+        "title<LEVEL1>": 1
+      },
+      "upstreamBlockTypes": {
+        "image": 1,
+        "text": 23,
+        "title<LEVEL1>": 1
+      },
+      "nativeOnly": [
+        {
+          "type": "text",
+          "body": "9.00"
+        }
+      ],
+      "upstreamOnly": [
+        {
+          "type": "text",
+          "body": "9.000"
+        }
+      ],
+      "nativeExactPrice9000": 0,
+      "upstreamExactPrice9000": 1
+    }
+  },
+  "diagnosticAssertions": "First baseline split at 20; upstream patch and final-norm substitutions restore 106.",
+  "pythonScriptSyntax": "passed"
+}

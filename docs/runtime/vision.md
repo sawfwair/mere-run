@@ -24,7 +24,7 @@ model ID.
 | `vision caption` | Generate training-friendly captions for images. | Qwen3-VL 2B Instruct 4-bit, downloaded on first use |
 | `vision inspect` | Describe or answer questions about an image using Qwen3-VL. | Default local vision-language model, downloaded on first use |
 | `vision embed` | Generate shared text and image embeddings with native Qwen3-VL. | `vision-embed-qwen3-vl-2b` |
-| `vision ocr` | Extract text from images with LightOnOCR, GLM-OCR, or Infinity-Parser2. | `vision-ocr-lighton` |
+| `vision ocr` | Extract text from images with LightOnOCR, GLM-OCR, Infinity-Parser2, or Unlimited-OCR-2. | `vision-ocr-lighton` |
 
 **Find, isolate, and follow**
 
@@ -127,6 +127,7 @@ managed capability catalog.
 | OCR | `vision-ocr-lighton` | 8 / 16 GB | You want the default: LightOnOCR 3 1B, which passed every case in its qualification. |
 | OCR | `vision-ocr-lighton-3-0.8b` | 8 / 16 GB | You want the smallest LightOnOCR 3 download and can review handwriting by hand. |
 | OCR | `vision-ocr-lighton-3-4b` | 16 / 24 GB | You want LightOn's quality recommendation and have the memory for it. |
+| OCR | `vision-ocr-unlimited-2` | 16 / 24 GB (estimated) | You want native ordered-document parsing; full-checkpoint qualification is outstanding. |
 | OCR | `vision-ocr-infinity-pro-int8` | 64 / 96 GB | You want Infinity-Parser2 document-to-JSON or Markdown parsing. |
 | OCR | `vision-ocr-infinity-pro` | 128 / 192 GB | You're running full-precision Infinity-Parser2 quality evaluations. |
 | Video depth | `vision-depth-vda-small` | 16 / 32 GB | You want relative depth for a clip. |
@@ -266,6 +267,7 @@ call it. The `--backend` option selects the engine:
 | `lighton` (default) | Native LightOnOCR | `vision-ocr-lighton` |
 | `infinity` | Native Infinity-Parser2, or an external parity adapter | `vision-ocr-infinity-pro-int8` |
 | `glm` | External `glmocr` CLI that you install and configure | Not applicable |
+| `unlimited` | Native Unlimited-OCR-2, with all images forming one ordered document | `vision-ocr-unlimited-2` |
 
 ```bash
 mere.run vision ocr ./page.png
@@ -275,6 +277,19 @@ mere.run vision ocr ./page.png --backend infinity --infinity-task doc2md
 Each backend reads only its own options and warns about the rest. `--compare`
 runs LightOn beside a secondary backend; with `--backend lighton`, the
 secondary backend is GLM. Defaults are 4,096 new tokens and temperature 0.2.
+
+#### Unlimited-OCR-2 documents
+
+```bash
+mere.run model pull vision-ocr-unlimited-2
+mere.run vision ocr ./page-01.png ./page-02.png --backend unlimited --temperature 0 --max-tokens 16384
+```
+
+The output preserves `<PAGE>` markers. `--unlimited-model` accepts the managed
+ID or an original BF16 checkpoint directory; `--unlimited-crop auto|base|tiles`
+controls image tiling. This backend doesn't support `--compare`. It retains
+the document KV cache and caps prompt plus output at 131,072 tokens. See
+[Unlimited-OCR-2](./unlimited-ocr-2.md) for implementation and validation limits.
 
 #### LightOnOCR 3
 

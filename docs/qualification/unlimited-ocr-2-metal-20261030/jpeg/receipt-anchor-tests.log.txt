@@ -1,0 +1,25 @@
+Test Suite 'Selected tests' started at 2026-10-30 15:05:41.831.
+Test Suite 'MereRunCoreTests.xctest' started at 2026-10-30 15:05:41.832.
+Test Suite 'UnlimitedOCRCheckpointTests' started at 2026-10-30 15:05:41.832.
+Test Case '-[MereRunCoreTests.UnlimitedOCRCheckpointTests testFullCheckpointDocumentsOnMetal]' started.
+[unlimited-ocr] receipt-base: Loading checkpoint
+[unlimited-ocr] receipt-base: Encoding page 1/1: 0 tiles, 273 visual tokens
+[unlimited-ocr] receipt-base: Prefilling 279 tokens
+[unlimited-ocr] receipt-base: Decoding
+[unlimited-ocr] receipt-base: Decoded 256 tokens
+[unlimited-ocr] receipt-base: 34.73936700820923s, 495 tokens, pages=1, missing=[["MODELLING CLAY"]], peak=9688842240
+[unlimited-ocr] receipt-auto: Loading checkpoint
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Tests/MereRunCoreTests/UnlimitedOCRCheckpointTests.swift:67: error: -[MereRunCoreTests.UnlimitedOCRCheckpointTests testFullCheckpointDocumentsOnMetal] : XCTAssertTrue failed - receipt-base: missing page anchors [["MODELLING CLAY"]]
+[unlimited-ocr] receipt-auto: Encoding page 1/1: 0 tiles, 273 visual tokens
+[unlimited-ocr] receipt-auto: Prefilling 279 tokens
+[unlimited-ocr] receipt-auto: Decoding
+[unlimited-ocr] receipt-auto: Decoded 256 tokens
+[unlimited-ocr] receipt-auto: 30.499589920043945s, 495 tokens, pages=1, missing=[["MODELLING CLAY"]], peak=7089138464
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Tests/MereRunCoreTests/UnlimitedOCRCheckpointTests.swift:67: error: -[MereRunCoreTests.UnlimitedOCRCheckpointTests testFullCheckpointDocumentsOnMetal] : XCTAssertTrue failed - receipt-auto: missing page anchors [["MODELLING CLAY"]]
+Test Case '-[MereRunCoreTests.UnlimitedOCRCheckpointTests testFullCheckpointDocumentsOnMetal]' failed (65.266 seconds).
+Test Suite 'UnlimitedOCRCheckpointTests' failed at 2026-10-30 15:06:47.098.
+	 Executed 1 test, with 2 failures (0 unexpected) in 65.266 (65.267) seconds
+Test Suite 'MereRunCoreTests.xctest' failed at 2026-10-30 15:06:47.098.
+	 Executed 1 test, with 2 failures (0 unexpected) in 65.266 (65.267) seconds
+Test Suite 'Selected tests' failed at 2026-10-30 15:06:47.098.
+	 Executed 1 test, with 2 failures (0 unexpected) in 65.266 (65.267) seconds

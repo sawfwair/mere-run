@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 
 #if os(macOS)
+import CryptoKit
 @testable import MereRunCLI
 
 final class MLXBundleSupportTests: XCTestCase {
@@ -20,6 +21,72 @@ final class MLXBundleSupportTests: XCTestCase {
     let contents = try String(contentsOf: sidecarURL, encoding: .utf8)
 
     XCTAssertEqual(MLXBundleSupport.stampStatus(contents: contents), .matched)
+    XCTAssertEqual(MLXBundleSupport.stampStatus(bundleURL: sidecarURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()), .matched)
+  }
+
+  func testCopiedLegacyStampRejectsAReplacementBinary() throws {
+    let bundle = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: bundle) }
+    let resources = bundle.appendingPathComponent("Contents/Resources")
+    try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
+    let originalStamp = repositoryRoot.appendingPathComponent("vendor/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib.version")
+    try FileManager.default.copyItem(at: originalStamp, to: resources.appendingPathComponent("default.metallib.version"))
+    let replacement = Data("replacement kernels".utf8)
+    try replacement.write(to: resources.appendingPathComponent("default.metallib"))
+    let digest = SHA256.hash(data: replacement).map { String(format: "%02x", $0) }.joined()
+    XCTAssertEqual(MLXBundleSupport.stampStatus(bundleURL: bundle), .mismatched([
+      .init(field: "metallib-sha256", stamped: digest, expected: MLXBundleSupport.legacyMetallibSHA256)
+    ]))
+  }
+
+  func testBinaryBoundStampAcceptsRebuildAndRejectsSameSizeMutation() throws {
+    let bundle = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: bundle) }
+    let resources = bundle.appendingPathComponent("Contents/Resources")
+    try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
+    let stampURL = repositoryRoot.appendingPathComponent("vendor/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib.version")
+    let bytes = Data("kernel A".utf8)
+    let digest = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+    let stamp = try String(contentsOf: stampURL, encoding: .utf8) + "\nmetallib-sha256: \(digest)\n"
+    try stamp.write(to: resources.appendingPathComponent("default.metallib.version"), atomically: true, encoding: .utf8)
+    try bytes.write(to: resources.appendingPathComponent("default.metallib"))
+    XCTAssertEqual(MLXBundleSupport.stampStatus(bundleURL: bundle), .matched)
+    let changed = Data("kernel B".utf8)
+    XCTAssertEqual(bytes.count, changed.count)
+    try changed.write(to: resources.appendingPathComponent("default.metallib"))
+    let actual = SHA256.hash(data: changed).map { String(format: "%02x", $0) }.joined()
+    XCTAssertEqual(MLXBundleSupport.stampStatus(bundleURL: bundle), .mismatched([
+      .init(field: "metallib-sha256", stamped: actual, expected: digest)
+    ]))
+  }
+
+  func testCompatibilityCopyReplacesDifferentKernelsWithEqualFileSize() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let source = root.appendingPathComponent("source.metallib")
+    let destination = root.appendingPathComponent("mlx.metallib")
+    try Data("new kernels".utf8).write(to: source)
+    try Data("old kernels".utf8).write(to: destination)
+    try MLXBundleSupport.refreshCopy(from: source, to: destination)
+    XCTAssertEqual(try Data(contentsOf: source), try Data(contentsOf: destination))
+  }
+
+  func testFlatResourcesRefreshTheColocatedLibraryThatMLXLoadsFirst() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let resources = root.appendingPathComponent("Resources")
+    try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
+    let stampURL = repositoryRoot.appendingPathComponent("vendor/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib.version")
+    let bytes = Data("new kernels".utf8)
+    let digest = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+    let stamp = try String(contentsOf: stampURL, encoding: .utf8) + "\nmetallib-sha256: \(digest)\n"
+    try stamp.write(to: resources.appendingPathComponent("default.metallib.version"), atomically: true, encoding: .utf8)
+    try bytes.write(to: resources.appendingPathComponent("default.metallib"))
+    try Data("old kernels".utf8).write(to: root.appendingPathComponent("mlx.metallib"))
+    try MLXBundleSupport.validateFlatResources(resourcesURL: resources, executableDir: root, quiet: true)
+    XCTAssertEqual(try Data(contentsOf: root.appendingPathComponent("mlx.metallib")), bytes)
+    XCTAssertEqual(try Data(contentsOf: resources.appendingPathComponent("mlx.metallib")), bytes)
   }
 
   func testCompiledSwiftRevisionMatchesPackagePin() throws {

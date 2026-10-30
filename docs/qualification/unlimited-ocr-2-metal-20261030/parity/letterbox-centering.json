@@ -1,0 +1,65 @@
+{
+  "frozenOffsetsUnchanged": true,
+  "inputs": [
+    {
+      "image": "document.png",
+      "containedSize": [
+        768,
+        1024
+      ],
+      "previousOffset": [
+        128,
+        0
+      ],
+      "correctedOffset": [
+        128,
+        0
+      ]
+    },
+    {
+      "image": "receipt.jpeg",
+      "containedSize": [
+        1024,
+        1024
+      ],
+      "previousOffset": [
+        0,
+        0
+      ],
+      "correctedOffset": [
+        0,
+        0
+      ]
+    },
+    {
+      "image": "w9-page-1.png",
+      "containedSize": [
+        791,
+        1024
+      ],
+      "previousOffset": [
+        116,
+        0
+      ],
+      "correctedOffset": [
+        116,
+        0
+      ]
+    },
+    {
+      "image": "w9-page-2.png",
+      "containedSize": [
+        791,
+        1024
+      ],
+      "previousOffset": [
+        116,
+        0
+      ],
+      "correctedOffset": [
+        116,
+        0
+      ]
+    }
+  ]
+}

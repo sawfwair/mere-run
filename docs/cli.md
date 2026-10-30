@@ -84,7 +84,7 @@ against the CLI and fails if they disagree.
   - `mere.run vision image-to-3d-trellis2` — Reconstruct a 512-resolution PBR O-Voxel mesh with native MLX TRELLIS.2.
   - `mere.run vision image-to-3d-idol` — Generate object Gaussian splats with native MLX IDOL.
   - `mere.run vision image-to-3d-multiview` — VFX alias for native four-view or six-view InstantMesh reconstruction.
-  - `mere.run vision ocr` — Extract text from images using LightOnOCR, GLM-OCR, or Infinity-Parser2.
+  - `mere.run vision ocr` — Extract text from images using LightOnOCR, GLM-OCR, Infinity-Parser2, or Unlimited-OCR-2.
 - [`mere.run geo`](/runtime/geo) — Run native geospatial inference models on local Earth-observation data.
   - `mere.run geo flood` — Run native TerraMind Flood tile inference with MLX on Apple Silicon.
   - `mere.run geo fire` — Run native TerraMind Fire tile inference with MLX on Apple Silicon.

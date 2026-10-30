@@ -1,0 +1,1 @@
+[mererun] Replaced unstamped MLX metallib bundle with stamped copy from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/vendor/mlx-swift_Cmlx.bundle.

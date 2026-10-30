@@ -1,0 +1,31 @@
+{
+  "checkpointRevision": "c14071b549f4fcab10909f3c4acc6a2edb366947",
+  "device": "Apple M5 Max",
+  "nativeKernelSHA256": "64431ed485178f63a8dc870c8231ba021090c3356218c607a726821a7b6abb82",
+  "sourceSHA256": {
+    "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRMath.swift": "de54578043e1713859cc197968951b508ec145b6ddc805c6265dfec42f3e71c8",
+    "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRAttention.swift": "475583df499313b1e28894c229db907e6980335d9b31e5a57f4d4ce4f0635ced",
+    "Tests/UnlimitedOCRRuntimeTests/UnlimitedOCRRuntimeTests.swift": "38e4ece6c8189deef32c0d903eaba6cbb7d67d5be08427b1c975b84f4a3aae97",
+    "Tests/UnlimitedOCRRuntimeTests/UnlimitedOCRPriceDiagnostics.swift": "5f83d2bdedffe1d6280a28826a496718a161b78a3a5220427807ffeb2578ccf2",
+    "Tests/UnlimitedOCRRuntimeTests/Fixtures/router-scaling.json": "8df0023aff476388084d13f8268264392619efecd583884513c565f526391017",
+    "Tests/UnlimitedOCRRuntimeTests/Fixtures/generate_router_scaling.py": "8c1d06bee0834b666a9cf57dc6ccb47732824a2e2072dc408ea68b729cefcfd9"
+  },
+  "productionChanges": "DASH scalar promotion only; no dtype, tie-breaking, or text postprocessing changes.",
+  "priceStep": 341,
+  "suffixTokenIDs": {
+    "00": 504,
+    "000": 1320
+  },
+  "nativePrefixVerifiedByGreedyReplay": true,
+  "weightsModified": false,
+  "vendorModified": false,
+  "limitations": [
+    "The full native receipt still emits 9.00, versus upstream 9.000.",
+    "Earlier BF16 activation and generated layout differences affect the price decision. Full numerical parity is not established.",
+    "The unrelated eight-case document suite was not repeated."
+  ],
+  "beforeCorrectionSourceSHA256": {
+    "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRMath.swift": "e0bed087901dd5d5c5503f7e87dabbeffb8b4e8e6352f7dc221a717cd5adac36",
+    "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRAttention.swift": "f4391731ffef8225968548a69506a3bc2e1717e4109511bb72bdc92af62d7af2"
+  }
+}

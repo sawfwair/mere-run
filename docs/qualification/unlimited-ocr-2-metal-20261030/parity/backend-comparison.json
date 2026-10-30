@@ -1,0 +1,44 @@
+[
+  {
+    "left": "probe.attention.cpu_torch.bfloat16",
+    "right": "probe.attention.cpu_torch.float32",
+    "maximum": 0.00390625,
+    "rmse": 9.779656829778105e-05,
+    "unequalFraction": 0.25413817167282104
+  },
+  {
+    "left": "probe.attention.cpu_torch.bfloat16",
+    "right": "probe.attention.mps_torch.bfloat16",
+    "maximum": 0.00390625,
+    "rmse": 0.00027251499705016613,
+    "unequalFraction": 0.633715808391571
+  },
+  {
+    "left": "probe.attention.cpu_torch.bfloat16",
+    "right": "probe.attention.mps_torch.float32",
+    "maximum": 0.00390625,
+    "rmse": 9.779454558156431e-05,
+    "unequalFraction": 0.25416260957717896
+  },
+  {
+    "left": "probe.attention.cpu_torch.float32",
+    "right": "probe.attention.mps_torch.bfloat16",
+    "maximum": 0.00390625,
+    "rmse": 0.00026680994778871536,
+    "unequalFraction": 0.628283679485321
+  },
+  {
+    "left": "probe.attention.cpu_torch.float32",
+    "right": "probe.attention.mps_torch.float32",
+    "maximum": 0.000244140625,
+    "rmse": 1.363512410534895e-06,
+    "unequalFraction": 0.0004028320254292339
+  },
+  {
+    "left": "probe.attention.mps_torch.bfloat16",
+    "right": "probe.attention.mps_torch.float32",
+    "maximum": 0.00390625,
+    "rmse": 0.0002668072411324829,
+    "unequalFraction": 0.6282958984375
+  }
+]

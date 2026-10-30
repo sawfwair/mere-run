@@ -1,0 +1,426 @@
+{
+  "binarySHA256": "0a435603c46c8c12af9b9a45bf45218c3e1e90358fe6f2faacf768b40074bdbf",
+  "mlxEnableTF32": false,
+  "cases": [
+    {
+      "caseID": "jpeg-base",
+      "command": [
+        "/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mere.run",
+        "vision",
+        "ocr",
+        "/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/qualification/unlimited-ocr-2/inputs/receipt.jpeg",
+        "--backend",
+        "unlimited",
+        "--unlimited-model",
+        "/Users/nerd/Library/Application Support/MereRun/models/vision-ocr-unlimited-2",
+        "--unlimited-crop",
+        "base",
+        "--temperature",
+        "0",
+        "--max-tokens",
+        "1024",
+        "--quiet",
+        "--unlimited-no-repeat-ngram-size",
+        "35",
+        "--unlimited-ngram-window",
+        "128"
+      ],
+      "seconds": 39.11710166599369,
+      "exitCode": 0,
+      "inputSHA256": "d66a3287c847823c6ddab9f8b2080582b96a66b7816d178472f697ea84e227b3",
+      "stdoutSHA256": "a5793637ce069b3576e4417e4946d90fc99e08c9c6057a2882b44e28064f3ae6",
+      "metalLibrarySHA256": "64431ed485178f63a8dc870c8231ba021090c3356218c607a726821a7b6abb82",
+      "upstream": {
+        "nativeBlocks": 25,
+        "upstreamBlocks": 25,
+        "exactTextAndTypeMatches": 24,
+        "unambiguousCoordinatePairs": 17,
+        "duplicateBodyGroupsExcluded": [
+          {
+            "type": "text",
+            "body": "0.00",
+            "nativeCount": 2,
+            "upstreamCount": 2
+          },
+          {
+            "type": "text",
+            "body": "9.00",
+            "nativeCount": 4,
+            "upstreamCount": 3
+          },
+          {
+            "type": "text",
+            "body": "RM",
+            "nativeCount": 2,
+            "upstreamCount": 2
+          }
+        ],
+        "exactBoxesAmongUnambiguousPairs": 10,
+        "meanAbsoluteCoordinateDelta": 0.4411764705882353,
+        "maximumAbsoluteCoordinateDelta": 6,
+        "nativeBlockTypes": {
+          "image": 1,
+          "text": 23,
+          "title<LEVEL1>": 1
+        },
+        "upstreamBlockTypes": {
+          "image": 1,
+          "text": 23,
+          "title<LEVEL1>": 1
+        },
+        "nativeOnly": [
+          {
+            "type": "text",
+            "body": "9.00"
+          }
+        ],
+        "upstreamOnly": [
+          {
+            "type": "text",
+            "body": "9.000"
+          }
+        ],
+        "nativeExactPrice9000": 0,
+        "upstreamExactPrice9000": 1
+      },
+      "missingFrozenAnchors": [
+        "MODELLING CLAY"
+      ],
+      "matchesXCTest": true,
+      "harnessUpstream": {
+        "nativeBlocks": 25,
+        "upstreamBlocks": 25,
+        "exactTextAndTypeMatches": 24,
+        "unambiguousCoordinatePairs": 17,
+        "duplicateBodyGroupsExcluded": [
+          {
+            "type": "text",
+            "body": "0.00",
+            "nativeCount": 2,
+            "upstreamCount": 2
+          },
+          {
+            "type": "text",
+            "body": "9.00",
+            "nativeCount": 4,
+            "upstreamCount": 3
+          },
+          {
+            "type": "text",
+            "body": "RM",
+            "nativeCount": 2,
+            "upstreamCount": 2
+          }
+        ],
+        "exactBoxesAmongUnambiguousPairs": 10,
+        "meanAbsoluteCoordinateDelta": 0.4411764705882353,
+        "maximumAbsoluteCoordinateDelta": 6,
+        "nativeBlockTypes": {
+          "image": 1,
+          "text": 23,
+          "title<LEVEL1>": 1
+        },
+        "upstreamBlockTypes": {
+          "image": 1,
+          "text": 23,
+          "title<LEVEL1>": 1
+        },
+        "nativeOnly": [
+          {
+            "type": "text",
+            "body": "9.00"
+          }
+        ],
+        "upstreamOnly": [
+          {
+            "type": "text",
+            "body": "9.000"
+          }
+        ],
+        "nativeExactPrice9000": 0,
+        "upstreamExactPrice9000": 1
+      }
+    },
+    {
+      "caseID": "jpeg-auto",
+      "command": [
+        "/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mere.run",
+        "vision",
+        "ocr",
+        "/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/qualification/unlimited-ocr-2/inputs/receipt.jpeg",
+        "--backend",
+        "unlimited",
+        "--unlimited-model",
+        "/Users/nerd/Library/Application Support/MereRun/models/vision-ocr-unlimited-2",
+        "--unlimited-crop",
+        "auto",
+        "--temperature",
+        "0",
+        "--max-tokens",
+        "1024",
+        "--quiet",
+        "--unlimited-no-repeat-ngram-size",
+        "35",
+        "--unlimited-ngram-window",
+        "128"
+      ],
+      "seconds": 34.96183891699184,
+      "exitCode": 0,
+      "inputSHA256": "d66a3287c847823c6ddab9f8b2080582b96a66b7816d178472f697ea84e227b3",
+      "stdoutSHA256": "a5793637ce069b3576e4417e4946d90fc99e08c9c6057a2882b44e28064f3ae6",
+      "metalLibrarySHA256": "64431ed485178f63a8dc870c8231ba021090c3356218c607a726821a7b6abb82",
+      "upstream": {
+        "nativeBlocks": 25,
+        "upstreamBlocks": 25,
+        "exactTextAndTypeMatches": 24,
+        "unambiguousCoordinatePairs": 17,
+        "duplicateBodyGroupsExcluded": [
+          {
+            "type": "text",
+            "body": "0.00",
+            "nativeCount": 2,
+            "upstreamCount": 2
+          },
+          {
+            "type": "text",
+            "body": "9.00",
+            "nativeCount": 4,
+            "upstreamCount": 3
+          },
+          {
+            "type": "text",
+            "body": "RM",
+            "nativeCount": 2,
+            "upstreamCount": 2
+          }
+        ],
+        "exactBoxesAmongUnambiguousPairs": 10,
+        "meanAbsoluteCoordinateDelta": 0.4411764705882353,
+        "maximumAbsoluteCoordinateDelta": 6,
+        "nativeBlockTypes": {
+          "image": 1,
+          "text": 23,
+          "title<LEVEL1>": 1
+        },
+        "upstreamBlockTypes": {
+          "image": 1,
+          "text": 23,
+          "title<LEVEL1>": 1
+        },
+        "nativeOnly": [
+          {
+            "type": "text",
+            "body": "9.00"
+          }
+        ],
+        "upstreamOnly": [
+          {
+            "type": "text",
+            "body": "9.000"
+          }
+        ],
+        "nativeExactPrice9000": 0,
+        "upstreamExactPrice9000": 1
+      },
+      "missingFrozenAnchors": [
+        "MODELLING CLAY"
+      ],
+      "matchesXCTest": true,
+      "harnessUpstream": {
+        "nativeBlocks": 25,
+        "upstreamBlocks": 25,
+        "exactTextAndTypeMatches": 24,
+        "unambiguousCoordinatePairs": 17,
+        "duplicateBodyGroupsExcluded": [
+          {
+            "type": "text",
+            "body": "0.00",
+            "nativeCount": 2,
+            "upstreamCount": 2
+          },
+          {
+            "type": "text",
+            "body": "9.00",
+            "nativeCount": 4,
+            "upstreamCount": 3
+          },
+          {
+            "type": "text",
+            "body": "RM",
+            "nativeCount": 2,
+            "upstreamCount": 2
+          }
+        ],
+        "exactBoxesAmongUnambiguousPairs": 10,
+        "meanAbsoluteCoordinateDelta": 0.4411764705882353,
+        "maximumAbsoluteCoordinateDelta": 6,
+        "nativeBlockTypes": {
+          "image": 1,
+          "text": 23,
+          "title<LEVEL1>": 1
+        },
+        "upstreamBlockTypes": {
+          "image": 1,
+          "text": 23,
+          "title<LEVEL1>": 1
+        },
+        "nativeOnly": [
+          {
+            "type": "text",
+            "body": "9.00"
+          }
+        ],
+        "upstreamOnly": [
+          {
+            "type": "text",
+            "body": "9.000"
+          }
+        ],
+        "nativeExactPrice9000": 0,
+        "upstreamExactPrice9000": 1
+      }
+    },
+    {
+      "caseID": "png-base",
+      "command": [
+        "/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mere.run",
+        "vision",
+        "ocr",
+        "/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/qualification/unlimited-ocr-2/inputs/receipt-canonical.png",
+        "--backend",
+        "unlimited",
+        "--unlimited-model",
+        "/Users/nerd/Library/Application Support/MereRun/models/vision-ocr-unlimited-2",
+        "--unlimited-crop",
+        "base",
+        "--temperature",
+        "0",
+        "--max-tokens",
+        "1024",
+        "--quiet",
+        "--unlimited-no-repeat-ngram-size",
+        "35",
+        "--unlimited-ngram-window",
+        "128"
+      ],
+      "seconds": 34.85232299999916,
+      "exitCode": 0,
+      "inputSHA256": "ece6b1ef186b904c20a1166efd01b97f53f06371ab0d3a1778a3649b6e12d651",
+      "stdoutSHA256": "a5793637ce069b3576e4417e4946d90fc99e08c9c6057a2882b44e28064f3ae6",
+      "metalLibrarySHA256": "64431ed485178f63a8dc870c8231ba021090c3356218c607a726821a7b6abb82",
+      "upstream": {
+        "nativeBlocks": 25,
+        "upstreamBlocks": 25,
+        "exactTextAndTypeMatches": 24,
+        "unambiguousCoordinatePairs": 17,
+        "duplicateBodyGroupsExcluded": [
+          {
+            "type": "text",
+            "body": "0.00",
+            "nativeCount": 2,
+            "upstreamCount": 2
+          },
+          {
+            "type": "text",
+            "body": "9.00",
+            "nativeCount": 4,
+            "upstreamCount": 3
+          },
+          {
+            "type": "text",
+            "body": "RM",
+            "nativeCount": 2,
+            "upstreamCount": 2
+          }
+        ],
+        "exactBoxesAmongUnambiguousPairs": 10,
+        "meanAbsoluteCoordinateDelta": 0.4411764705882353,
+        "maximumAbsoluteCoordinateDelta": 6,
+        "nativeBlockTypes": {
+          "image": 1,
+          "text": 23,
+          "title<LEVEL1>": 1
+        },
+        "upstreamBlockTypes": {
+          "image": 1,
+          "text": 23,
+          "title<LEVEL1>": 1
+        },
+        "nativeOnly": [
+          {
+            "type": "text",
+            "body": "9.00"
+          }
+        ],
+        "upstreamOnly": [
+          {
+            "type": "text",
+            "body": "9.000"
+          }
+        ],
+        "nativeExactPrice9000": 0,
+        "upstreamExactPrice9000": 1
+      },
+      "missingFrozenAnchors": [
+        "MODELLING CLAY"
+      ],
+      "matchesXCTest": true,
+      "harnessUpstream": {
+        "nativeBlocks": 25,
+        "upstreamBlocks": 25,
+        "exactTextAndTypeMatches": 24,
+        "unambiguousCoordinatePairs": 17,
+        "duplicateBodyGroupsExcluded": [
+          {
+            "type": "text",
+            "body": "0.00",
+            "nativeCount": 2,
+            "upstreamCount": 2
+          },
+          {
+            "type": "text",
+            "body": "9.00",
+            "nativeCount": 4,
+            "upstreamCount": 3
+          },
+          {
+            "type": "text",
+            "body": "RM",
+            "nativeCount": 2,
+            "upstreamCount": 2
+          }
+        ],
+        "exactBoxesAmongUnambiguousPairs": 10,
+        "meanAbsoluteCoordinateDelta": 0.4411764705882353,
+        "maximumAbsoluteCoordinateDelta": 6,
+        "nativeBlockTypes": {
+          "image": 1,
+          "text": 23,
+          "title<LEVEL1>": 1
+        },
+        "upstreamBlockTypes": {
+          "image": 1,
+          "text": 23,
+          "title<LEVEL1>": 1
+        },
+        "nativeOnly": [
+          {
+            "type": "text",
+            "body": "9.00"
+          }
+        ],
+        "upstreamOnly": [
+          {
+            "type": "text",
+            "body": "9.000"
+          }
+        ],
+        "nativeExactPrice9000": 0,
+        "upstreamExactPrice9000": 1
+      }
+    }
+  ],
+  "harnessExitCode": 0,
+  "allOutputsIdentical": true,
+  "harnessMetalLibrarySHA256": "64431ed485178f63a8dc870c8231ba021090c3356218c607a726821a7b6abb82"
+}

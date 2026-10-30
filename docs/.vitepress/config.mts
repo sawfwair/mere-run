@@ -32,6 +32,7 @@ export default defineConfig({
     const rawAssets = [
       'benchmarks/receipts',
       'benchmarks/lightonocr3-2026-10-08',
+      'qualification/unlimited-ocr-2-metal-20261030',
       'benchmarks/embeddinggemma2-coreml-tokenizer-2026-10-13.json'
     ]
     for (const asset of rawAssets) {
@@ -139,6 +140,7 @@ export default defineConfig({
           { text: 'Native Whistle', link: '/runtime/whistle' },
           { text: 'Nemotron Transcribe', link: '/runtime/nemotron-transcribe' },
           { text: 'Vision runtime', link: '/runtime/vision' },
+          { text: 'Unlimited-OCR-2', link: '/runtime/unlimited-ocr-2' },
           { text: 'Geospatial runtime', link: '/runtime/geo' },
           { text: 'Audio enhancement', link: '/runtime/audio' },
           { text: 'Music runtime', link: '/runtime/music' },
