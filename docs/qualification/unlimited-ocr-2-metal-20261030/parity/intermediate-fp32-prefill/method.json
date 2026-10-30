@@ -1,0 +1,13 @@
+{
+  "revision": "c14071b549f4fcab10909f3c4acc6a2edb366947",
+  "captureSHA256": "5d5c1867955ff38a5bfc956abf563b444809465245f3bdf59b25f1084fa7d7fa",
+  "sourceSHA256": {
+    "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRMath.swift": "8d21aaffe88bf220f77aefabbc2123d0f975d9fa826aed2f65e775ec011055c0",
+    "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRVision.swift": "508dd880bf8130c8ff5c6f80249e3b90c9821962477590f315e37e1ca9c623a3",
+    "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRDecoder.swift": "97e126baabab3b7a66fb9218104e1f388d2b0f46912da856c2e9e6ac9e908377",
+    "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRAttention.swift": "97dfefc945a4255e94051b19d27a57d21efa1ac6520d56c2ee978da463458f74"
+  },
+  "attentionOperands": "FP32 for prefill and decode; prefill bias rounded through BF16",
+  "stoppedDuring": "w9-instructions-base",
+  "reason": "Preserved before correcting prefill Q/K/V to upstream BF16 operands"
+}

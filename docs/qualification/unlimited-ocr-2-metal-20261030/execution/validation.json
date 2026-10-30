@@ -1,0 +1,44 @@
+{
+  "checks": [
+    {
+      "check": "repository-gate",
+      "exitCode": 0,
+      "logSHA256": "a6ae5f207d1a4b634e36f1dd35215fe2d81622fdfbce134d1d687dc402db78e1"
+    },
+    {
+      "check": "final-build",
+      "exitCode": 0,
+      "logSHA256": "9f74910a6de65ba8ad3ba3fc4a491b4b885e2da4186b22c9b238c9e4c8cbc980"
+    },
+    {
+      "check": "docs-build",
+      "exitCode": 0,
+      "logSHA256": "ae114350e64fc1e6dc620461fc0b7b9e07839ee80850384d6f007c2f4f0eb056"
+    },
+    {
+      "check": "six-receipt-comparison",
+      "exitCode": 0,
+      "logSHA256": "103faea5e7270126779c3330a9012efa4a2c0a1513ae6618e269d46c2883494a"
+    },
+    {
+      "check": "fresh-profile-cross-process-and-numerical",
+      "exitCode": 0,
+      "logSHA256": "18465255469058e9bf21e570a0b5fe71ca7a5b864dd3aa6add376578fcfdaa1c"
+    },
+    {
+      "check": "reject-copied-stamp",
+      "exitCode": 1,
+      "logSHA256": "836e186ac81174ed9b1e7ca02e0036a8b4862b5d3152f6e359e0e1899b2be1f4"
+    },
+    {
+      "check": "verify-fresh-profile",
+      "exitCode": 0,
+      "logSHA256": "145e936b199c04b9f001ca8eeacb744d6d7b403ea2d103030bbf79be54d4d282"
+    }
+  ],
+  "artifactUnitTests": 14,
+  "testLibraryUnitTests": 4,
+  "freshGPUNumericalTests": 17,
+  "checkpointCrossProcessTest": "passed",
+  "sixReceiptOutputsIdentical": true
+}

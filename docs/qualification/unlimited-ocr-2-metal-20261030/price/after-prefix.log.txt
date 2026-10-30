@@ -1,0 +1,13 @@
+Test Suite 'Selected tests' started at 2026-10-30 16:21:08.668.
+Test Suite 'UnlimitedOCRRuntimeTests.xctest' started at 2026-10-30 16:21:08.668.
+Test Suite 'UnlimitedOCRPriceDiagnostics' started at 2026-10-30 16:21:08.668.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRPriceDiagnostics testSamePrefixPriceDecision]' started.
+[price] upstream-vision: Decision(step: 341, expected: 504, winner: 504, expectedScore: 19.75, winnerScore: 19.75, score00: 19.75, score000: 19.75)
+[price] native-vision: Decision(step: 341, expected: 504, winner: 504, expectedScore: 20.25, winnerScore: 20.25, score00: 20.25, score000: 20.0)
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRPriceDiagnostics testSamePrefixPriceDecision]' passed (79.183 seconds).
+Test Suite 'UnlimitedOCRPriceDiagnostics' passed at 2026-10-30 16:22:27.852.
+	 Executed 1 test, with 0 failures (0 unexpected) in 79.183 (79.184) seconds
+Test Suite 'UnlimitedOCRRuntimeTests.xctest' passed at 2026-10-30 16:22:27.852.
+	 Executed 1 test, with 0 failures (0 unexpected) in 79.183 (79.184) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:22:27.852.
+	 Executed 1 test, with 0 failures (0 unexpected) in 79.183 (79.184) seconds

@@ -1,0 +1,32 @@
+{
+  "scope": "Private C decoder only; not a clean Swift package benchmark",
+  "baseline": "Empty C executable with the same compiler/configuration",
+  "configuration": "Apple clang -O0 -g; 8 compile workers; dead-stripped link",
+  "repetitions": 3,
+  "cleanSeconds": [
+    0.7257042499841191,
+    0.7735250830010045,
+    0.9218312079901807
+  ],
+  "incrementalSeconds": [
+    0.17295370801002719,
+    0.18464274998405017,
+    0.14861608302453533
+  ],
+  "incrementalEdit": "Recompile decode.c and relink, preserving upstream objects",
+  "emptyExecutableBytes": 17144,
+  "decoderExecutableBytes": 523000,
+  "cliExecutableBytes": 243005200,
+  "compiler": "Apple clang version 21.0.0 (clang-2100.4.1.1)\nTarget: arm64-apple-darwin27.2.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+  "baseCommit": "51ec7bf7b998ea741738004c6ccf3d6fc2ca8b54",
+  "retainedArtifacts": "OS compiler/cache and Swift/MLX dependency artifacts; each clean C sample recompiles all 55 translation units",
+  "limitations": "Concurrent receipt qualification and repository checks; warm filesystem caches. Full-package clean/incremental before/after times and historical CLI size delta were not measured. No throughput claim.",
+  "cleanRangeSeconds": [
+    0.7257042499841191,
+    0.9218312079901807
+  ],
+  "incrementalRangeSeconds": [
+    0.14861608302453533,
+    0.18464274998405017
+  ]
+}

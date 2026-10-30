@@ -1,0 +1,4 @@
+[parity] decoded RGB: max=41.0, mean=0.6918009; normalized pixels: max=0.28125, mean=0.0043135034
+	 Executed 1 test, with 0 failures (0 unexpected) in 10.170 (10.170) seconds
+	 Executed 1 test, with 0 failures (0 unexpected) in 10.170 (10.171) seconds
+	 Executed 1 test, with 0 failures (0 unexpected) in 10.170 (10.173) seconds

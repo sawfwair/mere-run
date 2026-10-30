@@ -1,0 +1,23 @@
+Test Suite 'Selected tests' started at 2026-10-30 15:10:40.891.
+Test Suite 'MereRunCoreTests.xctest' started at 2026-10-30 15:10:40.892.
+Test Suite 'UnlimitedOCRCheckpointTests' started at 2026-10-30 15:10:40.892.
+Test Case '-[MereRunCoreTests.UnlimitedOCRCheckpointTests testFullCheckpointDocumentsOnMetal]' started.
+[unlimited-ocr] jpeg: Loading checkpoint
+[unlimited-ocr] jpeg: Encoding page 1/1: 0 tiles, 273 visual tokens
+[unlimited-ocr] jpeg: Prefilling 279 tokens
+[unlimited-ocr] jpeg: Decoding
+[unlimited-ocr] jpeg: Decoded 256 tokens
+[unlimited-ocr] jpeg: 32.181483030319214s, 495 tokens, pages=1, missing=[[]], peak=9688842240
+[unlimited-ocr] png: Loading checkpoint
+[unlimited-ocr] png: Encoding page 1/1: 0 tiles, 273 visual tokens
+[unlimited-ocr] png: Prefilling 279 tokens
+[unlimited-ocr] png: Decoding
+[unlimited-ocr] png: Decoded 256 tokens
+[unlimited-ocr] png: 29.495291113853455s, 495 tokens, pages=1, missing=[[]], peak=7089142976
+Test Case '-[MereRunCoreTests.UnlimitedOCRCheckpointTests testFullCheckpointDocumentsOnMetal]' passed (61.707 seconds).
+Test Suite 'UnlimitedOCRCheckpointTests' passed at 2026-10-30 15:11:42.599.
+	 Executed 1 test, with 0 failures (0 unexpected) in 61.707 (61.708) seconds
+Test Suite 'MereRunCoreTests.xctest' passed at 2026-10-30 15:11:42.599.
+	 Executed 1 test, with 0 failures (0 unexpected) in 61.707 (61.708) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:11:42.599.
+	 Executed 1 test, with 0 failures (0 unexpected) in 61.707 (61.709) seconds

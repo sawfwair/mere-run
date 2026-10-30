@@ -1,0 +1,1077 @@
+Building for debugging...
+[Computing dependencies]
+[Provisioning 8 / 242]
+[Pre-planning 1 / 5824]
+[Planning 1 / 5824]
+[Planning 3866 / 5824]
+[Planning 5158 / 5824]
+[Planning deferred tasks]
+[Constructing 537 / 13283]
+[Constructing 12587 / 13283]
+warning: missing creator for mutated node: ('/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle/Contents/MacOS')
+[22 / 624] MereRun_MereRunCoreTests
+[23 / 624]
+[42 / 227] MediaIO
+[96 / 243] KolibriRuntimeTests-product
+[114 / 241] CMereRunJPEG
+[147 / 227] MereRunLagunaModel-product
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-16.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-16.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:513:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:232:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  232 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-16.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-16.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-16.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-16.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:513:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:291:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  291 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-16.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-16.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-16.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-16.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:513:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:333:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  333 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-16.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-16.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-16.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-16.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:513:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:382:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  382 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-16.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-16.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-16.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-16.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:531:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:232:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  232 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-16.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-16.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-16.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-16.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:531:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:291:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  291 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-16.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-16.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-16.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-16.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:531:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:333:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  333 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-16.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-16.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-16.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-16.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:531:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:382:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  382 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-16.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-16.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+8 warnings generated.
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:513:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:80:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+   80 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:513:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:169:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  169 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:513:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:232:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  232 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:513:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:291:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  291 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:513:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:333:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  333 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:513:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:382:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  382 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:531:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:80:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+   80 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:531:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:169:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  169 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:531:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:232:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  232 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:531:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:291:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  291 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:531:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:333:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  333 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:531:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:382:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  382 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-8.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-8.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+12 warnings generated.
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:513:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:80:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+   80 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:513:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:169:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  169 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:513:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:232:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  232 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:513:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:291:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  291 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:513:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:333:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  333 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:513:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:382:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  382 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:531:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:80:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+   80 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:531:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:169:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  169 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:531:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:232:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  232 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:531:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:291:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  291 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:531:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:333:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  333 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:531:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcol565.c:382:40: warning: implicit conversion loses integer precision: 'JLONG' (aka 'long') to 'int' [-Wshorten-64-to-32]
+  382 |       WRITE_TWO_ALIGNED_PIXELS(outptr, rgb);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/jdcolor-12.c:2:
+In file included from /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/jdcolor-12.c:14:
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/CMereRunJPEG/compile/../libjpeg/src/wrapper/../jdcolor.c:471:69: note: expanded from macro 'WRITE_TWO_ALIGNED_PIXELS'
+  471 | #define WRITE_TWO_ALIGNED_PIXELS(addr, pixels)  ((*(int *)(addr)) = pixels)
+      |                                                                   ~ ^~~~~~
+12 warnings generated.
+[166 / 229] MediaIO
+[173 / 233] MediaIO
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:195:43: warning: 'tracks(withMediaType:)' was deprecated in macOS 13.0: Use loadTracks(withMediaType:) instead [#DeprecatedDeclaration]
+193 |         let videoAsset = AVURLAsset(url: videoURL)
+194 |         let audioAsset = AVURLAsset(url: audioURL)
+195 |         guard let videoTrack = videoAsset.tracks(withMediaType: .video).first else {
+    |                                           `- warning: 'tracks(withMediaType:)' was deprecated in macOS 13.0: Use loadTracks(withMediaType:) instead [#DeprecatedDeclaration]
+196 |             throw MediaIOError.videoOperationFailed("Video track is missing from source asset.")
+197 |         }
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:198:43: warning: 'tracks(withMediaType:)' was deprecated in macOS 13.0: Use loadTracks(withMediaType:) instead [#DeprecatedDeclaration]
+196 |             throw MediaIOError.videoOperationFailed("Video track is missing from source asset.")
+197 |         }
+198 |         guard let audioTrack = audioAsset.tracks(withMediaType: .audio).first else {
+    |                                           `- warning: 'tracks(withMediaType:)' was deprecated in macOS 13.0: Use loadTracks(withMediaType:) instead [#DeprecatedDeclaration]
+199 |             throw MediaIOError.videoOperationFailed("Audio track is missing from source asset.")
+200 |         }
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:206:54: warning: 'duration' was deprecated in macOS 13.0: Use load(.duration) instead [#DeprecatedDeclaration]
+204 |             throw MediaIOError.videoOperationFailed("Could not create composition tracks.")
+205 |         }
+206 |         let audioDuration = CMTimeMinimum(videoAsset.duration, audioAsset.duration)
+    |                                                      `- warning: 'duration' was deprecated in macOS 13.0: Use load(.duration) instead [#DeprecatedDeclaration]
+207 |         try compositionVideoTrack.insertTimeRange(
+208 |             CMTimeRange(start: .zero, duration: videoAsset.duration),
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:206:75: warning: 'duration' was deprecated in macOS 13.0: Use load(.duration) instead [#DeprecatedDeclaration]
+204 |             throw MediaIOError.videoOperationFailed("Could not create composition tracks.")
+205 |         }
+206 |         let audioDuration = CMTimeMinimum(videoAsset.duration, audioAsset.duration)
+    |                                                                           `- warning: 'duration' was deprecated in macOS 13.0: Use load(.duration) instead [#DeprecatedDeclaration]
+207 |         try compositionVideoTrack.insertTimeRange(
+208 |             CMTimeRange(start: .zero, duration: videoAsset.duration),
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:208:60: warning: 'duration' was deprecated in macOS 13.0: Use load(.duration) instead [#DeprecatedDeclaration]
+206 |         let audioDuration = CMTimeMinimum(videoAsset.duration, audioAsset.duration)
+207 |         try compositionVideoTrack.insertTimeRange(
+208 |             CMTimeRange(start: .zero, duration: videoAsset.duration),
+    |                                                            `- warning: 'duration' was deprecated in macOS 13.0: Use load(.duration) instead [#DeprecatedDeclaration]
+209 |             of: videoTrack,
+210 |             at: .zero
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:217:63: warning: 'preferredTransform' was deprecated in macOS 13.0: Use load(.preferredTransform) instead [#DeprecatedDeclaration]
+215 |             at: .zero
+216 |         )
+217 |         compositionVideoTrack.preferredTransform = videoTrack.preferredTransform
+    |                                                               `- warning: 'preferredTransform' was deprecated in macOS 13.0: Use load(.preferredTransform) instead [#DeprecatedDeclaration]
+218 |         try exportComposition(composition, outputURL: outputURL, videoComposition: nil, audioMix: nil)
+219 |     }
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:228:33: warning: 'tracks(withMediaType:)' was deprecated in macOS 13.0: Use loadTracks(withMediaType:) instead [#DeprecatedDeclaration]
+226 |     ) throws -> VideoFrameSequence {
+227 |         let asset = AVURLAsset(url: videoURL)
+228 |         guard let track = asset.tracks(withMediaType: .video).first else {
+    |                                 `- warning: 'tracks(withMediaType:)' was deprecated in macOS 13.0: Use loadTracks(withMediaType:) instead [#DeprecatedDeclaration]
+229 |             throw MediaIOError.videoOperationFailed("Video track missing in asset: \(videoURL.path)")
+230 |         }
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:232:26: warning: 'nominalFrameRate' was deprecated in macOS 13.0: Use load(.nominalFrameRate) instead [#DeprecatedDeclaration]
+230 |         }
+231 |         let frameRate = try MediaVideoFrameRateResolver.resolve(
+232 |             Double(track.nominalFrameRate),
+    |                          `- warning: 'nominalFrameRate' was deprecated in macOS 13.0: Use load(.nominalFrameRate) instead [#DeprecatedDeclaration]
+233 |             fallbackFPS: 30
+234 |         )
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:236:54: warning: 'duration' was deprecated in macOS 13.0: Use load(.duration) instead [#DeprecatedDeclaration]
+234 |         )
+235 |         let fps = frameRate.framesPerSecond
+236 |         let durationSeconds = CMTimeGetSeconds(asset.duration)
+    |                                                      `- warning: 'duration' was deprecated in macOS 13.0: Use load(.duration) instead [#DeprecatedDeclaration]
+237 |         let estimatedFrameCountValue = (durationSeconds * fps).rounded(.toNearestOrEven)
+238 |         let requestedFrameCount: Int?
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:260:71: warning: 'naturalSize' was deprecated in macOS 13.0: Use load(.naturalSize) instead [#DeprecatedDeclaration]
+258 |         let frameCount = min(requestedFrameCount ?? estimatedFrameCount, estimatedFrameCount)
+259 |         if let validateDecodedSequence {
+260 |             let transformedBounds = CGRect(origin: .zero, size: track.naturalSize)
+    |                                                                       `- warning: 'naturalSize' was deprecated in macOS 13.0: Use load(.naturalSize) instead [#DeprecatedDeclaration]
+261 |                 .applying(track.preferredTransform)
+262 |             let metadataWidth = abs(transformedBounds.width).rounded(.up)
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:261:33: warning: 'preferredTransform' was deprecated in macOS 13.0: Use load(.preferredTransform) instead [#DeprecatedDeclaration]
+259 |         if let validateDecodedSequence {
+260 |             let transformedBounds = CGRect(origin: .zero, size: track.naturalSize)
+261 |                 .applying(track.preferredTransform)
+    |                                 `- warning: 'preferredTransform' was deprecated in macOS 13.0: Use load(.preferredTransform) instead [#DeprecatedDeclaration]
+262 |             let metadataWidth = abs(transformedBounds.width).rounded(.up)
+263 |             let metadataHeight = abs(transformedBounds.height).rounded(.up)
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:293:39: warning: 'copyCGImage(at:actualTime:)' was deprecated in macOS 15.0: Use generateCGImageAsynchronouslyForTime:completionHandler: instead [#DeprecatedDeclaration]
+291 |                 timescale: frameRate.timeScale
+292 |             )
+293 |             let image = try generator.copyCGImage(at: time, actualTime: nil)
+    |                                       `- warning: 'copyCGImage(at:actualTime:)' was deprecated in macOS 15.0: Use generateCGImageAsynchronouslyForTime:completionHandler: instead [#DeprecatedDeclaration]
+294 |             if frameWidth == 0 || frameHeight == 0 {
+295 |                 frameWidth = image.width
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:322:33: warning: 'tracks(withMediaType:)' was deprecated in macOS 13.0: Use loadTracks(withMediaType:) instead [#DeprecatedDeclaration]
+320 |     ) throws -> VideoFrameSequence {
+321 |         let asset = AVURLAsset(url: videoURL)
+322 |         guard let track = asset.tracks(withMediaType: .video).first else {
+    |                                 `- warning: 'tracks(withMediaType:)' was deprecated in macOS 13.0: Use loadTracks(withMediaType:) instead [#DeprecatedDeclaration]
+323 |             throw MediaIOError.videoOperationFailed("Video track missing in asset: \(videoURL.path)")
+324 |         }
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:326:26: warning: 'nominalFrameRate' was deprecated in macOS 13.0: Use load(.nominalFrameRate) instead [#DeprecatedDeclaration]
+324 |         }
+325 |         let sourceRate = try MediaVideoFrameRateResolver.resolve(
+326 |             Double(track.nominalFrameRate),
+    |                          `- warning: 'nominalFrameRate' was deprecated in macOS 13.0: Use load(.nominalFrameRate) instead [#DeprecatedDeclaration]
+327 |             fallbackFPS: 30
+328 |         )
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:329:47: warning: 'duration' was deprecated in macOS 13.0: Use load(.duration) instead [#DeprecatedDeclaration]
+327 |             fallbackFPS: 30
+328 |         )
+329 |         let duration = CMTimeGetSeconds(asset.duration)
+    |                                               `- warning: 'duration' was deprecated in macOS 13.0: Use load(.duration) instead [#DeprecatedDeclaration]
+330 |         guard duration.isFinite, duration > 0 else {
+331 |             throw MediaIOError.videoOperationFailed("Video duration is not finite or positive.")
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:361:39: warning: 'copyCGImage(at:actualTime:)' was deprecated in macOS 15.0: Use generateCGImageAsynchronouslyForTime:completionHandler: instead [#DeprecatedDeclaration]
+359 |                 timescale: sourceRate.timeScale
+360 |             )
+361 |             let image = try generator.copyCGImage(at: time, actualTime: nil)
+    |                                       `- warning: 'copyCGImage(at:actualTime:)' was deprecated in macOS 15.0: Use generateCGImageAsynchronouslyForTime:completionHandler: instead [#DeprecatedDeclaration]
+362 |             width = image.width
+363 |             height = image.height
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:507:23: warning: 'tracks(withMediaType:)' was deprecated in macOS 13.0: Use loadTracks(withMediaType:) instead [#DeprecatedDeclaration]
+505 |     static func hasAudioTrack(_ url: URL) -> Bool {
+506 |         let asset = AVURLAsset(url: url)
+507 |         return !asset.tracks(withMediaType: .audio).isEmpty
+    |                       `- warning: 'tracks(withMediaType:)' was deprecated in macOS 13.0: Use loadTracks(withMediaType:) instead [#DeprecatedDeclaration]
+508 |     }
+509 | 
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:542:16: warning: 'exportAsynchronously(completionHandler:)' was deprecated in macOS 15.0 [#DeprecatedDeclaration]
+540 |         export.audioMix = audioMix
+541 |         let semaphore = DispatchSemaphore(value: 0)
+542 |         export.exportAsynchronously { semaphore.signal() }
+    |                `- warning: 'exportAsynchronously(completionHandler:)' was deprecated in macOS 15.0 [#DeprecatedDeclaration]
+543 |         semaphore.wait()
+544 |         guard export.status == .completed else {
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:544:22: warning: 'status' was deprecated in macOS 15.0: Use states(updateInterval:) instead [#DeprecatedDeclaration]
+542 |         export.exportAsynchronously { semaphore.signal() }
+543 |         semaphore.wait()
+544 |         guard export.status == .completed else {
+    |                      `- warning: 'status' was deprecated in macOS 15.0: Use states(updateInterval:) instead [#DeprecatedDeclaration]
+545 |             throw MediaIOError.videoOperationFailed(export.error?.localizedDescription ?? "export failed")
+546 |         }
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MediaIO/AppleMediaVideoIO.swift:545:60: warning: 'error' was deprecated in macOS 15.0: Use export(to:as:) async throws instead [#DeprecatedDeclaration]
+543 |         semaphore.wait()
+544 |         guard export.status == .completed else {
+545 |             throw MediaIOError.videoOperationFailed(export.error?.localizedDescription ?? "export failed")
+    |                                                            `- warning: 'error' was deprecated in macOS 15.0: Use export(to:as:) async throws instead [#DeprecatedDeclaration]
+546 |         }
+547 |     }
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[176 / 234] MediaIOSmoke-product
+[189 / 246] MediaIOSmoke-product
+[189 / 246] AudioCodecs
+[198 / 250] AudioCodecs-product
+[200 / 251] MereRunCore
+[219 / 289] MereRunCore
+[221 / 289] MereRunCore
+[223 / 289] MereRunCore
+[225 / 289] MereRunCore
+[229 / 289] MereRunCore
+[230 / 289] MereRunCore
+[231 / 289] MereRunCore
+[232 / 289] MereRunCore
+[233 / 289] MereRunCore
+[234 / 289] MereRunCore
+[235 / 289] MereRunCore
+[236 / 289] MereRunCore
+[237 / 289] MereRunCore
+[238 / 289] MereRunCore
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/VideoDepth/DepthSequenceStreamingArtifactExporter.swift:318:16: warning: result of call to 'withUnsafeMutableBytes' is unused [#NoUsage]
+316 |         }
+317 |         var values = [Float](repeating: 0, count: expectedCount)
+318 |         values.withUnsafeMutableBytes { destination in
+    |                `- warning: result of call to 'withUnsafeMutableBytes' is unused [#NoUsage]
+319 |             data.copyBytes(to: destination)
+320 |         }
+
+[#NoUsage]: <https://docs.swift.org/compiler/documentation/diagnostics/no-usage>
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/Inkling/InklingSharedOuterLoRASwitchLinear.swift:12:85: warning: function call causes an infinite recursion
+ 10 | /// expert-specific. This preserves per-expert adaptation without allocating a
+ 11 | /// full independent LoRA pair for all 256 routed experts.
+ 12 | final class InklingSharedOuterLoRASwitchLinear: Q35SwitchLinear, TrainableLoRALayer {
+    |                                                                                     `- warning: function call causes an infinite recursion
+ 13 |     enum SharedFactor: Sendable, Equatable {
+ 14 |         /// Gate/up projections: the input-side factor touches hidden size.
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/Inkling/InklingSharedOuterLoRASwitchLinear.swift:12:85: warning: function call causes an infinite recursion
+ 10 | /// expert-specific. This preserves per-expert adaptation without allocating a
+ 11 | /// full independent LoRA pair for all 256 routed experts.
+ 12 | final class InklingSharedOuterLoRASwitchLinear: Q35SwitchLinear, TrainableLoRALayer {
+    |                                                                                     `- warning: function call causes an infinite recursion
+ 13 |     enum SharedFactor: Sendable, Equatable {
+ 14 |         /// Gate/up projections: the input-side factor touches hidden size.
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/NativeMediaAssembler.swift:292:37: warning: 'tracks(withMediaType:)' was deprecated in macOS 13.0: Use loadTracks(withMediaType:) instead [#DeprecatedDeclaration]
+ 290 |         for (index, url) in renderedSegmentURLs.enumerated() {
+ 291 |             let asset = AVURLAsset(url: url)
+ 292 |             guard let track = asset.tracks(withMediaType: .video).first else {
+     |                                     `- warning: 'tracks(withMediaType:)' was deprecated in macOS 13.0: Use loadTracks(withMediaType:) instead [#DeprecatedDeclaration]
+ 293 |                 throw NativeMediaAssemblerError.missingVideoTrack(url)
+ 294 |             }
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/NativeMediaAssembler.swift:297:43: warning: 'timeRange' was deprecated in macOS 13.0: Use load(.timeRange) instead [#DeprecatedDeclaration]
+ 295 | 
+ 296 |             let requestedDuration = CMTime(seconds: max(0.1, orderedSegments[index].endSeconds - orderedSegments[index].startSeconds), preferredTimescale: 600)
+ 297 |             let availableDuration = track.timeRange.duration
+     |                                           `- warning: 'timeRange' was deprecated in macOS 13.0: Use load(.timeRange) instead [#DeprecatedDeclaration]
+ 298 |             let insertDuration = CMTimeMinimum(requestedDuration, availableDuration)
+ 299 | 
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/NativeMediaAssembler.swift:524:39: warning: 'tracks(withMediaType:)' was deprecated in macOS 13.0: Use loadTracks(withMediaType:) instead [#DeprecatedDeclaration]
+ 522 |     ) throws {
+ 523 |         let asset = AVURLAsset(url: videoURL)
+ 524 |         guard let sourceTrack = asset.tracks(withMediaType: .video).first else {
+     |                                       `- warning: 'tracks(withMediaType:)' was deprecated in macOS 13.0: Use loadTracks(withMediaType:) instead [#DeprecatedDeclaration]
+ 525 |             throw NativeMediaAssemblerError.missingVideoTrack(videoURL)
+ 526 |         }
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/NativeMediaAssembler.swift:537:42: warning: 'timeRange' was deprecated in macOS 13.0: Use load(.timeRange) instead [#DeprecatedDeclaration]
+ 535 | 
+ 536 |         let targetDuration = CMTime(seconds: max(0.1, durationSeconds), preferredTimescale: 600)
+ 537 |         let sourceDuration = sourceTrack.timeRange.duration
+     |                                          `- warning: 'timeRange' was deprecated in macOS 13.0: Use load(.timeRange) instead [#DeprecatedDeclaration]
+ 538 |         let insertDuration = CMTimeMinimum(sourceDuration, targetDuration)
+ 539 | 
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/NativeMediaAssembler.swift:578:31: warning: 'preferredTransform' was deprecated in macOS 13.0: Use load(.preferredTransform) instead [#DeprecatedDeclaration]
+ 576 | 
+ 577 |     private func renderTransform(for track: AVAssetTrack, renderSize: CGSize) -> CGAffineTransform {
+ 578 |         let preferred = track.preferredTransform
+     |                               `- warning: 'preferredTransform' was deprecated in macOS 13.0: Use load(.preferredTransform) instead [#DeprecatedDeclaration]
+ 579 |         let naturalRect = CGRect(origin: .zero, size: track.naturalSize)
+ 580 |         let orientedRect = naturalRect.applying(preferred)
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/NativeMediaAssembler.swift:579:61: warning: 'naturalSize' was deprecated in macOS 13.0: Use load(.naturalSize) instead [#DeprecatedDeclaration]
+ 577 |     private func renderTransform(for track: AVAssetTrack, renderSize: CGSize) -> CGAffineTransform {
+ 578 |         let preferred = track.preferredTransform
+ 579 |         let naturalRect = CGRect(origin: .zero, size: track.naturalSize)
+     |                                                             `- warning: 'naturalSize' was deprecated in macOS 13.0: Use load(.naturalSize) instead [#DeprecatedDeclaration]
+ 580 |         let orientedRect = naturalRect.applying(preferred)
+ 581 |         let orientedSize = CGSize(width: abs(orientedRect.width), height: abs(orientedRect.height))
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/NativeMediaAssembler.swift:605:43: warning: 'tracks(withMediaType:)' was deprecated in macOS 13.0: Use loadTracks(withMediaType:) instead [#DeprecatedDeclaration]
+ 603 |         for layer in narrationLayers {
+ 604 |             let asset = AVURLAsset(url: layer.url)
+ 605 |             guard let sourceTrack = asset.tracks(withMediaType: .audio).first else {
+     |                                           `- warning: 'tracks(withMediaType:)' was deprecated in macOS 13.0: Use loadTracks(withMediaType:) instead [#DeprecatedDeclaration]
+ 606 |                 continue
+ 607 |             }
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/NativeMediaAssembler.swift:620:60: warning: 'timeRange' was deprecated in macOS 13.0: Use load(.timeRange) instead [#DeprecatedDeclaration]
+ 618 | 
+ 619 |             let remaining = CMTimeSubtract(totalDuration, start)
+ 620 |             let insertDuration = CMTimeMinimum(sourceTrack.timeRange.duration, remaining)
+     |                                                            `- warning: 'timeRange' was deprecated in macOS 13.0: Use load(.timeRange) instead [#DeprecatedDeclaration]
+ 621 |             guard insertDuration > .zero else { continue }
+ 622 | 
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/NativeMediaAssembler.swift:636:40: warning: 'tracks(withMediaType:)' was deprecated in macOS 13.0: Use loadTracks(withMediaType:) instead [#DeprecatedDeclaration]
+ 634 |         if let backgroundLayer {
+ 635 |             let asset = AVURLAsset(url: backgroundLayer.url)
+ 636 |             if let sourceTrack = asset.tracks(withMediaType: .audio).first,
+     |                                        `- warning: 'tracks(withMediaType:)' was deprecated in macOS 13.0: Use loadTracks(withMediaType:) instead [#DeprecatedDeclaration]
+ 637 |                let track = composition.addMutableTrack(
+ 638 |                    withMediaType: .audio,
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/NativeMediaAssembler.swift:644:68: warning: 'timeRange' was deprecated in macOS 13.0: Use load(.timeRange) instead [#DeprecatedDeclaration]
+ 642 |                 if start < totalDuration {
+ 643 |                     let remaining = CMTimeSubtract(totalDuration, start)
+ 644 |                     let insertDuration = CMTimeMinimum(sourceTrack.timeRange.duration, remaining)
+     |                                                                    `- warning: 'timeRange' was deprecated in macOS 13.0: Use load(.timeRange) instead [#DeprecatedDeclaration]
+ 645 |                     if insertDuration > .zero {
+ 646 |                         try track.insertTimeRange(
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/NativeMediaAssembler.swift:811:16: warning: 'exportAsynchronously(completionHandler:)' was deprecated in macOS 15.0 [#DeprecatedDeclaration]
+ 809 | 
+ 810 |         let semaphore = DispatchSemaphore(value: 0)
+ 811 |         export.exportAsynchronously {
+     |                `- warning: 'exportAsynchronously(completionHandler:)' was deprecated in macOS 15.0 [#DeprecatedDeclaration]
+ 812 |             semaphore.signal()
+ 813 |         }
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/NativeMediaAssembler.swift:816:22: warning: 'status' was deprecated in macOS 15.0: Use states(updateInterval:) instead [#DeprecatedDeclaration]
+ 814 |         semaphore.wait()
+ 815 | 
+ 816 |         guard export.status == .completed else {
+     |                      `- warning: 'status' was deprecated in macOS 15.0: Use states(updateInterval:) instead [#DeprecatedDeclaration]
+ 817 |             let details = export.error?.localizedDescription ?? "status=\(export.status.rawValue)"
+ 818 |             throw NativeMediaAssemblerError.exportFailed(details)
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/NativeMediaAssembler.swift:817:34: warning: 'error' was deprecated in macOS 15.0: Use export(to:as:) async throws instead [#DeprecatedDeclaration]
+ 815 | 
+ 816 |         guard export.status == .completed else {
+ 817 |             let details = export.error?.localizedDescription ?? "status=\(export.status.rawValue)"
+     |                                  `- warning: 'error' was deprecated in macOS 15.0: Use export(to:as:) async throws instead [#DeprecatedDeclaration]
+ 818 |             throw NativeMediaAssemblerError.exportFailed(details)
+ 819 |         }
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/NativeMediaAssembler.swift:817:82: warning: 'status' was deprecated in macOS 15.0: Use states(updateInterval:) instead [#DeprecatedDeclaration]
+ 815 | 
+ 816 |         guard export.status == .completed else {
+ 817 |             let details = export.error?.localizedDescription ?? "status=\(export.status.rawValue)"
+     |                                                                                  `- warning: 'status' was deprecated in macOS 15.0: Use states(updateInterval:) instead [#DeprecatedDeclaration]
+ 818 |             throw NativeMediaAssemblerError.exportFailed(details)
+ 819 |         }
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/Inkling/InklingSharedOuterLoRASwitchLinear.swift:12:85: warning: function call causes an infinite recursion
+ 10 | /// expert-specific. This preserves per-expert adaptation without allocating a
+ 11 | /// full independent LoRA pair for all 256 routed experts.
+ 12 | final class InklingSharedOuterLoRASwitchLinear: Q35SwitchLinear, TrainableLoRALayer {
+    |                                                                                     `- warning: function call causes an infinite recursion
+ 13 |     enum SharedFactor: Sendable, Equatable {
+ 14 |         /// Gate/up projections: the input-side factor touches hidden size.
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/Inkling/InklingSharedOuterLoRASwitchLinear.swift:12:85: warning: function call causes an infinite recursion
+ 10 | /// expert-specific. This preserves per-expert adaptation without allocating a
+ 11 | /// full independent LoRA pair for all 256 routed experts.
+ 12 | final class InklingSharedOuterLoRASwitchLinear: Q35SwitchLinear, TrainableLoRALayer {
+    |                                                                                     `- warning: function call causes an infinite recursion
+ 13 |     enum SharedFactor: Sendable, Equatable {
+ 14 |         /// Gate/up projections: the input-side factor touches hidden size.
+[246 / 297] MereRunCore
+[247 / 297] MereRunCore-product
+[247 / 297] AudioTTS
+[266 / 335] AudioSTT
+[268 / 335] AudioSTT
+[280 / 335] AudioSTT
+[286 / 336] AudioTTS
+[288 / 336] AudioTTSTests-product
+[290 / 342] AudioSTT
+[295 / 346] AudioTTS
+[299 / 342] AudioSTT
+[306 / 336] AudioSTT-product
+[306 / 336] AudioTTSTests-product
+[317 / 347] AudioTTSTests-product
+[320 / 348] AudioTTSTests-product
+[322 / 348] AudioTTSTests-product
+[324 / 349] AudioTTSTests-product
+[324 / 349] mere.run-product
+[342 / 406] mere.run-product
+[344 / 406] mere.run-product
+[345 / 406] mere.run-product
+[347 / 406] MereRunCoreTests-product
+[349 / 406] MereRunCoreTests-product
+[350 / 406] MereRunCoreTests-product
+[352 / 406] MereRunCoreTests-product
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCLI/Commands/GraphCommand.swift:555:13: warning: no 'async' operations occur within 'await' expression [#UnnecessaryEffectMarker]
+ 553 | 
+ 554 |     func run() async throws {
+ 555 |         try await mapRelayErrors {
+     |             `- warning: no 'async' operations occur within 'await' expression [#UnnecessaryEffectMarker]
+ 556 |             guard !(json && jsonStream) else {
+ 557 |                 throw ValidationError("--json and --json-stream are mutually exclusive.")
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCLI/Commands/GraphCommand.swift:657:13: warning: no 'async' operations occur within 'await' expression [#UnnecessaryEffectMarker]
+ 655 | 
+ 656 |     func run() async throws {
+ 657 |         try await mapRelayErrors {
+     |             `- warning: no 'async' operations occur within 'await' expression [#UnnecessaryEffectMarker]
+ 658 |             guard !(json && jsonStream) else {
+ 659 |                 throw ValidationError("--json and --json-stream are mutually exclusive.")
+
+[#UnnecessaryEffectMarker]: <https://docs.swift.org/compiler/documentation/diagnostics/unnecessary-effect-marker>
+[353 / 406] MereRunCoreTests-product
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCLI/Commands/RelayCommand.swift:47:25: warning: no 'async' operations occur within 'await' expression [#UnnecessaryEffectMarker]
+ 45 |         var generator = SystemRandomNumberGenerator()
+ 46 |         let pairingCode = String(format: "%06d", Int.random(in: 0...999_999, using: &generator))
+ 47 |         let state = try await LocalRelayState(
+    |                         `- warning: no 'async' operations occur within 'await' expression [#UnnecessaryEffectMarker]
+ 48 |             rootDirectory: root,
+ 49 |             relayName: relayName,
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCLI/Commands/RelayCommand.swift:103:38: warning: no calls to throwing functions occur within 'try' expression [#UnnecessaryEffectMarker]
+101 |                 executionQueue.async {
+102 |                     do {
+103 |                         let runner = try WorkflowRunner(
+    |                                      `- warning: no calls to throwing functions occur within 'try' expression [#UnnecessaryEffectMarker]
+104 |                             bundleDirectory: bundleDir,
+105 |                             runDirectory: runDir,
+
+[#UnnecessaryEffectMarker]: <https://docs.swift.org/compiler/documentation/diagnostics/unnecessary-effect-marker>
+[355 / 406] mere.run-product
+[357 / 406] MereRunCoreTests-product
+[359 / 406] MereRunCoreTests-product
+[359 / 405] MereRunCoreTests-product
+[364 / 405] mere.run-product
+[366 / 405] MereRunCoreTests-product
+[367 / 405] MereRunCoreTests-product
+[368 / 405] MereRunCLI
+[369 / 405] MereRunCLI
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Tests/MereRunCoreTests/PortableQuantizedMatmulTests.swift:311:26: warning: 'preferNativeQuant' is deprecated: Use MLXCUDAQuant.mode; automatic mode probes each operation independently. [#DeprecatedDeclaration]
+309 |     func testLegacyCUDAQuantPreferenceRemainsSourceCompatible() {
+310 |         XCTAssertEqual(
+311 |             MLXCUDAQuant.preferNativeQuant,
+    |                          `- warning: 'preferNativeQuant' is deprecated: Use MLXCUDAQuant.mode; automatic mode probes each operation independently. [#DeprecatedDeclaration]
+312 |             MLXCUDAQuant.mode == .native
+313 |         )
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[374 / 406] MereRunCLI
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Tests/MereRunCoreTests/Bonsai2SmallReferenceTests.swift:171:13: warning: no 'async' operations occur within 'await' expression [#UnnecessaryEffectMarker]
+169 |             try await ensureLoaded(rootURL: checkpoint, progressHandler: nil)
+170 |             let results = try await exportBonsaiParity(plan: plan, reference: reference, destination: destination)
+171 |             await unload()
+    |             `- warning: no 'async' operations occur within 'await' expression [#UnnecessaryEffectMarker]
+172 |             return results
+173 |         }
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Tests/MereRunCoreTests/Bonsai2SmallVisionStageTests.swift:82:13: warning: no 'async' operations occur within 'await' expression [#UnnecessaryEffectMarker]
+80 |             arrays["production_merged"] = production.hiddenStates
+81 |             try MLX.save(arrays: arrays, url: root.appending(path: "native-vision-stages-\(size).safetensors"))
+82 |             await unload()
+   |             `- warning: no 'async' operations occur within 'await' expression [#UnnecessaryEffectMarker]
+83 |         }
+84 |     }
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Tests/MereRunCoreTests/ClefOmniTests.swift:33:13: warning: variable 'changed' was never mutated; consider changing to 'let' constant [#VariableNeverMutated]
+ 31 |                     try XCTUnwrap(reference["visual_hidden"]))
+ 32 |         // A later token must not influence earlier states.
+ 33 |         var changed = ids
+    |             `- warning: variable 'changed' was never mutated; consider changing to 'let' constant [#VariableNeverMutated]
+ 34 |         changed[0, 10] = MLXArray(Int32(99))
+ 35 |         let output = try model(ids: changed, positions: positions)
+
+[#UnnecessaryEffectMarker]: <https://docs.swift.org/compiler/documentation/diagnostics/unnecessary-effect-marker>
+[#VariableNeverMutated]: <https://docs.swift.org/compiler/documentation/diagnostics/variable-never-mutated>
+[378 / 406] MereRunCLI
+[379 / 406] mere.run-product
+[381 / 406] MereRunCLI
+[382 / 406] MereRunCoreTests-product
+[383 / 417] MereRunCLITests-product
+[386 / 417] MereRunCLI
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Tests/MereRunCoreTests/Q38PLEPlacementIntegrationTests.swift:81:21: warning: result of call to 'writePlacementManifest()' is unused [#NoUsage]
+ 79 |         let fixture = try Fixture()
+ 80 |         defer { fixture.remove() }
+ 81 |         try fixture.writePlacementManifest()
+    |                     `- warning: result of call to 'writePlacementManifest()' is unused [#NoUsage]
+ 82 |         let blobs = fixture.root.appendingPathComponent("blobs", isDirectory: true)
+ 83 |         try FileManager.default.createDirectory(at: blobs, withIntermediateDirectories: true)
+
+[#NoUsage]: <https://docs.swift.org/compiler/documentation/diagnostics/no-usage>
+[387 / 417] MereRunCLI
+[389 / 417] MereRunCLI
+[390 / 417] MereRunCLI
+[391 / 417] MereRunCLI
+[392 / 417] MereRunCoreTests-product
+[392 / 417] MereRunCLI
+[393 / 418] MereRunCLI
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCLI/Commands/RelayCommand.swift:47:25: warning: no 'async' operations occur within 'await' expression [#UnnecessaryEffectMarker]
+ 45 |         var generator = SystemRandomNumberGenerator()
+ 46 |         let pairingCode = String(format: "%06d", Int.random(in: 0...999_999, using: &generator))
+ 47 |         let state = try await LocalRelayState(
+    |                         `- warning: no 'async' operations occur within 'await' expression [#UnnecessaryEffectMarker]
+ 48 |             rootDirectory: root,
+ 49 |             relayName: relayName,
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCLI/Commands/RelayCommand.swift:103:38: warning: no calls to throwing functions occur within 'try' expression [#UnnecessaryEffectMarker]
+101 |                 executionQueue.async {
+102 |                     do {
+103 |                         let runner = try WorkflowRunner(
+    |                                      `- warning: no calls to throwing functions occur within 'try' expression [#UnnecessaryEffectMarker]
+104 |                             bundleDirectory: bundleDir,
+105 |                             runDirectory: runDir,
+
+[#UnnecessaryEffectMarker]: <https://docs.swift.org/compiler/documentation/diagnostics/unnecessary-effect-marker>
+[393 / 418] MereRunCoreTests-product
+[395 / 418] MereRunCLI
+[395 / 418] MereRunCoreTests-product
+[396 / 418] MereRunCoreTests-product
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCLI/Commands/GraphCommand.swift:555:13: warning: no 'async' operations occur within 'await' expression [#UnnecessaryEffectMarker]
+ 553 | 
+ 554 |     func run() async throws {
+ 555 |         try await mapRelayErrors {
+     |             `- warning: no 'async' operations occur within 'await' expression [#UnnecessaryEffectMarker]
+ 556 |             guard !(json && jsonStream) else {
+ 557 |                 throw ValidationError("--json and --json-stream are mutually exclusive.")
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCLI/Commands/GraphCommand.swift:657:13: warning: no 'async' operations occur within 'await' expression [#UnnecessaryEffectMarker]
+ 655 | 
+ 656 |     func run() async throws {
+ 657 |         try await mapRelayErrors {
+     |             `- warning: no 'async' operations occur within 'await' expression [#UnnecessaryEffectMarker]
+ 658 |             guard !(json && jsonStream) else {
+ 659 |                 throw ValidationError("--json and --json-stream are mutually exclusive.")
+
+[#UnnecessaryEffectMarker]: <https://docs.swift.org/compiler/documentation/diagnostics/unnecessary-effect-marker>
+[397 / 418] MereRunCLI
+[397 / 416] MereRunCLI
+[399 / 416] MereRunCLI
+[402 / 407] MereRunCLITests-product
+[420 / 426] MereRunCLITests-product
+[421 / 426] MereRunCLITests-product
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Tests/MereRunCLITests/LocalRelayServerTests.swift:24:13: warning: no 'async' operations occur within 'await' expression [#UnnecessaryEffectMarker]
+ 22 | 
+ 23 |     private func makeState(pairingWindowMinutes: Int = 15) async throws -> LocalRelayState {
+ 24 |         try await LocalRelayState(
+    |             `- warning: no 'async' operations occur within 'await' expression [#UnnecessaryEffectMarker]
+ 25 |             rootDirectory: root,
+ 26 |             relayName: "test-relay",
+
+[#UnnecessaryEffectMarker]: <https://docs.swift.org/compiler/documentation/diagnostics/unnecessary-effect-marker>
+[424 / 427] MereRunCLITests-product
+[426 / 427] MereRunCLITests-product
+[428 / 428] MereRunCLITests-product
+Build complete! (42.70 secs.)
+Test Suite 'Selected tests' started at 2026-10-30 15:02:22.550.
+Test Suite 'UnlimitedOCRRuntimeTests.xctest' started at 2026-10-30 15:02:22.550.
+Test Suite 'UnlimitedOCRRuntimeTests.xctest' passed at 2026-10-30 15:02:22.550.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:22.550.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:22.638.
+Test Suite 'StudioUITests.xctest' started at 2026-10-30 15:02:22.639.
+Test Suite 'StudioUITests.xctest' passed at 2026-10-30 15:02:22.639.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:22.639.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:22.710.
+Test Suite 'StudioKitTests.xctest' started at 2026-10-30 15:02:22.711.
+Test Suite 'StudioKitTests.xctest' passed at 2026-10-30 15:02:22.711.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:22.711.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:22.827.
+Test Suite 'SpeechRuntimeTests.xctest' started at 2026-10-30 15:02:22.827.
+Test Suite 'SpeechRuntimeTests.xctest' passed at 2026-10-30 15:02:22.827.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:22.827.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:22.944.
+Test Suite 'QwenRuntimeTests.xctest' started at 2026-10-30 15:02:22.944.
+Test Suite 'QwenRuntimeTests.xctest' passed at 2026-10-30 15:02:22.944.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:22.944.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:23.060.
+Test Suite 'NemotronTranscribeRuntimeTests.xctest' started at 2026-10-30 15:02:23.061.
+Test Suite 'NemotronTranscribeRuntimeTests.xctest' passed at 2026-10-30 15:02:23.061.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:23.061.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:23.177.
+Test Suite 'NemotronBoltRuntimeTests.xctest' started at 2026-10-30 15:02:23.177.
+Test Suite 'NemotronBoltRuntimeTests.xctest' passed at 2026-10-30 15:02:23.177.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:23.177.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:23.245.
+Test Suite 'MereRunResidencyTests.xctest' started at 2026-10-30 15:02:23.246.
+Test Suite 'MereRunResidencyTests.xctest' passed at 2026-10-30 15:02:23.246.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:23.246.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:23.313.
+Test Suite 'MereRunRelayKitTests.xctest' started at 2026-10-30 15:02:23.314.
+Test Suite 'MereRunRelayKitTests.xctest' passed at 2026-10-30 15:02:23.314.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:23.314.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:23.381.
+Test Suite 'MereRunModelKitTests.xctest' started at 2026-10-30 15:02:23.382.
+Test Suite 'MereRunModelKitTests.xctest' passed at 2026-10-30 15:02:23.382.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:23.382.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:23.449.
+Test Suite 'MereRunExecutionTests.xctest' started at 2026-10-30 15:02:23.449.
+Test Suite 'MereRunExecutionTests.xctest' passed at 2026-10-30 15:02:23.449.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:23.449.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:23.517.
+Test Suite 'MereRunEvaluationTests.xctest' started at 2026-10-30 15:02:23.517.
+Test Suite 'MereRunEvaluationTests.xctest' passed at 2026-10-30 15:02:23.517.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:23.517.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:23.676.
+Test Suite 'MereRunCoreTests.xctest' started at 2026-10-30 15:02:23.676.
+Test Suite 'PillowJPEGTests' started at 2026-10-30 15:02:23.676.
+Test Case '-[MereRunCoreTests.PillowJPEGTests testConcurrentDecodesHaveIndependentErrorAndPixelBuffers]' started.
+Test Case '-[MereRunCoreTests.PillowJPEGTests testConcurrentDecodesHaveIndependentErrorAndPixelBuffers]' passed (0.001 seconds).
+Test Case '-[MereRunCoreTests.PillowJPEGTests testJPEGSignatureSelectsTheDecoderRegardlessOfFilename]' started.
+Test Case '-[MereRunCoreTests.PillowJPEGTests testJPEGSignatureSelectsTheDecoderRegardlessOfFilename]' passed (0.001 seconds).
+Test Case '-[MereRunCoreTests.PillowJPEGTests testMalformedAndTruncatedJPEGThrowWithoutAborting]' started.
+Test Case '-[MereRunCoreTests.PillowJPEGTests testMalformedAndTruncatedJPEGThrowWithoutAborting]' passed (0.001 seconds).
+Test Case '-[MereRunCoreTests.PillowJPEGTests testNativeJPEGBytesMatchIndependentPillowGoldens]' started.
+Test Case '-[MereRunCoreTests.PillowJPEGTests testNativeJPEGBytesMatchIndependentPillowGoldens]' passed (0.002 seconds).
+Test Case '-[MereRunCoreTests.PillowJPEGTests testNonJPEGInputsRetainThePlatformDecoder]' started.
+Test Case '-[MereRunCoreTests.PillowJPEGTests testNonJPEGInputsRetainThePlatformDecoder]' passed (0.003 seconds).
+Test Suite 'PillowJPEGTests' passed at 2026-10-30 15:02:23.685.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.008 (0.008) seconds
+Test Suite 'MereRunCoreTests.xctest' passed at 2026-10-30 15:02:23.685.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.008 (0.008) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:23.685.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.008 (0.009) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:23.752.
+Test Suite 'MereRunContractTests.xctest' started at 2026-10-30 15:02:23.753.
+Test Suite 'MereRunContractTests.xctest' passed at 2026-10-30 15:02:23.753.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:23.753.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:23.946.
+Test Suite 'MereRunCLITests.xctest' started at 2026-10-30 15:02:23.947.
+Test Suite 'MereRunCLITests.xctest' passed at 2026-10-30 15:02:23.947.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:23.947.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:24.033.
+Test Suite 'MereRunAppTests.xctest' started at 2026-10-30 15:02:24.034.
+Test Suite 'MereRunAppTests.xctest' passed at 2026-10-30 15:02:24.034.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:24.034.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:24.102.
+Test Suite 'MereRunAdmissionTests.xctest' started at 2026-10-30 15:02:24.102.
+Test Suite 'MereRunAdmissionTests.xctest' passed at 2026-10-30 15:02:24.102.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:24.102.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:24.217.
+Test Suite 'LagunaRuntimeTests.xctest' started at 2026-10-30 15:02:24.218.
+Test Suite 'LagunaRuntimeTests.xctest' passed at 2026-10-30 15:02:24.218.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:24.218.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:24.332.
+Test Suite 'LTXRuntimeTests.xctest' started at 2026-10-30 15:02:24.332.
+Test Suite 'LTXRuntimeTests.xctest' passed at 2026-10-30 15:02:24.332.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:24.332.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:24.447.
+Test Suite 'KolibriRuntimeTests.xctest' started at 2026-10-30 15:02:24.448.
+Test Suite 'KolibriRuntimeTests.xctest' passed at 2026-10-30 15:02:24.448.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:24.448.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:24.563.
+Test Suite 'ImageRuntimeTests.xctest' started at 2026-10-30 15:02:24.564.
+Test Suite 'ImageRuntimeTests.xctest' passed at 2026-10-30 15:02:24.564.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:24.564.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:24.681.
+Test Suite 'H3RuntimeTests.xctest' started at 2026-10-30 15:02:24.681.
+Test Suite 'H3RuntimeTests.xctest' passed at 2026-10-30 15:02:24.681.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:24.681.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:24.798.
+Test Suite 'GemmaRuntimeTests.xctest' started at 2026-10-30 15:02:24.799.
+Test Suite 'GemmaRuntimeTests.xctest' passed at 2026-10-30 15:02:24.799.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:24.799.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:24.915.
+Test Suite 'FlintRuntimeTests.xctest' started at 2026-10-30 15:02:24.916.
+Test Suite 'FlintRuntimeTests.xctest' passed at 2026-10-30 15:02:24.916.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:24.916.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:25.032.
+Test Suite 'Drama3RuntimeTests.xctest' started at 2026-10-30 15:02:25.033.
+Test Suite 'Drama3RuntimeTests.xctest' passed at 2026-10-30 15:02:25.033.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:25.033.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:25.150.
+Test Suite 'DecodeRuntimeTests.xctest' started at 2026-10-30 15:02:25.151.
+Test Suite 'DecodeRuntimeTests.xctest' passed at 2026-10-30 15:02:25.151.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:25.151.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:25.337.
+Test Suite 'AudioTTSTests.xctest' started at 2026-10-30 15:02:25.338.
+Test Suite 'AudioTTSTests.xctest' passed at 2026-10-30 15:02:25.338.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:25.338.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:25.455.
+Test Suite 'AudioPhononModelTests.xctest' started at 2026-10-30 15:02:25.455.
+Test Suite 'AudioPhononModelTests.xctest' passed at 2026-10-30 15:02:25.455.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:25.455.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 15:02:25.524.
+Test Suite 'AudioCoreTests.xctest' started at 2026-10-30 15:02:25.524.
+Test Suite 'AudioCoreTests.xctest' passed at 2026-10-30 15:02:25.524.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:02:25.524.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds

@@ -1,0 +1,233 @@
+{
+  "torchVersion": "2.13.0",
+  "comparisons": [
+    {
+      "comparison": "before",
+      "stages": [
+        {
+          "stage": "pixels.0",
+          "shape": [
+            1,
+            1024,
+            1024,
+            3
+          ],
+          "exact": true,
+          "maximum": 0.0,
+          "rmse": 0.0,
+          "unequalFraction": 0.0,
+          "nonfiniteMasksEqual": true,
+          "leftCaptureSHA256": "7399aa3c903d688f01ad02b84982fdf9ea6d82e8f03f486a8f9429392bb88bbc",
+          "rightCaptureSHA256": "7399aa3c903d688f01ad02b84982fdf9ea6d82e8f03f486a8f9429392bb88bbc"
+        },
+        {
+          "stage": "features.0",
+          "shape": [
+            273,
+            1280
+          ],
+          "exact": true,
+          "maximum": 0.0,
+          "rmse": 0.0,
+          "unequalFraction": 0.0,
+          "nonfiniteMasksEqual": true,
+          "leftCaptureSHA256": "e152928690afb57940294ede7400a8fd69f7334daf0345058491860d3c751db9",
+          "rightCaptureSHA256": "e152928690afb57940294ede7400a8fd69f7334daf0345058491860d3c751db9"
+        },
+        {
+          "stage": "prefill",
+          "shape": [
+            129280
+          ],
+          "exact": false,
+          "maximum": 0.1875,
+          "rmse": 0.035499099642038345,
+          "unequalFraction": 0.6945390105247498,
+          "nonfiniteMasksEqual": true,
+          "leftCaptureSHA256": "ce5982b11661eacb5f966e3ab66546cb0a804c4cd95ddc9dbddd71de345f3f15",
+          "rightCaptureSHA256": "4e482f25917a914b6a96260ff683c439ffbecf2d55208b70e357176ebf3fa444"
+        },
+        {
+          "stage": "decode.0",
+          "shape": [
+            129280
+          ],
+          "exact": false,
+          "maximum": 0.1875,
+          "rmse": 0.03549912944436073,
+          "unequalFraction": 0.694531261920929,
+          "nonfiniteMasksEqual": true,
+          "leftCaptureSHA256": "530a96ddd2229a501122640ea90c1a9b3a39e5972f75b9a29b4964596c9ab4c1",
+          "rightCaptureSHA256": "2e13c7f18916471e4866bfcfe44d7f133fb35d9c62154064e18b83812bb3e769"
+        },
+        {
+          "stage": "decode.1",
+          "shape": [
+            129280
+          ],
+          "exact": false,
+          "maximum": 0.15625,
+          "rmse": 0.03324323892593384,
+          "unequalFraction": 0.7142868041992188,
+          "nonfiniteMasksEqual": true,
+          "leftCaptureSHA256": "5c5b3075aa74250f69940a2e6d7a9d6dffb1a29f5b7e061c60b34f760326a5f5",
+          "rightCaptureSHA256": "048ff98e45257ecad7c31b93ee545c39712768df7e61a785bfc566ea85162672"
+        }
+      ],
+      "leftTokens": 495,
+      "rightTokens": 495
+    },
+    {
+      "comparison": "sameUnverifiedArtifact",
+      "stages": [
+        {
+          "stage": "pixels.0",
+          "shape": [
+            1,
+            1024,
+            1024,
+            3
+          ],
+          "exact": true,
+          "maximum": 0.0,
+          "rmse": 0.0,
+          "unequalFraction": 0.0,
+          "nonfiniteMasksEqual": true,
+          "leftCaptureSHA256": "7399aa3c903d688f01ad02b84982fdf9ea6d82e8f03f486a8f9429392bb88bbc",
+          "rightCaptureSHA256": "7399aa3c903d688f01ad02b84982fdf9ea6d82e8f03f486a8f9429392bb88bbc"
+        },
+        {
+          "stage": "features.0",
+          "shape": [
+            273,
+            1280
+          ],
+          "exact": true,
+          "maximum": 0.0,
+          "rmse": 0.0,
+          "unequalFraction": 0.0,
+          "nonfiniteMasksEqual": true,
+          "leftCaptureSHA256": "e152928690afb57940294ede7400a8fd69f7334daf0345058491860d3c751db9",
+          "rightCaptureSHA256": "e152928690afb57940294ede7400a8fd69f7334daf0345058491860d3c751db9"
+        },
+        {
+          "stage": "prefill",
+          "shape": [
+            129280
+          ],
+          "exact": true,
+          "maximum": 0.0,
+          "rmse": 0.0,
+          "unequalFraction": 0.0,
+          "nonfiniteMasksEqual": true,
+          "leftCaptureSHA256": "ce5982b11661eacb5f966e3ab66546cb0a804c4cd95ddc9dbddd71de345f3f15",
+          "rightCaptureSHA256": "ce5982b11661eacb5f966e3ab66546cb0a804c4cd95ddc9dbddd71de345f3f15"
+        },
+        {
+          "stage": "decode.0",
+          "shape": [
+            129280
+          ],
+          "exact": true,
+          "maximum": 0.0,
+          "rmse": 0.0,
+          "unequalFraction": 0.0,
+          "nonfiniteMasksEqual": true,
+          "leftCaptureSHA256": "530a96ddd2229a501122640ea90c1a9b3a39e5972f75b9a29b4964596c9ab4c1",
+          "rightCaptureSHA256": "530a96ddd2229a501122640ea90c1a9b3a39e5972f75b9a29b4964596c9ab4c1"
+        },
+        {
+          "stage": "decode.1",
+          "shape": [
+            129280
+          ],
+          "exact": true,
+          "maximum": 0.0,
+          "rmse": 0.0,
+          "unequalFraction": 0.0,
+          "nonfiniteMasksEqual": true,
+          "leftCaptureSHA256": "5c5b3075aa74250f69940a2e6d7a9d6dffb1a29f5b7e061c60b34f760326a5f5",
+          "rightCaptureSHA256": "5c5b3075aa74250f69940a2e6d7a9d6dffb1a29f5b7e061c60b34f760326a5f5"
+        }
+      ],
+      "leftTokens": 495,
+      "rightTokens": 495
+    },
+    {
+      "comparison": "verifiedArtifact",
+      "stages": [
+        {
+          "stage": "pixels.0",
+          "shape": [
+            1,
+            1024,
+            1024,
+            3
+          ],
+          "exact": true,
+          "maximum": 0.0,
+          "rmse": 0.0,
+          "unequalFraction": 0.0,
+          "nonfiniteMasksEqual": true,
+          "leftCaptureSHA256": "7399aa3c903d688f01ad02b84982fdf9ea6d82e8f03f486a8f9429392bb88bbc",
+          "rightCaptureSHA256": "7399aa3c903d688f01ad02b84982fdf9ea6d82e8f03f486a8f9429392bb88bbc"
+        },
+        {
+          "stage": "features.0",
+          "shape": [
+            273,
+            1280
+          ],
+          "exact": true,
+          "maximum": 0.0,
+          "rmse": 0.0,
+          "unequalFraction": 0.0,
+          "nonfiniteMasksEqual": true,
+          "leftCaptureSHA256": "e152928690afb57940294ede7400a8fd69f7334daf0345058491860d3c751db9",
+          "rightCaptureSHA256": "e152928690afb57940294ede7400a8fd69f7334daf0345058491860d3c751db9"
+        },
+        {
+          "stage": "prefill",
+          "shape": [
+            129280
+          ],
+          "exact": true,
+          "maximum": 0.0,
+          "rmse": 0.0,
+          "unequalFraction": 0.0,
+          "nonfiniteMasksEqual": true,
+          "leftCaptureSHA256": "4e482f25917a914b6a96260ff683c439ffbecf2d55208b70e357176ebf3fa444",
+          "rightCaptureSHA256": "4e482f25917a914b6a96260ff683c439ffbecf2d55208b70e357176ebf3fa444"
+        },
+        {
+          "stage": "decode.0",
+          "shape": [
+            129280
+          ],
+          "exact": true,
+          "maximum": 0.0,
+          "rmse": 0.0,
+          "unequalFraction": 0.0,
+          "nonfiniteMasksEqual": true,
+          "leftCaptureSHA256": "2e13c7f18916471e4866bfcfe44d7f133fb35d9c62154064e18b83812bb3e769",
+          "rightCaptureSHA256": "2e13c7f18916471e4866bfcfe44d7f133fb35d9c62154064e18b83812bb3e769"
+        },
+        {
+          "stage": "decode.1",
+          "shape": [
+            129280
+          ],
+          "exact": true,
+          "maximum": 0.0,
+          "rmse": 0.0,
+          "unequalFraction": 0.0,
+          "nonfiniteMasksEqual": true,
+          "leftCaptureSHA256": "048ff98e45257ecad7c31b93ee545c39712768df7e61a785bfc566ea85162672",
+          "rightCaptureSHA256": "048ff98e45257ecad7c31b93ee545c39712768df7e61a785bfc566ea85162672"
+        }
+      ],
+      "leftTokens": 495,
+      "rightTokens": 495
+    }
+  ]
+}

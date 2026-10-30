@@ -1,0 +1,27 @@
+<PAGE><BLOCK>header[132, 0, 862, 99]<FORK>
+<BLOCK>text[105, 142, 604, 180]<FORK>Document No : TD01167104
+<BLOCK>text[105, 206, 745, 243]<FORK>Date : 25/12/2018 8:13:39 PM
+<BLOCK>text[105, 260, 470, 297]<FORK>Cashier : MANIS
+<BLOCK>text[105, 316, 265, 352]<FORK>Member :
+<BLOCK>other[410, 393, 648, 436]<FORK>CASH BILL
+<BLOCK>table[48, 451, 971, 755]<FORK><table><tr><td>CODE/DESCQTY</td><td>PRICE RM</td><td>Disc</td><td>AMOUNT RM</td></tr><tr><td>95569390-0118</td><td>KF MODELING CLAY KIDDY FISH</td><td></td><td></td></tr><tr><td>1 PC *</td><td>9.000</td><td>0.00</td><td>9.00</td></tr></table>
+<BLOCK>text[524, 788, 960, 824]<FORK>Total : 9.00
+<BLOCK>text[255, 851, 960, 894]<FORK>Rour ding Adjustment: 0.00
+<BLOCK>text[184, 920, 962, 966]<FORK>Round d Total (RM): 9.00
+<PAGE><BLOCK>title<LEVEL1>[65, 44, 702, 77]<FORK>MERE RUN DOCUMENT CHECK
+<BLOCK>text[64, 99, 401, 121]<FORK>Reference: OCR-3-TEST-008
+<BLOCK>title<LEVEL2>[64, 140, 300, 166]<FORK>Project summary
+<BLOCK>text[63, 187, 441, 207]<FORK>Three sensors monitor the harbour.
+<BLOCK>text[64, 221, 441, 242]<FORK>The trial begins on 8 October 2026.
+<BLOCK>text[64, 255, 443, 277]<FORK>Station Alpha recorded 17 samples.
+<BLOCK>text[64, 290, 432, 311]<FORK>Station Beta recorded 23 samples.
+<BLOCK>title<LEVEL2>[554, 140, 785, 166]<FORK>Notes françaises
+<BLOCK>text[553, 186, 822, 207]<FORK>Température: 18,5 degrés.
+<BLOCK>text[553, 221, 860, 240]<FORK>Le café est ouvert à Montréal.
+<BLOCK>text[554, 252, 847, 276]<FORK>Équipe: Zoé, André et Émile.
+<BLOCK>text[553, 289, 870, 309]<FORK>Aucun incident pendant le test.
+<BLOCK>other[64, 406, 341, 429]<FORK>INVOICE SUMMARY
+<BLOCK>table[65, 453, 923, 645]<FORK><table><tr><td>Item</td><td>Quantity</td><td>Amount</td></tr><tr><td>Harbour sensor</td><td>3</td><td>$42.00</td></tr><tr><td>Calibration kit</td><td>2</td><td>$18.50</td></tr><tr><td>Total</td><td>5</td><td>$60.50</td></tr></table>
+<BLOCK>text[63, 744, 555, 766]<FORK>Conclusion: all five units passed inspection.
+<BLOCK>page_number[63, 919, 160, 937]<FORK>Page 1 / 1
+<BLOCK>footer[178, 919, 449, 937]<FORK>Verification code: MERE-1024

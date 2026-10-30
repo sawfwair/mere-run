@@ -1,0 +1,39 @@
+{
+  "installed": true,
+  "runtimeReady": true,
+  "model": "vision-ocr-unlimited-2",
+  "cases": [
+    {
+      "caseID": "receipt",
+      "images": [
+        "receipt.jpeg"
+      ],
+      "seconds": 40.945717791997595,
+      "exitCode": 0,
+      "pageMarkers": 1,
+      "missingAnchorsByPage": [
+        []
+      ],
+      "passed": true,
+      "stdoutSHA256": "058ad3dde8fac3cf52ac8e126a2db5e8b81b8ed59b8a58b57ff50d8c997ffaba",
+      "matchesLibraryReceipt": false
+    },
+    {
+      "caseID": "receipt-and-document",
+      "images": [
+        "receipt.jpeg",
+        "document.png"
+      ],
+      "seconds": 51.895113209000556,
+      "exitCode": 0,
+      "pageMarkers": 2,
+      "missingAnchorsByPage": [
+        [],
+        []
+      ],
+      "passed": true,
+      "stdoutSHA256": "1ee51b0a5f0f4c465cca3735f64470cbc5cdc630a7afd8028f58e0c8d00b0d26",
+      "matchesLibraryReceipt": null
+    }
+  ]
+}

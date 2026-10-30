@@ -1,0 +1,11 @@
+Test Suite 'Selected tests' started at 2026-10-30 16:54:35.904.
+Test Suite 'UnlimitedOCRRuntimeTests.xctest' started at 2026-10-30 16:54:35.905.
+Test Suite 'UnlimitedOCRLayoutDiagnostics' started at 2026-10-30 16:54:35.905.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRLayoutDiagnostics testFirstLayoutSplit]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRLayoutDiagnostics testFirstLayoutSplit]' passed (59.261 seconds).
+Test Suite 'UnlimitedOCRLayoutDiagnostics' passed at 2026-10-30 16:55:35.169.
+	 Executed 1 test, with 0 failures (0 unexpected) in 59.261 (59.264) seconds
+Test Suite 'UnlimitedOCRRuntimeTests.xctest' passed at 2026-10-30 16:55:35.169.
+	 Executed 1 test, with 0 failures (0 unexpected) in 59.261 (59.264) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:55:35.169.
+	 Executed 1 test, with 0 failures (0 unexpected) in 59.261 (59.265) seconds

@@ -1,0 +1,43 @@
+{
+  "cases": [
+    {
+      "id": "jpeg-base",
+      "crop": "base",
+      "maxTokens": 1024,
+      "pages": [
+        {
+          "image": "receipt.jpeg",
+          "anchors": [
+            "CASH BILL"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "jpeg-auto",
+      "crop": "auto",
+      "maxTokens": 1024,
+      "pages": [
+        {
+          "image": "receipt.jpeg",
+          "anchors": [
+            "CASH BILL"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "png-base",
+      "crop": "base",
+      "maxTokens": 1024,
+      "pages": [
+        {
+          "image": "receipt-canonical.png",
+          "anchors": [
+            "CASH BILL"
+          ]
+        }
+      ]
+    }
+  ]
+}

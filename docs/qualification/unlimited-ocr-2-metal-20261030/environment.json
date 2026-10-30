@@ -1,0 +1,21 @@
+{
+  "device": "Apple M5 Max",
+  "gpuCores": 40,
+  "physicalMemoryGiB": 128,
+  "os": "27.2",
+  "osBuild": "26B123",
+  "swift": "Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)\nTarget: arm64-apple-macosx27.2.0",
+  "baseCommit": "51ec7bf7b998ea741738004c6ccf3d6fc2ca8b54",
+  "mlxSwiftRevision": "1e077ba968b291e0237d1ab522b271d433fa1713",
+  "mlxCoreVersion": "0.32.4",
+  "mlxCoreRevision": "e3214809fa5ebd5aac5d6783e8101513b3d9a774",
+  "swiftTransformersVersion": "1.3.5",
+  "configuration": "debug",
+  "temperature": 0,
+  "execution": "XCTest on Device.gpu, MLXRequestStreams preserves selected device",
+  "poppler": "pdftoppm version 26.10.0",
+  "noRepeatNgramSize": 35,
+  "ngramWindowSinglePage": 128,
+  "ngramWindowMultiPage": 1024,
+  "mlxEnableTF32": false
+}

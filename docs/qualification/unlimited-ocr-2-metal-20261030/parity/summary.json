@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 1,
+  "checkpoint": "baidu/Unlimited-OCR-2",
+  "revision": "c14071b549f4fcab10909f3c4acc6a2edb366947",
+  "device": "Apple M5 Max",
+  "physicalMemoryGiB": 128.0,
+  "caseCount": 8,
+  "passedCount": 6,
+  "totalPages": 10,
+  "totalAnchors": 72,
+  "totalTokens": 17154,
+  "maxPeakMLXGiB": 9.0234375,
+  "invalidBlockBoxCount": 0,
+  "cases": [
+    {
+      "id": "document-control",
+      "passed": true,
+      "crop": "base",
+      "expectedPages": 1,
+      "actualPages": 1,
+      "anchorCount": 8,
+      "missingAnchorsByPage": [
+        []
+      ],
+      "unexpectedAnchorsByPage": [
+        []
+      ],
+      "tokens": 424,
+      "reachedTokenLimit": false,
+      "wallSeconds": 31.38409996032715,
+      "loadSeconds": 1.2058910131454468,
+      "visionSeconds": 5.595575928688049,
+      "prefillSeconds": 0.9867620468139648,
+      "decodeSeconds": 23.568562030792236,
+      "decodeTokensPerSecond": 17.99006657453457,
+      "peakMLXGiB": 9.0234375,
+      "emittedBlockBoxes": 16,
+      "invalidBlockBoxes": []
+    },
+    {
+      "id": "receipt-base",
+      "passed": false,
+      "crop": "base",
+      "expectedPages": 1,
+      "actualPages": 1,
+      "anchorCount": 6,
+      "missingAnchorsByPage": [
+        [
+          "MODELLING CLAY"
+        ]
+      ],
+      "unexpectedAnchorsByPage": [
+        []
+      ],
+      "tokens": 495,
+      "reachedTokenLimit": false,
+      "wallSeconds": 32.04926800727844,
+      "loadSeconds": 2.8967857360839844e-05,
+      "visionSeconds": 3.0673320293426514,
+      "prefillSeconds": 0.531325101852417,
+      "decodeSeconds": 28.446255922317505,
+      "decodeTokensPerSecond": 17.40123555633372,
+      "peakMLXGiB": 6.6022789478302,
+      "emittedBlockBoxes": 25,
+      "invalidBlockBoxes": []
+    },
+    {
+      "id": "receipt-auto",
+      "passed": false,
+      "crop": "auto",
+      "expectedPages": 1,
+      "actualPages": 1,
+      "anchorCount": 6,
+      "missingAnchorsByPage": [
+        [
+          "MODELLING CLAY"
+        ]
+      ],
+      "unexpectedAnchorsByPage": [
+        []
+      ],
+      "tokens": 495,
+      "reachedTokenLimit": false,
+      "wallSeconds": 29.975584030151367,
+      "loadSeconds": 5.4001808166503906e-05,
+      "visionSeconds": 3.1801860332489014,
+      "prefillSeconds": 0.5014190673828125,
+      "decodeSeconds": 26.293283104896545,
+      "decodeTokensPerSecond": 18.826100872424608,
+      "peakMLXGiB": 6.6022789478302,
+      "emittedBlockBoxes": 25,
+      "invalidBlockBoxes": []
+    },
+    {
+      "id": "w9-form-base",
+      "passed": true,
+      "crop": "base",
+      "expectedPages": 1,
+      "actualPages": 1,
+      "anchorCount": 7,
+      "missingAnchorsByPage": [
+        []
+      ],
+      "unexpectedAnchorsByPage": [
+        []
+      ],
+      "tokens": 1878,
+      "reachedTokenLimit": false,
+      "wallSeconds": 142.49679505825043,
+      "loadSeconds": 5.0067901611328125e-05,
+      "visionSeconds": 5.352273106575012,
+      "prefillSeconds": 0.5703750848770142,
+      "decodeSeconds": 136.57239592075348,
+      "decodeTokensPerSecond": 13.750948625736308,
+      "peakMLXGiB": 6.6022789478302,
+      "emittedBlockBoxes": 28,
+      "invalidBlockBoxes": []
+    },
+    {
+      "id": "w9-form-auto",
+      "passed": true,
+      "crop": "auto",
+      "expectedPages": 1,
+      "actualPages": 1,
+      "anchorCount": 7,
+      "missingAnchorsByPage": [
+        []
+      ],
+      "unexpectedAnchorsByPage": [
+        []
+      ],
+      "tokens": 1958,
+      "reachedTokenLimit": false,
+      "wallSeconds": 171.44783902168274,
+      "loadSeconds": 4.410743713378906e-05,
+      "visionSeconds": 30.532907962799072,
+      "prefillSeconds": 3.956146001815796,
+      "decodeSeconds": 136.9550280570984,
+      "decodeTokensPerSecond": 14.296663859494691,
+      "peakMLXGiB": 6.6572105884552,
+      "emittedBlockBoxes": 33,
+      "invalidBlockBoxes": []
+    },
+    {
+      "id": "w9-instructions-base",
+      "passed": true,
+      "crop": "base",
+      "expectedPages": 1,
+      "actualPages": 1,
+      "anchorCount": 8,
+      "missingAnchorsByPage": [
+        []
+      ],
+      "unexpectedAnchorsByPage": [
+        []
+      ],
+      "tokens": 2609,
+      "reachedTokenLimit": false,
+      "wallSeconds": 146.23254799842834,
+      "loadSeconds": 4.8041343688964844e-05,
+      "visionSeconds": 5.150792956352234,
+      "prefillSeconds": 0.5180820226669312,
+      "decodeSeconds": 140.5583679676056,
+      "decodeTokensPerSecond": 18.56168393048854,
+      "peakMLXGiB": 6.6022789478302,
+      "emittedBlockBoxes": 51,
+      "invalidBlockBoxes": []
+    },
+    {
+      "id": "w9-two-page-base",
+      "passed": true,
+      "crop": "base",
+      "expectedPages": 2,
+      "actualPages": 2,
+      "anchorCount": 15,
+      "missingAnchorsByPage": [
+        [],
+        []
+      ],
+      "unexpectedAnchorsByPage": [
+        [],
+        []
+      ],
+      "tokens": 4641,
+      "reachedTokenLimit": false,
+      "wallSeconds": 326.3085290193558,
+      "loadSeconds": 4.291534423828125e-05,
+      "visionSeconds": 11.21185290813446,
+      "prefillSeconds": 1.0280380249023438,
+      "decodeSeconds": 314.0660220384598,
+      "decodeTokensPerSecond": 14.77714771523955,
+      "peakMLXGiB": 6.602935079485178,
+      "emittedBlockBoxes": 91,
+      "invalidBlockBoxes": []
+    },
+    {
+      "id": "w9-reversed-base",
+      "passed": true,
+      "crop": "base",
+      "expectedPages": 2,
+      "actualPages": 2,
+      "anchorCount": 15,
+      "missingAnchorsByPage": [
+        [],
+        []
+      ],
+      "unexpectedAnchorsByPage": [
+        [],
+        []
+      ],
+      "tokens": 4654,
+      "reachedTokenLimit": false,
+      "wallSeconds": 323.9362189769745,
+      "loadSeconds": 3.802776336669922e-05,
+      "visionSeconds": 10.557171940803528,
+      "prefillSeconds": 1.0301109552383423,
+      "decodeSeconds": 312.34550499916077,
+      "decodeTokensPerSecond": 14.900166403907445,
+      "peakMLXGiB": 6.602935079485178,
+      "emittedBlockBoxes": 93,
+      "invalidBlockBoxes": []
+    }
+  ]
+}

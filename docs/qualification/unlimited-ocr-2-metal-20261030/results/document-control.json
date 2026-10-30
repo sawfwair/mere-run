@@ -1,0 +1,31 @@
+{
+  "activeMemoryBytes" : 6679185228,
+  "caseID" : "document-control",
+  "checkpointRevision" : "c14071b549f4fcab10909f3c4acc6a2edb366947",
+  "decodeSeconds" : 27.682262897491455,
+  "device" : "Apple M5 Max",
+  "expectedPages" : 1,
+  "loadSeconds" : 1.279662013053894,
+  "missingAnchorsByPage" : [
+    [
+
+    ]
+  ],
+  "mlxDevice" : "gpu",
+  "ngramWindow" : 128,
+  "noRepeatNgramSize" : 35,
+  "pagesGenerated" : 1,
+  "peakMemoryBytes" : 9688842240,
+  "physicalMemoryBytes" : 137438953472,
+  "prefillSeconds" : 0.9934378862380981,
+  "reachedTokenLimit" : false,
+  "seconds" : 35.847277998924255,
+  "text" : "<PAGE><BLOCK>title[65, 45, 704, 78]<FORK>MERE RUN DOCUMENT CHECK\n<BLOCK>text[63, 100, 401, 123]<FORK>Reference: OCR-3-TEST-008\n<BLOCK>title[63, 141, 300, 167]<FORK>Project summary\n<BLOCK>text[63, 188, 442, 210]<FORK>Three sensors monitor the harbour.\n<BLOCK>text[63, 222, 442, 244]<FORK>The trial begins on 8 October 2026.\n<BLOCK>text[63, 256, 444, 279]<FORK>Station Alpha recorded 17 samples.\n<BLOCK>text[63, 290, 435, 313]<FORK>Station Beta recorded 23 samples.\n<BLOCK>title[554, 141, 788, 166]<FORK>Notes françaises\n<BLOCK>text[553, 187, 827, 210]<FORK>Température: 18,5 degrés.\n<BLOCK>text[553, 221, 861, 243]<FORK>Le café est ouvert à Montréal.\n<BLOCK>text[553, 253, 851, 278]<FORK>Équipe: Zoé, André et Émile.\n<BLOCK>text[553, 290, 872, 312]<FORK>Aucun incident pendant le test.\n<BLOCK>title[63, 405, 341, 430]<FORK>INVOICE SUMMARY\n<BLOCK>table[65, 453, 919, 643]<FORK><table><tr><td>Item<\/td><td>Quantity<\/td><td>Amount<\/td><\/tr><tr><td>Harbour sensor<\/td><td>3<\/td><td>$42.00<\/td><\/tr><tr><td>Calibration kit<\/td><td>2<\/td><td>$18.50<\/td><\/tr><tr><td>Total<\/td><td>5<\/td><td>$60.50<\/td><\/tr><\/table>\n<BLOCK>text[62, 744, 555, 768]<FORK>Conclusion: all five units passed inspection.\n<BLOCK>page_number[63, 918, 449, 937]<FORK>Page 1 \/ 1 Verification code: MERE-1024",
+  "tokensGenerated" : 424,
+  "unexpectedAnchorsByPage" : [
+    [
+
+    ]
+  ],
+  "visionSeconds" : 5.856626033782959
+}

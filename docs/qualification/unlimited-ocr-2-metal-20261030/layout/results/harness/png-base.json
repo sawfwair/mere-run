@@ -1,0 +1,31 @@
+{
+  "activeMemoryBytes" : 6679190764,
+  "caseID" : "png-base",
+  "checkpointRevision" : "c14071b549f4fcab10909f3c4acc6a2edb366947",
+  "decodeSeconds" : 35.83342099189758,
+  "device" : "Apple M5 Max",
+  "expectedPages" : 1,
+  "loadSeconds" : 4.303455352783203e-05,
+  "missingAnchorsByPage" : [
+    [
+
+    ]
+  ],
+  "mlxDevice" : "gpu",
+  "ngramWindow" : 128,
+  "noRepeatNgramSize" : 35,
+  "pagesGenerated" : 1,
+  "peakMemoryBytes" : 7089143040,
+  "physicalMemoryBytes" : 137438953472,
+  "prefillSeconds" : 0.7517029047012329,
+  "reachedTokenLimit" : false,
+  "seconds" : 40.15680003166199,
+  "text" : "<PAGE><BLOCK>image[131, 0, 862, 99]<FORK>\n<BLOCK>text[104, 139, 604, 180]<FORK>Document No : TD01167104\n<BLOCK>text[104, 200, 743, 246]<FORK>Date : 25\/12\/2018 8:13:39 PM\n<BLOCK>text[104, 256, 470, 297]<FORK>Cashier : MANIS\n<BLOCK>text[104, 315, 266, 353]<FORK>Member :\n<BLOCK>title<LEVEL1>[410, 390, 648, 435]<FORK>CASH BILL\n<BLOCK>text[59, 495, 266, 537]<FORK>CODE\/DESC\n<BLOCK>text[148, 547, 223, 590]<FORK>QTY\n<BLOCK>text[427, 495, 538, 537]<FORK>PRICE\n<BLOCK>text[477, 547, 535, 585]<FORK>RM\n<BLOCK>text[594, 495, 664, 537]<FORK>Disc\n<BLOCK>text[807, 495, 956, 537]<FORK>AMOUNT\n<BLOCK>text[906, 547, 960, 585]<FORK>RM\n<BLOCK>text[59, 633, 286, 670]<FORK>95569390-0118\n<BLOCK>text[158, 690, 240, 730]<FORK>1 PC\n<BLOCK>text[344, 633, 860, 670]<FORK>KF MODELING CLAY KIDDY FISH\n<BLOCK>text[437, 690, 538, 730]<FORK>9.00\n<BLOCK>text[591, 690, 668, 730]<FORK>0.00\n<BLOCK>text[882, 690, 960, 730]<FORK>9.00\n<BLOCK>text[524, 783, 634, 823]<FORK>Total :\n<BLOCK>text[882, 783, 960, 823]<FORK>9.00\n<BLOCK>text[252, 848, 634, 890]<FORK>Rour ding Adjustment :\n<BLOCK>text[882, 848, 960, 890]<FORK>0.00\n<BLOCK>text[182, 916, 634, 966]<FORK>Round d Total (RM):\n<BLOCK>text[860, 916, 960, 966]<FORK>9.00",
+  "tokensGenerated" : 495,
+  "unexpectedAnchorsByPage" : [
+    [
+
+    ]
+  ],
+  "visionSeconds" : 3.5708330869674683
+}

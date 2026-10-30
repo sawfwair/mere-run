@@ -1,0 +1,42 @@
+{
+  "repository": "baidu/Unlimited-OCR-2",
+  "revision": "c14071b549f4fcab10909f3c4acc6a2edb366947",
+  "files": [
+    {
+      "file": "config.json",
+      "bytes": 5525,
+      "sha256": "607d130a70d5af5a35329aa237acd68651f45504c62cc7ced981066f4e781126"
+    },
+    {
+      "file": "model-00001-of-00002.safetensors",
+      "bytes": 4998430312,
+      "sha256": "4c40b740f209fd7682040d4ebf19409208acde5c401ccd2dde426d0f41542f18"
+    },
+    {
+      "file": "model-00002-of-00002.safetensors",
+      "bytes": 1689875264,
+      "sha256": "9490b82fa47f89e5110eb5577f8ab1b6694c12121905dbc086ddb10207a4ba0c"
+    },
+    {
+      "file": "model.safetensors.index.json",
+      "bytes": 254054,
+      "sha256": "dc60a31ecb77eb03e166345d18cbe25bc71d2a19cc6fc089d8a9ac1c7f209671"
+    },
+    {
+      "file": "special_tokens_map.json",
+      "bytes": 549,
+      "sha256": "9e89493d7938e7710c524dbaff613c3648f0a018262417af78505128004e5cb4"
+    },
+    {
+      "file": "tokenizer.json",
+      "bytes": 9980278,
+      "sha256": "c55c165e32c5a67830362a53e1f548c8930dcc8469efa30ff3252a982799c589"
+    },
+    {
+      "file": "tokenizer_config.json",
+      "bytes": 166632,
+      "sha256": "ceba7d221f265cca4c98b5e0a1d48c10107270b7b29c12396610d6d0fd64b126"
+    }
+  ],
+  "shardHashesMatchUpstream": true
+}

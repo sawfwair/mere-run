@@ -1,0 +1,797 @@
+[
+  {
+    "boundary" : "baseline",
+    "candidates" : [
+      6992,
+      7163,
+      7336,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31.125,
+      31.125,
+      31.125,
+      30.25,
+      30,
+      29.875,
+      29.5,
+      29.125
+    ],
+    "vision" : "upstream",
+    "winner" : 6992
+  },
+  {
+    "boundary" : "decoder.block.0",
+    "candidates" : [
+      6992,
+      7163,
+      7336,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31.125,
+      31.125,
+      31.125,
+      30.25,
+      30,
+      29.875,
+      29.5,
+      29
+    ],
+    "vision" : "upstream",
+    "winner" : 6992
+  },
+  {
+    "boundary" : "decoder.block.1",
+    "candidates" : [
+      7336,
+      6992,
+      7163,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "scores" : [
+      31.375,
+      31.25,
+      31.25,
+      30.375,
+      30.125,
+      30,
+      29.625,
+      29.125
+    ],
+    "vision" : "upstream",
+    "winner" : 7336
+  },
+  {
+    "boundary" : "decoder.block.2",
+    "candidates" : [
+      6992,
+      7163,
+      7336,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31.25,
+      31.25,
+      31.25,
+      30.375,
+      30.125,
+      30,
+      29.625,
+      29.125
+    ],
+    "vision" : "upstream",
+    "winner" : 6992
+  },
+  {
+    "boundary" : "decoder.block.3",
+    "candidates" : [
+      7163,
+      7336,
+      6992,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31.125,
+      31.125,
+      31,
+      30.25,
+      30,
+      29.75,
+      29.375,
+      29
+    ],
+    "vision" : "upstream",
+    "winner" : 7163
+  },
+  {
+    "boundary" : "decoder.block.4",
+    "candidates" : [
+      7163,
+      7336,
+      6992,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31.25,
+      31.25,
+      31.125,
+      30.375,
+      30.125,
+      29.875,
+      29.5,
+      29.125
+    ],
+    "vision" : "upstream",
+    "winner" : 7163
+  },
+  {
+    "boundary" : "decoder.block.5",
+    "candidates" : [
+      7163,
+      7336,
+      6992,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31.125,
+      31.125,
+      31,
+      30.25,
+      30,
+      29.875,
+      29.5,
+      29
+    ],
+    "vision" : "upstream",
+    "winner" : 7163
+  },
+  {
+    "boundary" : "decoder.block.6",
+    "candidates" : [
+      7336,
+      6992,
+      7163,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "scores" : [
+      31,
+      30.875,
+      30.875,
+      30.125,
+      29.875,
+      29.625,
+      29.25,
+      28.875
+    ],
+    "vision" : "upstream",
+    "winner" : 7336
+  },
+  {
+    "boundary" : "decoder.block.7",
+    "candidates" : [
+      7163,
+      7336,
+      6992,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31.125,
+      31.125,
+      31,
+      30.25,
+      30,
+      29.875,
+      29.375,
+      29
+    ],
+    "vision" : "upstream",
+    "winner" : 7163
+  },
+  {
+    "boundary" : "decoder.block.8",
+    "candidates" : [
+      7163,
+      7336,
+      6992,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31.125,
+      31.125,
+      31,
+      30.25,
+      30,
+      29.875,
+      29.5,
+      29
+    ],
+    "vision" : "upstream",
+    "winner" : 7163
+  },
+  {
+    "boundary" : "decoder.block.9",
+    "candidates" : [
+      7163,
+      7336,
+      6992,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31.125,
+      31.125,
+      31,
+      30.25,
+      30,
+      29.75,
+      29.375,
+      29
+    ],
+    "vision" : "upstream",
+    "winner" : 7163
+  },
+  {
+    "boundary" : "decoder.block.10",
+    "candidates" : [
+      7336,
+      6992,
+      7163,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "scores" : [
+      31.125,
+      31,
+      31,
+      30.25,
+      30,
+      29.75,
+      29.375,
+      29
+    ],
+    "vision" : "upstream",
+    "winner" : 7336
+  },
+  {
+    "boundary" : "decoder.block.11",
+    "candidates" : [
+      7336,
+      6992,
+      7163,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "scores" : [
+      31.125,
+      31,
+      31,
+      30.25,
+      30,
+      29.75,
+      29.375,
+      29
+    ],
+    "vision" : "upstream",
+    "winner" : 7336
+  },
+  {
+    "boundary" : "decoder.norm",
+    "candidates" : [
+      7336,
+      6992,
+      7163,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "scores" : [
+      31.125,
+      31,
+      31,
+      30.25,
+      30,
+      29.75,
+      29.375,
+      29
+    ],
+    "vision" : "upstream",
+    "winner" : 7336
+  },
+  {
+    "boundary" : "baseline",
+    "candidates" : [
+      7163,
+      7336,
+      6992,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31,
+      31,
+      30.875,
+      30.125,
+      29.875,
+      29.625,
+      29.25,
+      28.875
+    ],
+    "vision" : "native",
+    "winner" : 7163
+  },
+  {
+    "boundary" : "decoder.block.0",
+    "candidates" : [
+      6992,
+      7163,
+      7336,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31.125,
+      31.125,
+      31.125,
+      30.25,
+      30,
+      29.875,
+      29.5,
+      29
+    ],
+    "vision" : "native",
+    "winner" : 6992
+  },
+  {
+    "boundary" : "decoder.block.1",
+    "candidates" : [
+      7336,
+      6992,
+      7163,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "scores" : [
+      31.375,
+      31.25,
+      31.25,
+      30.375,
+      30.125,
+      30,
+      29.625,
+      29.125
+    ],
+    "vision" : "native",
+    "winner" : 7336
+  },
+  {
+    "boundary" : "decoder.block.2",
+    "candidates" : [
+      6992,
+      7163,
+      7336,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31.25,
+      31.25,
+      31.25,
+      30.375,
+      30.125,
+      30,
+      29.625,
+      29.125
+    ],
+    "vision" : "native",
+    "winner" : 6992
+  },
+  {
+    "boundary" : "decoder.block.3",
+    "candidates" : [
+      7163,
+      7336,
+      6992,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31.125,
+      31.125,
+      31,
+      30.25,
+      30,
+      29.75,
+      29.375,
+      29
+    ],
+    "vision" : "native",
+    "winner" : 7163
+  },
+  {
+    "boundary" : "decoder.block.4",
+    "candidates" : [
+      7163,
+      7336,
+      6992,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31.25,
+      31.25,
+      31.125,
+      30.375,
+      30.125,
+      29.875,
+      29.5,
+      29.125
+    ],
+    "vision" : "native",
+    "winner" : 7163
+  },
+  {
+    "boundary" : "decoder.block.5",
+    "candidates" : [
+      7163,
+      7336,
+      6992,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31.125,
+      31.125,
+      31,
+      30.25,
+      30,
+      29.875,
+      29.5,
+      29
+    ],
+    "vision" : "native",
+    "winner" : 7163
+  },
+  {
+    "boundary" : "decoder.block.6",
+    "candidates" : [
+      7336,
+      6992,
+      7163,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "scores" : [
+      31,
+      30.875,
+      30.875,
+      30.125,
+      29.875,
+      29.625,
+      29.25,
+      28.875
+    ],
+    "vision" : "native",
+    "winner" : 7336
+  },
+  {
+    "boundary" : "decoder.block.7",
+    "candidates" : [
+      7163,
+      7336,
+      6992,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31.125,
+      31.125,
+      31,
+      30.25,
+      30,
+      29.875,
+      29.375,
+      29
+    ],
+    "vision" : "native",
+    "winner" : 7163
+  },
+  {
+    "boundary" : "decoder.block.8",
+    "candidates" : [
+      7163,
+      7336,
+      6992,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31.125,
+      31.125,
+      31,
+      30.25,
+      30,
+      29.875,
+      29.5,
+      29
+    ],
+    "vision" : "native",
+    "winner" : 7163
+  },
+  {
+    "boundary" : "decoder.block.9",
+    "candidates" : [
+      7163,
+      7336,
+      6992,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31.125,
+      31.125,
+      31,
+      30.25,
+      30,
+      29.75,
+      29.375,
+      29
+    ],
+    "vision" : "native",
+    "winner" : 7163
+  },
+  {
+    "boundary" : "decoder.block.10",
+    "candidates" : [
+      7336,
+      6992,
+      7163,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "scores" : [
+      31.125,
+      31,
+      31,
+      30.25,
+      30,
+      29.75,
+      29.375,
+      29
+    ],
+    "vision" : "native",
+    "winner" : 7336
+  },
+  {
+    "boundary" : "decoder.block.11",
+    "candidates" : [
+      7336,
+      6992,
+      7163,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "scores" : [
+      31.125,
+      31,
+      31,
+      30.25,
+      30,
+      29.75,
+      29.375,
+      29
+    ],
+    "vision" : "native",
+    "winner" : 7336
+  },
+  {
+    "boundary" : "decoder.norm",
+    "candidates" : [
+      7336,
+      6992,
+      7163,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "scores" : [
+      31.125,
+      31,
+      31,
+      30.25,
+      30,
+      29.75,
+      29.375,
+      29
+    ],
+    "vision" : "native",
+    "winner" : 7336
+  },
+  {
+    "boundary" : "sam.patch",
+    "candidates" : [
+      7336,
+      6992,
+      7163,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "scores" : [
+      31,
+      30.875,
+      30.875,
+      30.125,
+      29.75,
+      29.5,
+      29.25,
+      28.75
+    ],
+    "vision" : "patch-upstream",
+    "winner" : 7336
+  },
+  {
+    "boundary" : "sam.patch",
+    "candidates" : [
+      6992,
+      7163,
+      7336,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      30.875,
+      30.875,
+      30.875,
+      30.125,
+      29.75,
+      29.5,
+      29.25,
+      28.75
+    ],
+    "vision" : "patch-chw",
+    "winner" : 6992
+  },
+  {
+    "boundary" : "sam.patch",
+    "candidates" : [
+      7163,
+      7336,
+      6992,
+      7792,
+      6650,
+      5769,
+      6924,
+      4460
+    ],
+    "firstDivergence" : 20,
+    "scores" : [
+      31,
+      31,
+      30.875,
+      30.125,
+      29.875,
+      29.625,
+      29.25,
+      28.875
+    ],
+    "vision" : "patch-hwc",
+    "winner" : 7163
+  }
+]

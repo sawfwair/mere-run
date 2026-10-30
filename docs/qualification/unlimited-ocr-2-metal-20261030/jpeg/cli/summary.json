@@ -1,0 +1,226 @@
+{
+  "binarySHA256": "90356ebfad8529bf4f5065059a48328d24005408b045371bb045d1c2b65af768",
+  "binaryBytes": 243005200,
+  "mlxEnableTF32": false,
+  "cases": [
+    {
+      "caseID": "jpeg-base",
+      "command": [
+        "/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mere.run",
+        "vision",
+        "ocr",
+        "/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/qualification/unlimited-ocr-2/inputs/receipt.jpeg",
+        "--backend",
+        "unlimited",
+        "--unlimited-crop",
+        "base",
+        "--temperature",
+        "0",
+        "--max-tokens",
+        "1024",
+        "--unlimited-no-repeat-ngram-size",
+        "35",
+        "--unlimited-ngram-window",
+        "128",
+        "--quiet"
+      ],
+      "seconds": 35.37396529200487,
+      "exitCode": 0,
+      "passed": true,
+      "inputSHA256": "d66a3287c847823c6ddab9f8b2080582b96a66b7816d178472f697ea84e227b3",
+      "stdoutSHA256": "fe570d07847442215aa071f4b69fb0bdb6cac94d419b54ebb0369edb04f8f59c",
+      "upstream": {
+        "nativeBlocks": 25,
+        "upstreamBlocks": 25,
+        "exactTextAndTypeMatches": 25,
+        "unambiguousCoordinatePairs": 18,
+        "duplicateBodyGroupsExcluded": [
+          {
+            "type": "text",
+            "body": "0.00",
+            "nativeCount": 2,
+            "upstreamCount": 2
+          },
+          {
+            "type": "text",
+            "body": "9.00",
+            "nativeCount": 3,
+            "upstreamCount": 3
+          },
+          {
+            "type": "text",
+            "body": "RM",
+            "nativeCount": 2,
+            "upstreamCount": 2
+          }
+        ],
+        "exactBoxesAmongUnambiguousPairs": 6,
+        "meanAbsoluteCoordinateDelta": 0.3333333333333333,
+        "maximumAbsoluteCoordinateDelta": 2,
+        "nativeBlockTypes": {
+          "image": 1,
+          "text": 23,
+          "title<LEVEL1>": 1
+        },
+        "upstreamBlockTypes": {
+          "image": 1,
+          "text": 23,
+          "title<LEVEL1>": 1
+        },
+        "nativeOnly": [],
+        "upstreamOnly": [],
+        "nativeExactPrice9000": 1,
+        "upstreamExactPrice9000": 1
+      }
+    },
+    {
+      "caseID": "jpeg-auto",
+      "command": [
+        "/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mere.run",
+        "vision",
+        "ocr",
+        "/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/qualification/unlimited-ocr-2/inputs/receipt.jpeg",
+        "--backend",
+        "unlimited",
+        "--unlimited-crop",
+        "auto",
+        "--temperature",
+        "0",
+        "--max-tokens",
+        "1024",
+        "--unlimited-no-repeat-ngram-size",
+        "35",
+        "--unlimited-ngram-window",
+        "128",
+        "--quiet"
+      ],
+      "seconds": 38.6465956660104,
+      "exitCode": 0,
+      "passed": true,
+      "inputSHA256": "d66a3287c847823c6ddab9f8b2080582b96a66b7816d178472f697ea84e227b3",
+      "stdoutSHA256": "fe570d07847442215aa071f4b69fb0bdb6cac94d419b54ebb0369edb04f8f59c",
+      "upstream": {
+        "nativeBlocks": 25,
+        "upstreamBlocks": 25,
+        "exactTextAndTypeMatches": 25,
+        "unambiguousCoordinatePairs": 18,
+        "duplicateBodyGroupsExcluded": [
+          {
+            "type": "text",
+            "body": "0.00",
+            "nativeCount": 2,
+            "upstreamCount": 2
+          },
+          {
+            "type": "text",
+            "body": "9.00",
+            "nativeCount": 3,
+            "upstreamCount": 3
+          },
+          {
+            "type": "text",
+            "body": "RM",
+            "nativeCount": 2,
+            "upstreamCount": 2
+          }
+        ],
+        "exactBoxesAmongUnambiguousPairs": 6,
+        "meanAbsoluteCoordinateDelta": 0.3333333333333333,
+        "maximumAbsoluteCoordinateDelta": 2,
+        "nativeBlockTypes": {
+          "image": 1,
+          "text": 23,
+          "title<LEVEL1>": 1
+        },
+        "upstreamBlockTypes": {
+          "image": 1,
+          "text": 23,
+          "title<LEVEL1>": 1
+        },
+        "nativeOnly": [],
+        "upstreamOnly": [],
+        "nativeExactPrice9000": 1,
+        "upstreamExactPrice9000": 1
+      }
+    },
+    {
+      "caseID": "png-base",
+      "command": [
+        "/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mere.run",
+        "vision",
+        "ocr",
+        "/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/qualification/unlimited-ocr-2/inputs/receipt-canonical.png",
+        "--backend",
+        "unlimited",
+        "--unlimited-crop",
+        "base",
+        "--temperature",
+        "0",
+        "--max-tokens",
+        "1024",
+        "--unlimited-no-repeat-ngram-size",
+        "35",
+        "--unlimited-ngram-window",
+        "128",
+        "--quiet"
+      ],
+      "seconds": 33.716569874988636,
+      "exitCode": 0,
+      "passed": true,
+      "inputSHA256": "ece6b1ef186b904c20a1166efd01b97f53f06371ab0d3a1778a3649b6e12d651",
+      "stdoutSHA256": "fe570d07847442215aa071f4b69fb0bdb6cac94d419b54ebb0369edb04f8f59c",
+      "upstream": {
+        "nativeBlocks": 25,
+        "upstreamBlocks": 25,
+        "exactTextAndTypeMatches": 25,
+        "unambiguousCoordinatePairs": 18,
+        "duplicateBodyGroupsExcluded": [
+          {
+            "type": "text",
+            "body": "0.00",
+            "nativeCount": 2,
+            "upstreamCount": 2
+          },
+          {
+            "type": "text",
+            "body": "9.00",
+            "nativeCount": 3,
+            "upstreamCount": 3
+          },
+          {
+            "type": "text",
+            "body": "RM",
+            "nativeCount": 2,
+            "upstreamCount": 2
+          }
+        ],
+        "exactBoxesAmongUnambiguousPairs": 6,
+        "meanAbsoluteCoordinateDelta": 0.3333333333333333,
+        "maximumAbsoluteCoordinateDelta": 2,
+        "nativeBlockTypes": {
+          "image": 1,
+          "text": 23,
+          "title<LEVEL1>": 1
+        },
+        "upstreamBlockTypes": {
+          "image": 1,
+          "text": 23,
+          "title<LEVEL1>": 1
+        },
+        "nativeOnly": [],
+        "upstreamOnly": [],
+        "nativeExactPrice9000": 1,
+        "upstreamExactPrice9000": 1
+      }
+    }
+  ],
+  "allOutputsIdentical": true,
+  "matchesPreviousCanonicalPNG": true,
+  "executionFollowup": {
+    "report": "../execution/README.md",
+    "previousCLIKernelSHA256": "1802f1eba2f0997d4eb0e538b64b261dd21e7fd7f3847b955361f272f4bbf69f",
+    "actualMacOSTarget": "14.0",
+    "stampClaimedMacOSTarget": "15.0",
+    "status": "Historical CLI output used an inconsistent artifact. Verified-kernel CLI and XCTest agree at 9.00; pixel parity remains valid."
+  }
+}

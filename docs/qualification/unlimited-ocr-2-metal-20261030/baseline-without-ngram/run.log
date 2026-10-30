@@ -1,0 +1,55 @@
+Test Suite 'Selected tests' started at 2026-10-30 12:49:47.061.
+Test Suite 'MereRunCoreTests.xctest' started at 2026-10-30 12:49:47.061.
+Test Suite 'UnlimitedOCRCheckpointTests' started at 2026-10-30 12:49:47.061.
+Test Case '-[MereRunCoreTests.UnlimitedOCRCheckpointTests testFullCheckpointDocumentsOnMetal]' started.
+[unlimited-ocr] document-control: Loading checkpoint
+[unlimited-ocr] document-control: Encoding page 1/1: 0 tiles, 273 visual tokens
+[unlimited-ocr] document-control: Prefilling 279 tokens
+[unlimited-ocr] document-control: Decoding
+[unlimited-ocr] document-control: Decoded 256 tokens
+[unlimited-ocr] document-control: 30.4322509765625s, 424 tokens, pages=1, missing=[[]], peak=9688842240
+[unlimited-ocr] receipt-base: Loading checkpoint
+[unlimited-ocr] receipt-base: Encoding page 1/1: 0 tiles, 273 visual tokens
+[unlimited-ocr] receipt-base: Prefilling 279 tokens
+[unlimited-ocr] receipt-base: Decoding
+[unlimited-ocr] receipt-base: Decoded 256 tokens
+[unlimited-ocr] receipt-base: 29.833038926124573s, 495 tokens, pages=1, missing=[["MODELLING CLAY"]], peak=7001060672
+[unlimited-ocr] receipt-auto: Loading checkpoint
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Tests/MereRunCoreTests/UnlimitedOCRCheckpointTests.swift:65: error: -[MereRunCoreTests.UnlimitedOCRCheckpointTests testFullCheckpointDocumentsOnMetal] : XCTAssertTrue failed - receipt-base: missing page anchors [["MODELLING CLAY"]]
+[unlimited-ocr] receipt-auto: Encoding page 1/1: 0 tiles, 273 visual tokens
+[unlimited-ocr] receipt-auto: Prefilling 279 tokens
+[unlimited-ocr] receipt-auto: Decoding
+[unlimited-ocr] receipt-auto: Decoded 256 tokens
+[unlimited-ocr] receipt-auto: 30.39944899082184s, 495 tokens, pages=1, missing=[["MODELLING CLAY"]], peak=7001060672
+[unlimited-ocr] w9-form-base: Loading checkpoint
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Tests/MereRunCoreTests/UnlimitedOCRCheckpointTests.swift:65: error: -[MereRunCoreTests.UnlimitedOCRCheckpointTests testFullCheckpointDocumentsOnMetal] : XCTAssertTrue failed - receipt-auto: missing page anchors [["MODELLING CLAY"]]
+[unlimited-ocr] w9-form-base: Encoding page 1/1: 0 tiles, 273 visual tokens
+[unlimited-ocr] w9-form-base: Prefilling 279 tokens
+[unlimited-ocr] w9-form-base: Decoding
+[unlimited-ocr] w9-form-base: Decoded 256 tokens
+[unlimited-ocr] w9-form-base: Decoded 512 tokens
+[unlimited-ocr] w9-form-base: Decoded 768 tokens
+[unlimited-ocr] w9-form-base: Decoded 1024 tokens
+[unlimited-ocr] w9-form-base: Decoded 1280 tokens
+[unlimited-ocr] w9-form-base: Decoded 1536 tokens
+[unlimited-ocr] w9-form-base: Decoded 1792 tokens
+[unlimited-ocr] w9-form-base: Decoded 2048 tokens
+[unlimited-ocr] w9-form-base: Decoded 2304 tokens
+[unlimited-ocr] w9-form-base: Decoded 2560 tokens
+[unlimited-ocr] w9-form-base: Decoded 2816 tokens
+[unlimited-ocr] w9-form-base: Decoded 3072 tokens
+[unlimited-ocr] w9-form-base: Decoded 3328 tokens
+[unlimited-ocr] w9-form-base: Decoded 3584 tokens
+[unlimited-ocr] w9-form-base: Decoded 3840 tokens
+[unlimited-ocr] w9-form-base: Decoded 4096 tokens
+[unlimited-ocr] w9-form-base: 269.59774100780487s, 4096 tokens, pages=1, missing=[["Social security number", "Certification instructions", "General Instructions", "What\'s New"]], peak=7013908584
+[unlimited-ocr] w9-form-auto: Loading checkpoint
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Tests/MereRunCoreTests/UnlimitedOCRCheckpointTests.swift:61: error: -[MereRunCoreTests.UnlimitedOCRCheckpointTests testFullCheckpointDocumentsOnMetal] : XCTAssertFalse failed - w9-form-base: output hit its token cap
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Tests/MereRunCoreTests/UnlimitedOCRCheckpointTests.swift:65: error: -[MereRunCoreTests.UnlimitedOCRCheckpointTests testFullCheckpointDocumentsOnMetal] : XCTAssertTrue failed - w9-form-base: missing page anchors [["Social security number", "Certification instructions", "General Instructions", "What\'s New"]]
+[unlimited-ocr] w9-form-auto: Encoding page 1/1: 12 tiles, 1513 visual tokens
+[unlimited-ocr] w9-form-auto: Prefilling 1519 tokens
+[unlimited-ocr] w9-form-auto: Decoding
+[unlimited-ocr] w9-form-auto: Decoded 256 tokens
+[unlimited-ocr] w9-form-auto: Decoded 512 tokens
+[unlimited-ocr] w9-form-auto: Decoded 768 tokens
+[unlimited-ocr] w9-form-auto: Decoded 1024 tokens

@@ -1,0 +1,2 @@
+[metallib] compiling 14 kernels from mlx-swift unknown (mlx core 0.32.4)
+[metallib] wrote /tmp/unlimited-ocr-execution/verified-fresh-kernels/default.metallib (+ default.metallib.version)

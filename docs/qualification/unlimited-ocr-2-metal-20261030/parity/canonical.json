@@ -1,0 +1,10 @@
+{
+  "imageSHA256": "ece6b1ef186b904c20a1166efd01b97f53f06371ab0d3a1778a3649b6e12d651",
+  "exitCode": 0,
+  "seconds": 52.23325516600744,
+  "noRepeatNgramSize": 35,
+  "ngramWindow": 128,
+  "mlxEnableTF32": false,
+  "price9000": true,
+  "reachedTokenLimit": false
+}

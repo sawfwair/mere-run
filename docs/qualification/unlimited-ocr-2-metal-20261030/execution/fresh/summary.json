@@ -1,0 +1,16 @@
+{
+  "cases": [
+    {
+      "case": "cross-process",
+      "exitCode": 0,
+      "tests": 1
+    },
+    {
+      "case": "numerical",
+      "exitCode": 0,
+      "tests": 17
+    }
+  ],
+  "metalLibrarySHA256": "f2ad3eaf3f4f6ed8a9fef6fbd9f362ed8108063ecfcd958e88e8195cc335350a",
+  "nativeEqualsCLI": true
+}

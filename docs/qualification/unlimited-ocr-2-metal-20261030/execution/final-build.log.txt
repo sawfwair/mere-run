@@ -1,0 +1,10 @@
+Building for debugging...
+[Computing dependencies]
+[Provisioning 15 / 211]
+[Using on-disk description]
+[1 / 373] MereRunKolibriModel
+warning: missing creator for mutated node: ('/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle/Contents/MacOS')
+[16 / 337] MereRun_MereRunCLITests
+[20 / 340]
+[20 / 105] Cmlx
+Build complete! (2.73 secs.)

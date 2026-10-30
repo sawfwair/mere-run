@@ -1,0 +1,234 @@
+{
+  "sources": [
+    {
+      "file": "fw9.pdf",
+      "url": "https://www.irs.gov/pub/irs-pdf/fw9.pdf",
+      "sha256": "2d420cbb4123dcf1fb82595b2359cfbb5d81f00b9df9d359fcc7af361d093f53"
+    },
+    {
+      "file": "receipt.jpeg",
+      "url": "https://huggingface.co/datasets/hf-internal-testing/fixtures_ocr/resolve/28fe12cdf7816b5dde94e22051b2ec8dc74267b7/SROIE-receipt.jpeg",
+      "sha256": "d66a3287c847823c6ddab9f8b2080582b96a66b7816d178472f697ea84e227b3"
+    }
+  ],
+  "rasterizer": "pdftoppm",
+  "rasterDPI": 144,
+  "imageSHA256": {
+    "document.png": "7c61546579c53707933e3c374547f4f7bfc4201d079211e266ef96c76e27733b",
+    "receipt.jpeg": "d66a3287c847823c6ddab9f8b2080582b96a66b7816d178472f697ea84e227b3",
+    "w9-page-1.png": "3de15d0b4eb91ed95eb6ac8890dc7992a7f648f276b74b4176205c0dec475f42",
+    "w9-page-2.png": "4fc282a2ec0b1dc02654b94ab7da0c99315e93625d1c1aa31c9636c37acd423c"
+  },
+  "cases": [
+    {
+      "id": "document-control",
+      "crop": "base",
+      "maxTokens": 1024,
+      "pages": [
+        {
+          "image": "document.png",
+          "anchors": [
+            "MERE RUN DOCUMENT CHECK",
+            "OCR-3-TEST-008",
+            "17 samples",
+            "23 samples",
+            "Harbour sensor",
+            "42.00",
+            "18.50",
+            "60.50"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "receipt-base",
+      "crop": "base",
+      "maxTokens": 1024,
+      "pages": [
+        {
+          "image": "receipt.jpeg",
+          "anchors": [
+            "CASH BILL",
+            "25/12/2018",
+            "MANIS",
+            "MODELLING CLAY",
+            "KIDDY FISH",
+            "9.00"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "receipt-auto",
+      "crop": "auto",
+      "maxTokens": 1024,
+      "pages": [
+        {
+          "image": "receipt.jpeg",
+          "anchors": [
+            "CASH BILL",
+            "25/12/2018",
+            "MANIS",
+            "MODELLING CLAY",
+            "KIDDY FISH",
+            "9.00"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "w9-form-base",
+      "crop": "base",
+      "maxTokens": 4096,
+      "pages": [
+        {
+          "image": "w9-page-1.png",
+          "anchors": [
+            "Request for Taxpayer",
+            "Taxpayer Identification Number",
+            "Social security number",
+            "Certification instructions",
+            "General Instructions",
+            "What's New",
+            "Purpose of Form"
+          ],
+          "forbidden": [
+            "Nonresident alien who becomes a resident alien",
+            "Form 1099-NEC",
+            "after 1983"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "w9-form-auto",
+      "crop": "auto",
+      "maxTokens": 4096,
+      "pages": [
+        {
+          "image": "w9-page-1.png",
+          "anchors": [
+            "Request for Taxpayer",
+            "Taxpayer Identification Number",
+            "Social security number",
+            "Certification instructions",
+            "General Instructions",
+            "What's New",
+            "Purpose of Form"
+          ],
+          "forbidden": [
+            "Nonresident alien who becomes a resident alien",
+            "Form 1099-NEC",
+            "after 1983"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "w9-instructions-base",
+      "crop": "base",
+      "maxTokens": 4096,
+      "pages": [
+        {
+          "image": "w9-page-2.png",
+          "anchors": [
+            "Form 1099-INT",
+            "Form 1099-NEC",
+            "Definition of a U.S. person",
+            "Foreign person",
+            "Nonresident alien who becomes a resident alien",
+            "Backup Withholding",
+            "24%",
+            "after 1983"
+          ],
+          "forbidden": [
+            "Request for Taxpayer Identification Number and Certification",
+            "City, state, and ZIP code"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "w9-two-page-base",
+      "crop": "base",
+      "maxTokens": 8192,
+      "pages": [
+        {
+          "image": "w9-page-1.png",
+          "anchors": [
+            "Request for Taxpayer",
+            "Taxpayer Identification Number",
+            "Social security number",
+            "Certification instructions",
+            "General Instructions",
+            "What's New",
+            "Purpose of Form"
+          ],
+          "forbidden": [
+            "Nonresident alien who becomes a resident alien",
+            "Form 1099-NEC",
+            "after 1983"
+          ]
+        },
+        {
+          "image": "w9-page-2.png",
+          "anchors": [
+            "Form 1099-INT",
+            "Form 1099-NEC",
+            "Definition of a U.S. person",
+            "Foreign person",
+            "Nonresident alien who becomes a resident alien",
+            "Backup Withholding",
+            "24%",
+            "after 1983"
+          ],
+          "forbidden": [
+            "Request for Taxpayer Identification Number and Certification",
+            "City, state, and ZIP code"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "w9-reversed-base",
+      "crop": "base",
+      "maxTokens": 8192,
+      "pages": [
+        {
+          "image": "w9-page-2.png",
+          "anchors": [
+            "Form 1099-INT",
+            "Form 1099-NEC",
+            "Definition of a U.S. person",
+            "Foreign person",
+            "Nonresident alien who becomes a resident alien",
+            "Backup Withholding",
+            "24%",
+            "after 1983"
+          ],
+          "forbidden": [
+            "Request for Taxpayer Identification Number and Certification",
+            "City, state, and ZIP code"
+          ]
+        },
+        {
+          "image": "w9-page-1.png",
+          "anchors": [
+            "Request for Taxpayer",
+            "Taxpayer Identification Number",
+            "Social security number",
+            "Certification instructions",
+            "General Instructions",
+            "What's New",
+            "Purpose of Form"
+          ],
+          "forbidden": [
+            "Nonresident alien who becomes a resident alien",
+            "Form 1099-NEC",
+            "after 1983"
+          ]
+        }
+      ]
+    }
+  ]
+}

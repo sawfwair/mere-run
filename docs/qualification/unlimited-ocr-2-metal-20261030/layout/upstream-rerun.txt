@@ -1,0 +1,62 @@
+[CodeStamp] warmup-window-page-switches-v4 sha256=86da9c563870 mtime=2026-10-30 13:03:11 switches=local_window:1,page_prefill:0 file=/private/tmp/unlimited-ocr-upstream/model/_sparse_base_impl.py
+DeepseekV2ForCausalLM has generative capabilities, as `prepare_inputs_for_generation` is explicitly defined. However, it doesn't directly inherit from `GenerationMixin`. From 👉v4.50👈 onwards, `PreTrainedModel` will NOT inherit from `GenerationMixin`, and this model will lose the ability to call `generate` and other related functions.
+  - If you're using `trust_remote_code=True`, you can get rid of this warning by loading the model with an auto class. See https://huggingface.co/docs/transformers/en/model_doc/auto#auto-classes
+  - If you are the owner of the model architecture code, please modify your model class such that it inherits from `GenerationMixin` (after `PreTrainedModel`, otherwise you'll get an exception).
+  - If you are not the owner of the model architecture class, please contact the model code owner to update it.
+UnlimitedOCRForCausalLM has generative capabilities, as `prepare_inputs_for_generation` is explicitly defined. However, it doesn't directly inherit from `GenerationMixin`. From 👉v4.50👈 onwards, `PreTrainedModel` will NOT inherit from `GenerationMixin`, and this model will lose the ability to call `generate` and other related functions.
+  - If you're using `trust_remote_code=True`, you can get rid of this warning by loading the model with an auto class. See https://huggingface.co/docs/transformers/en/model_doc/auto#auto-classes
+  - If you are the owner of the model architecture code, please modify your model class such that it inherits from `GenerationMixin` (after `PreTrainedModel`, otherwise you'll get an exception).
+  - If you are not the owner of the model architecture class, please contact the model code owner to update it.
+[PageRope] mode=page2d head_dim=128 tok_theta=10000.0 fallback_1d_theta=500000.0 page_pairs=1 page_theta=256.0 page_mod=2 tok_freq_mode=resample page_span=0
+[PageRope] pairs page/1 tok/63 capacity page=3pages tok=27143tokens
+[PageRope main] mode=page2d head_dim=128 page_pairs=1 page_theta=256.0 tok_theta=10000.0 tok_freq_mode=resample page_mod=2 capacity page=3pages tok=27143tokens
+[DASH] differentiable DASH attention active (entmax router, block_size=32, local_window=128, index_dim=128, main_rope=page2d, idx_rope=page2d, page_bucket=True); first dash layer_idx=0
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:00<00:00, 18.06it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:00<00:00, 18.03it/s]
+DeepseekV2ForCausalLM has generative capabilities, as `prepare_inputs_for_generation` is explicitly defined. However, it doesn't directly inherit from `GenerationMixin`. From 👉v4.50👈 onwards, `PreTrainedModel` will NOT inherit from `GenerationMixin`, and this model will lose the ability to call `generate` and other related functions.
+  - If you're using `trust_remote_code=True`, you can get rid of this warning by loading the model with an auto class. See https://huggingface.co/docs/transformers/en/model_doc/auto#auto-classes
+  - If you are the owner of the model architecture code, please modify your model class such that it inherits from `GenerationMixin` (after `PreTrainedModel`, otherwise you'll get an exception).
+  - If you are not the owner of the model architecture class, please contact the model code owner to update it.
+UnlimitedOCRForCausalLM has generative capabilities, as `prepare_inputs_for_generation` is explicitly defined. However, it doesn't directly inherit from `GenerationMixin`. From 👉v4.50👈 onwards, `PreTrainedModel` will NOT inherit from `GenerationMixin`, and this model will lose the ability to call `generate` and other related functions.
+  - If you're using `trust_remote_code=True`, you can get rid of this warning by loading the model with an auto class. See https://huggingface.co/docs/transformers/en/model_doc/auto#auto-classes
+  - If you are the owner of the model architecture code, please modify your model class such that it inherits from `GenerationMixin` (after `PreTrainedModel`, otherwise you'll get an exception).
+  - If you are not the owner of the model architecture class, please contact the model code owner to update it.
+DeepseekV2ForCausalLM has generative capabilities, as `prepare_inputs_for_generation` is explicitly defined. However, it doesn't directly inherit from `GenerationMixin`. From 👉v4.50👈 onwards, `PreTrainedModel` will NOT inherit from `GenerationMixin`, and this model will lose the ability to call `generate` and other related functions.
+  - If you're using `trust_remote_code=True`, you can get rid of this warning by loading the model with an auto class. See https://huggingface.co/docs/transformers/en/model_doc/auto#auto-classes
+  - If you are the owner of the model architecture code, please modify your model class such that it inherits from `GenerationMixin` (after `PreTrainedModel`, otherwise you'll get an exception).
+  - If you are not the owner of the model architecture class, please contact the model code owner to update it.
+UnlimitedOCRForCausalLM has generative capabilities, as `prepare_inputs_for_generation` is explicitly defined. However, it doesn't directly inherit from `GenerationMixin`. From 👉v4.50👈 onwards, `PreTrainedModel` will NOT inherit from `GenerationMixin`, and this model will lose the ability to call `generate` and other related functions.
+  - If you're using `trust_remote_code=True`, you can get rid of this warning by loading the model with an auto class. See https://huggingface.co/docs/transformers/en/model_doc/auto#auto-classes
+  - If you are the owner of the model architecture code, please modify your model class such that it inherits from `GenerationMixin` (after `PreTrainedModel`, otherwise you'll get an exception).
+  - If you are not the owner of the model architecture class, please contact the model code owner to update it.
+Upstream loaded on mps (bfloat16) in 1.5s
+[PageRope layer=0 row0] n_pages=1 page_mod=2 folded_pages=[0, 1] prompt(page0)[0-4#5] uniq_coords=279/279 p1:img#273 txt#0 ok=False
+[PageAwareKL layer=0] image_page_mode=marker page_token_id=128827 prompt_page_markers=1 per_page_image_tokens=273 page_markers=1 image_tokens=273 query_pages=1 image_pages=1 page_aware_enabled=True
+[PageAwareKL layer=0 row0] markers@[1] p0:img[2-274#273] pre[1-274#274] txt[none] ok=False
+[PageAwareKL layer=1] image_page_mode=marker page_token_id=128827 prompt_page_markers=1 per_page_image_tokens=273 page_markers=1 image_tokens=273 query_pages=1 image_pages=1 page_aware_enabled=True
+[PageAwareKL layer=1 row0] markers@[1] p0:img[2-274#273] pre[1-274#274] txt[none] ok=False
+[PageAwareKL layer=2] image_page_mode=marker page_token_id=128827 prompt_page_markers=1 per_page_image_tokens=273 page_markers=1 image_tokens=273 query_pages=1 image_pages=1 page_aware_enabled=True
+[PageAwareKL layer=2 row0] markers@[1] p0:img[2-274#273] pre[1-274#274] txt[none] ok=False
+[ImageMask layer=2] itm ok shape=(1, 279) image_token_id=128815 image_tokens=273/279 (97.8%) image_blocks=9.0/9 (100.0%) empty=False
+[PageAwareKL layer=3] image_page_mode=marker page_token_id=128827 prompt_page_markers=1 per_page_image_tokens=273 page_markers=1 image_tokens=273 query_pages=1 image_pages=1 page_aware_enabled=True
+[PageAwareKL layer=3 row0] markers@[1] p0:img[2-274#273] pre[1-274#274] txt[none] ok=False
+[PageAwareKL layer=4] image_page_mode=marker page_token_id=128827 prompt_page_markers=1 per_page_image_tokens=273 page_markers=1 image_tokens=273 query_pages=1 image_pages=1 page_aware_enabled=True
+[PageAwareKL layer=4 row0] markers@[1] p0:img[2-274#273] pre[1-274#274] txt[none] ok=False
+[PageAwareKL layer=5] image_page_mode=marker page_token_id=128827 prompt_page_markers=1 per_page_image_tokens=273 page_markers=1 image_tokens=273 query_pages=1 image_pages=1 page_aware_enabled=True
+[PageAwareKL layer=5 row0] markers@[1] p0:img[2-274#273] pre[1-274#274] txt[none] ok=False
+[PageAwareKL layer=6] image_page_mode=marker page_token_id=128827 prompt_page_markers=1 per_page_image_tokens=273 page_markers=1 image_tokens=273 query_pages=1 image_pages=1 page_aware_enabled=True
+[PageAwareKL layer=6 row0] markers@[1] p0:img[2-274#273] pre[1-274#274] txt[none] ok=False
+[PageAwareKL layer=7] image_page_mode=marker page_token_id=128827 prompt_page_markers=1 per_page_image_tokens=273 page_markers=1 image_tokens=273 query_pages=1 image_pages=1 page_aware_enabled=True
+[PageAwareKL layer=7 row0] markers@[1] p0:img[2-274#273] pre[1-274#274] txt[none] ok=False
+[PageAwareKL layer=8] image_page_mode=marker page_token_id=128827 prompt_page_markers=1 per_page_image_tokens=273 page_markers=1 image_tokens=273 query_pages=1 image_pages=1 page_aware_enabled=True
+[PageAwareKL layer=8 row0] markers@[1] p0:img[2-274#273] pre[1-274#274] txt[none] ok=False
+[PageAwareKL layer=9] image_page_mode=marker page_token_id=128827 prompt_page_markers=1 per_page_image_tokens=273 page_markers=1 image_tokens=273 query_pages=1 image_pages=1 page_aware_enabled=True
+[PageAwareKL layer=9 row0] markers@[1] p0:img[2-274#273] pre[1-274#274] txt[none] ok=False
+[PageAwareKL layer=10] image_page_mode=marker page_token_id=128827 prompt_page_markers=1 per_page_image_tokens=273 page_markers=1 image_tokens=273 query_pages=1 image_pages=1 page_aware_enabled=True
+[PageAwareKL layer=10 row0] markers@[1] p0:img[2-274#273] pre[1-274#274] txt[none] ok=False
+[PageAwareKL layer=11] image_page_mode=marker page_token_id=128827 prompt_page_markers=1 per_page_image_tokens=273 page_markers=1 image_tokens=273 query_pages=1 image_pages=1 page_aware_enabled=True
+[PageAwareKL layer=11 row0] markers@[1] p0:img[2-274#273] pre[1-274#274] txt[none] ok=False
+[debug DeepseekV2Model] indexer_kl_loss_type=NoneType count=0 return_dict=True training=False
+[debug DeepseekV2Model post-set] hasattr=True getattr=None id(out)=4621225408
+
+[TPS] tokens=256 avg=11.7 t/s
+receipt-base-bfloat16-ngram35 495 stop 44.6s

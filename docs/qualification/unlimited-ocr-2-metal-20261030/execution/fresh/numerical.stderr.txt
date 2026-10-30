@@ -1,0 +1,43 @@
+Test Suite 'Selected tests' started at 2026-10-30 15:53:09.460.
+Test Suite 'UnlimitedOCRRuntimeTests.xctest' started at 2026-10-30 15:53:09.461.
+Test Suite 'UnlimitedOCRRuntimeTests' started at 2026-10-30 15:53:09.461.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testBF16AttentionPreservesUpstreamOutputDType]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testBF16AttentionPreservesUpstreamOutputDType]' passed (0.027 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testBF16SparsePrefillAndDecodeMatchUpstreamPrecisionBoundaries]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testBF16SparsePrefillAndDecodeMatchUpstreamPrecisionBoundaries]' passed (0.019 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testDASHRouterUsesGemmaNormOffsetAndFP32AffineMath]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testDASHRouterUsesGemmaNormOffsetAndFP32AffineMath]' passed (0.005 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testEntmaxAgainstAnalyticProbabilities]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testEntmaxAgainstAnalyticProbabilities]' passed (0.005 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testIntrinsicActivationsMatchPyTorchBF16Rounding]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testIntrinsicActivationsMatchPyTorchBF16Rounding]' passed (0.006 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testMoEMixtureAccumulatesInFP32WithoutRoundingRouterProbabilities]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testMoEMixtureAccumulatesInFP32WithoutRoundingRouterProbabilities]' passed (0.003 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testPageCoordinatesContinueAcrossPromptAndResponse]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testPageCoordinatesContinueAcrossPromptAndResponse]' passed (0.002 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testPageRotaryParityAndScalarAngles]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testPageRotaryParityAndScalarAngles]' passed (0.004 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testPositionalGridUsesUpstreamAntialiasedHorizontalThenVerticalPasses]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testPositionalGridUsesUpstreamAntialiasedHorizontalThenVerticalPasses]' passed (0.004 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testQuickGELUKeepsTheScalarInFP32AndRoundsAtUpstreamBoundaries]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testQuickGELUKeepsTheScalarInFP32AndRoundsAtUpstreamBoundaries]' passed (0.002 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testReleasedConfigurationAndCheckpointShapes]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testReleasedConfigurationAndCheckpointShapes]' passed (0.018 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testSAMAttentionKeepsSpatialIndicesIntegral]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testSAMAttentionKeepsSpatialIndicesIntegral]' passed (0.053 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testSAMRelativePositionInterpolationAgainstScalarValues]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testSAMRelativePositionInterpolationAgainstScalarValues]' passed (0.004 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testSparseAttentionAgainstIndependentScalarReference]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testSparseAttentionAgainstIndependentScalarReference]' passed (0.015 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testTinyMoEDecoderAgainstIndependentScalarReferenceAndCachedSteps]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testTinyMoEDecoderAgainstIndependentScalarReferenceAndCachedSteps]' passed (0.059 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testVisionLinearFusesBiasBeforeBF16OutputRounding]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testVisionLinearFusesBiasBeforeBF16OutputRounding]' passed (0.003 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testVisionNormsPreserveTheirDistinctBF16Rounding]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testVisionNormsPreserveTheirDistinctBF16Rounding]' passed (0.005 seconds).
+Test Suite 'UnlimitedOCRRuntimeTests' passed at 2026-10-30 15:53:09.693.
+	 Executed 17 tests, with 0 failures (0 unexpected) in 0.231 (0.232) seconds
+Test Suite 'UnlimitedOCRRuntimeTests.xctest' passed at 2026-10-30 15:53:09.693.
+	 Executed 17 tests, with 0 failures (0 unexpected) in 0.231 (0.232) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 15:53:09.693.
+	 Executed 17 tests, with 0 failures (0 unexpected) in 0.231 (0.233) seconds

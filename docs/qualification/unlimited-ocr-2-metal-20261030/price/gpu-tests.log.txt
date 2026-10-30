@@ -1,0 +1,265 @@
+Building for debugging...
+[Computing dependencies]
+[Provisioning 6 / 242]
+[Using on-disk description]
+[1 / 9] mere.run-product
+[1 / 495] MereRunRelayKitTests-product
+[1 / 391] MereRunExecution-product
+[1 / 186] H3RuntimeTests-product
+[2 / 39] MereRunUnlimitedOCRModel
+[5 / 42] MereRunUnlimitedOCRModel
+[13 / 51] MereRunUnlimitedOCRModel
+[18 / 61] UnlimitedOCRRuntimeTests-product
+[22 / 65] UnlimitedOCRRuntimeTests-product
+[26 / 64] UnlimitedOCRRuntimeTests-product
+[28 / 64] UnlimitedOCRRuntimeTests-product
+[30 / 62] MereRunCore
+[32 / 63] MereRunCore
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/Inkling/InklingSharedOuterLoRASwitchLinear.swift:12:85: warning: function call causes an infinite recursion
+ 10 | /// expert-specific. This preserves per-expert adaptation without allocating a
+ 11 | /// full independent LoRA pair for all 256 routed experts.
+ 12 | final class InklingSharedOuterLoRASwitchLinear: Q35SwitchLinear, TrainableLoRALayer {
+    |                                                                                     `- warning: function call causes an infinite recursion
+ 13 |     enum SharedFactor: Sendable, Equatable {
+ 14 |         /// Gate/up projections: the input-side factor touches hidden size.
+
+/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/Sources/MereRunCore/Inkling/InklingSharedOuterLoRASwitchLinear.swift:12:85: warning: function call causes an infinite recursion
+ 10 | /// expert-specific. This preserves per-expert adaptation without allocating a
+ 11 | /// full independent LoRA pair for all 256 routed experts.
+ 12 | final class InklingSharedOuterLoRASwitchLinear: Q35SwitchLinear, TrainableLoRALayer {
+    |                                                                                     `- warning: function call causes an infinite recursion
+ 13 |     enum SharedFactor: Sendable, Equatable {
+ 14 |         /// Gate/up projections: the input-side factor touches hidden size.
+[37 / 68] MereRunCore-product
+[37 / 68] AudioTTS
+[47 / 68] AudioTTS-product
+[47 / 68] AudioTTSTests-product
+[50 / 69] AudioTTSTests-product
+[52 / 70] AudioTTSTests-product
+[52 / 70] MereRunCoreTests-product
+[57 / 72] mere.run-product
+[60 / 74] MereRunCoreTests-product
+[63 / 75] MereRunCoreTests-product
+[64 / 75] MereRunCoreTests-product
+[64 / 75] MereRunCLI
+[66 / 74] mere.run-product
+[68 / 77] mere.run-product
+[70 / 75] MereRunCLITests-product
+[73 / 76] MereRunCLITests-product
+[73 / 77] MereRunCLITests-product
+[77 / 77] MereRunCLITests-product
+warning: missing creator for mutated node: ('/Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run/.build/out/Products/Debug/mlx-swift_Cmlx.bundle/Contents/MacOS')
+Build complete! (38.27 secs.)
+Test Suite 'Selected tests' started at 2026-10-30 16:16:13.902.
+Test Suite 'UnlimitedOCRRuntimeTests.xctest' started at 2026-10-30 16:16:13.903.
+Test Suite 'UnlimitedOCRRuntimeTests' started at 2026-10-30 16:16:13.903.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testBF16AttentionPreservesUpstreamOutputDType]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testBF16AttentionPreservesUpstreamOutputDType]' passed (0.041 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testBF16SparsePrefillAndDecodeMatchUpstreamPrecisionBoundaries]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testBF16SparsePrefillAndDecodeMatchUpstreamPrecisionBoundaries]' passed (0.021 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testDASHRouterUsesGemmaNormOffsetAndFP32AffineMath]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testDASHRouterUsesGemmaNormOffsetAndFP32AffineMath]' passed (0.004 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testDASHScalingPreservesPythonScalarPromotion]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testDASHScalingPreservesPythonScalarPromotion]' passed (0.001 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testEntmaxAgainstAnalyticProbabilities]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testEntmaxAgainstAnalyticProbabilities]' passed (0.002 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testIntrinsicActivationsMatchPyTorchBF16Rounding]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testIntrinsicActivationsMatchPyTorchBF16Rounding]' passed (0.005 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testMoEMixtureAccumulatesInFP32WithoutRoundingRouterProbabilities]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testMoEMixtureAccumulatesInFP32WithoutRoundingRouterProbabilities]' passed (0.001 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testPageCoordinatesContinueAcrossPromptAndResponse]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testPageCoordinatesContinueAcrossPromptAndResponse]' passed (0.000 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testPageRotaryParityAndScalarAngles]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testPageRotaryParityAndScalarAngles]' passed (0.003 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testPositionalGridUsesUpstreamAntialiasedHorizontalThenVerticalPasses]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testPositionalGridUsesUpstreamAntialiasedHorizontalThenVerticalPasses]' passed (0.003 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testQuickGELUKeepsTheScalarInFP32AndRoundsAtUpstreamBoundaries]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testQuickGELUKeepsTheScalarInFP32AndRoundsAtUpstreamBoundaries]' passed (0.001 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testReleasedConfigurationAndCheckpointShapes]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testReleasedConfigurationAndCheckpointShapes]' passed (0.018 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testSAMAttentionKeepsSpatialIndicesIntegral]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testSAMAttentionKeepsSpatialIndicesIntegral]' passed (0.008 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testSAMRelativePositionInterpolationAgainstScalarValues]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testSAMRelativePositionInterpolationAgainstScalarValues]' passed (0.003 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testSparseAttentionAgainstIndependentScalarReference]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testSparseAttentionAgainstIndependentScalarReference]' passed (0.016 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testTinyMoEDecoderAgainstIndependentScalarReferenceAndCachedSteps]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testTinyMoEDecoderAgainstIndependentScalarReferenceAndCachedSteps]' passed (0.071 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testVisionLinearFusesBiasBeforeBF16OutputRounding]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testVisionLinearFusesBiasBeforeBF16OutputRounding]' passed (0.002 seconds).
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testVisionNormsPreserveTheirDistinctBF16Rounding]' started.
+Test Case '-[UnlimitedOCRRuntimeTests.UnlimitedOCRRuntimeTests testVisionNormsPreserveTheirDistinctBF16Rounding]' passed (0.004 seconds).
+Test Suite 'UnlimitedOCRRuntimeTests' passed at 2026-10-30 16:16:14.109.
+	 Executed 18 tests, with 0 failures (0 unexpected) in 0.204 (0.206) seconds
+Test Suite 'UnlimitedOCRRuntimeTests.xctest' passed at 2026-10-30 16:16:14.109.
+	 Executed 18 tests, with 0 failures (0 unexpected) in 0.204 (0.206) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:14.109.
+	 Executed 18 tests, with 0 failures (0 unexpected) in 0.204 (0.207) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:14.251.
+Test Suite 'StudioUITests.xctest' started at 2026-10-30 16:16:14.252.
+Test Suite 'StudioUITests.xctest' passed at 2026-10-30 16:16:14.252.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:14.252.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:14.363.
+Test Suite 'StudioKitTests.xctest' started at 2026-10-30 16:16:14.364.
+Test Suite 'StudioKitTests.xctest' passed at 2026-10-30 16:16:14.365.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:14.365.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:14.555.
+Test Suite 'SpeechRuntimeTests.xctest' started at 2026-10-30 16:16:14.556.
+Test Suite 'SpeechRuntimeTests.xctest' passed at 2026-10-30 16:16:14.556.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:14.556.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:14.721.
+Test Suite 'QwenRuntimeTests.xctest' started at 2026-10-30 16:16:14.722.
+Test Suite 'QwenRuntimeTests.xctest' passed at 2026-10-30 16:16:14.722.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:14.722.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:14.882.
+Test Suite 'NemotronTranscribeRuntimeTests.xctest' started at 2026-10-30 16:16:14.883.
+Test Suite 'NemotronTranscribeRuntimeTests.xctest' passed at 2026-10-30 16:16:14.883.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:14.883.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:15.041.
+Test Suite 'NemotronBoltRuntimeTests.xctest' started at 2026-10-30 16:16:15.042.
+Test Suite 'NemotronBoltRuntimeTests.xctest' passed at 2026-10-30 16:16:15.042.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:15.042.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:15.139.
+Test Suite 'MereRunResidencyTests.xctest' started at 2026-10-30 16:16:15.140.
+Test Suite 'MereRunResidencyTests.xctest' passed at 2026-10-30 16:16:15.140.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:15.140.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:15.240.
+Test Suite 'MereRunRelayKitTests.xctest' started at 2026-10-30 16:16:15.242.
+Test Suite 'MereRunRelayKitTests.xctest' passed at 2026-10-30 16:16:15.242.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:15.242.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:15.340.
+Test Suite 'MereRunModelKitTests.xctest' started at 2026-10-30 16:16:15.341.
+Test Suite 'MereRunModelKitTests.xctest' passed at 2026-10-30 16:16:15.341.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:15.341.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:15.439.
+Test Suite 'MereRunExecutionTests.xctest' started at 2026-10-30 16:16:15.439.
+Test Suite 'MereRunExecutionTests.xctest' passed at 2026-10-30 16:16:15.440.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:15.440.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:15.537.
+Test Suite 'MereRunEvaluationTests.xctest' started at 2026-10-30 16:16:15.537.
+Test Suite 'MereRunEvaluationTests.xctest' passed at 2026-10-30 16:16:15.538.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:15.538.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:15.840.
+Test Suite 'MereRunCoreTests.xctest' started at 2026-10-30 16:16:15.840.
+Test Suite 'MereRunCoreTests.xctest' passed at 2026-10-30 16:16:15.840.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:15.840.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:15.942.
+Test Suite 'MereRunContractTests.xctest' started at 2026-10-30 16:16:15.943.
+Test Suite 'MereRunContractTests.xctest' passed at 2026-10-30 16:16:15.943.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:15.943.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:16.237.
+Test Suite 'MereRunCLITests.xctest' started at 2026-10-30 16:16:16.238.
+Test Suite 'MereRunCLITests.xctest' passed at 2026-10-30 16:16:16.238.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:16.238.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:16.385.
+Test Suite 'MereRunAppTests.xctest' started at 2026-10-30 16:16:16.386.
+Test Suite 'MereRunAppTests.xctest' passed at 2026-10-30 16:16:16.386.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:16.386.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:16.484.
+Test Suite 'MereRunAdmissionTests.xctest' started at 2026-10-30 16:16:16.485.
+Test Suite 'MereRunAdmissionTests.xctest' passed at 2026-10-30 16:16:16.485.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:16.485.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:16.640.
+Test Suite 'LagunaRuntimeTests.xctest' started at 2026-10-30 16:16:16.641.
+Test Suite 'LagunaRuntimeTests.xctest' passed at 2026-10-30 16:16:16.641.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:16.641.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:16.801.
+Test Suite 'LTXRuntimeTests.xctest' started at 2026-10-30 16:16:16.802.
+Test Suite 'LTXRuntimeTests.xctest' passed at 2026-10-30 16:16:16.802.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:16.802.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:16.961.
+Test Suite 'KolibriRuntimeTests.xctest' started at 2026-10-30 16:16:16.962.
+Test Suite 'KolibriRuntimeTests.xctest' passed at 2026-10-30 16:16:16.962.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:16.962.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:17.119.
+Test Suite 'ImageRuntimeTests.xctest' started at 2026-10-30 16:16:17.120.
+Test Suite 'ImageRuntimeTests.xctest' passed at 2026-10-30 16:16:17.120.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:17.120.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:17.275.
+Test Suite 'H3RuntimeTests.xctest' started at 2026-10-30 16:16:17.276.
+Test Suite 'H3RuntimeTests.xctest' passed at 2026-10-30 16:16:17.276.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:17.276.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:17.431.
+Test Suite 'GemmaRuntimeTests.xctest' started at 2026-10-30 16:16:17.432.
+Test Suite 'GemmaRuntimeTests.xctest' passed at 2026-10-30 16:16:17.432.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:17.432.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:17.589.
+Test Suite 'FlintRuntimeTests.xctest' started at 2026-10-30 16:16:17.590.
+Test Suite 'FlintRuntimeTests.xctest' passed at 2026-10-30 16:16:17.590.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:17.590.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:17.748.
+Test Suite 'Drama3RuntimeTests.xctest' started at 2026-10-30 16:16:17.749.
+Test Suite 'Drama3RuntimeTests.xctest' passed at 2026-10-30 16:16:17.749.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:17.749.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:17.904.
+Test Suite 'DecodeRuntimeTests.xctest' started at 2026-10-30 16:16:17.905.
+Test Suite 'DecodeRuntimeTests.xctest' passed at 2026-10-30 16:16:17.905.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:17.905.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:18.159.
+Test Suite 'AudioTTSTests.xctest' started at 2026-10-30 16:16:18.160.
+Test Suite 'AudioTTSTests.xctest' passed at 2026-10-30 16:16:18.160.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:18.160.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:18.317.
+Test Suite 'AudioPhononModelTests.xctest' started at 2026-10-30 16:16:18.318.
+Test Suite 'AudioPhononModelTests.xctest' passed at 2026-10-30 16:16:18.318.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:18.318.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' started at 2026-10-30 16:16:18.423.
+Test Suite 'AudioCoreTests.xctest' started at 2026-10-30 16:16:18.424.
+Test Suite 'AudioCoreTests.xctest' passed at 2026-10-30 16:16:18.424.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 16:16:18.424.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds

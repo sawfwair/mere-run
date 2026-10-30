@@ -1,0 +1,29 @@
+Test Suite 'Selected tests' started at 2026-10-30 17:00:19.249.
+Test Suite 'MereRunCoreTests.xctest' started at 2026-10-30 17:00:19.250.
+Test Suite 'UnlimitedOCRCheckpointTests' started at 2026-10-30 17:00:19.250.
+Test Case '-[MereRunCoreTests.UnlimitedOCRCheckpointTests testFullCheckpointDocumentsOnMetal]' started.
+[unlimited-ocr] jpeg-base: Loading checkpoint
+[unlimited-ocr] jpeg-base: Encoding page 1/1: 0 tiles, 273 visual tokens
+[unlimited-ocr] jpeg-base: Prefilling 279 tokens
+[unlimited-ocr] jpeg-base: Decoding
+[unlimited-ocr] jpeg-base: Decoded 256 tokens
+[unlimited-ocr] jpeg-base: 38.11392402648926s, 495 tokens, pages=1, missing=[[]], peak=9688842240
+[unlimited-ocr] jpeg-auto: Loading checkpoint
+[unlimited-ocr] jpeg-auto: Encoding page 1/1: 0 tiles, 273 visual tokens
+[unlimited-ocr] jpeg-auto: Prefilling 279 tokens
+[unlimited-ocr] jpeg-auto: Decoding
+[unlimited-ocr] jpeg-auto: Decoded 256 tokens
+[unlimited-ocr] jpeg-auto: 39.180505990982056s, 495 tokens, pages=1, missing=[[]], peak=7089143040
+[unlimited-ocr] png-base: Loading checkpoint
+[unlimited-ocr] png-base: Encoding page 1/1: 0 tiles, 273 visual tokens
+[unlimited-ocr] png-base: Prefilling 279 tokens
+[unlimited-ocr] png-base: Decoding
+[unlimited-ocr] png-base: Decoded 256 tokens
+[unlimited-ocr] png-base: 40.15680003166199s, 495 tokens, pages=1, missing=[[]], peak=7089143040
+Test Case '-[MereRunCoreTests.UnlimitedOCRCheckpointTests testFullCheckpointDocumentsOnMetal]' passed (117.490 seconds).
+Test Suite 'UnlimitedOCRCheckpointTests' passed at 2026-10-30 17:02:16.740.
+	 Executed 1 test, with 0 failures (0 unexpected) in 117.490 (117.490) seconds
+Test Suite 'MereRunCoreTests.xctest' passed at 2026-10-30 17:02:16.740.
+	 Executed 1 test, with 0 failures (0 unexpected) in 117.490 (117.490) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 17:02:16.740.
+	 Executed 1 test, with 0 failures (0 unexpected) in 117.490 (117.491) seconds

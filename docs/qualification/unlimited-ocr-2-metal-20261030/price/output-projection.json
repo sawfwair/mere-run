@@ -1,0 +1,30 @@
+{
+  "ids": [
+    504,
+    1320
+  ],
+  "pieces": [
+    "00",
+    "000"
+  ],
+  "nativeLogits": [
+    20.25,
+    20.0
+  ],
+  "nativeUnroundedPair": [
+    20.230260848999023,
+    20.061080932617188
+  ],
+  "upstreamOnNativeHidden": [
+    20.25,
+    20.0
+  ],
+  "upstreamPromotedOnNativeHidden": [
+    20.25,
+    20.0
+  ],
+  "cpuFloat64Pair": [
+    20.230260626412928,
+    20.061080636573024
+  ]
+}

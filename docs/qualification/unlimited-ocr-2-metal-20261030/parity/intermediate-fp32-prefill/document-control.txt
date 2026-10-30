@@ -1,0 +1,16 @@
+<PAGE><BLOCK>title[65, 45, 703, 78]<FORK>MERE RUN DOCUMENT CHECK
+<BLOCK>text[63, 100, 401, 123]<FORK>Reference: OCR-3-TEST-008
+<BLOCK>title[63, 141, 300, 167]<FORK>Project summary
+<BLOCK>text[63, 188, 442, 210]<FORK>Three sensors monitor the harbour.
+<BLOCK>text[63, 222, 442, 244]<FORK>The trial begins on 8 October 2026.
+<BLOCK>text[63, 256, 444, 278]<FORK>Station Alpha recorded 17 samples.
+<BLOCK>text[63, 290, 435, 313]<FORK>Station Beta recorded 23 samples.
+<BLOCK>title[554, 141, 788, 166]<FORK>Notes françaises
+<BLOCK>text[553, 187, 827, 210]<FORK>Température: 18,5 degrés.
+<BLOCK>text[553, 222, 861, 243]<FORK>Le café est ouvert à Montréal.
+<BLOCK>text[553, 253, 850, 278]<FORK>Équipe: Zoé, André et Émile.
+<BLOCK>text[553, 290, 872, 312]<FORK>Aucun incident pendant le test.
+<BLOCK>title[63, 406, 341, 430]<FORK>INVOICE SUMMARY
+<BLOCK>table[65, 453, 919, 643]<FORK><table><tr><td>Item</td><td>Quantity</td><td>Amount</td></tr><tr><td>Harbour sensor</td><td>3</td><td>$42.00</td></tr><tr><td>Calibration kit</td><td>2</td><td>$18.50</td></tr><tr><td>Total</td><td>5</td><td>$60.50</td></tr></table>
+<BLOCK>text[62, 744, 555, 768]<FORK>Conclusion: all five units passed inspection.
+<BLOCK>page_number[63, 918, 449, 937]<FORK>Page 1 / 1 Verification code: MERE-1024

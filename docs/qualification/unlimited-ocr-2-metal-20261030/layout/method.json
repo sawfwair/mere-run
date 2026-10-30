@@ -1,0 +1,39 @@
+{
+  "checkpointRevision": "c14071b549f4fcab10909f3c4acc6a2edb366947",
+  "device": "Apple M5 Max",
+  "nativeKernelSHA256": "64431ed485178f63a8dc870c8231ba021090c3356218c607a726821a7b6abb82",
+  "mlxEnableTF32": false,
+  "outputStep": 20,
+  "firstSAMConvolutionUnequal": 94,
+  "firstSAMConvolutionElements": 3145728,
+  "upstreamPatchSubstitutionRestoresFirstCoordinate": true,
+  "sourceSHA256": {
+    "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRDecoder.swift": "c0dc3deaa6c94047d7e180929efe486ff3a41f0d8b57ab66115b6c7fd0ccaecb",
+    "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRVision.swift": "d37794f5a9217a57057ab72cf0982dcfb2df54b5bc04f3f506ef155be29d3b9a",
+    "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRMath.swift": "de54578043e1713859cc197968951b508ec145b6ddc805c6265dfec42f3e71c8",
+    "Sources/MereRunUnlimitedOCRModel/UnlimitedOCRAttention.swift": "475583df499313b1e28894c229db907e6980335d9b31e5a57f4d4ce4f0635ced",
+    "Tests/UnlimitedOCRRuntimeTests/UnlimitedOCRLayoutDiagnostics.swift": "df3fd45b6bfe599fed5ca940c71577484105f46c0c1b1fdba00ed7f937ca0b8f",
+    "docs/qualification/unlimited-ocr-2-metal-20261030/price/trace-price.py": "350a2bf7112e5b6c9fed912e640322e8fd1095ad2360a3bbea43437038c7e961",
+    "docs/qualification/unlimited-ocr-2-metal-20261030/layout/probe-rounding.py": "b26a603ff425752ae3945e6924b81c208f1a7930c8b156e6629f42a865f2c23d"
+  },
+  "captureSHA256": {
+    "upstream.safetensors": "a63f952a27b436bb4b9b560e69215609043d77b5d02d0eda56a5832635ad7df2",
+    "boundary-states.safetensors": "16ed865d9632ac74134f1848dd037f82288c1ef7e553c24a42edc1a8f9df097c",
+    "native-states.safetensors": "453f8a0ace7378b65ca16e5010093687e88b3c23ea98fe39129774e58ce43671",
+    "activations.safetensors": "17feaa9d1d9cc764b15932b4faa0a097d0dc1006980fdd6c7e322fb3ccddff4d"
+  },
+  "productionChanges": "Optional package-scoped diagnostic substitutions only. Model equations, dtypes, and token selection are unchanged.",
+  "weightsModified": false,
+  "vendorModified": false,
+  "upstreamSourceSHA256": {
+    "modeling_unlimitedocr.py.original": "f6df813cef23cc28b1daca40fd8cb20740d05a238e7b9dfa2334531fdcf39f1f",
+    "modeling_unlimitedocr.py": "90ee1857d63b1346d96a5d3bed945c0a853f153d5894f4263b83b80cf0d0a63a",
+    "modeling_deepseekv2.py": "24a15dfd47578ab24a7a4d4e977dc5d7a23dfef0a2a4c4bf73fcf3e2ce7acaf2",
+    "_sparse_base_impl.py": "86da9c5638704bb9338575040568a97b3e10820bbeb426f51c07e866f3423ccd",
+    "deepencoder.py": "419b63388c1645b9b72c716070cdca36cd0be6047049424dc75941d3a00aaf1f"
+  },
+  "torchGitRevision": "cf30153c4c131c8164ee7798e5022d810682e2cb",
+  "checkpointReceipt": "../checkpoint-receipt.json",
+  "originalPrefillCaptureSHA256": "5d5c1867955ff38a5bfc956abf563b444809465245f3bdf59b25f1084fa7d7fa",
+  "receiptComparisonSummarySHA256": "0d8be52a882675dcf8f378c0c1e4285b5bb2c5127f6aec7bef0d1bf8478880b7"
+}

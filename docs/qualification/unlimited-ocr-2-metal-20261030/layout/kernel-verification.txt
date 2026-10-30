@@ -1,0 +1,1 @@
+OK: vendor/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib.version matches mlx-swift unknown (mlx core 0.32.4)

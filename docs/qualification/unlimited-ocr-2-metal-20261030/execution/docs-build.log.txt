@@ -1,0 +1,17 @@
+
+> mere-run-docs@ docs:build /Users/nerd/.codex/worktrees/unlimited-ocr-2/mere-run
+> vitepress build docs
+
+
+  vitepress v1.6.4
+
+- building client + server bundles...
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[32m✓[0m building client + server bundles...
+- rendering pages...
+[32m✓[0m rendering pages...
+build complete in 4.96s.

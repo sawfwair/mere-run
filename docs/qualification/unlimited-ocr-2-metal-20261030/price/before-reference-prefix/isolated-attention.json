@@ -1,0 +1,146 @@
+{
+  "layer.0.explicit" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.0.fusedDense" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.0.gathered" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.1.explicit" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.1.fusedDense" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.1.gathered" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.10.explicit" : {
+    "maximum" : 9.536743e-07,
+    "unequal" : 1
+  },
+  "layer.10.fusedDense" : {
+    "maximum" : 9.536743e-07,
+    "unequal" : 1
+  },
+  "layer.10.gathered" : {
+    "maximum" : 9.536743e-07,
+    "unequal" : 1
+  },
+  "layer.11.explicit" : {
+    "maximum" : 1.5258789e-05,
+    "unequal" : 1
+  },
+  "layer.11.fusedDense" : {
+    "maximum" : 1.5258789e-05,
+    "unequal" : 1
+  },
+  "layer.11.gathered" : {
+    "maximum" : 0.00048828125,
+    "unequal" : 2
+  },
+  "layer.2.explicit" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.2.fusedDense" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.2.gathered" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.3.explicit" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.3.fusedDense" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.3.gathered" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.4.explicit" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.4.fusedDense" : {
+    "maximum" : 0.00024414062,
+    "unequal" : 1
+  },
+  "layer.4.gathered" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.5.explicit" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.5.fusedDense" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.5.gathered" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.6.explicit" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.6.fusedDense" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.6.gathered" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.7.explicit" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.7.fusedDense" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.7.gathered" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.8.explicit" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.8.fusedDense" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.8.gathered" : {
+    "maximum" : 3.8146973e-06,
+    "unequal" : 1
+  },
+  "layer.9.explicit" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.9.fusedDense" : {
+    "maximum" : 0,
+    "unequal" : 0
+  },
+  "layer.9.gathered" : {
+    "maximum" : 0,
+    "unequal" : 0
+  }
+}

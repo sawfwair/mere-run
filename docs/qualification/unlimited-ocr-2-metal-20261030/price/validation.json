@@ -1,0 +1,52 @@
+{
+  "checks": [
+    {
+      "check": "repository-gate",
+      "exitCode": 0,
+      "logSHA256": "5cd0e5590ec3b8e0845f2127fb89c4c50040166ebb1ce1adaa683f76729caefb"
+    },
+    {
+      "check": "gpu-18",
+      "exitCode": 0,
+      "logSHA256": "435d9c25427a9545d3b39e28cf81c5b621478eed9b44d75efac2bb300b44b5e6"
+    },
+    {
+      "check": "native-reference-prefix",
+      "exitCode": 0,
+      "logSHA256": "63a7c0e6c69e3ad0befffd6e4ffa349d700d3185998b3e928dfa20c244c9e03c"
+    },
+    {
+      "check": "native-original-prefix",
+      "exitCode": 0,
+      "logSHA256": "bd6c57253fac70fcf2ee67354d67afcb159403e61e16998269f7b93ce9ba51e5"
+    },
+    {
+      "check": "native-corrected-prefix",
+      "exitCode": 0,
+      "logSHA256": "32395847f6c0386ebd5cd272a826a802c23a16173564b73aa253abbd92498b5d"
+    },
+    {
+      "check": "projection",
+      "exitCode": 0,
+      "logSHA256": "c7f80c81e53125f184176268574fb6a0eadbbed02320d48733c0ef553651bdb1"
+    },
+    {
+      "check": "six-way-comparison",
+      "exitCode": 0,
+      "logSHA256": "9fe35bf843e017ac4bc4e5d14072b1ccb4a2dedffbe3bd40e5ded5f0036b9eff"
+    },
+    {
+      "check": "upstream-greedy-rerun",
+      "exitCode": 0,
+      "logSHA256": "53815d77610aa9cd8cb30f10b9398d000832e0a5a5d940746c04cd7a8be32b67"
+    },
+    {
+      "check": "docs-build",
+      "exitCode": 0,
+      "logSHA256": "903f51d5fc82e5c34d103f4d298141775569c2edad930258f0fc5cf6590fa646"
+    }
+  ],
+  "allSixNativeOutputsIdentical": true,
+  "freeGreedyUpstreamPriceMatches": false,
+  "invalidBoxesInReceiptMatrix": 0
+}
