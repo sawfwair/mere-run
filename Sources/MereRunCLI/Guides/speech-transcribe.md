@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Transcribe or translate speech from a WAV file using native ASR backends. Auto mode prefers Parakeet for transcription and Qwen for translation.
+Transcribe or translate speech from a WAV file using native ASR backends. Auto mode prefers Parakeet for transcription and Qwen for translation. Whistle and Nemotron Transcribe run only when you select them.
 
 ## Required models
 
@@ -10,6 +10,9 @@ Transcribe or translate speech from a WAV file using native ASR backends. Auto m
   artifact replaces it when `--provider coreml` is selected.
 - `speech-asr-qwen3` for quality-first transcription and translation.
 - `speech-asr-whistle` for native packed CQ2/CQ4 transcription in seven European languages.
+- `speech-asr-nemotron-35-transcribe` for offline Nemotron 3.5 Transcribe with
+  4-bit routed experts (25.09 GB). `speech-asr-nemotron-35-transcribe-bf16` is
+  the original BF16 checkpoint (67.5 GB). Both require `--accept-model-license`.
 
 ## Install and check
 
@@ -24,7 +27,7 @@ mere.run speech transcribe --help
 - positional audio: input WAV, 16 kHz recommended.
 - `--output`, `-o`: optional transcript path.
 - `--model`, `-m`: model id or local model path.
-- `--backend`: `auto`, `parakeet`, `qwen`, or `whistle`.
+- `--backend`: `auto`, `parakeet`, `qwen`, `whistle`, or `nemotron`.
 - `--provider`: Parakeet encoder provider, `mlx` or `coreml`. The default is
   `mlx`. Core ML requires explicit `--backend parakeet` selection.
 - `--coreml-encoder`: Mere-built Parakeet Core ML artifact directory.
@@ -33,8 +36,9 @@ mere.run speech transcribe --help
   always produces English, whatever language the audio is in; `--language`
   has no effect with it.
 - `--language`: optional language hint.
-- `--max-tokens`: Qwen or Whistle generation cap, default `448`. Whistle caps it
-  at 318 per window. Parakeet ignores it.
+- `--max-tokens`: Qwen, Whistle, or Nemotron generation cap, default `448`.
+  Whistle caps it at 318 per window. Raise it for long Nemotron recordings.
+  Parakeet ignores it.
 - `--stream`: streaming ASR mode using the selected backend. A local
   `--model` folder runs its own backend whatever the `--language` hint says.
 - `--stream-chunk-ms`: audio feed chunk size for streaming.
@@ -49,6 +53,10 @@ mere.run speech transcribe --help
 
 - Start with `--backend auto`.
 - Use `--backend parakeet` for normal transcription where speed matters.
+- Nemotron Transcribe is selected explicitly by `--backend nemotron` or a
+  Nemotron `--model`, and that choice wins over the translation and language
+  rules. It transcribes, or translates to English with `--task translate`. It
+  rejects `--stream` and produces no timestamps or speaker timelines.
 - Whistle is selected explicitly by backend or model ID. It rejects translation,
   unsupported language hints and Core ML. On Linux, set `MLX_USE_CUDA_GRAPHS=0`
   before starting the process; see `guide --model speech-asr-whistle`.
@@ -57,7 +65,8 @@ mere.run speech transcribe --help
   is not required. Non-streaming files are processed in 15-second windows with
   two seconds of overlap. The decoder processes as many as 16 windows in
   parallel, and matching aligned tokens are reconciled at each boundary.
-- For the other backends, the choice comes from, in order: `--task translate` (Qwen), a
+- For the other backends, the choice comes from, in order: an explicit Nemotron
+  backend or model, `--task translate` (Qwen), a
   `--language` Parakeet's router does not recognize (Qwen), an explicit
   `--backend`, the `--model`'s own backend, and otherwise Parakeet. Live
   transcription follows the same policy.
@@ -95,6 +104,11 @@ cat ./audio.pcm | mere.run speech transcribe - \
 mere.run speech transcribe ./spanish.wav --task translate
 ```
 
+```bash
+mere.run model pull speech-asr-nemotron-35-transcribe --accept-model-license
+mere.run speech transcribe ./interview.wav --backend nemotron --max-tokens 4096
+```
+
 ## Iteration tips
 
 - Clean or normalize audio before changing model settings.
@@ -120,3 +134,4 @@ mere.run speech transcribe ./spanish.wav --task translate
 - [MLX Parakeet checkpoint](https://huggingface.co/mlx-community/parakeet-tdt-0.6b-v3)
 - [NVIDIA Parakeet source checkpoint](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3)
 - [Qwen3-ASR checkpoint](https://huggingface.co/mlx-community/Qwen3-ASR-1.7B-8bit)
+- [Nemotron 3.5 Transcribe INT4 checkpoint](https://huggingface.co/Sawfwair/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-MLX-4bit)

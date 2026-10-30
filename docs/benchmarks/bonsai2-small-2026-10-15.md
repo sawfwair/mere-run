@@ -1,10 +1,10 @@
-# Bonsai 2 Small native checkpoint qualification
+# Bonsai 2 Small native checkpoint qualification — 2026-10-15
 
-These results cover the pinned 2B, 4B, and 9B MLX checkpoints through the native Swift/MLX release runtime. Python orchestrates requests and scores saved outputs; it does not execute model inference.
+This report qualifies the pinned Bonsai 2 Small 2B, 4B, and 9B MLX checkpoints through the native Swift/MLX release runtime on an Apple M3 Max with macOS 26.6.2. Under strict scoring, 2B passed 9/16 quality cases, and 4B and 9B each passed 12/16. Python orchestrates requests and scores saved outputs; it doesn't run model inference.
 
-The later [upstream parity investigation](./bonsai2-small-upstream-parity-2026-10-16.md) found native vision discrepancies and changed the runtime. The measurements below belong to the original executable identified here; they do not qualify the corrected implementation. Fresh measurements of the corrected executable are in the [fixed-runtime rerun](./bonsai2-small-fixed-2026-10-16.md).
+The later [upstream parity investigation](./bonsai2-small-upstream-parity-2026-10-16.md) found native vision discrepancies and changed the runtime. The measurements in this report belong to the original executable identified here; they do not qualify the corrected implementation. Fresh measurements of the corrected executable are in the [fixed-runtime rerun](./bonsai2-small-fixed-2026-10-16.md).
 
-The [machine-readable summary](./bonsai2-small-2026-10-15-summary.json) contains redacted copies of the cases and selected outputs, fixture hashes, and timing samples. Original prompts and outputs remain unchanged on T7; response hashes refer to those originals.
+The [machine-readable summary](./bonsai2-small-2026-10-15-summary.json) contains redacted copies of the cases and selected outputs, fixture hashes, and timing samples. Original prompts and outputs remain unchanged on the T7 evidence drive; response hashes refer to those originals.
 
 ## Scope and provenance
 
@@ -14,6 +14,8 @@ The [machine-readable summary](./bonsai2-small-2026-10-15-summary.json) contains
 - Model payloads, metadata, prompts, images, requests, outputs, and timing receipts are retained under `/Volumes/T7/mere-run-qualification/bonsai2-small-2026-10-15`.
 - All source files were checked against pinned upstream LFS SHA-256 or Git blob identities. The initial API cache copy was moved to T7 with a verified compatibility link.
 - No conversion, extra quantization, MTP, admission override, or parallel inference was used.
+
+The following table lists each pinned snapshot:
 
 | Model | Pinned revision | Model snapshot bytes |
 | --- | --- | ---: |
@@ -27,6 +29,8 @@ One sampled trial per case uses the generation sidecar sampler: temperature 1.0,
 
 The frozen suite contains eight grounded cases, two generated Python functions with five tests each, four images, one arithmetic case, and one reasoning case. Image cases cover OCR/counting, a receipt, a bar chart, and a public-domain NASA photograph. Requests use no output grammar or response-format enforcement. Strict JSON scoring rejects fences, repeated objects, and unfinished reasoning.
 
+The following tables show strict results and request latency per model.
+
 | Model | Passed cases | Grounded | Code tests | Vision strict | Arithmetic | Reasoning strict |
 | --- | ---: | ---: | ---: | ---: | --- | --- |
 | 2B | 9/16 | 6/8 | 7/10 | 1/4 | Pass | Fail |
@@ -39,7 +43,7 @@ The frozen suite contains eight grounded cases, two generated Python functions w
 | 4B | 9.00 | 219.78 | 2 |
 | 9B | 35.38 | 259.77 | 2 |
 
-Fence-only recovery is a separate diagnostic. It removes one complete outer Markdown fence without changing values or calling the model again. It does not change strict scores.
+Fence-only recovery is a separate diagnostic. It removes one complete outer Markdown fence without changing values or calling the model again. It does not change strict scores. The following table shows the recovered vision results.
 
 | Model | Vision after fence-only recovery | Correct vision fields after recovery |
 | --- | ---: | ---: |
@@ -49,7 +53,7 @@ Fence-only recovery is a separate diagnostic. It removes one complete outer Mark
 
 ### Separate sampler and budget probe
 
-A secondary run used the same four selected cases for every model: grounded JSON extraction, interval merging, shape OCR/counting, and the chart. It used presence penalty 1.0, repetition penalty 1.0, an 8,192-token output allowance, and a new resident session with a 16,384-token context. Temperature, top-p, top-k, and min-p stayed the same. The native presence penalty covers the full generated history; the model card prefers a 64-token window where supported. Multiple conditions changed, so this does not isolate the effect of the penalty. Primary scores above are unchanged.
+A secondary run used the same four selected cases for every model: grounded JSON extraction, interval merging, shape OCR/counting, and the chart. It used presence penalty 1.0, repetition penalty 1.0, an 8,192-token output allowance, and a new resident session with a 16,384-token context. Temperature, top-p, top-k, and min-p stayed the same. The native presence penalty covers the full generated history; the model card prefers a 64-token window where supported. Multiple conditions changed, so this does not isolate the effect of the penalty. Primary scores in the preceding tables are unchanged. The following table shows the secondary results.
 
 | Model | Secondary passed cases | 8,192-token caps | Slowest request (s) | Failed case IDs |
 | --- | ---: | ---: | ---: | --- |
@@ -62,6 +66,8 @@ The code evaluator runs generated functions with closed builtins, no imports or 
 ## Throughput
 
 Each model and modality has one discarded 128-token warm-up followed by three serial resident requests. Text requests have a 512-token budget; image requests have a 256-token budget. Native `/runtime/status` snapshots supply per-request generation, prefill, and decode timings. Timing requests are deliberately capped and are not scored for answer completion. Decode TPS includes reasoning tokens and excludes model loading and prefill. Prefix reuse follows the server default; internal first-token timing can precede the visible final answer.
+
+The following tables show decode rates, then prefill, first-token, and request medians.
 
 | Model | Text median decode tok/s | Text range | Vision median decode tok/s | Vision range |
 | --- | ---: | --- | ---: | --- |
@@ -86,7 +92,7 @@ The primary quality run included substantial latency variation: one 4B grounded 
 
 The T7 evidence root includes `download.py`, `metadata/`, `download-receipt.json`, `fixtures/make-fixtures.py`, `fixtures/manifest.json`, `quality-cases.json`, `plan.json`, and every request and response receipt. Native `model repair-manifests` completed managed discovery for all three snapshots.
 
-Use a fresh prepared evidence root for a new trial. Reusing the frozen root resumes saved quality results. Start the normally admitted loopback server before invoking the collector.
+Use a fresh prepared evidence root for a new trial. Reusing the frozen root resumes saved quality results. Start the normally admitted loopback server before invoking the collector. Then build the release executable and run the quality phase:
 
 ```bash
 swift build -c release --product mere.run

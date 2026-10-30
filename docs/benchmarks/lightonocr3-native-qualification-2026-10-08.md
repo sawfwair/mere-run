@@ -12,7 +12,8 @@ receipt scan, a public handwritten-word crop, a generated English/French
 two-column document with an invoice table, a generated labeled bar chart, and
 a blank page. Temperature was zero; the output cap was 1,024 tokens, or 64 for
 blank pages. All thirty runs completed below their token caps. Blank pages
-returned empty text in both modes for every model.
+returned empty text in both modes for every model. The following table
+summarizes each variant.
 
 | Variant | Passing output cases | Peak MLX allocations | Receipt plain / grounding | Document plain / grounding |
 | --- | --- | --- | --- | --- |
@@ -29,9 +30,10 @@ before each call and measures MLX allocations, not total system memory or RSS.
 The independent [output verifier source](https://github.com/sawfwair/mere-run/blob/main/docs/benchmarks/lightonocr3-2026-10-08/verify-results.py) checks
 selected text anchors, exact invoice/chart cell rows, empty blank-page output,
 termination, normalized box bounds, and known table/chart region overlap.
-The full [summary](lightonocr3-2026-10-08/summary.json) and all thirty
+The full [qualification summary](lightonocr3-2026-10-08/summary.json) and all thirty
 [raw output records](lightonocr3-2026-10-08/results/1B-document-grounding.json)
-are saved alongside this report.
+are saved alongside this report. The following table shows grounded-region
+overlap with the reference bounds.
 
 | Grounded region | 1B IoU | 0.8B IoU | 4B IoU |
 | --- | --- | --- | --- |
@@ -92,9 +94,10 @@ the generated document, chart, and blank images are committed.
 
 ## Reproduce
 
-Use the original checkpoints at the revisions above in external directories
+Use the original checkpoints at the revisions listed in the preceding section in external directories
 named `1B`, `0.8B`, and `4B`. The fixture helper requires Python with Pillow and
-the macOS Arial fonts; it verifies the hashes of the two downloaded public scans.
+the macOS Arial fonts; it verifies the hashes of the two downloaded public scans. Generate the inputs,
+run the checkpoint test, and verify the results:
 
 ```bash
 python3 docs/benchmarks/lightonocr3-2026-10-08/make-fixtures.py /tmp/lightonocr3-inputs
@@ -117,15 +120,15 @@ Normal repository tests skip this external-assets qualification.
 
 The first CLI attempt exposed a generic 16 GiB admission floor for every OCR
 run. The managed 1B and 0.8B single-backend plans now use the existing small
-6 GiB admission class, backed by the bounded measurements above. Comparisons,
+6 GiB admission class, backed by the bounded measurements in this report. Comparisons,
 4B, other backends, and unknown local directories retain their existing floors.
 All six public CLI document runs (three sizes × two modes) passed, and their
 output matched the saved native records exactly. The temporary override roots
 lacked managed source metadata, so the resolver fetched pinned Hub snapshots;
 this also exercised auto-download. The original installed OCR model was preserved.
-[CLI records](lightonocr3-2026-10-08/cli-checks.json) include output hashes and
+The [CLI check records](lightonocr3-2026-10-08/cli-checks.json) include output hashes and
 available process measurements. These CLI timings include resolution, and first
-runs include downloads; they are separate from the native timings above.
+runs include downloads; they are separate from the native timings in the scope and results section.
 The 4B CLI peaked at 10.47 GiB RSS and 18.96 GiB process footprint.
 Minimum-memory configurations were not qualified.
 

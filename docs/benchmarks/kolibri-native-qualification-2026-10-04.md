@@ -1,4 +1,4 @@
-# Native Kolibri mixed 2-bit checks — October 4, 2026
+# Native Kolibri mixed 2-bit checks — 2026-10-04
 
 The native Swift/MLX Kolibri runtime loaded and scored the full BF16 checkpoint
 and four quantized variants on a Runpod NVIDIA B200. Calibration selected
@@ -19,7 +19,7 @@ Their [publication receipt](./receipts/kolibri-publication-2026-10-04.json)
 records immutable release revisions and 64 verified bundle files per variant.
 Every remote SHA-256 and size matched before publication; anonymous access to
 those release revisions was also verified. Publication does not broaden the
-diagnostic scope below or establish full-checkpoint Apple memory fit.
+diagnostic scope of this report or establish full-checkpoint Apple memory fit.
 
 ## Weight policies and results
 
@@ -29,6 +29,7 @@ norms, routers, and the output head retain source precision; router correction
 biases are converted losslessly from BF16 to FP32. Routing and output logits
 compute in FP32. The 2/3-bit control changes only routed down projections to
 3-bit/group-64; the Q8 control uses 8-bit/group-64 for all quantized projections.
+The following table compares the four quantized variants.
 
 | Variant | Logical weights | Peak MLX allocation | Calibration KL | Heldout KL | Top-token agreement | Perplexity change | Overall and language gates |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
@@ -49,7 +50,8 @@ fixture produced identical logits in those two builds. Timings in the receipt
 are per-case inference/export timings and omit checkpoint verification/loading;
 they are not end-to-end CLI latency comparisons.
 
-For the selected 2-bit candidate:
+The following table shows heldout results by language for the selected 2-bit
+candidate.
 
 | Language | Heldout target tokens | Mean KL | Top-token agreement | Perplexity change | Worst-case perplexity ratio | Gates |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |

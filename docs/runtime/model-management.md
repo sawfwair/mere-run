@@ -1,9 +1,10 @@
 # Model management
 
-Use model-management commands to work with one writable store, a unified
-catalog, canonical IDs, and physical-storage accounting. Before downloading a
-model, `mere.run` checks whether the machine can run it. Storage reports count
-shared payloads once and identify data that is safe to delete.
+Use the model-management commands to download, locate, inspect, and remove
+models. `mere.run` keeps one writable model store, resolves every model by a
+canonical ID, and checks whether the machine can run a model before it
+downloads it. Storage reports count shared payloads once and identify data
+that's safe to delete.
 
 ## Commands
 
@@ -18,7 +19,7 @@ shared payloads once and identify data that is safe to delete.
 | `mere.run model storage` | Inspect physical model storage, sharing, and reclaimable space. |
 | `mere.run model gc` | Find or delete unreferenced model payloads and partial downloads. |
 | `mere.run model optimize` | Build inference-only caches for a supported installed model. |
-| `mere.run model repair-manifests` | Rewrite missing manifest metadata in the local store. |
+| `mere.run model repair-manifests` | Write missing manifest metadata for known models in the local store. |
 | `mere.run model runtime` | Read and update per-model API runtime settings. |
 | `mere.run model benchmark` | Run focused local model benchmarks. |
 | `mere.run adapter list` | List cataloged LoRA adapters and their install state. |
@@ -62,7 +63,7 @@ facade:
 mere.run model location add /Volumes/Models
 
 # An arbitrary existing directory name
-mere.run model location bind video-ltx23-full-mlx /Volumes/SALVATION/models/LTX-2.3 \
+mere.run model location bind video-ltx23-full-mlx /Volumes/Archive/models/LTX-2.3 \
   --accept-model-license
 
 mere.run model location list
@@ -85,8 +86,9 @@ any other file into external storage. Registrations live in:
 ~/Library/Application Support/MereRun/model_locations.json
 ```
 
-Use `model location remove <root>` or `model location unbind <id> [path]` to
-remove registrations. Both operations preserve every payload byte.
+To remove registrations, use `model location remove <root>` or
+`model location unbind <id> [path]`. Omit the path to remove every binding for
+that ID. Both commands preserve every payload byte.
 
 ## macOS Studio
 
@@ -102,16 +104,14 @@ Finder** opens the configured store; it does not start a download.
 
 ## Canonical model IDs
 
-The following list shows representative canonical IDs by modality:
+The following list shows representative canonical IDs by modality. For the
+complete catalog, run `mere.run model list` or see
+[Canonical managed model IDs](../model-sources.md#canonical-managed-model-ids).
 
 - images: `image-flux1-dev`, `image-flux2-dev`, `image-klein-nano`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-klein-max`, `image-zimage-max`
 - text, chat, and embeddings: `text-chat-gemma4`, `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-nemotron-35-lightning`, `vision-chat-nemotron-35-bolt-24gb`, `omni-chat-nemotron3-nano-30b-a3b-bf16`, `text-chat-q36-nano`, `vision-chat-q38-27b`, `vision-chat-q38-27b-4bit`, `vision-chat-q38-flash-next-mixed`, `vision-chat-q38-flash-next-3bit`, `vision-chat-q38-flash-next-3bit-native-ple`, `vision-chat-q38-flash-next-4bit`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-chat-lfm25-1.2b-bf16`, `text-chat-lfm25-1.2b-qad-4bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-2.6b-bf16`, `text-chat-lfm25-2.6b-qad-4bit`, `text-chat-lfm25-a1b-8bit`, `text-chat-lfm25-a1b-bf16`, `text-chat-lfm25-24b-a2b-bf16`, `vision-chat-lfm25-3b-8bit`, `vision-chat-lfm25-3b-bf16`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx-4bit`, `text-agent-ornith-35b-mlx-6bit`, `text-agent-ornith-35b-mlx-8bit`, `text-agent-ornith-35b-mlx`, `vision-chat-ornith-35b`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`, `text-embed-qwen3-0.6b`, `vision-embed-qwen3-vl-2b`
-
-Pulling an exact BF16 LFM2.5 DSpark target also pulls its pinned `*-dspark` companion after
-the same LFM Open License acknowledgement. Companions remain separately
-addressable for repair and inspection but are not standalone chat models.
-- speech: `speech-tts-qwen3-nano`, `speech-asr-parakeet`
-- vision: `vision-ocr-lighton`
+- speech: `speech-tts-qwen3-nano`, `speech-tts-breeze-2`, `speech-tts-phonon-31m`, `speech-asr-parakeet`, `speech-asr-qwen3`, `speech-asr-nemotron-35-transcribe`, `speech-diarization-nemotron3`
+- vision: `vision-ocr-lighton`, `vision-segment-sam31`, `vision-geometry-moge2-small`, `vision-depth-vda-small`
 - music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-acestep-xl-sft`, `music-acestep-xl-base`, `music-acestep-lm-1.7b`, `music-acestep-lm-4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
 - sfx: `sfx-woosh-dflow`, `sfx-woosh-flow`, `sfx-woosh-clap`, `sfx-woosh-synchformer`, `sfx-woosh-dvflow-8s`, `sfx-woosh-vflow-8s`, `sfx-mmaudio-large-44k-v2`
 - video: `video-minimax-h3-fl2va-mlx`, `video-minimax-h3-fl2va-bf16-mlx`,
@@ -120,8 +120,15 @@ addressable for repair and inspection but are not standalone chat models.
   `video-ltx25-distilled-bf16`, `video-ltx25-full-bf16`,
   `video-wan22-ti2v-5b-mlx`, `video-scail2-14b-mlx`
 
-The public runtime resolves these IDs directly. Documentation and examples must use
-the canonical names shown by `mere.run model list`.
+The public runtime resolves these IDs directly. Documentation and examples must
+use the canonical names shown by `mere.run model list`.
+
+Pulling an exact BF16 LFM2.5 DSpark target also pulls its pinned `*-dspark`
+companion after the same LFM Open License acknowledgement. Other targets, such
+as Gemma 4 12B, Laguna S 2.1, Muse Glimmer, and Nemotron 3.5 Lightning, also
+install hidden companions. Companions remain separately addressable for repair
+and inspection but aren't standalone chat models. For the full list, see
+[Companion checkpoints](../model-sources.md#companion-checkpoints).
 
 ## Library ownership
 
@@ -179,16 +186,19 @@ keep their backing payloads live.
 
 ### `mere.run model optimize`
 
-For compatible MiniMax-H3 or LTX 2.5 roots, the command builds the model-specific native
-inference artifact:
+For compatible MiniMax-H3 or LTX 2.5 roots, the command builds the
+model-specific native inference artifact. For Nemotron Omni or DRAMA-3,
+`--output DIR` writes a standalone native checkpoint to that directory.
+
+To optimize a local MiniMax-H3 root and an installed LTX 2.5 model, run:
 
 ```bash
 mere.run model optimize ./MiniMax-H3-FL2VA-full-MLX
 mere.run model optimize video-ltx25-full-bf16
 ```
 
-The versioned cache pack is written beside the installed model. It contains
-exact tables for 5, 9, 12, 16, 21, and 31 points at shifts 12/3 plus the
+For MiniMax-H3, the command writes a versioned cache pack beside the installed
+model. The pack contains exact tables for 5, 9, 12, 16, 21, and 31 points at shifts 12/3 plus the
 LightX2V 768p 5-point table at shifts 6/3. Custom schedules interpolate from
 the densest compatible table and emit a visible non-bit-exact diagnostic. Full
 legacy roots can synthesize the pack; pruned roots can validate an existing
@@ -301,7 +311,7 @@ mere.run text chat --model text-chat-nemotron-35-lightning --stats --prompt "Hel
 ```
 
 Nemotron 3 Nano Omni is a native Swift/MLX omni runtime for 112+ GB Apple
-Silicon machines. It pins the official 66.06 GB BF16 snapshot and accepts text,
+Silicon machines. It pins the official 66.05 GB BF16 snapshot and accepts text,
 images, local audio, and local video, producing text. PDF documents are rendered
 to page images before prompting, matching the model's actual input contract.
 The explicit licensed pull and first run are:
@@ -447,8 +457,8 @@ the model loaded across automatic TTL/LRU eviction), `--ttl-seconds` (unload
 TTL), `--max-context-tokens`, `--max-tokens`, `--temperature`, `--top-p`,
 `--min-p`, `--engine` (engine override, validated against catalog
 compatibility), and
-`--kv-cache-mode` (`default`, `affine4`, `affine8` — `affine8` applies to
-Gemma4/Qwen/LFM2 — plus Gemma4-only `polar2`/`auto`). Each option has a
+`--kv-cache-mode` (`default`, `affine4`, or `affine8`, where `affine8` applies
+to Gemma4, Qwen-family, and LFM2 models, plus Gemma4-only `polar2` and `auto`). Each option has a
 matching clear flag (`--clear-alias`, `--clear-ttl`,
 `--clear-max-context-tokens`, `--clear-max-tokens`,
 `--clear-temperature`, `--clear-top-p`, `--clear-min-p`, `--clear-engine`,
@@ -460,36 +470,39 @@ matching clear flag (`--clear-alias`, `--clear-ttl`,
 Runs focused local model benchmarks. This is a developer and performance tool,
 not part of the everyday inference workflow. Lanes:
 
-- `chat` — runs a small grounded-chat eval slice against local assistant models.
-- `fused` — runs the versioned 24-case Lite or 110-case Comprehensive
+- `chat`: runs a small grounded-chat eval slice against local assistant models.
+- `fused`: runs the versioned 24-case Lite or 110-case Comprehensive
   chat/code/tools/long-context/vision quality suite with native sampled
   profiles, repeated trials, provenance, and optional final-target logprob
   calibration diagnostics.
-- `fused-fixture` — stamps or verifies normalized pinned-fixture content hashes
+- `fused-fixture`: stamps or verifies normalized pinned-fixture content hashes
   without loading a model. The external source material remains non-vendored;
   `scripts/import-fused-benchmark-fixtures.py` regenerates the selected cases
   from the revision- and hash-locked source manifest.
-- `tool-calls` — runs a small tool-call selection eval against local chat models.
-- `tool-continuations` — evaluates Gemma 4 continuation after completed tool
+- `tool-calls`: runs a small tool-call selection eval against local chat models.
+- `tool-continuations`: evaluates Gemma 4 continuation after completed tool
   calls.
-- `code` — runs a real coding-eval slice against local coding models.
-- `gemma4-kv` — compares Gemma4 default key-value (KV) cache decode against
+- `code`: runs a real coding-eval slice against local coding models.
+- `gemma4-kv`: compares Gemma4 default key-value (KV) cache decode against
   packed PolarKV.
-- `gemma4-mtp` — compares Gemma4 serial decode against verified MTP speculative
+- `gemma4-mtp`: compares Gemma4 serial decode against verified MTP speculative
   decode.
-- `q36-mtp` — compares supported Qwen-family serial decode against warmed
+- `q36-mtp`: compares supported Qwen-family serial decode against warmed
   adaptive and forced MTP speculative decode.
-- `q38-verification` — measures target-only linear verification and checks
+- `q38-verification`: measures target-only linear verification and checks
   greedy output parity. Flash-Next supports widths through 32; Qwen3.8 27B and
   Ornith 1.5 Q4 support widths through nine.
-- `parakeet-coreml` — measures the resident Parakeet Core ML pipeline by stage.
-- `api-workload` — replays a chat workload against a running API server and
+- `kolibri-logprobs`: scores fixed token sequences with native Kolibri and
+  exports raw logits.
+- `laguna-dflash`: measures Laguna target-only and DFlash decode in one
+  resident process.
+- `parakeet-coreml`: measures the resident Parakeet Core ML pipeline by stage.
+- `api-workload`: replays a chat workload against a running API server and
   measures runtime cache counters.
-- `vlm` — compares vision-language chat models on synthetic or lmms-eval
+- `vlm`: compares vision-language chat models on synthetic or lmms-eval
   datasets.
 
-Each lane accepts `--json` for machine-readable reports; see
-`mere.run model benchmark <lane> --help` for lane-specific flags.
+For lane-specific flags, run `mere.run model benchmark <lane> --help`.
 
 ## Related docs
 

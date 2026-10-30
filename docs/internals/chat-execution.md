@@ -1,62 +1,75 @@
 # Shared chat execution
 
-`text chat` and `/v1/chat/completions` share request resolution and native runtime
-invocation in `MereRunCore`. Start with `ChatRequestResolution.swift`, then read
-`NativeChatRuntime.swift` and its selection and diagnostics extensions.
+`text chat` and `POST /v1/chat/completions` share request resolution and native
+runtime invocation in `MereRunCore`. Start with `ChatRequestResolution.swift`,
+then read `NativeChatRuntime.swift` and its `+Selection` and `+Diagnostics`
+extensions.
 
-## Request resolution
+## Ownership
+
+| Owner | Responsibility |
+| --- | --- |
+| `ChatRequestResolver` | Sampling defaults, shared numeric validation, and request-field preservation |
+| `NativeChatRuntime` | Native generator selection and invocation on macOS and Linux |
+| `ChatGenerationOperation` | Request validation, cancellation checks, and runtime lifetime for one generation |
+| CLI adapter | Tool authorization, media-input checks, and preflight reporting |
+| API adapter | Wire-field validation, model capabilities, aliases, and stored server settings |
+| `RuntimeServingServices` and `RuntimeChatSession` | Request admission and model residency for API requests |
+| `APIServer.swift` | HTTP response formatting and streaming transport |
+
+## Resolve and validate a request
 
 `ChatRequestResolver` resolves each omitted sampling field independently. Its
-`command` and `openAI` policies preserve the existing entry-point defaults. For
-example, an unrecognized model ID receives temperature `0.7` and top-p `0.9`
-under the command policy, and `1.0` and `0.95` under the API policy. This fallback
-does not make an unknown model available for execution.
+`command` and `openAI` policies keep the existing entry-point defaults. For
+example, an unrecognized model ID gets temperature `0.7` and top-p `0.9` under
+the command policy, and `1.0` and `0.95` under the API policy. This fallback
+doesn't make an unknown model available for execution.
 
-Explicit sampling values override their corresponding defaults. JSON output
-suppresses thinking output. The resolver preserves message media, tools, LoRA,
-stop sequences, cache settings, reasoning budgets, and diagnostic options.
+Explicit sampling values override their defaults. JSON output suppresses
+thinking output. The resolver preserves message media, tools, LoRA, stop
+sequences, cache settings, reasoning budgets, and diagnostic options.
 
-Both adapters use the same numeric checks. These reject empty message lists,
+Both adapters apply the same numeric checks. These reject empty message lists,
 invalid token or context limits, non-finite sampling values, out-of-range
 probabilities and penalties, negative top-k values, and repetition penalties
-that cannot be represented as a finite positive sampler value. CLI preflight
-reports these failures through `text_chat_request_invalid`.
+that can't become a finite positive sampler value. CLI preflight reports these
+failures as `text_chat_request_invalid`.
 
-The API adapter still validates wire fields and model capabilities, resolves
-aliases, and applies stored server settings before common resolution. CLI tool
-authorization and media-input checks remain in the command adapter.
+Before common resolution, the API adapter validates wire fields and model
+capabilities, resolves aliases, and applies stored server settings.
 
-## Generation and cleanup
+## Execution and runtime lifetime
 
-`NativeChatRuntime` selects and invokes native generators on macOS and Linux.
-This command/server adapter includes desktop-only GGUF and process-backed
-runtimes; the iOS app continues to select its on-device generators directly.
-Commands use the existing family selection rules, including command-only Psi
-and Inkling runtimes. The API selects its engine from the serving profile and passes its
-cache and batching settings to the same runtime factory.
+`NativeChatRuntime` includes desktop-only GGUF and process-backed runtimes; the
+iOS app selects its on-device generators directly. Commands use the family
+selection rules, including the command-only Psi and Inkling runtimes. The API
+selects its engine from the serving profile and passes its cache and batching
+settings to the same runtime factory.
 
 `ChatGenerationOperation.run` validates the effective request and checks
-cancellation before and after generation. A CLI command retains one runtime
-through its tool conversation and awaits unload when the conversation completes,
-fails, or is cancelled. Family generators continue to own loading and inference.
+cancellation before and after generation. A CLI command keeps one runtime for
+its whole tool conversation and awaits unload when the conversation completes,
+fails, or is cancelled. Family generators own loading and inference.
 
 `RuntimeServingServices.startChat` acquires API request admission, resolves the
-request, and acquires model residency. `RuntimeChatSession` owns both leases.
-Response producers retain the session through native generation or upstream
-proxy consumption. Its completion task releases model residency before request
-admission; concurrent completion calls await the same cleanup task.
+request, and acquires model residency. `RuntimeChatSession` holds both leases.
+Response producers keep the session alive through native generation or upstream
+proxy consumption. The session's completion task releases model residency
+before request admission, and concurrent completion calls await the same
+cleanup task.
 
-HTTP response formatting remains in `APIServer.swift`. Native streaming retains
-its text, tool-call, usage, and completion events. The macOS proxy stream forwards
-upstream bytes and cancels its producer when the downstream consumer disconnects.
-The Linux proxy path buffers upstream data and awaits cleanup before returning
-that buffered response.
+Native streaming keeps its text, tool-call, usage, and completion events. The
+macOS proxy stream forwards upstream bytes and cancels its producer when the
+downstream consumer disconnects. The Linux proxy path buffers upstream data and
+awaits cleanup before it returns the buffered response.
 
-## Validation boundaries
+## Validate a change
 
 `ChatExecutionTests` exercises defaults, request-field preservation, invalid
 requests, tool-conversation lifetime, and awaited cancellation cleanup.
-`ChatExecutionIntegrationTests` exercises CLI/API resolution, preflight, server
-settings and aliases, admission and residency cleanup, and proxy byte streaming
-and disconnects. These fixtures do not load model checkpoints. Use installed
-model tests separately to assess generation output and performance.
+`ChatExecutionIntegrationTests` exercises CLI and API resolution, preflight,
+server settings and aliases, admission and residency cleanup, and proxy byte
+streaming and disconnects.
+
+These fixtures don't load model checkpoints. Use installed-model tests to
+assess generation output and performance.

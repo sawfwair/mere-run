@@ -1,12 +1,13 @@
 # macOS deep links
 
 MereRun.app exposes two typed local handoff routes through the `mererun://`
-scheme. A launcher, automation, agent, or another macOS app can preview an
-existing artifact or ask MereRun to validate and record a completed result in
-Library. The caller does not need access to MereRun's private Library storage.
+scheme. A launcher, automation, agent, or other macOS app can preview an
+existing artifact, or ask MereRun to validate a completed result and record it
+in Library. The caller doesn't need access to MereRun's private Library
+storage.
 
-These routes belong to the macOS app. Linux releases contain the headless CLI
-only and cannot open MereRun Studio.
+These routes belong to the macOS app. Linux releases contain only the headless
+CLI and can't open MereRun Studio.
 
 ## Preview an artifact
 
@@ -16,17 +17,17 @@ Open one existing readable file in MereRun's native Quick Look panel:
 mererun://preview?path=%2FUsers%2Fdana%2FDesktop%2Fresult.png
 ```
 
-Build the URL with a URL-components API so the absolute path is percent encoded
-exactly once. From a shell, an already encoded link can be passed to Launch
+Build the URL with a URL-components API so that the absolute path is
+percent-encoded exactly once. From a shell, pass an encoded link to Launch
 Services with `open`:
 
 ```bash
 open 'mererun://preview?path=%2FUsers%2Fdana%2FDesktop%2Fresult.png'
 ```
 
-The target may be an image, audio, video, text, or Quick Look-compatible 3D
+The target can be an image, audio, video, text, or Quick Look-compatible 3D
 file. MereRun rejects relative paths, directories, missing or unreadable files,
-duplicate `path` values, and extra query parameters. Preview does not import,
+duplicate `path` values, and extra query parameters. Preview doesn't import,
 move, or modify the artifact.
 
 ## Import a completed result into Library
@@ -52,11 +53,10 @@ A version 1 receipt contains the completed local run metadata MereRun needs:
 }
 ```
 
-Version 1 accepts the `raycast` source and the typed `image`,
-`video`, `music`, and `speech` kinds. The source vocabulary is intentionally
-strict even though the deep-link transport is not coupled to Raycast. Before a
-maintained client emits receipts under another source name, add a source case
-and contract tests.
+Version 1 accepts the `raycast` source and the `image`, `video`, `music`, and
+`speech` kinds. The source vocabulary is strict by design, although the
+deep-link transport isn't tied to Raycast. Before a maintained client emits
+receipts under another source name, add a source case and contract tests.
 
 MereRun validates the receipt and referenced artifact, deduplicates repeated
 handoffs, records the completed result through its own Library store, opens the
@@ -77,6 +77,6 @@ caller must not read or write `library.json` directly.
 ## Example clients
 
 The public [Raycast integration](./raycast.md) demonstrates image, video, music,
-and speech generation followed by Library import or preview. It is a separate
-launcher extension, not a MereRun executable plugin, and is only one possible
+and speech generation followed by Library import or preview. It's a separate
+launcher extension, not a MereRun executable plugin, and only one possible
 client of the macOS handoff routes.

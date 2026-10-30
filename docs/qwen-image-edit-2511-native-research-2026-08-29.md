@@ -11,11 +11,11 @@ mere.run qualification receipt reproduces it.
 
 ## Implementation status
 
-The `codex/qwen-edit-2511-h3-lightx2v` branch now contains an implementation
-candidate for the reference path described here. It adds the separate managed
-IDs `image-qwen-edit-2511` and `image-qwen-edit-2511-lightning`, immutable base
-and adapter sources, ordered one-to-three-reference CLI and API routing,
-independent reference geometry, the official prompt/mask boundary, packed
+At the time of this note, the `codex/qwen-edit-2511-h3-lightx2v` branch
+contained an implementation candidate for the reference path described here.
+It added the separate managed IDs `image-qwen-edit-2511` and
+`image-qwen-edit-2511-lightning`, immutable base and adapter sources, ordered
+one-to-three-reference CLI and API routing, independent reference geometry, the official prompt/mask boundary, packed
 appearance tokens, exact Qwen2.5-VL merged-patch ordering, gated vision MLPs,
 multimodal position IDs, per-channel VAE normalization, shape-aware three-axis
 transformer RoPE, `zero_cond_t`, the shifted scheduler, positive-norm true CFG,
@@ -30,6 +30,14 @@ SHA-256. This is still an implementation candidate, not a qualified model
 release: no 57.7 GB real checkpoint was downloaded, no real-checkpoint weight
 application or tensor comparison was run, no output was visually reviewed, and
 no Apple Silicon memory, quality, or timing receipt exists yet.
+
+> **Follow-up (v0.67.1, 2026-10-29):** Both managed IDs,
+> `image-qwen-edit-2511` and `image-qwen-edit-2511-lightning`, are in the
+> managed catalog. v0.50.0 (2026-09-01) fixed native Lightning inference; see
+> `CHANGELOG.md`. For current usage, see
+> [Qwen Image Edit 2511](./runtime/image.md#qwen-image-edit-2511). This
+> follow-up doesn't change the research findings or add a qualification
+> receipt.
 
 ## Decision
 
@@ -106,7 +114,7 @@ Every ordered reference has two independent representations:
   grid, VAE latent shape, token length, and rotary coordinates.
 
 Output size is a separate choice. The reference pipeline defaults to an area of
-1,048,576 pixels using the last reference's aspect ratio. Mere.run should not
+1,048,576 pixels using the last reference's aspect ratio. mere.run should not
 hide that policy in list ordering. Use explicit output dimensions when
 provided; otherwise, use the primary reference's aspect ratio and record that
 decision in the run receipt.

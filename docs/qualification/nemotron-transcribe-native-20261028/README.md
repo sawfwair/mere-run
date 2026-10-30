@@ -1,4 +1,4 @@
-# Nemotron Transcribe native checkpoint validation — 2026-10-28
+# Nemotron Transcribe native checkpoint validation, 2026-10-28
 
 The original NVIDIA BF16 checkpoint passed end-to-end transcription through
 `mere.run speech transcribe --backend nemotron` on an Apple M5 Max with

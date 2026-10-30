@@ -1,4 +1,4 @@
-# Clef full-checkpoint checks — October 1, 2026
+# Clef full-checkpoint checks — 2026-10-01
 
 The native CLI completed text, image, video, and resized-image decisions using
 the full pinned `mlx-community/clef-4bit` checkpoint on Apple Silicon.
@@ -9,7 +9,7 @@ the resized-image probability difference fell from `0.0145` to `0.0031`.
 Independent fixtures now match the tested media preprocessing and BF16 position
 interpolation exactly; full-model numerical parity remains approximate.
 
-[Machine-readable receipt](./receipts/clef-native-2026-10-01.json) records the
+The [machine-readable receipt](./receipts/clef-native-2026-10-01.json) records the
 requests, media construction, results, timings, package versions, source pin,
 tested binary hash, and memory measurements. These four short synthetic probes
 establish execution and bounded numerical agreement, not general accuracy or
@@ -19,7 +19,8 @@ maximum-context capacity.
 
 The native debug CLI loaded the original affine 4-bit/group-64 backbone, BF16
 vision tower, and BF16 joint head. No Python process participates in native
-inference. The checkpoint occupies approximately 16.3 GB.
+inference. The checkpoint occupies approximately 16.3 GB. The following table shows each
+probe's timing, memory, and probability difference.
 
 | Probe | Input tokens | Native complete command | Peak process footprint | Maximum probability difference |
 | --- | ---: | ---: | ---: | ---: |
@@ -92,7 +93,7 @@ Use the rebuilt binary and the requests/media specified in the receipt:
 
 For an independent comparison, load the same local checkpoint with the pinned
 `clef_mlx.load(checkpoint, backend="vlm")`. Apply the video processor settings
-described above, convert video frame paths to RGB frame arrays, and call
+described in the reference comparison, convert video frame paths to RGB frame arrays, and call
 `logits(request)`. Softmax the logits in FP32, then use the pinned
 `systemone_answer` to decode each field. Compare input-token counts, categorical
 choices, and probabilities with the receipt. Keep the native and reference

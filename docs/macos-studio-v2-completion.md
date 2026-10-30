@@ -1,7 +1,9 @@
 # Studio v2 completion
 
-This guide describes the Studio workflows and the checks that protect them.
-The app continues to run the public CLI; it does not load model runtimes itself.
+This guide describes the Studio workflows that the v2 completion work
+([#437](https://github.com/sawfwair/mere-run/pull/437), September 5, 2026) added
+and the checks that protect them. The app runs the public CLI; it doesn't load
+model runtimes itself.
 
 ## Inspect and compare results
 
@@ -33,7 +35,7 @@ distinct directories.
 ## Edit the command for a task
 
 Use **Command** or Option-Command-C from any task. The panel edits the current
-task's contract form and shows the command that will run. Mapped prompt controls
+task's contract form and shows the command that runs. Mapped prompt controls
 synchronize with the form. Specialist forms retain Command edits and merge later
 changes from their simple controls into the edited command. A notice identifies
 active Command overrides; **Use form settings** clears them.
@@ -89,8 +91,9 @@ Command-minus, and Command-zero.
 ## Model inventory
 
 `mere.run model list --json` returns an `inventory` object with `rows`, inventory
-mode, completeness, and elapsed time, plus usage-term descriptions. Each row may
-include `contextWindow` from an installed model's `config.json`. Studio uses it
+mode, completeness, elapsed time, and any model-location issues, plus usage-term
+descriptions. A row can include `contextWindow` from an installed model's
+`config.json`. Studio uses it
 when estimating conversation history room; an explicit context size takes
 precedence. Missing or unfamiliar configurations report no context capacity.
 This value is declared capacity, not a tokenizer measurement or a runtime

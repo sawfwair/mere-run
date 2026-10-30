@@ -13,6 +13,7 @@ machine.
 | `mere.run model runtime get` | Print typed API runtime settings for a managed model. |
 | `mere.run model runtime set` | Update typed API runtime settings for a managed model. |
 | `mere.run status` | Show local server, loaded model, and installed model status. |
+| `mere.run open-webui quickstart` | Start `api serve` and the optional Open WebUI companion against it. |
 
 ## Keep image run records
 
@@ -86,19 +87,34 @@ lifecycle. API keys still cross the process boundary only through
 
 ## HTTP routes
 
-- `POST /v1/chat/completions`
-- `POST /v1/embeddings`
-- `POST /v1/images/generations`
-- `POST /v1/images/edits`
-- `POST /v1/videos/generations`
-- `POST /v1/vision/geometry`
-- `POST /v1/vision/geometry/multiview`
-- `POST /v1/vision/image-to-3d`
-- `POST /v1/vision/image-to-3d-multiview`
-- `POST /v1/vision/depth-video`
-- `POST /v1/audio/speech`
-- `POST /v1/audio/transcriptions`
-- `POST /v1/audio/diarizations`
+`mere.run api serve` registers the following routes. Every route except
+`/health` requires the API key when one is configured. The `/v1/videos` and
+`/v1/vision` routes are also loopback-only.
+
+| Method and path | Purpose |
+| --- | --- |
+| `GET /health` | Health check |
+| `GET /v1/models` | Installed API-servable models, aliases, and sidecars |
+| `POST /v1/chat/completions` | Chat completions, with streaming |
+| `POST /v1/embeddings` | Qwen3 text embeddings |
+| `POST /v1/images/generations` | Image generation |
+| `POST /v1/images/edits` | Image editing |
+| `POST /v1/videos/generations` | Video generation |
+| `POST /v1/vision/geometry` | Single-image metric geometry |
+| `POST /v1/vision/geometry/multiview` | DA3 multi-view geometry and cameras |
+| `POST /v1/vision/image-to-3d` | TripoSR mesh reconstruction |
+| `POST /v1/vision/image-to-3d-multiview` | InstantMesh reconstruction from uploaded views |
+| `POST /v1/vision/depth-video` | Temporally consistent video depth |
+| `POST /v1/audio/speech` | Text to speech |
+| `POST /v1/audio/transcriptions` | Speech to text and translation |
+| `POST /v1/audio/diarizations` | Speaker diarization |
+| `POST /v1/audio/diarizations/stream` | Live Nemotron 3 speaker activity from PCM |
+| `POST /v1/text/classifications` | GLiNER2.5 Decide label classification |
+| `POST /v1/text/extractions` | GLiNER2.5 Decide schema extraction |
+| `POST /v1/text/decisions` | Laya typed decisions |
+
+The `/runtime/*` routes are described in
+[Runtime control endpoints](#runtime-control-endpoints).
 
 Laguna chat requests enable reasoning by default. Chat responses return reasoning
 in `reasoning_content`, including buffered streaming tool-call replies. Clients
@@ -106,9 +122,9 @@ that preserve reasoning across tool turns should send that field back on the
 assistant message alongside its `tool_calls`.
 Qwen, Ornith, Laguna, Gemma 4, and Muse use their native templates to render
 `tool_calls`; the API keeps assistant `content` separate from those calls.
-Streaming responses send SSE keepalive comments during long generations, including
-buffered tool calls. Clients should ignore comment frames and wait for response
-data and the final usage chunk.
+Streaming responses send server-sent events (SSE) keepalive comments during
+long generations, including buffered tool calls. Clients must ignore comment
+frames and wait for response data and the final usage chunk.
 
 ### Model scope
 
@@ -121,8 +137,8 @@ such as `guidance_scale` as `image generate --cfg` or `top_k` as
 
 - A field the selected model refuses returns HTTP 400 with an
   `invalid_request_error` that names the field, for example `steps` other than
-  4 on `image-qwen-edit-2511-lightning`, which used to fail only once the
-  model loaded.
+  4 on `image-qwen-edit-2511-lightning`. The request fails before the model
+  loads.
 - A field the model accepts but never reads, such as `guidance_scale` on Krea 2,
   `top_p` on DiffusionGemma, or `max_tokens` on Parakeet, still runs. Each
   warning comes back as an `x-mere-warning` response header in the CLI's
@@ -132,9 +148,9 @@ such as `guidance_scale` as `image generate --cfg` or `top_k` as
   x-mere-warning: --cfg has no effect with Krea 2. It applies to FLUX.1-dev, FLUX.2 Klein, ...
   ```
 
-The route's own validation still runs after the check. A request the server
-used to run is never refused; one it refused only once the model loaded is now
-refused before. The check reads only the fields a client sent: the server's own
+The route's own validation still runs after the check. The check never refuses
+a request that the route would otherwise run; it only moves a refusal ahead of
+model loading. The check reads only the fields a client sent: the server's own
 defaults, such as video's 24 fps or transcription's token budget, never warn.
 Chat leaves models that `text chat` can't run, such as
 `text-agent-deepseek-v4-flash`, to the server, which serves them under their
@@ -578,8 +594,7 @@ swift run mere.run api serve \
   unpinned model. Active requests are never evicted.
 - `mere.run status` is the preferred quick check before you connect an editor or
   agent to a local server.
-- The server is local-first.
-- The server must not introduce relay, billing, or hosted-infrastructure concerns.
+- The server is local-first and has no relay or hosted-infrastructure layer.
 - Non-loopback binds require an API key, and the OpenAI-compatible routes
   support basic rate limiting.
 - Chat, embedding, image generation, and TTS requests must use
@@ -670,7 +685,7 @@ aliases, and installed native sidecars. In addition to the standard OpenAI
 fields, each entry can describe its `task`, `tool_call`, `reasoning`,
 `thinking_levels`, input/output `modalities`, context/output `limit`, and
 `openai_compat` dialect. Agent harnesses can therefore discover what the
-running server actually supports instead of inferring capabilities from a
+running server supports instead of inferring capabilities from a
 model name. Missing catalog models fail with an OpenAI-style error that tells
 the user to pull the model first.
 
@@ -802,7 +817,7 @@ Engine compatibility:
 - `text-chat-lfm25-24b-a2b-bf16`: uses the native LFM2 serving engine with the
   original BF16 weights and always generates reasoning. Non-streaming and
   tool-buffered replies separate `reasoning_content` from the final answer.
-  Plain token streams currently include `<think>` markup and reasoning in
+  Plain token streams include `<think>` markup and reasoning in
   `delta.content`.
 - `vision-chat-lfm25-3b-8bit`: uses the native LFM2 serving engine with
   LiquidAI's dense language backbone, SigLIP2 vision tower, and multimodal
@@ -891,13 +906,16 @@ whole-image conditioning rather than strict masked inpainting.
 
 `POST /v1/audio/speech` accepts:
 
-- `model`: `speech-tts-qwen3-nano`, `speech-tts-breeze-2`, a local supported TTS model path, or OpenAI
-  names such as `tts-1` mapped to the local default
+- `model`: `speech-tts-qwen3-nano` (default), `speech-tts-qwen3-customvoice`,
+  `speech-tts-breeze-2`, `speech-tts-phonon-31m`, a local supported TTS model
+  path, or the OpenAI names `tts-1`, `tts-1-hd`, and `gpt-4o-mini-tts`, which
+  map to the default. `speech-tts-drama-3` is available only through
+  `speech synthesize`.
 - `input`: required text
 - `voice`: OpenAI voice names are translated to speech style descriptions;
   custom descriptions are passed through
 - `speed`, `instructions`, and `temperature`
-- `seed`: optional mere.run extension for Breeze TTS 2 and Phonon 31m.
+- `seed`: optional mere.run extension for Breeze TTS 2 and Phonon 31m
 - `cfg_scale`: optional mere.run extension for Breeze TTS 2 only;
   CFG accepts finite values from 0 through 20 and defaults to 4
 - `response_format`: `wav`, `mp3`, `opus`, `aac`, or `flac`; non-WAV formats
@@ -908,7 +926,8 @@ text.
 
 `temperature` defaults to 0.6 and must be finite and between 0 and 2. `speed`
 defaults to 1 and accepts finite values from 0.25 through 4 for compatibility.
-The current Qwen3-TTS generator does not apply speed changes.
+The Qwen3-TTS generator doesn't apply speed changes. Phonon accepts only its
+default voice, no `instructions`, and a `speed` of 1.
 
 Speech requests use the same validation, native generation, and PCM16 WAV
 export as offline `speech synthesize`. The API retains its resident model and
@@ -918,8 +937,9 @@ response body, including partial transcoding output on failure.
 `POST /v1/audio/transcriptions` accepts multipart form fields:
 
 - `file`: required audio file part
-- `model`: `speech-asr-parakeet`, `speech-asr-qwen3`, a local ASR model path,
-  or OpenAI names such as `whisper-1` mapped to `speech-asr-parakeet`
+- `model`: `speech-asr-parakeet` (default), `speech-asr-qwen3`, a local ASR
+  model path, or the OpenAI names `whisper-1`, `gpt-4o-transcribe`, and
+  `gpt-4o-mini-transcribe`, which map to `speech-asr-parakeet`
 - `language`
 - `task`: `transcribe` or `translate`. Translation runs Qwen3-ASR and
   returns English; `language` does not change the target

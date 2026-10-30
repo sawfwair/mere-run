@@ -31,8 +31,8 @@ choice follows the system appearance — the app never forces one.
 | border | `D8D2C6` | `4E493F` | hairlines (0.4–0.8 opacity; 0.53 for the shell's rules) |
 | textPrimary | `211C13` | `F1EDE3` | primary text |
 | textSecondary | `5C564A` | `C9C1B3` | supporting text |
-| textMuted | `8A8273` | `918A7C` | captions, metadata |
-| accent | `9C7A2E` | `C9A65D` | bronze/gold brand accent |
+| textMuted | `716959` | `A49B8D` | captions, metadata |
+| accent | `86671F` | `C9A65D` | bronze/gold brand accent |
 | accentSoft | `F0E7D2` | `39331F` | selection washes (Library row, active header toggle), user chat bubble |
 | onAccent | `FFFFFF` | `1B160A` | glyphs and labels on a solid `accent` fill (selected sidebar row) |
 | segmentedSelection | `FFFFFF` | `3A362E` | the raised, selected segment of a segmented control |
@@ -90,9 +90,9 @@ breathe (24–32), rows and chips stay tight (8–12).
 
 ## Layout
 
-`StudioLayoutPolicy` holds every shell measurement: window 1280×820 by default and never
+`StudioLayoutPolicy` holds every shell measurement: window 1440×820 by default and never
 below 768×520; sidebar 212pt ideal (200 minimum, 300 maximum, user-resizable); Library column
-248pt; inspector 300pt; Command view 520pt; the feed's text measure 640pt; the content column
+248pt; inspector 300pt; Command view 440pt; the feed's text measure 640pt; the content column
 never narrower than 520pt. The Command Console window keeps its own three-pane split
 (catalog 220/268/360, form 420/560/∞, log 320/440/∞).
 
@@ -158,13 +158,15 @@ never narrower than 520pt. The Command Console window keeps its own three-pane s
   is wide enough and shrink to their content otherwise, so the pill never truncates. With the
   sidebar collapsed the first header adds 112pt of leading inset for the traffic lights.
 - Raw command form (the Command view column and the Command Console's middle pane):
-  eyebrow groups from the capability contract, each row a monospaced 12pt medium
-  `textSecondary` flag in a fixed column (150pt in the 520pt Command view, 168pt in the
-  console) beside the control the option's kind calls for, over a "Will run" block — the
-  shell-quoted command wrapped at the column width on `surfaceRaised` (radius 8, 12/10 padding,
-  11.5pt mono), with Copy, Open in Terminal, and the accent Run. The Command view's header is
-  44pt; the console gives each of its three panes a 52pt header and draws its catalog column in
-  the sidebar's row shape.
+  eyebrow groups from the capability contract, each row's head in a fixed 168pt column beside
+  the control the option's kind calls for. The console shows the flag alone (12pt medium
+  monospaced, `textSecondary`); the 440pt Command view shows the option's label (12pt medium,
+  `textSecondary`) over its flag (10.5pt monospaced, `textMuted`) and adds an "Extra
+  arguments" field. Below the form sits a "Will run" block: the shell-quoted command with
+  secrets masked, in monospaced type, with Copy and the accent Run. In the console the block is
+  11.5pt mono on `surfaceRaised` (radius 8, 12/10 padding), Run sits beside a Stop control
+  that is enabled only while a job runs, and Run becomes Queue during that time. The console gives each of its three panes a 52pt header and draws
+  its catalog column in the sidebar's row shape.
 - Library column: 248pt on `background` with a right hairline, running from the window
   top to the bottom. Header ("Library" 13pt semibold, count 11pt muted, scope segments) at
   14/14/8 padding; a 28pt capsule search field (12pt) beside a filter menu (kind, favorites

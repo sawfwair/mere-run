@@ -251,9 +251,9 @@ mere.run video generate \
 
 ## Resident Distilled Session
 
-`mere.run video session` keeps the standalone `video-ltx23-av-mlx` transformer,
-text encoder, VAEs, vocoder, and upscaler loaded while it processes serial JSONL
-requests. Each stdin line produces exactly one stdout line; diagnostics remain
+`mere.run video session` keeps an LTX 2.3 or LTX 2.5 bundle loaded while it
+processes serial JSONL requests. The default is the standalone distilled
+`video-ltx23-av-mlx`; full LTX 2.3 and LTX 2.5 models also work. Each stdin line produces exactly one stdout line; diagnostics remain
 on stderr. Required request keys are `prompt` and `output`.
 
 ```bash
@@ -264,10 +264,11 @@ printf '%s\n' \
 ```
 
 Successful result lines include phase timings and `resident_model_reused`; the
-second result reports zero model-load time. This session emits synchronized AV
-from the standalone distilled checkpoint. It intentionally rejects
-`video-ltx23-full-mlx`: the full quality/A2Vid lane fuses the distilled LoRA
-into the dev transformer in place and must reload before another generation.
+second result reports zero model-load time. With a full model, the session
+keeps the dev weights unchanged and applies the distilled adapter only for
+Stage 2, so it doesn't reload between requests. Full-model requests can also
+set sampling and guidance keys, including `distilled_lora_strength_stage_1` and
+`distilled_lora_strength_stage_2`; see `mere.run video session --help`.
 
 ## Iteration Tips
 

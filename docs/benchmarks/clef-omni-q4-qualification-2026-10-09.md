@@ -1,6 +1,10 @@
 # Clef Omni native Q4 qualification — 2026-10-09
 
-This artifact packs the routed experts of
+This report qualifies a native Q4 artifact of Clef Omni on a 36 GB Mac. All
+eight native Metal probes passed, every categorical choice matched the original
+BF16 reference, and the maximum probability difference was **0.0036**.
+
+The artifact packs the routed experts of
 `Cloudflare/clef-omni@0db1cd2607d76a7bdb2a382f659e7b313079f84b`
 with MLX affine 4-bit quantization, group size 64. Attention, routers,
 embeddings, vision/audio towers, and the joint head retain BF16. The native
@@ -54,8 +58,8 @@ returning billing with probability 0.9873. Its process peak memory footprint was
 20,011,421,128 bytes; this differs from MLX's allocator measurement. An earlier
 attempt was correctly refused at 15.78 GB of reclaimable memory. The successful
 run used the existing admission policy without overriding memory limits.
-All 22 artifact files passed local SHA256 verification. See the adjacent
-[receipt](./clef-omni-q4-qualification-2026-10-09.json) for hashes and raw decisions.
+All 22 artifact files passed local SHA256 verification. The
+[qualification receipt](./clef-omni-q4-qualification-2026-10-09.json) records hashes and raw decisions.
 
 The opt-in `ClefOmniCheckpointParityTests` records case outputs, probability
 differences, token counts, elapsed time, and MLX peak allocation.

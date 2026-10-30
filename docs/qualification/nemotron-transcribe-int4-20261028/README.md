@@ -1,4 +1,4 @@
-# Nemotron Transcribe BF16 versus routed-expert INT4 — 2026-10-28
+# Nemotron Transcribe BF16 versus routed-expert INT4, 2026-10-28
 
 Native Swift/MLX transcription was compared on twelve recordings totaling
 177.73 seconds and 522 reference words on an Apple M5 Max with 128 GiB unified
@@ -22,7 +22,8 @@ apostrophes, and ignoring punctuation. Apostrophes inside words are preserved;
 spelling variants count as errors. INT4's additional substitutions were
 `Kaliko` → `Calico` and `nor` → `or`. Both formats emitted `scepter` for the
 reference's `sceptre`, which counts as an error under this strict metric.
-Aggregate WER counts each recording once (the first measured run), so repeated timing cases do not receive extra weight.
+Aggregate WER counts each recording once (the first measured run), so
+repeated timing cases don't receive extra weight.
 The earlier standalone BF16 receipt used a different binary and the runtime's
 default TF32 setting; this paired comparison reruns both formats with TF32 disabled.
 
