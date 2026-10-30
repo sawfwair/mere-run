@@ -26,7 +26,8 @@ struct IdolLayers {
 
     func scalarEmbedding(_ values: MLXArray, _ name: String, period: Float = 10000, twoPi: Bool = false) -> MLXArray {
         let freqs = exp(-log(period) * MLXArray(0..<128).asType(.float32) / 128)
-        let angles = values.reshaped(-1, 1) * freqs * (twoPi ? 2 * Float.pi : 1)
+        let scale: Float = twoPi ? 2 * Float.pi : 1
+        let angles = values.reshaped(-1, 1) * freqs * scale
         return weights.linear(silu(weights.linear(concatenated([cos(angles), sin(angles)], axis: -1), name + ".mlp.0")),
                               name + ".mlp.2")
     }
