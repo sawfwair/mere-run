@@ -6,6 +6,30 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Serve `speech-asr-nemotron-35-transcribe`, its BF16 variant, and
+  `speech-asr-whistle` from `api serve` `/v1/audio/transcriptions`. These
+  requests previously reached the Qwen3-ASR route and failed.
+
+- Run Parakeet live in `speech listen --model speech-asr-parakeet`, as
+  `speech transcribe --stream` does, instead of replacing it with Qwen3-ASR.
+  Refuse Nemotron Transcribe IDs and local folders, since the model has no
+  live mode.
+
+- Refuse `api serve --engine text-chat-nemotron-h --model <id>` when the
+  model is neither `text-chat-nemotron-35-lightning` nor a local checkpoint
+  directory, instead of passing the ID through as a path.
+
+- Extend `guide image generate --model` to every model `image generate`
+  routes, including FLUX 3 Klein, FLUX.1-dev, FLUX.2-dev, and Qwen-Image 2.1,
+  and `guide music separate --model` to all four RoFormer models.
+
+- Print the command as invoked (for example `.build/release/mere.run`) in
+  hints from a binary run directly from `.build`. Correct the `config` and
+  `model benchmark code` help text.
+
+- Declare the `MereRunAdmission` dependency of `MereRunCoreTests` and
+  `AudioTTSTests`, so they link under the default Xcode 27 build system.
+
 - Refresh the documentation against the v0.67.1 command tree and managed
   catalog: document about 85 commands missing from the CLI reference, add
   source entries for 57 catalog models, correct stale flags, defaults, model

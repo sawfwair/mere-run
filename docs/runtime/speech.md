@@ -21,7 +21,7 @@ Two ASR backends have their own pages:
 | `mere.run speech transcribe` | Transcribe or translate speech to text using native ASR backends. |
 | `mere.run speech diarize` | Identify speaker time ranges as versioned JSON or RTTM using native MLX diarization. |
 | `mere.run speech diarize-live` | Emit incremental Nemotron 3 speaker activity from a microphone or PCM stdin. |
-| `mere.run speech listen` | Transcribe a macOS microphone with live Qwen3-ASR or Whistle. |
+| `mere.run speech listen` | Transcribe a macOS microphone with live Qwen3-ASR, Parakeet, or Whistle. |
 | `mere.run speech profile create` | Create a reusable voice profile from reference audio. |
 | `mere.run speech profile list` | List saved speech voice profiles. |
 | `mere.run speech profile delete` | Delete a speech profile by id. |
@@ -203,10 +203,12 @@ swift run mere.run speech listen --list-devices
 swift run mere.run speech listen --device <core-audio-uid>
 ```
 
-`speech listen` is the macOS microphone command. It runs Qwen3-ASR unless
-`--model` names Whistle, in which case it runs Whistle with the same decoding
-controls as `speech transcribe`. Parakeet transcribes recorded audio only, so
-a Parakeet `--model` prints a `Warning:` line and runs Qwen3-ASR.
+`speech listen` is the macOS microphone command. It defaults to Qwen3-ASR;
+`--model speech-asr-parakeet` selects Parakeet's live session, and
+`--model speech-asr-whistle` selects Whistle with the same decoding controls
+as `speech transcribe`. Unsupported Parakeet language hints select Qwen3-ASR,
+as they do for streamed transcription. Nemotron Transcribe is an offline
+backend and is rejected by `speech listen`; use file transcription instead.
 `--list-devices` lists inputs for `speech listen` and `speech diarize-live`
 before any model is read.
 

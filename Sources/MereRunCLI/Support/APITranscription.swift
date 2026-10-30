@@ -46,7 +46,14 @@ enum APITranscription {
                 "use a mere.run ASR model id or a local ASR model path"
             )
         }
-        let backend: ASRBackend = spec.id.contains("parakeet") ? .parakeet : .qwen
+        let backend: ASRBackend
+        if NemotronTranscribeResources.handles(spec.id) {
+            backend = .nemotron
+        } else if spec.id == WhistleGenerator.modelID {
+            backend = .whistle
+        } else {
+            backend = spec.id.contains("parakeet") ? .parakeet : .qwen
+        }
         return (spec.id, backend)
     }
 

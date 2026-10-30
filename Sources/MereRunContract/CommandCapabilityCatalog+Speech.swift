@@ -260,7 +260,7 @@ extension MereRunCapabilityCatalog {
         id: "speech.listen",
         command: ["speech", "listen"],
         title: "Live transcription",
-        summary: "Transcribe a macOS microphone with live Qwen or Whistle ASR.",
+        summary: "Transcribe a macOS microphone with live Qwen, Parakeet, or Whistle ASR.",
         options: [
             .init(flag: "--device", label: "Input device", kind: .string, group: Group.inputs, tier: .standard),
             .init(flag: "--list-devices", label: "List devices", kind: .boolean, group: Group.run, tier: .expert),

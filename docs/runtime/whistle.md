@@ -4,8 +4,10 @@ Whistle is a compact speech recognition model for English, German, French,
 Spanish, Italian, Dutch, and Polish. mere.run runs it directly in Swift/MLX
 from the original
 [Cactus-Compute archive](https://huggingface.co/Cactus-Compute/whistle), for
-file transcription, streamed PCM, and the macOS microphone. It's available
-from the CLI only, not the API server.
+file transcription, streamed PCM, and the macOS microphone. File transcription
+is also available through `POST /v1/audio/transcriptions` with
+`model=speech-asr-whistle`. The API uses Whistle's default decoding controls;
+use the CLI for its model-specific options.
 
 Automatic backend selection never picks Whistle. Select it with
 `--backend whistle` or by passing a Whistle model to `--model`:

@@ -8,7 +8,7 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
         abstract: "Run a real coding-evaluation slice against local coding models."
     )
 
-    @Option(name: [.long], help: "Comma-separated model ids. Defaults to the installed coding comparison lane.")
+    @Option(name: [.long], help: "Comma-separated model ids. Defaults to the coding comparison models this Mac supports, installed or not.")
     var models: String?
 
     @Option(

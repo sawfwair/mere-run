@@ -9,7 +9,7 @@ struct Config: ParsableCommand {
         discussion: """
         Stores settings in ~/Library/Application Support/MereRun/config.json so they
         survive across shells without environment variables. The Hugging Face token is
-        used to pull gated models (e.g. image-klein-9b).
+        used to pull gated models (e.g. image-flux1-dev).
 
         Resolution precedence for the HF token: HF_TOKEN (then HUGGING_FACE_HUB_TOKEN) env > config file.
 

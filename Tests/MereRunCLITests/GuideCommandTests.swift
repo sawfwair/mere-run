@@ -1,4 +1,5 @@
 import XCTest
+import MereRunContract
 @testable import MereRunCLI
 @testable import MereRunCore
 
@@ -279,6 +280,21 @@ final class GuideCommandTests: XCTestCase {
                     ManagedModelCatalog.spec(for: model),
                     "Guide \(entry.topic) references unknown managed model \(model)."
                 )
+            }
+        }
+    }
+
+    /// A command guide accepts `--model` for every model the command routes, so
+    /// `guide image generate --model image-flux3-klein` resolves like the command does.
+    func testCommandGuidesCoverEveryRoutedModel() throws {
+        for (topic, capabilityID) in [("image-generate", "image.generate"), ("music-separate", "music.separate")] {
+            let entry = try XCTUnwrap(GuideRegistry.all.first { $0.topic == topic })
+            let routing = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID)?.routing)
+            let routed = Set(routing.families.flatMap(\.models))
+            XCTAssertEqual(Set(entry.models), routed, topic)
+            let content = try GuideRegistry.content(for: entry)
+            for model in routed {
+                XCTAssertTrue(content.contains(model), "\(topic) guide does not mention \(model).")
             }
         }
     }

@@ -7,6 +7,11 @@ English. The managed default uses 4-bit routed experts; the original BF16
 checkpoint is a separate option. NVIDIA lists 40 transcription languages.
 Evaluate multilingual and translation accuracy on your own recordings.
 
+File transcription and English translation are also available through
+`POST /v1/audio/transcriptions` with either managed Nemotron model ID.
+The API uses the same offline generator and returns no timestamps; it does
+not add live transcription support.
+
 ## Install and run
 
 Two managed models are available:

@@ -328,6 +328,7 @@ if hasMediaIOTarget {
 
 var mereRunCoreTestDependencies: [Target.Dependency] = [
   "AudioDrama3Model",
+  "MereRunAdmission",
   "MereRunCoreMLModel",
   "MereRunLagunaModel",
   "MereRunH3Model",
@@ -1171,7 +1172,7 @@ targets.append(
 targets.append(
   .testTarget(
     name: "AudioTTSTests",
-    dependencies: ["AudioTTS", "MereRunMLXTestSupport"],
+    dependencies: ["AudioTTS", "MereRunAdmission", "MereRunMLXTestSupport"],
     path: "Tests/AudioTTSTests",
     swiftSettings: commonSwiftSettings,
     linkerSettings: linuxNativeLinkerSettings

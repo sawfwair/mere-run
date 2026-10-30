@@ -3,6 +3,7 @@ import Foundation
 extension MereRunCapabilityCatalog {
     enum SpeechListenFamily: String, MereRunFamilyID {
         case whistle
+        case parakeet
         case qwen3ASR = "qwen3-asr"
     }
 
@@ -143,14 +144,12 @@ extension MereRunCapabilityCatalog {
         defaultModels: [.always("speech-asr-qwen3")],
         families: [
             .init(SpeechListenFamily.qwen3ASR, title: "Qwen3-ASR", models: ["speech-asr-qwen3"]),
+            .init(SpeechListenFamily.parakeet, title: "Parakeet", models: ["speech-asr-parakeet"]),
             .init(SpeechListenFamily.whistle, title: "Whistle", models: ["speech-asr-whistle"])
         ],
-        // The live loader takes any id and runs Qwen3-ASR (`CLIQwenASRLoader`), so a Parakeet id
-        // runs and has no effect.
         excludedModels: .models(
-            ["speech-asr-parakeet"],
-            reason: "Parakeet transcribes recorded audio only; use `speech transcribe`.",
-            severity: .warning
+            ["speech-asr-nemotron-35-transcribe", "speech-asr-nemotron-35-transcribe-bf16"],
+            reason: "Nemotron Transcribe is an offline backend; use `speech transcribe` with a file input."
         ),
         listingFlags: ["--list-devices"]
     )

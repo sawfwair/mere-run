@@ -937,14 +937,20 @@ response body, including partial transcoding output on failure.
 `POST /v1/audio/transcriptions` accepts multipart form fields:
 
 - `file`: required audio file part
-- `model`: `speech-asr-parakeet` (default), `speech-asr-qwen3`, a local ASR
-  model path, or the OpenAI names `whisper-1`, `gpt-4o-transcribe`, and
-  `gpt-4o-mini-transcribe`, which map to `speech-asr-parakeet`
+- `model`: `speech-asr-parakeet` (default), `speech-asr-qwen3`,
+  `speech-asr-whistle`, `speech-asr-nemotron-35-transcribe`, its
+  `speech-asr-nemotron-35-transcribe-bf16` variant, or a local ASR model path.
+  The OpenAI names `whisper-1`, `gpt-4o-transcribe`, and
+  `gpt-4o-mini-transcribe` map to `speech-asr-parakeet`.
 - `language`
-- `task`: `transcribe` or `translate`. Translation runs Qwen3-ASR and
-  returns English; `language` does not change the target
+- `task`: `transcribe` or `translate`. Qwen3-ASR and Nemotron Transcribe
+  translate to English; a Parakeet translation request selects Qwen3-ASR.
+  Whistle rejects translation. `language` does not change the target.
 - `response_format`: `json`, `text`, `verbose_json`, `srt`, or `vtt`
 - `max_tokens`: 1 through 4,096; defaults to 448
+
+Nemotron Transcribe returns no timestamps. Whistle retains its transcription-only
+and supported-language limits on this endpoint.
 
 Unsupported format choices return OpenAI-style `invalid_request_error` payloads
 instead of being ignored.
