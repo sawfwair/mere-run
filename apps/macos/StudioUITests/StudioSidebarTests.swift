@@ -102,6 +102,39 @@ final class StudioSidebarTests: XCTestCase {
 
     // MARK: - Wordmark font
 
+    func testFontLookupSupportsFlatAndMacOSResourceBundles() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("studio-font-\(UUID())", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        for layout in ["flat", "macos"] {
+            let searchRoot = root.appendingPathComponent(layout, isDirectory: true)
+            let bundleURL = searchRoot.appendingPathComponent("MereRun_StudioUI.bundle", isDirectory: true)
+            let resources = layout == "flat" ? bundleURL : bundleURL.appendingPathComponent("Contents/Resources", isDirectory: true)
+            let fonts = resources.appendingPathComponent("Fonts", isDirectory: true)
+            try FileManager.default.createDirectory(at: fonts, withIntermediateDirectories: true)
+            if layout == "macos" {
+                let plist = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+                <plist version="1.0"><dict>
+                <key>CFBundleIdentifier</key><string>run.mere.studio-font-test</string>
+                <key>CFBundlePackageType</key><string>BNDL</string>
+                </dict></plist>
+                """
+                try Data(plist.utf8).write(to: bundleURL.appendingPathComponent("Contents/Info.plist"))
+            }
+            let expected = fonts.appendingPathComponent("Caveat[wght].ttf")
+            try Data().write(to: expected)
+            let missingRoot = root.appendingPathComponent("missing", isDirectory: true)
+            let actual = try XCTUnwrap(MereRunTheme.Brand.fontURL(in: [missingRoot, searchRoot]))
+            XCTAssertEqual(actual.resolvingSymlinksInPath(), expected.resolvingSymlinksInPath())
+        }
+    }
+
+    func testFontLookupReturnsNilForMissingResourceBundle() {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("studio-font-missing-\(UUID())", isDirectory: true)
+        XCTAssertNil(MereRunTheme.Brand.fontURL(in: [root]))
+    }
+
     func testBundledWordmarkFontIsFoundAndRegisters() throws {
         let url = try XCTUnwrap(MereRunTheme.Brand.fontURL(), "Caveat[wght].ttf is not in the app resource bundle")
         XCTAssertEqual(url.lastPathComponent, "Caveat[wght].ttf")

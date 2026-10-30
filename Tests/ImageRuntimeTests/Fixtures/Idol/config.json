@@ -1,0 +1,59 @@
+{
+  "denoiser": {
+    "name": "LatentSeqMMFlowModel",
+    "args": {
+      "q_token_length": 4,
+      "in_channels": 4,
+      "cam_channels": 5,
+      "model_channels": 32,
+      "cond_channels": 8,
+      "cond2_channels": 4,
+      "num_blocks": 2,
+      "num_refiner_blocks": 2,
+      "num_heads": 4,
+      "num_head_channels": 8,
+      "mlp_ratio": 2.0
+    }
+  },
+  "decoder": {
+    "name": "OctreeProbabilityFixedlenDecoder",
+    "args": {
+      "model_channels": 32,
+      "cond_channels": 4,
+      "num_blocks": 2,
+      "num_heads": 4,
+      "mlp_ratio": 2.0
+    }
+  },
+  "decoder_gs": {
+    "name": "GaussianFixedlenDecoder",
+    "args": {
+      "model_channels": 32,
+      "cond_channels": 4,
+      "num_blocks": 2,
+      "num_heads": 4,
+      "mlp_ratio": 2.0,
+      "in_channels": 3,
+      "representation_config": {
+        "num_gaussians": 32,
+        "lr": {
+          "_xyz": 1.0,
+          "_features_dc": 1.0,
+          "_opacity": 1.0,
+          "_scaling": 1.0,
+          "_rotation": 0.1
+        },
+        "perturbe_size": 1.5,
+        "scaling_bias": 0.004,
+        "opacity_bias": 0.1,
+        "3d_filter_kernel_size": 0.0009
+      }
+    }
+  },
+  "image_size": 16,
+  "max_voxel_level": 3,
+  "image_encoders": {
+    "dinov3": "facebook/dinov3-vith16plus-pretrain-lvd1689m",
+    "flux2_vae": "black-forest-labs/FLUX.2-dev"
+  }
+}

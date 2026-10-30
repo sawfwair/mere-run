@@ -1,0 +1,246 @@
+{
+  "id": "idol-native-20261030",
+  "platform": {
+    "soc": "Apple M5 Max",
+    "memory_bytes": 137438953472,
+    "macos": "27.2",
+    "swift": "6.4.2"
+  },
+  "reference_revision": "4702a7f00850e34b6e83a2170cc123c3e9570744",
+  "mask_parity": {
+    "foreground_iou": 0.99995184,
+    "mask_rmse": 0.000113243244
+  },
+  "component_parity": {
+    "dino_relative_rmse": 0.011008849,
+    "dino_rmse": 0.011007146,
+    "flow_camera_relative_rmse": 0.0023722055,
+    "flow_camera_rmse": 0.0014958199,
+    "flow_latent_relative_rmse": 0.005791659,
+    "flow_latent_rmse": 0.0071160994,
+    "gaussian_features_relative_rmse": 0.0022126597,
+    "gaussian_features_rmse": 0.008774202,
+    "negative_latent_relative_rmse": 0.0006654378,
+    "negative_latent_rmse": 0.0007812621,
+    "octree_16_relative_rmse": 0.0021758487,
+    "octree_16_rmse": 0.006141954,
+    "octree_256_relative_rmse": 0.0045541413,
+    "octree_256_rmse": 0.019181054,
+    "octree_2_relative_rmse": 0.0019229999,
+    "octree_2_rmse": 0.0045053735,
+    "positive_camera_relative_rmse": 0.00052978756,
+    "positive_camera_rmse": 0.00057606644,
+    "positive_latent_relative_rmse": 0.0008279158,
+    "positive_latent_rmse": 0.0010158144,
+    "vae_relative_rmse": 0.022340031,
+    "vae_rmse": 0.018967515
+  },
+  "matched_render": {
+    "0": {
+      "psnr_db": 84.31044870599234,
+      "foreground_iou": 1.0
+    },
+    "120": {
+      "psnr_db": 80.48455613039884,
+      "foreground_iou": 1.0
+    },
+    "240": {
+      "psnr_db": 80.7637297510243,
+      "foreground_iou": 0.9998787878787879
+    },
+    "splats": 262144,
+    "bounds": [
+      [
+        -0.1543005108833313,
+        -0.2636997699737549,
+        -0.49881792068481445
+      ],
+      [
+        0.15438145399093628,
+        0.26647767424583435,
+        0.49836647510528564
+      ]
+    ]
+  },
+  "runs": [
+    {
+      "example": "toy-submarine.webp",
+      "input_sha256": "231d70ce99a005de783b8784b0220ad898305cd19bad8b51b6de53c31344d261",
+      "settings": {
+        "gaussianCount": 262144,
+        "guidance": 3,
+        "seed": 42,
+        "steps": 50,
+        "timeShift": 3
+      },
+      "mode": "synthetic",
+      "gaussian_count": 262144,
+      "checkpoints": [
+        {
+          "byteCount": 444466856,
+          "filename": "birefnet.safetensors",
+          "sha256": "44bbc97b041f879975d0d6d538b8e66a25eb04d1f49aab40697544cdd97eaa8e"
+        },
+        {
+          "byteCount": 1482258308,
+          "filename": "denoiser.safetensors",
+          "sha256": "ded2cacf671bf3978ebc62729087abdbd318ef4752e6805b4c9fc8ffa51fe716"
+        },
+        {
+          "byteCount": 203171696,
+          "filename": "decoder.safetensors",
+          "sha256": "9da4d7676bfcadb1c3fdfbff796e6257dadf82d26ec05be7717c79b2b13a1c4e"
+        },
+        {
+          "byteCount": 949083036,
+          "filename": "decoder_gs.safetensors",
+          "sha256": "3087eb8ee5763206a53e4078acf2a1bf382dab5147d407ec13a2cf39c04cc544"
+        },
+        {
+          "byteCount": 1335,
+          "filename": "idol/config.json",
+          "sha256": "ddd89dcc6dcf4a5ac8d951b8c59afa1eceafe377615c5912c59f4e1f5ae35b32"
+        },
+        {
+          "byteCount": 744,
+          "filename": "dinov3/config.json",
+          "sha256": "35770e98e425c9383534bcbfa7f3b7a3cb1d943f6d26a37d7d19fea0735eab57"
+        },
+        {
+          "byteCount": 3362432800,
+          "filename": "dinov3/model.safetensors",
+          "sha256": "3e1d4d18b9bfa9f28fad8e9de6a783f1313532d3460efa4cd0b12521d81d1a4d"
+        },
+        {
+          "byteCount": 770,
+          "filename": "flux2-vae/config.json",
+          "sha256": "7948580b2d53da578d49b9fed61b45d94a4c037ded5057ebd3adb4040bb5aef5"
+        },
+        {
+          "byteCount": 336213556,
+          "filename": "flux2-vae/diffusion_pytorch_model.safetensors",
+          "sha256": "d64f3a68e1cc4f9f4e29b6e0da38a0204fe9a49f2d4053f0ec1fa1ca02f9c4b5"
+        }
+      ],
+      "artifacts": [
+        {
+          "byteCount": 17826250,
+          "filename": "object.ply",
+          "sha256": "66d7c9ebc23a24b4a202c2e7d1e09857836ada82d9cd8c9cf707579e0531da1b"
+        },
+        {
+          "byteCount": 301184,
+          "filename": "input.png",
+          "sha256": "7b5d08a5558cd5fca6a45d29bf78d9e298e34417936a031b435c521074838ad4"
+        },
+        {
+          "byteCount": 92,
+          "filename": "camera.json",
+          "sha256": "893da404b85bbfa64b330bb302342c7f40f0626722535c26c39667f9c2d226c6"
+        }
+      ],
+      "camera": {
+        "fov": 23.643785,
+        "pitch": 0.21155815,
+        "radius": 3.9961631,
+        "yaw": 2.2415354
+      }
+    },
+    {
+      "example": "food-strawberry.webp",
+      "input_sha256": "bcf1f3c5acc8569c25adfad41f7721640f0999f5edb7e3bd199f8980447872c8",
+      "settings": {
+        "gaussianCount": 32768,
+        "guidance": 3,
+        "seed": 42,
+        "steps": 50,
+        "timeShift": 3
+      },
+      "mode": "real",
+      "gaussian_count": 32768,
+      "checkpoints": [
+        {
+          "byteCount": 444466856,
+          "filename": "birefnet.safetensors",
+          "sha256": "44bbc97b041f879975d0d6d538b8e66a25eb04d1f49aab40697544cdd97eaa8e"
+        },
+        {
+          "byteCount": 1482258308,
+          "filename": "denoiser.safetensors",
+          "sha256": "ded2cacf671bf3978ebc62729087abdbd318ef4752e6805b4c9fc8ffa51fe716"
+        },
+        {
+          "byteCount": 203171696,
+          "filename": "decoder.safetensors",
+          "sha256": "9da4d7676bfcadb1c3fdfbff796e6257dadf82d26ec05be7717c79b2b13a1c4e"
+        },
+        {
+          "byteCount": 949083036,
+          "filename": "decoder_gs.safetensors",
+          "sha256": "3087eb8ee5763206a53e4078acf2a1bf382dab5147d407ec13a2cf39c04cc544"
+        },
+        {
+          "byteCount": 1335,
+          "filename": "idol/config.json",
+          "sha256": "ddd89dcc6dcf4a5ac8d951b8c59afa1eceafe377615c5912c59f4e1f5ae35b32"
+        },
+        {
+          "byteCount": 744,
+          "filename": "dinov3/config.json",
+          "sha256": "35770e98e425c9383534bcbfa7f3b7a3cb1d943f6d26a37d7d19fea0735eab57"
+        },
+        {
+          "byteCount": 3362432800,
+          "filename": "dinov3/model.safetensors",
+          "sha256": "3e1d4d18b9bfa9f28fad8e9de6a783f1313532d3460efa4cd0b12521d81d1a4d"
+        },
+        {
+          "byteCount": 770,
+          "filename": "flux2-vae/config.json",
+          "sha256": "7948580b2d53da578d49b9fed61b45d94a4c037ded5057ebd3adb4040bb5aef5"
+        },
+        {
+          "byteCount": 336213556,
+          "filename": "flux2-vae/diffusion_pytorch_model.safetensors",
+          "sha256": "d64f3a68e1cc4f9f4e29b6e0da38a0204fe9a49f2d4053f0ec1fa1ca02f9c4b5"
+        }
+      ],
+      "artifacts": [
+        {
+          "byteCount": 2228681,
+          "filename": "object.ply",
+          "sha256": "4b48ba570da6cfc9684ab2f4462c4de399cd99ab9bdcd026f516b80cbb0a6b38"
+        },
+        {
+          "byteCount": 596350,
+          "filename": "input.png",
+          "sha256": "8fc95eef086c6d8dc8c31adc5ae741e49e81d644ab05bb26e9f75bccf54d0e79"
+        },
+        {
+          "byteCount": 92,
+          "filename": "camera.json",
+          "sha256": "1227b733dccabc0fcc1d6302176f128f0ca3563f137a0578c5092377dbbe0fd2"
+        }
+      ],
+      "camera": {
+        "fov": 4.6765122,
+        "pitch": 0.13267118,
+        "radius": 19.493052,
+        "yaw": 1.7078544
+      }
+    }
+  ],
+  "validation": {
+    "real_checkpoint_tests": "passed: 2",
+    "pillow_fixture_bytes": "exact",
+    "swin_and_deformable_fixture_tests": "passed: 3",
+    "fixture_cli_tests_passed": 17,
+    "real_checkpoint_tests_passed": 2,
+    "lint": "passed",
+    "build": "passed",
+    "package_policy": "passed: all variants",
+    "cli_help_hygiene": "passed",
+    "full_gate": "passed",
+    "studio_font_tests": "passed: flat SwiftPM, macOS resource bundles, missing bundles, and live registration"
+  }
+}

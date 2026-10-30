@@ -2,6 +2,7 @@ import Foundation
 import MLX
 import MLXFast
 import MLXNN
+import MereRunTensor
 
 // MARK: - DINOv3 Vision Encoder
 //

@@ -31,3 +31,6 @@ storage I/O out of GPU command-buffer waits and leaves unmapped tensors lazy.
 `RoutedMoERouting` owns guarded routed quantization dispatch and kernels. Its
 staging, sorted prefill, residual, and gather extensions retain the shared
 implementation used by Laguna and other Core model families.
+
+`FusedAttentionPolicy` provides the shared `MERERUN_FUSED_SDPA` diagnostic
+switch for native encoders and Core orchestration.
