@@ -233,7 +233,7 @@ struct MereRunApp: App {
         }
         .defaultSize(width: 1_260, height: 780)
         .windowResizability(.contentMinSize)
-        // Window ▸ Command Console (⌃⌘C) in MereRunCommands opens it; SwiftUI's own Window-menu
+        // Window ▸ Command Console (⇧⌘C) in MereRunCommands opens it; SwiftUI's own Window-menu
         // item for the scene would list it twice.
         .commandsRemoved()
 

@@ -1,41 +1,43 @@
 # Contributing
 
-- Keep changes scoped to the Swift package, CLI, docs, or public repo automation.
+- Keep changes scoped to the Swift package, CLI, macOS and iOS apps, docs, or public repo automation.
 - Install SwiftLint and ripgrep (`brew install swiftlint ripgrep`) and run `./scripts/check.sh` before opening a PR.
-- Add or update tests when changing command parsing, model resolution, inference behavior, or security-sensitive defaults.
+- Add or update tests when you change command parsing, model resolution, inference behavior, or security-sensitive defaults.
 - Update `README.md`, `docs/`, and `CHANGELOG.md` when you change public setup, behavior, or operator-facing flags.
 - Run `./scripts/update-docs-command-reference.sh` after adding, removing, renaming, or redescribing a CLI command; CI rejects command inventories, docs ownership, navigation, and examples that drift from the code.
 - If you touch vendored artifacts or third-party package pins, update [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md).
-- Do not add hosted-service, billing, or app-store-only surfaces back into this repo.
+- Don't add hosted-service, billing, or app-store-only surfaces to this repo.
 
 ## Continuous integration lanes
 
-`./scripts/check.sh` is the local gate for every change. It stays the one command
-you run before opening a pull request, whatever you touched.
+`./scripts/check.sh` is the local gate for every change. Run it before you open
+a pull request, whatever you touched.
 
-Continuous integration scopes itself to the paths a pull request changes so a
-change confined to the macOS app does not pay for the whole package test suite.
+Continuous integration scopes itself to the paths a pull request changes, so a
+change confined to the macOS app doesn't pay for the whole package test suite.
 The `changes` job sorts every changed path into a category and prints the result
 in its job summary, together with the lane it selected:
 
 | Lane | Selected when | What the `swift` job runs |
 | --- | --- | --- |
+| No native change | Only `docs/**`, `README.md`, `CHANGELOG.md`, `CODEBASE.md`, `CONTRIBUTING.md`, `SECURITY.md`, `LICENSE`, or the pnpm workspace files changed | Nothing; the job reports success from a no-op step |
 | Fast | Only `apps/macos/**`, `apps/ios/**`, `docs/**`, Markdown, ordinary `scripts/**`, or `assets/`, `integrations/`, `skills/` changed | SwiftLint, the agent readiness, evaluation boundary, and documentation example checks, `swift build`, the MLX metallib verification, and the three Studio test targets (`StudioKitTests`, `StudioUITests`, `MereRunAppTests`) |
 | Full | Anything under `Sources/**`, `Tests/**`, `vendor/**`, `Package.swift`, `Package.resolved`, `.github/**`, or the gate scripts themselves changed | `./scripts/check.sh`, which is every package test target |
 | Post-merge cache warm | A push to `main` whose exact SHA passed the required merge-queue checks | `swift build` only, then saves the trusted default-branch build cache |
 
-The fast and full lanes build and verify the ad-hoc `MereRun.app` bundle, and both verify the
-vendored MLX Metal library against the pinned kernel sources. Path classification
-is default-deny: a path no rule recognises selects the full lane everywhere, so
-a new top-level directory can never take the short route by accident.
+The fast and full lanes build and verify the ad-hoc `MereRun.app` bundle, and
+both verify the vendored MLX Metal library against the pinned kernel sources.
+Path classification is default-deny: a path that no rule recognizes selects the
+full lane everywhere, so a new top-level directory can't take the short route
+by accident.
 
 Two more scopes come from the same classification. The Linux CLI gate runs when
 a change can reach the Linux CLI or the scripts it invokes, and reports success
 from a no-op step otherwise, so its required check always reports. The iOS job
-runs only when a change can reach the iOS project.
-Changes confined to `Sources/MereRunCLI/**` and `Tests/MereRunCLITests/**`
-still run the full macOS and Linux gates but do not run iOS, which does not
-link the CLI target. A mixed change that reaches Core still runs iOS.
+runs only when a change can reach the iOS project. Changes confined to
+`Sources/MereRunCLI/**` and `Tests/MereRunCLITests/**` still run the full
+macOS and Linux gates but skip iOS, which doesn't link the CLI target. A mixed
+change that reaches Core still runs iOS.
 
 The Linux job pulls the official Swift 6.1 Jammy image from Docker Hub, pinned
 to an immutable image digest. Package downloads prefer the HTTPS Ubuntu archive,
@@ -45,34 +47,35 @@ changing the image; a registry-only update must preserve the toolchain.
 ## Merge queue
 
 `main` merges through a merge queue. GitHub builds a `merge_group` ref for each
-queued pull request and waits for the six required checks — `swift`,
-`macos-app-bundle`, `linux-cli`, `linux-cli-compatibility-docs`,
-`dependency-review`, and `secret-scan` — to report on it, so both `ci.yml` and
-`security.yml` also trigger on `merge_group`.
+queued pull request and waits for six required checks to report on it:
+`swift`, `macos-app-bundle`, `linux-cli`, `linux-cli-compatibility-docs`,
+`dependency-review`, and `secret-scan`. Both `ci.yml` and `security.yml`
+trigger on `merge_group` for this reason.
 
 Two rules keep the queue moving:
 
 - Every required check runs and reports under its own name on a merge group.
-  A job with nothing to prove reports success from a no-op step rather than
+  A job with nothing to prove reports success from a no-op step instead of
   being skipped, because a required check that never reports leaves a merge
   group waiting until it times out. `dependency-review` is the clearest case:
   the action it wraps only supports pull requests, so on a merge group the job
   reports that the pull request's own review already ran.
 - Lane selection still applies. A merge group diffs against
-  `github.event.merge_group.base_sha`. If that diff cannot be computed the run
+  `github.event.merge_group.base_sha`. If that diff can't be computed, the run
   falls back to the full gate, because a merge group is the last check before
   `main`.
 
-Merge-queue runs are never cancelled by concurrency, since a cancelled run
-reports nothing and stalls the queue.
+Concurrency never cancels a merge-queue run, because a canceled run reports
+nothing and stalls the queue.
 
 After the merge, the `push` workflow verifies that the exact commit passed the
-required CI and security jobs on a `merge_group` run. It then warms the default-branch build cache
-without rerunning the full matrix. A direct push without that queue evidence
-fails closed; it does not claim that the required checks ran.
+required CI and security jobs on a `merge_group` run. It then warms the
+default-branch build cache without rerunning the full matrix. A direct push
+without that queue evidence fails closed instead of claiming that the required
+checks ran.
 
-The macOS job restores the SwiftPM build directory from a cache that only pushes
-to `main` write. Its key covers the Xcode version, `Package.swift`,
+The macOS job restores the SwiftPM build directory from a cache that only
+pushes to `main` write. Its key covers the Xcode version, `Package.swift`,
 `Package.resolved`, and the lane. The MLX Metal library is never restored or
 saved: a stale one silently corrupts inference, so every run regenerates and
 re-stamps it from the checkout.
@@ -82,11 +85,11 @@ re-stamps it from the checkout.
 Follow the [documentation style guide](./docs/documentation-style.md) for public
 pages, command descriptions, and examples. In particular:
 
-- write directly to the reader in active voice and present tense
-- use sentence case for titles and headings
-- use descriptive link text and accessible document structure
-- use reserved domains and fictional identifiers in examples
-- identify dated evidence and historical benchmark receipts precisely
+- Write directly to the reader in active voice and present tense.
+- Use sentence case for titles and headings.
+- Use descriptive link text and accessible document structure.
+- Use reserved domains and fictional identifiers in examples.
+- Identify dated evidence and historical benchmark receipts precisely.
 
 Run the focused documentation checks before you open a pull request:
 
@@ -98,8 +101,8 @@ pnpm docs:build
 ## Opening issues
 
 - Use GitHub issues for bugs, docs gaps, and feature requests.
-- Do not post security vulnerabilities in public issues. Follow [`SECURITY.md`](./SECURITY.md) instead.
-- Include your macOS version, Xcode/Swift toolchain, the command you ran, and any focused reproduction steps.
+- Don't post security vulnerabilities in public issues. Follow [`SECURITY.md`](./SECURITY.md) instead.
+- Include your macOS version, Xcode and Swift toolchain versions, the command you ran, and focused reproduction steps.
 
 ## Pull requests
 

@@ -1,4 +1,4 @@
-# Laya native qualification — September 22, 2026
+# Laya native qualification, September 22, 2026
 
 The native Swift/MLX implementation was compared with the pinned Laya SDK and
 all three published checkpoints on an Apple M4 Max with 128 GB unified memory.
@@ -48,7 +48,7 @@ Raw tensor checks use the three-question English batch for each real checkpoint:
 
 Decision logits must be within `2e-5`. Action logits reach thousands, so their
 gate bounds `abs(native-reference) / max(abs(reference), 1)` below `2e-6`.
-The absolute errors are retained above to make this tolerance explicit.
+The preceding table keeps the absolute errors to make this tolerance explicit.
 
 The seeded synthetic fixture separately exercises every encoder layer,
 global/local attention, unequal padding, all question types, and a single

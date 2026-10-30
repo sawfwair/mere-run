@@ -1,9 +1,9 @@
 # Companion plugins
 
-Extend `mere.run` without letting anything into its process. Official plugins
-are separate executables shipped outside the Swift package: they can add
-operational integrations and typed workflow-graph nodes, but they run
-out-of-process and speak one fixed protocol. A plugin manifest cannot inject a
+Official plugins extend `mere.run` without loading code into its process. Each
+plugin is a separate executable shipped outside the Swift package. Plugins can
+add operational integrations and typed workflow-graph nodes, but they run
+out of process and speak one fixed protocol. A plugin manifest can't inject a
 shell command into your workflow bundle.
 
 For business setup guides, see
@@ -14,64 +14,70 @@ Tools.
 
 ## Discover plugins
 
-The CLI reads the public plugin catalog and can return either a human-readable
+The CLI reads the public plugin catalog and returns either a human-readable
 list or machine-readable JSON:
 
 ```bash
 mere.run plugin list
 mere.run plugin list --json
 mere.run plugin info mere-runpod
+mere.run plugin info mere-runpod --json
 ```
 
-Use `--catalog-url` with a local JSON file when developing or reviewing a
-catalog change. The default catalog remains the public release source.
+`plugin info` shows one entry's description, capabilities, channel, install
+command, and any setup step. To develop or review a catalog change, pass
+`--catalog-url` with a local JSON file. The default catalog is the public
+release source.
 
 `plugin list --json` preserves the catalog fields and adds local inspection
 state for each entry: whether the entrypoint is installed, whether its manifest
 verified, the installed version and path, any verification error, and the
-default-channel install command. This is the source of truth for thin clients;
-they do not maintain a second plugin registry.
+default-channel install command. Thin clients use this output as their source
+of truth instead of keeping a second plugin registry.
 
 ## macOS Studio
 
-Open the **Plugins** domain in the Studio sidebar (Go ▸ Plugins). The page
-supports catalog search, installed and verified status, channel selection,
-repository access, copyable install commands, confirmed install or update,
-rollback to a retained signed bundle, and the fixed plugin doctor operation. A custom catalog URL or local
-JSON path is available for development.
+To manage plugins in the app, open the **Plugins** domain in the Studio
+sidebar (**Go ▸ Plugins**). The page offers catalog search, installed and
+verified status, channel selection, repository links, copyable install
+commands, confirmed install or update, rollback to a retained signed bundle,
+and the plugin doctor check. For development, you can point it at a custom
+catalog URL or local JSON path.
 
-The UI calls the same `plugin list`, `plugin install`, and `plugin doctor`
-commands documented here. Plugins remain separate executables and no plugin
-implementation is loaded into the app process.
+The page calls the same `plugin list`, `plugin install`, and `plugin doctor`
+commands that this guide documents. Plugins stay separate executables, and the
+app process never loads plugin code.
 
 ## Install safely
 
-`plugin install` is a dry run unless `--yes` is present. Inspect the exact
-package-manager command first, then opt in to execution:
+`plugin install` is a dry run unless you pass `--yes`. Inspect the exact
+package-manager command first, then run it:
 
 ```bash
 mere.run plugin install mere-runpod
 mere.run plugin install mere-runpod --yes
 ```
 
-After installation, `mere.run` verifies the plugin manifest and entrypoint. A
-plugin that declares a graph provider is registered only after that manifest
-passes validation.
+Catalog channels that install from source use
+[pipx](https://pipx.pypa.io/), so install pipx first (for example,
+`brew install pipx`). After installation, `mere.run` verifies the plugin
+manifest and entrypoint. A plugin that declares a graph provider is registered
+only after that manifest passes validation.
 
-A catalog channel may declare `setup: true` for a plugin whose verified
+A catalog channel can declare `setup: true` for a plugin whose verified
 entrypoint installs a separate local prerequisite. `plugin info` and every
 `plugin install` dry run show the setup step next to the install step. With
-`--yes`, installation invokes the entrypoint's fixed `setup --yes` verb once the
-installed plugin is verified, whether it came from pipx or a signed bundle.
+`--yes`, installation invokes the entrypoint's fixed `setup --yes` verb after
+the installed plugin is verified, whether it came from pipx or a signed bundle.
 For a signed bundle, the step runs through the managed entrypoint, shown as
 `mere.run plugin run ENTRYPOINT -- setup --yes`. A graph provider is registered
 before setup runs, so a failed setup leaves the plugin installed and
 registered; the error prints the setup command to retry. Setup does not run on
 `plugin rollback` or `plugin run`.
 
-The computer-use plugin uses this to install the signed, checksum-verified Cua
-Driver macOS app. macOS Accessibility and Screen Recording grants still require
-the user in System Settings.
+The `mere-computer-use` plugin uses this step to install the signed,
+checksum-verified Cua Driver macOS app. You still grant Accessibility and
+Screen Recording access yourself in macOS System Settings.
 
 Use `--channel` to select a non-default catalog channel and `--force` only when
 you intentionally want to forward a forced reinstall to the package manager.
@@ -107,6 +113,8 @@ Pipx 1.16.0 includes the fix for
 
 ## Diagnose an installation
 
+To check an installed plugin, run its doctor:
+
 ```bash
 mere.run plugin doctor mere-runpod
 ```
@@ -122,8 +130,7 @@ Plugin stdout and exit status remain owned by a verified executable.
 
 A graph-provider plugin exposes a versioned manifest and only three graph
 verbs: catalog, preflight, and execute. The core runtime validates typed
-requests and events; plugin manifests cannot inject arbitrary shell commands
-into workflow bundles.
+requests and events.
 
 See [Portable workflows](./workflows.md#graph-v2-runtime-and-v1-contract) for
 the graph ABI and [CLI reference](./cli.md) for every plugin option.
@@ -139,9 +146,10 @@ the graph ABI and [CLI reference](./cli.md) for every plugin option.
 
 ## Signed bundle pilot
 
-The signed bundle installer supports official macOS Apple Silicon releases on
-macOS 15 or later. The public catalog continues to use pipx until verified
-bundle artifacts and a compatible CLI release are published.
+The signed bundle installer supports official Apple Silicon releases on
+macOS 15 or later. As of October 29, 2026, every public catalog channel still
+installs through pipx; channels switch to bundles after verified bundle
+artifacts and a compatible CLI release are published.
 
 When a channel advertises a bundle, `plugin install` verifies the publisher
 signature, exact download hash, Developer ID, and notarization. It checks the
@@ -157,13 +165,13 @@ mere.run plugin rollback mere-doc-tools --yes
 ```
 
 Bundles are stored in the MereRun application support directory. A package's
-entrypoints share one private runtime. Existing pipx environments and PATH
-commands are not removed or rewritten. Use `plugin run` or native graph
+entrypoints share one private runtime. Installing a bundle doesn't remove or
+rewrite existing pipx environments or `PATH` commands. Use `plugin run` or native graph
 workflows to select the managed bundle; a bare PATH command can still refer
 to an existing pipx installation. Rollback affects all plugins in the shared
 package and revalidates the retained version before activation.
 
-To explicitly select source installation, use `--source`. A signature,
+To select source installation explicitly, use `--source`. A signature,
 notarization, compatibility, or download failure never falls back to pipx.
 `--force` does not bypass bundle verification or permit a downloaded downgrade.
 No unsigned bundle mode is provided.

@@ -4,7 +4,7 @@ External evaluation packs let a separate repository use `mere.run`'s local model
 runtime, adapters, logprobs, scoring lifecycle, gates, and promotion receipts
 without moving that repository's content into `mere.run`.
 
-This is an ownership boundary, not a packaging convention:
+Packs draw an ownership boundary, not a packaging convention:
 
 - `mere.run` owns the generic schema, validation, execution, checkpointing,
   calibration, and receipt formats.
@@ -28,7 +28,10 @@ Validate and content-address a pack without loading a model:
 mere.run eval pack validate /path/to/pack --json
 ```
 
-Review the exact plan without loading models or executing a scorer:
+Review the exact plan without loading models or executing a scorer. In these
+examples, replace `text-chat-model` with an installed managed model ID. A
+`--model` value without a slot name binds the `base` slot, and an `--adapter`
+value without a slot name binds `candidate`:
 
 ```bash
 mere.run eval run /path/to/pack \
@@ -38,7 +41,8 @@ mere.run eval run /path/to/pack \
   --json
 ```
 
-Run and checkpoint every completed case/trial row:
+Run the evaluation and checkpoint every completed case and trial row. To resume
+an interrupted run, repeat the command with `--resume`:
 
 ```bash
 mere.run eval run /path/to/pack \
@@ -63,9 +67,14 @@ mere.run eval promote ./results/report.json \
   --output ./results/promotion-receipt.json
 ```
 
-The runner does not download a missing model. A resume is accepted only when
-the pack, model, adapter, prompt, sampling, logprob, and runner identities match
-the checkpoint plan exactly.
+The runner doesn't download a missing model. It accepts a resume only when the
+pack, model, adapter, prompt, sampling, logprob, and runner identities match
+the checkpoint plan exactly. To stop cleanly after a fixed number of new rows,
+add `--case-trial-limit` along with `--checkpoint`.
+
+`eval run` can override some pack defaults for one run: `--trials`,
+`--max-tokens`, `--context-size`, `--logprobs`, and `--top-logprobs`. Use
+`--json` to write the report to stdout as well as, or instead of, `--output`.
 
 When an evaluated adapter has the native adjacent training manifest written by
 `mere.run text train-lora`, the plan pins that manifest and carries forward its
@@ -91,8 +100,8 @@ example-pack/
 └── score                 # optional executable
 ```
 
-Only files named by the manifest are read. Paths must remain inside the pack,
-and declared files may not be symlinks. Validation records the SHA-256 digest
+The runner reads only files that the manifest names. Paths must stay inside
+the pack, and declared files can't be symlinks. Validation records the SHA-256 digest
 and byte count of every declared file, including each image. Validation also
 records a digest for every canonical case and the aggregate pack. Every
 declared image must be referenced by a case. Every case image must appear in
@@ -111,8 +120,8 @@ built-in assertions, and optional string metadata. For example:
 {"id":"synthetic/color/001","split":"held-out","capability_tags":["instruction-following","conciseness"],"messages":[{"role":"user","content":"Name the color made by mixing blue and yellow. Reply with one lowercase word."}],"assertions":[{"id":"contains-green","kind":"contains","value":"green","case_insensitive":true},{"id":"no-markdown","kind":"excludes","value":"```"}],"metadata":{"source":"synthetic"}}
 ```
 
-An acceptable response is `green`. That example is deliberately synthetic; a
-pack owner defines the real cases and holds them in its own repository.
+An acceptable response is `green`. The example is synthetic; a pack owner
+defines the real cases and keeps them in its own repository.
 
 To attach an image, add the local file to `image_files` in the manifest:
 
@@ -157,8 +166,7 @@ read undeclared files.
 Available splits are `training`, `validation`, `development`, `held-out`,
 `regression`, `stability`, and `sealed-frontier`. Evaluation reports record the
 split, capability tags, case hash, and score, but omit the original case text.
-Raw model responses are also omitted unless `--log-responses` is explicitly
-set.
+They also omit raw model responses unless you pass `--log-responses`.
 
 Built-in assertion kinds are:
 
@@ -189,18 +197,17 @@ does not serialize a private pack path or adapter path into the plan.
 ## Sampling and logprobs
 
 For quality lanes, use a pinned, non-greedy profile and repeated trials. A
-temperature-zero lane is useful for compliance checks, replay, and narrow
-runtime comparisons; it is not a substitute for measuring a model's normal
-quality distribution.
+temperature-zero lane suits compliance checks, replay, and narrow runtime
+comparisons, but it doesn't measure a model's normal quality distribution.
 
 Each profile pins `temperature`, `top_p`, `top_k`, `min_p`, optional reasoning
 effort, and thinking visibility. The defaults select the trial count, token and
 context budgets, and logprob mode. Logprob modes are `none`, `summary`,
 `tokens`, and `top`; `top` also uses `top_logprobs`.
 
-Reports derive calibration diagnostics per arm/profile, including expected
+Reports derive calibration diagnostics for each arm and profile, including expected
 calibration error, selective accuracy, fragile passes, and confident failures.
-These diagnostics complement correctness gates; they do not replace them.
+These diagnostics add to correctness gates; they don't replace them.
 
 For a JSON object response, set `defaults.response_format` to `json_object` and
 set `defaults.logprobs` to `none`. The run plan pins the response format and
@@ -209,16 +216,17 @@ or set it to `text`, for unconstrained text.
 
 ## Scorers and gates
 
-The built-in assertion scorer does not launch another process. An
-`external-process` scorer must be a declared, executable file inside the pack
-and is pinned with the rest of the pack. It does not run during validation or a
+The built-in assertion scorer doesn't launch another process. An
+`external-process` scorer must be a declared, executable file inside the pack,
+and it's pinned with the rest of the pack. It doesn't run during validation or a
 dry run. A real evaluation requires the explicit `--allow-external-scorer`
 authorization flag.
 
-The scorer launches directly, not through a shell. Its environment is
-reduced to `HOME`, locale, `PATH`, and `TMPDIR`, so tokens and service-specific
-environment variables are not inherited. Temporary response files are private
-to the process user, and a timed-out scorer is forcibly reaped.
+The runner launches the scorer directly, not through a shell. The scorer's
+environment is reduced to `HOME`, locale, `PATH`, and `TMPDIR`, so it doesn't
+inherit tokens or service-specific environment variables. Temporary response
+files are private to the process user, and the runner forcibly reaps a
+timed-out scorer.
 
 For each completed row, the scorer receives one versioned JSON request on
 standard input. It includes pack/case hashes, arm and profile IDs, trial, model
@@ -241,7 +249,7 @@ promotion eligibility; optional gates remain visible diagnostics.
 
 `scripts/check-evaluation-boundary.sh` rejects tracked `eval-pack.json`
 manifests outside the synthetic contract fixture and rejects pack directories
-under public source targets. Organizations may add a private CI check without
+under public source targets. An organization can add a private CI check without
 publishing the terms it protects:
 
 ```bash
@@ -250,5 +258,6 @@ MERERUN_PROPRIETARY_MARKERS_FILE=/secure/path/markers.txt \
 ```
 
 The marker file is newline-delimited; blank lines and lines beginning with `#`
-are ignored. It must stay outside this repository. This is defense in depth:
-pack owners should also enforce their own access controls and review policies.
+are ignored. The file must stay outside this repository. The check is defense
+in depth; pack owners still need their own access controls and review
+policies.

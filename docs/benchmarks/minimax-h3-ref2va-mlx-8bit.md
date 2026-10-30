@@ -3,7 +3,9 @@
 This receipt records the corrected managed Ref2VA artifact and one real native
 Swift/MLX generation on an Apple M4 Max MacBook Pro with 128 GB unified memory.
 It is correctness and usability evidence, not a claim of speed parity with
-FL2VA or LTX.
+FL2VA or LTX. The corrected artifact generated a coherent 512 x 320, 124-frame
+clip with synchronized dialogue in `1,724.17` seconds, without the all-noise
+failure of the earlier conversion.
 
 ## Artifact identity
 

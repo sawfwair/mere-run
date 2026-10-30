@@ -15,7 +15,7 @@ vocoder stack locally; Magenta RT2 takes CC knobs while it is still generating.
 | --- | --- |
 | `mere.run music generate` | Generate audio from a music prompt. |
 | `mere.run music analyze` | Analyze source audio with ACE-Step audio understanding. |
-| `mere.run music serve` | Keep an ACE-Step pipeline resident behind the native music API. |
+| `mere.run music serve` | Keep an ACE-Step or MiniMax Music 3 pipeline resident behind a local generation API. |
 | `mere.run music train-adapter` | Train a reloadable ACE-Step LoRA or LoKr adapter. |
 | `mere.run music realtime` | Run Magenta RealTime 2 music generation with stdin or CoreMIDI steering. |
 | `mere.run music separate` | Separate stems or restore audio with native BS/MelBand RoFormer models. |
@@ -35,7 +35,7 @@ metrics, and run comparison. **Music ▸ Separate** shares the restoration surfa
 with Audio. The Command Console remains available for raw command-level control.
 App-to-CLI tests reject any emitted flag absent from `mere.run catalog --json`.
 
-## Model family
+## Model families
 
 - `music-acestep`
 - `music-acestep-xl-turbo`
@@ -100,9 +100,6 @@ mere.run guide music generate --model music-minimax-music3
 mere.run guide music generate --model music-yue2
 mere.run guide music generate --model music-magenta-rt2-small
 mere.run guide music separate --model music-separate-bs-roformer-viperx-1297
-mere.run guide music separate --model music-separate-bs-roformer-4stem
-mere.run guide music separate --model music-separate-mel-roformer-dereverb
-mere.run guide music separate --model music-separate-mel-roformer-denoise
 mere.run guide music transcribe --model music-muscriptor-medium
 ```
 
@@ -110,36 +107,10 @@ There is no separate `ace-step` guide topic. ACE-Step text-to-music, covers,
 style-transfer covers, and source-audio understanding are documented under
 `music generate` and `music analyze`, because those are the public CLI surfaces.
 
-## YuE2 score-conditioned songs
-
-YuE2 generates a score, semantic music tokens, and a 48 kHz stereo waveform
-with native Swift/MLX. Both model components use CC BY-NC 4.0. Review their
-terms before installing:
-
-```bash
-mere.run model pull music-yue2 --accept-model-license
-mere.run music generate "English piano pop, warm alto, soft drums" \
-  --model music-yue2 \
-  --lyrics-file ./lyrics.txt \
-  --duration 60 \
-  --output ./song.wav
-```
-
-The default full-score mode saves `song.abc` alongside the WAV and recipe.
-Use `--score-mode melody` for melody-only planning, or `--score-mode off` for
-direct generation. To supply an edited score, use `--abc-file ./score.abc`.
-Generation creates a complete recording; it does not edit regions of an input
-waveform. Audio-to-score transcription is outside this integration.
-
-This path is experimental. Local numerical fixtures cover the native math.
-The released checkpoints passed five bounded generation runs, including a
-36.08-second vocal track that ended naturally and a byte-identical seeded repeat.
-The vocal sample passed an owner listening review. Broader listening quality
-and long-song performance and memory remain unqualified.
-For controls, duration boundaries, and seed behavior, run
-`mere.run guide music generate --model music-yue2`.
-
 ## Typical workflow
+
+These commands cover each model family. Later sections explain the options
+they use.
 
 ```bash
 swift run mere.run music generate \
@@ -253,6 +224,8 @@ swift run mere.run music separate ./noisy.wav \
   --output-dir ./noise-restored
 ```
 
+## MiniMax Music 3
+
 MiniMax Music 3 keeps `--flow-strategy sequential` and
 `--seed-strategy legacy` as its released defaults. `--compose` adds a local,
 two-pass constrained-JSON writer before music inference: the first pass plans a
@@ -314,6 +287,37 @@ implausible peaks, and a near-missing stereo channel. The recipe records RMS,
 peak, sample count, and stereo-collapse fraction. These checks fail generation
 instead of saving a corrupted long-form render.
 
+## YuE2 score-conditioned songs
+
+YuE2 generates a score, semantic music tokens, and a 48 kHz stereo waveform
+with native Swift/MLX. Both model components use CC BY-NC 4.0. Review their
+terms before installing:
+
+```bash
+mere.run model pull music-yue2 --accept-model-license
+mere.run music generate "English piano pop, warm alto, soft drums" \
+  --model music-yue2 \
+  --lyrics-file ./lyrics.txt \
+  --duration 60 \
+  --output ./song.wav
+```
+
+The default full-score mode saves `song.abc` alongside the WAV and recipe.
+Use `--score-mode melody` for melody-only planning, or `--score-mode off` for
+direct generation. To supply an edited score, use `--abc-file ./score.abc`.
+Generation creates a complete recording; it does not edit regions of an input
+waveform. Audio-to-score transcription is outside this integration.
+
+This path is experimental. Local numerical fixtures cover the native math.
+The released checkpoints passed five bounded generation runs, including a
+36.08-second vocal track that ended naturally and a byte-identical seeded repeat.
+The vocal sample passed an owner listening review. Broader listening quality
+and long-song performance and memory remain unqualified.
+For controls, duration boundaries, and seed behavior, run
+`mere.run guide music generate --model music-yue2`.
+
+## Source separation and restoration
+
 `music separate` decodes the source at 44.1 kHz stereo, runs the pinned ViperX
 1297 BS-RoFormer checkpoint, and writes `vocals.wav`, `instrumental.wav`, and
 `separation.json`. The instrumental is computed from the decoded mixture minus
@@ -339,6 +343,8 @@ Inference preserves each profile's published chunk geometry, centered
 2,048-point STFT, 441-sample hop, DC filtering, 10% linear fades, and overlap
 default. Use a higher valid `--overlap` for denser chunk blending at additional
 compute cost, or `--dtype float32` for an all-float32 model path.
+
+## MuScriptor transcription
 
 MuScriptor predicts notes, instruments, and absolute event times. For MIDI
 output, mere.run adds a native musical-context pass that estimates tempo and
@@ -384,6 +390,8 @@ search packs live beams across the effective chunk group into as few bounded
 forwards per step as the lane budget allows, keeps an independently forked
 typed cache lane for every beam, and removes ended beams from later forwards.
 
+## ACE-Step generation
+
 ACE-Step generation uses the upstream CLI turbo shift default (`--shift 3.0`)
 and the native Haar DCW sampler correction (`double`, low `0.05`, high `0.02`)
 before VAE decode. The XL turbo managed ID installs the 4B DiT decoder plus the
@@ -412,6 +420,8 @@ ranking checks finite samples, level, clipping, DC offset, crest factor,
 spectral flatness, frame-energy movement, periodicity, time-varying spectral
 structure, and tail continuity. This prevents loud stationary noise or a
 prematurely dead ending from winning on level statistics alone.
+
+### Shared execution and export
 
 ACE-Step and MiniMax CLI and resident API requests share their model preparation
 and execution operations. Each resident runtime retains its CPU and GPU streams
@@ -468,6 +478,8 @@ forward-noise averaging and target-only finishing denoise. It is distinct from
 repaint: repaint preserves audio outside a time range, while flow edit morphs
 the whole source toward a new semantic target.
 
+### Adapters
+
 PEFT LoRA and LyCORIS LoKr adapters load natively with `--adapter`; multiple
 files stack and may use one shared or per-adapter scale. LoKr uses factored
 Kronecker evaluation instead of materializing full decoder deltas. Train either
@@ -486,6 +498,8 @@ Library callers use `ACEStepAdapterTrainingPlan.resolve` and
 audio cropping, checkpoint discovery, and training path. Callers own machine
 admission; the CLI retains its process-level reservation. These training events
 remain separate from image and transcription run records.
+
+### Resident server
 
 `music serve` holds the complete pipeline and its adapters in memory. It
 provides `GET /health`, `POST /v1/audio/music`, and serialized
@@ -512,6 +526,8 @@ selected winner per item, and rejects a request whose `model` does not match
 the resident model. Batch responses are JSON; raw `response_format: "wav"` is
 available on the single-generation endpoint.
 
+### Repaint, covers, and analysis
+
 Repaint is a real bounded edit, not a cover alias. `--repaint-start` and
 `--repaint-end` produce the upstream 25 Hz latent mask. The requested span is
 replaced by the checkpoint silence latent for conditioning, clean source
@@ -536,6 +552,17 @@ For faithful covers, keep `--audio-cover-strength 1.0` and leave
 `--audio-cover-strength` so the text prompt can steer genre, keep
 `--cover-noise-strength 0.0` while exploring, and use `--reference-audio` for an
 optional target-style/timbre example.
+
+## Magenta RT2 real-time steering
+
+Magenta RT2 is a native Apple Silicon macOS runtime. The managed model layout
+contains exported `.mlxfn` models, matching state files, and shared MusicCoCa and
+SpectroStream resources; raw upstream checkpoint files aren't enough for
+`mere.run`.
+
+`--style-conditioning streaming` matches upstream's real-time C++ path by using
+the coarsest MusicCoCa style tokens. `--style-conditioning full` uses all style
+tokens, matching upstream's high-level Python `.mlxfn` generator more closely.
 
 For interactive steering, pass `--interactive`. The command reads standard
 input while it runs, paces generation in real time, and applies changes between
@@ -586,7 +613,7 @@ runs, while `--midi-log-raw` writes raw packet bytes. Prompt changes still use
 stdin and may briefly stall while the prompt encoder runs; MIDI is intended for
 notes and continuous controls.
 
-## Runtime entrypoints
+## Runtime entry points
 
 ### CLI
 
@@ -595,6 +622,7 @@ notes and continuous controls.
 - `Sources/MereRunCLI/Commands/MusicServeCommand.swift`
 - `Sources/MereRunCLI/Commands/MusicTrainAdapterCommand.swift`
 - `Sources/MereRunCLI/Commands/MusicRealtimeCommand.swift`
+- `Sources/MereRunCLI/Commands/MusicSeparateCommand.swift`
 - `Sources/MereRunCLI/Commands/MusicTranscribeCommand.swift`
 
 ### Runtime
@@ -615,26 +643,15 @@ notes and continuous controls.
 
 ## Reading order
 
-The ACEStep runtime uses three phases:
+Read the ACE-Step runtime in three phases:
 
-1. `ACEStepPipeline.swift` for the public pipeline and orchestration
-2. `ACEStepPipeline+Prompting.swift` for prompt preparation and conditioning
-3. `ACEStepPipeline+Generation.swift` for the generation path itself
+1. `ACEStepPipeline.swift` for the public pipeline and orchestration.
+2. `ACEStepPipeline+Prompting.swift` for prompt preparation and conditioning.
+3. `ACEStepPipeline+Generation.swift` for the generation path.
 
 See [ACE-Step validation](./acestep-validation.md) for immutable checkpoint
 pins, parity coverage, installed-model evidence, listening review fixtures,
 and measured performance.
-
-This structure separates orchestration, prompt preparation, and generation.
-
-Magenta RT2 is a native Apple Silicon macOS runtime. The managed model layout
-contains exported `.mlxfn` models, matching state files, and shared MusicCoCa and
-SpectroStream resources; raw upstream checkpoint files are not enough for
-`mere.run`.
-
-`--style-conditioning streaming` matches upstream's real-time C++ path by using
-the coarsest MusicCoCa style tokens. `--style-conditioning full` uses all style
-tokens, matching upstream's high-level Python `.mlxfn` generator more closely.
 
 ## Contributor notes
 

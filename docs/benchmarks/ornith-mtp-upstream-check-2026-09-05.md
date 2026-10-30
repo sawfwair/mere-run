@@ -42,7 +42,7 @@ head acceptance and documents a Qwen3.6-initialized, KL-distilled replacement.
 The publisher marks it experimental and reports unresolved runtime correctness
 issues in some vLLM tests. Their throughput figures are not Mac measurements.
 
-Our native head contains 785 tensors. Local samples include a projection
+The stock native head contains 785 tensors. Local samples include a projection
 standard deviation near 0.02 and `mtp.norm.weight` mean 0.022813. These are
 consistent with the reported stock-head statistics; they do not prove whether
 or how the head was trained.
@@ -66,7 +66,8 @@ hash-checked. No normalization values or quantization were changed.
 Each row contains one measured 256-token request after a 256-token warm-up.
 The diagnostic uses block size 4 and a draft-cost estimate of `1e-100`.
 Counters verify three proposed drafts in every round except the final token
-budget tail. This cost override is a measurement control, not a selected default.
+budget tail. This cost override is a measurement control, not a selected default. The
+following table compares the stock and replacement heads:
 
 | Workload | Stock accepted / drafted | Stock acceptance | Replacement accepted / drafted | Replacement acceptance | Stock / replacement rounds |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -78,7 +79,7 @@ budget tail. This cost override is a measurement control, not a selected default
 These rows use the default draft-cost estimate of 0.18 and block size 4, with
 three measured requests after a 256-token warm-up. Acceptance counts were
 identical across repetitions. Decode TPS is the median with minimum and maximum
-in parentheses.
+in parentheses. The following table lists the adaptive results:
 
 | Workload | Stock acceptance | Replacement acceptance | Stock adaptive TPS (range) | Replacement adaptive TPS (range) |
 | --- | ---: | ---: | ---: | ---: |

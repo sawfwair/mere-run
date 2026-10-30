@@ -27,7 +27,7 @@ on-screen action.
 
 ## macOS Studio
 
-The **Sound** domain covers all six command families. **Sound ▸ Generate** is
+The **Sound** domain covers all six commands. **Sound ▸ Generate** is
 the prompt task for text-to-audio and **Sound ▸ Video Foley** synchronizes to a
 clip; **Condition**, **Encode**, **Decode**, and **Score** cover
 negative-conditioning and renoise controls, text-conditioning export, Woosh-AE
@@ -55,9 +55,9 @@ Measured on `sfx-woosh-dflow`, seed 7, peak amplitude of the generated WAV:
 | `ceramic mug shattering on a tile floor` | 0.082 — very quiet |
 | `A ceramic mug shatters on a tile floor` | 0.893 |
 
-The subject does not cause the collapse. `piano` and `lid closing` each generate
+The subject doesn't cause the collapse. `piano` and `lid closing` each generate
 audible output independently, and `piano lid closing, loud` recovers. Sampling
-also does not cause the collapse. The seed, `--cfg`, and `--steps` do not change
+doesn't cause it either. The seed, `--cfg`, and `--steps` do not change
 the result, and the `dflow` and `flow` checkpoints fail identically on the same
 prompts.
 
@@ -82,6 +82,8 @@ mere.run guide sfx generate --model sfx-woosh-dflow
 ```
 
 ## Typical workflow
+
+Install a model, then generate, encode, condition, or score audio:
 
 ```bash
 swift run mere.run model pull sfx-woosh-dflow --accept-model-license
@@ -204,6 +206,8 @@ defaults to 8 seconds, 25 Euler flow steps, and CFG 4.5.
 
 ## Reading order
 
+Read the Woosh runtime in this order:
+
 1. `WooshResources.swift` for model IDs, validation, and checkpoint layout.
 2. `WooshGenerator.swift` for prompt and video conditioning,
    Flow/DFlow/VFlow/DVFlow sampling, and WAV-ready samples.
@@ -211,7 +215,7 @@ defaults to 8 seconds, 25 Euler flow steps, and CFG 4.5.
 4. `WooshDiT.swift` for the native Flow and FlowMap DiTs.
 5. `WooshVideoDiT.swift` for VFlow and DVFlow video-feature-conditioned DiTs.
 6. `WooshSynchformer.swift` for raw-video frame preprocessing and
-   Synchformer `synch_out` extraction
+   Synchformer `synch_out` extraction.
 7. `WooshCLAP.swift` for Woosh-CLAP text and audio scoring.
 8. `WooshVocosDecoder.swift` for Woosh-AE encoding and decoding.
 

@@ -31,7 +31,9 @@ Supported engines:
   `image-zimage-nano`.
 - Image-to-3D: `image-3d-triposr` through a native uploaded-image mesh route.
 - Text-to-speech: `speech-tts-qwen3-nano`.
-- Speech-to-text: `speech-asr-parakeet` or `speech-asr-qwen3`.
+- Speech-to-text: `speech-asr-parakeet`, `speech-asr-qwen3`,
+  `speech-asr-nemotron-35-transcribe` (or its `-bf16` variant), or
+  `speech-asr-whistle`.
 
 ## Install And Check
 
@@ -264,7 +266,9 @@ download route.
 - `/v1/audio/transcriptions` accepts multipart `file`, `model`, `language`,
   `task`, and `response_format`. OpenAI model names such as `whisper-1` map to
   `speech-asr-parakeet`; response formats are `json`, `text`, `verbose_json`,
-  `srt`, and `vtt`; `max_tokens` is limited to 1 through 4,096.
+  `srt`, and `vtt`; `max_tokens` is limited to 1 through 4,096. Each model keeps
+  its CLI limits: Nemotron Transcribe returns no timestamps, and Whistle
+  transcribes but doesn't translate.
 - `/v1/audio/diarizations` accepts one uploaded `file`, a managed diarization
   `model`, `response_format` (`json` or `rttm`), `threshold`, `min_duration`,
   `merge_gap`, and Nemotron 3 `latency` (`offline`, `1.04`, `0.64`, or `0.32`).

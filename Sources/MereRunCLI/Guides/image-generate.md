@@ -9,11 +9,23 @@ Create a PNG from a text prompt, optionally conditioned on an input image and Lo
 Use one installed image model:
 
 - `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`
-- `image-klein-max`, `image-klein-base`, `image-klein-nano`
+- `image-klein-max`, `image-klein-base`, `image-klein-nano`, `image-klein-9b`, `image-klein-base-9b`
 - `image-bonsai-binary`, `image-bonsai-ternary`
+- `image-flux3-klein`
+- `image-flux1-dev`
+- `image-flux2-dev`
 - `image-ideogram4-sdnq-uint4`
 - `image-hidream-o1`, `image-hidream-o1-dev`
+- `image-sensenova-u1-5-8b-mot`
 - `image-krea2-turbo`, `image-krea2-raw`
+- `image-qwen-21`, `image-qwen-21-turbo`
+- `image-qwen-edit-2511`, `image-qwen-edit-2511-lightning`
+
+Each family's install terms, defaults, and prompting notes are in its model
+handbook: `mere.run guide --model <id>`, for example
+`mere.run guide --model image-flux3-klein`. FLUX 3 Klein, FLUX.1-dev, and
+FLUX.2-dev need a Hugging Face token with access to the gated repository and
+`--accept-model-license` on `model pull`.
 
 ## Install And Check
 
@@ -73,6 +85,7 @@ both lists without running anything.
 
 | Family | Refused | Runs with a warning |
 |---|---|---|
+| FLUX 3 Klein | `--sigmas`, `--sigma-shift`, `--strength`, `--lora`, a non-empty `--negative-prompt`, `--cfg` other than 1, `--width` or `--height` outside 64 to 4096, more than 10 `--ref-image` values | an empty `--negative-prompt`, `--max-sequence-length` |
 | FLUX.1-dev | `--input`, `--mask`, `--outpaint`, `--ref-image`, `--sigmas`, a non-empty `--negative-prompt` | an empty `--negative-prompt`, `--sigma-shift`, `--strength`, `--mask-feather`, `--max-sequence-length` above 512 |
 | FLUX.2 Klein, Bonsai | more than 4 `--ref-image` values are dropped (warning) | `--max-sequence-length` |
 | FLUX.2-dev | as Klein | `--negative-prompt` (embedded guidance), `--max-sequence-length` |

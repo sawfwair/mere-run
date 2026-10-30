@@ -1,7 +1,16 @@
 # Native Whistle speech recognition
 
-Whistle runs directly in Swift/MLX from the original
-[Cactus-Compute archive](https://huggingface.co/Cactus-Compute/whistle).
+Whistle is a compact speech recognition model for English, German, French,
+Spanish, Italian, Dutch, and Polish. mere.run runs it directly in Swift/MLX
+from the original
+[Cactus-Compute archive](https://huggingface.co/Cactus-Compute/whistle), for
+file transcription, streamed PCM, and the macOS microphone. File transcription
+is also available through `POST /v1/audio/transcriptions` with
+`model=speech-asr-whistle`. The API uses Whistle's default decoding controls;
+use the CLI for its model-specific options.
+
+Automatic backend selection never picks Whistle. Select it with
+`--backend whistle` or by passing a Whistle model to `--model`:
 
 ```bash
 mere.run model pull speech-asr-whistle
@@ -12,8 +21,10 @@ mere.run speech transcribe recording.wav --backend whistle --keyword "Siobhan" -
 mere.run speech listen --model speech-asr-whistle --keyword "Siobhan"
 ```
 
+## Model files
+
 The managed download pins revision `ca5287601bef25af26dcf2e1b2bdc0843a7c19e5`
-and downloads about 17 MB. A local model directory needs `config.json` and
+and is about 17 MB. A local model directory needs `config.json` and
 `whistle.cact`. The archive supplies CQ2/CQ4 neural weights, FP16 scales and
 small tensors, the exact tokenizer, and the audio filterbank. Native Metal
 matrix operations read packed indices directly; Engram tables expand only the
@@ -22,12 +33,57 @@ embedding rows on the CUDA device; they do not expand the full Engram table.
 The runtime does not execute an upstream binary or use ONNX.
 
 For the original FP32 reference path, also place
-`checkpoints/whistle.safetensors` in that directory and select it explicitly:
+`checkpoints/whistle.safetensors` in the local model directory and select it
+explicitly:
 
 ```bash
 mere.run speech transcribe recording.wav --backend whistle --model /path/to/whistle \
   --whistle-weights fp32 --beam-size 1 --no-timestamps
 ```
+
+## Features and decoding controls
+
+- Transcription in the seven supported languages, with automatic language
+  detection or a supported `--language` hint.
+- Audio decoding and 16 kHz mono resampling through the shared AudioCodecs reader.
+- Thirty-second inference windows with one-second overlap for longer files.
+- Cached beam search: `--beam-size 1...8`, default 5. Size 1 is greedy.
+- `--decoder-depth 2...8`, default 8, selects physical blocks by endpoint-preserving
+  bisection. Depth 4 uses blocks 0, 3, 5, and 7; the encoder always uses all eight.
+- Repeated `--keyword` phrases bias initial tokens by +2 and matching continuations
+  by +5 logits. Up to 64 phrases, each up to 128 Unicode scalars.
+- `--max-tokens` can lower the 318-text-token limit per window.
+- Word timestamps use normalized cross-attention and dynamic time warping on an
+  80 ms encoder grid. They are acoustic estimates. `--no-timestamps` skips alignment.
+- Exact digital silence produces an empty transcript.
+- Shared transcription operation records through `--run-dir` include the chosen
+  Whistle controls and alignment results.
+
+Whistle rejects translation, unsupported language hints, and Core ML
+execution before the model loads.
+
+## Live audio
+
+```bash
+mere.run speech transcribe recording.wav --backend whistle --stream
+mere.run speech transcribe - --backend whistle \
+  --stream --input-format pcm-s16le --sample-rate 16000 --jsonl
+mere.run speech listen --model speech-asr-whistle --jsonl
+```
+
+`speech listen` runs Whistle when `--model` names it and accepts the same
+`--whistle-weights`, `--beam-size`, `--decoder-depth`, and `--keyword` controls
+as `speech transcribe`.
+
+Live sessions keep one model resident. They split input into bounded
+utterances with voice activity detection (VAD), queue a bounded amount of
+input, and emit partial revisions at the `--stream-decode-ms` (or
+`--decode-ms` for `speech listen`) cadence, commit events, statistics, and one
+final event. At commit, a session decodes the complete utterance again,
+including audio that arrived after its last partial. Cancellation discards the active utterance. Live events carry
+utterance times; word alignment is computed for file transcription only.
+Whistle is a windowed speech model, so this is utterance streaming rather than
+causal encoder inference.
 
 ## Linux CUDA configuration
 
@@ -43,46 +99,6 @@ MLX_USE_CUDA_GRAPHS=0 mere.run speech listen --model speech-asr-whistle --jsonl
 Set the same environment variable before initializing MLX when embedding the
 runtime in another process. This is eager CUDA execution; it retains GPU tensor
 operations. Linux performance and long-session behavior need broader qualification.
-
-## Decoding controls
-
-- English, German, French, Spanish, Italian, Dutch, and Polish transcription,
-  with automatic language detection or a supported `--language` hint.
-- Audio decoding and 16 kHz mono resampling through the shared AudioCodecs reader.
-- Thirty-second inference windows with one-second overlap for longer files.
-- Cached beam search: `--beam-size 1...8`, default 5. Size 1 is greedy.
-- `--decoder-depth 2...8`, default 8, selects physical blocks by endpoint-preserving
-  bisection. Depth 4 uses blocks 0, 3, 5, and 7; the encoder always uses all eight.
-- Repeated `--keyword` phrases bias initial tokens by +2 and matching continuations
-  by +5 logits. Up to 64 phrases, each up to 128 Unicode scalars.
-- `--max-tokens` can lower the 318-text-token limit per window.
-- Word timestamps use normalized cross-attention and dynamic time warping on an
-  80 ms encoder grid. They are acoustic estimates. `--no-timestamps` skips alignment.
-- Exact digital silence produces an empty transcript.
-- Shared transcription operation records through `--run-dir` include the chosen
-  Whistle controls and alignment results.
-
-`--backend auto` keeps the existing Parakeet default. Naming the Whistle model
-selects Whistle. Translation, unsupported language hints, and Core ML execution
-are rejected. Whistle remains CLI-only.
-
-## Live audio
-
-```bash
-mere.run speech transcribe recording.wav --backend whistle --stream
-mere.run speech transcribe - --backend whistle \
-  --stream --input-format pcm-s16le --sample-rate 16000 --jsonl
-mere.run speech listen --model speech-asr-whistle --jsonl
-```
-
-Live sessions keep one model resident and use bounded VAD utterances, a bounded
-input queue, partial revisions at `--stream-decode-ms` / `--decode-ms` cadence,
-commit events, statistics, and one final event.
-They re-decode the complete utterance at commit, including audio arriving after
-its partial. Cancellation discards the active utterance. Live events carry
-utterance times; word alignment is computed for file transcription only.
-Whistle is a windowed speech model, so this is utterance streaming rather than
-causal encoder inference.
 
 ## Qualification boundary
 

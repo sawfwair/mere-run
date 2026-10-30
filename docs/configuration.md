@@ -1,8 +1,8 @@
 # Configuration
 
-Configure `mere.run` with persisted settings or environment variables. Persisted
-settings apply across shells, and environment variables apply to an individual
-run. This page also identifies settings that contain secrets.
+Configure `mere.run` with persisted settings or environment variables.
+Persisted settings apply across shells; environment variables apply to one
+process. This page also marks the settings that contain secrets.
 
 ## Persisted settings: `mere.run config`
 
@@ -14,10 +14,10 @@ configuration file path.
 
 The following keys are available:
 
-- `hf-token`: Hugging Face access token used to pull gated models, such as
-  `image-klein-9b`. The `get` and `list` commands mask this secret. To print the
-  full token, pass `--reveal` to `get`.
-- `hf-endpoint`: Alternative Hugging Face endpoint for managed downloads.
+- `hf-token`: Hugging Face access token for pulling gated models, such as
+  `image-flux1-dev`. The `get` and `list` commands mask this secret. To print
+  the full token, pass `--reveal` to `get`.
+- `hf-endpoint`: alternative Hugging Face endpoint for managed downloads.
 
 ```bash
 swift run mere.run config set hf-token hf_xxxxxxxx
@@ -25,8 +25,8 @@ swift run mere.run config get hf-token --reveal
 swift run mere.run config list
 ```
 
-To keep the token out of process arguments in scripts and GUI launchers, use an
-environment variable:
+To keep the token out of process arguments in scripts and GUI launchers, pass it
+through an environment variable:
 
 ```bash
 export MERERUN_CONFIG_VALUE=hf_xxxxxxxx
@@ -45,9 +45,10 @@ stored `hf-token`. The endpoint resolves from `HF_ENDPOINT`, then the stored
 
 ### `MERERUN_MODELS_DIR`
 
-Overrides the model links and model-local file store. Large managed Hub
-payloads normally live under `MERERUN_HUB_CACHE`, so moving only this directory
-does not move most downloaded bytes.
+Overrides the directory that holds model links and model-local files. Large
+managed Hub payloads live under `MERERUN_HUB_CACHE`, so moving only this
+directory doesn't move most downloaded bytes. The global `--models-root` option
+has the same effect for one command.
 
 ```bash
 export MERERUN_MODELS_DIR=/Volumes/Models/mere.run
@@ -64,16 +65,16 @@ Default:
 
 ### `MERERUN_HUB_CACHE`
 
-Overrides the physical payload store used by managed model pulls. This is the
-location to move if large downloaded weights must reside on another disk.
+Overrides the physical payload store for managed model pulls. Move this
+location when large downloaded weights must live on another disk. To place a
+single pull's payload elsewhere, pass `model pull --cache-dir PATH` instead.
 
 ```bash
 export MERERUN_HUB_CACHE=/Volumes/Models/huggingface
 swift run mere.run model pull image-zimage-nano
 ```
 
-Managed pulls use cataloged Hugging Face repos only. Private archive hosts and
-R2 credential flows are not part of the public distribution.
+Managed pulls use cataloged Hugging Face repositories only.
 
 ## Adapter store
 
@@ -83,9 +84,9 @@ Checksum-pinned public adapter releases install under:
 ~/Library/Application Support/MereRun/adapters
 ```
 
-`mere.run adapter pull` uses public HTTPS release URLs and does not require or
-accepts R2 credentials. Catalog ids resolve from this verified local store when
-passed to `text chat --lora` or `api serve --lora`.
+`mere.run adapter pull` downloads from public HTTPS URLs and verifies each
+file's byte count and SHA-256. When you pass a catalog ID to `text chat --lora`
+or `api serve --lora`, it resolves from this verified local store.
 
 ## Specialized model roots
 
@@ -94,22 +95,36 @@ passed to `text chat --lora` or `api serve --lora`.
 Sets the default root used by `mere.run video generate` and
 `mere.run video export-latents` when you omit `--model-root`.
 
+### `MERERUN_VIDEO_LTX_TEXT_ENCODER_ROOT`
+
+Points LTX 2.3 prompt conditioning at an external
+`mlx-community/gemma-3-12b-it-4bit` checkout instead of the managed
+`text-encoder-ltx-gemma3-12b-4bit` companion.
+
 ### `MERERUN_MUSIC_ACESTEP_ROOT`
 
 Sets the default checkpoint root used by `mere.run music generate` and
 `mere.run music analyze` when the command does not resolve a model from the
 shared model store.
 
+## External tools
+
+`MERERUN_FFMPEG` and `MERERUN_FFPROBE` set the `ffmpeg` and `ffprobe`
+executables that media commands run. When unset, `mere.run` looks up `ffmpeg`
+and `ffprobe` on `PATH`. On macOS, MP4 writing falls back to the native writer
+when `ffmpeg` is missing and `MERERUN_FFMPEG` is unset.
+
 ## API server security
 
 ### `MERERUN_API_KEY`
 
-Provides the bearer token accepted by `mere.run api serve` for `/v1/models`,
-`/v1/chat/completions`, `/v1/embeddings`, `/v1/images/generations`,
-`/v1/images/edits`, `/v1/audio/speech`, and `/v1/audio/transcriptions`.
+Provides the bearer token that `mere.run api serve` requires on every route
+except `/health`, including the `/v1/*` and `/runtime/*` routes. The
+`--api-key` option takes precedence.
 
-This key is optional for loopback-only use and required for non-loopback binds.
-`mere.run status` also reads it when probing `/v1/models`.
+The key is optional for a loopback-only server and required for a non-loopback
+bind. `mere.run status` also reads it when it probes `/v1/models`, and
+`mere.run open-webui quickstart` uses it as its default API key.
 
 ## Runtime experiments
 
@@ -133,8 +148,8 @@ In-memory prompt-prefix reuse for the LFM2 chat runtime is enabled by default
 in `mere.run api serve`. Set `0`, `false`, or `off` to disable it. One-shot CLI
 invocations keep it off because a prefix cache cannot outlive the process. The
 implementation mirrors the Qwen-family implementation. Forked layer caches
-(attention KV and short-convolution states both support forking) retain exact prompts plus the
-stable conversation prefix before the final message. The longest matching
+(attention KV and short-convolution states both support forking) retain exact
+prompts plus the stable conversation prefix before the final message. The longest matching
 token prefix seeds later requests, so a repeated or extended prompt re-prefills
 only its tail. Intermediate prefill chunks are not cloned. The cache is bounded
 to 4 entries with the shared retention planner, which keeps semantic
@@ -229,6 +244,27 @@ runtime prefers managed DFlash2, then an existing managed original DFlash
 install, then the optional local `vision-chat-muse-glimmer-30b-assistant-q4`
 conversion.
 
+### DSpark and DFlash speculation
+
+The LFM2.5, Nemotron 3.5 Lightning, and Laguna S 2.1 runtimes use their managed
+draft companions automatically. The following variables tune or disable that
+speculation. Set an enable switch to `0`, `false`, `no`, or `off` to force
+target-only decode.
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `MERERUN_LFM25_DSPARK` | Enabled | LFM2.5 DSpark switch |
+| `MERERUN_LFM25_DSPARK_MIN_OUTPUT` | `16` | Minimum requested output tokens before DSpark starts |
+| `MERERUN_LFM25_DSPARK_MIN_ACCEPTANCE` | `0.2` | Acceptance rate, from 0 to 1, below which the request falls back to the target |
+| `MERERUN_LFM25_DSPARK_PATH` | Managed companion | Explicit DSpark checkpoint directory |
+| `MERERUN_NEMOTRON35_DSPARK` | Enabled | Nemotron 3.5 Lightning DSpark switch |
+| `MERERUN_NEMOTRON35_DSPARK_MIN_OUTPUT` | `16` | Minimum requested output tokens before DSpark starts |
+| `MERERUN_NEMOTRON35_DSPARK_MIN_ACCEPTANCE` | Two-thirds | Acceptance rate, from 0 to 1, below which the request falls back to the target |
+| `MERERUN_NEMOTRON35_DSPARK_PATH` | Managed companion | Explicit DSpark checkpoint directory |
+| `MERERUN_LAGUNA_DFLASH_TOKENS` | `12` | Proposals per Laguna DFlash round |
+| `MERERUN_LAGUNA_DFLASH_MIN_TOKENS` | `32` | Minimum requested output tokens before DFlash starts |
+| `MERERUN_LAGUNA_DFLASH_PATH` | Managed companion | Explicit DFlash checkpoint directory |
+
 ### `MERERUN_GEMMA4_MTP`
 
 Gemma 4 12B MTP is enabled by default when the managed
@@ -269,8 +305,8 @@ pipelined decode loop runs a burst: the continuation of that earlier
 occurrence is drafted and verified in one batched forward, exactly like an
 MTP draft, so outputs are token-identical to plain greedy decode. A
 no-match token costs one host-side scan and no GPU work. Decode speed on
-non-repetitive text is unchanged, while echo-heavy generation, such as quoted
-documents, retrieval answers, code edits, tool loops) measured 1.9× on an
+non-repetitive text is unchanged. Echo-heavy generation, such as quoted
+documents, retrieval answers, code edits, and tool loops, measured 1.9× on an
 echo workload. Three consecutive zero-accept rounds stop further lookups
 for the request. MTP takes precedence when its assistant is active;
 JSON-constrained requests do not use lookup.
@@ -358,11 +394,11 @@ eval lock; its concurrency benchmark is documented in
 ### Magenta RT2 prompt swaps (no switch)
 
 Magenta RT2 mid-session prompt swaps block the render loop for the engine's
-prompt encode (1ms status poll). This is a hard engine constraint, not a
+prompt encode (1 ms status poll). This is a hard engine constraint, not a
 tunable: overlapping `mrt2_engine_generate_frame` with the asynchronous
 encode segfaults, verified live against the engine by the gated
 `MagentaRT2PromptSwapTests`. Stall-free swaps require the engine's threaded
-`mrt2_runner_*` API with its buffered audio ring. Note the engine's Metal
+`mrt2_runner_*` API with its buffered audio ring. The engine's Metal
 libraries inside `vendor/magentart.xcframework` are Git LFS objects. A
 checkout without hydrated LFS fails at model load with a metallib error. Run
 `git lfs install --local && git lfs pull` and rebuild.
@@ -384,8 +420,8 @@ retaining every intermediate. Unset, the default is resolution-aware: it
 engages when the peak training resolution (after `--max-resolution` capping)
 reaches 768×768-equivalent pixels, and stays off below that. Activation memory
 scales with the token count, so capped-resolution recipes (for example
-`klein-fast-style` at 512, or 768×416 runs) fit comfortably without the
-recompute overhead, while a single full-injection step at 1024×1024 peaks
+`klein-fast-style` at 512, or 768×416 runs) fit without the recompute
+overhead, while a single full-injection step at 1024×1024 peaks
 around 159 GB on the Krea 2 backbone and crashes outright on Klein base
 (183 GB peak observed) on 128 GB machines. Set `1` to force checkpointing on
 everywhere, or `0`/`false`/`off` to force it off. The explicit
@@ -413,8 +449,9 @@ overlap, which is negligible next to a training step.
 
 Adapter checkpoint cadence, in optimizer steps, for image-LoRA training
 (default `100`; `0` disables). A `<name>.partial.safetensors` file is written
-next to the output and removed once the final save succeeds, so a run killed
-mid-training, for example by memory pressure, retains its partial work.
+next to the output and removed after the final save succeeds, so a run that
+stops mid-training, for example under memory pressure, retains its partial
+work.
 The trainer also logs `step_s` and `footprint_gb` diagnostics at the metrics
 cadence.
 
@@ -652,7 +689,7 @@ to an independent forward if cache types or shapes do not prove compatibility.
 
 ## Debug toggles
 
-These are quiet by default and are intended for troubleshooting deeper runtime paths.
+These toggles are off by default. Use them to troubleshoot deeper runtime paths.
 
 - `MERERUN_FLUX2_DEBUG=1`
 - `MERERUN_FLUX2_TIMING=1` prints prompt encoding, per-stage first-step,

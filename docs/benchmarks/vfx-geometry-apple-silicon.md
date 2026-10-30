@@ -1,11 +1,13 @@
 # VFX geometry Apple Silicon benchmarks
 
 These measurements exercise the native Swift/MLX runtime and the audited
-managed checkpoints. They are implementation evidence, not cross-device
-performance promises.
-
-Use this report to compare the measured native geometry paths and understand
-their validation boundaries.
+managed checkpoints for five geometry models on an Apple M4 Max: MoGe-2, Video
+Depth Anything Small, Depth Anything 3 Small, TripoSR, and InstantMesh Base.
+Exact-digest checkpoint verification cut TripoSR's managed cold model load from
+153.3 seconds to about 1.0 to 1.3 seconds, and repeated TripoSR and InstantMesh
+runs reproduced identical mesh hashes. These results are implementation
+evidence, not cross-device performance promises. Use this report to compare the
+measured native geometry paths and understand their validation boundaries.
 
 ## Host
 
@@ -20,7 +22,8 @@ their validation boundaries.
 A 128 x 128 RGB PNG was processed at the production 3,600-token setting through
 the managed `vision-geometry-moge2-small` checkpoint. Each row represents a
 fresh CLI process. The measurements include strict ONNX digest verification,
-native MLX loading, metric camera recovery, and all artifact exports.
+native MLX loading, metric camera recovery, and all artifact exports, as the
+following table shows:
 
 | Input | Tokens | Valid points | Model load | Inference | Postprocess | Wall | Max RSS | Peak footprint |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -38,7 +41,7 @@ treated as a high-quality production setting, not a small-memory default.
 The test used a synthetic 128 x 128 H.264 source at 8 frames per second. It
 decoded and exported the source at its original resolution. The test used the
 managed relative checkpoint through
-`vision-depth-vda-small`.
+`vision-depth-vda-small`. The following table lists each run:
 
 | Frames | Network input | Windows | Model load | Inference | Export/review | Wall | Max RSS | Peak footprint |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -63,7 +66,8 @@ depth/preview artifact hashes were byte-identical.
 Two 128 x 128 PNG views were processed through the managed
 `vision-geometry-da3-small` checkpoint. Each CLI invocation was a fresh
 process; later rows benefited from filesystem and Metal cache warming. Peak
-footprint includes the MLX/Metal allocations that are not visible in RSS.
+footprint includes the MLX/Metal allocations that are not visible in RSS. The
+following table lists each run:
 
 | Camera mode | Process resolution | Exported points | Preprocess | Model load | Inference | Wall | Max RSS | Peak footprint |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -73,10 +77,10 @@ footprint includes the MLX/Metal allocations that are not visible in RSS.
 
 The 504 run emitted two depth EXRs, two confidence EXRs, review and processed
 PNGs, predicted camera JSON, a 76,208-point colored binary PLY, a glTF 2.0 GLB
-point cloud, and a Nerfstudio/3DGS initialization handoff. The handoff is
+point cloud, and a Nerfstudio/3DGS initialization handoff. The handoff
 explicitly contains only camera data and colored points; it contains no learned
-Gaussian parameters and no triangle mesh. A separate pose-conditioned run preserved the
-supplied cameras, used the checkpoint's camera encoder, and recorded the
+Gaussian parameters and no triangle mesh. A separate pose-conditioned run
+preserved the supplied cameras, used the checkpoint's camera encoder, and recorded the
 pairwise camera-baseline scale divisor in both structured output and the durable
 scene manifest.
 
@@ -85,7 +89,8 @@ scene manifest.
 The deterministic 512x512 parity image was reconstructed through the managed
 `image-3d-triposr` checkpoint. These rows use the exact pinned upstream CKPT,
 full native MLX scene encoding, learned vertex colors, and the native marching
-tetrahedra exporter. Each invocation was a fresh process.
+tetrahedra exporter. Each invocation was a fresh process. The following table
+lists each grid size:
 
 | Density grid | Vertices | Triangles | Checkpoint verify | Model load | Scene encode | Mesh/color | Export | Wall | Max RSS | Peak footprint |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -115,7 +120,8 @@ at the released conditioning rig: azimuth/elevation `30/+20`, `90/-10`,
 `150/+20`, `210/-10`, `270/+20`, and `330/-10` degrees. The managed
 `image-3d-instantmesh-base` id resolved the exact verified converted
 safetensors package from its `native` child. Every invocation was a fresh
-native Swift/MLX process with learned vertex colors enabled.
+native Swift/MLX process with learned vertex colors enabled. The following
+table lists each grid size:
 
 | SDF grid | Views | Vertices | Triangles | Checkpoint verify | Model load | Scene encode | Mesh/color | Export/manifests | Wall | Max RSS | Peak footprint |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |

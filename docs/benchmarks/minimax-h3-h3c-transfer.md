@@ -5,6 +5,13 @@ techniques into `mere.run`. It is not a performance receipt. Production behavior
 does not change until a candidate passes its tensor, checkpoint, quality,
 memory, and fallback gates.
 
+The program ran on an Apple M4 Max with 128 GB of unified memory against a
+pinned h3.c revision. Its main result came from reference-serving parity, not
+an approximate kernel or sampler: the final zero-swap Ref2VA retake completed
+in 578.450 seconds versus 1,920.079 seconds and cut MLX peak memory from 88.59
+to 41.14 GiB. The FastH3 Q8 MLP kernels were promoted; the scalar-SIMD Q8
+cores, W8A8, and MXFP8 paths were rejected.
+
 ## Promotion conclusion
 
 The original scalar-SIMD affine-Q8 matrix cores remain rejected because they
@@ -192,8 +199,9 @@ MERERUN_H3_BF16_OVERLAY_ROOT=/absolute/path/to/overlay \
 
 Each kernel candidate must first reproduce an explicit decomposed oracle. If a
 candidate deliberately changes arithmetic, such as dynamic INT8 activation
-quantization, it also needs a same-seed checkpoint quality comparison and may not be
-described as trajectory-exact.
+quantization, it also needs a same-seed checkpoint quality comparison and must not
+be described as trajectory-exact. The following table lists the kernel
+candidates.
 
 | ID | Candidate | First proving shape | Required fallback |
 | --- | --- | --- | --- |
@@ -467,7 +475,8 @@ and, for Ref2VA, one pinned 663,630-byte audio reference with SHA-256
 FL2VA used the same image as its first-frame condition and the installed
 `minimax-h3-lightx2v-4step` adapter. Every listed arm began with zero swap, a
 clean worktree, no matched build/ML process, and no thermal or performance
-warning; all arms also ended at zero swap.
+warning; all arms also ended at zero swap. The following table compares the
+baseline and boundary execution for each model.
 
 | Model and boundary execution | Commit | Baseline | Boundary | Wall delta | Peak-footprint delta | Decision |
 | --- | --- | ---: | ---: | ---: | ---: | --- |
@@ -502,8 +511,9 @@ larger blinded semantic/reference-retention review.
 
 ## Quality-sensitive algorithm lane
 
-These modes are always explicit. They may compose only after their individual
-quality envelopes have been measured.
+These modes are always explicit. They can compose only after their individual
+quality envelopes have been measured. The following table lists each candidate
+and its initial comparison.
 
 | ID | Candidate | Initial comparison |
 | --- | --- | --- |
@@ -613,6 +623,8 @@ order	kind	bytes	sha256
 2	audio	663630	444afb780a0b1a8fe5b1bb90ac744669ef9086c721439c4a0d569389c2e1df80
 ```
 
+Then pass the manifest to the harness:
+
 ```bash
 MERERUN_H3_BAKEOFF_REFERENCE_MANIFEST=./references.expected.tsv \
   scripts/h3-algorithm-bakeoff.sh \
@@ -706,7 +718,8 @@ reference preprocessing path, not the dense runtime.
 
 The full FL2VA matrix began with zero swap. Every arm through A3 also began at
 zero swap; A3 caused macOS to retain 200.62 MiB, so A4 began below, but not at,
-the 1024 MiB ceiling. No arm recorded a thermal or performance warning.
+the 1024 MiB ceiling. No arm recorded a thermal or performance warning. The
+following table compares each FL2VA arm with the dense quality reference.
 
 | FL2VA arm | Wall time | Delta vs quality | Video SSIM | VMAF | Audio correlation | Decision |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
@@ -733,7 +746,8 @@ That artifact was generated twice byte-identically in zero-swap sessions at
 1,920.079 and 1,911.015 seconds; their 1,915.547-second mean is used only as the
 timing reference for this comparison. The selected follow-up began with 200.62 MiB of swap,
 dropped to 192.62 MiB, and recorded no thermal or performance warning, so these
-are screening timings rather than additional zero-swap baselines.
+are screening timings rather than additional zero-swap baselines. The
+following table compares the selected Ref2VA arms with the baseline mean.
 
 | Ref2VA arm | Wall time | Delta vs baseline mean | Process-peak delta | Video SSIM | VMAF | Audio correlation | Decision |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
@@ -772,6 +786,7 @@ These runs began with 12,694.5 to 12,710.5 MiB of swap after earlier model
 work. No thermal or performance warning was recorded. They establish
 cross-seed behavior and the direction of the serving-contract improvement,
 but their wall times remain screening evidence until repeated from zero swap.
+The following table compares the dense and velocity-reuse arms for each seed.
 
 | Seed | Dense wall | Velocity wall | Wall reduction | Dense / velocity MLX peak | Video SSIM | PSNR | VMAF | Audio correlation | Audio relative L2 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -800,7 +815,8 @@ The final non-LTX retake used commit `bc2532a7`, release executable SHA-256
 an Apple M4 Max with 128 GB of unified memory, and macOS 26.5.2. Both arms
 started with zero swap, a clean worktree, no matching build or ML process, and
 no thermal or performance warning. Ref2VA also ended at zero swap; the larger
-LightX2V arm ended with 15.94 MiB.
+LightX2V arm ended with 15.94 MiB. The following table lists the two
+finalists.
 
 | Finalist | Geometry and evaluations | Wall time | Denoising | Non-denoise remainder | MLX peak | Process peak footprint | Output SHA-256 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |

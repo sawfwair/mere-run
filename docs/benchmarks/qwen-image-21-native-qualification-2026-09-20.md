@@ -2,8 +2,12 @@
 
 This report records bounded local qualification of `image-qwen-21` on an Apple
 M4 Max with 128 GiB unified memory (Mac16,6, macOS 26.5.2). It qualifies the
-recorded requests and artifacts. It does not establish general image quality,
-minimum hardware requirements, hosted CI status, or a released implementation.
+recorded requests and artifacts. All twelve native CLI invocations ran
+successfully. Nine passed visual inspection, the eight-step CFG 3 case failed,
+and two boundary cases qualify execution only. One tiny BF16 transformer probe
+fails its numerical tolerance. The report does not establish general image
+quality, minimum hardware requirements, hosted CI status, or a released
+implementation.
 
 The implementation uses Swift and MLX for tokenization, Qwen3-VL conditioning,
 reference encoding, denoising with prefix KV reuse, and RGBA decoding. Python
@@ -31,7 +35,8 @@ and every recorded case preflight reported ready.
 
 Comparisons use common input tensors and trained checkpoint weights. They do
 not compare final generated pixels between PyTorch and MLX: equal seeds do not
-produce the same initial noise across those frameworks.
+produce the same initial noise across those frameworks. The following table
+lists each check:
 
 | Check | Result |
 | --- | --- |
@@ -62,12 +67,13 @@ The case plan is
 `scripts/validation/qwen-image-21-qualification-plan.json`.
 Run the corresponding script from the source checkout to retain preflights,
 progress events, output hashes, timing, and image inspection metrics. The
-[machine-readable evidence](/qualification/qwen-image-21-native-2026-09-20.json)
+[machine-readable Qwen Image 2.1 evidence](/qualification/qwen-image-21-native-2026-09-20.json)
 records the exact prompts, seeds, controls, per-case executable hashes, and
 numerical comparisons.
 
 All twelve invocations passed preflight, returned successful receipts, and wrote
-valid RGBA PNGs at the requested dimensions. Visual outcomes are separate.
+valid RGBA PNGs at the requested dimensions. Visual outcomes are separate. The
+following table lists each case:
 
 | Case | Pixels | Steps | Seconds | Peak footprint (GiB) | Visual result |
 | --- | --- | --- | --- | --- | --- |
@@ -98,8 +104,8 @@ requirement. Smaller-memory Macs were not tested.
 The 512-pixel same-seed replay produced byte-identical PNG and RGBA pixel
 hashes. The 1024- and 2048-pixel teapots have coherent lids, curved spouts, handles,
 and ceramic materials. The 40-step 2K case completed in 41.4 minutes with
-70.3 GiB OS peak memory footprint on the tested host. The single-reference edit changes red to cobalt blue while retaining
-the recognizable teapot and scene. The two-reference edit places the strawberry
+70.3 GiB OS peak memory footprint on the tested host. The single-reference edit
+changes red to cobalt blue while retaining the recognizable teapot and scene. The two-reference edit places the strawberry
 beside the teapot on the wooden table.
 
 The transparency case produces alpha values from 0 through 255; 67.2% of pixels
@@ -108,8 +114,9 @@ isolated strawberry. Minor edge speckles and a semitransparent outer border
 remain. This is working RGBA generation, not a production-quality matte claim.
 
 The eight-step CFG 3 case executes and changes the output, but overexposes the
-teapot and produces a distorted or ghosted handle. It fails visual inspection. A separate 40-step CFG 1.5 case produces a
-coherent teapot without those defects and passes visual inspection.
+teapot and produces a distorted or ghosted handle. It fails visual inspection.
+A separate 40-step CFG 1.5 case produces a coherent teapot without those defects
+and passes visual inspection.
 The two-step 2K case produces a blurred silhouette and qualifies execution only.
 The ten-reference boundary case uses repeated references and two steps; it does
 not establish composition quality with ten distinct images.

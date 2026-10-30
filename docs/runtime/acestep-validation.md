@@ -21,15 +21,19 @@ Hugging Face revisions:
 
 Generation recipes repeat the effective repository/revision set, adapter
 SHA-256 and scale, final effective conditioning metadata, complete inference
-configuration, candidate ranking, and input/output hashes. Recipe schema 5
-adds the semantic-code CFG scale and negative prompt to schema 4's planner
-temperature, top-k/top-p, and repetition penalty and schema 3's
-resolved planner source, root, and immutable repository/revision provenance
-and schema 2's post-planning BPM, duration, key/scale, vocal language, and time
-signature. This protects old installs whose original
-manifest predates source provenance, distinguishes requested metadata from the
-values actually used, and records independently resolved DiT and planner
-components.
+configuration, candidate ranking, and input/output hashes. Each recipe schema
+builds on the previous one:
+
+- Schema 2 adds post-planning BPM, duration, key/scale, vocal language, and
+  time signature.
+- Schema 3 adds the resolved planner source, root, and immutable
+  repository/revision provenance.
+- Schema 4 adds planner temperature, top-k/top-p, and repetition penalty.
+- Schema 5 adds the semantic-code CFG scale and negative prompt.
+
+This provenance protects old installs whose original manifest predates source
+provenance, distinguishes requested metadata from the values actually used,
+and records independently resolved DiT and planner components.
 
 ## Parity and local gates
 
@@ -38,17 +42,17 @@ The deterministic test surface covers:
 - Turbo and continuous timestep schedules, Euler and Heun updates, CFG, APG,
   ADG, guidance windows, and stabilization.
 - Typed task and checkpoint capability routing and exact Base-only restrictions.
-- source conditioning, repaint masks/injection/splice, retake endpoints and
+- Source conditioning, repaint masks/injection/splice, retake endpoints and
   spherical interpolation, and flow-edit integration windows.
-- prompt/condition encoder, audio-tokenizer, DCW, first-velocity, final-latent,
+- Prompt/condition encoder, audio-tokenizer, DCW, first-velocity, final-latent,
   and VAE parity dump paths.
 - Python-contract metadata precedence: explicit duration and language survive
   conflicting planner proposals, 1.7B is discovered before 4B, and separately
   managed planners resolve without checkpoint-store symlinks.
-- upstream two-phase LM prompting: metadata uses CFG `1.0`; code generation
+- Upstream two-phase LM prompting: metadata uses CFG `1.0`; code generation
   continues from the planned CoT, guides conditional/unconditional logits at
   `2.0`, and keeps the sampled token streams synchronized.
-- stable seed fanout, candidate metrics/ranking, batch/session serialization,
+- Stable seed fanout, candidate metrics/ranking, batch/session serialization,
   API decoding and security, WAV headers, LRC, recipes, and DAW bundle topology.
 - PEFT LoRA and LyCORIS LoKr key mapping, numerical contributions, alpha/scale,
   decomposed Kronecker factors, and adapter stacking.
@@ -76,8 +80,8 @@ environment variables and skip truthfully when an asset is absent.
 ## Installed-model evidence
 
 All files in the installed-model evidence table were generated locally at
-48 kHz stereo. Hashes make the
-specific validation artifacts identifiable without committing model output.
+48 kHz stereo. The hashes identify each validation artifact without committing
+model output.
 
 | Path exercised | Configuration | Result |
 | --- | --- | --- |
@@ -171,7 +175,9 @@ The review CSV remains deliberately unscored until a person listens. The
 technical rank is evidence against the exact stationary-noise regression, but
 it is not a substitute for a musical-quality or lyric-alignment judgment.
 
-For a repeatable timing capture:
+## Performance proof
+
+For a repeatable timing capture, run:
 
 ```bash
 ./scripts/acestep-performance-proof.sh
@@ -184,6 +190,6 @@ SHA-256
 `a5d5a265488373d9b32beabd1ccdf5c7e99cc4d159b08a1a8aaa006ef12bdf1f`
 and a matching schema 2 recipe.
 
-Do not treat a source-level test, generated recipe, or unchecked listening
+Don't treat a source-level test, generated recipe, or unchecked listening
 playlist as installed-model proof. Each evidence layer answers a different
 question.

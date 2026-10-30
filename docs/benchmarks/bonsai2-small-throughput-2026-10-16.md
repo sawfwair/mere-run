@@ -1,14 +1,16 @@
-# Bonsai 2 Small upstream throughput and scheduling fix
+# Bonsai 2 Small upstream throughput and scheduling fix — 2026-10-16
 
-Follow-up: the [fresh selected-runtime quality run](./bonsai2-small-selected-quality-2026-10-16.md) closes the missing sampled quality rerun described below. This report retains the original throughput observations and conditions.
+This report is for runtime contributors comparing the native 2B, 4B, and 9B packs with their pinned upstream MLX implementations on an Apple M3 Max. A shared compiled-graph cache caused a model-order performance penalty. Each Small-model request now owns its compiled activation graphs. A fused Metal transform also reduces short-row signed-Hadamard dispatch work. With the selected executable, native text decode reached 105.78, 81.79, and 57.96 tok/s for 2B, 4B, and 9B, compared with 156.15, 93.63, and 60.58 tok/s upstream.
 
-This report is for runtime contributors comparing the native 2B, 4B, and 9B packs with their pinned upstream MLX implementations. A shared compiled-graph cache caused a model-order performance penalty. Each Small-model request now owns its compiled activation graphs. A fused Metal transform also reduces short-row signed-Hadamard dispatch work.
+Follow-up: the [fresh selected-runtime quality run](./bonsai2-small-selected-quality-2026-10-16.md) closes the missing sampled quality rerun described in this report. This report retains the original throughput observations and conditions.
 
 ## Cause and control
 
 Native Q35 activation helpers use compiled functions for SwiGLU and recurrent gates. The shared functions can retain a graph traced on the first generator’s task-local GPU stream. MLX’s compile-cache lookup uses its backend default stream, which does not identify the Swift task-local stream. Later models then reuse cross-stream activation graphs and incur synchronization.
 
 The unchanged executable reproduces the effect when load order is reversed: 4B runs quickly when first, while 2B becomes slow when second. Both use 512-element Hadamard blocks. Enabling only `MERERUN_Q35_SCOPED_COMPILE=1` removes the large penalty in the original order. The source fix enables that qualified feature for the three Small IDs. Other scheduling features and diagnostic overrides retain their behavior.
+
+The following table shows text decode rates for each cohort, load order, and feature setting.
 
 | Cohort | Order | 2B text tok/s | 4B text tok/s | 9B text tok/s |
 | --- | --- | ---: | ---: | ---: |
@@ -26,7 +28,7 @@ The [earlier quality/throughput trial](./bonsai2-small-fixed-2026-10-16.md) used
 
 ## Upstream comparison
 
-All values are medians of three resident requests after one discarded 128-token warm-up per model and modality. Text requests allow 512 output tokens; vision requests allow 256. The primary native cohort uses the rebuilt production defaults in 2B → 4B → 9B order, without environment overrides. The reverse-order cohort is a separate confirmation, not a source of selected faster samples.
+All values are medians of three resident requests after one discarded 128-token warm-up per model and modality. Text requests allow 512 output tokens; vision requests allow 256. The primary native cohort uses the rebuilt production defaults in 2B → 4B → 9B order, without environment overrides. The reverse-order cohort is a separate confirmation, not a source of selected faster samples. The following tables show medians, then ranges.
 
 | Model | Upstream text tok/s | Native text tok/s | Upstream vision tok/s | Native vision tok/s |
 | --- | ---: | ---: | ---: | ---: |
@@ -60,7 +62,7 @@ Experimental component profiles use real checkpoint gate, down, and output proje
 
 ## Conditions and interpretation
 
-Host: Apple M3 Max, 36 GiB unified memory, macOS 26.6.2. Models, metadata, images, Python environment, build products, profiles, and raw results are on T7. The [summary](./bonsai2-small-throughput-2026-10-16-summary.json) retains source revisions, weight hashes, runtime versions, timers, thermal/memory snapshots, model-order controls, and admission checks.
+Host: Apple M3 Max, 36 GiB unified memory, macOS 26.6.2. Models, metadata, images, Python environment, build products, profiles, and raw results are on T7. The [machine-readable summary](./bonsai2-small-throughput-2026-10-16-summary.json) retains source revisions, weight hashes, runtime versions, timers, thermal/memory snapshots, model-order controls, and admission checks.
 
 Baseline release SHA-256: `6468cd000e7268c9ba1678892a96beccbf13f296fceacf970a4af7f72322d23a`. Optimized release SHA-256: `a1e3224fae3c4c85d54bcae618de8602c5cbfdd041105292f535ffbef25d54b3`. The native backend is MLX 0.32.1 through Swift fork `001d1aa3e5655d7efc073fb9632f952f57cdf528`. Upstream uses unmodified pack sources, verified against their pinned Git blobs, with MLX 0.32.0, mlx-vlm 0.6.3, mlx-lm 0.31.3, and Transformers 5.5.0. These backend versions are recorded separately; the unchanged-binary scheduling ablation isolates the native source change.
 

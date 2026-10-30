@@ -1,145 +1,295 @@
 # Text runtime
 
-Use the text runtime to stream chat tokens, run a sandboxed tool loop, include
-an image with a prompt, produce a grammar-checked JSON object, and fine-tune on
-your own conversations. Separate paths provide GGUF code generation, embeddings
-for local search, and local personally identifiable information (PII)
-redaction.
+The `mere.run text` commands run language models locally. Use them to stream
+chat, run a sandboxed tool loop, ask about an image, produce a grammar-checked
+JSON object, and fine-tune a LoRA adapter on your own conversations. Separate
+commands generate code from GGUF models, create embeddings for local search,
+answer typed decision questions, classify and extract text, and redact
+personally identifiable information (PII).
+
+This page lists the commands and models, then covers chat behavior by model
+family. Models with their own guide are listed in
+[Model guides](#model-guides).
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `mere.run text chat` | Run local chat with text chat models. |
-| `mere.run text code` | Run local code generation with GGUF models via llama.cpp. |
-| `mere.run text embed` | Generate native Qwen3 or [EmbeddingGemma 2](./embeddinggemma2.md) text, code, image, audio, and video embeddings. |
-| `mere.run text decide` | Evaluate ordered choice, score, and boolean questions with [native Laya](./laya.md). |
-| `mere.run text classify` | Classify text using caller supplied labels with [native GLiNER2.5 Decide](./gliner25-decide.md). |
-| `mere.run text extract` | Extract entities, relations, and structured records with [native GLiNER2.5 Decide](./gliner25-decide.md). |
-| `mere.run text anonymize` | Detect and redact PII using OpenAI Privacy Filter. |
+| `mere.run text chat` | Run local chat, tool loops, image input, and JSON output with chat models. |
+| `mere.run text code` | Generate code with GGUF models through llama.cpp. |
+| `mere.run text embed` | Create Qwen3, [EmbeddingGemma 2](./embeddinggemma2.md), or [PPLX Embed v2](./pplx-embed-v2.md) embeddings for text, code, images, audio, and video. |
+| `mere.run text decide` | Answer typed choice, score, and yes-or-no questions with [Laya](./laya.md), [Clef](./clef.md), or [D1](./d1.md). |
+| `mere.run text classify` | Classify text against labels you supply with [GLiNER2.5 Decide](./gliner25-decide.md). |
+| `mere.run text extract` | Extract entities, relations, and structured records with [GLiNER2.5 Decide](./gliner25-decide.md). |
+| `mere.run text anonymize` | Detect and redact PII with OpenAI Privacy Filter. |
 | `mere.run text train-lora` | Train a text or Gemma 4 image-conditioned LoRA adapter from chat-style SFT JSONL. |
 
-## macOS Studio
+Run `mere.run text <command> --help` for the complete flag list. In CLI
+commands, stdout carries the result and stderr carries progress and
+diagnostics.
 
-The macOS app compiles against the same `MereRunContract` emitted by
-`mere.run catalog --json`. **Chat ▸ Chat**'s inspector exposes text versus
-constrained `json_object` output, model-default, show, or disable reasoning,
-context and sampling controls, key-value (KV) quantization, a catalog adapter ID
-or local LoRA file, tool permissions, preflight, and installed-model
-enforcement, rendered from the contract's own option metadata.
-**Text ▸ Embeddings** is a vector explorer with dimensions, norms, previews, and
-cosine similarity. Select EmbeddingGemma 2 to add image, audio, video, or mixed
-JSON inputs. Sending media from another Studio page to Embeddings selects a
-compatible managed model; **Text ▸ Anonymize** shows original and protected text with
-labeled PII spans. **Chat ▸ Train** opens a text-dataset preview, preflight,
-live metrics, artifacts, history, and run comparison for native LoRA. The
-Command view and the Command Console keep the raw command surface; every
-generated flag is checked against public ArgumentParser help in the repository
-gate.
+## Model guides
+
+These models have a dedicated guide with install steps, options, limits, and
+validation results:
+
+| Guide | Model IDs | Use it for |
+| --- | --- | --- |
+| [Recursive Flint](./flint.md) | `text-chat-flint-4bit`, `text-chat-flint-bf16` | MoE chat and tools from the published INT4 export or original BF16 weights |
+| [Nemotron 3.5 Bolt](./nemotron-bolt.md) | `vision-chat-nemotron-35-bolt-24gb` | Text and image chat from NVIDIA's original mixed packed checkpoint |
+| [Native Kolibri-1](./kolibri.md) | Converted local checkpoint directories | MoE chat from mixed 2-bit, 8-bit, or BF16 conversions, with paired-logprob tooling |
+| [EmbeddingGemma 2](./embeddinggemma2.md) | `text-embed-embeddinggemma2`, `text-embed-embeddinggemma2-coreml` | Text, code, image, audio, and video embeddings in one space |
+| [PPLX Embed v2](./pplx-embed-v2.md) | `text-embed-pplx-v2-late-*`, `text-embed-pplx-v2-context-9b-preview*` | Late-interaction token vectors and contextual chunk vectors |
+| [GLiNER2.5 Decide](./gliner25-decide.md) | `text-classify-gliner25-decide` | Label classification and schema extraction |
+| [Laya](./laya.md) | `text-decide-laya`, `text-decide-laya-multilingual`, `text-decide-laya-typed-decisions` | Typed decisions over plain text; the `text decide` default |
+| [Clef](./clef.md) | `text-decide-clef-4bit`, `text-decide-clef-flash-4bit`, `text-decide-clef-omni` | Typed decisions over JSON state, images, video, and audio |
+| [D1](./d1.md) | `text-decide-d1-3b-bf16`, `text-decide-d1-omni-600m-fp32` | Typed decisions over text, JSON, images, or audio |
+
+For pinned sources, licenses, and sizes of every managed model, see
+[Model sources](../model-sources.md).
+
+## Choose a chat model
+
+`text chat` defaults to `text-chat-gemma4-12b-4bit` on Apple Silicon and
+`text-chat-q36-nano-gguf` on Linux CUDA. `mere.run model capabilities
+--recommended` reports the recommendation for your machine. On Apple Silicon,
+it follows these unified-memory bands:
+
+| Unified memory | Recommended model | Notes |
+| --- | --- | --- |
+| 8–15 GB | `text-chat-lfm25-1.2b-qad-4bit` | Memory-first tier; step up to the 2.6B MLX model when its larger footprint fits. |
+| 16–23 GB | `text-chat-gemma4-12b-4bit` | Compact default; use `text-chat-gemma4-nano` only when the 12B 4-bit model is too large. |
+| 24–63 GB | `text-chat-gemma4-12b-4bit` | Default local assistant; `text-chat-gemma4-turbo` is the larger Gemma alternative. |
+| 64–95 GB | `text-chat-gemma4-12b-4bit` | Keep the Gemma assistant and use the headroom for context, concurrency, or `text-chat-gemma4-max`. |
+| 96 GB and up | `text-agent-deepseek-v4-flash` | Agent and API chat tier; keep Gemma 12B 4-bit for interactive local chat. |
+
+On Linux CUDA, the 24–63 GB and 64–95 GB bands recommend
+`text-chat-q36-nano-gguf` instead of Gemma.
 
 ## Model families
 
-### Chat
+### Chat models
 
-[Native Kolibri-1](./kolibri.md) accepts converted BF16, 8-bit, and mixed 2-bit checkpoint directories, with paired-logprob qualification tooling.
+Most chat models run natively in Swift/MLX. Large models never download
+implicitly; pull them with `mere.run model pull` first. The following table
+groups the chat model IDs by family:
 
-- `text-chat-gemma4`
-- `text-chat-gemma4-12b` (managed dense Google Gemma 4 12B-it snapshot)
-- `text-chat-gemma4-12b-4bit` (managed MLX 4-bit Gemma 4 12B-it snapshot)
-- `text-chat-gemma4-turbo` (managed MLX NVFP4 Gemma 4 26B-A4B MoE snapshot)
-- `text-chat-diffusiongemma-26b-optiq-4bit` (managed mixed-bit MLX DiffusionGemma 26B-A4B snapshot)
-- `vision-chat-muse-glimmer-30b` (pinned Sawfwair selective MLX Q4 conversion of Meta Muse Glimmer 30B)
-- `text-chat-laguna-s-2-1` (managed Poolside Laguna S 2.1 118B-A8B NVFP4 target plus DFlash)
-- `text-chat-laguna-xs-2-1` (managed Poolside Laguna XS 2.1 33B-A3B NVFP4 target)
-- `text-chat-nemotron-35-lightning` (managed NVIDIA Nemotron 3.5 Lightning 30B-A3B NVFP4 target plus DSpark)
-- `text-chat-q36-nano`
-- `vision-chat-q38-27b` (managed official Qwen3.8 27B BF16 vision-language snapshot)
-- `vision-chat-q38-27b-4bit` (managed MLX 4-bit target plus pinned MTP and official vision components)
-- `text-chat-bonsai-27b-1bit` (managed packed 1-bit dense Qwen3.6 27B vision/reasoning snapshot)
-- `text-chat-bonsai-2-2b-2bit` (Bonsai 2 Small Qwen3.5 2B with native Hadamard 2-bit loading)
-- `text-chat-bonsai-2-4b-2bit` (Bonsai 2 Small Qwen3.5 4B with native Hadamard 2-bit loading)
-- `text-chat-bonsai-2-9b-2bit` (Bonsai 2 Small Qwen3.5 9B with native Hadamard 2-bit loading)
-- `text-chat-bonsai-2-27b-2bit` (Bonsai 2 Qwen3.8 27B with native Hadamard 2-bit loading)
-- `text-chat-bonsai-27b-2bit` (managed packed 2-bit ternary dense Qwen3.6 27B vision/reasoning snapshot)
-- `text-chat-lfm25-2.6b-4bit` (managed LiquidAI LFM2.5 2.6B dense MLX 4-bit snapshot)
-- `text-chat-lfm25-2.6b-qad-4bit` (managed QAD-trained LFM2.5 2.6B native MLX 4-bit conversion)
-- `text-chat-lfm25-2.6b-bf16` (managed LiquidAI LFM2.5 2.6B BF16 target plus DSpark)
-- `text-chat-lfm25-1.2b-bf16` (managed LiquidAI LFM2.5 1.2B Instruct BF16 target plus DSpark)
-- `text-chat-lfm25-1.2b-qad-4bit` (managed QAD-trained LFM2.5 1.2B native MLX 4-bit conversion)
-- `text-chat-lfm25-a1b-8bit` (managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot)
-- `text-chat-lfm25-24b-a2b-bf16` — original LiquidAI 24B-A2B reasoning MoE safetensors
-- `text-chat-lfm25-a1b-bf16` (managed LiquidAI LFM2.5 8B-A1B BF16 target plus DSpark)
-- `vision-chat-lfm25-3b-8bit` (managed LiquidAI LFM2.5-VL 3B MLX 8-bit vision-language snapshot)
-- `vision-chat-lfm25-3b-bf16` (managed LiquidAI LFM2.5-VL 3B BF16 snapshot with DSpark)
-- `text-agent-ornith-9b` (experimental native MLX/OptiQ coding-agent snapshot)
-- `text-agent-ornith-35b-mlx-4bit` (recommended self-contained Ornith 1.5 Q4 coding and vision bundle)
-- `text-agent-ornith-35b-mlx-6bit` (Ornith 1.5 balanced tier)
-- `text-agent-ornith-35b-mlx-8bit` (Ornith 1.5 quantized quality tier)
-- `text-agent-ornith-35b-mlx` (Ornith 1.5 35B-A3B BF16 MLX coding-agent snapshot)
-- `vision-chat-ornith-35b` (Ornith 1.5 full BF16 coding and vision reference)
-- `text-agent-deepseek-v4-flash` (API/agent serving)
-- `text-chat-mebot` (API serving; not a `text chat` dispatch lane)
-- `text-chat-psi-agent`
+| Family | Model IDs | Details |
+| --- | --- | --- |
+| Gemma 4 | `text-chat-gemma4-12b-4bit`, `text-chat-gemma4-12b`, `vision-chat-gemma4-12b`, `text-chat-gemma4-nano`, `text-chat-gemma4-turbo`, `text-chat-gemma4-max`, `text-chat-gemma4` | [Gemma 4](#gemma-4). `text-chat-gemma4` is the 31B dense model kept for compatibility. |
+| DiffusionGemma | `text-chat-diffusiongemma-26b-optiq-4bit` | [DiffusionGemma block diffusion](#diffusiongemma-block-diffusion) |
+| Muse Glimmer | `vision-chat-muse-glimmer-30b` | [Muse Glimmer](#muse-glimmer) |
+| Qwen3.6 | `text-chat-q36-nano`, `text-chat-q36-nano-gguf` | MLX on Apple Silicon; the GGUF build runs through llama.cpp and is the Linux CUDA default. |
+| Qwen3.8 | `vision-chat-q38-27b`, `vision-chat-q38-27b-4bit`, `vision-chat-q38-flash-next-mixed`, `vision-chat-q38-flash-next-3bit`, `vision-chat-q38-flash-next-3bit-native-ple`, `vision-chat-q38-flash-next-4bit` | [Qwen3.8](#qwen3-8). The Flash Next builds are described in [Model sources](../model-sources.md). |
+| Bonsai | `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-chat-bonsai-2-2b-2bit`, `text-chat-bonsai-2-4b-2bit`, `text-chat-bonsai-2-9b-2bit`, `text-chat-bonsai-2-27b-2bit` | [Bonsai](#bonsai) |
+| Ornith | `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx-4bit`, `text-agent-ornith-35b-mlx-6bit`, `text-agent-ornith-35b-mlx-8bit`, `text-agent-ornith-35b-mlx`, `vision-chat-ornith-35b` | [Ornith](#ornith) |
+| LFM2.5 | `text-chat-lfm25-1.2b-bf16`, `text-chat-lfm25-1.2b-qad-4bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-2.6b-qad-4bit`, `text-chat-lfm25-2.6b-bf16`, `text-chat-lfm25-a1b-8bit`, `text-chat-lfm25-a1b-bf16`, `text-chat-lfm25-24b-a2b-bf16`, `vision-chat-lfm25-3b-8bit`, `vision-chat-lfm25-3b-bf16` | [LFM2.5](#lfm2-5) |
+| Laguna | `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1` | [Laguna](#laguna) |
+| Nemotron | `text-chat-nemotron-35-lightning`, `vision-chat-nemotron-35-bolt-24gb`, `omni-chat-nemotron3-nano-30b-a3b-bf16` | [Nemotron 3.5 Lightning](#nemotron-3-5-lightning), the [Bolt guide](./nemotron-bolt.md), and [Model sources](../model-sources.md) for Nemotron 3 Nano Omni |
+| Inkling | `text-chat-inkling-small` | [Inkling-Small](#inkling-small) |
+| Recursive Flint | `text-chat-flint-4bit`, `text-chat-flint-bf16` | [Flint guide](./flint.md) |
+| Kolibri | Converted local checkpoints | [Kolibri guide](./kolibri.md) |
+| DeepSeek V4 Flash | `text-agent-deepseek-v4-flash` | API and agent serving; see [DeepSeek V4 Flash](#deepseek-v4-flash). |
+| Other | `text-chat-psi-agent`, `text-chat-mebot` | Psi is local-path-only; MeBot is for API serving and isn't a `text chat` model. |
 
-### Code
+### Code models
 
-- `text-agent-ornith-35b`
+`text code` runs these GGUF models through llama.cpp:
+
+- `text-code-qwen3` (default)
 - `text-code-north-mini`
-- `text-code-qwen3`
+- `text-agent-ornith-35b`
+- `text-agent-qwen35-9b`
 
-### Embeddings
+### Embedding models
 
-- `text-embed-qwen3-0.6b`
-- `text-embed-embeddinggemma2` — native text, code, image, audio, and video embeddings with task prefixes
-  and normalized 128/256/512/768-dimensional output. See the
-  [EmbeddingGemma 2 guide](./embeddinggemma2.md) for scope and examples.
+- `text-embed-qwen3-0.6b` (default)
+- `text-embed-embeddinggemma2` and `text-embed-embeddinggemma2-coreml`; see
+  [EmbeddingGemma 2](./embeddinggemma2.md).
+- `text-embed-pplx-v2-late-0.6b`, `text-embed-pplx-v2-late-9b`,
+  `text-embed-pplx-v2-late-9b-mixed-4bit`,
+  `text-embed-pplx-v2-context-9b-preview`, and
+  `text-embed-pplx-v2-context-9b-preview-8bit`; see
+  [PPLX Embed v2](./pplx-embed-v2.md).
 
-### Anonymization
+### Decision, classification, and extraction models
+
+- Laya: `text-decide-laya` (the `text decide` default),
+  `text-decide-laya-multilingual`, and `text-decide-laya-typed-decisions`
+- Clef: `text-decide-clef-4bit`, `text-decide-clef-flash-4bit`, and
+  `text-decide-clef-omni`
+- D1: `text-decide-d1-3b-bf16` and `text-decide-d1-omni-600m-fp32`
+- GLiNER2.5 Decide: `text-classify-gliner25-decide`
+
+### Anonymization model
 
 - `text-anonymize-privacy-filter`
 
-## Typical workflows
+## macOS Studio
 
-### Local chat
+The macOS app compiles against the same `MereRunContract` that
+`mere.run catalog --json` emits.
+
+- **Chat ▸ Chat** has an inspector for text or constrained `json_object`
+  output; model-default, shown, or disabled reasoning; context and sampling
+  controls; key-value (KV) cache quantization; a catalog adapter ID or local
+  LoRA file; tool permissions; preflight; and installed-model enforcement. The
+  controls render from the contract's own option metadata.
+- **Text ▸ Embeddings** is a vector explorer with dimensions, norms, previews,
+  and cosine similarity. Select EmbeddingGemma 2 to add image, audio, video, or
+  mixed JSON inputs. Sending media from another Studio page to Embeddings
+  selects a compatible managed model.
+- **Text ▸ Anonymize** shows the original and protected text with labeled PII
+  spans.
+- **Text ▸ Decisions**, **Text ▸ Classify**, and **Text ▸ Extract** build Laya
+  and GLiNER requests; see the [Laya](./laya.md) and
+  [GLiNER2.5 Decide](./gliner25-decide.md) guides.
+- **Chat ▸ Train** opens a text-dataset preview, preflight, live metrics,
+  artifacts, history, and run comparison for native LoRA.
+
+The Command view and the Command Console keep the raw command surface. The
+repository gate checks every generated flag against the public ArgumentParser
+help.
+
+## Chat
+
+### Run a chat
 
 ```bash
 swift run mere.run text chat \
   --stream \
-  --model text-chat-gemma4 \
   --prompt "Summarize diffusion models in one paragraph."
 ```
 
-With `--stream`, interactive terminals render common Markdown incrementally.
-Redirected stdout remains raw for scripts. Use `--markdown never` to keep raw
-Markdown in a terminal or `--markdown always` to force structural rendering;
+With `--stream`, interactive terminals render common Markdown as it arrives.
+Redirected stdout stays raw for scripts. Use `--markdown never` to keep raw
+Markdown in a terminal or `--markdown always` to force structural rendering.
 JSON response mode is always raw.
 
-`text-chat-gemma4-12b` runs Google's dense Gemma 4 12B-it checkpoint through
-the native Swift Gemma runtime. Managed pulls for `text-chat-gemma4-12b` and
-`vision-chat-gemma4-12b` install the `google/gemma-4-12B-it-assistant`
-companion as `text-chat-gemma4-12b-mtp`; when it is present, greedy serial
-decode can use native MTP on the decode tail after text or multimodal prefill.
-Sampled requests, prefix-KV seeded requests, continuous batching, raw local
-model paths, and prompts below the MTP threshold fall back to baseline decode.
-When no assistant is active, greedy requests use draft-model-free
-prompt-lookup speculation by default: repeated context n-grams are drafted
-and verified in bursts inside the pipelined loop — output-identical, free on
-non-repetitive text, and worth ~2× when generation echoes the prompt
-(`MERERUN_GEMMA4_PROMPT_LOOKUP=0` disables; see
-[Configuration](../configuration.md#mererun_gemma4_prompt_lookup)).
+`text chat` checks numeric sampling and token limits before generation, and
+`--preflight` runs the same checks without loading or downloading a model. Pass
+`--require-installed` to fail instead of downloading. During a tool
+conversation, the command keeps one native runtime and unloads it after
+completion, failure, or cancellation. See
+[shared chat execution](../internals/chat-execution.md) for the request and
+runtime boundaries shared with the API.
 
-`vision-chat-muse-glimmer-30b` installs Sawfwair's pinned 21.38 GB selective MLX
-Q4 target plus z-lab's DFlash2 assistant. The target's receipt pins every
-source and output hash and retains Meta's bundled terms. Native DFlash captures
-the five released target hidden-state taps during text or image prefill, drafts
-masked blocks, and verifies them against the target. It engages for output
-budgets of at least 32 tokens, defaults to 3 proposals per round on MLX, and
-returns to target-only decode after two rounds below 40% acceptance. Add
-`--stats` to see the proposal width, acceptance, verification forwards, and
-fallback state.
-Loading performs one target and DFlash warmup before the first user-visible
-decode, so lazy MLX graph compilation is reported in `loadSeconds` and a
-persistent CLI/API model session pays that cost once.
+### Sampling
+
+Without explicit options, `text chat` samples at temperature 0.7 and top-p 0.9
+with no top-k cutoff. Models that publish their own values use them instead;
+the family sections on this page list those values.
+
+Native and llama.cpp text generation also accept min-p sampling. A value such
+as `0.05` removes tokens with less than 5% of the most likely token's
+probability after top-k and top-p filtering, then renormalizes the remaining
+distribution. Min-p is off by default except for Laguna S 2.1's measured
+`0.02`, and it doesn't change temperature-zero greedy output. Set it with
+`--min-p` in text commands or `min_p` in OpenAI-compatible chat requests.
+
+### JSON output
+
+Native MLX Gemma and Qwen-family chat models support
+`--response-format json_object`. The output must be one complete root object.
+Before each token streams, the prefix grammar checks nested objects and arrays,
+strings and escapes, Unicode, numbers, booleans, null, commas, and colons.
+Qwen-family JSON mode turns thinking off and bypasses MTP, continuous batching,
+and pipelined decoding. The GGUF Qwen3.6 model used by Linux packages runs on
+llama.cpp and rejects JSON-object mode.
+
+```bash
+swift run mere.run text chat \
+  --model text-chat-q36-nano \
+  --response-format json_object \
+  --prompt 'Return an object with a name and an array of tags.'
+```
+
+### Tool use
+
+`text chat` can run a local agentic tool loop. `--tools` takes a comma-separated
+list of built-in tool names (`write_file`, `shell_exec`), and `--tool-loop`
+turns on the loop: generate, run tool calls, feed results back, and continue,
+up to 10 iterations.
+
+- Tools run inside a sandbox directory. `--sandbox-dir` sets it; the default is
+  a per-process temporary directory.
+- Each call asks for interactive `[y/N]` approval by default.
+- `shell_exec` also requires `--allow-shell-exec`, and it always asks for
+  approval, even with `--auto-approve-tools`.
+- `--auto-approve-tools` skips confirmation for `write_file` only.
+- `write_file` targets absolute paths outside the sandbox only with
+  `--allow-absolute-tool-paths`.
+
+Approved shell commands run through `/bin/zsh` on macOS and `/bin/sh` on Linux.
+Each call has a five-minute deadline. The tool drains stdout and stderr while
+the command runs and keeps the first 256 KiB of their combined output. If the
+output exceeds that limit, the result includes `[output truncated]`, but the
+command keeps running. A timeout or task cancellation stops the owned process
+group.
+
+```bash
+swift run mere.run text chat \
+  --model text-chat-gemma4-12b-4bit \
+  --prompt "Create hello.py that prints the system time, then run it." \
+  --tools write_file,shell_exec \
+  --tool-loop \
+  --allow-shell-exec \
+  --sandbox-dir ./work
+```
+
+### Image input
+
+`text chat --image` accepts a local file path or a `data:image/...` URI for
+vision-capable chat models such as Bonsai 27B or `vision-chat-gemma4-12b`. The
+image attaches to the user prompt for multimodal prefill. Omni chat models also
+accept `--audio` and `--video`.
+
+```bash
+swift run mere.run text chat \
+  --model text-chat-bonsai-27b-2bit \
+  --image ./photo.png \
+  --prompt "Describe what is in this photo."
+```
+
+### KV cache quantization
+
+To reduce long-context memory in `text chat`, pass `--kv-bits 4` or `8`.
+Qwen-family, Inkling-Small, and LFM2.5 models use affine KV quantization. Gemma 4
+uses its model-specific path and also accepts `--kv-quant-scheme` (`uniform`,
+`polar`, or `turboquant`), `--kv-group-size`, and `--quantized-kv-start`.
+Qwen-family and LFM2 dequantize the generic cache for attention, so these modes
+aren't assumed to be faster.
+
+`api serve` accepts the same Gemma 4 flags. To set a per-model KV mode for API
+serving, use `mere.run model runtime set <model> --kv-cache-mode` with
+`affine4` or `affine8`, or the Gemma 4-only `polar2` or `auto`. `default`
+restores the engine, model, or server default. For details, see
+[Model management](./model-management.md).
+
+Interactive `text chat` keeps the memory-oriented Gemma Turbo recipe. `api serve`
+defaults Turbo to full-precision KV, because long-schema serving showed that
+token-zero TurboQuant could dominate decode latency. To choose that memory
+tradeoff for the API anyway, pass
+`--kv-bits 4 --kv-quant-scheme turboquant --quantized-kv-start 0`.
+
+## Chat model notes
+
+### Gemma 4
+
+`text-chat-gemma4-12b` runs Google's dense Gemma 4 12B-it checkpoint through the
+native Swift Gemma runtime. Managed pulls for `text-chat-gemma4-12b` and
+`vision-chat-gemma4-12b` also install the `google/gemma-4-12B-it-assistant`
+companion as `text-chat-gemma4-12b-mtp`. When the companion is present, greedy
+serial decode can use native MTP on the decode tail after text or multimodal
+prefill. Sampled requests, prefix-KV seeded requests, continuous batching, raw
+local model paths, and prompts below the MTP threshold use baseline decode.
+
+When no assistant is active, greedy requests use prompt-lookup speculation by
+default. Repeated context n-grams are drafted and verified in bursts inside the
+pipelined loop. Output is identical, non-repetitive text costs nothing extra,
+and generation that echoes the prompt runs about twice as fast. To turn it off,
+set `MERERUN_GEMMA4_PROMPT_LOOKUP=0`; see
+[Configuration](../configuration.md#mererun-gemma4-prompt-lookup).
 
 ### DiffusionGemma block diffusion
 
@@ -147,8 +297,8 @@ persistent CLI/API model session pays that cost once.
 through a dedicated native Swift runtime. The runtime caches the causal prompt,
 then denoises a bidirectional token canvas in parallel instead of decoding one
 token at a time. It supports output budgets from 1 through 256 tokens and uses
-up to 48 denoising steps per canvas. Set both `--temperature 0` and `--seed`
-when you need a repeatable run.
+up to 48 denoising steps per canvas. For a repeatable run, set both
+`--temperature 0` and `--seed`.
 
 ```bash
 mere.run model pull text-chat-diffusiongemma-26b-optiq-4bit
@@ -160,14 +310,14 @@ mere.run text chat \
   --prompt "Explain block diffusion in one paragraph."
 ```
 
-Diffusion stats distinguish conventional output throughput from the actual
-parallel work performed by the model. `decode_tps` counts returned tokens,
-`canvas_tps` counts canvas tokens, and `work_tps` counts one canvas token for
-every denoising step. The same line includes `seed`, `denoise_steps`, and
-`work_tokens`, making fixed-seed performance comparisons reproducible.
+Diffusion stats separate conventional output throughput from the parallel work
+the model performs. `decode_tps` counts returned tokens, `canvas_tps` counts
+canvas tokens, and `work_tps` counts one canvas token for every denoising step.
+The same line includes `seed`, `denoise_steps`, and `work_tokens`, so you can
+reproduce fixed-seed performance comparisons.
 
-Use `--show-unmasking` to render revision-aware canvas drafts on stderr while
-keeping the final answer on stdout:
+To render revision-aware canvas drafts on stderr while the final answer goes to
+stdout, pass `--show-unmasking`:
 
 ```bash
 mere.run text chat \
@@ -179,17 +329,17 @@ mere.run text chat \
 ```
 
 Progressive drafts are observability output, not an append-only token stream:
-later steps can replace text shown by earlier steps.
+later steps can replace text that earlier steps showed.
 
 The managed snapshot includes and validates its separate BF16 vision sidecar,
 but this runtime supports text input only. It rejects `--image`, `--audio`, and
 `--video` rather than claiming an unqualified multimodal path.
 
-DFlash2 adds two-phase grouped dynamic causal convolution and predecessor-aware
-sparse candidate selection. It is installed and preferred automatically; an
-existing original DFlash or local Q4 assistant remains a fallback. A real
-64-token selective-Q4 probe produced the same bytes as the original DFlash path
-while improving acceptance from 63.1% to 67.7% on that prompt.
+### Muse Glimmer
+
+`vision-chat-muse-glimmer-30b` installs Sawfwair's pinned 21.38 GB selective MLX
+Q4 target plus z-lab's DFlash2 assistant. The target's receipt pins every source
+and output hash and keeps Meta's bundled terms.
 
 ```bash
 swift run mere.run model pull vision-chat-muse-glimmer-30b --accept-model-license
@@ -199,12 +349,31 @@ swift run mere.run text chat \
   --stats
 ```
 
-`text-chat-nemotron-35-lightning` is an explicit native Swift/MLX lane for
-NVIDIA's 30B-total, 3B-active Nemotron-H model. The runtime implements its
-52-layer Mamba-2, attention, and routed-MoE stack directly; it consumes the
-released NVFP4 values without requantization and uses FP32 recurrent state for
-the Mamba layers. Pulling the target also installs the converted 967M DSpark
-companion:
+Native DFlash captures the five released target hidden-state taps during text or
+image prefill, drafts masked blocks, and verifies them against the target. It
+engages for output budgets of at least 32 tokens, defaults to 3 proposals per
+round on MLX, and returns to target-only decode after two rounds below 40%
+acceptance. `--stats` shows the proposal width, acceptance, verification
+forwards, and fallback state.
+
+DFlash2 adds two-phase grouped dynamic causal convolution and predecessor-aware
+sparse candidate selection. It's installed and preferred automatically; an
+existing original DFlash or local Q4 assistant remains a fallback. A real
+64-token selective-Q4 probe produced the same bytes as the original DFlash path
+while acceptance improved from 63.1% to 67.7% on that prompt.
+
+Loading runs one target and DFlash warmup before the first user-visible decode.
+Lazy MLX graph compilation is reported in `loadSeconds`, and a persistent CLI or
+API model session pays that cost once. `--reasoning-effort` accepts 0 through 1
+for this model.
+
+### Nemotron 3.5 Lightning
+
+`text-chat-nemotron-35-lightning` runs NVIDIA's 30B-total, 3B-active Nemotron-H
+model natively in Swift/MLX. The runtime implements its 52-layer Mamba-2,
+attention, and routed-MoE stack directly. It uses the released NVFP4 values
+without requantization and keeps FP32 recurrent state for the Mamba layers.
+Pulling the target also installs the converted 967M DSpark companion:
 
 ```bash
 swift run mere.run model pull text-chat-nemotron-35-lightning
@@ -216,77 +385,70 @@ swift run mere.run text chat \
   --prompt "Design a recovery-safe Swift actor pipeline."
 ```
 
-DSpark uses NVIDIA's recommended three-token proposal width. Every proposal is
-verified by the target; after two rounds below 67% measured acceptance, the
+DSpark uses NVIDIA's recommended three-token proposal width, and the target
+verifies every proposal. After two rounds below 67% measured acceptance, the
 request continues on the faster serial target path. `--stats` reports the
 proposal, verification, recovery, and adaptive-fallback counts. Set
 `MERERUN_NEMOTRON35_DSPARK=0` to compare serial target decode, or tune the
 break-even gate with `MERERUN_NEMOTRON35_DSPARK_MIN_ACCEPTANCE`. The model is
-never selected or downloaded implicitly; 32 GB is the catalog floor and 64 GB
-provides additional runtime headroom.
+never selected or downloaded implicitly. The catalog floor is 32 GB, and 64 GB
+gives additional runtime headroom.
 
-Use these recommended chat models by unified-memory band:
+For the larger 74B-A9B text and image model, see the
+[Nemotron 3.5 Bolt guide](./nemotron-bolt.md).
 
-| Unified memory | Recommended model | Notes |
-| --- | --- | --- |
-| 16-23 GB | `text-chat-gemma4-12b-4bit` | Compact default; `text-chat-gemma4-nano` has the smallest memory requirement. |
-| 24-63 GB | `text-chat-gemma4-12b-4bit` | Default grounded local-assistant tier; `text-chat-gemma4-turbo` is the larger Gemma alternate. |
-| 64-95 GB | `text-chat-gemma4-12b-4bit` | Retain the measured Gemma assistant lane; use additional memory for context, concurrency, or larger Gemma alternatives. |
-| 96+ GB | `text-agent-deepseek-v4-flash` | Agent and API chat tier; retain Gemma 12B 4-bit for interactive local chat. |
+### DeepSeek V4 Flash
 
-The DeepSeek V4 Flash tier uses the official 80.76 GiB pure-Q2 0731 imatrix
-GGUF. Its persistent DS4 server defaults to a 32K operational context, a
-1,024-token prefill chunk, and an 8 GiB disk-KV budget. A 128 GB Mac provides
-additional headroom. Close other memory-heavy workloads before using the model
-on a 96 GB machine.
+`text-agent-deepseek-v4-flash` is the agent and API chat tier for Macs with 96 GB
+or more. It uses the official 80.76 GiB pure-Q2 0731 imatrix GGUF. Its
+persistent DS4 server defaults to a 32K operational context, a 1,024-token
+prefill chunk, and an 8 GiB disk-KV budget. A 128 GB Mac gives additional
+headroom; on a 96 GB machine, close other memory-heavy workloads first. Serve it
+with `mere.run api serve --engine text-chat-deepseek-v4-flash`.
 
-`text-chat-lfm25-24b-a2b-bf16` is a separate reasoning MoE install with
-original BF16 safetensors, a declared 131,072-token context, and no DSpark
-companion. Its template always starts reasoning; `--no-thinking` controls
-display only. Omitted sampling uses temperature 0.1, top-k 50, and top-p 1.
-Use `--context-size` to set the operational context budget. Original weights
-load directly without conversion or Python. Native BF16 checks on a 128 GB
-M5 Max pass completed answers, a tool round trip, and exact retrieval from
-24,042 prompt tokens under a 32K context budget. The MLX 0.32.4 fork restores
-upstream NAX selection for floating-point operations and confines its
-generation-17 workaround to quantized dispatch. Native prefill processes the
-final prompt token separately, matching upstream's first generation logits.
-With both fixes, the exact 127,242-token retrieval probe returns the correct
-code and stops after 295 output tokens under the declared 131,072-token context
-and unchanged 2,048-token output budget. Broader retrieval quality and numerical
-parity remain unqualified.
+### LFM2.5
+
+All LFM2.5 models run through the native Swift LFM2 runtime. The LFM Open
+License v1.0 applies, so pull them with `--accept-model-license`. Commercial use
+by a legal entity with annual revenue of at least USD 10 million isn't licensed
+under the community terms. `api serve --engine text-chat-lfm2` serves
+`text-chat-lfm25-a1b-8bit` unless you pass `--model`.
+
+#### LFM2.5 24B-A2B
+
+`text-chat-lfm25-24b-a2b-bf16` is a reasoning MoE that loads LiquidAI's original
+BF16 safetensors directly, without conversion or Python. The download is about
+47.9 GB, and the catalog lists 64 GB of unified memory as the minimum and 96 GB
+as recommended. It has a declared 131,072-token context and no DSpark companion.
+
+```bash
+swift run mere.run model pull text-chat-lfm25-24b-a2b-bf16 --accept-model-license
+swift run mere.run text chat \
+  --model text-chat-lfm25-24b-a2b-bf16 \
+  --context-size 32768 \
+  --prompt "Plan a staged rollout for a database migration."
+```
+
+The model's template always starts reasoning, so `--no-thinking` only hides the
+reasoning output. Without explicit options, sampling uses temperature 0.1,
+top-k 50, and top-p 1. Use `--context-size` to set the operational context
+budget.
+
+Native BF16 checks on a 128 GB M5 Max pass completed answers, a tool round trip,
+and exact retrieval from 24,042 prompt tokens under a 32K context budget. The
+MLX 0.32.4 fork restores upstream NAX selection for floating-point operations
+and confines its generation-17 workaround to quantized dispatch. Native prefill
+processes the final prompt token separately, matching upstream's first
+generation logits. With both fixes, the exact 127,242-token retrieval probe
+returns the correct code and stops after 295 output tokens under the declared
+131,072-token context and the unchanged 2,048-token output budget. Broader
+retrieval quality and numerical parity remain unqualified.
+
+#### BF16 models with DSpark
 
 `text-chat-lfm25-1.2b-bf16`, `text-chat-lfm25-2.6b-bf16`, and
 `text-chat-lfm25-a1b-bf16` install exact pinned LiquidAI LFM2.5 checkpoints and
-their matching DSpark assistants. All three run through the native Swift LFM2
-runtime and are text-only. Select one with `--model`; `api serve --engine
-text-chat-lfm2` defaults to the A1B model unless `--model` is provided.
-DSpark uses five non-causal diffusion-attention layers to draft nine-token
-blocks from five configured target-layer outputs and verifies them with the target before
-committing output. Greedy tokens remain target-authoritative: accepted draft
-prefixes are committed, while a mismatch partially rolls target attention and
-short-convolution state back to the accepted prefix without replaying the
-rejected block. Sampled generation uses rejection sampling, and the runtime
-adaptively falls back if draft acceptance stays below 20% for three rounds.
-`text chat --stats` prints `lfm25_dspark` state and acceptance counters.
-
-The QAD ids use deterministic Sawfwair-hosted native-MLX conversions of
-LiquidAI's QAD Q4_0 GGUFs. Projection nibbles and scales are preserved exactly
-in affine group-32 tensors; the tied Q6_K embedding is requantized to MLX
-6-bit/group-64 with error recorded in `MERERUN_CONVERSION.json`. QAD's benefit
-is accuracy recovery at a compact Q4_0 footprint. It is not a second speedup
-over Q4_0; MLX throughput depends on the native group-32 kernel. Use 1.2B QAD
-as the memory-first tier, the standard 2.6B MLX checkpoint as the faster compact
-2.6B tier, and 2.6B QAD when quantized quality recovery is the priority.
-
-Set `MERERUN_LFM25_DSPARK=0` for a target-only A/B or
-`MERERUN_LFM25_DSPARK_PATH` to load an explicit compatible sidecar. Very short
-outputs, vision prefill, logprob capture, continuous batching, and target
-prefix-cache reuse currently take the target-only path. Without DSpark,
-concurrent serve workloads use ragged, cache-safe decode batching when
-`--max-active-requests` is above `1` (`MERERUN_LFM2_CONTINUOUS_BATCHING`
-overrides); rows at different prompt lengths share a forward only when every
-attention and short-conv cache proves compatibility.
+their matching DSpark assistants. All three are text-only.
 
 ```bash
 swift run mere.run model pull text-chat-lfm25-2.6b-bf16 --accept-model-license
@@ -296,9 +458,41 @@ swift run mere.run text chat \
   --prompt "Explain speculative decoding in one paragraph."
 ```
 
+DSpark uses five non-causal diffusion-attention layers to draft nine-token
+blocks from five configured target-layer outputs, and the target verifies them
+before output is committed. Greedy tokens stay target-authoritative: accepted
+draft prefixes are committed, and a mismatch partially rolls target attention
+and short-convolution state back to the accepted prefix without replaying the
+rejected block. Sampled generation uses rejection sampling. The runtime falls
+back adaptively if draft acceptance stays below 20% for three rounds.
+`text chat --stats` prints the `lfm25_dspark` state and acceptance counters.
+
+Set `MERERUN_LFM25_DSPARK=0` for a target-only comparison, or set
+`MERERUN_LFM25_DSPARK_PATH` to load an explicit compatible sidecar. Very short
+outputs, vision prefill, log-probability capture, continuous batching, and
+target prefix-cache reuse take the target-only path. Without DSpark, concurrent
+`api serve` workloads use ragged, cache-safe decode batching when
+`--max-active-requests` is above `1` (`MERERUN_LFM2_CONTINUOUS_BATCHING`
+overrides this). Rows at different prompt lengths share a forward pass only when
+every attention and short-convolution cache proves compatible.
+
+#### QAD 4-bit models
+
+The QAD IDs use deterministic Sawfwair-hosted native MLX conversions of
+LiquidAI's QAD Q4_0 GGUFs. Projection nibbles and scales are preserved exactly
+in affine group-32 tensors. The tied Q6_K embedding is requantized to MLX
+6-bit/group-64, with the error recorded in `MERERUN_CONVERSION.json`.
+
+QAD recovers accuracy at a compact Q4_0 footprint; it isn't a second speedup
+over Q4_0, and MLX throughput depends on the native group-32 kernel. Use 1.2B QAD
+as the memory-first tier, the standard 2.6B MLX model as the faster compact 2.6B
+tier, and 2.6B QAD when quantized quality recovery matters most.
+
+#### LFM2.5-VL vision models
+
 `vision-chat-lfm25-3b-8bit` adds the checkpoint's SigLIP2 vision tower and
-multimodal projector to that native LFM2 engine. Pass a local image path or
-base64 data URL through `--image`; the runtime smart-resizes the image to the
+multimodal projector to the native LFM2 engine. Pass a local image path or a
+base64 data URL with `--image`. The runtime smart-resizes the image to the
 checkpoint's 16-pixel patch grid, projects the downsampled visual tokens into
 the language prompt, then reuses the normal LFM2 decode path.
 
@@ -310,10 +504,10 @@ swift run mere.run text chat \
   --prompt "Summarize this document and list its key figures."
 ```
 
-For BF16 vision inference with DSpark, pull the separate BF16 target. The
-managed pull also installs its four-layer DSpark companion. At temperature
-zero, the native decoder proposes up to eight tokens per verification pass.
-Image encoding and prompt prefill use the same LFM2.5-VL path as the 8-bit model.
+For BF16 vision inference with DSpark, pull the separate BF16 target. The managed
+pull also installs its four-layer DSpark companion. At temperature zero, the
+native decoder proposes up to eight tokens per verification pass. Image encoding
+and prompt prefill use the same LFM2.5-VL path as the 8-bit model.
 
 ```bash
 swift run mere.run model pull vision-chat-lfm25-3b-bf16 --accept-model-license
@@ -325,10 +519,12 @@ swift run mere.run text chat \
   --prompt "Summarize this document and list its key figures."
 ```
 
-`text-chat-laguna-s-2-1` is an opt-in 96 GB-and-up Apple Silicon lane and is
-never selected by setup or hardware-aware defaults. Its roughly 72 GB target
-and 2.2 GB DFlash companion use immutable official Poolside revisions. The
-public OpenMDW-1.1 repositories are not gated:
+### Laguna
+
+`text-chat-laguna-s-2-1` is an opt-in model for Apple Silicon Macs with 96 GB or
+more. Setup and hardware-aware defaults never select it. Its roughly 72 GB
+target and 2.2 GB DFlash companion use immutable official Poolside revisions.
+The public OpenMDW-1.1 repositories aren't gated:
 
 ```bash
 swift run mere.run model pull text-chat-laguna-s-2-1
@@ -344,13 +540,13 @@ budgets of at least 32 tokens and falls back losslessly to target-only decode
 when acceptance is poor. Longer requests can use ragged continuous batching in
 `api serve` when `--max-active-requests` is above `1`.
 
-`text-chat-laguna-xs-2-1` is the smaller 36 GB-minimum / 48 GB-recommended
-lane. It pins Poolside's five-shard `Laguna-XS-2.1-NVFP4-mlx` revision and
-uses the same native runtime with the XS-validated M5 decode and terminal
+`text-chat-laguna-xs-2-1` is the smaller model, with a 36 GB minimum and 48 GB
+recommended. It pins Poolside's five-shard `Laguna-XS-2.1-NVFP4-mlx` revision
+and uses the same native runtime with the XS-validated M5 decode and terminal
 prefill accelerations, traced back to Poolside's canonical released
-`Laguna-XS-2.1-NVFP4` model. The public repository is not gated; the managed
-entry retains its OpenMDW-1.1 license file, never auto-downloads because of its
-size, and does not attach the S DFlash checkpoint:
+`Laguna-XS-2.1-NVFP4` model. The public repository isn't gated. The managed
+entry keeps its OpenMDW-1.1 license file, never downloads automatically because
+of its size, and doesn't attach the S DFlash checkpoint:
 
 ```bash
 swift run mere.run model pull text-chat-laguna-xs-2-1
@@ -360,30 +556,35 @@ swift run mere.run text chat \
   --stats
 ```
 
-`text-chat-inkling-small` installs mere.run's immutable native MLX conversion
-of Thinking Machines Lab's released Inkling-Small checkpoint. The 256 routed
+To serve either model, use `mere.run api serve --engine text-chat-laguna --model
+text-chat-laguna-xs-2-1`. Laguna XS also supports
+[LoRA training](#train-a-lora-adapter).
+
+### Inkling-Small
+
+`text-chat-inkling-small` installs mere.run's immutable native MLX conversion of
+Thinking Machines Lab's released Inkling-Small checkpoint. The 256 routed
 experts in each sparse layer use MLX affine 2-bit quantization with group size
-128. Attention, embeddings, routers, shared experts, dense MLPs, and norms
-retain the released BF16 precision. Because it is still a very large artifact,
-it never auto-downloads from an inference command; pull it explicitly on a
-128 GB unified-memory machine.
+128. Attention, embeddings, routers, shared experts, dense MLPs, and norms keep
+the released BF16 precision. The artifact is very large, so inference commands
+never download it; pull it explicitly on a Mac with 128 GB of unified memory.
 
-The released model is a 276B-total / 12B-active multimodal MoE with a
-1,048,576-token architecture limit. This first mere.run lane loads only the
-`language_model.*` weights in native Swift/MLX; image and audio towers are not
-claimed here. The operational context defaults to
-32,768 tokens to leave room for weights, KV cache, and macOS on a 128 GB Mac.
-Larger `--context-size` values are accepted when the host has the additional
-memory.
+The released model is a 276B-total, 12B-active multimodal MoE with a
+1,048,576-token architecture limit. This runtime loads only the
+`language_model.*` weights in native Swift/MLX and doesn't claim the image and
+audio towers. The operational context defaults to 32,768 tokens to leave room
+for weights, KV cache, and macOS on a 128 GB Mac. `--context-size` accepts larger
+values when the host has the additional memory. `--reasoning-effort` accepts 0
+through 0.99.
 
-This mixed recipe replaces the rejected blanket 2-bit experiment, which was
+This mixed recipe replaces a rejected blanket 2-bit experiment, which was
 degraded and repetitive even on a basic arithmetic prompt. Keeping every
-non-routed path at BF16 deliberately spends more memory to protect model
-quality. The managed snapshot is 84.56 GB (78.75 GiB). A full CUDA load used
-84.53 GB of active MLX memory and peaked at 84.77 GB on an H200; greedy checks
-correctly answered `2 + 2`, the "all but 9" sheep question, and generated a
-valid Swift `isEven` function. That is artifact and CUDA-runtime proof; the
-native Apple Silicon generation smoke remains a separate gate.
+non-routed path at BF16 spends more memory to protect model quality. The managed
+snapshot is 84.56 GB (78.75 GiB). A full CUDA load used 84.53 GB of active MLX
+memory and peaked at 84.77 GB on an H200. Greedy checks correctly answered
+`2 + 2` and the "all but 9" sheep question, and generated a valid Swift `isEven`
+function. That result proves the artifact and the CUDA runtime; the native Apple
+Silicon generation smoke test is a separate gate.
 
 ```bash
 swift run mere.run model pull text-chat-inkling-small
@@ -394,21 +595,10 @@ swift run mere.run text chat \
   --stats
 ```
 
-Per-model API-serving KV behavior is set with `mere.run model runtime
---kv-cache-mode` (see [Model Management](./model-management.md)); it is not a
-flag on `text chat` or `api serve`. For Gemma4, Qwen-family, and LFM2 models
-you can select explicit `affine4` or `affine8` as long-context memory
-controls relative to full-precision K/V. Qwen-family and LFM2 dequantize the
-generic cache for attention, so these modes are not assumed faster. Gemma uses
-its model-specific quantized KV path. Interactive `text chat` retains the
-memory-oriented Gemma Turbo recipe, while `api serve` defaults Turbo to
-full-precision KV after long-schema serving showed that token-zero TurboQuant
-could dominate decode latency. API operators can request that memory tradeoff
-explicitly with `--kv-bits 4 --kv-quant-scheme turboquant
---quantized-kv-start 0`. `default` restores the engine/model/server default.
+### Qwen3.8
 
-`vision-chat-q38-27b` is the official dense Qwen3.8 27B BF16 checkpoint. Pull
-it explicitly before use because the pinned snapshot is 55.59 GB:
+`vision-chat-q38-27b` is the official dense Qwen3.8 27B BF16 checkpoint. The
+pinned snapshot is 55.59 GB, so pull it explicitly before use:
 
 ```bash
 swift run mere.run model pull vision-chat-q38-27b
@@ -418,29 +608,31 @@ swift run mere.run text chat \
   --prompt "Explain this diagram and verify every label."
 ```
 
-The lane uses the published 262,144-token context, thinking default,
+The model uses the published 262,144-token context, thinking by default,
 temperature 1.0, top-p 0.95, top-k 20, both generation stop tokens, and the
 Qwen3.8 image sizing floor. Its native reasoning-effort values are `low`,
 `medium`, and `xhigh`; Pi's `minimal`, `high`, and `max` aliases map to those
-native values without inventing unsupported template labels. Tool calls use a
-streaming structural Qwen XML parser, including when parameter strings contain
-tag-like text. The checkpoint also contains video understanding weights, but
-the native command accepts text and local images only. Its embedded
-dense MTP head can be loaded from the official shards with
-`MERERUN_Q35_MTP_SPECULATION=1`. This materially accelerates greedy decode, but
-is experimental: BF16 multi-token verification can choose a different greedy
-path from serial target decode. The default, sampled, and JSON-constrained paths
-retain target-only decode. With API concurrency enabled, an eligible MTP request
-uses speculation only while uncontended; peers use the continuous-batching lane.
+values without inventing unsupported template labels. Tool calls use a streaming
+structural Qwen XML parser, including when parameter strings contain tag-like
+text. The checkpoint also contains video understanding weights, but the native
+command accepts text and local images only.
 
-Qwen3.8 prefill defaults to 1,024-token chunks. Live reclaimable host-memory
-headroom below 16 GiB, or an admitted peer, caps a chunk at 512 tokens. This
-uses live pressure instead of total physical memory because the dense BF16
-checkpoint and concurrent workloads can consume most unified memory before
-prefill begins. `MERERUN_Q35_PREFILL_CHUNK_TOKENS` remains an explicit upper
-bound and is still pressure-capped.
+The checkpoint's embedded dense MTP head can be loaded from the official shards
+with `MERERUN_Q35_MTP_SPECULATION=1`. This speeds up greedy decode considerably
+but is experimental: BF16 multi-token verification can choose a different
+greedy path from serial target decode. The default, sampled, and
+JSON-constrained paths keep target-only decode. With API concurrency enabled, an
+eligible MTP request uses speculation only while uncontended; other requests use
+the continuous-batching path.
 
-For the lower-residency lane, pull the separate 4-bit model ID:
+Qwen3.8 prefill defaults to 1,024-token chunks. If live reclaimable host-memory
+headroom is below 16 GiB, or another request is admitted, chunks are capped at
+512 tokens. The cap uses live pressure instead of total physical memory, because
+the dense BF16 checkpoint and concurrent workloads can consume most unified
+memory before prefill begins. `MERERUN_Q35_PREFILL_CHUNK_TOKENS` sets an
+explicit upper bound, which is still pressure-capped.
+
+For lower residency, pull the separate 4-bit model:
 
 ```bash
 swift run mere.run model pull vision-chat-q38-27b-4bit
@@ -449,33 +641,43 @@ swift run mere.run text chat \
   --prompt "Implement a bounded async work queue in Swift."
 ```
 
-This installs the pinned MLX Fast 4-bit/group-64 target, its matching
+This model installs the pinned MLX Fast 4-bit/group-64 target, its matching
 proposal-only 4-bit/group-64 MTP head under `mtp/`, and the pinned official BF16
-vision component under `vision/`, totaling about 19.49 GB. Only the official
-shard containing the vision tower is mounted, and language tensors in that
-shard are not loaded. The managed install also retains Qwen's official
-Apache-2.0 license. On the measured M4 Max coding slice,
-target-only warm decode reached about 26.5 tok/s versus 8.8 tok/s for BF16;
-explicit MTP reached 37.8–43.8 tok/s across the three short cases. All cases
-passed. On a deterministic 24-task stride through the official HumanEval set,
-target-only and explicit MTP both passed 20/24 with the same four failures, but
-one failing case generated 174 tokens with MTP versus 177 target-only. MTP also
-changed a thinking-mode token trajectory, so it remains explicitly opt-in and
-is disabled for sampled and JSON-constrained generation.
+vision component under `vision/`, about 19.49 GB in total. Only the official
+shard that contains the vision tower is mounted, and language tensors in that
+shard aren't loaded. The install also keeps Qwen's official Apache-2.0 license.
+
+On the measured M4 Max coding slice, target-only warm decode reached about
+26.5 tok/s versus 8.8 tok/s for BF16, and explicit MTP reached 37.8–43.8 tok/s
+across the three short cases. All cases passed. On a deterministic 24-task
+stride through the official HumanEval set, target-only and explicit MTP both
+passed 20/24 with the same four failures, but one failing case generated 174
+tokens with MTP versus 177 target-only. MTP also changed a thinking-mode token
+trajectory in those measurements.
+
+The 4-bit model enables greedy MTP decode by default from short prompts, because
+its small-batch Q4 verification matches serial decode exactly. To use
+target-only decode, set `MERERUN_Q35_MTP_SPECULATION=0`. MTP stays opt-in for
+the BF16 model. JSON-constrained, tool, image, log-probability, and penalized
+requests keep target-only decode on both models.
+
+The Qwen3.8 Flash Next builds (`vision-chat-q38-flash-next-*`) are large
+mixed-precision models for 96 GB and larger Macs. Their sources, quantization,
+memory profiles, and license terms are in [Model sources](../model-sources.md).
+
+### Bonsai
 
 `text-chat-bonsai-27b-1bit` and `text-chat-bonsai-27b-2bit` install the pinned
-5.13 GB binary and 8.52 GB ternary Prism ML snapshots. They run packed low-bit
-language weights plus a dense vision tower through the native Qwen-family
-runtime. Both default to thinking-enabled generation and the published
-temperature 0.7, top-p 0.95, and top-k 20 when those values are not set
-explicitly. The models advertise 262,144 tokens; `text chat` selects that limit
-automatically, and `--context-size` can set a smaller operational bound. Choose
-1-bit for lower residency and faster decode or 2-bit for the larger ternary
-checkpoint. On Linux CUDA, the pinned MLX fork executes supported 1-bit affine
-projections directly from packed weights; the runtime retains its operation-
-scoped dense fallback for unsupported shapes and keeps 2-bit and wider model
-dispatch independent. For memory-constrained long-context work, opt into the
-generic affine cache:
+5.13 GB binary and 8.52 GB ternary Prism ML snapshots of a dense Qwen3.6 27B
+vision and reasoning model. They run packed low-bit language weights plus a
+dense vision tower through the native Qwen-family runtime. Choose 1-bit for
+lower residency and faster decode, or 2-bit for the larger ternary checkpoint.
+
+Both generate with thinking enabled by default and use the published
+temperature 0.7, top-p 0.95, and top-k 20 when you don't set those values. The
+models advertise 262,144 tokens. `text chat` selects that limit automatically,
+and `--context-size` can set a smaller operational bound. For memory-constrained
+long-context work, use the affine KV cache:
 
 ```bash
 swift run mere.run model pull text-chat-bonsai-27b-1bit
@@ -487,30 +689,55 @@ swift run mere.run text chat \
   --prompt "Summarize the key decisions in this context."
 ```
 
-The local-path-only `text-chat-psi-agent` runtime has guarded compressed-MLA
-and fused sparse-MoE controls. They remain opt-in until a repeatable public
-checkpoint quality/throughput A/B is available; see the
-[guarded acceleration audit](../internals/guarded-acceleration.md).
+On Linux CUDA, the pinned MLX fork runs supported 1-bit affine projections
+directly from packed weights. The runtime keeps its operation-scoped dense
+fallback for unsupported shapes, and 2-bit and wider model dispatch stays
+independent.
+
+Bonsai 2 packs use Hadamard-transformed affine 2-bit language weights, which the
+native loader applies without expanding the full model:
+
+- `text-chat-bonsai-2-27b-2bit` is an experimental Qwen3.8 27B vision and
+  reasoning model.
+- `text-chat-bonsai-2-2b-2bit`, `text-chat-bonsai-2-4b-2bit`, and
+  `text-chat-bonsai-2-9b-2bit` are Bonsai 2 Small Qwen3.5 vision models.
+
+Bonsai 2 Small thinks by default; pass `--no-thinking` for short answers, or
+allow at least 8,192 output tokens with `--max-tokens` for reasoning requests.
+
+```bash
+mere.run model pull text-chat-bonsai-2-2b-2bit
+mere.run text chat --model text-chat-bonsai-2-2b-2bit --context-size 8192 --no-thinking --prompt "Explain how a heat pump works."
+```
+
+For pins, sampling, and penalty guidance, see
+[Bonsai 2](../model-sources.md#bonsai-2-mlx) and
+[Bonsai 2 Small](../model-sources.md#bonsai-2-small-mlx) in Model sources. The
+[selected-runtime quality run](../benchmarks/bonsai2-small-selected-quality-2026-10-16.md)
+and [throughput report](../benchmarks/bonsai2-small-throughput-2026-10-16.md)
+record bounded Bonsai 2 Small results.
+
+### Ornith
 
 `text-agent-ornith-9b` installs an Ornith 1.0 9B OptiQ MLX snapshot and runs
-through the native Qwen-family runtime. Use `text chat --model text-agent-ornith-9b`
-or `api serve --engine text-chat-q36 --model text-agent-ornith-9b` for coding-agent
-smoke tests.
+through the native Qwen-family runtime. For coding-agent smoke tests, use
+`text chat --model text-agent-ornith-9b` or
+`api serve --engine text-chat-q36 --model text-agent-ornith-9b`.
 
-Ornith 1.5 35B-A3B uses the same native Qwen-family lane across the official
+Ornith 1.5 35B-A3B uses the same native Qwen-family runtime across the official
 `text-agent-ornith-35b-mlx-4bit`, `-6bit`, `-8bit`, and BF16
-`text-agent-ornith-35b-mlx` targets. Runtime-triggered auto-download stays
-disabled. `model capabilities` selects explicit speed/balanced/quality ids
-from unified memory: Q4 starts at 32 GB, Q6 at 48 GB, Q8 at 64 GB, and BF16 at
-96 GB. Pulling any tier also installs one shared MTP head from the pinned
-authoritative base checkpoint; target verification remains authoritative for
-every emitted speculative token. Ornith enables that verified MTP path from
-short prompts; Qwen3.6 retains its separate 6,144-token adaptive threshold.
+`text-agent-ornith-35b-mlx` targets. Inference commands don't download them.
+`model capabilities` picks a speed, balanced, or quality tier from unified
+memory: Q4 starts at 32 GB, Q6 at 48 GB, Q8 at 64 GB, and BF16 at 96 GB. Pulling
+any tier also installs one shared MTP head from the pinned authoritative base
+checkpoint, and target verification stays authoritative for every emitted
+speculative token. Ornith uses that verified MTP path from short prompts;
+Qwen3.6 keeps its separate 6,144-token adaptive threshold.
 
-The recommended `text-agent-ornith-35b-mlx-4bit` ID combines the official 4-bit
-text target with the authoritative base checkpoint's vision shard and the
-shared MTP head. Pull it explicitly on a 32 GB-or-larger Apple Silicon Mac;
-48 GB is the conservative recommendation:
+The recommended `text-agent-ornith-35b-mlx-4bit` combines the official 4-bit
+text target with the authoritative base checkpoint's vision shard and the shared
+MTP head. Pull it explicitly on a Mac with 32 GB or more; 48 GB is the
+conservative recommendation:
 
 ```bash
 swift run mere.run model pull text-agent-ornith-35b-mlx-4bit
@@ -520,103 +747,48 @@ swift run mere.run text chat \
   --prompt "Describe the interface and identify the most likely next action."
 ```
 
-Image requests are resized to a 65,536-pixel runtime budget and disable
-MTP speculation, so vision output remains target-only. The pinned processor
-metadata still records its published 16,777,216-pixel upper bound; the lower
-local cap prevents Metal watchdog failures. Text-only requests use the shared
-verified MTP companion. `vision-chat-ornith-35b` remains the explicit-pull full
-BF16 quality reference for systems with at least 96 GB. The recommended memory
-for this reference lane is 128 GB.
+Image requests are resized to a 65,536-pixel runtime budget and turn off MTP
+speculation, so vision output stays target-only. The pinned processor metadata
+still records its published 16,777,216-pixel upper bound; the lower local cap
+prevents Metal watchdog failures. Text-only requests use the shared verified MTP
+companion. `vision-chat-ornith-35b` is the explicit-pull full BF16 quality
+reference for systems with at least 96 GB; 128 GB is recommended.
 
-The Ornith lanes are R1-style reasoning tunes and generate with thinking
-enabled by default in `text chat` and `api serve` — without it the models
-degenerate into repetition loops or signature echo on constrained prompts.
-The reasoning stays hidden in `text chat` unless `--thinking` is passed;
-`--no-thinking` disables reasoning generation entirely. When sampling options
-are not set explicitly, these lanes also use the model's published
-`generation_config.json` sampling (temperature 1.0, top-p 0.95, top-k 20)
-instead of the generic chat defaults. Other Qwen-family lanes such as
-`text-chat-q36-nano` keep the existing no-think default.
+The Ornith models are R1-style reasoning tunes, so `text chat` and `api serve`
+generate with thinking enabled by default. Without it, the models degenerate
+into repetition loops or signature echo on constrained prompts. `text chat`
+hides the reasoning unless you pass `--thinking`; `--no-thinking` turns off
+reasoning generation entirely. When you don't set sampling options, Ornith uses
+the model's published `generation_config.json` values (temperature 1.0, top-p
+0.95, top-k 20) instead of the generic chat defaults. Other Qwen-family models,
+such as `text-chat-q36-nano`, keep the no-thinking default.
 
-Native and llama.cpp text generation also accept min-p sampling. A value such
-as `0.05` removes tokens with less than 5% of the most likely token's
-probability after top-k/top-p filtering, then renormalizes the remaining
-distribution. It is disabled by default except for Laguna's measured `0.02`,
-does not change temperature-zero greedy output, and is available as `--min-p`
-in text commands and `min_p` in OpenAI-compatible chat requests.
+The [Ornith MTP promotion report](../benchmarks/ornith-mtp-promotion-2026-09-05.md)
+records the measurements behind the shared MTP head.
 
-Native MLX Gemma and Qwen-family chat models support
-`--response-format json_object`. The output must be one complete root object;
-the prefix grammar checks nested objects and arrays, strings and escapes,
-Unicode, numbers, booleans, null, commas, and colons before each token is
-streamed. Qwen-family JSON mode forces thinking off and bypasses MTP,
-continuous batching, and pipelined decoding. The GGUF Q36 model used by Linux
-packages remains on llama.cpp and rejects JSON-object mode until a llama.cpp
-grammar is wired.
+### Psi agent
 
-```bash
-swift run mere.run text chat \
-  --model text-chat-q36-nano \
-  --response-format json_object \
-  --prompt 'Return an object with a name and an array of tags.'
-```
+The local-path-only `text-chat-psi-agent` runtime has guarded compressed-MLA and
+fused sparse-MoE controls. They stay opt-in until a repeatable public checkpoint
+quality and throughput comparison is available; see the
+[guarded acceleration audit](../internals/guarded-acceleration.md).
 
-### Tool use
-
-`text chat` can run a local agentic tool loop. `--tools` takes a
-comma-separated list of built-in tool names (`write_file`, `shell_exec`), and
-`--tool-loop` enables the loop: generate, execute tool calls, feed results
-back, continue, capped at 10 iterations. Tools execute inside a sandbox
-directory — `--sandbox-dir` sets it; the default is a per-process temp
-directory — and each call asks for interactive `[y/N]` approval by default.
-`shell_exec` additionally requires `--allow-shell-exec`, and `write_file` only
-targets absolute paths outside the sandbox with `--allow-absolute-tool-paths`.
-`--auto-approve-tools` skips confirmation for `write_file` only; `shell_exec`
-always requires interactive approval even when that flag is set.
-Approved shell commands run through `/bin/zsh` on macOS and `/bin/sh` on Linux.
-
-Each approved shell call has a five-minute deadline. The tool drains stdout and
-stderr while the command runs and retains the first 256 KiB of their combined
-output. If output exceeds that limit, the result includes `[output truncated]`.
-Reaching the capture limit does not stop the command. A timeout or task
-cancellation terminates the owned process group.
-
-```bash
-swift run mere.run text chat \
-  --model text-chat-gemma4-12b-4bit \
-  --prompt "Create hello.py that prints the system time, then run it." \
-  --tools write_file,shell_exec \
-  --tool-loop \
-  --allow-shell-exec \
-  --sandbox-dir ./work
-```
-
-### Vision input
-
-`text chat` accepts `--image` with a local file path or a `data:image/...` URI
-for vision-capable chat models such as Bonsai 27B or `vision-chat-gemma4-12b`.
-The image attaches to the user prompt for multimodal prefill.
-
-```bash
-swift run mere.run text chat \
-  --model text-chat-bonsai-27b-2bit \
-  --image ./photo.png \
-  --prompt "Describe what is in this photo."
-```
-
-### Local code generation
+## Code generation
 
 ```bash
 swift run mere.run text code \
   --prompt "Write a Swift function that reverses a string."
 ```
 
-`text-code-qwen3`, `text-code-north-mini`, and `text-agent-ornith-35b` are
-native `text code` models and run GGUF weights through llama.cpp. North Mini
-Code uses the Unsloth `North-Mini-Code-1.0-UD-Q4_K_M.gguf` quant, so it
-requires a llama.cpp runtime with `cohere2moe` architecture support. Ornith 35B
-uses DeepReinforce's `ornith-1.0-35b-Q4_K_M.gguf` quant for larger coding-agent
-evals.
+`text code` runs GGUF weights through the vendored llama.cpp runtime
+(`vendor/llama.xcframework`). It defaults to `text-code-qwen3`, and `--model`
+accepts a managed model ID or a path to a GGUF file.
+
+- North Mini Code uses the Unsloth `North-Mini-Code-1.0-UD-Q4_K_M.gguf` quant,
+  so it requires a llama.cpp runtime with `cohere2moe` architecture support.
+- `text-agent-ornith-35b` uses DeepReinforce's `ornith-1.0-35b-Q4_K_M.gguf`
+  quant for larger coding-agent evaluations.
+- `text-agent-qwen35-9b` is a low-memory Qwen3.5 9B GGUF coding model.
 
 ```bash
 swift run mere.run model pull text-code-north-mini
@@ -630,7 +802,16 @@ swift run mere.run text code \
   --prompt "Write a compact Swift Result helper."
 ```
 
-### Embeddings
+`text code` hides the model's reasoning by default; pass `--thinking` to show it
+before the code response. On packaged Linux installs, the command runs the
+bundled `llama-cli` subprocess so CUDA GGUF loads stay isolated from the MLX
+runtime in the Swift process.
+
+## Embeddings
+
+`text embed` creates vectors for semantic search and other representation
+tasks; it doesn't generate text. Without `--model`, it uses
+`text-embed-qwen3-0.6b`:
 
 ```bash
 swift run mere.run text embed \
@@ -638,14 +819,46 @@ swift run mere.run text embed \
   --pretty
 ```
 
-### PII anonymization
+For multimodal embeddings, task prefixes, and output dimensions, see
+[EmbeddingGemma 2](./embeddinggemma2.md). For late-interaction token vectors
+and contextual chunk vectors, see [PPLX Embed v2](./pplx-embed-v2.md).
+
+## Decisions, classification, and extraction
+
+These commands score answers instead of generating text, and they read a JSON
+request from `--input` or stdin:
+
+- `text decide` answers typed choice, score, and yes-or-no questions. Laya is
+  the default; Clef and D1 add JSON state, images, video, and audio. See
+  [Laya](./laya.md), [Clef](./clef.md), and [D1](./d1.md).
+- `text classify` and `text extract` label text and extract entities, relations,
+  and structures. See [GLiNER2.5 Decide](./gliner25-decide.md).
+
+Each command has `--preflight` to check token budgets without loading weights.
+
+## PII anonymization
+
+`text anonymize` runs the OpenAI Privacy Filter token-classification model
+through the native MLX runtime. It prints redacted text by default, or
+structured JSON spans with `--json`. When you don't pass text arguments, it
+reads stdin.
 
 ```bash
 swift run mere.run text anonymize \
   "My name is Dana Example and my email is dana@example.com"
 ```
 
-### Native text and VLM LoRA training
+`--replacement` sets the replacement template, which supports `{label}` and
+`{index}` (default `[{label}]`).
+
+## Train a LoRA adapter
+
+`text train-lora` trains LoRA adapters for Gemma 4 text models,
+`vision-chat-gemma4-12b`, `text-chat-laguna-xs-2-1`, `text-chat-inkling-small`,
+and `text-chat-lfm25-a1b-8bit` from reviewed chat SFT data. Laguna S and its
+DFlash companion are inference-only. Keep local text fine-tuning in `mere.run`
+so model IDs, manifests, runtime constraints, and evaluation artifacts stay on
+the same command surface.
 
 ```bash
 swift run mere.run text train-lora \
@@ -657,44 +870,107 @@ swift run mere.run text train-lora \
   --json
 ```
 
-`text train-lora` is the native MereRun entrypoint for chat-style SFT JSONL.
-The data format is one JSON object per line with `sources`, `messages`, and an
-optional typed `tools` array. Messages use the same `system`, `user`,
-`assistant`, and `tool` roles as the local chat runtime. Assistant messages can
-carry typed `toolCalls`; tool results use `name` and `toolCallID`. The selected
-model's native template receives the same complete tool schemas during
-training that it receives during inference, and native tool-call markup is
-included in the assistant loss target. `--dry-run` validates the dataset,
-fingerprints messages and complete tool schemas, validates and counts an
-optional held-out SFT dataset, and writes a `.manifest.json` next to the
-requested adapter path.
+### Dataset format
+
+The dataset is JSONL with one object per line that contains `sources`,
+`messages`, and an optional typed `tools` array. Messages use the same `system`,
+`user`, `assistant`, and `tool` roles as the local chat runtime. Assistant
+messages can carry typed `toolCalls`, and tool results use `name` and
+`toolCallID`. During training, the selected model's native template receives
+the same complete tool schemas it receives during inference, and native
+tool-call markup is part of the assistant loss target.
+
+`--dry-run` validates the dataset, fingerprints messages and complete tool
+schemas, validates and counts an optional held-out SFT dataset, and writes a
+`.manifest.json` next to the requested adapter path.
 
 Duplicate detection compares the complete controller prefix and its tool
-schemas, rather than only the first user question. A curriculum may therefore
-repeat a question after an assistant tool call and tool result, while an exact
-duplicate controller state remains invalid.
+schemas, not only the first user question. A curriculum can repeat a question
+after an assistant tool call and tool result, but an exact duplicate controller
+state is invalid.
 
-Without `--dry-run`, the command resolves a supported Gemma 4 text model,
-`vision-chat-gemma4-12b`, `text-chat-laguna-xs-2-1`,
-`text-chat-inkling-small`, or `text-chat-lfm25-a1b-8bit` through the same
-managed model store as chat. The command applies the model's chat template,
-masks loss to assistant tokens, injects LoRA layers into the family-specific
-target surface, and writes a `.safetensors` adapter plus a family-specific
-manifest. Add
-`--visualize` to start the same loopback LoRA training dashboard used by image
-training; text runs write `run.json`, `*.events.jsonl`, `*.loss.csv`, and
-`*.loss.html` beside the adapter so loss and training events can be inspected
-while the optimizer runs. Keep local text fine-tuning in `mere.run` so the same
-model IDs, manifests, runtime constraints, and evaluation artifacts remain
-under the MereRun command surface.
+### Training run
 
-When `--eval` is supplied for a real training run, mere.run tokenizes that
-held-out SFT JSONL with the same model chat template and reports assistant-token
-negative log-likelihood immediately before and after optimization. The held-out
+Without `--dry-run`, the command resolves the base model through the same
+managed model store as chat. It applies the model's chat template, masks loss to
+assistant tokens, injects LoRA layers into the family-specific target surface,
+and writes a `.safetensors` adapter plus a family-specific manifest.
+
+`--visualize` starts the same loopback LoRA training dashboard that image
+training uses. Text runs write `run.json`, `*.events.jsonl`, `*.loss.csv`, and
+`*.loss.html` beside the adapter, so you can inspect loss and training events
+while the optimizer runs.
+
+```bash
+swift run mere.run text train-lora \
+  --data ./pairs.seed.jsonl \
+  --eval ./eval.prompts.jsonl \
+  --output ./local-assistant.safetensors \
+  --model text-chat-gemma4-12b-4bit \
+  --visualize \
+  --visualize-port 8787
+```
+
+When you pass `--eval` for a real training run, the command tokenizes that
+held-out SFT JSONL with the same chat template and reports assistant-token
+negative log-likelihood immediately before and after optimization. Held-out
 examples never enter the training order. The machine-readable training report
 includes both losses plus the evaluated example and assistant-token counts.
 
-#### Train Gemma 4 with image-conditioned examples
+Use the resulting adapter with native Gemma chat:
+
+```bash
+swift run mere.run text chat \
+  --model text-chat-gemma4-12b-4bit \
+  --lora ./local-assistant.safetensors \
+  --prompt "What should this local assistant know?"
+```
+
+### Core hyperparameters
+
+The defaults are tuned for local Gemma 4 SFT. Run
+`swift run mere.run text train-lora --help` for the full flag list.
+
+| Flag | Purpose | Default |
+| --- | --- | --- |
+| `--training-steps`, `--steps` | Number of optimizer steps | `600` |
+| `--batch-size` | Training batch size | `1` |
+| `--learning-rate`, `--lr` | Optimizer learning rate | `0.0001` |
+| `--rank` | LoRA rank | `16` |
+| `--alpha` | LoRA alpha | The rank |
+| `--max-sequence-length` | Maximum training sequence length | `4096` |
+| `--reasoning-effort` | Inkling renderer effort from `0` through `0.99`; use the same value for inference | `0.9` |
+| `--seed` | Random seed | `42` |
+| `--resume-from` | Optimizer-bearing text LoRA checkpoint to continue | None |
+| `--resume-step` | Verified completed step for a checkpoint without embedded step state | None |
+| `--target-modules` | Comma-separated LoRA target suffixes | Attention for Gemma, Laguna, and LFM2.5; Inkling adds MLP, expert, and `lm_head` targets |
+| `--adapter-name` | Adapter display name | `local-assistant` |
+
+Gemma and Laguna target the q/k/v/o attention projections, and LFM2.5 targets
+the q/k/v/output attention projections.
+
+The optimizer projects only loss-masked target positions through `lm_head`.
+Prompt and padding rows never contribute loss, so gradients are unchanged. It
+reads the loss back every 10 steps instead of every step, and writes a
+`<name>.partial.safetensors` checkpoint every 100 steps so that an interrupted
+run can continue. At each readback, it prints
+`[text-lora-train] step= loss= step_s= footprint_gb=` diagnostics.
+[Configuration](../configuration.md) documents the `MERERUN_TEXT_LORA_TRAIN_*`
+and shared `MERERUN_LORA_TRAIN_*` environment variables that tune or turn off
+each behavior.
+
+### Resume a run
+
+To continue a self-describing checkpoint, pass `--resume-from` with the same
+model, dataset, optimizer recipe, seed, target modules, and total
+`--training-steps`. The trainer restores the saved LoRA tensors, FP32 Adam
+moments, global optimizer step, and deterministic data-order position. It
+rejects incomplete optimizer state, changed configuration, changed tensor
+inventories, and shape mismatches. For a checkpoint without embedded step
+state, also pass the verified completed step with `--resume-step`. Write resumed
+output to a different file from the source checkpoint.
+
+### Train Gemma 4 with image-conditioned examples
 
 For Gemma 4 12B vision training, store each image under the dataset directory.
 Add exactly one dataset-relative `imageUrl` value to a user message in each
@@ -722,15 +998,15 @@ mere.run text train-lora \
 
 The loader rejects remote URLs, absolute paths, path escapes, symbolic links,
 audio, video, and multiple images per example. It decodes every image before
-training. The dataset manifest records image reference count, unique image
+training. The dataset manifest records the image reference count, unique image
 count, byte count, and a content fingerprint. Changing an image changes the
 dataset fingerprint, even when the JSONL file doesn't change.
 
-The first Gemma 4 VLM target freezes the vision encoder, multimodal projector,
-and base language weights. It trains q/k/v/o LoRA parameters in language
-attention with assistant-token loss. VLM batches contain one example. The
-runtime preprocesses the referenced image again for each optimizer step and
-verifies that its visual-token shape still matches the validated dataset.
+The Gemma 4 VLM target freezes the vision encoder, multimodal projector, and base
+language weights. It trains q/k/v/o LoRA parameters in language attention with
+assistant-token loss. VLM batches contain one example. The runtime preprocesses
+the referenced image again for each optimizer step and verifies that its
+visual-token shape still matches the validated dataset.
 
 After training, use the adapter with the same base model:
 
@@ -742,69 +1018,11 @@ mere.run text chat \
   --prompt "Describe the evidence in this image."
 ```
 
-An improving held-out loss proves that the optimizer path works. It doesn't
+An improving held-out loss shows that the optimizer path works; it doesn't
 prove task quality. Before promotion, compare the base and adapted model on a
 separate image-conditioned evaluation pack.
 
-Core hyperparameters (defaults are tuned for local Gemma4 SFT):
-
-- `--training-steps` / `--steps` — number of optimizer steps (default `600`)
-- `--batch-size` — training batch size (default `1`)
-- `--learning-rate` / `--lr` — optimizer learning rate (default `0.0001`)
-- `--rank` — LoRA rank (default `16`)
-- `--alpha` — LoRA alpha (defaults to the rank)
-- `--max-sequence-length` — maximum training sequence length (default `4096`)
-- `--reasoning-effort` — Inkling renderer effort from `0` through `0.99`
-  (default `0.9`; use the same value for inference)
-- `--seed` — random seed (default `42`)
-- `--resume-from` — optimizer-bearing text LoRA checkpoint to continue
-- `--resume-step` — verified completed step for a checkpoint that doesn't
-  contain embedded step state
-- `--target-modules` — comma-separated LoRA target suffixes. Gemma and Laguna
-  default to q/k/v/o attention. LFM2.5 defaults to q/k/v/output attention.
-  Inkling also defaults to MLPs and `lm_head`.
-- `--adapter-name` — adapter display name (default `local-assistant`)
-
-This list is deliberately not exhaustive; run
-`swift run mere.run text train-lora --help` for the full flag surface.
-
-The optimizer projects only loss-masked target positions through the lm_head
-(prompt and padding rows never contribute loss, so gradients are unchanged),
-reads the loss back every 10 steps rather than per step, writes a
-`<name>.partial.safetensors` checkpoint every 100 steps so an interrupted run
-can continue, and prints `[text-lora-train] step= loss= step_s= footprint_gb=`
-diagnostics at each readback. `docs/configuration.md` documents the
-`MERERUN_TEXT_LORA_TRAIN_*` and shared `MERERUN_LORA_TRAIN_*` environment
-switches that tune or disable each behavior.
-
-To continue a self-describing checkpoint, pass `--resume-from` and use the
-same model, dataset, optimizer recipe, seed, target modules, and total
-`--training-steps`. The trainer restores the saved LoRA tensors, FP32 Adam
-moments, global optimizer step, and deterministic data-order position. It
-rejects incomplete optimizer state, changed configuration, changed tensor
-inventories, and shape mismatches. For a checkpoint that doesn't contain
-embedded step state, also pass the verified completed step with
-`--resume-step`. Write resumed output to a different file from the source
-checkpoint.
-
-```bash
-swift run mere.run text train-lora \
-  --data ./pairs.seed.jsonl \
-  --eval ./eval.prompts.jsonl \
-  --output ./local-assistant.safetensors \
-  --model text-chat-gemma4-12b-4bit \
-  --visualize \
-  --visualize-port 8787
-```
-
-Use the resulting adapter with native Gemma chat:
-
-```bash
-swift run mere.run text chat \
-  --model text-chat-gemma4-12b-4bit \
-  --lora ./local-assistant.safetensors \
-  --prompt "What should this local assistant know?"
-```
+### Train Laguna XS
 
 Laguna XS uses the same dataset and hyperparameter surface:
 
@@ -820,18 +1038,20 @@ swift run mere.run text chat \
   --prompt "What should this local assistant know?"
 ```
 
-Laguna training defaults to q/k/v/o attention projections and writes
+Laguna training defaults to the q/k/v/o attention projections and writes
 `mererun.laguna.text-lora` in its manifest. At inference time, applying an
 adapter discards retained base-only QKV side layouts before generation so the
-LoRA cannot be bypassed. Switching or removing an adapter reloads the base
-model and is rejected while a continuous batch is active.
+LoRA can't be bypassed. Switching or removing an adapter reloads the base model
+and is rejected while a continuous batch is active.
+
+### Train Inkling-Small
 
 Inkling-Small uses the same assistant-only dataset and held-out evaluation
-surface. Its native lane keeps the mixed checkpoint intact: routed experts
-remain affine 2-bit/group-128, non-routed weights remain BF16, and only q/k/v/o
+surface. Its native path keeps the mixed checkpoint intact: routed experts stay
+affine 2-bit/group-128, non-routed weights stay BF16, and only q/k/v/o
 attention, gate/up/down MLP, and `lm_head` LoRA parameters are optimized. The
 expert adapters use shared-outer factors: the hidden-dimension factor is shared
-across experts while the expert-intermediate factor remains expert-specific.
+across experts, and the expert-intermediate factor stays expert-specific.
 
 ```bash
 swift run mere.run text train-lora \
@@ -849,46 +1069,15 @@ swift run mere.run text chat \
 ```
 
 Inkling adapters write `mererun.inkling.text-lora` in their manifest. The
-training graph uses a differentiable MLX mask path and treats discrete expert
-selection indices as non-differentiable while retaining gradients through the
+training graph uses a differentiable MLX mask path. It treats discrete expert
+selection indices as non-differentiable while keeping gradients through the
 selected router scores and quantized expert computation.
 
-LFM2.5 A1B uses a frozen affine 8-bit base and adapts only the four attention
-projections. This first target surface excludes short-convolution blocks,
-dense feed-forward layers, routers, and expert matrices. The native module
-name is `out_proj`; the injector also accepts the upstream LoRA alias
-`o_proj`.
-
-```bash
-mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
-
-mere.run text train-lora \
-  --model text-chat-lfm25-a1b-8bit \
-  --data ./copper-finch-canary.jsonl \
-  --eval ./copper-finch-heldout.jsonl \
-  --output ./copper-finch-lfm25.safetensors \
-  --training-steps 10 \
-  --rank 16 \
-  --alpha 32
-
-mere.run text chat \
-  --model text-chat-lfm25-a1b-8bit \
-  --lora ./copper-finch-lfm25.safetensors \
-  --prompt "Introduce yourself in two sentences."
-```
-
-LFM2.5 adapters write `mererun.lfm2.text-lora` in their manifest. The LFM
-Open License v1.0 applies to the base model and derived adapters. You must
-accept the model license before installation. Commercial use by a legal entity
-with annual revenue of at least USD 10 million isn't licensed under the
-community terms.
-
 Loss improvement is diagnostic, not a behavioral acceptance gate. The repository
-includes a deterministic codebook task with 32 train examples and four unseen
-paraphrases. The following proven recipe covers 12 complete shuffled epochs
-using balanced batch-4 updates, then requires the adapter to answer all
-held-out cases exactly while improving by at least three cases over the base
-model:
+includes a deterministic codebook task with 32 training examples and four unseen
+paraphrases. The following recipe covers 12 complete shuffled epochs with
+balanced batch-4 updates. The adapter must then answer all held-out cases
+exactly and improve by at least three cases over the base model:
 
 ```bash
 swift run mere.run text train-lora \
@@ -908,103 +1097,79 @@ scripts/eval-inkling-receptivity.py \
 The implementation validation on the pinned affine-q2/group-128 artifact used
 that recipe on a 128 GB Apple Silicon machine. It measured a 110.2 GB peak,
 held-out loss `4.4072 -> 0.0302`, and exact behavior `0/4 -> 4/4`. The gate
-report records hashes for the CLI, model config, and adapter; those results
+report records hashes for the CLI, model config, and adapter. Those results
 demonstrate this deterministic receptivity task, not broad downstream quality.
+
+### Train LFM2.5 A1B
+
+LFM2.5 A1B uses a frozen affine 8-bit base and adapts only the four attention
+projections. This target surface excludes short-convolution blocks, dense
+feed-forward layers, routers, and expert matrices. The native module name is
+`out_proj`; the injector also accepts the upstream LoRA alias `o_proj`.
+
+```bash
+mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
+
+mere.run text train-lora \
+  --model text-chat-lfm25-a1b-8bit \
+  --data ./copper-finch-canary.jsonl \
+  --eval ./copper-finch-heldout.jsonl \
+  --output ./copper-finch-lfm25.safetensors \
+  --training-steps 10 \
+  --rank 16 \
+  --alpha 32
+
+mere.run text chat \
+  --model text-chat-lfm25-a1b-8bit \
+  --lora ./copper-finch-lfm25.safetensors \
+  --prompt "Introduce yourself in two sentences."
+```
+
+LFM2.5 adapters write `mererun.lfm2.text-lora` in their manifest. The LFM Open
+License v1.0 applies to the base model and to derived adapters.
 
 ## Runtime entrypoints
 
-### CLI
+The CLI commands live in `Sources/MereRunCLI/Commands/`:
 
-- `Sources/MereRunCLI/Commands/TextChatCommand.swift`
-- `Sources/MereRunCLI/Commands/TextCodeCommand.swift`
-- `Sources/MereRunCLI/Commands/TextEmbedCommand.swift`
-- `Sources/MereRunCLI/Commands/TextAnonymizeCommand.swift`
-- `Sources/MereRunCLI/Commands/TextTrainLoRACommand.swift`
+- `TextChatCommand.swift`
+- `TextCodeCommand.swift`
+- `TextEmbedCommand.swift`
+- `TextDecideCommand.swift`
+- `TextClassifyCommand.swift`
+- `TextExtractCommand.swift`
+- `TextAnonymizeCommand.swift`
+- `TextTrainLoRACommand.swift`
 
 Text training uses [shared options and execution](../internals/text-training-execution.md)
 in Core. The command owns output formatting and the optional dashboard.
 
-### Chat families
+Chat orchestration for each family lives under `Sources/MereRunCore/`, for
+example `Gemma4/`, `Q35/`, `LFM2/`, `Laguna/`, `Inkling/`, `DiffusionGemma/`,
+`MuseGlimmer/`, `NemotronH/`, `NemotronBolt/`, `Flint/`, `Kolibri/`,
+`DeepseekV4Flash/`, `Psi/`, and `MeBot/`. Newer families keep model computation
+in owned runtime targets such as `MereRunGemmaModel`, `MereRunQwenModel`,
+`MereRunLagunaModel`, `MereRunFlintModel`, `MereRunKolibriModel`, and
+`MereRunNemotronBoltModel`.
 
-- `Sources/MereRunCore/Q35/`
-- `Sources/MereRunCore/Gemma4/`
-- `Sources/MereRunCore/LFM2/`
-- `Sources/MereRunCore/Psi/`
-- `Sources/MereRunCore/MeBot/`
+Other text features use these directories:
 
-### Code generation
-
-`mere.run text code` uses the vendored `llama.cpp` runtime via
-`vendor/llama.xcframework` and the matching support code in `MereRunCore`. On
-packaged Linux installs, the command uses the colocated `llama-cli` subprocess
-so CUDA GGUF loads stay isolated from the MLX runtime in the Swift process.
-Code generation hides the model's reasoning by default; pass `--thinking` to
-show it before the code response.
-
-### Embeddings
-
-- `Sources/MereRunCore/Embeddings/`
-
-### Anonymization
-
-- `Sources/MereRunCore/PrivacyFilter/`
-
-## Practical distinctions
-
-### `mere.run text chat`
-
-Use this for local assistant-style generation. It supports prompt/system
-control, token limits, token streaming with `--stream`, and the chat-oriented
-model families. Native MLX Gemma and Qwen-family models also support constrained
-JSON objects with `--response-format json_object`.
-
-### `mere.run text code`
-
-Use this when you want a GGUF-backed coding path through the vendored
-`llama.cpp` runtime. Linux packages run the same model family through the
-bundled `llama-cli` subprocess when it is present.
-
-### `mere.run text embed`
-
-Use this for vector generation, semantic search prep, and other representation
-tasks. It is not a generative command.
-
-### `mere.run text anonymize`
-
-Use this for local PII detection and redaction. It runs the OpenAI Privacy
-Filter token-classification model through the native MLX runtime and can emit
-plain redacted text or structured JSON spans.
-
-### `mere.run text train-lora`
-
-Use this to prepare and train Gemma-family, Laguna XS 2.1, Inkling-Small, or
-LFM2.5 A1B 8-bit text LoRA adapters from reviewed chat SFT data. The Laguna lane is
-`text-chat-laguna-xs-2-1`; Laguna S and DFlash are inference-only here. The
-Inkling lane is `text-chat-inkling-small` and trains against its pinned native
-mixed-precision MLX artifact.
-The LFM2.5 lane is `text-chat-lfm25-a1b-8bit` and uses attention-only QLoRA.
+- Code generation: `Sources/MereRunCore/CodeGen/`
+- Embeddings: `Sources/MereRunCore/Embeddings/` and `MereRunCoreMLModel`
+- Decisions: `Sources/MereRunCore/Laya/`, `Clef/`, and `D1/`, with
+  `MereRunLayaModel` and `MereRunD1Model`
+- Classification and extraction: `Sources/MereRunCore/GLiNER/` and
+  `MereRunGLiNERModel`
+- Anonymization: `Sources/MereRunCore/PrivacyFilter/`
 
 ## Reading the code
 
-If you want to understand the text stack:
+To understand the text stack, follow these steps:
 
 1. Start at the matching CLI command.
 2. Follow model resolution through `MereRunModelManifest` and `ModelResolver`.
-3. Continue to the family-specific runtime in `MereRunCore`.
+3. Continue to the family-specific runtime in `MereRunCore` or its owned runtime
+   target.
 
 For repository orientation, pair this page with
 [CLI and runtime internals](../internals/cli-and-runtime.md).
-
-## Request validation and lifetime
-
-`text chat` checks numeric sampling and token limits before generation. Its
-preflight report uses the same checks. During a tool conversation, the command
-retains one native runtime and unloads it after completion, failure, or
-cancellation. See [shared chat execution](../internals/chat-execution.md) for the
-request and runtime boundaries shared with the API.
-
-## Nemotron 3.5 Bolt
-
-[Nemotron 3.5 Bolt](./nemotron-bolt.md) loads the original mixed packed
-checkpoint through the native Swift/MLX runtime for text and image chat.
-Install `vision-chat-nemotron-35-bolt-24gb` explicitly before inference.

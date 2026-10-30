@@ -72,7 +72,7 @@ struct VideoExportLatents: AsyncParsableCommand {
           <model-root>/ltx-2-spatial-upscaler-x2-1.0.safetensors
 
         Example:
-          swift run mere.run video export-latents \\
+          mere.run video export-latents \\
             --model video-ltx-av \\
             -o out.safetensors \\
             "a cinematic drone flyover at sunrise"
@@ -179,16 +179,16 @@ struct VideoGenerate: AsyncParsableCommand {
         not combine it with --quality or --output-mode.
 
         Examples:
-          swift run mere.run video generate "a cinematic drone flythrough over snowy mountains" --num-frames 65
-          swift run mere.run video generate "woman walking in neon rain" --image frame.png
-          swift run mere.run video generate "a car drives from dawn into sunset" --image start.png --end-image end.png
-          swift run mere.run video generate "a cinematic final shot" --quality final --duration 4
-          swift run mere.run video generate "dialogue with clean background music" --quality final --output-mode audio-video --duration 15 --fps 24
-          swift run mere.run video generate "a kinetic live performance" --audio song.wav --audio-start-time 30 --duration 5 --image performer.png
-          swift run mere.run video generate "the camera walks forward" --model video-wan22-ti2v-5b-mlx --image frame.png --num-frames 41 --width 1280 --height 704
-          swift run mere.run video generate "use this subject and motion" --model video-minimax-h3-ref2va-mlx --reference image:subject.png --reference video:motion.mp4
-          swift run mere.run video generate "one continuous tracking shot" --model video-minimax-h3-fl2va-bf16-mlx --duration 15 --h3-window-frames 124 --h3-window-overlap 35
-          swift run mere.run video generate "the actor crosses three sets" --model video-minimax-h3-fl2va-bf16-mlx --h3-frame 72:second-set.png --h3-frame 144:third-set.png
+          mere.run video generate "a cinematic drone flythrough over snowy mountains" --num-frames 65
+          mere.run video generate "woman walking in neon rain" --image frame.png
+          mere.run video generate "a car drives from dawn into sunset" --image start.png --end-image end.png
+          mere.run video generate "a cinematic final shot" --quality final --duration 4
+          mere.run video generate "dialogue with clean background music" --quality final --output-mode audio-video --duration 15 --fps 24
+          mere.run video generate "a kinetic live performance" --audio song.wav --audio-start-time 30 --duration 5 --image performer.png
+          mere.run video generate "the camera walks forward" --model video-wan22-ti2v-5b-mlx --image frame.png --num-frames 41 --width 1280 --height 704
+          mere.run video generate "use this subject and motion" --model video-minimax-h3-ref2va-mlx --reference image:subject.png --reference video:motion.mp4
+          mere.run video generate "one continuous tracking shot" --model video-minimax-h3-fl2va-bf16-mlx --duration 15 --h3-window-frames 124 --h3-window-overlap 35
+          mere.run video generate "the actor crosses three sets" --model video-minimax-h3-fl2va-bf16-mlx --h3-frame 72:second-set.png --h3-frame 144:third-set.png
         """
     )
 

@@ -1,8 +1,8 @@
 # Graph Studio
 
 Use Mere Graph Studio to build workflows on a canvas instead of writing JSON by
-hand. Graph Studio is the visual authoring and operations surface for the
-`mere.run` Graph v2 runtime. Use either the hosted app at
+hand. Graph Studio is the visual editor and run console for the `mere.run`
+Graph v2 runtime. Use either the hosted app at
 [studio.mere.run](https://studio.mere.run/) or the cross-platform Tauri 2
 desktop build for macOS, Windows, and Linux.
 
@@ -30,17 +30,17 @@ Relay, and paired Nodes execute the same immutable bundle bytes.
 
 [Open Graph Studio](https://studio.mere.run/app) in a modern browser and sign in
 with Mere World. Projects are private to the signed-in account. The site loads
-the live node catalog reported by the user's paired fleet, performs placement
+the live node catalog that your paired fleet reports, runs placement
 preflight, creates an immutable job, and submits it through Relay.
 
 The hosted site does not run models. Relay owns admission, scheduling, leases,
 retry state, and artifact delivery; the paired Node owns model execution. A
 stale worker cannot settle a newer attempt.
 
-Hosted execution accepts graphs whose inputs are JSON values. Use the
-desktop app for workflows that bind local files or directories; browser asset
-upload is a separate transport boundary and is not inferred from a machine-local
-path.
+Hosted execution accepts only graphs whose inputs are JSON values. For
+workflows that bind local files or directories, use the desktop app. Browser
+asset upload is a separate transport boundary, and the hosted site doesn't
+infer it from a machine-local path.
 
 ### Desktop Studio
 
@@ -54,26 +54,26 @@ Use the desktop app for these tasks:
 - Manage native project and run workspaces.
 
 Desktop Studio requires a compatible `mere.run` executable for local execution.
-Optional workflow tools add templates, programs, and conservative ComfyUI
-prompt import; core graph authoring remains available without them.
+Optional workflow tools add templates, programs, and a limited ComfyUI prompt
+import; core graph authoring works without them.
 
 The desktop product has one native backend: the frontend invokes Rust through
 Tauri IPC, and Rust invokes the installed CLI. It does not ship a Python
 runtime, browser compatibility server, or loopback HTTP API.
 
-Native packaging is implemented for each platform. Public installer links are
-published from [studio.mere.run](https://studio.mere.run/) only after the
-matching platform artifact has passed its signing and package-verification
-gate; the hosted app remains available without a desktop install.
+Each platform has native packaging. [studio.mere.run](https://studio.mere.run/)
+publishes an installer link only after that platform's artifact passes its
+signing and package-verification gate. The hosted app works without a desktop
+install.
 
 ## Authentication boundary
 
-Local Studio does not require Mere World sign-in. Launch, authoring, project
-save and load, catalog discovery, validation, preflight, and local execution
-remain available without an account or network connection when the required
-CLI and model assets are already installed.
+Local Studio does not require Mere World sign-in. When the required CLI and
+model assets are already installed, launch, authoring, project save and load,
+catalog discovery, validation, preflight, and local execution work without an
+account or a network connection.
 
-Identity is introduced only when Studio crosses an account or fleet boundary:
+Studio asks for identity only when it crosses an account or fleet boundary:
 
 | Surface | Authentication |
 | --- | --- |
@@ -115,13 +115,14 @@ mere.run graph preflight workflow.json --inputs-json inputs.json --executor loca
 mere.run graph run workflow.json --inputs-json inputs.json --run-dir ./runs/studio --json
 ```
 
-If you use a paired fleet, select the Relay executor in Studio or submit the same
-materialized bundle with `mere.run graph submit-job`. Run reports, events, and
-artifact hashes use the same contract in either client.
+For a paired fleet, select the Relay executor in Studio, or export the bundle
+and submit it with `mere.run graph submit-job`. Run reports, events, and
+artifact hashes use the same contract in either client. For executor setup, see
+[Portable workflows](../workflows.md#executor-profiles).
 
 ## Compatibility and drift prevention
 
-Studio does not keep a private hard-coded execution schema. Desktop Studio
+Studio doesn't keep a private, hard-coded execution schema. Desktop Studio
 reads `mere.run graph catalog --json`; hosted Studio reads catalogs reported by
 connected Nodes through Relay. The catalog carries node fields, requirements,
 provider versions, and provider catalog digests, so an unavailable or outdated

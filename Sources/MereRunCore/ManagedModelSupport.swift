@@ -226,7 +226,7 @@ public enum ManagedModelCapabilityCatalog {
             descriptor(
                 "image-klein-9b",
                 "Image, large artistic quality",
-                "Installs the gated FLUX.2 Klein 9B image model for higher-capacity prompt and reference-image workflows.",
+                "Installs the license-restricted FLUX.2 Klein 9B image model for higher-capacity prompt and reference-image workflows.",
                 minimum: 48,
                 recommended: 64
             ),

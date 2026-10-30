@@ -1,159 +1,140 @@
 # Vision runtime
 
-Use the vision runtime to ask a question about a photo, isolate a named object,
-follow it through a video, read a document, recover metric depth and camera
-intrinsics from one frame, or reconstruct a physically based rendering (PBR)
-mesh. The runtime provides 19 commands that run on your machine.
+The vision runtime analyzes images and video on your machine. Use it to caption
+or question a photo, embed images for retrieval, read a document, find and mask
+named objects, follow them through a video, analyze faces, measure pose and
+motion, recover depth and camera geometry, or reconstruct a textured 3D mesh.
+Every model runs locally, and most run natively in Swift and MLX.
+
+To chat with a vision-language model about an image, use `text chat --image`
+instead. For more information, see [Vision input](./text.md#image-input) in
+the text runtime and [Nemotron 3.5 Bolt](./nemotron-bolt.md).
 
 ## Commands
 
+The `mere.run vision` command group has 20 subcommands. The default model for
+each command is the one it resolves when you omit `--model`. A dash means the
+command uses a platform framework or a downloaded default rather than a managed
+model ID.
+
 **Understand and read**
 
-| Command | What it does |
-| --- | --- |
-| `mere.run vision inspect` | Describe or answer questions about an image using Qwen3-VL. |
-| `mere.run vision caption` | Generate training-friendly captions for images. |
-| `mere.run vision ocr` | Extract text from images using LightOnOCR, GLM-OCR, or Infinity-Parser2. |
+| Command | What it does | Default model |
+| --- | --- | --- |
+| `vision caption` | Generate training-friendly captions for images. | Qwen3-VL 2B Instruct 4-bit, downloaded on first use |
+| `vision inspect` | Describe or answer questions about an image using Qwen3-VL. | Default local vision-language model, downloaded on first use |
+| `vision embed` | Generate shared text and image embeddings with native Qwen3-VL. | `vision-embed-qwen3-vl-2b` |
+| `vision ocr` | Extract text from images with LightOnOCR, GLM-OCR, or Infinity-Parser2. | `vision-ocr-lighton` |
 
 **Find, isolate, and follow**
 
-| Command | What it does |
-| --- | --- |
-| `mere.run vision ground` | Ground text queries in an image with the native Falcon Perception runtime. |
-| `mere.run vision segment` | Segment prompted objects in an image with the native SAM 3.1 runtime. |
-| `mere.run vision track` | Track prompted objects through a video with the native SAM 3.1 runtime. |
-| `mere.run vision track-live` | Capture from a camera and track text-prompted objects with native SAM 3.1. |
+| Command | What it does | Default model |
+| --- | --- | --- |
+| `vision ground` | Ground text queries in an image with native Falcon Perception. | `vision-ground-falcon-perception` |
+| `vision serve` | Serve resident Falcon Perception grounding over loopback HTTP. | `vision-ground-falcon-perception` |
+| `vision segment` | Segment prompted objects in an image with native SAM 3.1. | `vision-segment-sam31` |
+| `vision track` | Track prompted objects through a video with native SAM 3.1. | `vision-segment-sam31` |
+| `vision track-live` | Capture from a camera and track text-prompted objects with native SAM 3.1. | `vision-segment-sam31` |
 
-**Faces**
+**Faces, pose, and motion**
 
-| Command | What it does |
-| --- | --- |
-| `mere.run vision face detect` | Detect faces and five-point landmarks in an image. |
-| `mere.run vision face embed` | Create a normalized ArcFace embedding for one face in an image. |
-| `mere.run vision face compare` | Compare one face from each of two images with cosine similarity. |
-| `mere.run vision face batch` | Analyze many images with one warm detector/recognizer session and emit JSONL. |
+| Command | What it does | Default model |
+| --- | --- | --- |
+| `vision face detect` | Detect faces and five-point landmarks in an image. | `vision-face-buffalo-l` |
+| `vision face embed` | Create a normalized ArcFace embedding for one face in an image. | `vision-face-buffalo-l` |
+| `vision face compare` | Compare one face from each of two images with cosine similarity. | `vision-face-buffalo-l` |
+| `vision face batch` | Analyze many images with one warm detector and recognizer session, and emit JSONL. | `vision-face-buffalo-l` |
+| `vision pose` | Detect body, hand, and face landmarks with the native platform runtime. | - |
+| `vision flow` | Generate dense optical flow between two equal-size images. | - |
 
-**Measure, reconstruct, and move**
+**Depth, geometry, and 3D**
 
-| Command | What it does |
-| --- | --- |
-| `mere.run vision pose` | Detect body, hand, and face landmarks with the native platform runtime. |
-| `mere.run vision flow` | Generate dense optical flow between two equal-size images. |
-| `mere.run vision depth` | Estimate affine-invariant depth for a still image with native Marigold V2. |
-| `mere.run vision depth-video` | Generate temporally consistent relative or metric video depth with native VDA-S. |
-| `mere.run vision geometry` | Generate metric depth, normals, camera intrinsics, and a point cloud with native MoGe-2. |
-| `mere.run vision geometry-multiview` | Solve native DA3-Small multi-view relative geometry, confidence, and cameras. |
-| `mere.run vision image-to-3d` | Reconstruct a colored object mesh from one image with native TripoSR. |
-| `mere.run vision image-to-3d-trellis2` | Reconstruct a 512-resolution PBR O-Voxel mesh with native MLX TRELLIS.2. |
-| `mere.run vision image-to-3d-multiview` | VFX alias for native 4/6-view InstantMesh reconstruction. |
+| Command | What it does | Default model |
+| --- | --- | --- |
+| `vision depth` | Estimate affine-invariant depth for a still image with native Marigold V2. | `vision-depth-marigold-v2` |
+| `vision depth-video` | Generate temporally consistent relative or metric video depth with native VDA-S. | `vision-depth-vda-small` |
+| `vision geometry` | Generate metric depth, normals, camera intrinsics, and a point cloud with native MoGe-2. | `vision-geometry-moge2-small` |
+| `vision geometry-multiview` | Solve native DA3-Small multi-view relative geometry, confidence, and cameras. | `vision-geometry-da3-small` |
+| `vision image-to-3d` | Reconstruct a colored object mesh from one image with native TripoSR. | `image-3d-triposr` |
+| `vision image-to-3d-trellis2` | Reconstruct a 512-resolution PBR O-Voxel mesh with native MLX TRELLIS.2. | `image-3d-trellis2-4b` |
+| `vision image-to-3d-multiview` | Reconstruct a colored mesh from four or six supplied views with native InstantMesh. | `image-3d-instantmesh-base` |
 
-The macOS Studio app exposes the same surface through its shared capability
+The three `image-to-3d` commands run the same implementations as `image
+reconstruct-3d`, `image reconstruct-3d-trellis2`, and `image
+reconstruct-3d-multiview`. For the image-family spellings, see the
+[Image runtime](./image.md).
+
+## Choose a model
+
+When a task has more than one managed model, use the following table to pick
+one. Memory values are the minimum and recommended unified memory from the
+managed capability catalog.
+
+| Task | Model ID | Memory (min / recommended) | Choose it when |
+| --- | --- | --- | --- |
+| OCR | `vision-ocr-lighton` | 8 / 16 GB | You want the default: LightOnOCR 3 1B, which passed every case in its qualification. |
+| OCR | `vision-ocr-lighton-3-0.8b` | 8 / 16 GB | You want the smallest LightOnOCR 3 download and can review handwriting by hand. |
+| OCR | `vision-ocr-lighton-3-4b` | 16 / 24 GB | You want LightOn's quality recommendation and have the memory for it. |
+| OCR | `vision-ocr-infinity-pro-int8` | 64 / 96 GB | You want Infinity-Parser2 document-to-JSON or Markdown parsing. |
+| OCR | `vision-ocr-infinity-pro` | 128 / 192 GB | You're running full-precision Infinity-Parser2 quality evaluations. |
+| Video depth | `vision-depth-vda-small` | 16 / 32 GB | You want relative depth for a clip. |
+| Video depth | `vision-depth-vda-small-metric` | 16 / 32 GB | You want depth in metric units for a clip. |
+| Still depth | `vision-depth-marigold-v2` | 64 / 96 GB | You want affine-invariant depth from Marigold V2. |
+| Still geometry | `vision-geometry-moge2-small` | 8 / 16 GB | You need metric depth, normals, intrinsics, or a point cloud from one image. |
+| Multi-view geometry | `vision-geometry-da3-small` | 12 / 24 GB | You have several views of one scene and need cameras and a fused point cloud. |
+| Object mesh | `image-3d-triposr` | 16 / 32 GB | You want a fast colored mesh from one image. |
+| Object mesh | `image-3d-trellis2-4b` | 64 / 128 GB | You want a PBR mesh with metallic, roughness, and alpha from one image. |
+| Object mesh | `image-3d-instantmesh-base` | 24 / 48 GB | You already have four or six views of the object. |
+
+Other managed vision models have one role each: `vision-embed-qwen3-vl-2b`
+(16 / 24 GB), `vision-ground-falcon-perception` (16 / 24 GB),
+`vision-segment-sam31` (16 / 24 GB), and `vision-face-buffalo-l` (8 / 16 GB).
+
+Some downloads require you to acknowledge upstream terms with
+`--accept-model-license`:
+
+- `vision-segment-sam31`: Meta's SAM License.
+- `vision-face-buffalo-l`: InsightFace non-commercial research terms.
+- `image-3d-trellis2-4b`: the gated DINOv3 License. Accept it on Hugging Face
+  before the first pull.
+
+## macOS Studio
+
+The macOS Studio app exposes the same commands through its shared capability
 contract, as the ten tasks of the **Vision** domain. **Read**, **Find**,
 **Segment**, and **Track** show the answer beside the input: boxes drawn over
-the picture, masks composited on it, track spans under the video's scrubber, and
-the raw result document one segment away. **Depth**, **Pose**, **Faces**,
-**Flow**, **Geometry**, and **Live** cover video depth, native pose and optical
-flow, Buffalo-L detection, embedding, comparison and batch analysis, single- and
-multi-view geometry, and live camera tracking; they draw native face and pose
-overlays and direction-colored flow vectors, play annotated and depth video,
-embed orbitable point clouds, report request-scoped progress, and preserve
-structured and visual sidecars in the Library.
+the picture, masks composited on it, track spans under the video's scrubber,
+and the raw result document one segment away. **Depth**, **Pose**, **Faces**,
+**Flow**, **Geometry**, and **Live** cover still and video depth, native pose
+and optical flow, Buffalo-L detection, embedding, comparison and batch
+analysis, single- and multi-view geometry, and live camera tracking. They draw
+face and pose overlays and direction-colored flow vectors, play annotated and
+depth video, embed orbitable point clouds, report request-scoped progress, and
+keep structured and visual sidecars in the Library.
 
-The Command view (⌥⌘C) and the Command Console show and run the raw command for
-any of them. Image-to-3D commands live in the **3D** domain so the app has one
-canonical reconstruction flow.
+Image-to-3D commands live in the **3D** domain so the app has one
+reconstruction flow. The grounding server has its own **Server ▸ Vision
+server** task. The **Command view** (⌥⌘C) and the **Command Console** show and
+run the raw command for any of these tasks.
 
-## Model families
+## Understand images
 
-- `vision-ocr-lighton`
-- `vision-ocr-lighton-3-0.8b`
-- `vision-ocr-lighton-3-4b`
-- `vision-ground-falcon-perception`
-- `vision-face-buffalo-l`
-- `vision-segment-sam31`
-- `vision-geometry-moge2-small`
-- `vision-depth-vda-small`
-- `vision-depth-vda-small-metric`
-- `vision-geometry-da3-small`
-- `vision-depth-marigold-v2`
-- `image-3d-triposr`
-- `image-3d-trellis2-4b`
-- `image-3d-instantmesh-base`
+### Caption images
 
-Captioning and inspect flows also depend on vision-language support code in
-`MereRunCore`.
-
-Grounding runs natively through the Swift/MLX Falcon Perception stack in
-`MereRunCore`.
-
-Segmentation and tracking run natively through the Swift/MLX SAM 3.1 stack in
-`MereRunCore`.
-
-Face analysis runs the Buffalo-L detector and ArcFace R50 recognizer locally
-through ONNX Runtime. The default `auto` provider uses CPU for this model based
-on the repository's Apple Silicon parity run; `--execution-provider coreml`
-and `--execution-provider cpu` remain explicit controls.
-
-The detector is useful beyond identity search: it provides face boxes and
-five-point landmarks for alignment, crops, counts, redaction, face-aware
-reframing, thumbnail selection, and dataset quality gates. The embedding model
-also supports verification, unnamed-person clustering, similarity search,
-representative prototype selection, and identity-outlier review. Neither model
-claims emotion, demographic attributes, liveness, deepfake detection, or
-general image understanding.
-
-## SAM 3.1 scope
-
-- `vision segment` supports text prompts and geometry prompts with boxes and points.
-- `vision track` supports text, box, and point prompts on the initial frame. It
-  then propagates tracked objects through later frames.
-- `vision track-live` records a camera clip, searches a short warm-up window
-  for seed objects, and then runs the same native tracking path over the saved
-  recording.
-- The managed `vision-segment-sam31` package supports segmentation and tracking.
-
-## Implementation notes
-
-- Still-image text prompting uses the native detector path.
-- Still-image box and point prompting use the native interactive SAM prompt path.
-  Boxes and points combine by label: a labeled point refines the box with the
-  same label that contains it (else the first with that label), unlabeled
-  points refine the one unlabeled box when there is exactly one, and points
-  that match no box form one object per label and must include a positive
-  point.
-- Offline video tracking uses native prompt propagation built on the image
-  segmenter instead of a full SAM memory-bank tracker.
-- Live capture supports text-prompt seeding in the CLI.
-
-## Fused attention policy
-
-Supported SAM 3.1, LightOn OCR, and selected vision-encoder attention shapes use
-MLX fused scaled-dot-product attention by default. Unsupported shapes retain
-their portable implementation. Set `MERERUN_FUSED_SDPA=0` for an emergency
-compatibility fallback or a controlled A/B.
-
-The installed-model gate on 2026-07-11 used release binaries on an M4 Max with
-128 GB unified memory. A SAM 3.1 text-prompt segmentation run was about 3%
-faster (1.36 seconds to 1.32 seconds) and reduced peak footprint by 13.2%; all 11 exported
-masks were bit-exact, with only negligible score/box deltas. A warm LightOn OCR
-run improved from 2.87 seconds to 1.97 seconds (1.46x throughput) and reduced peak footprint
-by 55%, with byte-identical text. Process RSS was effectively flat in both
-comparisons, so these measurements are not presented as general RSS savings or
-as guarantees for other models, prompts, or shapes.
-
-## Typical workflows
-
-### Caption an image
+`vision caption` writes one `.txt` caption beside each image, or into
+`--output-dir`. If you omit `--model`, it downloads
+`mlx-community/Qwen3-VL-2B-Instruct-4bit` on first use.
 
 ```bash
-swift run mere.run vision caption ./image.png
+mere.run vision caption ./image.png
 ```
 
-For dataset captioning, use a domain prompt file and focus terms when the
-generic captioner would miss the training objective:
+For dataset captioning, add a domain prompt file and focus terms when the
+generic captioner misses the training objective. `--trigger-token`
+prefixes every saved caption with a LoRA trigger token.
 
 ```bash
-swift run mere.run vision caption ./cards/*.jpg \
+mere.run vision caption ./cards/*.jpg \
   --output-dir ./captions \
   --prompt-file ./card-caption-prompt.txt \
   --focus "full card border" "printed title text" "visible gag" \
@@ -161,95 +142,206 @@ swift run mere.run vision caption ./cards/*.jpg \
   --temperature 0.1
 ```
 
-### Inspect an image with a question
+Defaults are 96 new tokens, temperature 0.2, and top-p 0.9.
+
+### Ask a question about an image
+
+`vision inspect` prints the model's answer on stdout and keeps progress on
+stderr. The prompt defaults to `Describe this image.`
 
 ```bash
-swift run mere.run vision inspect ./image.png "What objects are visible?"
+mere.run vision inspect ./image.png --prompt "What objects are visible?"
 ```
 
-### Detect, embed, and compare faces
+Defaults are 2,048 new tokens, temperature 0.7, and top-p 0.9. Positional
+prompt words still work, but `--prompt` is preferred. `caption` is a direct
+descriptive task, and `inspect` is question-driven; they share vision-language
+support code but serve different intents.
+
+### Embed text and images
+
+`vision embed` produces L2-normalized vectors in one shared space for text,
+images, and mixed text-and-image records. Use them for semantic retrieval,
+clustering, and candidate ranking. The managed `vision-embed-qwen3-vl-2b`
+model pins the official BF16 Qwen3-VL Embedding checkpoint and returns 2,048
+dimensions.
 
 ```bash
-swift run mere.run model pull vision-face-buffalo-l --accept-model-license
-swift run mere.run vision face detect ./group.jpg --json
-swift run mere.run vision face embed ./reference.jpg --json
-swift run mere.run vision face compare ./reference.jpg ./candidate.jpg --json
+mere.run model pull vision-embed-qwen3-vl-2b
+mere.run vision embed \
+  --image ./vehicle.jpg \
+  --text "a white SUV" \
+  --instruction "Retrieve visually similar vehicles" \
+  --pretty
 ```
 
-`detect --include-embeddings` emits one normalized 512-dimensional embedding
-per detected face. `embed` selects the largest face by default or accepts
-`--face-index`; `compare` returns cosine similarity. Use the companion
-`mere-face-tools` plugin for resumable folder indexing, SQLite search, and
-review/export workflows.
+Each `--text` and `--image` value becomes an independent item. To pair text
+with an image or keep stable caller IDs, pass a JSON batch with `--input-json`
+(or `-` for stdin). Image paths in the JSON resolve relative to the JSON file.
 
-For folder-scale processing, `face batch` keeps the detector and embedding
-sessions warm across many images:
+```json
+{
+  "inputs": [
+    {"id": "query", "text": "a maroon pickup truck"},
+    {"id": "candidate-1", "image": "./crop-001.jpg"},
+    {"id": "candidate-2", "text": "rear view", "image": "./crop-002.jpg"}
+  ]
+}
+```
 
 ```bash
-swift run mere.run vision face batch --input-list ./images.txt --jsonl-output ./faces.jsonl
+mere.run vision embed --input-json ./retrieval-inputs.json --output ./vectors.json
 ```
 
-`--input-list` reads one image path per line (positional image paths also
-work), `--jsonl-output` writes one durable JSONL record per image instead of
-stdout, and `--fail-fast` stops at the first unreadable or invalid image.
+JSON always goes to stdout; `--output` also writes it to a file.
+`--dimensions` truncates vectors to 1 through 2,048 values and renormalizes
+them. Each item allows 8,192 tokens, and images resize to between 4,096 and
+1,843,200 pixels (`--min-pixels`, `--max-pixels`). Because the vectors are
+normalized, a dot product gives cosine similarity. A high score isn't proof of
+identity; keep match thresholds, reranking, and review in your application.
 
-Buffalo-L pretrained weights are provided by InsightFace for non-commercial
-research use. The pull command requires `--accept-model-license` to acknowledge
-the upstream restriction and prints the authoritative license URL before the
-download starts. The weights are not bundled with mere.run.
+For text, code, image, audio, and video vectors from one Google model, see
+[EmbeddingGemma 2](./embeddinggemma2.md).
 
-### Segment an image with SAM 3.1
+### Extract text with OCR
+
+`vision ocr` reads one or more images and prints the text on stdout, or writes
+`.txt` files with `--output-dir`. Render PDF pages to upright images before you
+call it. The `--backend` option selects the engine:
+
+| Backend | Runtime | Default model |
+| --- | --- | --- |
+| `lighton` (default) | Native LightOnOCR | `vision-ocr-lighton` |
+| `infinity` | Native Infinity-Parser2, or an external parity adapter | `vision-ocr-infinity-pro-int8` |
+| `glm` | External `glmocr` CLI that you install and configure | Not applicable |
 
 ```bash
-swift run mere.run model pull vision-segment-sam31 --accept-model-license
-swift run mere.run vision segment ./image.png --prompt "a person"
+mere.run vision ocr ./page.png
+mere.run vision ocr ./page.png --backend infinity --infinity-task doc2md
 ```
+
+Each backend reads only its own options and warns about the rest. `--compare`
+runs LightOn beside a secondary backend; with `--backend lighton`, the
+secondary backend is GLM. Defaults are 4,096 new tokens and temperature 0.2.
+
+#### LightOnOCR 3
+
+`vision-ocr-lighton` downloads the pinned official LightOnOCR-3-1B checkpoint,
+which runs on the native Pixtral path. `vision-ocr-lighton-3-0.8b` and
+`vision-ocr-lighton-3-4b` run on the native Qwen3.5 vision runtime. The 4B
+model is LightOn's quality recommendation, and 0.8B is the smaller option. The
+default stays 1B.
+
+```bash
+mere.run model pull vision-ocr-lighton-3-4b
+mere.run vision ocr ./page.png --model vision-ocr-lighton-3-4b --lighton-mode grounding
+```
+
+`--lighton-mode` selects the output:
+
+- `plain` (default) sends an empty image-only prompt and returns a Markdown
+  transcription.
+- `grounding` sends the exact trained instruction and preserves raw labels and
+  boxes such as `![text](80,175,920,225)`, followed by content. Coordinates are
+  normalized to 0 through 1,000. Image regions can contain short descriptions,
+  and chart regions can contain HTML tables with estimated values. The runtime
+  doesn't validate those estimates or convert the output to JSON.
+
+The mode also applies to the LightOn side of `--compare`. Qwen3.5 variants
+disable thinking and process aspect-preserving images between 65,536 and
+5,000,000 pixels, resizing further when the 16K context budget requires it.
+The 1B model keeps Pixtral's 1,540-pixel long-edge convention.
+
+Existing `vision-ocr-lighton` installs are preserved and might still contain
+LightOnOCR 2. To replace one with 3-1B, back it up and run `mere.run model pull
+vision-ocr-lighton --force`, or download 3-1B to a separate directory and pass
+that directory with `--model`.
+
+All three released BF16 checkpoints completed the
+[LightOnOCR 3 native qualification](../benchmarks/lightonocr3-native-qualification-2026-10-08.md)
+on 2026-10-08. 1B and 4B passed all ten checked output cases each; 0.8B passed
+eight and failed the handwritten-word crop in both modes. The generated invoice
+rows, chart values, and table and chart grounding regions passed for every
+variant. This is a small image-input qualification; full transcription
+accuracy, upstream numerical parity, and comparative throughput remain
+unqualified. For upstream details, see the
+[LightOnOCR 3 release](https://huggingface.co/blog/lightonai/lightonocr-3) and
+the [1B model card](https://huggingface.co/lightonai/LightOnOCR-3-1B).
+
+#### Infinity-Parser2 and GLM-OCR
+
+Native Infinity-Parser2 runs on the Q35 text runtime and the Qwen-family vision
+tower. `vision-ocr-infinity-pro-int8` (about 38 GiB) is the default native
+model; `vision-ocr-infinity-pro` (about 131 GiB) is the full BF16 model for
+heavyweight evaluations. Neither downloads automatically. `--infinity-task`
+selects `doc2json` (default), `doc2md`, or `custom` with `--infinity-prompt`.
+
+For a parity check against upstream, `--infinity-runtime external` runs the
+`parser` executable from `infinity_parser2` with the Transformers, vLLM engine,
+or vLLM server backend. To compare against a vLLM server that is already
+running, run:
+
+```bash
+mere.run vision ocr ./page.png \
+  --backend infinity \
+  --infinity-runtime external \
+  --infinity-api-url http://127.0.0.1:8000/v1/chat/completions
+```
+
+GLM-OCR runs the upstream `glmocr` CLI from your `PATH`, or from
+`--glmocr-cli`. Install and configure it from the
+[GLM-OCR repository](https://github.com/zai-org/GLM-OCR); `--glm-config`
+forwards a configuration file.
+
+## Find, isolate, and follow objects
 
 ### Ground objects with Falcon Perception
 
+`vision ground` finds the regions that match one or more text queries and
+optionally exports a mask for each detection.
+
 ```bash
-swift run mere.run model pull vision-ground-falcon-perception
-swift run mere.run vision ground ./image.png --query "cat" "person in red" \
+mere.run model pull vision-ground-falcon-perception
+mere.run vision ground ./image.png --query "cat" "person in red" \
   --mask-output-dir ./masks
 ```
 
-`--query` (alias `--prompt`) accepts one or more grounding expressions in a
-single run; at least one is required. If `--model`/`-m` is omitted, the command
-resolves the managed `vision-ground-falcon-perception` package from the local
-model store; it also accepts a local Falcon Perception model root directory.
-The annotated image defaults to `<stem>_grounded.<ext>` (`--output`/`-o`
-overrides it), JSON metadata defaults to `<stem>_grounded.json`
-(`--json-output` overrides it), and `--mask-output-dir` exports one PNG mask
-per detection. `--preflight --json` validates the image, installed model,
-queries, and output plan without loading the model; `--quiet` prints only the
-annotated image path.
+`--query` (alias `--prompt`) takes one or more expressions; at least one is
+required. `--model` accepts the managed ID or a local Falcon Perception model
+root. The command writes these files:
 
-For local model roots, preflight applies the same manifest, checkpoint-file,
-and tokenizer-layout validation as execution. Missing or invalid manifests fail
-before the command reports readiness. These checks do not load tensor data or
-establish model accuracy.
+- An annotated image at `<stem>_grounded.<ext>`, or at `--output`.
+- JSON metadata at `<stem>_grounded.json`, or at `--json-output`. It contains
+  `schemaVersion`, the model and paths, the query list, and detections with
+  `query`, normalized `xy` and `hw`, a derived `box`, and optional `score` and
+  `maskPath`.
+- Optional per-detection PNG masks in `--mask-output-dir`.
 
-Coordinate decoding follows the Falcon reference's repeated-location policy in
-both direct grounding and the batch endpoint. Each query keeps its own coordinate
-history. If both predicted axes are within a strict 1% of an earlier coordinate,
-the decoder suppresses both selected bins and tries again, for at most 100
-attempts. The selected coordinate feeds subsequent token generation; this is not
-postprocessing of final boxes. The last candidate is retained when the attempt
-limit is reached, so duplicates are still possible. Token budgets and image
-preprocessing remain separate settings.
+`--preflight --json` validates the image, model, queries, and output plan
+without loading the model. For local model roots, preflight applies the same
+manifest, checkpoint-file, and tokenizer-layout checks as execution; these
+checks don't load tensors or establish accuracy. `--quiet` prints only the
+annotated image path, and `--receipt` prints a final JSON line that lists every
+output.
 
-Direct grounding and batched vision serving stop each query when the model emits
-its configured end-of-sequence token or the tokenizer's `<|end_of_query|>` token.
-Other batch queries continue until they stop or reach the requested token limit.
+Coordinate decoding follows the Falcon reference's repeated-location policy.
+Each query keeps its own coordinate history. If both predicted axes are within
+a strict 1% of an earlier coordinate, the decoder suppresses both bins and
+tries again, for at most 100 attempts. The selected coordinate feeds later
+token generation, so this isn't postprocessing of final boxes. When the attempt
+limit is reached, the last candidate is kept, so duplicates are still possible.
+Each query stops at the model's end-of-sequence token or the tokenizer's
+`<|end_of_query|>` token.
 
-Portable graphs expose the same runtime as the built-in `vision.ground` node.
-The node accepts an image plus a JSON array of queries and produces a verified
-annotated `image`, structured `detections` JSON, and a portable `masks`
-directory containing per-detection PNG masks. These outputs are candidate
-geometry, not authoritative evidence.
+In portable graphs, the built-in `vision.ground` node runs the same runtime. It
+takes an image and a JSON array of queries and produces a verified annotated
+`image`, structured `detections` JSON, and a `masks` directory. Treat these
+outputs as candidate geometry, not authoritative evidence.
 
-For repeated binary frames, keep Falcon Perception resident behind the generic
-loopback vision service:
+### Serve grounding to other processes
+
+For repeated frames, `vision serve` keeps Falcon Perception resident behind a
+loopback HTTP service:
 
 ```bash
 mere.run vision serve --port 8091
@@ -262,14 +354,14 @@ curl http://127.0.0.1:8091/v1/vision/ground \
   -F 'image=@frame.webp;type=image/webp'
 ```
 
-The service accepts PNG, JPEG, or WebP bytes and returns normalized detections,
-the input image SHA-256, request identifiers, and inference timing. It does not
-assign application semantics or preserve application-specific state; clients
-own cadence, temporal association, and policy. Loopback is the default, and
-non-loopback binds require `--api-key`.
+The service accepts PNG, JPEG, or WebP bytes and returns normalized
+detections, the input image SHA-256, request identifiers, and inference timing.
+It assigns no application meaning and keeps no application state; clients own
+cadence, temporal association, and policy. It binds to `127.0.0.1` by default.
+A non-loopback `--host` requires `--api-key` or `MERERUN_API_KEY`.
 
-Use the bounded batch endpoint to ground several images in one native MLX
-prefill/decode pass:
+To ground several images in one native prefill and decode pass, use the batch
+endpoint:
 
 ```bash
 curl http://127.0.0.1:8091/v1/vision/ground-batch \
@@ -281,414 +373,432 @@ curl http://127.0.0.1:8091/v1/vision/ground-batch \
   -F 'image[]=@frame-000043.webp;type=image/webp'
 ```
 
-`frame_id[]` is optional; when present it must provide one identifier per
-image. Every query applies to every image, and `--max-batch-size` limits the
-flattened number of image-query pairs (8 by default, at most 32). Individual
-images remain subject to `--max-frame-bytes`; their combined encoded bytes are
-bounded by `--max-batch-bytes`. The batch response contains ordered per-image
-hashes and normalized detections. It intentionally omits masks and annotated
-images; use the single-image endpoint when those artifacts are required.
+`frame_id[]` is optional; when present, it needs one value for each image.
+Every query applies to every image. The server enforces these limits:
+
+| Option | Limit | Default |
+| --- | --- | --- |
+| `--max-batch-size` | Image-query pairs in one batch, 1 through 32 | 8 |
+| `--max-frame-bytes` | Encoded bytes for one image | 16,777,216 |
+| `--max-batch-bytes` | Combined encoded bytes in one batch | 67,108,864 |
+
+The batch response contains ordered per-image hashes and normalized
+detections. It omits masks and annotated images; use the single-image endpoint
+when you need them.
+
+### Segment an image with SAM 3.1
+
+`vision segment` masks objects named by text prompts, or picked by box and
+point prompts in image pixels.
+
+```bash
+mere.run model pull vision-segment-sam31 --accept-model-license
+mere.run vision segment ./image.png --prompt "a person"
+mere.run vision segment ./image.png --box 120,80,460,610 --point 300,300,positive
+```
+
+Boxes and points combine by label:
+
+- `--box x1,y1,x2,y2[,label]` is one object.
+- `--point x,y,positive[,label]` or `x,y,negative[,label]` refines the box with
+  the same label that contains it, or else the first box with that label.
+- Unlabeled points refine the one unlabeled box when there is exactly one, and
+  otherwise form one object together.
+- Points that match no box must include a positive point.
+
+Text prompts run the native detector path. Box and point prompts run the
+interactive SAM path; `--multimask` returns several mask candidates for each
+prompted object. The default score threshold is 0.05 and the default square
+input resolution is 1,008. `--show-boxes` draws boxes over the mask overlays.
+
+The command writes an annotated image at `<stem>_segmented.<ext>` and JSON at
+`<stem>_segmented.json`, unless you pass `--output` or `--json-output`.
+`--mask-output-dir` exports one PNG for each object. The JSON contains
+`schemaVersion`, the model and paths, prompts, threshold, resolution, and
+detections with `label`, `score`, `box`, `maskAreaPixels`, and optional
+`objectID`, `promptKind`, `maskPath`, and `candidateIndex`. `--preflight
+--json` inspects the request without loading SAM.
 
 ### Track objects through a video
 
-```bash
-swift run mere.run model pull vision-segment-sam31 --accept-model-license
-swift run mere.run vision track ./clip.mp4 --prompt "a dog" --init-frame 12
-```
-
-### Track a recorded live camera session
+`vision track` seeds objects on one frame with text, box, or point prompts and
+propagates them through later frames.
 
 ```bash
-swift run mere.run vision track-live --output ./live.mp4 --prompt "a person"
+mere.run model pull vision-segment-sam31 --accept-model-license
+mere.run vision track ./clip.mp4 --prompt "a dog" --init-frame 12
 ```
+
+`--init-frame` defaults to 0, and `--end-frame` sets an inclusive last frame.
+Box and point prompts follow the same grouping as `vision segment`; points
+seed the object on the initial frame and return when a lost object is
+re-seeded. Tracking uses native prompt propagation built on the image
+segmenter, not a full SAM memory-bank tracker.
+
+The command writes an annotated video at `<stem>_tracked.mp4` and JSON at
+`<stem>_tracked.json`. `--mask-output-dir` writes per-frame mask PNGs into
+frame-named subdirectories. The JSON contains `schemaVersion`, the model and
+paths, fps, frame size, initial frame, dropped-frame count, stable object
+metadata, and per-frame detections with `objectID`, `label`, `score`,
+`visible`, `box`, `maskAreaPixels`, and optional `maskPath`. `--preflight
+--json` checks the video, prompts, model, and outputs without loading SAM.
+
+### Track a live camera session
+
+`vision track-live` records a camera clip, searches for seed objects, and then
+runs the same tracking path over the recording. It accepts text prompts only
+and requires an output path.
+
+```bash
+mere.run vision track-live --output ./live.mp4 --prompt "a person"
+```
+
+Capture defaults to camera 0 for 10 seconds (`--camera`,
+`--duration-seconds`). If the initial frame yields no objects, the command
+searches up to `--seed-search-frames` more frames (default 30). It removes the
+temporary recording when it's interrupted.
+
+## Analyze faces
+
+The `vision face` commands run the Buffalo-L detector and ArcFace R50
+recognizer locally through ONNX Runtime. InsightFace provides the pretrained
+weights for non-commercial research use, so the pull requires
+`--accept-model-license` and prints the license URL before the download
+starts. The weights aren't bundled with mere.run. The catalog reports
+Buffalo-L as unsupported on Linux.
+
+```bash
+mere.run model pull vision-face-buffalo-l --accept-model-license
+mere.run vision face detect ./group.jpg --json
+mere.run vision face embed ./reference.jpg --json
+mere.run vision face compare ./reference.jpg ./candidate.jpg --json
+```
+
+Each command does one job:
+
+- `detect` returns image dimensions, inference time, face scores, pixel boxes,
+  and five landmarks. `--include-embeddings` adds a normalized
+  512-dimensional embedding for each face, and `--max-faces` caps detections.
+- `embed` returns one face and its embedding. It picks the largest face unless
+  you pass `--face-index`.
+- `compare` returns the selected face indexes and their cosine similarity.
+  `--reference-face-index` and `--candidate-face-index` override the
+  largest-face default.
+
+The detector score threshold defaults to 0.65. `--execution-provider` accepts
+`auto`, `coreml`, or `cpu`; `auto` uses the CPU for this model, based on the
+repository's Apple Silicon parity run. `--json` prints to stdout, and
+`--json-output` writes the same sorted payload atomically.
+
+For folders, `face batch` keeps both sessions warm across many images:
+
+```bash
+mere.run vision face batch --input-list ./images.txt --jsonl-output ./faces.jsonl
+```
+
+`--input-list` reads one image path per line, and positional paths also work.
+`--jsonl-output` writes one durable JSONL record per image instead of stdout.
+`--include-embeddings` adds vectors for search, and `--fail-fast` stops at the
+first unreadable or invalid image.
+
+The detector supports more than identity search: face boxes and landmarks
+drive alignment, crops, counts, redaction, face-aware reframing, thumbnail
+selection, and dataset quality checks. The embeddings support verification,
+unnamed-person clustering, similarity search, prototype selection, and
+identity-outlier review. Neither model claims emotion, demographic attributes,
+liveness, deepfake detection, or general image understanding. For resumable
+folder indexing, SQLite search, and review workflows, use the companion
+`mere-face-tools` plugin.
+
+## Measure pose and motion
 
 ### Extract pose landmarks
 
+`vision pose` uses the native platform runtime, so there's no model to
+install on Apple platforms.
+
 ```bash
-swift run mere.run vision pose ./person.png \
+mere.run vision pose ./person.png \
   --json-output ./person-pose.json \
   --minimum-confidence 0.2
 ```
 
-The native pose result contains body, hand, and face subjects. Landmark
-coordinates use a normalized bottom-left coordinate system and retain per-point
-confidence for downstream temporal filtering and motion export.
+The JSON, written to `<stem>_pose.json` by default, contains typed body, hand,
+and face subjects with stable point names, image dimensions, and per-point
+confidence for temporal filtering and motion export. Coordinates are
+normalized with a bottom-left origin. `--no-body`, `--no-hands`, and
+`--no-face` skip subjects, `--max-hands` defaults to 2, and
+`--minimum-confidence` defaults to 0.1. `--json` also prints the payload on
+stdout.
 
-### Generate a dense motion pass
+### Generate dense optical flow
+
+`vision flow` computes a motion vector for every pixel between two images of
+equal size.
 
 ```bash
-swift run mere.run vision flow ./frame-001.png ./frame-002.png \
+mere.run vision flow ./frame-001.png ./frame-002.png \
   --output ./frame-001-to-002.flo \
   --accuracy high
 ```
 
-The two images must have equal dimensions. Output vectors use the Middlebury
-`.flo` format and preserve full-resolution 32-bit horizontal and vertical
-motion components.
+The output uses the Middlebury `.flo` format with full-resolution 32-bit
+horizontal and vertical components. Typed JSON metadata, including magnitude
+statistics, goes to `--json-output` or, with `--json`, to stdout.
+`--accuracy` accepts `low`, `medium`, `high` (default), or `very-high`. The
+command rejects images with different dimensions.
 
-### Estimate depth for a single image
+## Estimate depth and geometry
+
+These commands share a pattern: `--output` names the output directory,
+`--dry-run` verifies inputs and the checkpoint and prints the plan without
+running inference, and `--json` prints the structured result on stdout. For
+measured load, inference, and memory on an M4 Max, see the
+[VFX geometry benchmarks](https://github.com/sawfwair/mere-run/blob/main/docs/benchmarks/vfx-geometry-apple-silicon.md).
+
+### Estimate depth for a still image
+
+`vision depth` runs native Marigold V2. Treat it as experimental: accuracy
+parity with the reference hasn't been established.
 
 ```bash
-swift run mere.run model pull vision-depth-marigold-v2
-swift run mere.run vision depth ./photo.jpg --output ./photo-depth
+mere.run model pull vision-depth-marigold-v2
+mere.run vision depth ./photo.jpg --output ./photo-depth
 ```
 
-Treat this runtime as experimental. Accuracy parity with the reference has not
-been established.
+The output directory (default `<stem>-depth` next to the input) contains a
+depth EXR, a preview PNG, and a manifest JSON. Inference is one
+rectified-flow step at a fixed timestep on a frozen, 4-bit quantized
+Qwen-Image-Edit-2509 transformer with rank-128 adapters, so there's no step
+count or guidance scale to set.
 
-Native Marigold V2 writes a depth EXR, a preview PNG, and a manifest JSON into
-the output directory (default `<stem>-depth` next to the input). Inference is a
-single rectified-flow step at a fixed timestep on a frozen, 4-bit quantized
-Qwen-Image-Edit-2509 transformer with rank-128 adapters installed on top, so
-there is no step count or guidance scale to set.
+Depth is affine-invariant: it's recovered up to an unknown scale and shift for
+each image. Values are normalized per image so that larger means farther, and
+the manifest records the applied mapping and the raw range. The model doesn't
+estimate a camera, so no intrinsics or point cloud are written. Use `vision
+geometry` when you need metric units or a camera.
 
-Output is affine-invariant: depth is recovered up to an unknown scale and shift
-per image. Values are normalized per image so that larger means farther, and the
-manifest records the mapping that was applied along with the raw range. No
-camera intrinsics or point cloud are written, because the model does not
-estimate them; use `vision geometry` when you need metric units or a camera.
+Options:
 
-`--max-edge` bounds the longest inference edge, rounded to a multiple of 16
-(default 1024); `--native` runs at the source resolution instead. Memory grows
-with resolution, so raise the cap only with headroom to spare. `--checkpoint`
-selects a published variant — `log-stage2` (default) is the paper model, the
-`*-layered` variants predict see-through depth behind glass, and the
-`disparity-*` and `uniform-*` variants change the depth parameterization.
-Variants other than the default are not part of the managed install and need a
-local Marigold repository root passed to `--model`. `--dry-run` and `--json`
-behave as in `geometry`; `--receipt` prints the final result line naming the
-depth EXR, the preview PNG, and the manifest, and cannot be combined with
-`--dry-run`.
+- `--max-edge` caps the longest inference edge, rounded to a multiple of 16
+  (default 1,024). `--native` runs at the source resolution instead. Memory
+  grows with resolution.
+- `--checkpoint` selects a published variant: `log-stage2` (default, the paper
+  model), `log-stage1`, `log-layered`, `uniform-base`, `uniform-layered`,
+  `disparity-base`, or `disparity-layered`. The `*-layered` variants predict
+  see-through depth behind glass. Only the default is part of the managed
+  install; for the others, pass a local Marigold repository root to `--model`.
+- `--receipt` prints a final JSON line that names the EXR, preview, and
+  manifest. You can't combine it with `--dry-run`.
 
-`vision depth` is available from the CLI and Studio's Image depth task only.
-There is no API route: the depth API serves video depth, and the managed
-catalog declares `vision-depth-marigold-v2` CLI-only so API discovery never
-lists it. Machine admission treats every run as a large job from the catalog's
-64 GB minimum, because the BF16 base is loaded before quantization even though
-the download itself is smaller than the large-download threshold; two depth
-runs therefore do not share the machine.
+`vision depth` runs from the CLI and Studio's **Vision ▸ Depth** task only. It
+has no API route: the depth API serves video depth, and the catalog declares
+`vision-depth-marigold-v2` CLI-only so API discovery doesn't list it. Machine
+admission treats every run as a large job from the catalog's 64 GB minimum,
+because the BF16 base loads before quantization even though the download is
+below the large-download threshold. Two depth runs therefore don't share the
+machine.
 
-The native runtime uses MLX affine 4-bit weights and deterministic VAE encoding.
-It preserves the first image-modulation projection in full precision; quantizing
-that projection destroys depth structure. Prequantized checkpoints must preserve
-this projection too.
-The reference uses bitsandbytes NF4 and samples the VAE posterior. Accuracy
-parity between these implementations has not been established. Loading also
-requires the BF16 base before quantization, so the reference's quantized
-inference memory figures do not describe native loading requirements.
+The native runtime uses MLX affine 4-bit weights and deterministic VAE
+encoding. It keeps the first image-modulation projection in full precision,
+because quantizing it destroys depth structure; prequantized checkpoints must
+preserve it too. The reference uses bitsandbytes NF4 and samples the VAE
+posterior, and its quantized memory figures don't describe native loading,
+which needs the BF16 base first.
 
 ### Generate temporally consistent video depth
 
-```bash
-swift run mere.run model pull vision-depth-vda-small
-swift run mere.run vision depth-video ./clip.mp4 --output ./clip-depth
-```
-
-Native Video Depth Anything Small writes per-frame depth EXRs, preview PNGs, a
-review MP4, and a depth-sequence manifest JSON into the output directory
-(default `<stem>-depth` next to the input). `--input-size` bounds the longest
-network edge before aspect-ratio adjustment (default 518) and `--max-frames`
-bounds decoded source frames (default 240). The default model is relative
-depth; `--model vision-depth-vda-small-metric` switches to the metric variant.
-`--dry-run` hashes and decodes the bounded input, verifies media/network limits
-and the checkpoint, then prints the plan without inference; `--json` prints the
-structured result on stdout.
-
-### Recover metric geometry from a single image
+`vision depth-video` runs native Video Depth Anything Small.
 
 ```bash
-swift run mere.run model pull vision-geometry-moge2-small
-swift run mere.run vision geometry ./photo.jpg --output ./photo-geometry
+mere.run model pull vision-depth-vda-small
+mere.run vision depth-video ./clip.mp4 --output ./clip-depth
 ```
 
-Native MoGe-2 emits metric depth and normal EXRs with preview PNGs, a validity
-mask, camera intrinsics JSON, a point-cloud PLY, and a manifest (default
-directory `<stem>-geometry`). `--resolution-level` selects quality 0 through 9
-(default 9), `--token-count` overrides the DINO base-token count (1 to 3600),
-and `--max-points` caps the PLY point count. `--dry-run` and `--json` behave as
-in `depth-video`.
+The output directory (default `<stem>-depth`) contains per-frame depth EXRs,
+preview PNGs, a review MP4, and a depth-sequence manifest. `--input-size`
+caps the longest network edge, 14 through 1,008, before aspect-ratio
+adjustment (default 518). `--max-frames` caps decoded source frames, 1 through
+2,400 (default 240). The default model gives relative depth;
+`--model vision-depth-vda-small-metric` gives metric depth. `--dry-run` also
+hashes and decodes the bounded input before it prints the plan.
+
+### Recover metric geometry from one image
+
+`vision geometry` runs native MoGe-2.
+
+```bash
+mere.run model pull vision-geometry-moge2-small
+mere.run vision geometry ./photo.jpg --output ./photo-geometry
+```
+
+The output directory (default `<stem>-geometry`) contains metric depth and
+normal EXRs with preview PNGs, a validity mask, camera intrinsics JSON, a
+point-cloud PLY, and a manifest. `--resolution-level` selects quality 0
+through 9 (default 9), `--token-count` overrides the DINO base-token count (1
+through 3,600), and `--max-points` caps the PLY point count.
 
 ### Solve multi-view geometry and cameras
 
+`vision geometry-multiview` runs native DA3-Small across views of one scene,
+in the order you pass them.
+
 ```bash
-swift run mere.run model pull vision-geometry-da3-small
-swift run mere.run vision geometry-multiview ./view-01.jpg ./view-02.jpg ./view-03.jpg \
+mere.run model pull vision-geometry-da3-small
+mere.run vision geometry-multiview ./view-01.jpg ./view-02.jpg ./view-03.jpg \
   --output ./scene
 ```
 
-Native DA3-Small solves relative depth, per-view confidence, and cameras
-across the ordered views, exporting per-view depth/confidence EXRs and preview
-PNGs, camera JSON, colored point clouds (PLY and GLB), a Nerfstudio/3DGS
-initialization handoff, and a scene manifest (default directory
-`<first-stem>-da3-scene`). `--cameras` supplies one calibrated W2C camera per
-image as JSON; `--process-resolution` bounds the longest processed side
-(default 504); `--reference-view` picks `first`, `middle`, `saddle-balanced`
-(default), or `saddle-similarity-range`; `--confidence-percentile` (default 40)
-discards low-confidence points and `--max-points` caps scene exports.
-`--dry-run` and `--json` behave as in `depth-video`.
+It solves relative depth, per-view confidence, and cameras. The output
+directory (default `<first-stem>-da3-scene`) contains per-view depth and
+confidence EXRs with preview PNGs, camera JSON, colored PLY and GLB point
+clouds, a Nerfstudio and 3D Gaussian splatting initialization handoff, and a
+scene manifest.
+
+| Option | What it sets | Default |
+| --- | --- | --- |
+| `--cameras` | JSON with one calibrated world-to-camera (W2C) camera per image | None |
+| `--process-resolution` | Upper bound for the longest processed side | 504 |
+| `--reference-view` | `first`, `middle`, `saddle-balanced`, or `saddle-similarity-range` | `saddle-balanced` |
+| `--confidence-percentile` | Points below this percentile are discarded | 40 |
+| `--max-points` | Colored points in scene exports | 1,000,000 |
+
+## Reconstruct 3D objects
 
 ### Reconstruct a PBR object with TRELLIS.2
 
-Accept the DINOv3 checkpoint license on Hugging Face before the first pull,
-then run the native 512-resolution pipeline:
+`vision image-to-3d-trellis2` reconstructs one isolated object as a
+512-resolution O-Voxel mesh with base color, metallic, roughness, and alpha.
+Accept the DINOv3 license on Hugging Face and authenticate your Hugging Face
+client before the first pull.
 
 ```bash
-swift run mere.run model pull image-3d-trellis2-4b --accept-model-license
-swift run mere.run vision image-to-3d-trellis2 ./object.png \
+mere.run model pull image-3d-trellis2-4b --accept-model-license
+mere.run vision image-to-3d-trellis2 ./object.png \
   --output ./object-trellis2 \
   --seed 42
 ```
 
-Transparent alpha is required by default. `--already-framed` explicitly opts
-an opaque, isolated object into black-background conditioning. The result
-contains canonical colored OBJ/PLY/GLB meshes and a hashed `.pbrvox` sidecar
-that preserves base color, metallic, roughness, and alpha.
+The input needs transparent alpha; the command crops the object before
+conditioning. `--already-framed` opts an opaque, isolated, centered object into
+black-background conditioning instead.
 
-## Output artifacts
+- `--seed` (default 42) controls deterministic MLX noise. `--texture-seed`
+  re-rolls only the texture flow and replays geometry from `--seed`, so you
+  can search palettes without changing a good shape.
+- `--max-tokens` caps decoded O-Voxels (default 2,097,152). Raising it can
+  increase memory use substantially.
+- By default, the mesh is a watertight narrow-band remesh of the raw crust.
+  `--remesh-band` (default 1.0 voxel) widens tear tolerance, `--seal-radius`
+  (default 12 voxels; 0 turns it off) seals occluded cavities, and
+  `--no-remesh` exports the raw porous crust.
 
-### `vision ground`
+The output contains OBJ, PLY, and GLB meshes with vertex color, a
+`-textured.glb` with baked glTF PBR textures, a mesh manifest, a hashed
+`.pbrvox` sidecar that preserves base color, metallic, roughness, and alpha for
+every O-Voxel, and a run manifest. The command supports the official 512
+pipeline only. For details, run `mere.run guide vision image-to-3d-trellis2`.
 
-- annotated image written to `<stem>_grounded.<ext>` unless `--output` is provided
-- JSON metadata written to `<stem>_grounded.json` unless `--json-output` is provided
-- optional mask PNGs written to `--mask-output-dir`
+### Reconstruct with TripoSR or InstantMesh
 
-The JSON includes:
+`vision image-to-3d` runs native TripoSR on one image, and
+`vision image-to-3d-multiview` runs native InstantMesh on views you supply:
 
-- `schemaVersion`
-- model and input/output paths
-- query list
-- detections with `query`, normalized `xy`, normalized `hw`, derived `box`, optional `score`, and optional `maskPath`
+```bash
+mere.run model pull image-3d-triposr
+mere.run vision image-to-3d ./object.png --output ./object-3d
 
-### `vision face`
+mere.run model pull image-3d-instantmesh-base
+mere.run vision image-to-3d-multiview \
+  --view ./front.png --view ./right.png --view ./back.png --view ./left.png \
+  --output ./object-instantmesh
+```
 
-- `detect` emits image dimensions, elapsed inference time, face scores, pixel
-  boxes, and five landmarks; `--include-embeddings` adds identity vectors
-- `embed` emits one selected face and its normalized 512-value embedding
-- `compare` emits the selected face indexes and cosine similarity
-- `batch` keeps the sessions warm and emits one durable JSONL result per image;
-  `--include-embeddings` enables recognition/search vectors
-- `--json` keeps stdout machine-readable; `--json-output` writes the same
-  sorted payload atomically
+TripoSR crops transparent PNG foregrounds automatically
+(`--foreground-ratio`, default 0.85) unless you pass `--already-framed`.
+`--resolution` sets its density grid, 2 through 512 (default 256), and
+`--density-threshold` sets the isosurface threshold (default 25.0).
 
-### `vision segment`
+InstantMesh needs `--view` exactly four or six times, in order; it doesn't
+generate views. `--resolution` sets its grid, 2 through 256 (default 128), and
+`--cameras` takes an optional camera JSON file.
 
-- annotated image written to `<stem>_segmented.<ext>` unless `--output` is provided
-- JSON metadata written to `<stem>_segmented.json` unless `--json-output` is provided
-- optional mask PNGs written to `--mask-output-dir`
+Both commands accept `--no-vertex-colors` for geometry-only export, plus
+`--dry-run` and `--json`.
 
-The JSON includes:
+## Fused attention policy
 
-- `schemaVersion`
-- model and input/output paths
-- prompts, threshold, and resolution
-- detections with `label`, `score`, `box`, `maskAreaPixels`, and optional `objectID`, `promptKind`, `maskPath`, and `candidateIndex`
+Supported SAM 3.1, LightOn OCR, and selected vision-encoder attention shapes
+use MLX fused scaled-dot-product attention by default. Unsupported shapes keep
+their portable implementation. Set `MERERUN_FUSED_SDPA=0` for an emergency
+compatibility fallback or a controlled A/B comparison.
 
-### `vision track` and `vision track-live`
+The installed-model gate on 2026-07-11 used release binaries on an M4 Max with
+128 GB unified memory. A SAM 3.1 text-prompt segmentation run was about 3%
+faster (1.36 seconds to 1.32 seconds) and reduced peak footprint by 13.2%; all
+11 exported masks were bit-exact, with only negligible score and box deltas. A
+warm LightOn OCR run improved from 2.87 seconds to 1.97 seconds (1.46x
+throughput) and reduced peak footprint by 55%, with byte-identical text.
+Process RSS was effectively flat in both comparisons, so these measurements
+aren't general RSS savings or guarantees for other models, prompts, or shapes.
 
-- annotated video written to `<stem>_tracked.mp4` for `vision track`
-- JSON metadata written to `<stem>_tracked.json` for `vision track`
-- `vision track-live` requires an explicit output video path
-- `vision track-live` defaults to frame 0 but searches a short warm-up window when that frame yields no seed objects
-- optional per-frame mask PNGs written under frame-named subdirectories when `--mask-output-dir` is set on `vision track`
+## How the runtimes work
 
-The tracking JSON includes:
+### Segmentation and tracking
 
-- `schemaVersion`
-- model and input/output paths
-- fps, frame size, init frame, and dropped frame count
-- stable tracked object metadata
-- per-frame detections with `objectID`, `label`, `score`, `visible`, `box`, `maskAreaPixels`, and optional `maskPath`
+1. The CLI resolves `vision-segment-sam31` from the model store, or uses the
+   local root passed with `--model`.
+2. The native SAM 3.1 runtime validates the root, loads the tokenizer,
+   configuration, and weights, and preprocesses the image or video frames.
+3. Text prompts run the detector once, and then run text, Detection
+   Transformer (DETR), and mask decoding for each prompt.
+4. Box and point prompts use the interactive SAM path. Video tracking reuses
+   those prompts frame to frame after the seed frame.
+5. Postprocessing applies thresholding, mask resizing, score ordering,
+   non-maximum suppression (NMS), and optional mask export.
+6. The runtime writes annotated media and structured JSON.
 
-### `vision pose`
+### Grounding
 
-- JSON metadata written to `<stem>_pose.json` unless `--json-output` is provided
-- typed body, hand, and face subjects with stable point names
-- normalized coordinates, image dimensions, and confidence values
-- no separately installed model package on Apple platforms; inference is owned
-  by the native platform runtime in `MereRunCore`
-
-### `vision flow`
-
-- dense full-resolution two-component optical-flow vectors
-- standard Middlebury `.flo` output plus typed JSON metadata
-- selectable native accuracy and magnitude statistics
-- explicit equal-dimension validation
+1. The CLI resolves `vision-ground-falcon-perception` from the model store, or
+   uses the local root passed with `--model`.
+2. The native Falcon runtime validates the root, loads the configuration,
+   tokenizer, and weights, and preprocesses the image and queries.
+3. The model autoregressively emits detections as coordinate and size tokens,
+   and decodes optional segmentation masks.
+4. Postprocessing derives normalized centers, sizes, boxes, and optional mask
+   files.
+5. The runtime writes an annotated image and structured JSON.
 
 ### OCR
 
-```bash
-swift run mere.run vision ocr ./page.png --backend lighton
-swift run mere.run vision ocr ./page.png --backend infinity --infinity-task doc2md
-```
+1. The CLI resolves the OCR model for the selected backend.
+2. The runtime loads the required components and normalizes the image into the
+   expected tensor form.
+3. Inference runs, and the command prints text on stdout without internal logs.
 
-`--backend`, `--infinity-runtime`, and `--compare` pick the runtime; each
-reads only its own options and prints a warning for the rest. For an external
-Infinity-Parser2 parity evaluation against an already-running vLLM server,
-run:
-
-```bash
-swift run mere.run vision ocr ./page.png \
-  --backend infinity \
-  --infinity-runtime external \
-  --infinity-api-url http://127.0.0.1:8000/v1/chat/completions
-```
+LightOnOCR 3-1B uses the dedicated LightOn runtime; the 0.8B and 4B variants
+and Infinity-Parser2 use the Q35 runtime with the Qwen-family vision tower.
+GLM-OCR and external Infinity runs shell out to upstream executables.
 
 ## Runtime entrypoints
 
-### CLI
+The following table lists where each part of the runtime lives:
 
-- `Sources/MereRunCLI/Commands/VisionCaptionCommand.swift`
-- `Sources/MereRunCLI/Commands/VisionInspectCommand.swift`
-- `Sources/MereRunCLI/Commands/VisionFaceCommand.swift`
-- `Sources/MereRunCLI/Commands/VisionGroundCommand.swift`
-- `Sources/MereRunCLI/Commands/VisionSegmentCommand.swift`
-- `Sources/MereRunCLI/Commands/VisionTrackCommand.swift`
-- `Sources/MereRunCLI/Commands/VisionTrackLiveCommand.swift`
-- `Sources/MereRunCLI/Commands/VisionPoseCommand.swift`
-- `Sources/MereRunCLI/Commands/VisionFlowCommand.swift`
-- `Sources/MereRunCLI/Commands/VisionDepthVideoCommand.swift`
-- `Sources/MereRunCLI/Commands/VisionGeometryCommand.swift`
-- `Sources/MereRunCLI/Commands/VisionGeometryMultiViewCommand.swift`
-- `Sources/MereRunCLI/Commands/VisionOCRCommand.swift`
-
-### Pose runtime
-
-- `Sources/MereRunCore/Pose/NativePoseDetector.swift`
-
-### Optical-flow runtime
-
-- `Sources/MereRunCore/OpticalFlow/NativeOpticalFlowGenerator.swift`
-
-### OCR runtime
-
-- `Sources/MereRunCore/LightOnOCR/LightOnOCRGenerator.swift`
-- `Sources/MereRunCore/LightOnOCR/LightOnOCRGenerator+Loading.swift`
-- `Sources/MereRunCore/LightOnOCR/LightOnOCRGenerator+Inference.swift`
-- `Sources/MereRunCore/LightOnOCR/LightOnOCRSupport.swift`
-- `Sources/MereRunCore/Q35/Q35Generator.swift`
-- `Sources/MereRunQwenModel/Q35Model.swift`
-- `Sources/MereRunCore/Q35/Q35VisionTower.swift`
-
-### Vision-language support
-
-- `Sources/MereRunCore/VLM/`
-- `Sources/MereRunCore/QwenVLCaptioner.swift`
-- `Sources/MereRunCore/Qwen25VLEncoder.swift`
-- `Sources/MereRunCore/QwenVisionAttention.swift`
-
-### Falcon grounding runtime
-
-- `Sources/MereRunCore/FalconPerception/FalconPerceptionConfig.swift`
-- `Sources/MereRunCore/FalconPerception/FalconPerceptionResources.swift`
-- `Sources/MereRunCore/FalconPerception/FalconPerceptionTokenizer.swift`
-- `Sources/MereRunCore/FalconPerception/FalconPerceptionProcessor.swift`
-- `Sources/MereRunCore/FalconPerception/FalconPerceptionModel.swift`
-- `Sources/MereRunCore/FalconPerception/FalconPerceptionAnyUp.swift`
-- `Sources/MereRunCore/FalconPerception/FalconPerceptionGrounder.swift`
-
-### SAM 3.1 runtime
-
-- `Sources/MereRunCore/SAM3/SAM31Config.swift`
-- `Sources/MereRunCore/SAM3/SAM31Resources.swift`
-- `Sources/MereRunCore/SAM3/SAM31Tokenizer.swift`
-- `Sources/MereRunCore/SAM3/SAM31Model.swift`
-- `Sources/MereRunCore/SAM3/SAM31InteractiveSAM.swift`
-- `Sources/MereRunCore/SAM3/SAM31Prompts.swift`
-- `Sources/MereRunCore/SAM3/SAM31ImageSegmenter.swift`
-- `Sources/MereRunCore/SAM3/SAM31VideoIO.swift`
-- `Sources/MereRunCore/SAM3/SAM31VideoTracker.swift`
-- `Sources/MereRunCore/SAM3/SAM31CameraCapture.swift`
-
-## How the OCR path works
-
-1. The CLI resolves the OCR model.
-2. The OCR runtime loads the required components.
-3. The runtime normalizes the input image into the expected tensor form.
-4. OCR inference runs.
-5. The command emits text on standard output without internal bring-up logs.
-
-LightOnOCR uses the dedicated LightOn runtime and remains the default `vision ocr`
-backend. Native Infinity-Parser2 uses the Q35 text runtime plus the Qwen-family
-vision tower, with `vision-ocr-infinity-pro-int8` as the default native
-Infinity model and
-`vision-ocr-infinity-pro` as the full BF16 heavyweight compatibility target.
-
-GLM-OCR remains an external CLI adapter that shells out to `glmocr`. Infinity can
-also run as an external parity adapter through `--infinity-runtime external`,
-which shells out to the `parser` executable from `infinity_parser2` and can
-target an upstream Transformers, vLLM engine, or vLLM server run.
-
-## How segmentation and tracking work
-
-1. The CLI resolves `vision-segment-sam31` from the model store or uses the
-   local root passed with `--model`.
-2. The native SAM 3.1 runtime validates the root, loads the tokenizer,
-   configuration, and weights, and preprocesses the input image or video frames.
-3. Still-image text prompts run the detector once and then run text, Detection
-   Transformer (DETR), and mask decoding for each prompt.
-4. Geometry prompts use the interactive SAM path. Video tracking reuses those
-   prompts frame to frame after the seed frame.
-5. Native postprocessing applies thresholding, mask resizing, score ordering,
-   non-maximum suppression (NMS), and optional mask export.
-6. The runtime writes annotated media and structured JSON metadata.
-
-## How grounding works
-
-1. The CLI resolves `vision-ground-falcon-perception` from the model store or
-   uses the local root passed with `--model`.
-2. The native Falcon runtime validates the root, loads the configuration,
-   tokenizer, and weights, and preprocesses the image and text query.
-3. The model autoregressively emits grounded detections, including coordinate
-   and size tokens, and decodes optional segmentation masks.
-4. Native postprocessing derives normalized centers, sizes, bounding boxes,
-   and optional exported mask artifacts.
-5. The runtime writes an annotated image and structured JSON metadata for
-   downstream agents.
-
-## How caption and inspect differ
-
-- `caption` is a direct descriptive task.
-- `inspect` is a question-driven vision-language path.
-
-They share some of the same underlying vision support code, but they are
-presented as separate public tasks because your intent differs.
-
-## LightOnOCR 3
-
-`vision-ocr-lighton` now downloads the pinned official LightOnOCR-3-1B checkpoint.
-The 1B model uses the native Pixtral/Qwen runtime; `vision-ocr-lighton-3-0.8b`
-and `vision-ocr-lighton-3-4b` use the existing native Qwen3.5 vision runtime.
-The 4B variant is LightOn's quality recommendation; 0.8B is the smaller lane.
-The default stays 1B for compatibility with existing workflows.
-
-```bash
-mere.run model pull vision-ocr-lighton-3-0.8b
-mere.run vision ocr ./page.png --model vision-ocr-lighton-3-0.8b --lighton-mode grounding
-```
-
-`--lighton-mode plain` (default) sends an empty image-only prompt and returns
-Markdown transcription. `grounding` sends the exact trained instruction and
-preserves raw labels and boxes such as `![text](80,175,920,225)`, followed by
-content. Coordinates are normalized to 0–1000. Image regions can contain short
-descriptions; chart regions can contain HTML tables with estimated values.
-The runtime does not validate those estimates or convert the output to JSON.
-The flag applies to the LightOn side of `--compare` as well.
-
-Qwen variants disable thinking and process aspect-preserving images within
-65,536–5,000,000 pixels, with further resizing when required by the 16K context
-budget. Pixtral keeps the 1540px long-edge processor convention.
-Render PDF pages to upright images before calling the command.
-
-Existing `vision-ocr-lighton` installations are preserved and may still contain
-LightOnOCR 2. To intentionally replace an existing install with 3-1B, back it up
-and run `mere.run model pull vision-ocr-lighton --force`, or download 3-1B to a
-separate directory and pass that directory with `--model`.
-
-All three released BF16 checkpoints completed the [bounded native qualification](../benchmarks/lightonocr3-native-qualification-2026-10-08.md).
-1B and 4B passed all ten checked output cases each; 0.8B passed eight and failed
-the handwritten-word crop in both modes. The generated invoice rows, chart values,
-and table/chart grounding regions passed for every variant. This is a small
-image-input qualification; full transcription accuracy, upstream numerical parity,
-and comparative throughput remain unqualified.
-See the [LightOnOCR 3 release](https://huggingface.co/blog/lightonai/lightonocr-3)
-and [1B model card](https://huggingface.co/lightonai/LightOnOCR-3-1B).
+| Area | Location |
+| --- | --- |
+| CLI commands | `Sources/MereRunCLI/Commands/Vision*Command.swift` |
+| Captioning and inspection | `Sources/MereRunCore/VLM/` |
+| Multimodal embeddings | `Sources/MereRunCore/MultimodalEmbeddings/` |
+| LightOn OCR | `Sources/MereRunCore/LightOnOCR/` |
+| Q35 OCR runtime | `Sources/MereRunCore/Q35/`, `Sources/MereRunQwenModel/Q35Model.swift`, `Sources/MereRunQwenModel/Q35VisionTower.swift` |
+| Falcon grounding | `Sources/MereRunCore/FalconPerception/` |
+| SAM 3.1 | `Sources/MereRunCore/SAM3/` |
+| Face analysis | `Sources/MereRunCore/FaceAnalysis/` |
+| Pose | `Sources/MereRunCore/Pose/NativePoseDetector.swift` |
+| Optical flow | `Sources/MereRunCore/OpticalFlow/NativeOpticalFlowGenerator.swift` |
+| Marigold V2 | `Sources/MereRunCore/MarigoldV2/` |
+| Video depth | `Sources/MereRunCore/VideoDepth/` |
+| MoGe-2 | `Sources/MereRunCore/VisionGeometry/MoGe2/` |
+| Depth Anything 3 | `Sources/MereRunCore/DepthAnything3/` |
+| 3D reconstruction | `Sources/MereRunCore/TripoSR/`, `Sources/MereRunCore/Trellis2/`, `Sources/MereRunCore/InstantMesh/` |

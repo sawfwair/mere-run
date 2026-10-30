@@ -325,17 +325,33 @@ private func temporaryFolder() throws -> URL {
     #expect(gate.family == "parakeet" && gate.violations.isEmpty, "\(gate)")
 }
 
-/// `speech listen` loads Qwen3-ASR whatever `--model` names, so a Parakeet id runs with a
-/// warning; `--list-devices` lists inputs before any model is read, on both live commands.
-@Test func liveCommandsKeepWhatTheyAcceptedBefore() throws {
+/// `speech listen` runs Parakeet live, as `speech transcribe --stream` does, and refuses
+/// Nemotron Transcribe, which has no live mode. `--list-devices` lists inputs before any model
+/// is read, on both live commands.
+@Test func liveCommandsRunParakeetAndRefuseOfflineNemotron() throws {
     let parakeet = try report("speech", "listen", "--model", "speech-asr-parakeet")
-    #expect(parakeet.family == "qwen3-asr" && parakeet.model == "speech-asr-qwen3" && parakeet.violations.isEmpty)
-    #expect(parakeet.warnings == [
-        "--model speech-asr-parakeet has no effect: speech listen runs Qwen3-ASR. "
-            + "Parakeet transcribes recorded audio only; use `speech transcribe`."
-    ])
+    #expect(parakeet.family == "parakeet" && parakeet.model == "speech-asr-parakeet")
+    #expect(parakeet.violations.isEmpty && parakeet.warnings.isEmpty)
     let alias = try report("speech", "listen", "-m", "mlx-community/parakeet-tdt-0.6b-v3")
-    #expect(alias.family == "qwen3-asr" && alias.warnings.count == 1)
+    #expect(alias.family == "parakeet" && alias.warnings.isEmpty, "\(alias)")
+    let route = try SpeechTranscriptionResolver.route(
+        task: .transcribe, language: nil, preferredBackend: .auto, modelOverride: "speech-asr-parakeet"
+    )
+    #expect(route.decision.backend == .parakeet && route.modelOverride == "speech-asr-parakeet")
+    for nemotron in ["speech-asr-nemotron-35-transcribe", "speech-asr-nemotron-35-transcribe-bf16"] {
+        let listened = try report("speech", "listen", "--model", nemotron)
+        #expect(listened.source == .excluded && listened.violations.count == 1, "\(listened)")
+        #expect(throws: CLICapabilityGate.Rejection.self) {
+            try CLICapabilityGate.check(arguments: ["mere.run", "speech", "listen", "--model", nemotron])
+        }
+        #expect(throws: (any Error).self) { try SpeechListen.parse(["--model", nemotron]) }
+    }
+    let local = FileManager.default.temporaryDirectory.appendingPathComponent("listen-nemotron-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: local, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: local) }
+    try Data(#"{"architectures":["Nemotron3_5TranscribeForConditionalGeneration"]}"#.utf8)
+        .write(to: local.appendingPathComponent("config.json"))
+    #expect(throws: (any Error).self) { try SpeechListen.parse(["--model", local.path]) }
     for commandLine in [
         ["speech", "listen", "--list-devices", "--model", "speech-asr-parakeet"],
         ["speech", "diarize-live", "--list-devices", "--model", "speech-diarization-sortformer"],

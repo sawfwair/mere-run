@@ -1,8 +1,10 @@
 # Development workflow
 
-This page describes the expected local workflow for editing `mere-run`.
+This page describes the local workflow for changing `mere-run`: what to install,
+which checks to run for each kind of change, and what the repository keeps out
+of scope. Apple Silicon macOS is the supported development platform.
 
-Before using `./scripts/check.sh`, install SwiftLint and ripgrep once:
+Before you run `./scripts/check.sh`, install SwiftLint and ripgrep once:
 
 ```bash
 brew install swiftlint ripgrep
@@ -15,7 +17,7 @@ brew install node pnpm gitleaks
 ```
 
 For Linux CLI compatibility work, use a headless toolchain. On Ubuntu-style
-systems the baseline packages are:
+systems, install these baseline packages:
 
 ```bash
 sudo apt-get update
@@ -23,8 +25,8 @@ sudo apt-get install -y clang cmake ninja-build pkg-config gfortran libcurl4-ope
 ```
 
 `ffmpeg` packages normally include both `ffmpeg` and `ffprobe`. If a runner or
-developer machine installs them somewhere else, use absolute executable
-overrides:
+developer machine installs them somewhere else, point mere.run at the
+executables with absolute paths:
 
 ```bash
 export MERERUN_FFMPEG=/opt/ffmpeg/bin/ffmpeg
@@ -40,8 +42,11 @@ For most changes:
 3. Run `./scripts/check.sh`.
 4. If you changed real runtime behavior, run the installed smoke sweep.
 
-That keeps the package healthy without forcing a full manual validation cycle
-for every tiny edit.
+On macOS, `./scripts/check.sh` runs SwiftLint, the agent-readiness,
+evaluation-boundary, documentation-example, model-boundary, and package-policy
+checks, then `swift build`, the MLX shader verification, `swift test`, and the
+CLI help and output checks. On Linux, it runs `scripts/check-linux.sh`
+instead. For details, see the [testing guide](testing.md).
 
 Continuous integration narrows itself to the paths a pull request changes, so a
 change confined to the macOS app runs a shorter package gate than a change to
@@ -80,11 +85,14 @@ release qualification must also load the packaged library on macOS 15 hardware.
 ### Docs-only change
 
 ```bash
+bash ./scripts/check-docs-examples.sh
+pnpm docs:build
 ./scripts/check.sh
 ```
 
-This catches documentation hygiene regressions and verifies the CLI help surface still
-matches the public tree.
+The example check and site build catch example-data and link problems. The
+main gate catches documentation hygiene regressions and verifies that the CLI
+help surface still matches the public tree.
 
 If the change adds, removes, renames, or redescribes a CLI command, first run:
 
@@ -124,9 +132,9 @@ true generation from the exact packaged binary:
   --json-output ./video-gate.json
 ```
 
-This separately exercises LTX 2.3 draft, full generated audio/video, and
-source-audio A2Vid. It decodes the resulting MP4s and fails if promised audio
-is missing or silent.
+This command separately exercises LTX 2.3 draft, full generated audio and
+video, and source-audio A2Vid. It decodes the resulting MP4s and fails if
+promised audio is missing or silent.
 
 Before publishing a packaged candidate, run the exhaustive installed-model
 smoke from that same extracted binary:
@@ -136,18 +144,18 @@ smoke from that same extracted binary:
   --json-output ./release-gate.json
 ```
 
-This creates one result for every `installed` row in `model list`, including
+This command creates one result for every `installed` row in `model list`, including
 image-to-3D, music/SFX, OCR, SAM, grounding, face, geometry/depth, and every
 video/world backend. Unmapped installed entries and missing required companion
 models fail closed.
 
-Exceptional, release-owner-approved quarantines use
-`--skip-model <installed-id>` and remain visible as `skipped` rows in the JSON
-report. They are not passes.
+For an exceptional quarantine that the release owner approves, pass
+`--skip-model <installed-id>`. The model stays visible as a `skipped` row in the
+JSON report; it isn't a pass.
 
 ### Linux CLI compatibility change
 
-Keep this scope to the headless CLI, local API, and test fixtures. Do not move
+Keep this scope to the headless CLI, local API, and test fixtures. Don't move
 SwiftUI, app bundle, installer, or DMG behavior into the Linux target.
 
 ```bash
@@ -169,31 +177,33 @@ artifacts. Build package artifacts locally on the Linux host class you intend to
 validate:
 
 ```bash
-MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.23.0
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.67.1
 ls dist/linux/
 ```
 
 The package script builds
 `dist/linux/mere-run-<version>-linux-<arch>.tar.gz`,
 `dist/linux/mere-run_<version>_<deb-arch>.deb`, and
-`dist/linux/SHA256SUMS`. It must run on Linux with CUDA. There is no CPU-only
+`dist/linux/SHA256SUMS`. Run it on Linux with CUDA. There is no CPU-only
 Linux release; CPU package builds are test fixtures only.
 
 The x86_64 CUDA lane uses a suffix to identify its accelerator contract:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
-  scripts/package-linux.sh --version 0.23.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.67.1 --artifact-suffix cuda
 ```
 
-That writes artifacts such as
+That command writes artifacts such as
 `mere-run-<version>-linux-x86_64-cuda.tar.gz` and
 `mere-run-cuda_<version>_amd64.deb`. Real CUDA runtime smoke belongs on an
 actual GPU host. CUDA package builders need CMake 3.25 or newer for the
-upstream `mlx-swift` CUDA bridge. On Ubuntu 22.04/Jammy images, install CMake
-3.25 or later with
-`python3 -m pip install --upgrade "cmake>=3.25,<4"` before starting the CUDA
-package build.
+upstream `mlx-swift` CUDA bridge. On Ubuntu 22.04 (Jammy) images, install CMake
+3.25 or later before you start the CUDA package build:
+
+```bash
+python3 -m pip install --upgrade "cmake>=3.25,<4"
+```
 
 Arm64 CUDA package builds require a real arm64 CUDA host. CUDA `.deb` artifacts
 are gated to binaries whose linked `libcudart` SONAME proves CUDA 12 or CUDA 13,
@@ -204,16 +214,16 @@ MLX's runtime NVRTC kernels require CUDA headers such as `cuda_bf16.h`. For any
 other or unknown toolkit major, use `--skip-deb`; the tar
 package path remains available and must be smoke-tested on a matching host.
 An explicit `MERERUN_PACKAGE_LINUX_DEPS` value bypasses the automatic CUDA
-major gate and is written verbatim, making dependency compatibility the
-packager's responsibility.
+major-version gate and is written verbatim, so dependency compatibility becomes
+the packager's responsibility.
 
-Release builds cover macOS Apple Silicon, Linux arm64 CUDA on Spark, and Linux
-x86_64 CUDA on RunPod. Publish each Linux artifact only after rebuilding and
-smoke-testing it on matching GPU hardware.
+Every release ships macOS Apple Silicon artifacts. Linux x86_64 and arm64 CUDA
+artifacts are attached only when a matching GPU host is available: publish each
+Linux artifact only after rebuilding and smoke-testing it on that hardware.
 
 ## Model-store expectations
 
-The public runtime is hard-cut to the canonical OSS model IDs. That means:
+The public runtime uses only the canonical OSS model IDs:
 
 - Runtime code must use canonical public IDs only.
 - Examples must use canonical public IDs only.
@@ -243,7 +253,10 @@ swift run mere.run model info image-klein-max
 ### If you touch runtime code
 
 - Keep debug output behind the internal debug helper.
-- Do not introduce implicit hosted defaults.
+- Don't introduce implicit hosted defaults.
+- Put a new model runtime in an owned runtime target, not in `MereRunCore`, and
+  register any new target in `scripts/package-policy.json`. See
+  [Package policy](internals/package-policy.md).
 - Keep model resolution explicit and canonical.
 - Add or update the closest relevant tests.
 - For Linux media I/O, test executable discovery through `MERERUN_FFMPEG`,
@@ -259,13 +272,15 @@ swift run mere.run model info image-klein-max
 
 ## Contribution boundaries
 
-This repository is intentionally scoped to the package and CLI. Changes must not
-reintroduce:
+This repository holds the Swift package, the CLI, the open-source macOS and iOS
+Studio apps, and the docs. Changes must not introduce:
 
-- Hosted-service assumptions.
-- Billing or entitlement logic.
-- App-store-only release behavior.
-- Relay, web, or app-specific product layers.
+- Hosted-service assumptions or service implementations. The repository ships
+  the portable relay client (`MereRunRelayKit`) and the local `relay serve`
+  host, not a hosted relay.
+- Billing, in-app purchase, or entitlement logic.
+- Store distribution machinery, such as receipt validation, provisioning
+  automation, or marketing metadata pipelines.
 
 See the root `CONTRIBUTING.md` file for the short policy version.
 
@@ -282,13 +297,14 @@ Before you open a pull request:
 - The documentation reflects any user-facing change.
 - The public command and model vocabulary remain canonical.
 
-If you changed runtime behavior against real models, also include the result of:
+If you changed runtime behavior against real models, also include the result
+of this command:
 
 ```bash
 ./scripts/e2e_smoke.sh --core
 ```
 
-and, when relevant:
+When relevant, also include the installed sweep:
 
 ```bash
 ./scripts/e2e_smoke.sh --installed

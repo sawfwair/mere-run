@@ -1,8 +1,8 @@
-# Bonsai 2 Small selected-runtime quality
+# Bonsai 2 Small selected-runtime quality — 2026-10-16
 
-The selected native Swift/MLX runtime was rerun once on the same 48 frozen quality requests. Strict scoring passes **37/48**: 2B 11/16, 4B 13/16, and 9B 13/16. This closes the missing fresh quality run after the [scheduling and transform changes](./bonsai2-small-throughput-2026-10-16.md); it does not establish broad model quality.
+The selected native Swift/MLX runtime was rerun once on an Apple M3 Max with the same 48 frozen quality requests. Strict scoring passes **37/48**: 2B 11/16, 4B 13/16, and 9B 13/16. This closes the missing fresh quality run after the [scheduling and transform changes](./bonsai2-small-throughput-2026-10-16.md); it does not establish broad model quality.
 
-The executable SHA-256 is `a1e3224fae3c4c85d54bcae618de8602c5cbfdd041105292f535ffbef25d54b3`, preserved with its runtime resources on T7. Its Bonsai runtime source is committed in `3b059874`; the subsequent main merge retains those runtime source hashes. The [summary](./bonsai2-small-selected-quality-2026-10-16-summary.json) retains input, collector, executable, and response identities without publishing private prompt data.
+The executable SHA-256 is `a1e3224fae3c4c85d54bcae618de8602c5cbfdd041105292f535ffbef25d54b3`, preserved with its runtime resources on T7. Its Bonsai runtime source is committed in `3b059874`; the subsequent main merge retains those runtime source hashes. The [machine-readable summary](./bonsai2-small-selected-quality-2026-10-16-summary.json) retains input, collector, executable, and response identities without publishing private prompt data.
 
 ## Conditions
 
@@ -13,6 +13,8 @@ The resident loopback API uses serial requests, an 8,192-token context, catalog/
 CPU-only compilation overlapped some quality requests. Saved wall times are diagnostic fields and are not comparable throughput measurements. The quality gate is based on answers and token budgets.
 
 ## Results
+
+The following tables show strict scores, outer-fence recovery, and token-cap counts per model.
 
 | Model | Strict cases | Text cases | Grounded | Code checks | Vision strict | Arithmetic | Reasoning |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |

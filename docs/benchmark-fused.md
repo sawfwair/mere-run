@@ -1,10 +1,13 @@
 # Mere fused model evaluation
 
 `mere.run model benchmark fused` is the quality-comparison lane for local chat,
-coding, tool-use, long-context, vision, and Mere local-first behavior. It does
-not copy whole public leaderboards into the repository. A versioned Mere
-manifest selects deliberate strata from multiple benchmark families and mixes
-them with authored scenarios.
+coding, tool use, long context, vision, and Mere local-first behavior. It
+doesn't copy whole public leaderboards into the repository. Instead, a
+versioned Mere manifest (`mere-fused-v1`) selects deliberate strata from
+several benchmark families and mixes them with Mere-authored scenarios.
+
+For when to use this lane instead of the standalone chat, tool-call, and code
+lanes, see [Benchmarking](./benchmarking.md).
 
 ## Suites
 
@@ -15,10 +18,10 @@ them with authored scenarios.
 - `comprehensive` contains 110 cases: 59 chat/long-context, 21 code, 20
   tool-use, and 10 vision. It includes every Mere-authored chat and tool case,
   plus fixed external benchmark strata. The default is five sampled trials.
-  Qwen3.8 runs its `low`, `medium`, and `xhigh` native reasoning tiers
-  separately.
+  Qwen3.8 runs its `low`, `medium`, and `xhigh` native reasoning tiers as
+  separate profiles. In `lite`, Qwen3.8 runs only the `medium` tier.
 
-The chat lane is deliberately more than extraction. It covers explanation,
+The chat lane covers more than extraction. It covers explanation,
 rewriting and tone, empathy, false-premise correction, uncertainty,
 recommendations and tradeoffs, planning, prompt-injection resistance,
 concision, counterexamples, constrained creativity, and clarification, along
@@ -26,26 +29,33 @@ with grounded local-first behavior. Dry-run text and JSON expose the lane
 counts directly, and tests enforce minimum Comprehensive floors so the suite
 cannot quietly collapse back into a coding-heavy smoke test.
 
-Inspect the entire plan without loading a model, generating text, or executing
-candidate code:
+To inspect the entire plan without loading a model, generating text, or running
+candidate code, use `--dry-run`:
 
 ```bash
 mere.run model benchmark fused --suite lite --dry-run --json
 mere.run model benchmark fused --suite comprehensive --dry-run --json
 ```
 
-The default model matrix covers Qwen3.8 BF16 and 4-bit, Nemotron Lightning, and
-Laguna XS 2.1. Override it with `--models`.
+The default model matrix is Qwen3.8 27B BF16 and 4-bit
+(`vision-chat-q38-27b` and `vision-chat-q38-27b-4bit`), Nemotron Lightning
+(`text-chat-nemotron-35-lightning`), and Laguna XS 2.1
+(`text-chat-laguna-xs-2-1`). To compare other installed models, pass
+`--models`.
+
+The 35 external cases aren't bundled. Until you import them, as described in
+[Provenance and external fixtures](#provenance-and-external-fixtures), a dry
+run lists them as reference-only cases awaiting imported fixtures.
 
 Completed local reference results for Qwen3.8 low reasoning, Laguna XS 2.1, and
 Nemotron Lightning are recorded in
-[Fused comprehensive reference runs](benchmarks/fused-reference-runs.md).
+[Fused comprehensive reference runs](./benchmarks/fused-reference-runs.md).
 That page preserves the exact plan, runner, model-manifest, and receipt hashes
 alongside the per-source results, comparable non-vision scores, and limitations.
 
 ### Exact source mix
 
-The table lists case counts before repeated trials. By default, `lite` produces
+The following table lists case counts before repeated trials. By default, `lite` produces
 48 case-trial rows per model profile, and `comprehensive` produces 550.
 
 | Source family | `lite` | `comprehensive` | Pinned selection | Passing requirement |
@@ -64,8 +74,8 @@ The table lists case counts before repeated trials. By default, `lite` produces
 The complete machine-readable case list, including difficulty, capability tags,
 selection rationale, and upstream ID, lives in
 `Sources/MereRunCLI/BenchmarkSuites/mere-fused-v1.json`. The exact external
-revisions and file hashes live in `mere-fused-sources-v1.json`. A dry run prints
-the resolved list without loading a model:
+revisions and file hashes live in `mere-fused-sources-v1.json` in the same
+directory. A dry run prints the resolved list without loading a model:
 
 ```bash
 mere.run model benchmark fused --suite comprehensive --dry-run --json
@@ -73,7 +83,7 @@ mere.run model benchmark fused --suite comprehensive --dry-run --json
 
 ### What the questions and answers look like
 
-The examples show the prompt structure and scoring contract for each lane.
+The following examples show the prompt structure and scoring contract for each lane.
 Public examples use reserved identifiers where the specific value does not
 affect the behavior under test. The HumanEval example abbreviates its
 MIT-licensed contract for readability, and the LongBench example is
@@ -166,7 +176,7 @@ and pass.
 #### Long-context retrieval and synthesis
 
 A LongBench row can present many documents followed by a question such as
-“which of these two events happened first?” The answer may be only the entity
+“which of these two events happened first?” The answer might be only the entity
 name. Other rows ask for a government-report or multi-news summary, research
 paper QA, multi-hop QA, or a numbered passage retrieval result. These are not
 scored with phrase presence: the suite uses normalized QA-F1, ROUGE-L, or
@@ -208,7 +218,7 @@ supports it:
 model, are unscored and reported separately instead of being counted as wrong.
 
 Compare the strict pass rate, mean score, unscored count, and per-source
-breakdown together. A model can perform well at chat and tool use while being
+breakdown together. A model can perform well at chat and tool use and still be
 materially weaker at executable code, or the reverse.
 
 A real fused run never downloads a missing model. Every selected catalog ID
@@ -217,19 +227,23 @@ stops before MLX initialization. The plan records the mere.run version and exact
 runner-executable SHA-256, host processor/memory/architecture/OS identity,
 catalog repository and revision, plus the installed `mererun_model.json` ID,
 schema version, source pins, and exact manifest SHA-256. This makes a receipt
-identify the code, host, and checkpoint metadata that were actually visible to
-the runtime without recursively scanning model storage.
+identify the code, host, and checkpoint metadata that were visible to the
+runtime without recursively scanning model storage.
 
 ## Sampling contract
 
-The fused quality lane never uses temperature zero. It evaluates the models
-under their published native sampling profiles:
+The fused quality lane never uses temperature zero. It evaluates each model
+under its published native sampling profile, shown in the following table:
 
 | Family | Temperature | Top-p | Top-k | Min-p |
 | --- | ---: | ---: | ---: | ---: |
 | Qwen3.8 | 1.0 | 0.95 | 20 | 0 |
 | Nemotron Lightning | 1.0 | 0.95 | disabled | 0 |
 | Laguna | 1.0 | 1.0 | 20 | 0.02 |
+
+Other Qwen-family catalog models use their catalog-recommended sampling. Any
+other model uses a fallback of temperature 0.7 and top-p 0.9. The plan records the
+profile name for every model.
 
 The manifest supplies repeated trials so one lucky or unlucky stochastic
 sample does not become the model result. Correctness is reported per lane,
@@ -239,7 +253,8 @@ category.
 ## Log-probability contract
 
 Quality runs default to `--logprobs summary`. Use `tokens` for chosen-token
-records or `top --top-logprobs 5` for visible-token candidate lists:
+records, or `top` with `--top-logprobs` (default `5`) for visible-token
+candidate lists:
 
 ```bash
 mere.run model benchmark fused \
@@ -250,7 +265,7 @@ mere.run model benchmark fused \
   --json
 ```
 
-Each measurement distinguishes:
+Each measurement distinguishes the following values:
 
 - Raw model log probability before temperature, top-k, top-p, and min-p
 - Policy log probability after the exact sampling transforms that selected the token
@@ -269,7 +284,7 @@ math. It routes Qwen away from MTP, Nemotron away from DSpark, and Laguna away
 from DFlash and continuous batching. Draft probabilities and acceptance rates
 belong to acceleration diagnostics, not model calibration.
 
-Use the separate native performance lane when both views are needed:
+When you need both views, add the separate native performance lane:
 
 ```bash
 mere.run model benchmark fused \
@@ -279,12 +294,12 @@ mere.run model benchmark fused \
   --json
 ```
 
-Performance-lane rows have no correctness score and no log probabilities. This keeps
-readback overhead and acceleration routing out of the quality result.
+Performance-lane rows have no correctness score and no log probabilities, which
+keeps readback overhead and acceleration routing out of the quality result.
 
 ## Provenance and external fixtures
 
-Every planned case reports:
+Every planned case reports the following provenance:
 
 - Source and pinned or imported version
 - Upstream original ID
@@ -319,28 +334,28 @@ the frozen result before running a model:
 
 ```bash
 python3 scripts/import-fused-benchmark-fixtures.py
-.build/debug/mere.run model benchmark fused-fixture \
+mere.run model benchmark fused-fixture \
   .tmp/fused-benchmark-fixtures/unstamped.jsonl \
   > .tmp/fused-benchmark-fixtures/selected.jsonl
-.build/debug/mere.run model benchmark fused-fixture \
+mere.run model benchmark fused-fixture \
   .tmp/fused-benchmark-fixtures/selected.jsonl --check
 ```
 
-After one online import, `--offline` reproduces the same normalized fixtures
+After one online import, the importer's `--offline` option reproduces the same normalized fixtures
 by using only the verified source cache. Generated source and fixture files remain
 under `.tmp/` and are not committed.
 
-The normalized selection contains:
+The normalized selection contains the following cases:
 
-- six HumanEval+ and six MBPP+ tasks evaluated against every selected base and
-  Plus input;
-- six LiveCodeBench `release_v5` code-generation strata spanning Codeforces
-  stdin programs and LeetCode-style functional tasks, including public and
-  private tests;
-- ten BFCL v3 slices covering single, parallel, zero-call, and pinned
-  conversation-history tool-use cases;
-- seven LongBench v1 slices scored with task-appropriate QA-F1, ROUGE-L, or
-  retrieval metrics and explicit Mere thresholds.
+- Six HumanEval+ and six MBPP+ tasks, evaluated against every selected base
+  and Plus input
+- Six LiveCodeBench `release_v5` code-generation strata, spanning Codeforces
+  stdin programs and LeetCode-style functional tasks with public and private
+  tests
+- Ten BFCL v3 slices, covering single, parallel, zero-call, and pinned
+  conversation-history tool-use cases
+- Seven LongBench v1 slices, scored with task-appropriate QA-F1, ROUGE-L, or
+  retrieval metrics and explicit Mere thresholds
 
 This is a pinned Mere subset, not a reproduction of any upstream leaderboard.
 BFCL conversation-history slices are not the complete BFCL executable-state
@@ -374,7 +389,8 @@ import is rejected before any model loads when either hash does not match. The
 importer-generated upstream ID, source revision, and resolved hashes become the
 run receipt.
 
-Run the frozen selection with either suite:
+The following command runs the frozen selection with the `lite` suite; it works
+the same way with `comprehensive`:
 
 ```bash
 mere.run model benchmark fused \
@@ -391,8 +407,8 @@ normal machine-wide admission controller.
 
 ## Checkpointed and bounded runs
 
-Long fused runs can persist an atomic JSON checkpoint after every completed
-case-trial. `--resume` accepts that file only when the full plan hash still
+With `--checkpoint`, a long fused run persists an atomic JSON checkpoint after
+every completed case-trial. `--resume` accepts that file only when the full plan hash still
 matches: exact runner executable and host identity, suite manifest, model order
 and profiles, installed model-manifest hashes, fixture paths and hashes, trials,
 cases, context and token limits, logprob settings, response capture, resolved
@@ -400,14 +416,14 @@ Python executable and SHA-256, resolved code-sandbox backend, execution timeout,
 and performance lane. Duplicate or out-of-plan rows are rejected. Checkpoints
 also preserve ISO-8601 creation and last-update timestamps.
 
-Model preparation or generation failures abort the invocation without writing
+Model preparation or generation failures stop the invocation without writing
 the row in progress. Rows checkpointed before the failure remain intact, and an
 exact `--resume` retries the pending row instead of recording infrastructure
 failure as model quality.
 
 Use `--case-trial-limit` to yield Metal cleanly after a small number of new
-rows. It requires a checkpoint; the next invocation resumes at the first
-unfinished row instead of repeating completed inference:
+rows. It requires a checkpoint. The next invocation, with `--resume`, starts at
+the first unfinished row instead of repeating completed inference:
 
 ```bash
 mere.run model benchmark fused \
@@ -438,7 +454,9 @@ complete/partial case-trial counts.
 
 ## Code execution
 
-Code scoring uses the existing local sandbox and requires explicit consent:
+Code scoring uses the same local sandbox as `model benchmark code` and requires
+explicit consent through `--allow-code-execution`. `--sandbox` accepts `auto`
+(the default), `macos-sandbox-exec`, `bubblewrap`, or `none`:
 
 ```bash
 mere.run model benchmark fused \
@@ -448,4 +466,4 @@ mere.run model benchmark fused \
   --json
 ```
 
-`--dry-run` never executes code and does not require the flag.
+`--dry-run` never runs code and doesn't require the flag.

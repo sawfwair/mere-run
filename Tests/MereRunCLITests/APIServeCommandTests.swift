@@ -138,6 +138,21 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertFalse(cmd.engine.openAICompatibility.supportsStructuredOutputs)
     }
 
+    func testAPIServeNemotronHRejectsOtherModelIDs() throws {
+        for model in ["vision-chat-nemotron-35-bolt-24gb", NemotronHResources.dsparkModelID] {
+            let command = try APIServe.parse(["--engine", "text-chat-nemotron-h", "--model", model])
+            XCTAssertThrowsError(try command.resolveModelPath()) { error in
+                XCTAssertTrue("\(error)".contains(NemotronHResources.modelID), "\(model): \(error)")
+            }
+        }
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-nemotron-local-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let local = try APIServe.parse(["--engine", "text-chat-nemotron-h", "--model", root.path])
+        XCTAssertEqual(try local.resolveModelPath(), root.path)
+    }
+
     func testAPIServeResolvesInstalledNemotronCanonicalIDForPreflightAndRuntime() throws {
         let modelsRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-nemotron-api-\(UUID().uuidString)", isDirectory: true)

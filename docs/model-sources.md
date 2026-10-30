@@ -3,18 +3,18 @@
 For provider cookbooks, prompt formats, and research gaps by managed model, see
 the [provider prompting guide tracker](./provider-prompting-guides.md).
 
-Weights reach `mere.run` in three local-first ways:
+Weights reach `mere.run` in three ways, all local-first:
 
-1. **Managed pulls** — cataloged Hugging Face snapshots installed into the local
-   model store by `mere.run model pull`
-2. **Registered locations** — read-only search roots or explicit canonical-ID
-   bindings managed by `mere.run model location`
-3. **Local paths** — a directory you point at yourself with `--model`,
-   `--model-root`, or the command's equivalent option
+- **Managed pulls**: cataloged Hugging Face snapshots that `mere.run model pull`
+  installs into the local model store.
+- **Registered locations**: read-only search roots or explicit canonical-ID
+  bindings that you manage with `mere.run model location`.
+- **Local paths**: a directory that you pass with `--model`, `--model-root`, or
+  the command's equivalent option.
 
-There is no private model archive, no credentialed mirror, and no central host
-in between. Every managed model's source repository and pinned revision are in
-the catalog, so you can see exactly where each byte came from.
+No private model archive, credentialed mirror, or central host sits in between.
+The catalog records every managed model's source repository and pinned
+revision, so you can see where each byte came from.
 
 The canonical local model store is:
 
@@ -22,7 +22,7 @@ The canonical local model store is:
 ~/Library/Application Support/MereRun/models
 ```
 
-Override that with `MERERUN_MODELS_DIR` or `--models-root`.
+To use a different store, set `MERERUN_MODELS_DIR` or pass `--models-root`.
 
 Registered locations augment the normal persisted primary store without
 copying payloads or creating symlinks. Search roots use
@@ -42,15 +42,17 @@ network-volume access prompt, or when a disk is asleep or disconnected. Its
 models show as `offline` in `model list`. `status` and `model list` name each
 skipped location, and so do the `modelLocationIssues` fields in `status --json`
 and `/runtime/status`. The same output names a location where macOS denied
-access; to allow it, open System Settings > Privacy & Security > Files &
-Folders.
+access; to allow it, go to **System Settings** > **Privacy & Security** >
+**Files & Folders**.
 
 ## Canonical managed model IDs
 
-This is the authoritative public catalog list. It is kept in sync with
+The following table is the authoritative public catalog list. It matches
 `ManagedModelCatalog.allSpecs`, and the test suite fails if the table drifts
-from the runtime catalog used by `mere.run model list`,
-`mere.run model capabilities --all`, and `mere.run model pull`.
+from the runtime catalog that `mere.run model list`,
+`mere.run model capabilities --all`, and `mere.run model pull` use. Hidden
+companion checkpoints are listed separately in
+[Companion checkpoints](#companion-checkpoints).
 
 API-served catalog entries also own a typed profile for their task, serving
 engine, input/output modalities, tool and structured-output support, reasoning
@@ -297,9 +299,14 @@ validates all configured models before downloading any; both accept the same
 | `image-flux2-dev` | FLUX Non-Commercial License and BFL Acceptable Use Policy; non-commercial, non-production use |
 | `image-klein-9b`, `image-klein-base-9b` | FLUX Non-Commercial License v2.1; non-commercial, non-production use |
 | `image-krea2-raw`, `image-krea2-turbo` | Krea 2 Community License; commercial use is limited to entities below USD 1M trailing annual revenue, plus use/distribution conditions |
-| `image-sensenova-u1-5-8b-mot` | Apache License 2.0 |
+| `image-qwen-21`, `image-qwen-21-turbo` | Qwen Research License Agreement; non-commercial research and evaluation only |
 | `image-ideogram4-sdnq-uint4` | Ideogram Non-Commercial Model Agreement |
 | LFM2.5 text and vision targets plus their DSpark companions | LFM Open License v1.0; commercial use by entities at or above USD 10M annual revenue is excluded |
+| `text-decide-d1-3b-bf16`, `text-decide-d1-omni-600m-fp32` | LFM Open License v1.0 |
+| `omni-chat-nemotron3-nano-30b-a3b-bf16` | NVIDIA Open Model Agreement |
+| `speech-asr-nemotron-35-transcribe`, `speech-asr-nemotron-35-transcribe-bf16`, `speech-diarization-nemotron3` | OpenMDW-1.1; the catalog asks you to acknowledge its use and redistribution terms |
+| `speech-tts-drama-3` | Fish Audio Community License 1.0; revenue, hosted-service, attribution, and voice-consent terms |
+| `speech-tts-breeze-2` | BreezeBlue Research and Non-Commercial License; weights and self-hosted outputs are for research and non-commercial use |
 | `vision-chat-muse-glimmer-30b` | Apache-2.0 plus Meta's bundled usage policy; upstream says the model is not intended for download or use by people under 18 |
 | `vision-chat-q38-flash-next-mixed`, `vision-chat-q38-flash-next-3bit`, `vision-chat-q38-flash-next-3bit-native-ple`, `vision-chat-q38-flash-next-4bit` | Qwen Community License 1.0; redistribution, attribution, and restricted-use terms |
 | `vision-segment-sam31` | Meta SAM License custom use, trade-control, attribution, and redistribution conditions |
@@ -307,6 +314,8 @@ validates all configured models before downloading any; both accept the same
 | `vision-embed-olmoearth-v12-{nano,tiny,small,base}` | OlmoEarth Artifact License; prohibited military, defense, intelligence, human-surveillance, policing, and listed extractive uses |
 | `video-minimax-h3-fl2va-mlx`, `video-minimax-h3-fl2va-bf16-mlx`, `video-minimax-h3-fl2va-8bit-mlx`, `video-minimax-h3-fasth3-vsa-datafree-mlx`, `video-minimax-h3-ref2va-mlx` | MiniMax-H3 Community License; use, distribution, and display are excluded in the United States, European Union, United Kingdom, and Republic of Korea, with downstream notice and safeguard obligations |
 | `image-3d-trellis2-4b` | the mounted DINOv3 encoder is gated under Meta's custom DINOv3 License |
+| `music-yue2` | CC BY-NC 4.0 for the YuE2-3B and YuE2 VAE weights |
+| `music-minimax-music3` | MiniMax-Music3 Community License; product attribution, revenue-threshold authorization, and hosted-generation safeguards |
 | `music-muscriptor-{small,medium,large}` | CC BY-NC 4.0 model weights |
 | `sfx-woosh-*` | CC BY-NC 4.0 Woosh or MMAudio Synchformer weights |
 | `sfx-mmaudio-large-44k-v2` | CC BY-NC 4.0 MMAudio checkpoints plus Apple's research-only DFN5B encoder terms |
@@ -314,7 +323,7 @@ validates all configured models before downloading any; both accept the same
 
 The catalog pins every restricted download source to an immutable commit. New
 managed installs write those repository revisions, every applicable
-model/component license and URL, and the acceptance result into schema 3
+model or component license and URL, and the acceptance result into schema 3
 of `mererun_model.json`. `mere.run model info MODEL` displays the same record.
 Pre-existing installs remain usable and are not retroactively treated as an
 acceptance.
@@ -323,8 +332,11 @@ The flag is not a generic click-through for every custom model license. Public,
 ungated downloads whose licenses grant commercial use by exercising the
 licensed rights do not require it. This includes Poolside Laguna S/XS 2.1 and
 NVIDIA Cosmos3-Edge under OpenMDW-1.1, NVIDIA Sortformer under the NVIDIA Open
-Model License, and the hidden Gemma 3 companion under the Gemma Terms of Use.
-Their terms still apply. Managed downloads retain the available license,
+Model License, the hidden Gemma 3 companion under the Gemma Terms of Use, and
+`image-sensenova-u1-5-8b-mot` under Apache License 2.0. Their terms still apply.
+The Nemotron 3.5 Transcribe and Nemotron 3 Diarization checkpoints also use
+OpenMDW-1.1, but their catalog entries ask for acknowledgment, so they appear in
+the preceding table. Managed downloads retain the available license,
 README, attribution, and immutable source provenance.
 
 `music-separate-bs-roformer-viperx-1297`,
@@ -382,10 +394,12 @@ existing installs and explicit local paths keep working:
 - `image-klein-shared`
 - `text-chat-mebot`
 - `text-chat-psi-agent`
+- `video-dreamx-world-5b-ar-mlx`
 
-`image-klein-shared` is an internal shared-component install shape, and the
-text-chat IDs listed here remain local-path-only until they have public Hugging
-Face sources.
+`image-klein-shared` is an internal shared-component install shape. The other
+IDs have no managed download and resolve only from a local path; see
+[`video-dreamx-world-5b-ar-mlx`](#video-dreamx-world-5b-ar-mlx) for the DreamX
+root.
 
 `text-agent-qwen35-9b` is a low-memory GGUF coding model. It uses the public
 Hugging Face source `unsloth/Qwen3.5-9B-GGUF` and selects
@@ -481,7 +495,7 @@ checkpoint at immutable revision
 vision-language model with hybrid linear/full attention, a 262,144-token
 native context window, image and video weights, and Apache-2.0 terms. mere.run
 supports text and local-image prompts through the native Qwen-family runtime;
-video input is not yet exposed. The selected snapshot is 55.59 GB, requires an
+it doesn't expose video input for this model. The selected snapshot is 55.59 GB, requires an
 explicit `model pull`, and is cataloged for 64 GB unified memory minimum with
 96 GB recommended. The pull retains the published generation and processor
 metadata as well as the license.
@@ -547,7 +561,7 @@ affine Q4/group-64 for eligible matrices, with Q4/group-32 for the 160-wide
 n-gram table. It is cataloged for 160 GB minimum and 192 GB recommended rather
 than as a 128 GB alternative.
 
-All three artifacts include the Qwen Community License 1.0 and a complete
+All four Flash-Next artifacts include the Qwen Community License 1.0 and a complete
 source/output hash receipt. Pulls are explicit and require either
 `--accept-model-license` or its equivalent `--accept-license-terms` alias. The
 native Qwen4Exp runtime supports text generation; image input remains
@@ -787,10 +801,6 @@ published vision DSpark measurements use 16-bit weights; acceleration of
 quantized targets was outside that release's scope. See the
 [LFM2.5-VL-DSpark release](https://www.liquid.ai/blog/lfm2-5-vl-dspark)
 for upstream measurements. They are not mere.run results.
-
-Useful environment variables for that path:
-
-- `MERERUN_HUB_CACHE`: override the native Hugging Face snapshot cache path
 
 `image-klein-9b` installs the ungated `mlx-community/FLUX.2-klein-9B` mirror for
 larger distilled Klein generation and reference-image workflows. It is distinct
@@ -1144,14 +1154,6 @@ swift run mere.run model pull image-zimage-nano
 # Pull into a custom SSD-backed store
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-q36-nano
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
-MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-a1b-bf16 --accept-model-license
-MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-1.2b-bf16 --accept-model-license
-MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-1.2b-qad-4bit --accept-model-license
-MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-2.6b-4bit --accept-model-license
-MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-2.6b-bf16 --accept-model-license
-MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-2.6b-qad-4bit --accept-model-license
-MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull vision-chat-lfm25-3b-8bit --accept-model-license
-MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull vision-chat-lfm25-3b-bf16 --accept-model-license
 
 # Inspect installed models
 swift run mere.run status
@@ -1504,8 +1506,8 @@ default `--quality final --output-mode video-only` route runs the full video
 pipeline without requiring audio in the deliverable. With `--output-mode
 audio-video`, unified AV jointly denoises guided video and audio latents in
 stage one, then refines both after LoRA fusion. A2Vid encodes source audio and
-freezes those audio latents through both stages; the original decoded source
-segment—not VAE-decoded audio—is muxed into the MP4.
+freezes those audio latents through both stages. The MP4 contains the original
+decoded source segment, not VAE-decoded audio.
 
 ### `video-ltx23-a2vid-mlx`
 
@@ -1536,7 +1538,7 @@ distilled transformer directly in mere.run's native module-key layout, together
 with the shared connector, video VAE, audio VAE/BWE vocoder, spatial upsampler,
 and duration head from `Lightricks/LTX-2.5@dd53cc2...`. The custom Gemma 4
 language tower is MLX affine Q4/group-64; its LTX projection and tokenizer
-support remain BF16/raw. The complete selected payload is exactly
+support remain BF16 or raw. The complete selected payload is exactly
 53,878,517,792 bytes. The repository is ungated, includes the governing LTX and
 Gemma terms and modification notice, and requires no separate component pull,
 local quantization, or post-install re-keying.
@@ -1902,7 +1904,7 @@ Apple Silicon. The encoder download includes the two original shards containing
 its text and audio tensors. Read the setup and qualification scope with
 `mere.run guide --model audio-auk-base`.
 
-### Bonsai 2 MLX
+## Bonsai 2 MLX
 
 `text-chat-bonsai-2-27b-2bit` pins
 `prism-ml/Ternary-Bonsai-2-27B-mlx-2bit` at
@@ -1913,8 +1915,8 @@ module records and applies signed normalized transforms without expanding the
 full language model. The older Bonsai IDs remain separate models.
 
 The pack requires the matching native loader; ordinary affine loading omits
-required transforms. Short text and synthetic vision smoke checks passed locally; full-model parity
-and broad quality evaluation remain unverified.
+required transforms. Short text and synthetic vision smoke checks passed
+locally; full-model parity and broad quality evaluation remain unverified.
 
 ## Qwen Image 2.1
 
@@ -1976,7 +1978,7 @@ schedule, and CLI/API routing. Trained Turbo checkpoint inference, quality,
 numerical parity, speed, and memory use for dense BF16 remain unqualified; base-model results
 do not qualify Turbo. Run `mere.run guide --model image-qwen-21-turbo` for details.
 
-### PPLX Embed v2 packed 9B variants
+## PPLX Embed v2 packed 9B variants
 
 `text-embed-pplx-v2-late-9b-mixed-4bit` pins `Sawfwair/pplx-embed-v2-late-9b-MLX-Mixed-4bit` at
 `7309bd8d28fd8e0a9a27033f3d13cc2d7a5cf219`. `text-embed-pplx-v2-context-9b-preview-8bit`
@@ -1990,7 +1992,7 @@ Both passed bounded full-checkpoint native CLI checks. Read the
 [qualification report](./qualification/pplx-embed-v2-9b-2026-10-09.md) for paired FP32 drift and limitations. Broad retrieval quality and maximum
 context remain unqualified. See [native usage](./runtime/pplx-embed-v2.md).
 
-### Bonsai 2 Small MLX
+## Bonsai 2 Small MLX
 
 The [Bonsai 2 Small collection](https://huggingface.co/collections/prism-ml/bonsai-2-small)
 provides Qwen3.5-based 2B, 4B, and 9B vision models. These managed installs load
@@ -2052,7 +2054,7 @@ The shared benchmark requires 32 GiB of admission headroom. A normally admitted
 resident API session can collect repeated requests when that larger class is
 unavailable; keep both machine and request admission enabled.
 
-### Nemotron 3.5 Bolt packed checkpoint
+## Nemotron 3.5 Bolt packed checkpoint
 
 `vision-chat-nemotron-35-bolt-24gb` pins NVIDIA's original safetensors at
 `96a5d63027ac013c8ef37fb438f3b4ec5fbd3ba6` in
@@ -2067,3 +2069,92 @@ qualification limits.
 
 [Run Recursive Flint](./runtime/flint.md) covers the pinned BF16 and MLX INT4
 checkpoints, native Swift/MLX execution, memory estimates, and qualification limits.
+
+## Other managed sources
+
+The following catalog entries don't have a dedicated section on this page. Each
+one installs from the listed Hugging Face repository at the revision pinned in
+the catalog. Sizes are the catalog's download estimates. For entries that
+require license acceptance, the terms are listed in
+[Restricted model downloads](#restricted-model-downloads); for the others,
+review the upstream repository's license before you use the weights.
+
+| Model ID | Upstream repository | Approximate download | License acceptance |
+| --- | --- | --- | --- |
+| `image-klein-nano` | `stereovoid/flux2-klein-4b-4bit` | 4.63 GB | Not required |
+| `image-zimage-max` | `Tongyi-MAI/Z-Image-Turbo` | 32.85 GB | Not required |
+| `image-zimage-base` | `Tongyi-MAI/Z-Image` | 5.91 GB | Not required |
+| `text-chat-flint-4bit` | `RecursiveSI/flint-int4` | 22.58 GB | Not required |
+| `text-chat-flint-bf16` | `RecursiveSI/flint` | 79.59 GB | Not required |
+| `text-chat-gemma4-nano` | `google/gemma-4-E4B-it` | 16.02 GB | Not required |
+| `text-chat-gemma4-max` | `google/gemma-4-31B-it` | 62.58 GB | Not required |
+| `text-chat-laguna-s-2-1` | `poolside/Laguna-S-2.1-NVFP4-mlx` | 71.91 GB | Not required |
+| `text-chat-laguna-xs-2-1` | `poolside/Laguna-XS-2.1-NVFP4-mlx` | 21.57 GB | Not required |
+| `text-chat-inkling-small` | `Sawfwair/Inkling-Small-MLX-Mixed-2bit` | 84.56 GB | Not required |
+| `speech-tts-drama-3` | `fishaudio/drama-3` | 27.41 GB | Required |
+| `speech-tts-phonon-31m` | `gradium/phonon-31m-en` | 103 MB | Not required |
+| `speech-asr-whistle` | `Cactus-Compute/whistle` | 17 MB | Not required |
+| `speech-tts-breeze-2` | `BreezeBlue/Breeze-TTS-2` | 7.65 GB | Required |
+| `speech-tts-qwen3-nano` | `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign` | 4.52 GB | Not required |
+| `speech-tts-qwen3-customvoice` | `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` | 4.52 GB | Not required |
+| `speech-asr-qwen3` | `mlx-community/Qwen3-ASR-1.7B-8bit` | 2.47 GB | Not required |
+| `text-embed-embeddinggemma2` | `google/embeddinggemma-2` | 1.49 GB | Not required |
+| `text-embed-embeddinggemma2-coreml` | `FluidInference/embeddinggemma-2-coreml` | 1.48 GB | Not required |
+| `text-code-qwen3` | `Qwen/Qwen3-Coder-Next-GGUF` | 48.41 GB | Not required |
+| `text-embed-qwen3-0.6b` | `Qwen/Qwen3-Embedding-0.6B` | 2.15 GB | Not required |
+| `vision-embed-qwen3-vl-2b` | `Qwen/Qwen3-VL-Embedding-2B` | 4.27 GB | Not required |
+| `text-anonymize-privacy-filter` | `openai/privacy-filter` | 2.83 GB | Not required |
+| `text-embed-pplx-v2-late-0.6b` | `perplexity-ai/pplx-embed-v2-late-0.6b` | 2.40 GB | Not required |
+| `text-classify-gliner25-decide` | `fastino/GLiNER2.5-Decide` | 1.95 GB | Not required |
+| `text-decide-laya` | `convaiinnovations/laya` | 846 MB | Not required |
+| `text-decide-laya-multilingual` | `convaiinnovations/laya` | 678 MB | Not required |
+| `text-decide-laya-typed-decisions` | `convaiinnovations/laya` | 846 MB | Not required |
+| `text-decide-d1-3b-bf16` | `LiquidAI/d1-3B` | 6.30 GB | Required |
+| `text-decide-d1-omni-600m-fp32` | `LiquidAI/d1-omni-600M` | 2.40 GB | Required |
+| `text-decide-clef-4bit` | `mlx-community/clef-4bit` | 16.31 GB | Not required |
+| `text-decide-clef-flash-4bit` | `mlx-community/clef-flash-4bit` | 6.21 GB | Not required |
+| `text-decide-clef-omni` | `Cloudflare/clef-omni` | 70.80 GB | Not required |
+| `vision-ocr-infinity-pro` | `infly/Infinity-Parser2-Pro` | 140.66 GB | Not required |
+| `vision-ocr-infinity-pro-int8` | `Sawfwair/Infinity-Parser2-Pro-Int8` | 40.80 GB | Not required |
+| `vision-ocr-lighton` | `lightonai/LightOnOCR-3-1B` | 2.02 GB | Not required |
+| `vision-ocr-lighton-3-0.8b` | `lightonai/LightOnOCR-3-0.8B` | 1.71 GB | Not required |
+| `vision-ocr-lighton-3-4b` | `lightonai/LightOnOCR-3-4B` | 9.11 GB | Not required |
+| `vision-ground-falcon-perception` | `tiiuae/Falcon-Perception` | 2.53 GB | Not required |
+| `vision-flood-terramind-base` | `ibm-esa-geospatial/TerraMind-base-Flood` | 673 MB | Not required |
+| `vision-geometry-moge2-small` | `Ruicheng/moge-2-vits-normal-onnx` | 141 MB | Not required |
+| `vision-depth-vda-small` | `depth-anything/Video-Depth-Anything-Small` | 116 MB | Not required |
+| `vision-depth-vda-small-metric` | `depth-anything/Metric-Video-Depth-Anything-Small` | 116 MB | Not required |
+| `vision-geometry-da3-small` | `depth-anything/DA3-SMALL` | 137 MB | Not required |
+| `vision-depth-marigold-v2` | `huawei-bayerlab/marigold-v2-0` | 42.99 GB | Not required |
+| `image-3d-triposr` | `stabilityai/TripoSR` | 1.68 GB | Not required |
+| `image-3d-instantmesh-base` | `TencentARC/InstantMesh` | 1.25 GB | Not required |
+| `vision-fire-terramind-base` | `ibm-esa-geospatial/TerraMind-base-Fire` | 673 MB | Not required |
+| `vision-embed-tessera-v2-nano` | `geotessera/TESSERA-V-2.0-2B-N` | 4 MB | Not required |
+| `vision-embed-tessera-v2-small` | `geotessera/TESSERA-V-2.0-2B-S` | 28 MB | Not required |
+| `vision-embed-tessera-v2-medium` | `geotessera/TESSERA-V-2.0-2B-M` | 84 MB | Not required |
+| `vision-embed-tessera-v2-large` | `geotessera/TESSERA-V-2.0-2B-L` | 175 MB | Not required |
+| `vision-embed-tessera-v2-teacher` | `geotessera/TESSERA-V-2.0-2B-Teacher` | 8.26 GB | Not required |
+| `vision-embed-olmoearth-v12-nano` | `allenai/OlmoEarth-v1_2-Nano` | 17 MB | Required |
+| `vision-embed-olmoearth-v12-tiny` | `allenai/OlmoEarth-v1_2-Tiny` | 107 MB | Required |
+| `vision-embed-olmoearth-v12-small` | `allenai/OlmoEarth-v1_2-Small` | 315 MB | Required |
+| `vision-embed-olmoearth-v12-base` | `allenai/OlmoEarth-v1_2-Base` | 1.03 GB | Required |
+
+## Companion checkpoints
+
+Some managed models install a hidden companion checkpoint. Companions are
+separately addressable for repair and inspection, appear in `model list` and
+`model pull --all`, and aren't standalone chat models.
+
+| Companion ID | Upstream repository | Installed with |
+| --- | --- | --- |
+| `text-agent-ornith-35b-mtp` | `ornith-ai/Ornith-1.5-35B-A3B` | Ornith 1.5 Q6, Q8, and BF16 MLX targets |
+| `text-chat-gemma4-12b-mtp` | `google/gemma-4-12B-it-assistant` | `text-chat-gemma4-12b`, `vision-chat-gemma4-12b` |
+| `text-chat-laguna-s-2-1-dflash` | `poolside/Laguna-S-2.1-DFlash` | `text-chat-laguna-s-2-1` |
+| `vision-chat-muse-glimmer-30b-dflash2` | `z-lab/Muse-Glimmer-30B-DFlash2` | `vision-chat-muse-glimmer-30b` |
+| `vision-chat-muse-glimmer-30b-assistant` | `meta-models/Muse-Glimmer-30B-assistant` | Existing Muse Glimmer installs (compatible fallback) |
+| `text-chat-nemotron-35-lightning-dspark` | `Sawfwair/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark-MLX` | `text-chat-nemotron-35-lightning` |
+| `text-chat-lfm25-a1b-dspark` | `LiquidAI/LFM2.5-8B-A1B-DSpark` | `text-chat-lfm25-a1b-bf16` |
+| `text-chat-lfm25-1.2b-dspark` | `LiquidAI/LFM2.5-1.2B-Instruct-DSpark` | `text-chat-lfm25-1.2b-bf16` |
+| `text-chat-lfm25-2.6b-dspark` | `LiquidAI/LFM2.5-2.6B-DSpark` | `text-chat-lfm25-2.6b-bf16` |
+| `vision-chat-lfm25-3b-dspark` | `LiquidAI/LFM2.5-VL-3B-DSpark` | `vision-chat-lfm25-3b-bf16` |
+| `text-encoder-ltx-gemma3-12b-4bit` | `mlx-community/gemma-3-12b-it-4bit` | LTX 2.3 MLX video models |

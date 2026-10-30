@@ -6,17 +6,19 @@ endpoint with the same corridor, light, and scene. The session uses a
 navigation graph, so an exact inverse move replays the arrival edge instead of
 generating a different room on the return path.
 
-It runs as a long-lived local HTTP server, loopback-first, on either of two
-native Swift/MLX backends:
+The runtime is a long-lived, loopback-first local HTTP server that keeps one
+warm session. To render standalone clips instead, see
+[Video runtime](./video.md).
 
-- `dreamx`: Wan 2.2 TI2V resources plus a converted DreamX causal checkpoint
-- `cosmos3`: the official Cosmos3-Edge checkpoint with learned action
-  conditioning and the `camera_pose` action domain
+## Choose a backend
 
-The macOS Studio app has no designed surface for this server; it runs from
-the **Command Console**, which builds typed backend, model, state-directory,
-warmup, host, port, and authentication controls from the capability contract. API keys are injected with `MERERUN_API_KEY` so they
-do not appear in the child process argument list.
+`world serve --backend` selects one of two native Swift/MLX backends. The
+default is `dreamx`.
+
+| Backend | Models | Conditioning | Extra features |
+| --- | --- | --- | --- |
+| `dreamx` | `video-wan22-ti2v-5b-mlx` plus `video-dreamx-world-5b-ar-mlx` | Learned camera conditioning with block-causal attention and persistent attention caches | Multi-block rollouts, streamed chunks, revisit-aware scene memory, exact causal checkpoints |
+| `cosmos3` | `video-cosmos3-edge-mlx` | Learned action conditioning in the `camera_pose` action domain | Exact replay from normalized model-space actions |
 
 ## Commands
 
@@ -24,7 +26,7 @@ do not appear in the child process argument list.
 | --- | --- |
 | `mere.run world serve` | Serve one warm native world-model session over HTTP. |
 
-## Required models
+## Install the models
 
 DreamX combines two managed roots:
 
@@ -34,27 +36,21 @@ DreamX combines two managed roots:
   for learned camera conditioning, block-causal attention, and persistent
   attention caches.
 
-Both roots must already be installed or supplied as local directories. The
-server never downloads model components while starting or serving requests.
-
-Cosmos3 uses one complete managed snapshot:
-
-- `video-cosmos3-edge-mlx` supplies the generation/understanding transformer,
-  Wan VAE, tokenizer, scheduler, packed SigLIP2 vision encoder, and projector.
-
-Install it explicitly from NVIDIA's public OpenMDW-1.1 repository:
+Cosmos3 uses one complete managed snapshot. `video-cosmos3-edge-mlx` supplies
+the generation and understanding transformer, Wan VAE, tokenizer, scheduler,
+packed SigLIP2 vision encoder, and projector. Install it explicitly from
+NVIDIA's public OpenMDW-1.1 repository:
 
 ```bash
 mere.run model pull video-cosmos3-edge-mlx
 ```
 
-`--backend` (default `dreamx`) picks the runtime. With `--backend cosmos3`,
-`--base-model`, `--disable-scene-memory`, and the `--scene-memory-*` options
-have no effect and print a `Warning:` on stderr. `--model`'s DreamX default
-means "the Cosmos3 default" on that backend. A Cosmos3 id with the DreamX
-backend stops before anything loads.
+Every root must already be installed or supplied as a local directory. The
+server never downloads model components while it starts or serves requests.
 
 ## Start a session
+
+To start a DreamX session, run the following command:
 
 ```bash
 mere.run world serve \
@@ -64,11 +60,7 @@ mere.run world serve \
   --prepare
 ```
 
-The default listener is `127.0.0.1:8791`. `--prepare` loads and warms the
-models before the server accepts transitions. Without it, the runtime prepares
-on the first explicit prepare or transition request.
-
-Start an action-conditioned Cosmos3 session with:
+To start an action-conditioned Cosmos3 session, run the following command:
 
 ```bash
 mere.run world serve \
@@ -78,30 +70,43 @@ mere.run world serve \
   --prepare
 ```
 
-The default state directory is:
+The default listener is `127.0.0.1:8791`. `--prepare` loads and warms the
+models before the server accepts transitions. Without it, the runtime prepares
+on the first explicit prepare or transition request.
+
+`--state-directory` holds transition videos and terminal state frames. It
+defaults to:
 
 ```text
 ~/Library/Application Support/MereRun/world-sessions/default
 ```
 
-Binding to a non-loopback address requires `--api-key`. Authenticated requests
-use `Authorization: Bearer <token>`.
+With `--backend cosmos3`, `--base-model`, `--disable-scene-memory`, and the
+`--scene-memory-*` options have no effect and print a `Warning:` on stderr. The
+DreamX default for `--model` resolves to the Cosmos3 default on that backend.
+A Cosmos3 ID with the DreamX backend stops before anything loads.
 
-## HTTP lifecycle
+Binding to a non-loopback address requires `--api-key`, which the server also
+reads from `MERERUN_API_KEY`. Authenticated requests use
+`Authorization: Bearer <token>`.
 
-Use the Hypertext Transfer Protocol (HTTP) endpoints in this section to manage
-the session lifecycle.
+## Call the HTTP endpoints
 
-The server exposes:
+The server exposes the following endpoints:
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/health` | Process health; does not load a model. |
+| `GET` | `/health` | Process health; doesn't load a model. |
 | `GET` | `/v1/world/session` | Read phase, transition count, state IDs, and retained-state flags. |
 | `POST` | `/v1/world/session/prepare` | Load and warm the session. |
 | `POST` | `/v1/world/session/source` | Decode an uploaded image body, normalize it to PNG, and reset the world origin. |
 | `POST` | `/v1/world/session/transitions` | Queue one transition and return `202 Accepted`. |
 | `POST` | `/v1/world/session/rollouts` | Queue a multi-block DreamX `action_seq` rollout and return `202 Accepted`. |
+| `GET` | `/v1/world/session/checkpoints` | List live DreamX causal locks. |
+| `POST` | `/v1/world/session/checkpoints` | Lock the live DreamX causal state. |
+| `POST` | `/v1/world/session/checkpoints/{id}/restore` | Restore a lock before generating a different branch. |
+| `GET` | `/v1/world/session/checkpoints/{id}/media/frame` | Fetch a lock's PNG frame. |
+| `DELETE` | `/v1/world/session/checkpoints/{id}` | Release a lock. |
 | `GET` | `/v1/world/jobs/{id}` | Poll job status, progress, receipt, or error. |
 | `GET` | `/v1/world/jobs/{id}/media/chunks/{index}` | Stream a decoded DreamX block as soon as it appears in the job. |
 | `GET` | `/v1/world/jobs/{id}/media/output` | Stream the completed rollout MP4. |
@@ -114,191 +119,15 @@ Only one transition can be active in a session. A competing transition,
 prepare, reset, or unload request fails explicitly instead of racing the active
 generation.
 
-## Queue a DreamX rollout
-
-The rollout surface preserves the released DreamX AR request dialect. Actions
-can compose translation and rotation keys: `WASD` move and `IJKL` pitch/yaw.
-`action_speed_list` contains relative duration weights, not physical speed.
-Model-space motion uses DreamX's fixed default rate of `1.5`; the runtime does
-not reinterpret UI meters or degrees as trajectory speed.
-
-```bash
-curl -X POST http://127.0.0.1:8791/v1/world/session/rollouts \
-  -H 'content-type: application/json' \
-  -d '{
-    "prompt": "continue through the same coherent station",
-    "action_seq": ["w", "wj", "wl"],
-    "action_speed_list": [4, 6, 6],
-    "source_image": "./station.png",
-    "width": 1280,
-    "height": 704,
-    "num_output_frames": 63,
-    "speed": 1.5,
-    "seed": 42,
-    "fps": 16
-  }'
-```
-
-As in upstream DreamX, `num_output_frames` is the latent-frame count and must
-be divisible by three. The public pixel-frame count is
-`(num_output_frames - 1) * 4 + 1`: `21` produces `81` frames and `63` produces
-`249`. The upstream DreamX one-minute recipe ends at 252 latent frames and
-1,005 pixel frames (62.8 encoded seconds at 16 frames per second, including the
-initial frame). Resolution must not exceed the official 1280 x 704 geometry.
-The defaults are 1280 x 704, 21 latent frames, speed 1.5, seed 42, and 16 frames
-per second.
-
-A browser or app can seed the first frame without knowing a path on the runtime
-host:
-
-```bash
-curl -X POST http://127.0.0.1:8791/v1/world/session/source \
-  -H 'content-type: image/jpeg' \
-  --data-binary @station.jpg
-```
-
-Polling the returned job exposes `chunks` while generation is still active.
-Each entry carries its pixel-frame range and a same-origin `media_path`. For a
-fresh causal session, the first three-latent block emits nine pixel frames and
-each following block emits 12 new frames after removing the shared boundary.
-When continuing an already-active causal session, the first streamed chunk also
-contains the prior terminal boundary frame, so clients must trust each chunk's
-reported `pixel_frame_count` instead of assuming nine. A completed job also
-includes a `rollout_receipt` with the final output and terminal-frame media
-paths. Browser clients may fetch and queue those MP4 chunks in order instead of waiting for
-the full rollout. The server supplies CORS headers for local product clients;
-Bearer authentication still applies when configured.
-
-Session snapshots expose total `generated_latent_frame_count` separately from
-the bounded `retained_latent_frame_count`. DreamX keeps only the three clean
-latents required for the next VAE decode window while its causal attention cache
-continues at the full generated position.
-
-They also expose `current_world_pose`, `scene_memory_mode`, the complete
-`scene_memory_policy`,
-`scene_memory_frame_count`, `scene_memory_retrieval_count`, and
-`scene_memory_recycled_frame_count`. Rollout receipts report the terminal pose
-and per-rollout memory counts so clients can distinguish an actual non-local
-revisit from a normal causal continuation.
-
-## Revisit-aware scene memory
-
-DreamX model conditioning remains byte-for-byte compatible with the released
-chunk-relative trajectory path. In parallel, the session composes those moves
-into a persistent global camera pose and stores at most 96 predicted-clean
-latents with their original causal positions. Retrieval requires the paper's
-minimum temporal separation heuristic plus its revisit thresholds: at most 2
-degrees of yaw error and 0.1 model-space translation distance. A retrieved
-latent contributes an 8-percent residual anchor during denoising; movement
-without a qualifying revisit receives no anchor. The index keeps the first
-clean latent observed at each exact pose rather than replacing it with a later
-generated revisit. Matches within 0.01 degrees and 0.001 model-space distance
-restore that canonical latent completely, preventing the causal cache from
-compounding character scale or appearance on repeated loop closure. The first
-origin entry stays pinned while capacity eviction removes the oldest
-non-origin entry.
-
-Reproduce or deliberately sweep the default from the command line:
-
-```bash
-mere.run world serve --prepare \
-  --scene-memory-strength 0.08 \
-  --scene-memory-max-frames 96 \
-  --scene-memory-minimum-gap 3 \
-  --scene-memory-max-yaw 2 \
-  --scene-memory-max-translation 0.1 \
-  --scene-memory-exact-yaw 0.01 \
-  --scene-memory-exact-translation 0.001
-```
-
-`--disable-scene-memory` supplies the no-memory control. Invalid or non-finite
-values fail before model loading instead of tripping a runtime precondition.
-
-The public mode name is `paper_reconstructed_revisit_anchor` on purpose. The
-DreamX 1.0 paper describes training with packed memory/recent/target tokens,
-camera-overlap retrieval, retained original temporal positions, and residual
-recycling. The released upstream AR code and weights do not contain that
-memory-trained pathway. This implementation reconstructs geometry retrieval
-and a conservative inference-time anchor; it does not claim weight-level
-parity with unreleased training code. Exact causal checkpoints include the
-global pose and scene-memory index, so branching cannot leak memories from a
-discarded future.
-
-## Lock and branch an exact causal state
-
-DreamX graph locks can capture the live model state, including every bounded
-self-attention and projective-camera cache window, the retained clean latents,
-the global causal position, and the public terminal frame:
-
-```bash
-curl -X POST http://127.0.0.1:8791/v1/world/session/checkpoints \
-  -H 'content-type: application/json' \
-  -d '{"name":"station gate"}'
-```
-
-Restore the returned `checkpoint_id` before generating a different branch:
-
-```bash
-curl -X POST \
-  http://127.0.0.1:8791/v1/world/session/checkpoints/$CHECKPOINT_ID/restore
-```
-
-`GET /v1/world/session/checkpoints` lists live locks, and
-`GET /v1/world/session/checkpoints/:id/media/frame` returns a lock's PNG for a
-browser client. `DELETE /v1/world/session/checkpoints/:id` releases it. Locks
-are exact within the loaded session and intentionally cleared by
-`reset` or `unload`; they are not mislabeled restart-persistent checkpoints.
-Artifact numbering remains collision-free across restores, logical resets, and
-existing files in the state directory, while the next rollout's
-`previous_state_id` and causal token position fork from the locked state.
-
-## Paper-aligned world evaluation
-
-Run the captured 5-second, exact 63-latent/249-frame parity, approximately
-30-second, out-and-back, translation/rotation, rectangular-loop, and
-104-action / 13-return adversarial soak suite
-against a prepared server:
-
-```bash
-python3 scripts/reference-parity/run_dreamx_world_eval.py \
-  --base-url http://127.0.0.1:8791 \
-  --source /absolute/path/to/world-origin.jpg \
-  --prompt "preserve this playable world and its landmarks" \
-  --output /tmp/dreamx-world-eval
-```
-
-The runner saves requests, jobs, receipts, MP4 files, terminal PNG files,
-`ffprobe` data, pose closure, and scene-memory telemetry. Add deterministic
-peak signal-to-noise ratio (PSNR) and structural similarity index measure (SSIM)
-scores:
-
-```bash
-uv run --script scripts/reference-parity/score_dreamx_world_eval.py \
-  --report /tmp/dreamx-world-eval/report.json
-```
-
-The learned lane rejects unpinned evaluator sources or weights, computes
-matched-baseline revisit gains for LPIPS, DINO-Sim, MutualVPR, and
-SuperPoint+LightGlue, and reports absolute consecutive-frame CLIP-Video:
-
-```bash
-uv run --script scripts/reference-parity/score_dreamx_world_eval_learned.py \
-  --report /tmp/dreamx-world-eval/report.json \
-  --mutual-vpr-root /tmp/MutualVPR \
-  --mutual-vpr-weights /tmp/mutualvpr.pth \
-  --lightglue-root /tmp/LightGlue
-```
-
-On the soak scenario it scores the worst of all 13 exact-pose periodic returns,
-not only the final frame. `verify_dreamx_experience_gate.py` then combines that
-receipt with action count, first-block and total latency, bounded resident
-memory, and macOS thermal state. A passing pose threshold alone remains
-structural evidence, never a quality claim.
+The session response includes a top-level `backend` field whose value is
+`dreamx` or `cosmos3`. Use it to select the matching interactive camera recipe.
+Older servers can be identified from the session's `conditioning_mode`.
 
 ## Queue a transition
 
-The first transition requires `sourceImage`. Later transitions reuse the
-previous terminal state unless a new source is supplied.
+A transition sends one semantic camera move and returns one MP4 chunk. The
+first transition requires `sourceImage`. Later transitions reuse the previous
+terminal state unless you supply a new source.
 
 ```bash
 curl -X POST http://127.0.0.1:8791/v1/world/session/transitions \
@@ -327,41 +156,63 @@ Camera motion values are `hold`, `forward`, `backward`, `strafeLeft`,
 `strafeRight`, `yawLeft`, `yawRight`, and `custom`. Translation and rotation
 arrays are XYZ values in meters and degrees.
 
-Omitted sampling fields use backend-specific recipes. DreamX defaults to
-512 x 320, 17 frames, 40 steps, classifier-free guidance (CFG) 5, shift 5, seed
-42, and 24 frames per second. Cosmos3 uses 320 x 176, 17 frames, 30 steps, CFG
-1, shift 3, seed 0, and 30 frames per second. Every
-interactive camera primitive uses NVIDIA's default 16-action cadence and the
-same pinned translation-magnitude envelope. Rotation intent is divided into a
-constant per-frame pose delta. This keeps each generative chunk local enough to
-preserve scene identity. Explicit `num_frames` still overrides the default.
-Each continued chunk uses `base_seed + chunk_index`,
-matching NVIDIA's autoregressive sampling policy. Cosmos3 frame counts must be
-`4n+1`.
+Omitted sampling fields use backend-specific recipes:
+
+| Field | DreamX | Cosmos3 |
+| --- | --- | --- |
+| Size | 512 x 320 | 320 x 176 |
+| Frames | 17 | 17 (must be `4n+1`) |
+| Steps | 40 | 30 |
+| Classifier-free guidance (CFG) | 5 | 1 |
+| Shift | 5 | 3 |
+| Seed | 42 | 0 |
+| Frames per second | 24 | 30 |
+
+Every interactive camera primitive uses NVIDIA's default 16-action cadence and
+the same pinned translation-magnitude envelope. Rotation intent is divided into
+a constant per-frame pose delta, which keeps each generative chunk local enough
+to preserve scene identity. An explicit `num_frames` still overrides the
+default. Each continued chunk uses `base_seed + chunk_index`, matching NVIDIA's
+autoregressive sampling policy.
 
 The session is a small navigation graph rather than a write-only frame chain.
 An exact inverse control at the same magnitude replays the active path edge in
 reverse, pops it, and restores its source state, model-space action, and
-generation depth. Repeated backtracking can therefore traverse multiple parent
+generation depth. Repeated backtracking can therefore traverse several parent
 edges without spending stochastic chunks or compounding avoidable scene drift.
 
-For Cosmos3, the semantic camera request selects a normalized model-space
-trajectory. NVIDIA defines every nine-dimensional `camera_pose` row as the relative pose delta
-between consecutive visual states: XYZ translation plus column-based
-rotation-6D. The released 60x9 trajectory is retained byte-for-byte as a parity
-fixture, but it is an arbitrary camera sample rather than a canonical forward
-path. Semantic translation controls preserve that sample's per-step magnitude
-envelope while placing each delta on the requested camera-relative axis;
-stationary and yaw controls use zero translation. Request translation values
-scale the normalized envelope and are not a calibrated physical displacement.
-A caller that already has a normalized trajectory can provide it directly as
-`model_space_actions`.
-The server validates nine finite values per row, fits the sequence to the
-requested frame count without renormalizing it, and reports `action_space`,
-`action_domain`, and `model_space_actions` in the receipt (`raw_actions`
-remains a compatibility alias).
+### Continue from the terminal frame
 
-For exact replay, add the trajectory beside the semantic camera intent:
+The generated terminal frame seeds the next transition, so a second request
+can omit `sourceImage` and keep moving through the same world. The runtime
+follows NVIDIA's autoregressive recipe: it extracts the public terminal frame,
+re-encodes that image at the start of the next chunk, and compiles a fresh
+relative-delta trajectory for the next request. It doesn't accumulate the
+prior chunk's final delta as though it were an absolute pose, and doesn't
+transplant the terminal latent from the end of one causal VAE timeline into
+frame zero of another. The exact prior public state image is also placed at
+frame zero of the next clip for a pixel-stable player handoff.
+
+A completed receipt includes the previous and new state IDs, transition index,
+MP4 output, terminal-frame image, camera request, conditioning mode, and seed.
+Persisted files are the public handoff; callers never receive mutable MLX
+tensors.
+
+### Replay exact Cosmos3 actions
+
+For Cosmos3, the semantic camera request selects a normalized model-space
+trajectory. NVIDIA defines every nine-dimensional `camera_pose` row as the
+relative pose delta between consecutive visual states: XYZ translation plus
+column-based rotation-6D. The released 60x9 trajectory is retained
+byte-for-byte as a parity fixture, but it's an arbitrary camera sample rather
+than a canonical forward path. Semantic translation controls preserve that
+sample's per-step magnitude envelope while placing each delta on the requested
+camera-relative axis; stationary and yaw controls use zero translation. Request
+translation values scale the normalized envelope and aren't a calibrated
+physical displacement.
+
+If you already have a normalized trajectory, pass it as `model_space_actions`
+beside the semantic camera intent:
 
 ```json
 {
@@ -377,28 +228,155 @@ For exact replay, add the trajectory beside the semantic camera intent:
 }
 ```
 
-A production replay normally supplies all 60 rows. A shorter explicit list is
-extended by repeating its final row; a longer list is truncated to
-`num_frames - 1`.
-The generated terminal frame seeds the next transition, so a second request
-can omit `sourceImage` and continue moving through the same world. The runtime
-follows NVIDIA's autoregressive recipe: it extracts the public terminal frame,
-re-encodes that image at the start of the next chunk, and compiles a fresh
-relative-delta trajectory for the next request. It does not accumulate the
-prior chunk's final delta as though it were an absolute pose, and does not
-transplant the terminal latent from the end of one causal VAE timeline into
-frame zero of another. The exact prior public state image is also placed at
-frame zero of the next clip for a pixel-stable player handoff.
+The server validates nine finite values per row and fits the sequence to the
+requested frame count without renormalizing it. A production replay normally
+supplies all 60 rows. A shorter list is extended by repeating its final row; a
+longer list is truncated to `num_frames - 1`. The receipt reports
+`action_space`, `action_domain`, and `model_space_actions`; `raw_actions`
+remains a compatibility alias.
 
-A completed receipt includes the previous and new state IDs, transition index,
-MP4 output, terminal-frame image, camera request, conditioning mode, and seed.
-Persisted files are the public handoff; callers never receive mutable MLX
-tensors.
+## Queue a DreamX rollout
 
-The session response also includes a top-level `backend` field whose value is
-`dreamx` or `cosmos3`. Consumers should use it to select the matching
-interactive camera recipe. Older servers can be identified from the session's
-`conditioning_mode`.
+A rollout queues several DreamX blocks from one request and streams each block
+as it decodes. The rollout surface preserves the released DreamX AR request
+dialect. Actions can compose translation and rotation keys: `WASD` move and
+`IJKL` pitch and yaw. `action_speed_list` contains relative duration weights,
+not physical speed. Model-space motion uses DreamX's fixed default rate of
+`1.5`; the runtime doesn't reinterpret UI meters or degrees as trajectory
+speed.
+
+```bash
+curl -X POST http://127.0.0.1:8791/v1/world/session/rollouts \
+  -H 'content-type: application/json' \
+  -d '{
+    "prompt": "continue through the same coherent station",
+    "action_seq": ["w", "wj", "wl"],
+    "action_speed_list": [4, 6, 6],
+    "source_image": "./station.png",
+    "width": 1280,
+    "height": 704,
+    "num_output_frames": 63,
+    "speed": 1.5,
+    "seed": 42,
+    "fps": 16
+  }'
+```
+
+The defaults are 1280 x 704, 21 latent frames, speed 1.5, seed 42, and 16 frames
+per second. Resolution must not exceed the official 1280 x 704 geometry.
+
+As in upstream DreamX, `num_output_frames` is the latent-frame count and must
+be divisible by three. The public pixel-frame count is
+`(num_output_frames - 1) * 4 + 1`: `21` produces `81` frames and `63` produces
+`249`. The upstream DreamX one-minute recipe ends at 252 latent frames and
+1,005 pixel frames (62.8 encoded seconds at 16 frames per second, including the
+initial frame).
+
+A browser or app can seed the first frame without knowing a path on the runtime
+host:
+
+```bash
+curl -X POST http://127.0.0.1:8791/v1/world/session/source \
+  -H 'content-type: image/jpeg' \
+  --data-binary @station.jpg
+```
+
+### Stream rollout chunks
+
+Polling the returned job exposes `chunks` while generation is still active.
+Each entry carries its pixel-frame range and a same-origin `media_path`. For a
+fresh causal session, the first three-latent block emits nine pixel frames and
+each following block emits 12 new frames after removing the shared boundary.
+When an already-active causal session continues, the first streamed chunk also
+contains the prior terminal boundary frame, so clients must trust each chunk's
+reported `pixel_frame_count` instead of assuming nine.
+
+A completed job also includes a `rollout_receipt` with the final output and
+terminal-frame media paths. Browser clients can fetch and queue the MP4 chunks
+in order instead of waiting for the full rollout. The server supplies CORS
+headers for local product clients; Bearer authentication still applies when
+configured.
+
+Session snapshots expose the total `generated_latent_frame_count` separately
+from the bounded `retained_latent_frame_count`. DreamX keeps only the three
+clean latents required for the next VAE decode window while its causal
+attention cache continues at the full generated position. Snapshots also
+expose `current_world_pose`, `scene_memory_mode`, the complete
+`scene_memory_policy`, `scene_memory_frame_count`,
+`scene_memory_retrieval_count`, and `scene_memory_recycled_frame_count`.
+Rollout receipts report the terminal pose and per-rollout memory counts so
+clients can distinguish an actual non-local revisit from a normal causal
+continuation.
+
+## Tune revisit-aware scene memory
+
+DreamX model conditioning remains byte-for-byte compatible with the released
+chunk-relative trajectory path. In parallel, the session composes those moves
+into a persistent global camera pose and stores at most 96 predicted-clean
+latents with their original causal positions.
+
+Retrieval requires the paper's minimum temporal separation heuristic plus its
+revisit thresholds: at most 2 degrees of yaw error and 0.1 model-space
+translation distance. A retrieved latent contributes an 8-percent residual
+anchor during denoising; movement without a qualifying revisit receives no
+anchor. The index keeps the first clean latent observed at each exact pose
+rather than replacing it with a later generated revisit. Matches within 0.01
+degrees and 0.001 model-space distance restore that canonical latent
+completely, preventing the causal cache from compounding character scale or
+appearance on repeated loop closure. The first origin entry stays pinned while
+capacity eviction removes the oldest non-origin entry.
+
+The following command sets every scene-memory option to its default. Change
+the values to sweep the policy:
+
+```bash
+mere.run world serve --prepare \
+  --scene-memory-strength 0.08 \
+  --scene-memory-max-frames 96 \
+  --scene-memory-minimum-gap 3 \
+  --scene-memory-max-yaw 2 \
+  --scene-memory-max-translation 0.1 \
+  --scene-memory-exact-yaw 0.01 \
+  --scene-memory-exact-translation 0.001
+```
+
+`--disable-scene-memory` supplies the no-memory control. Invalid or non-finite
+values fail before model loading instead of tripping a runtime precondition.
+
+The public mode name is `paper_reconstructed_revisit_anchor` on purpose. The
+DreamX 1.0 paper describes training with packed memory, recent, and target
+tokens, camera-overlap retrieval, retained original temporal positions, and
+residual recycling. The released upstream AR code and weights don't contain
+that memory-trained pathway. This implementation reconstructs geometry
+retrieval and a conservative inference-time anchor; it doesn't claim
+weight-level parity with unreleased training code. Exact causal checkpoints
+include the global pose and scene-memory index, so branching can't leak
+memories from a discarded future.
+
+## Lock and branch an exact causal state
+
+DreamX graph locks capture the live model state, including every bounded
+self-attention and projective-camera cache window, the retained clean latents,
+the global causal position, and the public terminal frame:
+
+```bash
+curl -X POST http://127.0.0.1:8791/v1/world/session/checkpoints \
+  -H 'content-type: application/json' \
+  -d '{"name":"station gate"}'
+```
+
+Restore the returned `checkpoint_id` before generating a different branch:
+
+```bash
+curl -X POST \
+  http://127.0.0.1:8791/v1/world/session/checkpoints/$CHECKPOINT_ID/restore
+```
+
+Locks are exact within the loaded session and are cleared by `reset` or
+`unload`; they don't persist across a server restart. Artifact numbering stays
+collision-free across restores, logical resets, and existing files in the state
+directory, while the next rollout's `previous_state_id` and causal token
+position fork from the locked state.
 
 ## Reset or unload
 
@@ -410,8 +388,60 @@ curl -X POST http://127.0.0.1:8791/v1/world/session/reset \
 curl -X POST http://127.0.0.1:8791/v1/world/session/unload
 ```
 
-Reset preserves the server but clears the transition chain. Unload releases
+Reset keeps the server running but clears the transition chain. Unload releases
 model resources and returns the session to a cold phase.
+
+## Evaluate a DreamX world
+
+The paper-aligned evaluation suite covers a captured 5-second run, an exact
+63-latent and 249-frame parity case, an approximately 30-second run,
+out-and-back, translation and rotation, rectangular-loop, and a 104-action,
+13-return adversarial soak. Run it against a prepared server:
+
+```bash
+python3 scripts/reference-parity/run_dreamx_world_eval.py \
+  --base-url http://127.0.0.1:8791 \
+  --source /absolute/path/to/world-origin.jpg \
+  --prompt "preserve this playable world and its landmarks" \
+  --output ./dreamx-world-eval
+```
+
+The runner saves requests, jobs, receipts, MP4 files, terminal PNG files,
+`ffprobe` data, pose closure, and scene-memory telemetry. To add deterministic
+peak signal-to-noise ratio (PSNR) and structural similarity index measure
+(SSIM) scores, run:
+
+```bash
+uv run --script scripts/reference-parity/score_dreamx_world_eval.py \
+  --report ./dreamx-world-eval/report.json
+```
+
+The learned lane rejects unpinned evaluator sources or weights, computes
+matched-baseline revisit gains for LPIPS, DINO-Sim, MutualVPR, and
+SuperPoint+LightGlue, and reports absolute consecutive-frame CLIP-Video:
+
+```bash
+uv run --script scripts/reference-parity/score_dreamx_world_eval_learned.py \
+  --report ./dreamx-world-eval/report.json \
+  --mutual-vpr-root ./MutualVPR \
+  --mutual-vpr-weights ./mutualvpr.pth \
+  --lightglue-root ./LightGlue
+```
+
+On the soak scenario, the learned lane scores the worst of all 13 exact-pose
+periodic returns, not only the final frame.
+`scripts/reference-parity/verify_dreamx_experience_gate.py` then combines that
+receipt with action count, first-block and total latency, bounded resident
+memory, and macOS thermal state. A passing pose threshold alone remains
+structural evidence, never a quality claim.
+
+## macOS Studio
+
+The macOS Studio app has no designed surface for this server. Run it from the
+**Command Console**, which builds typed backend, model, state-directory,
+warmup, host, port, and authentication controls from the capability contract.
+Studio passes API keys through `MERERUN_API_KEY` so they don't appear in the
+child process argument list.
 
 ## Runtime entrypoints
 
