@@ -16,7 +16,7 @@ cache bridging. The obsolete unaligned
 1-bit fast-kernel tail was not replayed because upstream now requires aligned
 fast dispatch; the fork instead tests matching host/kernel alignment directly.
 Changes stay scoped to their bit width, group size, quantization mode, and
-backend so stock 2-bit and wider models keep their existing paths.
+backend, so stock 2-bit and wider models keep their existing paths.
 
 The pin exposes `Stream.Context` and `Stream.withDefaultStream` over upstream's
 pooled task-local CPU and GPU streams. Companion streams are created lazily,
@@ -57,6 +57,9 @@ BF16 dot symbols. Fast-fence kernels are guarded by Metal 3.2 for the fork's
 baseline macOS 14 shader builds. mere.run's bundle targets macOS 15 and Metal 3.2.
 
 ## v0.32.4 integration
+
+This section records the validation for the v0.32.4 refresh. The results are
+dated evidence for that pin, not a statement about later revisions.
 
 The [core patch inventory](https://github.com/sawfwair/mlx/blob/e3214809fa5ebd5aac5d6783e8101513b3d9a774/FORK_PATCHES.md)
 classifies all 20 previous core commits. The
@@ -129,7 +132,7 @@ this host; the dependency refreshes remain draft PRs.
 
 ## Refresh procedure
 
-Refresh and publish the dependency chain in dependency order:
+Refresh and publish the dependency chain in this order:
 
 1. Record immutable upstream cutoffs for both repositories and classify every
    fork-only commit as replay, replace with upstream, or drop with a regression
@@ -159,7 +162,11 @@ Refresh and publish the dependency chain in dependency order:
 Perform this audit at least once per upstream minor release, and sooner for a
 security fix or a correctness/performance change in a path mere.run owns.
 
-The previously staged compiled-call optimization is included. MLX v0.32.1
+## Compiled-call lock removal
+
+The pin includes the compiled-call optimization that earlier pins held back.
+The rest of this page records why it was held back and what it required.
+MLX v0.32.1
 makes compile caches thread-local and cache erasure thread-safe, and the Swift
 bridge retains the originating cache identities across executors. With that
 core prerequisite in place, independent stateless compiled functions no longer
@@ -177,9 +184,10 @@ from 13.53 us/call to 7.61 us/call. Reproduce it in mlx-swift with
 `MLX_SWIFT_BENCHMARK_COMPILE_CONCURRENCY=1 swift test --filter
 TransformTests.testConcurrentCompiledCallOverheadMicrobench`.
 
-## The finding
+## Original finding
 
-`CompiledFunction.call` (Source/MLX/Transforms+Compile.swift) takes the global
+This section and the next two record the analysis from before the v0.32.1 core
+refresh. `CompiledFunction.call` (Source/MLX/Transforms+Compile.swift) takes the global
 `evalLock` and rebuilds a closure trampoline on every invocation. At decode
 call rates this is a cliff, measured on an M4 Max (Gemma4 12B, 96 compiled
 calls/token):
@@ -193,7 +201,7 @@ Every MLXNN compiled activation (`geluApproximate`, swiglu helpers, …) pays
 this cost per call, including code that does not call `compile(...)` directly. Confirmed present
 through upstream v0.31.6 (the file is unchanged upstream since 2026-05-07).
 
-## Why the one-line fix was previously held back
+## Why the one-line fix was held back
 
 Removing the global lock is only proven safe for the paths our benchmarks
 exercised: repeated calls to already-traced functions from one generator at a
@@ -218,7 +226,7 @@ For a serving runtime the burden of proof is on the patch, and
 "maintainer-documented not-thread-safe + globals on the unlocked path + our
 architecture exercises it" is past the threshold to hold it back.
 
-## Required paired fix
+## Paired fix requirements
 
 1. **Core-side thread safety:** Update the vendored MLX core so compile
    tracing state is thread-local and the compile cache has its own narrow
@@ -233,7 +241,7 @@ architecture exercises it" is past the threshold to hold it back.
    this class. Run it through Xcode, which builds the Metal shader bundle;
    command-line SwiftPM alone cannot build that bundle.
 
-Do **not** replay the lock removal onto an older core without the cache-scoped
+Don't replay the lock removal onto an older core without the cache-scoped
 erase bridge and the concurrency regressions.
 
 ## Staging branches (kept on the fork)
@@ -256,5 +264,5 @@ erase bridge and the concurrency regressions.
   release, and generated-kernel source hash compiled into `mere.run`.
   `scripts/check.sh` recomputes the same provenance and release ancestry from
   the clean pinned checkout.
-- Do not edit `.build/checkouts/` to change dependency behavior. Checkout
+- Don't edit `.build/checkouts/` to change dependency behavior. Checkout
   edits disappear during the next `swift package resolve` or `swift package update`.

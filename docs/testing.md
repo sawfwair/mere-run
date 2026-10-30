@@ -2,19 +2,19 @@
 
 This repository has three layers of validation:
 
-1. Swift build and unit tests
-2. CLI help and hygiene checks
-3. End-to-end smoke runs against real installed models
+1. Swift build and unit tests.
+2. The repository gate: lint, hygiene, CLI help, and output checks.
+3. End-to-end smoke runs against real installed models.
 
-Use the smallest layer that covers your change, then scale up before opening a
-pull request.
+Use the smallest layer that covers your change, and then scale up before you
+open a pull request.
 
 Linux CLI compatibility uses a narrower fixture boundary for hosted CI:
 headless CLI behavior and media-tool discovery. There is no CPU-only Linux
 release. Every release-worthy Linux package must exercise its CUDA lane on
-matching real CUDA hardware. Active release validation covers macOS and the
-configured `tensor.local` x86_64 CUDA builder. The arm64 CUDA lane remains
-paused until a matching host is available.
+matching real CUDA hardware, so a release attaches Linux packages only for the
+architectures that passed that check. Some releases ship x86_64 and arm64
+packages, some ship one architecture, and some ship macOS only.
 
 ## Fast validation
 
@@ -25,27 +25,47 @@ swift test
 
 Use this for:
 
-- Pure library changes
-- Parser changes that already have test coverage
-- Refactors that should not change public behavior
+- Pure library changes.
+- Parser changes that already have test coverage.
+- Refactors that don't change public behavior.
 
-## Repo-wide validation
+To run one test target or test class, pass `--filter`. Numerical fixtures
+compare against FP32 references, so set `MLX_ENABLE_TF32=0` the way the main
+gate does:
+
+```bash
+MLX_ENABLE_TF32=0 swift test --filter QwenRuntimeTests
+```
+
+The package test targets are listed in the
+[repository tour](./repository-tour.md#tests). Many runtime tests skip unless
+you set a `MERERUN_*` environment variable that points at a local checkpoint;
+the skip message usually names the variable.
+
+## Repository-wide validation
 
 ```bash
 ./scripts/check.sh
 ```
 
-This script is the main gate for contributors. It runs:
+This script is the main gate for contributors. On macOS, it runs:
 
-- `swift build`
-- `swift test`
-- Help smoke for the public command tree
-- Generated CLI documentation and command-owner synchronization
-- `mere.run model list` output sanity checks
-- `mere.run status` output sanity checks
-- Documentation and source hygiene sweeps
+- `swiftlint --strict`.
+- `scripts/agent_readiness_check.sh`, `scripts/check-evaluation-boundary.sh`,
+  `scripts/check-docs-examples.sh`, `scripts/check-model-boundaries.sh`, and
+  `scripts/check-package-policy.sh`.
+- `swift build`, then `scripts/build_mlx_metallib.sh --verify-only` against the
+  vendored MLX shader bundle.
+- `swift test` with `MLX_ENABLE_TF32=0`, including the CLI documentation
+  contract.
+- `--help` for the public command tree.
+- Output checks for `mere.run model list` and `mere.run status`.
+- Source hygiene sweeps for unconditional debug prints and prohibited runtime
+  dependencies.
 
-Run this gate for most changes before you open a pull request.
+On macOS, set `MERERUN_SWIFT_DISABLE_INDEX_STORE=1` to pass
+`--disable-index-store` to SwiftPM, as CI does. On Linux, the script runs
+`scripts/check-linux.sh` instead. Run this gate for most changes before you open a pull request.
 
 ### CLI documentation contract
 
@@ -76,10 +96,14 @@ sudo apt-get install -y clang cmake ninja-build pkg-config gfortran libcurl4-ope
 ```
 
 CUDA package builders need CMake 3.25 or newer for the upstream `mlx-swift`
-CUDA bridge. Ubuntu 22.04/Jammy's default CMake is too old, so upgrade it
-before CUDA packaging with `python3 -m pip install --upgrade "cmake>=3.25,<4"`.
+CUDA bridge. The default CMake on Ubuntu 22.04 (Jammy) is too old, so upgrade
+it before CUDA packaging:
 
-Media probing and conversion should use `ffmpeg` and `ffprobe` from `PATH`.
+```bash
+python3 -m pip install --upgrade "cmake>=3.25,<4"
+```
+
+Media probing and conversion use `ffmpeg` and `ffprobe` from `PATH`.
 When tests or runners need explicit binaries, set:
 
 ```bash
@@ -87,7 +111,7 @@ export MERERUN_FFMPEG=/usr/bin/ffmpeg
 export MERERUN_FFPROBE=/usr/bin/ffprobe
 ```
 
-The pull-request fixture must remain CPU MLX-compatible on hosted x86 runners.
+The pull-request fixture must stay CPU MLX-compatible on hosted x86 runners.
 CUDA machines can run additional package and smoke tests, but CUDA installation,
 driver selection, and GPU availability are not assumptions in the shared hosted
 CI contract. Do not describe a CUDA configuration as tested until that exact
@@ -118,7 +142,7 @@ the path.
 Linux release packaging has its own artifact check:
 
 ```bash
-MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.23.0
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.67.1
 test -s dist/linux/SHA256SUMS
 tar -tzf dist/linux/mere-run-*-linux-*.tar.gz | grep '/mere.run$'
 tar -tzf dist/linux/mere-run-*-linux-*.tar.gz | grep '/install.sh$'
@@ -134,7 +158,7 @@ Linux builder with CUDA development packages:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
-  scripts/package-linux.sh --version 0.23.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.67.1 --artifact-suffix cuda
 tar -tzf dist/linux/mere-run-*-linux-x86_64-cuda.tar.gz | grep '/.mererun-linux-cuda$'
 dpkg-deb --info dist/linux/mere-run-cuda_*_amd64.deb
 ```
@@ -151,7 +175,7 @@ major gate.
 On Linux arm64, use CUDA for the package check:
 
 ```bash
-MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.23.0
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.67.1
 ```
 
 Run Linux package and manifest checks on the affected Linux host class. CUDA
@@ -239,12 +263,13 @@ drop-in native MLX model root.
 ./scripts/e2e_smoke.sh --core
 ```
 
-This runs a smaller, stable subset of real workflows. Use it when you touched:
+This sweep runs a smaller, stable subset of real workflows. Use it when you
+touched:
 
-- Model resolution
-- Runtime orchestration
-- Output writing
-- Common CLI paths
+- Model resolution.
+- Runtime orchestration.
+- Output writing.
+- Common CLI paths.
 
 ### Installed sweep
 
@@ -252,16 +277,16 @@ This runs a smaller, stable subset of real workflows. Use it when you touched:
 ./scripts/e2e_smoke.sh --installed
 ```
 
-This runs the established cross-modality installed-model subset against the
-local model store. It is useful for broad development feedback, but it is not a
+This sweep runs the established cross-modality installed-model subset against
+the local model store. It gives broad development feedback, but it doesn't
 claim that every installed checkpoint ran. Use it when you changed:
 
-- Image generation
-- Speech generation or transcription
-- OCR
-- music or video generation
-- SAM segmentation or tracking behavior
-- Manifest handling or installed model discovery
+- Image generation.
+- Speech generation or transcription.
+- OCR.
+- Music or video generation.
+- SAM segmentation or tracking behavior.
+- Manifest handling or installed model discovery.
 
 ### Strict pre-release video generation
 
@@ -379,7 +404,7 @@ CUDA-provisioned arm64 host, not a hosted CPU arm64 runner.
 
 ## Troubleshooting
 
-### A managed model is “missing”
+### A managed model is reported missing
 
 Check:
 
@@ -394,7 +419,7 @@ need manifest and component details for one model.
 
 ### `mere.run model pull` fails immediately
 
-That usually means the requested model is local-path-only in the public build or
+An immediate failure usually means the requested model is local-path-only in the public build or
 the Mac does not pass the capability check.
 
 Run:
@@ -407,11 +432,11 @@ See [Model sources](./model-sources.md) and [Configuration](./configuration.md).
 
 ### A smoke test fails only in `--installed`
 
-That usually points to:
+A failure only in the installed sweep usually points to one of these causes:
 
-- an incomplete local model directory
-- missing or stale manifest metadata
-- family-specific runtime expectations that the core sweep does not exercise
+- An incomplete local model directory.
+- Missing or stale manifest metadata.
+- Family-specific runtime expectations that the core sweep doesn't exercise.
 
 Use `mere.run model info <id>` to inspect the resolved install and compare it
 against the expected canonical path.

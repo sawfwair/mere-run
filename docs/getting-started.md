@@ -1,8 +1,8 @@
 # Getting started
 
-By the end of this page, you will have built the package from source, pulled a
-model, and generated your first image, paragraph, and spoken line. All inference
-stays on your machine.
+This page walks you through building the package from source, pulling a
+model, and generating a first image, paragraph, and spoken line. All inference
+runs on your machine.
 
 If you only want to use the app, install a signed build from
 [mere.run releases](https://mere.run/releases) and go to
@@ -20,9 +20,9 @@ path.
   `Sources/AudioCodecs`, `Sources/AudioSTT`, and `Sources/AudioTTS`
 - Tests and smoke harnesses for both interfaces
 
-There is no hosted inference service behind it. Inference stays local; network
-access happens only for explicit operations such as model downloads,
-installation and update checks, or Relay.
+No hosted inference service runs behind it. Inference stays local. The CLI
+and app use the network only for explicit operations such as model downloads,
+installation and update checks, and Relay.
 
 ## Prerequisites
 
@@ -38,7 +38,7 @@ For the supported macOS developer path:
 
 For Linux CLI compatibility work:
 
-- A Swift 6.x toolchain
+- Swift 6.1 or later
 - `clang`, `cmake`, `ninja`, `pkg-config`, `gfortran`, and the curl, zlib,
   OpenBLAS, and LAPACK development headers
 - `ffmpeg` and `ffprobe` for media probing and conversion
@@ -46,14 +46,14 @@ For Linux CLI compatibility work:
   checkpoint archives
 - Enough disk space for a headless model store
 
-On Ubuntu-style runners, the system package layer is:
+On Ubuntu-style hosts, install the system packages:
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y clang cmake ninja-build pkg-config gfortran libcurl4-openssl-dev zlib1g-dev libopenblas-dev liblapacke-dev ffmpeg gzip unzip zip
 ```
 
-If the media tools are not on `PATH`, point the CLI at explicit binaries:
+If the media tools aren't on `PATH`, point the CLI at explicit binaries:
 
 ```bash
 export MERERUN_FFMPEG=/opt/ffmpeg/bin/ffmpeg
@@ -62,7 +62,7 @@ export MERERUN_FFPROBE=/opt/ffmpeg/bin/ffprobe
 
 ## Build the package
 
-From the repo root:
+From the repository root:
 
 ```bash
 swift build
@@ -72,17 +72,16 @@ app_path="$(./scripts/build_mere_run_app.sh debug)"
 open "$app_path"
 ```
 
-If all five commands succeed, the package resolves, the CLI builds and parses,
-and the Mac app bundles and opens.
+If all five commands succeed, the package resolves, the CLI builds and parses
+its arguments, and the Mac app bundles and opens.
 
-On Linux compatibility branches, keep the first pass headless and stop at the
-CLI surface:
+On Linux, build only the headless CLI:
 
 ```bash
 swift run mere.run --help
 ```
 
-The macOS app product is intentionally outside the Linux target.
+The Linux build doesn't include the macOS app product.
 
 ## Launch the macOS studio
 
@@ -98,50 +97,48 @@ app_path="$(./scripts/build_mere_run_app.sh debug)"
 open "$app_path"
 ```
 
-For contributor smoke tests, `swift run mere.run.app` still builds the executable
-product, but the bundle script is the recommended local launch path for normal
-macOS window behavior. The app auto-detects a bundled CLI first, then nearby
-Swift Package Manager build products, common install locations, and then the active
-package checkout. It does not silently install the terminal command on launch;
-open Settings and choose `Install CLI` or `Install Skill` when you want the
-bundled command or `use-mere-run` Codex skill copied into user-visible
-locations.
+For contributor smoke tests, `swift run mere.run.app` also builds the
+executable product. Use the bundle script for normal macOS window behavior.
 
-The studio is macOS-only. Linux users and Linux CI should exercise the CLI and
-local API surfaces directly rather than trying to build or launch
-`mere.run.app`.
+The app looks for a CLI in this order: the bundled CLI, nearby Swift Package
+Manager build products, common install locations, and the active package
+checkout. It doesn't install the terminal command on launch. To copy the
+bundled command or the `use-mere-run` Codex skill into user-visible locations,
+open **Settings** and click **Install CLI** or **Install Skill**.
 
-MereRun 0.27.1 and newer checks the stable signed update feed once per day and
-also exposes **MereRun > Check for Updates…**. Updates replace the whole signed
-app bundle atomically, so the Studio and its embedded CLI stay on the same
-version. Releases older than 0.27.1 do not contain the updater and need one
-final manual DMG install before future updates can arrive in-app.
+The Studio is macOS-only. On Linux, use the CLI and the local API server
+directly.
+
+MereRun 0.27.1 and later checks the stable signed update feed once per day.
+To check manually, click **MereRun > Check for Updates…**. Each update replaces
+the whole signed app bundle atomically, so the Studio and its embedded CLI stay
+on the same version. Releases earlier than 0.27.1 don't include the updater
+and need one manual disk image install before they can update in the app.
 
 ## Build Linux package artifacts
 
-Linux package artifacts are headless CLI-only. They install the `mere.run` CLI
-plus colocated runtime assets; they do not include `mere.run.app`, SwiftUI
-studio flows, or the macOS DMG layout. For Linux setup commands, package
-checks, and Compute Unified Device Architecture (CUDA) validation limits, see
-the [Linux quickstart](./linux-quickstart.md).
+Linux package artifacts contain only the headless `mere.run` CLI and its
+colocated runtime assets. They don't include `mere.run.app`, the SwiftUI
+Studio, or the macOS disk image layout. To build packages for version 0.67.1,
+run:
 
 ```bash
-scripts/package-linux.sh --version 0.23.0
+scripts/package-linux.sh --version 0.67.1
 ls dist/linux/
 ```
 
-Build and smoke-test CUDA packages on matching CUDA hardware before treating
-them as supported. Active release builds cover macOS and the configured
-`tensor.local` x86_64 CUDA builder. The arm64 CUDA release lane is paused while
-no matching build host is available. CPU arm64 packages are local smoke
-artifacts, not release targets.
+Published Linux packages target NVIDIA's Compute Unified Device Architecture
+(CUDA). Build and smoke-test each CUDA package on matching CUDA hardware before
+you treat it as supported. CPU packages are local test artifacts, not release
+targets. For setup commands, package checks, and CUDA validation limits, see
+the [Linux quickstart](./linux-quickstart.md).
 
 ## Understand the command tree
 
-Commands are organized by what you want to make — `image`, `text`, `speech`,
-`vision`, `music`, `sfx`, `video`, `world` — with separate families for running
-graphs, managing models, and serving. This table is generated from the CLI
-itself, so it matches the binary you built:
+Commands are grouped by what you want to make or analyze, such as `image`,
+`text`, `speech`, `vision`, `music`, `sfx`, `video`, and `world`. Separate
+command groups run graphs, manage models, and serve APIs. The following table
+is generated from the CLI:
 
 <!-- BEGIN GENERATED: CLI TOP LEVEL -->
 | Command | Purpose |
@@ -185,13 +182,13 @@ By default, models live in:
 ~/Library/Application Support/MereRun/models
 ```
 
-Override that for a session with either:
+To use a different store for a shell session, set `MERERUN_MODELS_DIR`:
 
 ```bash
 export MERERUN_MODELS_DIR=/path/to/models
 ```
 
-or:
+To use a different store for one command, pass `--models-root`:
 
 ```bash
 swift run mere.run --models-root /path/to/models model list
@@ -199,15 +196,15 @@ swift run mere.run --models-root /path/to/models model list
 
 ## Check local status
 
-Use `status` for a quick snapshot of this machine's mere.run state:
+To see a snapshot of this machine's mere.run state, run `status`:
 
 ```bash
 swift run mere.run status
 ```
 
-It reports whether the local API server is reachable, which model the server
-exposes through `/v1/models`, the active model store, and the managed
-models installed there. Use JSON output when scripting:
+The command reports whether the local API server is reachable, which model
+the server exposes through `/v1/models`, the active model store, and the
+managed models installed there. For scripts, request JSON output:
 
 ```bash
 swift run mere.run status --json
@@ -215,12 +212,13 @@ swift run mere.run status --json
 
 ## Pull a model
 
-Models come from cataloged Hugging Face repos into a local store you own. There
-is no private mere.run model host or inference credential to buy. An upstream
-repository can still require terms acceptance and a Hugging Face token.
+Models download from cataloged Hugging Face repositories into a local store
+that you own. mere.run has no private model host and no inference credential to
+buy. An upstream repository can still require you to accept its terms and
+provide a Hugging Face token.
 
-Ask the machine what it can actually run before spending gigabytes on a
-download:
+Before you download several gigabytes, check which models this machine can
+run, and then pull one:
 
 ```bash
 swift run mere.run model capabilities
@@ -229,11 +227,11 @@ swift run mere.run model pull image-zimage-nano
 swift run mere.run model pull image-bonsai-binary
 ```
 
-Set `MERERUN_HUB_CACHE` when you want every Hugging Face cache operation on
-another disk, or pass `model pull --cache-dir PATH` for one explicit pull. A
+To keep every Hugging Face cache operation on another disk, set
+`MERERUN_HUB_CACHE`. For a single pull, pass `model pull --cache-dir PATH`. A
 model installed through an external cache is unavailable while that volume is
-disconnected.
-See [Model Sources](./model-sources.md) for the full matrix.
+disconnected. For every model ID and its source, see
+[model sources](./model-sources.md).
 
 For guided onboarding, run:
 
@@ -242,40 +240,48 @@ swift run mere.run setup
 ```
 
 The setup command offers a local Mere agent powered by Pi, a
-bring-your-own-agent handoff prompt for Claude or Codex, or manual commands. Use
-`--mode agent --agent-model small` to select the tool-capable native Ornith 9B
-setup agent explicitly. On Apple Silicon Macs with at least 96 GB of unified
-memory, the hardware-tier and premier-agent path selects DeepSeek V4 Flash as
-the preferred setup agent. On Linux, install Pi or provide it with `--pi-path`
-or `PATH` before you use `--start`.
+bring-your-own-agent handoff prompt for Claude or Codex, or manual commands. To
+select the tool-capable Ornith 1.0 9B setup agent, pass
+`--mode agent --agent-model small`; it needs at least 16 GB of unified memory.
+On Apple Silicon Macs with at least 96 GB of unified memory, the default `tier`
+choice and the `premier` choice select DeepSeek V4 Flash. To preview the steps
+without installing anything, add `--dry-run`. On Linux, install Pi or provide
+it with `--pi-path` or `PATH` before you use `--start`.
 
 ### Agent commands
 
-`mere.run agent` exposes the guided setup agent directly, with `onboard` as
-the default subcommand:
+`mere.run agent` runs the guided setup agent directly. Its default
+subcommand is `onboard`:
 
-- `mere.run agent onboard` — summarize this machine's model capabilities and
-  prepare the optional Pi agent
-- `mere.run agent install-pi` — install the most recent published Pi coding-agent release
-- `mere.run agent start` — start Pi against a local mere.run setup-agent API
-  server
+- `mere.run agent onboard`: summarizes this machine's model capabilities and
+  prepares the optional Pi agent.
+- `mere.run agent status`: inspects agent, Pi, provider, and model readiness.
+- `mere.run agent install-pi`: installs the most recent published Pi
+  coding-agent release.
+- `mere.run agent start`: starts Pi against a local mere.run setup-agent API
+  server.
+
+To pull the recommended setup model and start the agent, run:
 
 ```bash
 swift run mere.run agent onboard --pull-recommended --accept-model-license
 swift run mere.run agent start
 ```
 
-`agent onboard` also takes `--install-pi`, `--configure-pi`, `--model`, and
-`--host`/`--port` to write the Pi provider extension. `agent start`
-bootstraps by default — it auto-pulls the missing managed model from Hugging
-Face and auto-installs Pi; pass `--no-bootstrap` to refuse both. Other
-`start` flags include `--model`, `--prompt`, `--skip-server`,
-`--allow-unsupported`, and `--pi-path`.
+`agent onboard` also accepts `--install-pi`, `--configure-pi`, `--model`,
+`--host`, and `--port`, which configure the Pi provider extension. By default,
+`agent start` downloads a missing managed model and installs Pi. To refuse
+both, pass `--no-bootstrap`. Other `start` options include `--model`,
+`--prompt`, `--inline`, `--skip-server`, `--allow-unsupported`, and
+`--pi-path`.
 
 ## Make something
 
-Each command writes a file to disk and runs independently. Start with any
-modality.
+Each of the following commands runs independently, so you can start with any
+of them. Text chat, Qwen3 speech synthesis, and vision inspection download
+their default models on first use. Other examples include a `model pull` step
+or use a model from [Pull a model](#pull-a-model). If a command reports a
+missing model, run `mere.run model pull MODEL_ID` with the ID it names.
 
 ### Image generation
 
@@ -289,6 +295,8 @@ swift run mere.run image generate \
   --prompt "a tiny bonsai tree in a sunlit greenhouse" \
   --output ./bonsai.png
 
+# Review the Krea 2 community license before accepting it.
+swift run mere.run model pull image-krea2-turbo --accept-model-license
 swift run mere.run image generate \
   --model image-krea2-turbo \
   --prompt "a cinematic product photo of a translucent portable speaker, crisp reflections" \
@@ -310,6 +318,17 @@ swift run mere.run text chat \
 swift run mere.run speech synthesize \
   "Hello from mere.run" \
   --output ./hello.wav
+```
+
+### Speech transcription
+
+Transcription uses Parakeet by default. Whistle and Nemotron 3.5 Transcribe
+are also available through `--backend`; for details, see the
+[speech guide](./runtime/speech.md).
+
+```bash
+swift run mere.run model pull speech-asr-parakeet
+swift run mere.run speech transcribe ./hello.wav
 ```
 
 ### Vision inspect
@@ -344,13 +363,13 @@ swift run mere.run vision track-live --output ./live.mp4 --prompt "a person"
 
 ## Validate your local environment
 
-Before you open a pull request, run the same script CI does:
+Before you open a pull request, run the same check script that CI runs:
 
 ```bash
 ./scripts/check.sh
 ```
 
-Optional end-to-end smoke coverage:
+To add end-to-end smoke tests, set `MERERUN_RUN_E2E`:
 
 ```bash
 MERERUN_RUN_E2E=core ./scripts/check.sh
@@ -359,8 +378,9 @@ MERERUN_RUN_E2E=installed ./scripts/check.sh
 
 ## What to read next
 
-- [CLI reference](./cli.md) if you want command details
-- [Configuration](./configuration.md) if you need to tune paths or runtime
-  behavior
-- [Repository tour](./repository-tour.md) if you want to work on the code
-- [Testing guide](./testing.md) if you plan to contribute
+- [CLI reference](./cli.md): every command and option
+- [Offline cookbooks](./cookbooks.md): model and command guides from
+  `mere.run guide`
+- [Configuration](./configuration.md): paths and runtime behavior
+- [Repository tour](./repository-tour.md): where the code lives
+- [Testing guide](./testing.md): validation before you contribute

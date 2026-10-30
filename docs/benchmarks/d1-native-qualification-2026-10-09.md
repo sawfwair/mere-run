@@ -5,12 +5,15 @@ Both pinned, original LiquidAI safetensors ran through the native Swift/MLX
 images; D1 omni-600M was tested in FP32 with text, images, and audio. Each of
 five requests contained one yes/no, one choice, and one ordinal score question:
 15 decisions total. The runtime computation is from commit `b7a4bde5`.
+Choices, yes/no classifications, and input-token counts agreed with an
+independent reference for every case; the largest probability difference was
+0.001278479, for D1-3B text.
 
 ## Original weight identity
 
 Downloads matched the SHA-256 hashes published by Hugging Face for these exact
 revisions. No converted weights, quantization, or Python inference fallback
-were used by the native runtime.
+were used by the native runtime. The following table lists the pinned weights.
 
 | Model | Revision | Weight bytes | SHA-256 |
 | --- | --- | ---: | --- |
@@ -22,7 +25,8 @@ were used by the native runtime.
 The independent reference loads the original checkpoint's Python implementation
 and weights on CPU, using BF16 for D1-3B and FP32 for omni. It executes each
 question separately to match native execution. Reference generation is test
-infrastructure; user inference requires no Python installation.
+infrastructure; user inference requires no Python installation. The following
+table shows the largest difference for each model and input.
 
 | Model | Input | Maximum absolute probability difference |
 | --- | --- | ---: |
@@ -35,8 +39,8 @@ infrastructure; user inference requires no Python installation.
 Choice identities, yes/no classifications at 0.5, and executed input-token
 counts agree for all cases. All CLI commands exited successfully and emitted
 valid probability distributions with zero output tokens. Expected score values
-agree within the committed numerical tolerances. [Native outputs and comparison
-receipt](./d1-native-qualification-2026-10-09.json) retain every answer.
+agree within the committed numerical tolerances. The [native outputs and
+comparison receipt](./d1-native-qualification-2026-10-09.json) retain every answer.
 
 Inputs are in `Tests/MereRunCoreTests/Fixtures/D1/released/`:
 

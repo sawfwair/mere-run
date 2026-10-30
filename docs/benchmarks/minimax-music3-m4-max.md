@@ -4,11 +4,13 @@ This receipt records installed-checkpoint MiniMax Music 3 performance work on a
 16-core CPU and 40-core GPU M4 Max MacBook Pro with 128 GB unified memory. Tests
 used the immutable managed `MiniMaxAI/MiniMax-Music3` snapshot, staged loading,
 44.1 kHz stereo PCM24 export, seed 37, guidance 1.7, and 30 flow steps unless a
-row says otherwise.
+row says otherwise. On the historical 250-frame workload, Q8 autoregressive
+turbo ran 2.72 times faster than the `mere.run` 0.37.0 reference, and a
+180-second Q8 floor run finished in 1,413.81 s.
 
 ## Historical matched 250-frame result
 
-The timings below describe the original acceleration graph. A later
+The timings in the following table describe the original acceleration graph. A later
 seeded-lyric parity correction retained the compact semantic head, global
 language-model fusion, and fixed-capacity global KV cache, but restored the
 masked 200,000-token sampling layout and removed incremental/fused execution
@@ -85,7 +87,7 @@ isolated tensor fixtures.
   35.63 s eager on a 100-frame, one-chunk, 30-step run: a 6.4% regression.
 - Affine Q8 flow weights retained 0.99941 cosine on a fixed transformer fixture
   but increased a 251-frame end-to-end run to 60.10 s and did not reduce the
-  run's peak resident memory. The production turbo modes therefore keep flow
+  run's peak resident memory. Therefore, the production turbo modes keep flow
   BF16.
 - Serial flow CFG took 18.43 s versus 17.38 s for batched CFG on a matched
   100-frame, one-chunk, 30-step Q8 run. Batched CFG stays as the default.
@@ -180,6 +182,9 @@ it requires faster flow kernels or a changed/distilled model, not more launch
 cleanup.
 
 ## Reproduction
+
+The following command reproduces the 250-frame Q8 quality-tier run with a
+profiler report:
 
 ```bash
 /usr/bin/time -lp mere.run music generate \

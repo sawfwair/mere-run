@@ -5,6 +5,14 @@
 **Repository:** `mere-run`
 **Reference:** `../mlx-vlm/mlx_vlm/models/falcon_perception`
 
+> **Follow-up (v0.67.1, 2026-10-29):** This report records the state of the
+> native port on 2026-04-12. Disparities A and B have since been addressed in
+> `Sources/MereRunCore/FalconPerception/FalconPerceptionModel.swift`:
+> `FalconPerceptionAttention` declares a `sinks` parameter, prefill calls
+> `MLXFast.scaledDotProductAttention` with `sinks:`, and single-token cached
+> decode uses a sink-aware manual path. This follow-up doesn't re-measure the
+> grounding result or verify disparity C.
+
 ## Goal
 
 This report traces the native Swift Falcon Perception path end to end, compares
@@ -31,7 +39,8 @@ Observed sample from the emitted JSON:
 - Detections 2 through 19: mostly the same narrow centerline box, repeated
   with small `y` shifts
 
-This is not “over-detecting people.” It is a malformed generation pattern.
+This isn't the model over-detecting people. It's a malformed generation
+pattern.
 
 ## End-to-end trace
 

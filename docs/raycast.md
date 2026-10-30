@@ -1,16 +1,16 @@
 # Raycast integration
 
-Raycast is one example client of MereRun's public macOS handoff surface. Read
-[macOS deep links](./macos-deep-links.md) for the app-owned route contracts and
-security boundaries independent of any launcher.
-
 Generate an image, video, music track, or spoken-audio file from Raycast, then
-open the completed local artifact as the selected item in MereRun Library. The
-Raycast extension calls the public `mere.run` CLI, writes a small typed receipt,
-and hands that receipt to the macOS app through `mererun://library/import`.
+open the finished file as the selected item in MereRun Library. The Raycast
+extension calls the public `mere.run` CLI, writes a small typed receipt, and
+hands that receipt to the macOS app through `mererun://library/import`.
 
-The extension is a separate macOS launcher integration. It is not a MereRun
-executable plugin and is not installed through the MereRun plugin catalog.
+Raycast is one example client of MereRun's public macOS handoff routes. For the
+app-owned route contracts and security boundaries that apply to any launcher,
+see [macOS deep links](./macos-deep-links.md).
+
+The extension is a separate macOS launcher integration. It isn't a MereRun
+plugin, and you don't install it through the MereRun plugin catalog.
 
 ## Requirements
 
@@ -35,9 +35,9 @@ npm ci
 npm run dev
 ```
 
-Keep `npm run dev` running while using the development extension. Raycast shows
-a development warning badge beside locally loaded commands; that badge does not
-mean local generation failed.
+Keep `npm run dev` running while you use the development extension. Raycast
+shows a development warning badge beside locally loaded commands; the badge
+doesn't mean that generation failed.
 
 To remove the development copy, stop the process with Control-C and use
 Raycast's **Uninstall Extension** action.
@@ -51,9 +51,9 @@ Raycast's **Uninstall Extension** action.
 | **Generate Music** | `mere music` | `mere.run music generate` | WAV |
 | **Synthesize Speech** | `mere speech` | `mere.run speech synthesize` | WAV |
 
-Choose a command, enter its prompt in Raycast, and press Return. Raycast shows
-the CLI's most recent diagnostic while generation is active. After the command exits
-successfully and the output is readable, the extension imports the artifact,
+Choose a command, enter its prompt in Raycast, and press Return. While
+generation runs, Raycast shows the CLI's most recent diagnostic. After the
+command exits successfully and the output is readable, the extension imports the artifact,
 opens the MereRun domain the row belongs to, reveals Library, and selects the
 imported row.
 
@@ -67,13 +67,14 @@ mere-speech-2026-08-01T22-46-28-054Z.wav
 
 ## Configure the extension
 
-Open Raycast's extension preferences for **Mere.run** to change either setting:
+To change these settings, open Raycast's extension preferences for
+**Mere.run**:
 
 - **MereRun CLI Path:** Optional absolute path to a `mere.run` executable.
 - **Output Directory:** Artifact directory, defaulting to
   `~/MereRun/Raycast`. Tilde paths are supported.
 - **Open Result In:** **MereRun Library** by default, or **Quick Look Only**
-  when the artifact should not be imported.
+  to open the artifact without importing it.
 
 When no CLI path is configured, the extension selects the first executable in
 this order:
@@ -103,7 +104,8 @@ version 1 receipt contains only the completed local run metadata MereRun needs:
 }
 ```
 
-It then asks Launch Services to open one percent-encoded absolute receipt path:
+The extension then asks Launch Services to open one percent-encoded absolute
+receipt path:
 
 ```text
 mererun://library/import?receipt=%2FUsers%2Fdana%2FLibrary%2FApplication%20Support%2Fcom.raycast.macos%2Fextensions%2Fmere-run%2Flibrary-imports%2F5cb7dc90-a9d4-4634-a486-0b8140226b42.json
@@ -111,10 +113,10 @@ mererun://library/import?receipt=%2FUsers%2Fdana%2FLibrary%2FApplication%20Suppo
 
 MereRun accepts receipt version 1 and the typed `image`, `video`, `music`, and
 `speech` kinds. It rejects oversized or malformed receipts, unsupported
-versions, empty prompts, missing or unreadable artifacts, and media that does
-not match the declared kind. Reopening the same receipt or artifact selects the
-existing row instead of duplicating it. MereRun owns `library.json`; the
-launcher does not read or write that file.
+versions, empty prompts, missing or unreadable artifacts, and media that
+doesn't match the declared kind. Reopening the same receipt or artifact selects
+the existing row instead of duplicating it. MereRun owns `library.json`; the
+launcher doesn't read or write that file.
 
 ## Preview an existing artifact
 
@@ -125,7 +127,7 @@ percent-encoded absolute path:
 mererun://preview?path=%2FUsers%2Fdana%2FDesktop%2Fresult.png
 ```
 
-Raycast extensions should let the URL API encode the path:
+In a Raycast extension, let the URL API encode the path:
 
 ```typescript
 import { open } from "@raycast/api";
@@ -137,7 +139,7 @@ await open(deepLink.toString());
 
 The target must already exist and be a readable file. MereRun rejects relative
 paths, directories, missing files, duplicate `path` values, and extra query
-parameters. Opening a preview does not import, move, or modify the artifact.
+parameters. Opening a preview doesn't import, move, or modify the artifact.
 
 ## Local and security boundaries
 
@@ -149,12 +151,12 @@ parameters. Opening a preview does not import, move, or modify the artifact.
   existing readable artifact whose type matches the receipt.
 - Receipt IDs cannot replace an existing Library row that points elsewhere.
 - A preview link can open only one existing, readable local file.
-- The extension does not run inside MereRun and cannot add runtime providers or
+- The extension doesn't run inside MereRun and can't add runtime providers or
   graph nodes.
 
 ## Troubleshooting
 
-### The commands do not appear in Raycast
+### The commands don't appear in Raycast
 
 Confirm `npm run dev` is still running in the `mere-run-raycast` checkout. If
 the extension was removed, run the command again to reload the development
@@ -175,7 +177,7 @@ the available managed models with:
 mere.run model list
 ```
 
-### Generation finishes but the Library item does not open
+### Generation finishes but the Library item doesn't open
 
 Confirm that the installed MereRun.app includes `mererun://library/import`, and
 that both the receipt and generated artifact still exist. Choose **Quick Look

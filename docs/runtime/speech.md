@@ -1,10 +1,17 @@
 # Speech runtime
 
 Read text aloud, clone a voice from a short reference clip and save it for
-reuse, transcribe either a file or a live microphone, and identify who spoke
-when in a recording. Four automatic speech recognition (ASR) backends and two
-speaker-diarization backends are available. These operations run locally, so
-the audio does not leave the machine.
+reuse, transcribe a file or a live microphone, and identify who spoke when in a
+recording. Four automatic speech recognition (ASR) backends and two
+speaker-diarization backends are available. Every operation runs locally, so
+the audio doesn't leave the machine.
+
+Two ASR backends have their own pages:
+
+- [Native Whistle](./whistle.md) covers the compact seven-language model,
+  beam search, keyword biasing, and live transcription.
+- [Nemotron 3.5 Transcribe](./nemotron-transcribe.md) covers the large offline
+  model, its INT4 default and BF16 option, and its measured tradeoffs.
 
 ## Commands
 
@@ -14,7 +21,7 @@ the audio does not leave the machine.
 | `mere.run speech transcribe` | Transcribe or translate speech to text using native ASR backends. |
 | `mere.run speech diarize` | Identify speaker time ranges as versioned JSON or RTTM using native MLX diarization. |
 | `mere.run speech diarize-live` | Emit incremental Nemotron 3 speaker activity from a microphone or PCM stdin. |
-| `mere.run speech listen` | Transcribe a macOS microphone with live Qwen ASR. |
+| `mere.run speech listen` | Transcribe a macOS microphone with live Qwen3-ASR or Whistle. |
 | `mere.run speech profile create` | Create a reusable voice profile from reference audio. |
 | `mere.run speech profile list` | List saved speech voice profiles. |
 | `mere.run speech profile delete` | Delete a speech profile by id. |
@@ -31,10 +38,15 @@ the audio does not leave the machine.
 
 ### Speech-to-text
 
-- `speech-asr-qwen3`
-- `speech-asr-parakeet`
-- [`speech-asr-nemotron-35-transcribe`](./nemotron-transcribe.md) (native INT4-default offline transcription and English translation; BF16 option; explicit installation)
-- [`speech-asr-whistle`](./whistle.md) (native packed CQ2/CQ4 transcription in seven languages)
+- `speech-asr-parakeet` (default for automatic transcription)
+- `speech-asr-qwen3` (translation and languages Parakeet doesn't recognize)
+- [`speech-asr-whistle`](./whistle.md) (packed CQ2/CQ4 transcription in seven
+  languages; about 17 MB)
+- [`speech-asr-nemotron-35-transcribe`](./nemotron-transcribe.md) (offline
+  transcription and English translation with 4-bit routed experts; 25.09 GB;
+  explicit installation)
+- [`speech-asr-nemotron-35-transcribe-bf16`](./nemotron-transcribe.md) (the
+  original BF16 checkpoint; 67.5 GB; explicit installation)
 
 ### Speaker diarization
 
@@ -69,55 +81,6 @@ uses the public CLI contract and stays in the Library.
 The packaged app declares `NSMicrophoneUsageDescription` and signs both the app
 and embedded CLI with the audio-input entitlement. Recording is local; granting
 microphone access does not enable a network upload path.
-
-### Diarize a conversation
-
-Pull the released Nemotron 3 checkpoint after reviewing its OpenMDW-1.1 terms:
-
-```bash
-mere.run model pull speech-diarization-nemotron3 --accept-model-license
-mere.run speech diarize ./meeting.wav --model speech-diarization-nemotron3 \
-  --format json --output ./meeting-speakers.json
-```
-
-The native MLX runtime accepts a 16 kHz mono waveform after CLI decoding and
-returns anonymous speaker time ranges. It preserves overlapping speakers and
-uses cache-aware chunks, so long recordings are not limited to one attention
-window. `--latency offline` uses a 30.4-second input buffer. For the released
-model's smaller buffer settings, choose `--latency 1.04`, `0.64`, or `0.32`.
-These values describe buffered audio, not total processing time. The existing
-four-speaker Sortformer remains the command default; `--latency` applies only
-to Nemotron 3. A local model folder runs Nemotron 3 when it holds
-`Nemotron-3-Diarization.nemo`, and Sortformer otherwise. A buffer other than
-`offline` for Sortformer stops before any model is loaded.
-
-### Diarize live audio
-
-`diarize-live` keeps the speaker cache and recent context across incoming audio
-chunks. It emits `schema_version: 1` JSON Lines events (`ready`, `activity`, and
-`final`) before the input ends. Each `activity` event covers a nonoverlapping
-time range and includes zero or more anonymous speaker segments. Adjacent
-chunks may contain segments from the same continuous turn.
-
-```bash
-mere.run speech diarize-live --model speech-diarization-nemotron3 \
-  --latency 1.04
-```
-
-Use `--device <core-audio-uid>` to choose a microphone or `--list-devices` to
-list UIDs. For an external 16 kHz mono PCM source, pass signed 16-bit
-little-endian samples on stdin:
-
-```bash
-ffmpeg -re -i ./meeting.wav -ar 16000 -ac 1 -f s16le - |
-  mere.run speech diarize-live --stdin --latency 1.04
-```
-
-The 1.04-second input buffer is the live default. `--latency 0.64` and `0.32`
-reduce buffered audio and can reduce speaker consistency. These durations
-exclude capture, computation, and output transport. The file command continues
-to return a complete timeline after processing the input; choose `diarize-live`
-when results must arrive during capture.
 
 ## Typical workflows
 
@@ -175,27 +138,44 @@ swift run mere.run speech synthesize \
 swift run mere.run speech transcribe ./hello.wav --backend auto
 ```
 
-Whistle is selected explicitly with `--backend whistle` or
-`--model speech-asr-whistle`. It supports file and live transcription in seven languages;
-translation and unsupported language hints are rejected. See
-[Native Whistle](./whistle.md) for its limits.
+The four ASR backends differ in what they accept:
 
-The other backends are chosen in this order:
+| Backend | Select it with | Tasks | Live input | Word timestamps |
+| --- | --- | --- | --- | --- |
+| Parakeet | Default for `--backend auto` transcription | Transcribe | `--stream` | Yes |
+| Qwen3-ASR | `--backend qwen`, translation, or an unrecognized language hint | Transcribe, translate to English | `--stream`, `speech listen` | No |
+| Whistle | `--backend whistle` or a Whistle `--model` | Transcribe in seven languages | `--stream`, `speech listen` | Estimated |
+| Nemotron 3.5 Transcribe | `--backend nemotron` or a Nemotron `--model` | Transcribe in 40 languages, translate to English | No | No |
 
-1. `--task translate` always runs Qwen, because Parakeet does not translate.
-2. A `--language` that Parakeet's router does not recognize runs Qwen, which
-   supports more languages.
-3. `--backend parakeet` or `--backend qwen` runs that backend.
-4. A `--model` runs its own backend.
-5. Otherwise Parakeet runs.
+Automatic selection never picks Whistle or Nemotron 3.5 Transcribe. Install
+them and select them explicitly; see [Native Whistle](./whistle.md) and
+[Nemotron 3.5 Transcribe](./nemotron-transcribe.md) for their limits.
 
-A managed model of the other backend is replaced by the chosen backend's
-default, and a flag the choice overrules has no effect. The CLI prints a
-`Warning:` line for either, for example for `--model speech-asr-parakeet --task
-translate`. A local model folder of the other backend stops the run instead.
-Options outside a backend's scope produce a warning: Qwen returns no
-word timestamps, so `--timestamps` and `--no-timestamps` apply to Parakeet and Whistle.
-`--max-tokens` applies to Qwen and Whistle; Whistle caps it at 318 per window.
+The CLI chooses the backend in this order:
+
+1. `--backend whistle` or `--backend nemotron` runs that backend. With
+   `--backend auto`, a Whistle or Nemotron Transcribe `--model` does the same.
+   Whistle rejects translation, and both reject a `--language` hint they don't
+   support, before any model loads.
+2. `--task translate` runs Qwen3-ASR, because Parakeet doesn't translate.
+3. A `--language` hint that Parakeet's router doesn't recognize runs Qwen3-ASR,
+   which supports more languages.
+4. `--backend parakeet` or `--backend qwen` runs that backend.
+5. A `--model` runs its own backend.
+6. Otherwise, Parakeet runs.
+
+When the choice overrules a flag, the flag has no effect, and a managed model
+of another backend is replaced by the chosen backend's default. The CLI prints
+a `Warning:` line in either case, for example for `--model speech-asr-parakeet
+--task translate`. A local model folder of another backend stops the run
+instead.
+
+Options outside the chosen backend's scope also produce a warning:
+
+- `--timestamps` and `--no-timestamps` apply to Parakeet and Whistle. Qwen3-ASR
+  and Nemotron 3.5 Transcribe return no word timestamps.
+- `--max-tokens` (default 448) applies to Qwen3-ASR, Whistle, and Nemotron 3.5
+  Transcribe. Whistle caps it at 318 per window. Parakeet ignores it.
 
 Translation always produces English, whatever language the audio is in, so
 `--language` has no effect with `--task translate` and the CLI says so.
@@ -207,10 +187,11 @@ language tag is English. Review translations before relying on them.
 swift run mere.run speech transcribe ./interview-de.wav --task translate
 ```
 
-Streaming transcription chooses the backend and model the same way, except
-that a local model folder runs its own backend whatever the `--language` hint
-says, and accepts raw `pcm-s16le/16000/mono` on stdin. Its transcript carries no timestamps. Use
-`--backend parakeet` or `--backend qwen` to pin it explicitly:
+Streaming transcription chooses the backend and model the same way, with two
+exceptions: a local model folder runs its own backend whatever the `--language`
+hint says, and Nemotron 3.5 Transcribe rejects `--stream` before loading. A
+stream reads raw `pcm-s16le/16000/mono` on stdin, and its transcript carries no
+timestamps. Use `--backend parakeet` or `--backend qwen` to pin the backend:
 
 ```bash
 audio-source | swift run mere.run speech transcribe - \
@@ -222,10 +203,12 @@ swift run mere.run speech listen --list-devices
 swift run mere.run speech listen --device <core-audio-uid>
 ```
 
-`speech listen` remains the Qwen-backed macOS microphone convenience command.
-It runs Qwen3-ASR whatever `--model` names, so a Parakeet id prints a
-`Warning:` line and runs Qwen3-ASR. `--list-devices` lists inputs for `speech
-listen` and `speech diarize-live` before any model is read.
+`speech listen` is the macOS microphone command. It runs Qwen3-ASR unless
+`--model` names Whistle, in which case it runs Whistle with the same decoding
+controls as `speech transcribe`. Parakeet transcribes recorded audio only, so
+a Parakeet `--model` prints a `Warning:` line and runs Qwen3-ASR.
+`--list-devices` lists inputs for `speech listen` and `speech diarize-live`
+before any model is read.
 
 #### Record and retry a transcription
 
@@ -251,7 +234,7 @@ a new sibling directory with the original run ID recorded as its parent; it
 does not modify the original or resume a partially completed decoder.
 
 Retry uses the saved model path, backend, provider, task, language, and token
-limit. It verifies retained audio and captured model metadata before executing.
+limit. It verifies retained audio and captured model metadata before running.
 If either changed, start a new transcription command. Runs without captured
 local model metadata cannot be retried; install the model before recording if
 you need that behavior. Model metadata checks do not fingerprint tensor weights
@@ -378,8 +361,57 @@ Sortformer answers “who spoke when”; it does not transcribe the words or inf
 real identities. Labels such as `speaker_0` are stable within one recording
 but are not identities that carry between recordings. The v2.1 checkpoint has
 four output channels, so recordings with more than four distinct speakers are
-outside this model's supported range. This runtime is offline and file-based.
-Streaming diarization is not supported.
+outside this model's supported range. Sortformer runs offline on files. For
+speaker activity during capture, use Nemotron 3 with
+[`speech diarize-live`](#diarize-live-audio).
+
+### Diarize with Nemotron 3
+
+Pull the released Nemotron 3 checkpoint after reviewing its OpenMDW-1.1 terms:
+
+```bash
+mere.run model pull speech-diarization-nemotron3 --accept-model-license
+mere.run speech diarize ./meeting.wav --model speech-diarization-nemotron3 \
+  --format json --output ./meeting-speakers.json
+```
+
+The native MLX runtime accepts a 16 kHz mono waveform after CLI decoding and
+returns anonymous speaker time ranges. It preserves overlapping speakers and
+uses cache-aware chunks, so long recordings are not limited to one attention
+window. `--latency offline` uses a 30.4-second input buffer. For the released
+model's smaller buffer settings, choose `--latency 1.04`, `0.64`, or `0.32`.
+These values describe buffered audio, not total processing time. The
+four-speaker Sortformer remains the command default, and `--latency` applies
+only to Nemotron 3. A local model folder runs Nemotron 3 when it holds
+`Nemotron-3-Diarization.nemo`, and Sortformer otherwise. A buffer other than
+`offline` for Sortformer stops before any model is loaded.
+
+### Diarize live audio
+
+`diarize-live` keeps the speaker cache and recent context across incoming audio
+chunks. It emits `schema_version: 1` JSON Lines events (`ready`, `activity`, and
+`final`) before the input ends. Each `activity` event covers a nonoverlapping
+time range and includes zero or more anonymous speaker segments. Adjacent
+chunks can contain segments from the same continuous turn.
+
+```bash
+mere.run speech diarize-live --model speech-diarization-nemotron3 \
+  --latency 1.04
+```
+
+Use `--device <core-audio-uid>` to choose a microphone or `--list-devices` to
+list UIDs. For an external 16 kHz mono PCM source, pass signed 16-bit
+little-endian samples on stdin:
+
+```bash
+ffmpeg -re -i ./meeting.wav -ar 16000 -ac 1 -f s16le - |
+  mere.run speech diarize-live --stdin --latency 1.04
+```
+
+The 1.04-second input buffer is the live default. `--latency 0.64` and `0.32`
+reduce buffered audio and can reduce speaker consistency. These durations
+exclude capture, computation, and output transport. `speech diarize` returns a complete timeline after it processes the whole file;
+choose `diarize-live` when results must arrive during capture.
 
 ### Manage voice profiles
 
@@ -421,113 +453,6 @@ Each mode reads its own options. Clone mode ignores `--voice`, and style mode
 ignores `--profile`, `--ref-audio`, `--ref-text`, and `--save-profile`; the CLI
 prints a `Warning:` line for any it ignores. With `--profile`, clone mode also
 ignores `--ref-audio` and `--save-profile`.
-
-## Runtime entry points
-
-### CLI
-
-- `Sources/MereRunCLI/Commands/SpeechSynthesizeCommand.swift`
-- `Sources/MereRunCLI/Commands/SpeechTranscribeCommand.swift`
-- `Sources/MereRunCLI/Commands/SpeechDiarizeCommand.swift`
-- `Sources/MereRunCLI/Commands/SpeechListenCommand.swift`
-- `Sources/MereRunCLI/Commands/SpeechProfileCommand.swift` (the `list`, `create`, and `delete` profile subcommands)
-
-### TTS runtime
-
-- `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator.swift`
-- `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator+Loading.swift`
-- `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator+Generation.swift`
-- `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator+Support.swift`
-
-Tokenizer internals:
-
-- `Sources/AudioQwen3TTSModel/Qwen3TTSSpeechTokenizer.swift`
-- `Sources/AudioQwen3TTSModel/Qwen3TTSSpeechTokenizer+Encoder.swift`
-- `Sources/AudioQwen3TTSModel/Qwen3TTSSpeechTokenizer+Decoder.swift`
-
-### STT runtime
-
-- `Sources/AudioSTT/Qwen3ASR/Qwen3ASRGenerator.swift`
-- `Sources/AudioSTT/Qwen3ASR/Qwen3ASRLiveSession.swift`
-- `Sources/AudioSTT/Parakeet/ParakeetGenerator.swift`
-- `Sources/AudioSTT/Parakeet/ParakeetCoreMLEncoder.swift`
-- `Sources/AudioSTT/Parakeet/ParakeetASRLiveSession.swift`
-
-### Diarization runtime
-
-- `Sources/AudioSortformer/SortformerDiarizer.swift`
-- `Sources/AudioSortformer/SortformerModel.swift`
-- `Sources/AudioSortformer/SortformerFeatures.swift`
-
-## How speech synthesis flows
-
-At a high level:
-
-1. The CLI validates text, temperature, and streaming options before resolving
-   the model or preparing a clone reference.
-2. The CLI resolves profiles and optional reference transcription. The API
-   maps model and voice aliases. Both construct a shared synthesis plan.
-3. AudioTTS loads the model and generates host waveform samples through one
-   native path for offline and streaming requests.
-4. AudioCore encodes the samples and publishes the completed WAV. CLI progress
-   and receipts and API response formatting remain in their adapters.
-
-`--temperature` must be finite and between 0 and 2. Streaming chunk intervals
-must be greater than zero. Offline output remains unnormalized, undithered
-PCM16. `--stream` retains float32 output, including finite samples outside
-the unit range. Both replace nonfinite samples with zero.
-
-Streaming writes to a temporary sibling file and publishes the destination
-after generation ends and the WAV header is complete. Failure or cooperative
-cancellation removes the temporary file and preserves an existing destination.
-The receipt therefore describes the finalized file. With `--progress-json`,
-streaming token progress is emitted even when you also specify `--quiet`.
-
-See [shared speech synthesis](../internals/speech-synthesis-operation.md) for
-execution, export, and model lifetime ownership.
-
-## How transcription flows
-
-1. The runtime decodes audio input into the expected local format.
-2. The selected backend loads its model components.
-3. The backend produces a transcript.
-4. The CLI prints or writes the output.
-
-## How diarization flows
-
-1. The runtime decodes and resamples audio input to 16 kHz mono.
-2. The MLX feature extractor produces NeMo-compatible mel features.
-3. Sortformer predicts activity independently across four speaker channels.
-4. thresholding, minimum-duration filtering, and same-speaker gap merging
-   produce time segments.
-5. The CLI emits versioned JSON or standard RTTM text.
-
-Nemotron 3 uses eight speaker channels and a cache across chunks. Its pinned
-BF16 initializer is restored into FP32 model weights, matching NeMo's execution
-precision.
-The Spark CUDA regression checks a 46.57-second real A-B-A recording with a
-returning speaker across the default chunk boundary. NVIDIA's pinned NeMo
-implementation and native FP32 inference both preserve the returning speaker;
-forced native BF16 inference failed that recording. This is a bounded regression
-check, not a general diarization accuracy score.
-
-Run the checkpoint regression with `MERERUN_NEMOTRON3_MODEL_DIR` set to the
-installed model directory:
-
-```sh
-swift test --filter SortformerDiarizationTests/testNemotron3ReturningSpeakerSurvivesChunkBoundaryWhenConfigured
-```
-Fixture attribution and exact turn boundaries are in
-`Tests/MereRunCoreTests/Fixtures/Nemotron3/README.md`.
-
-## Notes for contributors
-
-- Speech code spans both `AudioTTS` and `AudioSTT`. Do not assume it all lives
-  under `MereRunCore`.
-- Profile management is CLI-facing but depends on the same canonical model and
-  model-store conventions as the rest of the repository.
-
-See the [architecture map](../architecture.md) for a recommended reading order.
 
 ## DRAMA-3 on a 36 GB Mac
 
@@ -624,16 +549,131 @@ mere.run speech synthesize "Hello from mere run." --model speech-tts-phonon-31m 
 
 Phonon loads original safetensors through native Swift/MLX and produces 24 kHz
 mono audio. Add `--stream` for frame-by-frame audio. The managed download is
-about 103 MB; GGUF weight formats are not supported. The existing Qwen default
-is unchanged.
+about 103 MB; GGUF weight formats are not supported. Qwen3-TTS remains the
+`speech synthesize` default.
 
 Omit voice descriptions, named speakers, clone controls, and CFG guidance.
 Phonon accepts English at its native speaking rate. Spell out structured text
 such as numbers, dates, and email addresses; Gradium's rewrite pipeline is not
-included. See `mere.run guide handbook-phonon` for the checkpoint pin, chunk
+included. See `mere.run guide --model speech-tts-phonon-31m` for the checkpoint pin, chunk
 policy, API usage, and the bounded released-weight quality and speed comparison.
 
 For full F32 checkpoint comparisons on Linux CUDA, set `MLX_ENABLE_TF32=0`
 and `MLX_USE_CUDA_GRAPHS=0` before launching the CLI. The bounded
 [CUDA qualification](../qualification/phonon-cuda-2026-10-23.json) records
 the tested host and numerical tolerances.
+
+## Runtime entry points
+
+### CLI
+
+- `Sources/MereRunCLI/Commands/SpeechSynthesizeCommand.swift`
+- `Sources/MereRunCLI/Commands/SpeechTranscribeCommand.swift`
+- `Sources/MereRunCLI/Commands/SpeechDiarizeCommand.swift`
+- `Sources/MereRunCLI/Commands/SpeechDiarizeLiveCommand.swift`
+- `Sources/MereRunCLI/Commands/SpeechListenCommand.swift`
+- `Sources/MereRunCLI/Commands/SpeechProfileCommand.swift` (the `list`, `create`, and `delete` profile subcommands)
+
+### TTS runtime
+
+- `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator.swift`
+- `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator+Loading.swift`
+- `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator+Generation.swift`
+- `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator+Support.swift`
+
+Tokenizer internals:
+
+- `Sources/AudioQwen3TTSModel/Qwen3TTSSpeechTokenizer.swift`
+- `Sources/AudioQwen3TTSModel/Qwen3TTSSpeechTokenizer+Encoder.swift`
+- `Sources/AudioQwen3TTSModel/Qwen3TTSSpeechTokenizer+Decoder.swift`
+
+### STT runtime
+
+- `Sources/AudioSTT/SpeechTranscriptionResolver.swift` (backend routing)
+- `Sources/AudioSTT/Qwen3ASR/Qwen3ASRGenerator.swift`
+- `Sources/AudioSTT/Qwen3ASR/Qwen3ASRLiveSession.swift`
+- `Sources/AudioSTT/Parakeet/ParakeetGenerator.swift`
+- `Sources/AudioSTT/Parakeet/ParakeetCoreMLEncoder.swift`
+- `Sources/AudioSTT/Parakeet/ParakeetASRLiveSession.swift`
+- `Sources/AudioSTT/Whistle/WhistleGenerator.swift` (model code in `Sources/AudioWhistleModel/`)
+- `Sources/AudioSTT/NemotronTranscribe/NemotronTranscribeGenerator.swift` (model code in `Sources/AudioNemotronTranscribeModel/`)
+
+### Diarization runtime
+
+- `Sources/AudioSortformer/SortformerDiarizer.swift`
+- `Sources/AudioSortformer/SortformerModel.swift`
+- `Sources/AudioSortformer/SortformerFeatures.swift`
+- `Sources/AudioSortformer/Nemotron3DiarizationModel.swift`
+- `Sources/AudioSortformer/Nemotron3DiarizationStreaming.swift`
+
+## How speech synthesis flows
+
+At a high level:
+
+1. The CLI validates text, temperature, and streaming options before resolving
+   the model or preparing a clone reference.
+2. The CLI resolves profiles and optional reference transcription. The API
+   maps model and voice aliases. Both construct a shared synthesis plan.
+3. AudioTTS loads the model and generates host waveform samples through one
+   native path for offline and streaming requests.
+4. AudioCore encodes the samples and publishes the completed WAV. CLI progress
+   and receipts and API response formatting remain in their adapters.
+
+`--temperature` must be finite and between 0 and 2. Streaming chunk intervals
+must be greater than zero. Offline output remains unnormalized, undithered
+PCM16. `--stream` retains float32 output, including finite samples outside
+the unit range. Both replace nonfinite samples with zero.
+
+Streaming writes to a temporary sibling file and publishes the destination
+after generation ends and the WAV header is complete. Failure or cooperative
+cancellation removes the temporary file and preserves an existing destination.
+The receipt therefore describes the finalized file. With `--progress-json`,
+streaming token progress is emitted even when you also specify `--quiet`.
+
+See [shared speech synthesis](../internals/speech-synthesis-operation.md) for
+execution, export, and model lifetime ownership.
+
+## How transcription flows
+
+1. The runtime decodes audio input into the expected local format.
+2. The selected backend loads its model components.
+3. The backend produces a transcript.
+4. The CLI prints or writes the output.
+
+## How diarization flows
+
+1. The runtime decodes and resamples audio input to 16 kHz mono.
+2. The MLX feature extractor produces NeMo-compatible mel features.
+3. Sortformer predicts activity independently across four speaker channels.
+4. Thresholding, minimum-duration filtering, and same-speaker gap merging
+   produce time segments.
+5. The CLI emits versioned JSON or standard RTTM text.
+
+Nemotron 3 uses eight speaker channels and a cache across chunks. Its pinned
+BF16 initializer is restored into FP32 model weights, matching NeMo's execution
+precision.
+
+The Spark CUDA regression checks a 46.57-second real A-B-A recording with a
+returning speaker across the default chunk boundary. NVIDIA's pinned NeMo
+implementation and native FP32 inference both preserve the returning speaker;
+forced native BF16 inference failed that recording. This is a bounded regression
+check, not a general diarization accuracy score.
+
+Run the checkpoint regression with `MERERUN_NEMOTRON3_MODEL_DIR` set to the
+installed model directory:
+
+```bash
+swift test --filter SortformerDiarizationTests/testNemotron3ReturningSpeakerSurvivesChunkBoundaryWhenConfigured
+```
+
+Fixture attribution and exact turn boundaries are in
+`Tests/MereRunCoreTests/Fixtures/Nemotron3/README.md`.
+
+## Notes for contributors
+
+- Speech code spans both `AudioTTS` and `AudioSTT`. Do not assume it all lives
+  under `MereRunCore`.
+- Profile management is CLI-facing but depends on the same canonical model and
+  model-store conventions as the rest of the repository.
+
+See the [architecture map](../architecture.md) for a recommended reading order.

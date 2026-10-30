@@ -1,4 +1,4 @@
-# Clef Flash full-checkpoint checks — October 2, 2026
+# Clef Flash full-checkpoint checks — 2026-10-02
 
 The native Swift/MLX runtime completed text, image, video, and resized-image
 decisions with the full pinned `mlx-community/clef-flash-4bit` checkpoint on
@@ -24,7 +24,7 @@ capacity claim.
 
 Each probe loads a fresh native operation with the original affine 4-bit/group-64
 backbone, BF16 vision tower, and BF16 joint head. Python runs only the separate
-reference implementation.
+reference implementation. The following table shows each probe's result.
 
 | Probe | Input tokens | Choice in both implementations | Maximum rounded probability difference |
 | --- | ---: | --- | ---: |

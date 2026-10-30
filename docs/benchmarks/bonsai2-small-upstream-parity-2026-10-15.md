@@ -1,14 +1,14 @@
-# Bonsai 2 Small upstream parity
-
-Follow-up: the [October 16 precise-intrinsic correction](./bonsai2-small-upstream-parity-2026-10-16.md) resolves the strict 2B/4B vision failures. This report preserves the earlier measurements.
+# Bonsai 2 Small upstream parity — 2026-10-15
 
 This check compares the released 2B, 4B, and 9B checkpoints with the native Swift/MLX implementation. The independent reference uses each pack's unmodified `vision_artifact.py` loader and its pinned Python dependencies. Python is a validation reference; product inference uses Swift/MLX.
 
 Verification is complete. The corrected implementation matches all 930 teacher-forced greedy decisions across 18 cases. Text passes for all three checkpoints. The 9B pack passes every frozen gate; 2B and 4B fail strict vision parity. A 2B chart trace isolates its remaining drift to rotary-frequency rounding; the other failed cases remain unqualified. These failures remained open in that measurement; tolerances were not changed.
 
+Follow-up: the [October 16 precise-intrinsic correction](./bonsai2-small-upstream-parity-2026-10-16.md) resolves the strict 2B/4B vision failures. This report preserves the earlier measurements.
+
 ## Reference and inputs
 
-The checkpoints and fixture bytes are the same as the [initial quality and throughput report](./bonsai2-small-2026-10-15.md). That report measures the earlier implementation and is retained as historical evidence.
+The checkpoints and fixture bytes are the same as the [initial quality and throughput report](./bonsai2-small-2026-10-15.md). That report measures the earlier implementation and is retained as historical evidence. The following table lists the pinned upstream revisions.
 
 | Pack | Upstream revision |
 | --- | --- |
@@ -28,6 +28,8 @@ The upstream reference selects up to 64 greedy continuation tokens. Native execu
 
 Both implementations prefill in 512-token chunks within a 16,384-token context. Image chunks receive explicit slices of the upstream model's own full-prompt mRoPE positions. Automatic scalar cached-decode positions cannot represent spatial image tokens inside later prefill chunks. This supplies the model's position API without modifying its neural implementation.
 
+The comparison applies these frozen gates:
+
 | Gate | Frozen requirement |
 | --- | --- |
 | Prompt token IDs | Exact |
@@ -43,7 +45,7 @@ Every gate is reported separately. Any failure prevents an overall parity pass. 
 
 The [machine-readable summary](./bonsai2-small-upstream-parity-2026-10-15-summary.json) records every case and gate, tensor hashes, source identities, and exact native executable receipts.
 
-The original implementation had large vision errors. Bicubic preprocessing, ordinary RMS scales, checkpoint-dtype position interpolation, Conv3d projection, and the upstream reciprocal/power frequency formula substantially reduce them. All intermediate variants remain in the summary and T7 evidence.
+The original implementation had large vision errors. Bicubic preprocessing, ordinary RMS scales, checkpoint-dtype position interpolation, Conv3d projection, and the upstream reciprocal/power frequency formula substantially reduce them. All intermediate variants remain in the summary and T7 evidence. The following table shows original and final results per model.
 
 | Model | Original max image relative L2 | Final max image relative L2 | Final max probability delta | Final argmax | Overall |
 | --- | ---: | ---: | ---: | ---: | --- |
@@ -75,7 +77,7 @@ This smoke does not rerun the original 16-case sampled quality corpus or residen
 
 - Native patch embedding flattened the Conv3d kernel into a matrix multiply. The operations differ in FP16 accumulation order. Bounded real-weight CPU probes showed maximum differences of 0.00390625 (2B) and 0.0078125 (4B and 9B); native Conv3d matched the independent reference exactly for all three. Prism now uses the published Conv3d operation.
 
-- Vision rotary frequencies now use the upstream FP32 power/reciprocal expression. Independent CPU fixtures check the formula; GPU fixtures allow at most `1e-6` for this isolated operation. This component tolerance does not change the frozen full-model gates above.
+- Vision rotary frequencies now use the upstream FP32 power/reciprocal expression. Independent CPU fixtures check the formula; GPU fixtures allow at most `1e-6` for this isolated operation. This component tolerance does not change the frozen full-model gates listed in the method section.
 
 The preserved baseline test executable and baseline source hashes identify the original implementation. Baseline exports and corrected exports are retained separately. Earlier quality scores and throughput samples must not be attributed to a corrected executable.
 
@@ -85,7 +87,7 @@ The preserved baseline test executable and baseline source hashes identify the o
 
 ## Reproduce
 
-Prepare the exact pinned snapshots and their source receipts on T7, copy the corresponding published runtime sources into `metadata/SIZE/runtime`, and install the published requirements into the parity environment. Keep the frozen `cases.json` and `protocol.json` with the evidence.
+Prepare the exact pinned snapshots and their source receipts on T7, copy the corresponding published runtime sources into `metadata/SIZE/runtime`, and install the published requirements into the parity environment. Keep the frozen `cases.json` and `protocol.json` with the evidence. Then export the reference and native results and compare them for 2B:
 
 ```bash
 export MERERUN_TEST_MLX_DEVICE=gpu

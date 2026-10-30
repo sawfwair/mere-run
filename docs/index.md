@@ -32,32 +32,42 @@ features:
     link: /runtime/api-server
 ---
 
-## Six commands, six kinds of thing
+## Try six commands
 
-Install a signed build from [mere.run/releases](https://mere.run/releases), or
-`swift build` from a clone. Then:
+Install a signed build from [mere.run releases](https://mere.run/releases), or
+build from a clone with `swift build`. Before you download anything, check
+which models this machine can run:
 
 ```bash
-mere.run image generate --prompt "a ceramic mug in morning light" --output mug.png
+mere.run model capabilities --recommended
+```
+
+Each of the following commands writes one file or directory with the command's
+default model. Some commands download their default model on first use; for
+the others, run `mere.run model pull MODEL_ID` first. Each command's `--help`
+names its default.
+
+```bash
+mere.run image generate --prompt "a ceramic mug centered on a plain black background" --output mug.png
 mere.run music generate "arena rock anthem, stacked vocals" --output anthem.wav
 mere.run speech synthesize "Hello from mere.run" --output hello.wav
 mere.run sfx generate "a ceramic mug shattering on tile" --output smash.wav
 mere.run video generate "a drone flight over snowy peaks" --output flight.mp4
-mere.run vision image-to-3d-trellis2 ./mug.png --output ./mug-3d
+mere.run vision image-to-3d-trellis2 ./mug.png --already-framed --output ./mug-3d
 ```
 
-Every command uses the same binary and grammar. None requires an inference API
-key.
+TRELLIS.2 expects an object image with a transparent background. The
+`--already-framed` option accepts an opaque image instead, if it shows one
+centered object on a black background, which is why the image prompt asks for
+one.
 
-Start with `mere.run model capabilities` — it reads your hardware and tells you
-which models this machine can actually run before you spend a gigabyte finding
-out.
+Every command uses the same binary and argument style. None of them needs an
+inference API key.
 
 ## The full command surface
 
-All of it ships in that one executable. This table is generated from the
-CLI itself, so it cannot drift from what your copy really does — and every row
-links to the page that owns that command.
+The following table is generated from the CLI, and each row links to the page
+that documents the command.
 
 <!-- BEGIN GENERATED: CLI TOP LEVEL -->
 | Command | Purpose |
@@ -95,41 +105,61 @@ links to the page that owns that command.
 
 ### Get it running
 
-Install, pull a first model, and make something in the next ten minutes.
+Install the CLI, pull a first model, and generate a first result.
 
 - [Getting started](/getting-started)
-- [macOS deep links](/macos-deep-links) — preview or import local artifacts from launchers, automations, agents, and apps
 - [Linux quickstart](/linux-quickstart)
 - [CLI reference](/cli)
-- [Offline cookbooks](/cookbooks) — `mere.run guide` works without a network
+- [Offline cookbooks](/cookbooks): `mere.run guide` works without a network
 - [Configuration](/configuration)
 - [Model sources](/model-sources)
+- [macOS deep links](/macos-deep-links): preview or import local artifacts from
+  launchers, automations, agents, and other apps
 
-### Make things
+### Make and analyze
 
-Each family is its own page: what it generates, which model to pull, and the
-flags that actually change the output.
+Each runtime page lists what the family produces, which model to pull, and the
+options that change the output.
 
-- [Image generation](/runtime/image) — text-to-image, edits, and local LoRA training
-- [Text](/runtime/text) — chat, code, embeddings, tool use, PII redaction
-- [Speech](/runtime/speech) — synthesis, voice cloning, live transcription
-- [Vision and 3D](/runtime/vision) — caption, segment, track, depth, mesh, OCR
-- [Music](/runtime/music) — generation, covers, realtime MIDI, transcription
-- [Sound effects](/runtime/sfx) — Foley from text or from a silent video
-- [Video](/runtime/video) — clips with synchronized audio, subject animation
-- [Persistent worlds](/runtime/world) — a scene that remembers where you walked
+- [Image generation](/runtime/image): text-to-image, editing, and local LoRA
+  training
+- [Text](/runtime/text): chat, code, embeddings, tool use, PII redaction,
+  classification, extraction, and typed decisions
+- [Speech](/runtime/speech): synthesis, voice cloning, transcription, and
+  speaker diarization
+- [Vision and 3D](/runtime/vision): captioning, segmentation, tracking, depth,
+  meshes, and OCR
+- [Audio enhancement](/runtime/audio): speech bandwidth extension and audio
+  super-resolution
+- [Music](/runtime/music): generation, covers, stem separation, realtime MIDI,
+  and transcription
+- [Sound effects](/runtime/sfx): Foley from text or from a silent video
+- [Video](/runtime/video): clips with synchronized audio, and subject animation
+- [Persistent worlds](/runtime/world): persistent conditioned-video world
+  sessions
+- [Geospatial inference](/runtime/geo): flood and fire scores and
+  Earth-observation embeddings
+
+These model families also have their own pages:
+[Recursive Flint](/runtime/flint), [Nemotron 3.5 Bolt](/runtime/nemotron-bolt),
+[Nemotron 3.5 Transcribe](/runtime/nemotron-transcribe),
+[Whistle](/runtime/whistle), [Kolibri-1](/runtime/kolibri),
+[GLiNER2.5 Decide](/runtime/gliner25-decide), [Laya](/runtime/laya),
+[Clef](/runtime/clef), [D1](/runtime/d1),
+[PPLX Embed v2](/runtime/pplx-embed-v2), and
+[EmbeddingGemma 2](/runtime/embeddinggemma2).
 
 ### Put it to work
 
-Serve it, schedule it, measure it, and keep it honest.
-
-- [Business use cases](/business/) — start with a support ticket or a shared archive
+- [Business use cases](/business/): start with a support ticket or a shared
+  archive
 - [Portable workflows, executors, and run artifacts](/workflows)
 - [Model and adapter management](/runtime/model-management)
-- [Raycast example integration](/raycast) — one launcher client for the macOS deep-link routes
 - [Local API server and Open WebUI](/runtime/api-server)
 - [Official companion plugins](/plugins)
-- [Quality gate](/gate) — the check that catches a bad build before you do
+- [Raycast example integration](/raycast): a launcher client for the macOS
+  deep-link routes
+- [Quality gate](/gate): end-to-end checks against installed models
 - [Benchmarking](/benchmarking)
 
 ### Work on the code

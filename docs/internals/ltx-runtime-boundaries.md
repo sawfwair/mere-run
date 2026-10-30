@@ -1,12 +1,12 @@
 # LTX runtime boundaries
 
-Use this guide when editing LTX inference. `MereRunLTXModel` builds with MLX,
-MLXFast, and MLXNN. It does not depend on Core, tokenizers, installed models,
-media codecs, or command parsing.
+Use this map when you edit LTX inference. `MereRunLTXModel` builds with MLX,
+MLXFast, and MLXNN only. It doesn't depend on Core, tokenizers, installed
+models, media codecs, or command parsing. Core re-exports its public types.
 
 ## Ownership
 
-| Owner | Responsibilities |
+| Owner | Responsibility |
 | --- | --- |
 | `MereRunLTXModel` | Transformer layers, convolutional and diffusion VAEs, upsampling, duration prediction, position layouts, tiled decode, sampler math, and model caches |
 | `MereRunCore/LTX` | Checkpoint selection and loading, weight mapping, prompt preparation, input media, generation actors, denoising orchestration, vocoding, and output |
@@ -14,39 +14,41 @@ media codecs, or command parsing.
 | `LTXRuntimeTests` | Independent tensor, temporal-layout, cached-attention, sampler, and tiled-decoder fixtures |
 | `MereRunCoreTests` | Checkpoint adapters, resource layouts, generation contracts, and media integration |
 
-Core re-exports public LTX model types. The duration-head and DiffVAE loading
-methods remain Core extensions, so existing Core callers keep the same API.
-Package access supports generation and adapter code without exposing private
-model machinery as public API.
+The duration-head and DiffVAE loading methods stay as Core extensions, so
+existing Core callers keep the same API. Package access lets generation and
+adapter code reach model internals without making them public API.
 
 ## Reading order
 
-1. Read `LTXUnifiedAVGenerationTypes.swift` and `LTXUnifiedAVGenerator.swift`
-   for inputs, outputs, and resident state.
-2. Read the generator's loading, full-loading, and component-preparation extensions
-   for checkpoint selection and adapter installation.
-3. Read its generation, audio-generation, and audio-to-video extensions for
+All files are in `Sources/MereRunCore/LTX` unless noted.
+
+1. `LTXUnifiedAVGenerationTypes.swift` and `LTXUnifiedAVGenerator.swift`
+   define inputs, outputs, and resident state.
+2. The generator's `+Loading`, `+FullLoading`, and `+ComponentPreparation`
+   extensions handle checkpoint selection and adapter installation.
+3. Its `+Generation`, `+AudioGeneration`, and `+AudioToVideo` extensions set
    execution order and resource lifetime.
-4. Read the denoising files for the selected sampler and guidance path.
-5. Read the model library for transformer, VAE, and cache computation.
-6. Read `LTXVideoMP4Writer.swift` for final media assembly.
+4. The denoising files implement the selected sampler and guidance path.
+5. `Sources/MereRunLTXModel` holds transformer, VAE, and cache computation.
+6. `LTXVideoMP4Writer.swift` assembles the final media.
 
-The legacy distilled generator has its own state, loading, and generation
-files. Core also retains specialized HDR, DFR, retake, and reference-input policy.
+`LTXDistilledLatentGenerator` has its own state, loading, and generation files.
+Core also keeps the specialized HDR, DFR, retake, and reference-input policy.
 
-## Preserved execution contracts
+## Contracts to preserve
 
-The extraction preserves tensor arithmetic, checkpoint keys, compiled-block
-variants, random-stream order, evaluation boundaries, and actor isolation.
-The original cleanup scopes retain ownership of adapter activation and resident
-state. Decoder tiling retains causal temporal overlap and weighted accumulation.
-Audio and video use their existing distinct sampling grids and shared time origin.
+Preserve tensor arithmetic, checkpoint keys, compiled-block variants,
+random-stream order, evaluation boundaries, and actor isolation. The cleanup
+scopes own adapter activation and resident state. Decoder tiling keeps causal
+temporal overlap and weighted accumulation. Audio and video keep their distinct
+sampling grids and shared time origin.
 
-The boundary does not establish checkpoint quality, cancellation responsiveness,
-or lower memory use. Those require execution measurements. Specialized generation
-paths remain in Core and can be refined independently of model compilation.
+This boundary doesn't establish checkpoint quality, cancellation
+responsiveness, or lower memory use; those need execution measurements.
+Specialized generation paths stay in Core and can change without recompiling
+the model library.
 
-## Validation
+## Validate a change
 
 ```bash
 swift build --target MereRunLTXModel
@@ -56,11 +58,11 @@ bash scripts/check-model-boundaries.sh
 ./scripts/check.sh
 ```
 
-The boundary guard rejects transitive Core, tokenizer, codec, and CLI dependencies
-in the model and its tests. It also rejects MLX test support in shipped products.
-The model tests cover causal convolution, cached and masked attention, DiffVAE
-query tiling, frame geometry, weighted decode overlap, duration prediction,
-sampler updates, and synchronized guidance-cache reuse.
+The boundary guard rejects transitive Core, tokenizer, codec, and CLI
+dependencies in the model and its tests. It also rejects MLX test support in
+shipped products. The model tests cover causal convolution, cached and masked
+attention, DiffVAE query tiling, frame geometry, weighted decode overlap,
+duration prediction, sampler updates, and synchronized guidance-cache reuse.
 
-Published-checkpoint tests remain opt-in. Metal-specific attention tests require
-a GPU; a CPU fixture pass does not qualify those kernels or CUDA execution.
+Published-checkpoint tests are opt-in. Metal-specific attention tests need a
+GPU; a CPU fixture pass doesn't qualify those kernels or CUDA execution.

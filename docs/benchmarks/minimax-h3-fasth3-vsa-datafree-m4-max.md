@@ -4,7 +4,11 @@ This receipt records a bounded native Metal generation for the managed
 `video-minimax-h3-fasth3-vsa-datafree-mlx` package. It proves that the packaged
 base, adapter, AdaLN cache, four-evaluation schedule, VSA-H3 path, video decoder,
 audio decoder, and MP4 muxer complete together. It does not establish general
-output quality or parity with the full upstream checkpoint.
+output quality or parity with the full upstream checkpoint. On an Apple M4 Max
+with 128 GB unified memory, the first 384 by 256 pixel, 22-frame run finished
+in 96.37 s end to end. Later sections qualify the premerged Q8 package, the
+FastH3 Metal fusion kernels, and a 294-frame, 1,344 by 768 output rendered from
+a 672 by 384 canvas in 1,083.12 seconds.
 
 ## Environment
 
@@ -32,6 +36,8 @@ generated command contained only the managed model ID and did not contain an
 
 ## Command
 
+The run used the following command, with step and phase profiling enabled:
+
 ```bash
 MERERUN_H3_PROFILE_STEPS=1 \
 MERERUN_H3_PROFILE_PHASES=1 \
@@ -47,6 +53,8 @@ mere.run video generate \
 ```
 
 ## Results
+
+The following table lists the timing and memory measurements for the run.
 
 | Measurement | Observed value |
 | --- | ---: |

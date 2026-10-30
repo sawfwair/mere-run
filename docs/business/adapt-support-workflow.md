@@ -1,83 +1,89 @@
 # Adapt an Ornith support workflow to your ticketing app
 
-This guide is for a developer or support operator with a ticketing website
-open on an Apple Silicon Mac. You can run GLiNER2.5 Decide, Ornith, and
-Computer Use without changing the website's code. You still need a small
-controller that understands how your app presents tickets and how to check the
-result of each action.
+This guide turns the one-ticket Ornith workflow into a controller that works
+through your own app's inbox. GLiNER2.5 Decide, Ornith, and Computer Use run
+without changes to the website's code, but you still need a small controller
+that knows how your app presents tickets and how to check the result of each
+action. The guide is for a developer or support operator with the ticketing
+website open on an Apple Silicon Mac.
 
 For a controller that applies GLiNER labels through Cua Driver without Ornith,
 follow [Route tickets with GLiNER and Cua Driver](./direct-ticket-triage.md).
 
-Follow [Triage tickets and save drafts](./customer-support.md) to set
-up the tools yourself. The coding-agent prompt in this guide can also do that
-setup. Keep the website open in one macOS window. Select a ticket that your
-team authorizes for a draft-only run. Confirm that you can inspect its draft,
-tags, team, and priority afterward.
+## Before you begin
+
+1. Set up the tools by following
+   [Triage tickets and save drafts](./customer-support.md), or let the
+   coding-agent prompt later in this guide do the setup.
+2. Open the website in one macOS window.
+3. Select a ticket that your team authorizes for a draft-only run, and confirm
+   that you can inspect its draft, tags, team, and priority afterward.
 
 ## Map one ticket
 
-1. Run `mere-computer-use windows` and record the process ID and window ID for
+1. Run `mere-computer-use windows` and record the process ID and window ID of
    the ticketing website. Keep the controller limited to that window.
 2. Select the approved ticket. Record where the window shows its stable ID,
-   status, customer message, and context needed for classification.
+   status, customer message, and the context that classification needs.
 3. Record the exact team, priority, and tag options in the app. Locate the
    reply field, **Save draft**, and any **Send** control. Use the app's actual
    names in prompts and code.
 4. Record how the app lists open tickets and how you return to the list. Check
-   whether a fresh observation identifies the selected ticket after each
+   that a fresh observation identifies the selected ticket after each
    navigation step.
-5. Choose a read-only way to verify the saved result. Prefer a ticket
-   API or audit log when you have access. Otherwise, read the ticket again
-   through a fresh window observation and record that this is a weaker check.
+5. Choose a read-only way to verify the saved result. Use a ticket API or audit
+   log if you have access. Otherwise, read the ticket again through a fresh
+   window observation, and record that this check is weaker.
 
-The selected window can expose customer information in observations and run
-records. Keep those files in a private local directory. Do not commit them to
-the controller's source repository.
+Observations and run records can contain customer information from the
+selected window. Keep those files in a private local directory, and don't
+commit them to the controller's source repository.
 
 ## Build the controller around the app
 
 Keep app-specific reading and navigation in an adapter. The rest of the
-controller can follow the same sequence for each ticket:
+controller follows the same sequence for each ticket:
 
 1. **Discover tickets.** List open tickets and identify each one by a stable
    ID. Stop if the selected window or list changes unexpectedly.
-2. **Observe a ticket.** Read its message, context, status, and current values.
-   Save the observation before inference.
+2. **Observe the ticket.** Read its message, context, status, and current
+   values. Save the observation before inference.
 3. **Classify the text.** Pass the observed text and your app's team and
    priority labels to `mere.run text classify`. Keep the selected labels and
    scores.
 4. **Decide whether to act.** Skip resolved tickets, `No action` results, and
-   requests that need review. GLiNER scores are not calibrated probabilities.
-5. **Act in the app.** Recheck the ticket ID and content. Give accepted labels
-   and draft-only limits to `mere-computer-use plan`, then run the plan with
-   Ornith.
+   requests that need review. GLiNER scores aren't calibrated probabilities.
+5. **Act in the app.** Recheck the ticket ID and content. Give the accepted
+   labels and draft-only limits to `mere-computer-use plan`, then run the plan
+   with Ornith.
 6. **Verify the result.** Read the ticket again. Check its team, priority,
    tags, saved draft, unchanged status, and sent-reply count. Stop at the first
    mismatch.
-7. **Resume carefully.** Compare the current ticket with the saved receipt
-   before retrying. Skip a completed ticket only after verifying its final
+7. **Verify before you resume.** Before a retry, compare the current ticket with the
+   saved receipt. Skip a completed ticket only after you verify its final
    state.
 
-Set an action limit and timeout for each ticket. Save the initial observation,
-classification, plan, action count, final observation, verification result,
-and wall time. Test navigation, resolved tickets, uncertain classifications,
-interrupted runs, and a changed ticket before processing an inbox.
+Set an action limit and a timeout for each ticket. Save the initial
+observation, classification, plan, action count, final observation,
+verification result, and wall time. Before you process an inbox, test
+navigation, resolved tickets, uncertain classifications, interrupted runs, and
+a ticket that changes mid-run.
 
-The controller uses the website's visible controls for changes. A read-only
-API can strengthen verification, but the workflow does not require adding an
-API or model integration to the ticketing app. Use labels, navigation, and
-ticket IDs from your own app rather than another app's controller.
+The controller makes changes through the website's visible controls. A
+read-only API can strengthen verification, but the workflow doesn't require
+adding an API or model integration to the ticketing app. Use the labels,
+navigation, and ticket IDs from your own app rather than another app's
+controller.
 
 ## Ask a coding agent to set it up
 
-Run Codex or Claude on the same Mac with terminal access. Open the approved
-ticket in the website, then paste this prompt into the coding agent. The agent
-can check the CLI, models, plugin, and driver. If `CuaDriver.app` needs
-Accessibility or Screen Recording permissions, grant them in macOS System
+Run Codex or Claude with terminal access on the same Mac. Open the approved
+ticket in the website, then paste the following prompt into the coding agent.
+The agent can check the CLI, models, plugin, and driver. If `CuaDriver.app`
+needs Accessibility or Screen Recording access, grant it in macOS System
 Settings before the agent operates the window.
 
-If your coding agent uses a hosted model, its provider may receive ticket
+If your coding agent uses a hosted model, its provider might receive ticket
 content that the agent reads during setup. Use an agent configuration that your
 organization permits for that data.
 
@@ -127,12 +133,15 @@ and resume behavior, and a one-ticket receipt. Report what worked, what needs
 my input, and what remains unverified before I use it on more tickets.
 ```
 
-After the first run, review the receipt and the ticket in the website. For a
-larger pilot, use several labeled tickets and measure classification errors,
-action success, and total wall time. Each additional app needs its own adapter
-and verification rules.
+## Check the first run
 
-Before expanding the pilot, confirm that the controller stops when a ticket
-changes after classification, a second run does not add another draft, and the
-ticket has no new sent reply. Check the final state in the app rather than
-relying only on the agent's report.
+1. Review the receipt and the ticket in the website. Check the final state in
+   the app rather than relying only on the agent's report.
+2. Confirm that the controller stops when a ticket changes after
+   classification.
+3. Confirm that a second run doesn't add another draft and that the ticket has
+   no new sent reply.
+
+For a larger pilot, use several labeled tickets and measure classification
+errors, action success, and total wall time. Each additional app needs its own
+adapter and verification rules.

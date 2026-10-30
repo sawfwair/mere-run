@@ -1,6 +1,6 @@
 # Native DRAMA-3 checkpoint qualification
 
-The latest bounded probes pass batch speech, reference conditioning, short and
+The extended bounded probes pass batch speech, reference conditioning, short and
 paragraph streaming, and cancellation on a 36 GiB system. See
 [extended results](#extended-results-after-the-sampler-correction) for scope,
 memory peaks, latency, and remaining quality limits.
@@ -143,7 +143,6 @@ and loader suite passed, and Metal tests preserved both BF16 attention paths
 and expert output before and after fusion. The documentation build passed.
 Hosted CI remains unverified.
 
-
 ## Extended qualification and semantic sampling
 
 The first 57-word paragraph probe reached the 750-frame acoustic limit and
@@ -261,7 +260,6 @@ and local gate results. This repeats the short case on the integrated branch;
 the seven-probe receipts above retain their original source revision. Hosted
 checks and the protected merge queue remain separate delivery gates.
 
-
 ## Public Q4 distribution
 
 The measured export is published as
@@ -277,7 +275,6 @@ The [publication receipt](./huggingface-publication.json) records every file's
 hash and size. The managed `speech-tts-drama-3` download uses this Q4 artifact,
 while source provenance and Fish Audio usage terms retain the upstream pin.
 This distribution check adds no speech-quality or inference-capacity claims.
-
 
 A clean native `model pull speech-tts-drama-3` also completed from the public
 revision, using an empty model store and cache with registered locations excluded.

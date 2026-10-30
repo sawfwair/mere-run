@@ -2,14 +2,14 @@
 
 Use this guide to install or build the headless `mere.run` CLI on Linux.
 
-Be clear about what you are getting. The Linux path is real but deliberately
-narrow: CLI only, Ubuntu-style hosts, and CUDA on x86_64 or arm64. There is no
-CPU-only Linux release and no studio app here; macOS remains the primary
-development and runtime-validation environment for this repository.
+The Linux path is narrow by design: the CLI only, on Ubuntu-style hosts, with
+CUDA on x86_64 or arm64. There's no CPU-only Linux release and no Studio app.
+macOS remains the primary development and runtime-validation platform for this
+repository.
 
-Nothing is treated as supported until it has been built and smoke-tested on the
-host class it targets. Validate CUDA artifacts on real CUDA hardware; do not
-treat a cross-build as runtime proof.
+A Linux configuration counts as supported only after it has been built and
+smoke-tested on the host class it targets. Validate CUDA artifacts on real CUDA
+hardware. A cross-build isn't proof that the runtime works.
 
 ## Validation boundary
 
@@ -21,19 +21,22 @@ treat a cross-build as runtime proof.
   installer UI, or the DMG layout.
 - Published Linux package builds must use `MERERUN_LINUX_ACCEL=cuda`. CPU
   builds are test fixtures, not release artifacts.
-- Release builds cover macOS Apple Silicon, Linux arm64 CUDA on Spark, and
-  Linux x86_64 CUDA on RunPod. Each Linux package must pass validation on
-  matching GPU hardware.
-- CUDA validation applies only to hosts that
-  have run the CUDA package and smoke path.
+- Not every release attaches Linux packages. When a release does, it can
+  include an x86_64 CUDA tarball and `.deb`, and an arm64 CUDA tarball and
+  `.deb`. Check the assets on the
+  [GitHub releases page](https://github.com/sawfwair/mere-run/releases).
+- Each Linux package must pass validation on matching GPU hardware. CUDA
+  validation applies only to hosts that have run the CUDA package and smoke
+  path.
 
 ## Install with apt
 
-Use this path on Debian or Ubuntu-style systems after building a matching
-`.deb`, or when a matching `.deb` is attached to a release:
+Use this path on Debian or Ubuntu-style systems after you build a matching
+`.deb` or download one from a release. Set `version` to the package version,
+and adjust the path if the package isn't in `./dist/linux`:
 
 ```bash
-version=0.23.0
+version=0.67.1
 case "$(uname -m)" in
   x86_64|amd64) package="./dist/linux/mere-run-cuda_${version}_amd64.deb" ;;
   aarch64|arm64) package="./dist/linux/mere-run_${version}_arm64.deb" ;;
@@ -50,11 +53,11 @@ assets that the CLI needs at runtime.
 
 ## Install the portable tarball
 
-Use this path after building a matching tarball, or when a matching tarball is
-attached to a release:
+Use this path after you build a matching tarball or download one from a
+release:
 
 ```bash
-version=0.23.0
+version=0.67.1
 case "$(uname -m)" in
   x86_64|amd64) archive="mere-run-${version}-linux-x86_64-cuda.tar.gz" ;;
   aarch64|arm64) archive="mere-run-${version}-linux-arm64.tar.gz" ;;
@@ -69,8 +72,8 @@ mere.run status
 ```
 
 The tarball installer copies the CLI and its runtime assets together. The
-packaged launcher resolves its own install location and sets `LD_LIBRARY_PATH`
-for the bundled runtime libraries before it starts the real `mere.run` binary.
+packaged launcher finds its own install location and sets `LD_LIBRARY_PATH`
+for the bundled runtime libraries before it starts the `mere.run` binary.
 On CUDA 13 hosts it also resolves CUDA CCCL from CUDA home, versioned Toolkit
 roots, and target-specific include directories, then adds that `cuda/std` root
 to `CPATH` and `MERERUN_CUDA_CCCL_INCLUDE_PATH`. MLX CUDA kernels use that
@@ -78,12 +81,11 @@ explicit path while JIT-compiling in the installed package.
 
 ## Install the x86_64 CUDA tarball
 
-Use this artifact for GPU worker images, remote trainers, and other x86_64 CUDA
-hosts after building it, or when a matching CUDA tarball is attached to a
-release:
+Use this artifact for GPU worker images, remote trainers, and other x86_64
+CUDA hosts, after you build it or download it from a release:
 
 ```bash
-version=0.23.0
+version=0.67.1
 tar -xzf "./dist/linux/mere-run-${version}-linux-x86_64-cuda.tar.gz"
 cd "mere-run-${version}-linux-x86_64-cuda"
 ./install.sh
@@ -91,9 +93,9 @@ mere.run --version
 mere.run status
 ```
 
-Use the CUDA tarball as the build pack for companion remote-runner plugins.
-It is not a source or bootstrap archive and must not compile on paid GPU time.
-No CPU-only tarball is published.
+Companion remote-runner plugins use the CUDA tarball as their build pack. It
+isn't a source or bootstrap archive and must not compile anything on paid GPU
+time. No CPU-only tarball is published.
 
 ## First commands
 
@@ -108,8 +110,8 @@ mere.run model capabilities --recommended
 mere.run status
 ```
 
-Use `mere.run model capabilities` before pulling large checkpoints. It gives a
-machine-local view of the recommended public model IDs for the host.
+Run `mere.run model capabilities` before you pull large checkpoints. It lists
+the managed model IDs that this host can run and recommends a first set.
 InsightFace Buffalo-L face analysis requires the macOS ONNX Runtime build, so
 the capability check reports it as unsupported on Linux.
 
@@ -133,7 +135,7 @@ sudo apt-get update
 sudo apt-get install -y ffmpeg
 ```
 
-If the binaries are not on `PATH`, point the CLI at explicit locations:
+If the binaries aren't on `PATH`, point the CLI at explicit locations:
 
 ```bash
 export MERERUN_FFMPEG=/usr/bin/ffmpeg
@@ -148,7 +150,7 @@ x86_64 CUDA development host:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
-  scripts/package-linux.sh --version 0.23.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.67.1 --artifact-suffix cuda
 ls dist/linux/
 ```
 
@@ -162,15 +164,15 @@ MERERUN_LINUX_ACCEL=cuda \
 MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
 MERERUN_NATIVE_BUILD_JOBS=14 \
 MERERUN_CUDA_ARCHITECTURES="86-real;90-virtual" \
-  scripts/package-linux.sh --version 0.23.0 --artifact-suffix cuda
+  scripts/package-linux.sh --version 0.67.1 --artifact-suffix cuda
 ```
 
 Run a real GPU smoke on the target runtime class before widening support claims.
 
 ## Linux arm64 CUDA package path
 
-Linux arm64 is only useful for this project when the CUDA lane works. Do not
-publish or recommend CPU-only arm64 packages as release artifacts.
+Linux arm64 packages are useful only with CUDA. Don't publish or recommend
+CPU-only arm64 packages as release artifacts.
 
 Build arm64 packages on a native arm64 Linux host with an NVIDIA GPU, driver,
 CUDA Toolkit, `nvcc`, CUDA CCCL headers, cuDNN, NCCL, Swift,
@@ -179,7 +181,7 @@ repository this includes `cuda-cccl-13-0`, `libcudnn9-dev-cuda-13`, and
 `libnccl-dev`:
 
 ```bash
-MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.23.0
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.67.1
 ls dist/linux/
 ```
 
@@ -336,16 +338,17 @@ studio, and DMG packaging are macOS-only.
 
 ## Verify release assets
 
-When a Linux release includes `SHA256SUMS`, place it beside the matching
-tarball or `.deb` before checking it:
+When a release includes `SHA256SUMS`, download it into the directory that
+holds the matching tarball or `.deb`, and then check it. Version 0.65.0 is an
+example of a release with Linux packages:
 
 ```bash
-tag=v0.23.0
+tag=v0.65.0
 
 curl -L "https://github.com/sawfwair/mere-run/releases/download/${tag}/SHA256SUMS" -o SHA256SUMS
 sha256sum -c SHA256SUMS
 ```
 
-If you only downloaded one asset, `sha256sum -c` will report the missing file as
-not found. That is expected; download the matching tarball or `.deb` before
-running the full manifest check.
+The manifest also lists the macOS disk image and the other Linux packages, so
+`sha256sum -c` reports every asset you didn't download as missing. To check
+only the files you have, add `--ignore-missing`.
