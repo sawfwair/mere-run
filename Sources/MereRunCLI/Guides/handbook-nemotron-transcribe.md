@@ -1,7 +1,8 @@
 # Nemotron 3.5 Transcribe (NVIDIA)
 
 `speech-asr-nemotron-35-transcribe` defaults to published MLX 4-bit routed
-experts for native offline transcription and translation to English.
+experts for native transcription and translation to English, from a file or
+live, one utterance at a time.
 The 25.09 GB download has an estimated 32 GB minimum / 48 GB recommended
 memory budget. The original 67.5 GB BF16 model is
 `speech-asr-nemotron-35-transcribe-bf16`, with a 96 / 128 GB budget.
@@ -15,6 +16,7 @@ mere.run speech transcribe ./recording.wav --backend nemotron --max-tokens 4096
 mere.run speech transcribe ./recording.wav --backend nemotron --task translate --max-tokens 4096
 mere.run model pull speech-asr-nemotron-35-transcribe-bf16 --accept-model-license
 mere.run speech transcribe ./recording.wav --model speech-asr-nemotron-35-transcribe-bf16 --max-tokens 4096
+mere.run speech listen --model speech-asr-nemotron-35-transcribe --language en
 ```
 
 ## Controls and variants
@@ -26,7 +28,8 @@ mere.run speech transcribe ./recording.wav --model speech-asr-nemotron-35-transc
 - `--max-tokens` controls output length; the default is 448. Long recordings need a larger budget.
 - Audio can be 20 ms through one hour, within 65,536 combined input/output tokens.
 - The encoder splits waveform input into 30-second rows and generates one transcript.
-- `--stream`, CTC timestamps, speaker timelines, audio question answering, and MTP/DFlash speculation are unsupported.
+- `speech listen` and `speech transcribe --stream` split audio at pauses and re-decode the utterance, up to 30 seconds. Use the INT4 default live: BF16 falls far behind.
+- CTC timestamps, speaker timelines, audio question answering, and MTP/DFlash speculation are unsupported.
 
 Pulling either managed variant preserves a complete legacy BF16 install under
 the explicit BF16 ID before replacing the old default. INT4 downloads an
@@ -48,6 +51,12 @@ time fell from 46.74 to 6.45 seconds; largest process footprint fell from
 61.74 to 21.83 GiB on an M5 Max with 128 GiB. These small cases do not
 establish broad equivalence, multilingual/translation quality, noisy speech
 accuracy, one-hour performance, or minimum-memory hardware qualification.
+
+Live text arrives per utterance, not word by word. One run of synthesized
+English, piped at real-time pace on the same machine, committed INT4 utterances
+2.3 to 2.8 seconds after speech ended, including the 0.9-second silence window.
+BF16 lagged by up to 108 seconds. Live microphone latency and
+quality are unmeasured.
 
 - [Managed INT4 checkpoint](https://huggingface.co/Sawfwair/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-MLX-4bit)
 - [Original BF16 checkpoint](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B)

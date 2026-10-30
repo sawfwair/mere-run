@@ -48,7 +48,7 @@ struct SpeechTranscribe: AsyncParsableCommand {
         abstract: "Transcribe or translate speech to text using native ASR backends.",
         discussion: """
         Supports native Parakeet, Qwen, Whistle, and Nemotron Transcribe backends with policy routing.
-        Nemotron Transcribe defaults to 4-bit routed experts, with an explicit BF16 option for offline transcription and English translation.
+        Nemotron Transcribe defaults to 4-bit routed experts, with an explicit BF16 option. It transcribes and translates to English, and streams one utterance at a time.
         Whistle supports packed CQ2/CQ4 weights, beam search, word timestamps, and seven European languages.
         In auto mode, transcription prefers Parakeet while translation routes to Qwen.
 
@@ -177,11 +177,6 @@ struct SpeechTranscribe: AsyncParsableCommand {
             throw ValidationError("--receipt is not available for raw streaming stdin ('-'); use --jsonl.")
         }
         if stream {
-            let route = try SpeechTranscriptionResolver.route(task: task.task, language: language,
-                                                             preferredBackend: backend.backend, modelOverride: model)
-            guard route.decision.backend != .nemotron else {
-                throw ValidationError("Nemotron Transcribe is an offline backend. Use a file input without --stream.")
-            }
             guard streamChunkMs > 0 else {
                 throw ValidationError("--stream-chunk-ms must be > 0.")
             }
@@ -509,7 +504,8 @@ struct SpeechTranscribe: AsyncParsableCommand {
 
         switch route.decision.backend {
         case .nemotron:
-            throw ValidationError("Nemotron Transcribe is an offline backend. Use a file input without --stream.")
+            return try await CLINemotronLiveSession.make(model: route.modelOverride, request: request, configuration: configuration,
+                                                         progressHandler: progressHandler)
         case .whistle:
             let generator = WhistleGenerator()
             var liveOptions = whistleOptions

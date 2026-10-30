@@ -325,10 +325,10 @@ private func temporaryFolder() throws -> URL {
     #expect(gate.family == "parakeet" && gate.violations.isEmpty, "\(gate)")
 }
 
-/// `speech listen` runs Parakeet live, as `speech transcribe --stream` does, and refuses
-/// Nemotron Transcribe, which has no live mode. `--list-devices` lists inputs before any model
-/// is read, on both live commands.
-@Test func liveCommandsRunParakeetAndRefuseOfflineNemotron() throws {
+/// `speech listen` runs Parakeet live, as `speech transcribe --stream` does, and Nemotron Transcribe
+/// one utterance at a time on both commands. `--list-devices` lists inputs before any model is
+/// read, on both live commands.
+@Test func liveCommandsRunParakeetAndNemotronTranscribe() throws {
     let parakeet = try report("speech", "listen", "--model", "speech-asr-parakeet")
     #expect(parakeet.family == "parakeet" && parakeet.model == "speech-asr-parakeet")
     #expect(parakeet.violations.isEmpty && parakeet.warnings.isEmpty)
@@ -339,19 +339,34 @@ private func temporaryFolder() throws -> URL {
     )
     #expect(route.decision.backend == .parakeet && route.modelOverride == "speech-asr-parakeet")
     for nemotron in ["speech-asr-nemotron-35-transcribe", "speech-asr-nemotron-35-transcribe-bf16"] {
-        let listened = try report("speech", "listen", "--model", nemotron)
-        #expect(listened.source == .excluded && listened.violations.count == 1, "\(listened)")
-        #expect(throws: CLICapabilityGate.Rejection.self) {
-            try CLICapabilityGate.check(arguments: ["mere.run", "speech", "listen", "--model", nemotron])
+        let listened = try report("speech", "listen", "--model", nemotron, "--decode-ms", "4000")
+        #expect(listened.family == "nemotron-transcribe" && listened.model == nemotron, "\(listened)")
+        #expect(listened.violations.isEmpty && listened.warnings.isEmpty, "\(listened)")
+        let streamed = try report("speech", "transcribe", "-", "--stream", "--input-format", "pcm-s16le",
+                                  "--sample-rate", "16000", "--jsonl", "--model", nemotron, "--stream-decode-ms", "4000")
+        #expect(streamed.family == "nemotron-transcribe" && streamed.violations.isEmpty && streamed.warnings.isEmpty, "\(streamed)")
+        #expect(throws: Never.self) { try SpeechListen.parse(["--model", nemotron]) }
+        #expect(throws: Never.self) {
+            try SpeechTranscribe.parse(["-", "--stream", "--input-format", "pcm-s16le", "--sample-rate", "16000", "--model", nemotron])
         }
-        #expect(throws: (any Error).self) { try SpeechListen.parse(["--model", nemotron]) }
+        let route = try SpeechTranscriptionResolver.route(
+            task: .transcribe, language: "de", preferredBackend: .auto, modelOverride: nemotron
+        )
+        #expect(route.decision.backend == .nemotron && route.modelOverride == nemotron)
+        let whistleFlag = try report("speech", "listen", "--model", nemotron, "--beam-size", "3")
+        #expect(whistleFlag.violations.count == 1, "\(whistleFlag)")
     }
+    #expect(throws: (any Error).self) { try SpeechListen.parse(["--model", NemotronTranscribeResources.modelID, "--language", "zz"]) }
     let local = FileManager.default.temporaryDirectory.appendingPathComponent("listen-nemotron-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: local, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: local) }
     try Data(#"{"architectures":["Nemotron3_5TranscribeForConditionalGeneration"]}"#.utf8)
         .write(to: local.appendingPathComponent("config.json"))
-    #expect(throws: (any Error).self) { try SpeechListen.parse(["--model", local.path]) }
+    #expect(throws: Never.self) { try SpeechListen.parse(["--model", local.path]) }
+    let localRoute = try SpeechTranscriptionResolver.route(
+        task: .transcribe, language: nil, preferredBackend: .auto, modelOverride: local.path
+    )
+    #expect(localRoute.decision.backend == .nemotron && localRoute.modelOverride == local.path)
     for commandLine in [
         ["speech", "listen", "--list-devices", "--model", "speech-asr-parakeet"],
         ["speech", "diarize-live", "--list-devices", "--model", "speech-diarization-sortformer"],

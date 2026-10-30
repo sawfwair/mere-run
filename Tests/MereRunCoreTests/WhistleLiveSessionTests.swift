@@ -39,6 +39,23 @@ final class WhistleLiveSessionTests: XCTestCase {
         XCTAssertEqual(events.compactMap { event -> ASRLiveFinishReason? in if case .final(let reason) = event { return reason }; return nil }, [.cancelled])
     }
 
+    func testPartialsAreSkippedWhileAudioIsQueued() async throws {
+        let probe = LiveWhistleProbe(block: true)
+        let live = makeLive(probe)
+        let reader = collect(live.events)
+        try await live.feed(samples: Array(repeating: 0.1, count: 100))
+        await probe.waitUntilStarted()
+        try await live.feed(samples: Array(repeating: 0.1, count: 300))
+        await probe.release()
+        await probe.waitUntilStarted(count: 2)
+        await probe.release()
+        try await live.finish()
+        let events = try await reader.value
+        let counts = await probe.counts
+        XCTAssertEqual(counts, [100, 400])
+        XCTAssertEqual(events.compactMap { event -> String? in if case .commit(let value) = event { return value.text }; return nil }, ["400 samples"])
+    }
+
     func testNonFiniteLiveAudioIsRejected() async throws {
         let live = makeLive(LiveWhistleProbe(block: false))
         do { try await live.feed(samples: [.nan]); XCTFail("Expected invalid audio") }
@@ -74,8 +91,8 @@ private actor LiveWhistleProbe {
         if block { await withCheckedContinuation { suspended = $0 } }
         return ASRResult(text: "\(samples.count) samples", language: "en")
     }
-    func waitUntilStarted() async {
-        if counts.isEmpty { await withCheckedContinuation { started.append($0) } }
+    func waitUntilStarted(count: Int = 1) async {
+        while counts.count < count { await withCheckedContinuation { started.append($0) } }
     }
     func release() { suspended?.resume(); suspended = nil }
 }

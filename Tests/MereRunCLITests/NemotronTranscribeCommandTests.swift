@@ -7,13 +7,13 @@ import XCTest
 import MereRunCore
 
 final class NemotronTranscribeCommandTests: XCTestCase {
-    func testParsesOfflineBackendAndTranslation() throws {
+    func testParsesBackendAndTranslation() throws {
         let command = try SpeechTranscribe.parse(["audio.wav", "--backend", "nemotron", "--task", "translate", "--no-timestamps"])
         XCTAssertEqual(command.backend.backend, .nemotron)
         XCTAssertEqual(command.task.task, .translate)
     }
 
-    func testCapabilityGateSupportsOfflineTranscriptionAndTranslation() throws {
+    func testCapabilityGateSupportsTranscriptionTranslationAndStreaming() throws {
         for flags in [["--backend", "nemotron"], ["--model", NemotronTranscribeResources.modelID, "--task", "translate"],
                       ["--model", NemotronTranscribeResources.bf16ModelID, "--task", "translate"]] {
             let report = try XCTUnwrap(CLICapabilityGate.evaluate(commandLine: ["speech", "transcribe", "audio.wav", "--no-timestamps"] + flags)).report
@@ -21,13 +21,14 @@ final class NemotronTranscribeCommandTests: XCTestCase {
             XCTAssertEqual(report.violations, [])
         }
         let stream = try XCTUnwrap(CLICapabilityGate.evaluate(commandLine: ["speech", "transcribe", "audio.wav", "--backend", "nemotron", "--stream"])).report
-        XCTAssertFalse(stream.violations.isEmpty)
+        XCTAssertEqual(stream.family, "nemotron-transcribe")
+        XCTAssertEqual(stream.violations, [])
     }
 
-    func testRejectsStreamingBeforeLoading() {
+    func testParsesStreamingForEveryVariant() throws {
         for selection in [["--backend", "nemotron"], ["--model", NemotronTranscribeResources.modelID],
                           ["--model", NemotronTranscribeResources.bf16ModelID]] {
-            XCTAssertThrowsError(try SpeechTranscribe.parse(["audio.wav", "--stream"] + selection))
+            XCTAssertNoThrow(try SpeechTranscribe.parse(["audio.wav", "--stream"] + selection))
         }
     }
 

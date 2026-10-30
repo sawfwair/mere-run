@@ -2,15 +2,15 @@
 
 `mere.run` runs NVIDIA's
 [Nemotron 3.5 Transcribe 30B-A4B](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B)
-natively in Swift/MLX for offline file transcription and speech translation to
+natively in Swift/MLX for file and live transcription and speech translation to
 English. The managed default uses 4-bit routed experts; the original BF16
 checkpoint is a separate option. NVIDIA lists 40 transcription languages.
 Evaluate multilingual and translation accuracy on your own recordings.
 
 File transcription and English translation are also available through
 `POST /v1/audio/transcriptions` with either managed Nemotron model ID.
-The API uses the same offline generator and returns no timestamps; it does
-not add live transcription support.
+The API uses the same generator on whole files and returns no timestamps. It
+has no live transcription route.
 
 ## Install and run
 
@@ -129,15 +129,47 @@ doesn't provide speaker identity across rows or recordings.
 - **Input length:** 20 ms through one hour of audio, subject to the
   65,536-token combined input and output context. Set `--max-tokens` for the
   expected transcript length; the command default is 448.
-- **No live ASR:** `speech transcribe --stream` stops before the model loads,
-  and `speech listen` doesn't run this model. Internal chunking doesn't make
-  the backend a streaming one.
+- **Per-utterance live ASR:** text arrives after a pause, not word by word. See
+  [Live transcription](#live-transcription).
 - **No timestamps:** the output is plain text. CTC timestamps aren't
   supported, and `--timestamps` has no effect.
 - **No speaker timelines:** use [`speech diarize`](./speech.md#identify-speakers)
   for who spoke when.
 - **Unsupported features:** audio question answering, FP8 and NVFP4
   checkpoints, and MTP or DFlash speculation.
+
+## Live transcription
+
+The model has no incremental decoder, so `speech listen` and
+`speech transcribe --stream` segment audio at pauses and re-decode the whole
+utterance for each partial and for the commit. Text arrives per utterance, not
+word by word.
+
+```bash
+mere.run speech listen --model speech-asr-nemotron-35-transcribe --language en
+```
+
+An utterance is cut at 30 seconds, which can split a word when nobody pauses.
+Before reporting ready, the session runs one warm-up decode, because the first
+decode took over five seconds. While audio is queued the session skips partials
+and still commits every utterance. Its queue holds 60 seconds of audio; a longer
+backlog ends the session with `backpressure_exceeded`.
+
+One run per case on an M5 Max with 128 GiB, using synthesized English piped to
+`speech transcribe --stream` at real-time pace:
+
+| Case | Variant | Commit delay | Largest reported backlog |
+| --- | --- | ---: | ---: |
+| 22 s, four sentences with pauses | INT4 | 2.3 to 2.8 s | 1.7 s |
+| 49 s, continuous | INT4 | 4.8 to 6.1 s | 5.9 s |
+| 22 s, four sentences with pauses | BF16 | 10 to 106 s | 7 s |
+| 49 s, continuous | BF16 | 77 to 108 s | 32.9 s |
+
+Commit delay runs from the end of the committed audio to the commit event, and
+includes the 0.9-second silence window where a pause ended the utterance.
+Sessions report backlog only with a partial, so the true peak can be higher.
+BF16 keeps running but does not keep up, so use INT4 live. Latency and quality from a live
+microphone, noisy speech, and other languages are unmeasured.
 
 ## Validation
 

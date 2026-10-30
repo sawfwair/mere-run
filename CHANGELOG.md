@@ -19,8 +19,14 @@ The format is based on Keep a Changelog.
 
 - Run Parakeet live in `speech listen --model speech-asr-parakeet`, as
   `speech transcribe --stream` does, instead of replacing it with Qwen3-ASR.
-  Refuse Nemotron Transcribe IDs and local folders, since the model has no
-  live mode.
+
+- Run Nemotron 3.5 Transcribe live in `speech listen` and
+  `speech transcribe --stream`, one utterance at a time. Text arrives after a
+  pause, and an utterance is cut at 30 seconds. Use the INT4 default live; BF16
+  falls far behind.
+
+- Skip partials in re-decoding live sessions, including Whistle, while audio is
+  queued. Commits still decode every utterance.
 
 - Refuse `api serve --engine text-chat-nemotron-h --model <id>` when the
   model is neither `text-chat-nemotron-35-lightning` nor a local checkpoint
