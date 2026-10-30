@@ -628,6 +628,7 @@ targets.append(
     exclude: [
       "README.md",
       "Flux2/Transformer/README.md",
+      "Idol/README.md",
       "QwenImage21/README.md",
       "ZImage/README.md",
       "ZImage/Transformer/README.md",
@@ -882,6 +883,7 @@ targets.append(
       "Support/README.md",
       "TESSERA/README.md",
       "Trellis2/README.md",
+      "Idol/README.md",
       "TerraMindFire/README.md",
       "TerraMindFlood/README.md",
       "TripoSR/README.md",

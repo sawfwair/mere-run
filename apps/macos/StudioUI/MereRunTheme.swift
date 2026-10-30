@@ -100,7 +100,6 @@ package enum MereRunTheme {
         /// test bundle) in a SwiftPM build directory. Never `Bundle.module`, whose accessor traps
         /// when the bundle is missing; a missing font must degrade, not crash.
         package static func fontURL() -> URL? {
-            let bundleName = "MereRun_StudioUI.bundle"
             var roots: [URL] = []
             if let resources = Bundle.main.resourceURL { roots.append(resources) }
             roots.append(Bundle.main.bundleURL)
@@ -110,13 +109,18 @@ package enum MereRunTheme {
             let hostBundle = Bundle(for: BrandBundleLocator.self)
             roots.append(hostBundle.bundleURL.deletingLastPathComponent())
             if let hostResources = hostBundle.resourceURL { roots.append(hostResources) }
+            return fontURL(in: roots)
+        }
+
+        /// Foundation resolves both flat SwiftPM bundles and macOS bundles with
+        /// a `Contents/Resources` directory.
+        package static func fontURL(in roots: [URL]) -> URL? {
             for root in roots {
-                let candidate = root
-                    .appendingPathComponent(bundleName, isDirectory: true)
-                    .appendingPathComponent("Fonts", isDirectory: true)
-                    .appendingPathComponent(fontFileName, isDirectory: false)
-                    .appendingPathExtension("ttf")
-                if FileManager.default.fileExists(atPath: candidate.path) { return candidate }
+                let bundleURL = root.appendingPathComponent("MereRun_StudioUI.bundle", isDirectory: true)
+                if let resourceBundle = Bundle(url: bundleURL),
+                   let fontURL = resourceBundle.url(forResource: fontFileName, withExtension: "ttf", subdirectory: "Fonts") {
+                    return fontURL
+                }
             }
             return nil
         }

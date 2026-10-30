@@ -12,9 +12,9 @@ the text runtime and [Nemotron 3.5 Bolt](./nemotron-bolt.md).
 
 ## Commands
 
-The `mere.run vision` command group has 20 subcommands. The default model for
-each command is the one it resolves when you omit `--model`. A dash means the
-command uses a platform framework or a downloaded default rather than a managed
+The `mere.run vision` command group provides the following subcommands. The
+default model for each command is the one it resolves when you omit `--model`.
+A dash means the command uses a platform framework or a downloaded default rather than a managed
 model ID.
 
 **Understand and read**
@@ -57,12 +57,64 @@ model ID.
 | `vision geometry-multiview` | Solve native DA3-Small multi-view relative geometry, confidence, and cameras. | `vision-geometry-da3-small` |
 | `vision image-to-3d` | Reconstruct a colored object mesh from one image with native TripoSR. | `image-3d-triposr` |
 | `vision image-to-3d-trellis2` | Reconstruct a 512-resolution PBR O-Voxel mesh with native MLX TRELLIS.2. | `image-3d-trellis2-4b` |
+| `vision image-to-3d-idol` | Generate object Gaussian splats with native MLX IDOL. | Explicit local checkpoint directories |
 | `vision image-to-3d-multiview` | Reconstruct a colored mesh from four or six supplied views with native InstantMesh. | `image-3d-instantmesh-base` |
 
-The three `image-to-3d` commands run the same implementations as `image
-reconstruct-3d`, `image reconstruct-3d-trellis2`, and `image
+The TripoSR, TRELLIS.2, and InstantMesh commands run the same implementations
+as `image reconstruct-3d`, `image reconstruct-3d-trellis2`, and `image
 reconstruct-3d-multiview`. For the image-family spellings, see the
 [Image runtime](./image.md).
+
+## IDOL object splats
+
+`vision image-to-3d-idol` turns one object image into a standard 3D Gaussian
+Splatting PLY. It runs the IDOL denoiser and decoders, DINOv3 H+, and the
+FLUX.2 VAE in Swift and MLX. The command requires local checkpoints and does
+not have a managed model ID or Studio task.
+
+Prepare these directories before running it:
+
+| Option | Source | Required files |
+| --- | --- | --- |
+| `--model` | [speridlabs/idol](https://huggingface.co/speridlabs/idol), revision `2731c2291fc65a797c5cb627a5e5526fc1490902` | `config.json`, `denoiser.safetensors`, `decoder.safetensors`, `decoder_gs.safetensors`, `birefnet.safetensors` |
+| `--dino` | [DINOv3 ViT-H+/16](https://huggingface.co/facebook/dinov3-vith16plus-pretrain-lvd1689m) | `config.json`, `model.safetensors` |
+| `--vae` | [FLUX.2-dev](https://huggingface.co/black-forest-labs/FLUX.2-dev), `vae` subdirectory | `config.json`, `diffusion_pytorch_model.safetensors` |
+
+Accept the DINOv3 and FLUX.2-dev terms through their publishers before
+obtaining those encoders. Use the original published safetensors: FP32 denoiser/decoder weights and FP16 BiRefNet. The command
+checks their release hashes and records encoder hashes in the run manifest.
+
+```bash
+mere.run vision image-to-3d-idol ./object.png \
+  --model /path/to/idol --dino /path/to/dinov3-hplus \
+  --vae /path/to/FLUX.2-dev/vae --output ./object-idol \
+  --mode synthetic --num-gaussians 262144 --seed 42
+```
+
+Opaque images use native BiRefNet background removal automatically. Transparent
+PNG inputs preserve supplied alpha and skip BiRefNet. `--mode real` leaves more
+room around the detected object than `--mode synthetic`. Use `--already-framed`
+to skip foreground detection and cropping for an isolated object already framed
+on black. The output directory must not exist.
+
+The output contains `object.ply` with y-up splats, `input.png` with the prepared
+1024-pixel image, `camera.json` with predicted yaw and pitch in radians, radius,
+and vertical field of view in degrees, and `manifest.json` with settings,
+checkpoint identities, and artifact hashes. Camera values retain the model's
+z-up convention. Use a Gaussian splat viewer to inspect the PLY.
+
+Defaults are 50 Euler steps, guidance 3, and time shift 3. Guidance follows the
+upstream formula `(1+w)*conditional-w*unconditional`. Gaussian counts range
+from 32768 to 1048576 in multiples of 32. Add `--dry-run` to validate the image
+header and checkpoint bytes without running inference, or `--json` to
+print the completed manifest on stdout. Progress is written to stderr.
+
+Small synthetic fixtures compare the native BiRefNet, denoiser, guided
+trajectory, decoders, PLY payload, and VAE token packing against upstream
+PyTorch. Lanczos resizing and foreground framing match Pillow byte for byte
+on RGB and RGBA fixtures. Real-checkpoint measurements and rendered examples
+are recorded in the [IDOL qualification report](../qualification/idol-native-20261030/README.md).
+MLX and PyTorch use different random streams for the same seed.
 
 ## Choose a model
 
@@ -112,7 +164,7 @@ face and pose overlays and direction-colored flow vectors, play annotated and
 depth video, embed orbitable point clouds, report request-scoped progress, and
 keep structured and visual sidecars in the Library.
 
-Image-to-3D commands live in the **3D** domain so the app has one
+Managed image-to-3D commands live in the **3D** domain so the app has one
 reconstruction flow. The grounding server has its own **Server ▸ Vision
 server** task. The **Command view** (⌥⌘C) and the **Command Console** show and
 run the raw command for any of these tasks.
