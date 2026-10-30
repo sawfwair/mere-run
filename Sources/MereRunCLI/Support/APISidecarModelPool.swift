@@ -116,6 +116,8 @@ private enum APISidecarImageGenerator: @unchecked Sendable {
 private enum APISidecarASRGenerator: Sendable {
     case qwen(Qwen3ASRGenerator)
     case parakeet(ParakeetGenerator)
+    case nemotron(NemotronTranscribeGenerator)
+    case whistle(WhistleGenerator)
 }
 
 private final class APISidecarEmbeddingRuntime: @unchecked Sendable {
@@ -399,6 +401,40 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         )
     }
 
+    func transcribeNemotron(
+        request: ASRRequest,
+        modelID: String,
+        modelPath: String?,
+        progressHandler: (@Sendable (ASRProgress) -> Void)?
+    ) async throws -> ASRResult {
+        try await transcribe(
+            request: request,
+            key: APISidecarASRKey(
+                backend: .nemotron,
+                modelID: modelID,
+                modelPath: modelPath.map(normalizedPath)
+            ),
+            progressHandler: progressHandler
+        )
+    }
+
+    func transcribeWhistle(
+        request: ASRRequest,
+        modelID: String,
+        modelPath: String?,
+        progressHandler: (@Sendable (ASRProgress) -> Void)?
+    ) async throws -> ASRResult {
+        try await transcribe(
+            request: request,
+            key: APISidecarASRKey(
+                backend: .whistle,
+                modelID: modelID,
+                modelPath: modelPath.map(normalizedPath)
+            ),
+            progressHandler: progressHandler
+        )
+    }
+
     private func transcribe(
         request: ASRRequest,
         key: APISidecarASRKey,
@@ -434,23 +470,16 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 make: {
                     switch key.backend {
                     case .nemotron:
-                        throw SpeechTranscriptionIssue("unsupported_backend", "Nemotron Transcribe is available through speech transcribe only.")
+                        return .nemotron(NemotronTranscribeGenerator())
                     case .whistle:
-                        throw SpeechTranscriptionIssue("unsupported_backend", "Whistle is available through speech transcribe only.")
+                        return .whistle(WhistleGenerator())
                     case .qwen:
                         return .qwen(Qwen3ASRGenerator(modelId: key.modelID))
                     case .parakeet:
                         return .parakeet(ParakeetGenerator(modelId: key.modelID))
                     }
                 },
-                unload: { generator in
-                    switch generator {
-                    case .qwen(let generator):
-                        await generator.unload()
-                    case .parakeet(let generator):
-                        await generator.unload()
-                    }
-                },
+                unload: { generator in await Self.unloadASR(generator) },
                 operation: { generator in
                     switch generator {
                     case .qwen(let generator):
@@ -462,6 +491,20 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                     case .parakeet(let generator):
                         return try await generator.transcribe(
                             request,
+                            modelPath: key.modelPath,
+                            progressHandler: progressHandler
+                        )
+                    case .nemotron(let generator):
+                        return try await generator.transcribe(
+                            request,
+                            modelID: key.modelID,
+                            modelPath: key.modelPath,
+                            progressHandler: progressHandler
+                        )
+                    case .whistle(let generator):
+                        return try await generator.transcribe(
+                            request,
+                            modelID: key.modelID,
                             modelPath: key.modelPath,
                             progressHandler: progressHandler
                         )
@@ -1042,6 +1085,10 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         case .qwen(let generator):
             await generator.unload()
         case .parakeet(let generator):
+            await generator.unload()
+        case .nemotron(let generator):
+            await generator.unload()
+        case .whistle(let generator):
             await generator.unload()
         }
     }

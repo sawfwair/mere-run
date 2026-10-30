@@ -7,18 +7,28 @@ import XCTest
 @testable import MereRunCLI
 
 final class TranscriptionRunCommandTests: XCTestCase {
-    func testAPIRejectsASRFamiliesItsPoolDoesNotServe() throws {
-        let audio = URL(fileURLWithPath: "/tmp/mere-run-api-asr-fixture.wav")
-        for modelID in [
-            NemotronTranscribeResources.modelID, NemotronTranscribeResources.bf16ModelID, WhistleGenerator.modelID
-        ] {
+    func testAPIRoutesEachManagedASRModelToItsOwnBackend() throws {
+        let audio = try root().appendingPathComponent("audio.wav")
+        try Data("RIFF".utf8).write(to: audio)
+        let expected: [(String, ASRResolvedBackend)] = [
+            (NemotronTranscribeResources.modelID, .nemotron),
+            (NemotronTranscribeResources.bf16ModelID, .nemotron),
+            (WhistleGenerator.modelID, .whistle),
+            ("speech-asr-parakeet", .parakeet),
+            ("speech-asr-qwen3", .qwen),
+        ]
+        for (modelID, backend) in expected {
             let options = APIServerContract.TranscriptionPlan(
                 modelID: modelID, language: nil, responseFormat: "json", task: .transcribe, maxTokens: 64
             )
-            XCTAssertThrowsError(try APITranscription.plan(audioURL: audio, options: options)) { error in
-                XCTAssertTrue(error.localizedDescription.contains("speech transcribe"), "\(modelID): \(error)")
-            }
+            let plan = try APITranscription.plan(audioURL: audio, options: options)
+            XCTAssertEqual(plan.decision.backend, backend, modelID)
+            XCTAssertEqual(plan.modelID, modelID)
         }
+        let translate = APIServerContract.TranscriptionPlan(
+            modelID: WhistleGenerator.modelID, language: nil, responseFormat: "json", task: .translate, maxTokens: 64
+        )
+        XCTAssertThrowsError(try APITranscription.plan(audioURL: audio, options: translate))
     }
 
     func testRecordingFlagsAreOptInAndDoNotOverlapLiveStdinOrOutputFiles() throws {

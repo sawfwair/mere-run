@@ -46,16 +46,14 @@ enum APITranscription {
                 "use a mere.run ASR model id or a local ASR model path"
             )
         }
-        // The API's transcription pool serves Qwen3-ASR and Parakeet; the other ASR families
-        // run through `speech transcribe` only, so reject them before routing.
-        if NemotronTranscribeResources.handles(spec.id) || spec.id == WhistleGenerator.modelID {
-            throw APIRequestValidationError.invalidField(
-                "model",
-                "\(spec.id) is available through `mere.run speech transcribe` only; "
-                    + "the API serves Qwen3-ASR and Parakeet models"
-            )
+        let backend: ASRBackend
+        if NemotronTranscribeResources.handles(spec.id) {
+            backend = .nemotron
+        } else if spec.id == WhistleGenerator.modelID {
+            backend = .whistle
+        } else {
+            backend = spec.id.contains("parakeet") ? .parakeet : .qwen
         }
-        let backend: ASRBackend = spec.id.contains("parakeet") ? .parakeet : .qwen
         return (spec.id, backend)
     }
 

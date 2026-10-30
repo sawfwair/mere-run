@@ -13,7 +13,7 @@ import CoreAudio
 struct SpeechListen: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "listen",
-        abstract: "Transcribe a macOS microphone with live Qwen or Whistle ASR."
+        abstract: "Transcribe a macOS microphone with live Qwen, Parakeet, or Whistle ASR."
     )
 
     @Option(name: [.long], help: "CoreAudio input-device UID. Defaults to the system input.")
@@ -25,7 +25,7 @@ struct SpeechListen: AsyncParsableCommand {
     @Option(name: [.long], help: "Language hint (for example, en or zh).")
     var language: String?
 
-    @Option(name: [.customShort("m"), .long], help: "Qwen or Whistle model ID or local model path.")
+    @Option(name: [.customShort("m"), .long], help: "Qwen, Parakeet, or Whistle model ID or local model path.")
     var model: String?
 
     @Option(name: [.customLong("whistle-weights")], help: "Whistle weights: cactus or fp32 (requires a local checkpoint).")
@@ -62,11 +62,8 @@ struct SpeechListen: AsyncParsableCommand {
             let route = try SpeechTranscriptionResolver.route(
                 task: .transcribe, language: language, preferredBackend: .auto, modelOverride: model
             )
-            if Self.liveModel(model, route: route) == nil, ManagedModelCatalog.spec(for: model) == nil {
-                throw ValidationError(
-                    "\(model) is a \(route.decision.backend.rawValue) model; speech listen runs Qwen3-ASR or Whistle. "
-                        + "Use `speech transcribe` for recorded audio."
-                )
+            guard route.decision.backend != .nemotron else {
+                throw ValidationError("Nemotron Transcribe is an offline backend. Use `speech transcribe` with a file input.")
             }
         }
         guard WhistleOptions.Weights(rawValue: whistleWeights) != nil else { throw ValidationError("--whistle-weights must be cactus or fp32.") }
@@ -142,15 +139,6 @@ struct SpeechListen: AsyncParsableCommand {
         throw ValidationError("mere.run speech listen requires the macOS live-capture backend.")
         #endif
     }
-    /// The model the Qwen3-ASR live session loads: a Parakeet or Nemotron Transcribe id falls back to
-    /// the default (the capability gate warns that it has no effect).
-    static func liveModel(_ model: String?, route: SpeechTranscriptionRoute) -> String? {
-        switch route.decision.backend {
-        case .qwen, .whistle: model
-        case .parakeet, .nemotron: nil
-        }
-    }
-
     private func makeLiveSession(progressHandler: (@Sendable (ASRProgress) -> Void)?) async throws -> CLILiveASRSession {
         let request = ASRStreamingRequest(language: language, sampleRate: 16_000, decodeIntervalMs: decodeMs, minDecodeAudioMs: 1_600)
         let configuration = Qwen3ASRLiveConfiguration(decodeIntervalMs: decodeMs, silenceMs: silenceMs)
@@ -168,7 +156,19 @@ struct SpeechListen: AsyncParsableCommand {
                                      feed: { try await live.feed(samples: $0) }, finish: { try await live.finish(reason: $0) },
                                      cancel: { await live.cancel() })
         }
-        let generator = try await CLIQwenASRLoader.prepare(model: Self.liveModel(model, route: route), progressHandler: progressHandler)
+        if route.decision.backend == .parakeet {
+            var parakeetConfiguration = configuration
+            parakeetConfiguration.silenceMs = min(configuration.silenceMs, 600)
+            let generator = try await CLIParakeetASRLoader.prepare(model: route.modelOverride, progressHandler: progressHandler)
+            let live = ParakeetASRLiveSession(generator: generator, request: request, configuration: parakeetConfiguration)
+            return CLILiveASRSession(backend: .parakeet, events: live.events,
+                                     feed: { try await live.feed(samples: $0) }, finish: { try await live.finish(reason: $0) },
+                                     cancel: { await live.cancel() })
+        }
+        guard route.decision.backend == .qwen else {
+            throw ValidationError("Nemotron Transcribe is an offline backend. Use `speech transcribe` with a file input.")
+        }
+        let generator = try await CLIQwenASRLoader.prepare(model: route.modelOverride, progressHandler: progressHandler)
         let live = Qwen3ASRLiveSession(generator: generator, request: request, configuration: configuration)
         return CLILiveASRSession(backend: .qwen, events: live.events,
                                  feed: { try await live.feed(samples: $0) }, finish: { try await live.finish(reason: $0) },

@@ -6,13 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
-- Reject `speech-asr-nemotron-35-transcribe`, its BF16 variant, and
-  `speech-asr-whistle` in `api serve` transcription requests with a 400 that
-  points to `speech transcribe`, instead of routing them to the Qwen3-ASR loader.
+- Serve `speech-asr-nemotron-35-transcribe`, its BF16 variant, and
+  `speech-asr-whistle` from `api serve` `/v1/audio/transcriptions`. These
+  requests previously reached the Qwen3-ASR route and failed.
 
-- Run `speech listen --model` with a Nemotron Transcribe ID on the default
-  Qwen3-ASR model with a warning, as a Parakeet ID already does. Refuse a local
-  Parakeet or Nemotron Transcribe folder, which the live session can't load.
+- Run Parakeet live in `speech listen --model speech-asr-parakeet`, as
+  `speech transcribe --stream` does, instead of replacing it with Qwen3-ASR.
+  Refuse Nemotron Transcribe IDs and local folders, since the model has no
+  live mode.
 
 - Refuse `api serve --engine text-chat-nemotron-h --model <id>` when the
   model is neither `text-chat-nemotron-35-lightning` nor a local checkpoint

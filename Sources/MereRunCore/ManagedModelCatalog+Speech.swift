@@ -221,7 +221,7 @@ extension ManagedModelCatalog {
             validationKind: .parakeet,
             normalizationKind: .parakeetNested,
             estimatedDownloadBytes: 2 * 1_073_741_824,
-            defaultCLICommands: ["speech transcribe"]
+            defaultCLICommands: ["speech transcribe", "speech listen"]
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.sortformerDiarization.rawValue,
