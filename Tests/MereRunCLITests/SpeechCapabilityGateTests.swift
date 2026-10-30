@@ -336,6 +336,25 @@ private func temporaryFolder() throws -> URL {
     ])
     let alias = try report("speech", "listen", "-m", "mlx-community/parakeet-tdt-0.6b-v3")
     #expect(alias.family == "qwen3-asr" && alias.warnings.count == 1)
+    for nemotron in ["speech-asr-nemotron-35-transcribe", "speech-asr-nemotron-35-transcribe-bf16"] {
+        let listened = try report("speech", "listen", "--model", nemotron)
+        #expect(listened.family == "qwen3-asr" && listened.model == "speech-asr-qwen3" && listened.violations.isEmpty)
+        #expect(listened.warnings == [
+            "--model \(nemotron) has no effect: speech listen runs Qwen3-ASR. "
+                + "Nemotron Transcribe transcribes recorded audio only; use `speech transcribe`."
+        ])
+        let route = try SpeechTranscriptionResolver.route(
+            task: .transcribe, language: nil, preferredBackend: .auto, modelOverride: nemotron
+        )
+        #expect(SpeechListen.liveModel(nemotron, route: route) == nil)
+    }
+    let local = FileManager.default.temporaryDirectory.appendingPathComponent("listen-nemotron-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: local, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: local) }
+    try Data(#"{"architectures":["Nemotron3_5TranscribeForConditionalGeneration"]}"#.utf8)
+        .write(to: local.appendingPathComponent("config.json"))
+    #expect(throws: (any Error).self) { try SpeechListen.parse(["--model", local.path]) }
+    #expect(throws: Never.self) { try SpeechListen.parse(["--model", "speech-asr-nemotron-35-transcribe"]) }
     for commandLine in [
         ["speech", "listen", "--list-devices", "--model", "speech-asr-parakeet"],
         ["speech", "diarize-live", "--list-devices", "--model", "speech-diarization-sortformer"],

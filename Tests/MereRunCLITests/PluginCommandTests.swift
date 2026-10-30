@@ -4,6 +4,17 @@ import XCTest
 @testable import MereRunCLI
 
 final class PluginCommandTests: XCTestCase {
+    func testDisplayedCommandMatchesHowTheBinaryWasInvoked() {
+        XCTAssertEqual(CLICommandDisplay.executable(invokedAs: "mere.run"), "mere.run")
+        XCTAssertEqual(CLICommandDisplay.executable(invokedAs: "/opt/homebrew/bin/mere.run"), "mere.run")
+        XCTAssertEqual(CLICommandDisplay.executable(invokedAs: ".build/release/mere.run"), ".build/release/mere.run")
+        XCTAssertEqual(CLICommandDisplay.executable(invokedAs: "./.build/release/mere.run"), "./.build/release/mere.run")
+        XCTAssertEqual(
+            CLICommandDisplay.executable(invokedAs: "/src/mere-run/.build/arm64-apple-macosx/debug/mere.run"),
+            "swift run mere.run"
+        )
+    }
+
     func testMereRunCLIExposesPluginCommand() {
         let commandNames = Set(MereRunCLI.configuration.subcommands.map { $0.configuration.commandName })
 

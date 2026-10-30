@@ -7,6 +7,20 @@ import XCTest
 @testable import MereRunCLI
 
 final class TranscriptionRunCommandTests: XCTestCase {
+    func testAPIRejectsASRFamiliesItsPoolDoesNotServe() throws {
+        let audio = URL(fileURLWithPath: "/tmp/mere-run-api-asr-fixture.wav")
+        for modelID in [
+            NemotronTranscribeResources.modelID, NemotronTranscribeResources.bf16ModelID, WhistleGenerator.modelID
+        ] {
+            let options = APIServerContract.TranscriptionPlan(
+                modelID: modelID, language: nil, responseFormat: "json", task: .transcribe, maxTokens: 64
+            )
+            XCTAssertThrowsError(try APITranscription.plan(audioURL: audio, options: options)) { error in
+                XCTAssertTrue(error.localizedDescription.contains("speech transcribe"), "\(modelID): \(error)")
+            }
+        }
+    }
+
     func testRecordingFlagsAreOptInAndDoNotOverlapLiveStdinOrOutputFiles() throws {
         let root = try root()
         let run = root.appendingPathComponent("run")

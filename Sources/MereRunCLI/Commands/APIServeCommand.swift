@@ -421,6 +421,12 @@ struct APIServe: AsyncParsableCommand {
                     }
                     return installed.path
                 }
+                guard FileManager.default.fileExists(atPath: explicit) else {
+                    throw ValidationError(
+                        "--engine text-chat-nemotron-h serves '\(NemotronHResources.modelID)' or a local "
+                            + "Nemotron 3.5 Lightning checkpoint directory; '\(explicit)' is neither."
+                    )
+                }
                 return explicit
             }
             return ManagedModelResolver.resolveInstalledModel(id: NemotronHResources.modelID)?.path

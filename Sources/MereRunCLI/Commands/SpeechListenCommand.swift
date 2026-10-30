@@ -59,7 +59,15 @@ struct SpeechListen: AsyncParsableCommand {
 
     func validate() throws {
         if !listDevices, let model {
-            _ = try SpeechTranscriptionResolver.route(task: .transcribe, language: language, preferredBackend: .auto, modelOverride: model)
+            let route = try SpeechTranscriptionResolver.route(
+                task: .transcribe, language: language, preferredBackend: .auto, modelOverride: model
+            )
+            if Self.liveModel(model, route: route) == nil, ManagedModelCatalog.spec(for: model) == nil {
+                throw ValidationError(
+                    "\(model) is a \(route.decision.backend.rawValue) model; speech listen runs Qwen3-ASR or Whistle. "
+                        + "Use `speech transcribe` for recorded audio."
+                )
+            }
         }
         guard WhistleOptions.Weights(rawValue: whistleWeights) != nil else { throw ValidationError("--whistle-weights must be cactus or fp32.") }
         try whistleOptions.validate()
@@ -134,6 +142,15 @@ struct SpeechListen: AsyncParsableCommand {
         throw ValidationError("mere.run speech listen requires the macOS live-capture backend.")
         #endif
     }
+    /// The model the Qwen3-ASR live session loads: a Parakeet or Nemotron Transcribe id falls back to
+    /// the default (the capability gate warns that it has no effect).
+    static func liveModel(_ model: String?, route: SpeechTranscriptionRoute) -> String? {
+        switch route.decision.backend {
+        case .qwen, .whistle: model
+        case .parakeet, .nemotron: nil
+        }
+    }
+
     private func makeLiveSession(progressHandler: (@Sendable (ASRProgress) -> Void)?) async throws -> CLILiveASRSession {
         let request = ASRStreamingRequest(language: language, sampleRate: 16_000, decodeIntervalMs: decodeMs, minDecodeAudioMs: 1_600)
         let configuration = Qwen3ASRLiveConfiguration(decodeIntervalMs: decodeMs, silenceMs: silenceMs)
@@ -151,7 +168,7 @@ struct SpeechListen: AsyncParsableCommand {
                                      feed: { try await live.feed(samples: $0) }, finish: { try await live.finish(reason: $0) },
                                      cancel: { await live.cancel() })
         }
-        let generator = try await CLIQwenASRLoader.prepare(model: model, progressHandler: progressHandler)
+        let generator = try await CLIQwenASRLoader.prepare(model: Self.liveModel(model, route: route), progressHandler: progressHandler)
         let live = Qwen3ASRLiveSession(generator: generator, request: request, configuration: configuration)
         return CLILiveASRSession(backend: .qwen, events: live.events,
                                  feed: { try await live.feed(samples: $0) }, finish: { try await live.finish(reason: $0) },

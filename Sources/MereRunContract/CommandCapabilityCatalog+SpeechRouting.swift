@@ -145,11 +145,15 @@ extension MereRunCapabilityCatalog {
             .init(SpeechListenFamily.qwen3ASR, title: "Qwen3-ASR", models: ["speech-asr-qwen3"]),
             .init(SpeechListenFamily.whistle, title: "Whistle", models: ["speech-asr-whistle"])
         ],
-        // The live loader takes any id and runs Qwen3-ASR (`CLIQwenASRLoader`), so a Parakeet id
-        // runs and has no effect.
+        // The live session runs Qwen3-ASR for any managed id other than Whistle's, so a Parakeet
+        // or Nemotron Transcribe id runs and has no effect.
         excludedModels: .models(
             ["speech-asr-parakeet"],
             reason: "Parakeet transcribes recorded audio only; use `speech transcribe`.",
+            severity: .warning
+        ).and(
+            ["speech-asr-nemotron-35-transcribe", "speech-asr-nemotron-35-transcribe-bf16"],
+            reason: "Nemotron Transcribe transcribes recorded audio only; use `speech transcribe`.",
             severity: .warning
         ),
         listingFlags: ["--list-devices"]
