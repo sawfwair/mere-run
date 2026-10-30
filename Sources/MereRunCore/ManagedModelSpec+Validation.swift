@@ -379,6 +379,8 @@ public extension ManagedModelSpec {
             return Wan2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .miniMaxH3MLX:
             return MiniMaxH3Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .cosmos3SuperTextToImage:
+            return Cosmos3Resources(rootURL: rootURL).validateSuperTextToImage(fileManager: fileManager)
         case .cosmos3EdgeMLX:
             let resources = Cosmos3Resources(rootURL: rootURL)
             return resources.validate(fileManager: fileManager)
@@ -555,6 +557,17 @@ public extension ManagedModelSpec {
                     return resources.validateCompactCachePack(fileManager: fileManager)
                 }
                 return []
+            } catch {
+                return [error.localizedDescription]
+            }
+        case .cosmos3SuperTextToImage:
+            let resources = Cosmos3Resources(rootURL: normalizedRootURL(rootURL, fileManager: fileManager))
+            let missing = resources.validateSuperTextToImage(fileManager: fileManager)
+            if !missing.isEmpty {
+                return missing.map { "Missing required Cosmos3-Super file: \($0.path)" }
+            }
+            do {
+                return try resources.superTextToImageValidationIssues()
             } catch {
                 return [error.localizedDescription]
             }

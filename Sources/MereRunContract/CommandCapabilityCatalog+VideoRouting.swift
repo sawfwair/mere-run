@@ -7,6 +7,7 @@ extension MereRunCapabilityCatalog {
 
     enum Cosmos3Family: String, MereRunFamilyID {
         case cosmos3
+        case superTextToImage = "cosmos3-super-text-to-image"
     }
 
     enum DubItFamily: String, MereRunFamilyID {
@@ -49,7 +50,14 @@ extension MereRunCapabilityCatalog {
     static let videoCosmos3Routing = MereRunCapabilityRouting(
         modelFlags: ["--model"],
         defaultModels: [.always("video-cosmos3-edge-mlx")],
-        families: [.init(Cosmos3Family.cosmos3, title: "Cosmos 3 Edge", models: ["video-cosmos3-edge-mlx"])]
+        families: [
+            .init(Cosmos3Family.cosmos3, title: "Cosmos 3 Edge", models: ["video-cosmos3-edge-mlx"]),
+            .init(
+                Cosmos3Family.superTextToImage, title: "Cosmos 3 Super text-to-image",
+                models: ["image-cosmos3-super-t2i-4step"],
+                selectors: [.init(flag: "--mode", values: ["text-to-image"])]
+            )
+        ]
     )
 
     static let videoDubItRouting = MereRunCapabilityRouting(

@@ -9,6 +9,20 @@ import Testing
 /// option-driven defaults, `--model-root` precedence, FastH3, `world serve`'s backend, and the
 /// scopes on the flags that also pick a default model, which the generated cases skip.
 @Suite struct VideoCapabilityRoutingTests {
+    @Test func cosmosSuperRequiresTextToImageMode() throws {
+        let base = ["video", "cosmos3", "A red cube", "--model", "image-cosmos3-super-t2i-4step"]
+        let image = try report(base + ["--mode", "text-to-image"])
+        #expect(image.family == "cosmos3-super-text-to-image")
+        #expect(image.violations.isEmpty)
+        #expect(try report(base + ["--mode", "text-to-image", "--shift", "3"]).violations.isEmpty == false)
+        let edge = try report([
+            "video", "cosmos3", "A moving cube", "--model", "video-cosmos3-edge-mlx", "--mode", "image-to-video"
+        ])
+        #expect(edge.family == "cosmos3" && edge.violations.isEmpty)
+        #expect(try report(base).source == .unmatched)
+        #expect(try report(base + ["--mode", "image-to-video"]).source == .unmatched)
+    }
+
     private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionReport {
         try #require(CLICapabilityGate.evaluate(commandLine: commandLine)).report
     }

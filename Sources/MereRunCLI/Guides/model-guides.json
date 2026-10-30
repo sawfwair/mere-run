@@ -161,6 +161,7 @@
     "models": [
       "text-chat-gemma4",
       "text-chat-gemma4-turbo",
+      "text-chat-gemma4-26b-a4b-bf16",
       "text-chat-gemma4-12b",
       "text-chat-gemma4-12b-4bit",
       "vision-chat-gemma4-12b",
@@ -703,6 +704,15 @@
       "video-minimax-h3-ref2va-mlx"
     ],
     "resourceName": "handbook-minimax-h3-ref.md"
+  },
+  {
+    "topic": "handbook-cosmos3-super",
+    "title": "Cosmos3 Super 4-Step (NVIDIA)",
+    "category": "Image",
+    "models": [
+      "image-cosmos3-super-t2i-4step"
+    ],
+    "resourceName": "handbook-cosmos3-super.md"
   },
   {
     "topic": "handbook-cosmos3",

@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add the pinned Gemma 4 26B-A4B MLX BF16 export as a separate managed text-chat
+  model, with native chat, API, and LoRA routing and its existing Gemma handbook.
+
+- Add Cosmos3-Super 4-Step MLX INT4 to the image catalog, pinned to the published
+  converted checkpoint. Validate its generation assets without requiring Edge
+  reasoner files, and route it through `video cosmos3 --mode text-to-image`.
+
 ## 0.67.1 - 2026-10-29
 
 - Complete selected full-precision checkpoint reads on the CPU before GPU

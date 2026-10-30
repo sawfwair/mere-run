@@ -365,6 +365,20 @@ extension MereRunModelManifest {
                 upstreamRepoId: Gemma4Resources.maxUpstreamModelId,
                 createdAt: createdAt
             )
+        case .gemma4A4BBF16:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .gemma4,
+                family: .gemma,
+                tier: .large,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.chat],
+                components: gemma4TextComponents,
+                upstreamRepoId: "\(Gemma4Resources.a4bBF16UpstreamModelId)@\(Gemma4Resources.a4bBF16UpstreamRevision)",
+                createdAt: createdAt
+            )
         case .gemma4Turbo:
             return MereRunModelManifest(
                 id: modelID.rawValue,
@@ -2377,6 +2391,27 @@ extension MereRunModelManifest {
                     scheduler: nil
                 ),
                 upstreamRepoId: "\(MiniMaxH3Resources.ref2vaArtifactRepository)@\(MiniMaxH3Resources.ref2vaArtifactRevision)",
+                createdAt: createdAt
+            )
+        case .cosmos3SuperTextToImage:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .cosmos3Super,
+                family: .cosmos,
+                tier: .max,
+                variant: .distilled,
+                precision: .int4,
+                quantization: Quantization(bits: 4, groupSize: 64, scheme: "mlx-affine"),
+                defaults: Defaults(steps: 4, cfg: 1.0),
+                supports: [.txt2img],
+                components: Components(
+                    tokenizer: .local(path: "text_tokenizer"),
+                    textEncoder: .local(path: "."),
+                    transformer: .local(path: "transformer"),
+                    vae: .local(path: "vae"),
+                    scheduler: .local(path: "scheduler")
+                ),
+                upstreamRepoId: "\(Cosmos3Resources.superTextToImageMLXRepository)@\(Cosmos3Resources.superTextToImageMLXRevision)",
                 createdAt: createdAt
             )
         case .cosmos3EdgeMLX:

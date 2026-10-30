@@ -410,6 +410,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 64
             ),
             descriptor(
+                Gemma4Resources.a4bBF16ModelId,
+                "Gemma 4 26B-A4B BF16",
+                "Runs the pinned MLX BF16 Gemma 4 26B-A4B instruction checkpoint through the native text runtime.",
+                minimum: 64,
+                recommended: 96
+            ),
+            descriptor(
                 Gemma4Resources.turboModelId,
                 "Gemma 4 NVFP4 MoE",
                 "Installs the MLX NVFP4 Gemma 4 26B-A4B-it MoE snapshot for the native Swift 32 GB tier.",
@@ -1472,6 +1479,13 @@ public enum ManagedModelCapabilityCatalog {
                 "MiniMax-H3 Ref2VA MLX",
                 "Runs the explicit-pull 8-bit Ref2VA package with ordered image, video, and audio references and synchronized generated audio.",
                 minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
+                ModelResolver.ModelID.cosmos3SuperTextToImage.rawValue,
+                "Cosmos3-Super 4-Step MLX 4-bit",
+                "Generates images with the distilled four-step Cosmos3-Super export through video cosmos3 text-to-image mode.",
+                minimum: 64,
                 recommended: 128
             ),
             descriptor(

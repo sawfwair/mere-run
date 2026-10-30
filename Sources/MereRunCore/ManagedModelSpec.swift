@@ -124,6 +124,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case wan22TI2VMLX
     case miniMaxH3MLX
     case cosmos3EdgeMLX
+    case cosmos3SuperTextToImage
     case scail2MLX
     case dreamXCausalMLX
     case hfTextChat

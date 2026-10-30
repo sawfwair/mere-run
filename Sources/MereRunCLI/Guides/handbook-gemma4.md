@@ -30,6 +30,13 @@ reference describes roles and modality tokens; it isn't a quality guarantee for
 every size or quantization. Use the local reasoning and output-limit controls
 instead of asking for a specific number of hidden reasoning tokens.
 
+`text-chat-gemma4-26b-a4b-bf16` selects the original-precision MLX export of
+Gemma 4 26B-A4B, pinned to revision `e13fae2a81ec07e3092a3ebb70c80970b640dc3c`.
+Its approximately 51.6 GB BF16 weights need more memory than the NVFP4
+`text-chat-gemma4-turbo` export. The catalog's 64 GB minimum and 96 GB
+recommendation are planning estimates. This entry serves text chat and uses
+the existing native Gemma runtime; it does not enable image input.
+
 ## Iterate and review
 
 If the response ignores the format, shorten the output schema and provide one
@@ -75,6 +82,7 @@ This guide covers the following managed model IDs:
 
 - `text-chat-gemma4`
 - `text-chat-gemma4-turbo`
+- `text-chat-gemma4-26b-a4b-bf16`
 - `text-chat-gemma4-12b`
 - `text-chat-gemma4-12b-4bit`
 - `vision-chat-gemma4-12b`

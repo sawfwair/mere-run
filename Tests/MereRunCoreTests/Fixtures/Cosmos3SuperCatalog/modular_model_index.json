@@ -1,0 +1,77 @@
+{
+  "_blocks_class_name": "Cosmos3DistilledBlocks",
+  "_class_name": "Cosmos3DistilledModularPipeline",
+  "_diffusers_version": "0.39.0",
+  "is_distilled": true,
+  "distilled_sigmas": [
+    1.0,
+    0.9375,
+    0.8333333333333334,
+    0.625
+  ],
+  "scheduler": [
+    "diffusers",
+    "FlowMatchEulerDiscreteScheduler",
+    {
+      "pretrained_model_name_or_path": "nvidia/Cosmos3-Super-Text2Image-4Step",
+      "subfolder": "scheduler",
+      "type_hint": [
+        "diffusers",
+        "FlowMatchEulerDiscreteScheduler"
+      ],
+      "variant": null
+    }
+  ],
+  "sound_tokenizer": [
+    "diffusers",
+    "Cosmos3AVAEAudioTokenizer",
+    {
+      "pretrained_model_name_or_path": "nvidia/Cosmos3-Super-Text2Image-4Step",
+      "subfolder": "sound_tokenizer",
+      "type_hint": [
+        "diffusers",
+        "Cosmos3AVAEAudioTokenizer"
+      ],
+      "variant": null
+    }
+  ],
+  "text_tokenizer": [
+    "transformers",
+    "Qwen2TokenizerFast",
+    {
+      "pretrained_model_name_or_path": "nvidia/Cosmos3-Super-Text2Image-4Step",
+      "subfolder": "text_tokenizer",
+      "type_hint": [
+        "transformers",
+        "Qwen2TokenizerFast"
+      ],
+      "variant": null
+    }
+  ],
+  "transformer": [
+    "diffusers",
+    "Cosmos3OmniTransformer",
+    {
+      "pretrained_model_name_or_path": "nvidia/Cosmos3-Super-Text2Image-4Step",
+      "subfolder": "transformer",
+      "type_hint": [
+        "diffusers",
+        "Cosmos3OmniTransformer"
+      ],
+      "variant": null
+    }
+  ],
+  "vae": [
+    "diffusers",
+    "AutoencoderKLWan",
+    {
+      "pretrained_model_name_or_path": "nvidia/Cosmos3-Super-Text2Image-4Step",
+      "subfolder": "vae",
+      "type_hint": [
+        "diffusers",
+        "AutoencoderKLWan"
+      ],
+      "variant": null
+    }
+  ]
+}

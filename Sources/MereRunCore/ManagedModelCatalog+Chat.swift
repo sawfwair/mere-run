@@ -80,6 +80,23 @@ extension ManagedModelCatalog {
             apiProfile: .gemma4()
         ),
         ManagedModelSpec(
+            id: Gemma4Resources.a4bBF16ModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: Gemma4Resources.a4bBF16UpstreamModelId,
+                revision: Gemma4Resources.a4bBF16UpstreamRevision,
+                patterns: Gemma4Resources.snapshotPatterns
+            ),
+            upstreamRepoId: Gemma4Resources.a4bBF16UpstreamModelId,
+            upstreamRevision: Gemma4Resources.a4bBF16UpstreamRevision,
+            validationKind: .gemma4,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 51_644_318_400,
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"],
+            apiProfile: .gemma4()
+        ),
+        ManagedModelSpec(
             id: Gemma4Resources.twelveBModelId,
             category: .textChat,
             installShape: .directoryRoot,

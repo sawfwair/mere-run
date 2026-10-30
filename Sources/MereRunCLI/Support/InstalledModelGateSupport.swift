@@ -663,6 +663,11 @@ enum InstalledModelSmokePlans {
                 try await runner.installedMiniMaxH3Check(model: spec.id)
             }
 
+        case .cosmos3SuperTextToImage:
+            return direct(spec, route: "video cosmos3 text-to-image") { runner in
+                try await runner.installedCosmosSuperCheck(model: spec.id)
+            }
+
         case .cosmos3EdgeMLX:
             return direct(spec, route: "video cosmos3 image-to-video") { runner in
                 try await runner.installedCosmosCheck(model: spec.id)
@@ -1863,6 +1868,26 @@ extension GateRunner {
             wallSeconds: run.wallSeconds,
             decodeTps: nil,
             semanticFailure: try validateVideoArtifact(output, requireAudio: true)
+        )
+    }
+
+    func installedCosmosSuperCheck(model: String) async throws -> GateObservation {
+        let output = artifactURL(model, extension: "png")
+        let run = try await exec(
+            [
+                "video", "cosmos3", "A red cube on a clean neutral background.",
+                "--mode", "text-to-image", "--model", model,
+                "--width", "768", "--height", "768", "--steps", "4",
+                "--guidance-scale", "1", "--seed", "7", "--output", output.path, "--quiet",
+            ],
+            timeout: 3_600
+        )
+        let image = try MediaImageIO.decode(output)
+        let data = try Data(contentsOf: output)
+        return GateObservation(
+            hash: Self.sha256(data), secondRunHash: nil, wallSeconds: run.wallSeconds, decodeTps: nil,
+            semanticFailure: image.width == 768 && image.height == 768 && data.count > 1_024
+                ? nil : "generated Cosmos3-Super image did not decode at 768 x 768"
         )
     }
 

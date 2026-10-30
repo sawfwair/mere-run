@@ -128,6 +128,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case miniMaxH3 = "minimax-h3"
         /// NVIDIA Cosmos3-Edge native omnimodal world-model family.
         case cosmos3Edge = "cosmos3-edge"
+        /// Cosmos3-Super distilled text-to-image family.
+        case cosmos3Super = "cosmos3-super"
         /// Psi agent chat family.
         case psiChat = "psi-chat"
         /// DeepSeek V4 Flash family, served by the bundled `ds4-server` subprocess.
@@ -144,6 +146,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
 
     public enum Family: String, Codable, CaseIterable, Hashable, Sendable {
         case flux3
+        case cosmos
         case laya
         case clef
         case d1
