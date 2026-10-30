@@ -1902,3 +1902,28 @@ CC-BY-NC checkpoints are not included. Model assets are downloaded separately.
   checkpoint weights are not redistributed in this source repository.
   The local routed-expert affine INT4 converter retains these notices and
   model licenses in its derived artifact and records source/output hashes.
+
+## IDOL native runtime and synthetic fixtures
+
+The native IDOL layers in `Sources/MereRunImageModels/Idol/` adapt
+[speridlabs/idol-sdk](https://github.com/speridlabs/idol-sdk) at
+`4702a7f00850e34b6e83a2170cc123c3e9570744` under Apache-2.0. The upstream
+denoiser also credits the Wan and Hugging Face teams (Copyright 2025). The
+upstream license is preserved in
+`Sources/MereRunCore/Resources/ModelLicenses/Idol-Code-LICENSE`.
+
+`Tests/ImageRuntimeTests/Fixtures/Idol/` contains synthetic tensors and expected
+outputs generated with that implementation. It contains no pretrained model
+weights. The released IDOL checkpoint is separately pinned to Hugging Face
+revision `2731c2291fc65a797c5cb627a5e5526fc1490902`. DINOv3 H+ and the
+FLUX.2-dev VAE remain separate, gated model dependencies governed by their
+publishers' terms; this repository does not redistribute those weights.
+
+The native BiRefNet implementation in `Sources/MereRunImageModels/Idol/` also
+adapts the pinned SDK's Swin-L, multiscale, deformable ASPP, and decoder
+implementation under the same Apache-2.0 license. The reduced BiRefNet
+fixtures contain synthetic weights. Native IDOL Lanczos resampling follows
+Pillow's fixed-point algorithm and premultiplied RGBA conversion, under the
+Pillow MIT-CMU notice already recorded in this file. Qualification renders
+show model outputs from the pinned SDK's public submarine and strawberry
+examples; they contain no model weights.

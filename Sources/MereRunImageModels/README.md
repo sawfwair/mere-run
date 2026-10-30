@@ -7,6 +7,7 @@ FLUX.2, ZImage, and Qwen Image 2.1 transformer layers, typed configuration, and 
 - `ZImage/Transformer/` owns ZImage blocks, caches, and coordinate handling.
 - `ZImage/` owns typed configuration and the sparse-attention admission policy.
 - `QwenImage21/` owns the single-stream transformer, prefix cache, and RGBA VAE.
+- `Idol/` owns native image-to-Gaussian computation and the shared DINOv3 tower.
 - `VAE/` owns shared image encoding and decoding tensors.
 
 This library depends on MLX and `MereRunTensor`. Core owns model loading,

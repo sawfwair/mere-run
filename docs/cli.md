@@ -82,6 +82,7 @@ against the CLI and fails if they disagree.
   - `mere.run vision geometry-multiview` — Solve native DA3-Small multi-view relative geometry, confidence, and cameras.
   - `mere.run vision image-to-3d` — Reconstruct a colored object mesh from one image with native TripoSR.
   - `mere.run vision image-to-3d-trellis2` — Reconstruct a 512-resolution PBR O-Voxel mesh with native MLX TRELLIS.2.
+  - `mere.run vision image-to-3d-idol` — Generate object Gaussian splats with native MLX IDOL.
   - `mere.run vision image-to-3d-multiview` — VFX alias for native four-view or six-view InstantMesh reconstruction.
   - `mere.run vision ocr` — Extract text from images using LightOnOCR, GLM-OCR, Infinity-Parser2, or Unlimited-OCR-2.
 - [`mere.run geo`](/runtime/geo) — Run native geospatial inference models on local Earth-observation data.

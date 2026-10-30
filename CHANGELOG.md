@@ -34,6 +34,16 @@ The format is based on Keep a Changelog.
   progressive, grayscale, and CMYK goldens, malformed-input checks, and repeated
   Metal receipt comparisons. Other image formats retain their platform decoder.
 
+- Resolve Studio's bundled Caveat wordmark font through Foundation bundles so
+  flat SwiftPM and Xcode `Contents/Resources` layouts both find the font.
+
+- Add `vision image-to-3d-idol` for native Swift/MLX object Gaussian splats,
+  using explicit local IDOL, DINOv3 H+, and FLUX.2 VAE checkpoints. Export PLY,
+  prepared input, camera, and hashed provenance. Native Swin-L BiRefNet removes
+  opaque backgrounds; Pillow-compatible Lanczos preserves transparent input
+  framing. Real-checkpoint qualification covers default sampling and numerical
+  comparisons with upstream.
+
 - Add the pinned Gemma 4 26B-A4B MLX BF16 export as a separate managed text-chat
   model, with native chat, API, and LoRA routing and its existing Gemma handbook.
 
