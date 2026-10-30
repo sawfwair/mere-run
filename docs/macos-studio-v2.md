@@ -21,6 +21,7 @@ contract. The table records the original implementation sequence.
 | A0 | [#406](https://github.com/sawfwair/mere-run/pull/406) | The argv builder is checked against the contract from maximal drafts; the three drifted flags were added to the contract |
 | A1 | [#407](https://github.com/sawfwair/mere-run/pull/407) | `Job`, `JobStore`, `JobLane`, `ArtifactResolver`, `ProcessRunner` under `Jobs/` |
 | A2 | [#410](https://github.com/sawfwair/mere-run/pull/410) | `utilityCommandResult`, readiness, and `status --json` are lane jobs; `Process()` is confined to `Jobs/ProcessRunner.swift` and `CLIBootstrapInstaller` |
+| A3 | [#437](https://github.com/sawfwair/mere-run/pull/437) | Landed by a different route: `StudioLibraryStore` observes the controller's run completions from `StudioAppSession`, rather than `JobStore` owning the write-through |
 | A4 | [#408](https://github.com/sawfwair/mere-run/pull/408), [#416](https://github.com/sawfwair/mere-run/pull/416) | Landed as two pull requests, not three: the shell and navigation first, then the v2 drawing of the sidebar, content header, composer, Models, and Realtime |
 | A5 | [#425](https://github.com/sawfwair/mere-run/pull/425) | Views observe a `Job` by id; the Activity popover replaced the machine-facts popover; the global running overlay is gone |
 | A6 | [#408](https://github.com/sawfwair/mere-run/pull/408), [#429](https://github.com/sawfwair/mere-run/pull/429) | Library scope and row-to-domain switching, then per-task drafts and their `studio.drafts` scene memory. The Welcome sheet became a one-time banner in #408 |
@@ -31,13 +32,14 @@ contract. The table records the original implementation sequence.
 | B5 | [#425](https://github.com/sawfwair/mere-run/pull/425) | Thread list, per-turn model, Code as a preset, Branch |
 | C1 | [#425](https://github.com/sawfwair/mere-run/pull/425) | `StudioAnalyzeSchema` declares the Analyze surface per task; the five input-first prompt tasks render it |
 | C2 | [#418](https://github.com/sawfwair/mere-run/pull/418), [#427](https://github.com/sawfwair/mere-run/pull/427), [#431](https://github.com/sawfwair/mere-run/pull/431) | Option metadata, `--receipt`, `--progress-json`, then the declared outputs reconciled with what the commands write |
+| C3 | [#532](https://github.com/sawfwair/mere-run/pull/532) | Specialist pages moved onto the contract-backed task workspace on 2026-09-24; see [Specialist migration](#specialist-migration) |
 | C4 | [#416](https://github.com/sawfwair/mere-run/pull/416), [#425](https://github.com/sawfwair/mere-run/pull/425) | Music ▸ Realtime as the Session shape and Video ▸ Subjects as the Project shape |
 | C5 | [#432](https://github.com/sawfwair/mere-run/pull/432) | `CommandFlags` generated from the contract, `ArgumentBuilder`, `Catalog/` per category; `arguments(from:)` and `defaultDraft()` deleted |
 | C6 | [#428](https://github.com/sawfwair/mere-run/pull/428), [#430](https://github.com/sawfwair/mere-run/pull/430) | The Command view groups by the contract; the Command Console is `ContractForm` over any capability; `MereRunRootView.swift` deleted and Settings moved |
 | C7 | [#424](https://github.com/sawfwair/mere-run/pull/424) | `ArtifactResolver` prefers the receipt; the 350 ms poll runs only for commands that print none |
 | D1 | [#434](https://github.com/sawfwair/mere-run/pull/434) | `StudioKit` / `StudioUI` / `MereRunStudio`, plus `StudioKitTests`, `StudioUITests`, and a shared `StudioTestSupport`. A move-and-declare refactor: cross-boundary declarations are `package`, nothing became `public`, and all 559 tests still run |
 | D2 | [#416](https://github.com/sawfwair/mere-run/pull/416), [#425](https://github.com/sawfwair/mere-run/pull/425), [#429](https://github.com/sawfwair/mere-run/pull/429) | The offscreen snapshot harness grew with the boards it renders rather than landing at once |
-| D3 | this pull request | Documentation |
+| D3 | [#433](https://github.com/sawfwair/mere-run/pull/433) | Documentation. No separate 2.0 release was cut; as of v0.67.1, the app takes its version from the CLI release |
 
 ### Completion work
 
@@ -100,7 +102,7 @@ an arbitrary prompt fits. Hardware and installed-model acceptance remain
 separate from the local code and offscreen rendering gates. No 2.0 release is
 cut by this change.
 
-The five decisions at the end of this document were resolved as written:
+The five decisions at the end of this document were resolved as follows:
 Vision is one domain with ten tasks, Code is a Converse preset, the Library is a
 column, output goes to `~/Pictures`, `~/Music`, or `~/Documents` under
 `mere.run/<Domain>` by media kind, and training is a task inside Image, Chat,
@@ -180,7 +182,7 @@ Specialist workspaces (the 19 sheets, about 15,000 lines):
 - Naming suffixes: Lab, Studio, Tools, Console, Center. Title, button label,
   and file name disagree for four of them.
 - No specialist job can be cancelled, although `cancel(requestID:)` exists.
-  Music Tools "Stop server" calls the global cancel and kills whatever is
+  Music Tools "Stop server" calls the global cancel and stops whatever is
   running. Job state is `@State` in the sheet, so closing a sheet mid-download
   orphans the progress UI while the process continues.
 - Library rows are attributed to the wrong mode: Geospatial → Read Image,
@@ -333,7 +335,8 @@ Shell rules:
   ⌥⌘I, Command ⌥⌘C, Sidebar ⌃⌘S; Go ▸ every domain (⌘1–⌘9, then ⌥⌘1…) and
   every task of the current domain; Run ▸ Run ⌘↩, Stop ⌘., Open, Reveal, acting
   on the current task; Help ▸ Guide ⌘?, mere.run, Export Diagnostics. Retire
-  ⇧⌘S and ⇧⌘P.
+  ⇧⌘S and ⇧⌘P. As shipped in v0.67.1, Library is ⇧⌘L and Inspector is ⌘E;
+  Help ▸ Keyboard Shortcuts lists the full set.
 - First run: no Welcome sheet. The Image empty state with "Get the model" is
   the onboarding, plus a one-time dismissible banner.
 - Settings gains tabs: General, Models, Server, Advanced.
@@ -570,6 +573,9 @@ under `studio.*`, the `mererun://` deep-link contract, and the Raycast receipt
 format.
 
 ## Decisions to confirm
+
+These decisions were open on September 3, 2026. The [Status](#status) section
+records how each was resolved.
 
 1. **Vision as one domain with nine tasks** rather than v1's four sidebar rows
    (Read, Find, Segment, Track). One row keeps the sidebar to 15 rows; four

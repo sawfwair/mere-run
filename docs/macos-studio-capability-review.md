@@ -14,10 +14,10 @@ Three things follow from it.
    domains, so a Library row files where the work was done and a command is
    always somewhere a person can name.
 2. **Designed surfaces are a deliberate subset.** Some capabilities have a task
-   built for what they actually produce — the Analyze canvas draws detection
-   boxes over the picture, Video ▸ Subjects is a three-stage board, Models ▸
-   Installed is a list and detail. Most do not, and that is a decision about
-   where the effort goes, not a gap in reachability.
+   built for what they produce: the Analyze canvas draws detection boxes over
+   the picture, Video ▸ Subjects is a three-stage board, and Models ▸ Installed
+   is a list and detail. Most don't, and that is a decision about where the
+   effort goes, not a gap in reachability.
 3. **The Command Console is the guaranteed home.** It renders any capability
    from `MereRunCapabilityCatalog`: the option's `kind` picks the control, its
    `choices` fill the picker, its `depends_on` gates the row, and the "Will run"
@@ -31,7 +31,9 @@ navigation system in the sidebar footer were the cost.
 [macOS Studio v2](./macos-studio-v2.md) keeps the coverage goal and drops that
 reading.
 
-## What is enforced today
+## What is enforced
+
+As of v0.67.1, these tests guard the chain from CLI to contract to app:
 
 | Guard | Where | What it proves |
 |---|---|---|
@@ -54,15 +56,20 @@ task assertion safe.
 
 ## Exemptions
 
-Thirty-two leaf commands stay CLI-only, each named in `contractExemptCommandIDs`
-with its reason: the twelve `executor` commands and `relay serve` (the Relay
-console owns node identity, placement, scheduling, and fleet telemetry), the
-fourteen `graph` commands (Graph Studio owns workflow authoring and execution,
-and the worker verbs are a machine-to-machine protocol), the three
-`vision image-to-3d` aliases (surfaced through the 3D domain as
-`image reconstruct-3d`), and `catalog` (it emits the contract that the shells
-compile against), plus the research-only `model benchmark q38-verification`
-command.
+As of v0.67.1, the contract lists 136 commands, and 39 leaf commands stay
+CLI-only. Each exemption is named in `contractExemptCommandIDs` with its
+reason:
+
+- The twelve `executor` commands and `relay serve`: the Relay console owns node
+  identity, placement, scheduling, and fleet telemetry.
+- The twenty-one `graph` commands: Graph Studio owns workflow authoring and
+  execution, the seven `graph batch` commands use the Graph Studio domain and
+  the portable Relay client, and the four `graph worker` verbs are a
+  machine-to-machine protocol.
+- The three `vision image-to-3d` aliases, which the 3D domain surfaces as
+  `image reconstruct-3d`.
+- `catalog`, which emits the contract that the shells compile against.
+- The research-only `model benchmark q38-verification` command.
 
 ---
 
@@ -71,8 +78,8 @@ command.
 Everything below is the original review, preserved as the record of how the
 coverage gaps were found and closed. It describes v1 as it shipped: the counts
 are accurate for that moment, and the "workspace" language is the superseded
-reading. Do not read it as a description of the app today — see
-[`apps/macos/README.md`](../apps/macos/README.md) for that.
+reading. It doesn't describe the app as it is now. For that, see
+[`apps/macos/README.md`](../apps/macos/README.md).
 
 This review compared the public CLI command tree against the surfaces macOS
 Studio owned, and identified every capability that had not been brought to the
@@ -194,8 +201,8 @@ and runtime policy, but not the location of the store itself. Read-only search
 roots and explicit model bindings have no GUI path.
 
 This is a desktop-shaped need. Checkpoints are large, external and secondary
-volumes are common on a Mac, and a user who keeps models on another disk
-currently has to leave the app to register it.
+volumes are common on a Mac, and at audit time a user who kept models on another
+disk had to leave the app to register it.
 
 ### Plugin lifecycle — 3 commands
 
@@ -297,7 +304,7 @@ that Studio compiles against, so the app has no need to shell out for it.
 The v1 destinations named in this audit were renamed and re-hosted by v2. Their
 current addresses:
 
-| Capability | v1 destination | Today |
+| Capability | v1 destination | v2 destination |
 |---|---|---|
 | `geo` (4) | Geospatial Lab, a sheet | **Earth** ▸ Flood, Fire, TESSERA, OlmoEarth |
 | `model benchmark` (12) | Health & Repair, a sheet | **Models ▸ Benchmarks**, beside **Models ▸ Health** |
@@ -308,4 +315,4 @@ current addresses:
 | `config list` / `path` (2) | Settings | **Settings ▸ Advanced** |
 
 Each was built against a typed capability already proven to match CLI help,
-rather than a hand-copied argument list — which is what made the move cheap.
+rather than a hand-copied argument list, which is what made the move cheap.

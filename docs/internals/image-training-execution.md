@@ -1,51 +1,58 @@
 # Shared image training execution
 
-`image train-lora` uses `ImageLoRATrainingOptions`, `ImageLoRATrainingPlan`, and
-`ImageLoRATrainingOperation` in `MereRunCore`. Library callers can prepare and
-execute the same Krea and Klein training paths without importing the CLI or
-starting a dashboard.
+`image train-lora` uses `ImageLoRATrainingOptions`, `ImageLoRATrainingPlan`,
+and `ImageLoRATrainingOperation` in `MereRunCore/LoRA`. Library callers can
+prepare and run the same Krea and Klein training paths without importing the
+CLI or starting a dashboard.
 
-## Prepare a plan
+## Ownership
 
-Options resolve recipes and explicit overrides, validate training controls,
-and select LoRA targets. Plan resolution finds the model manifest, reads image
-and caption pairs, and prepares a family-specific native trainer configuration.
-It does not load weights or create output directories. Captions are retained in
-the plan; native trainers read image bytes during execution.
+| Owner | Responsibility |
+| --- | --- |
+| `ImageLoRATrainingOptions` | Resolve recipes and explicit overrides, validate training controls, and select LoRA targets |
+| `ImageLoRATrainingPlan` | Find the model manifest, read image and caption pairs, and prepare a family-specific native trainer configuration |
+| `ImageLoRATrainingOperation` | Dispatch the prepared configuration to the native trainer and forward typed progress |
+| Native trainers | Validate model and optimizer checkpoint compatibility, read image bytes, and own optimizers, checkpoint formats, and sampling math |
+| CLI adapter | Numeric validation, preflight, the MLX check, the optional dashboard, and the saved run plan |
+
+## Plan and validate a request
+
+Plan resolution doesn't load weights or create output directories. The plan
+keeps captions; native trainers read image bytes during execution.
 
 Krea keeps its synthetic-data and frozen-base quantization options. Klein keeps
 its resume checkpoint, target ranks, timestep settings, progressive resolution,
-latent-cache settings, preview settings, and benchmark mode. Native trainers
-continue to validate model and optimizer checkpoint compatibility.
+latent-cache settings, preview settings, and benchmark mode.
 
-The CLI performs numeric validation and preflight before checking MLX. For an
-actual run, it checks MLX and prepares the plan before starting the dashboard.
-Dataset, family, or preview-model validation failures therefore do not start a
-viewer. The viewer task is cancelled and awaited when execution finishes or
-fails.
+The CLI runs numeric validation and `--preflight` before it checks MLX. For a
+real run, it checks MLX and prepares the plan before it starts the dashboard, so
+dataset, family, or preview-model validation failures never start a viewer.
 
-## Execute a plan
+## Execution and runtime lifetime
 
-The operation dispatches the prepared configuration and examples to the
-existing native trainer and forwards typed progress. Klein preview generation
-uses the prepared prompt, model, seed, and adapter settings. A benchmark returns
-a benchmark outcome; a completed training run returns the adapter path.
-Cancellation cannot return a successful outcome, but it does not remove
-checkpoints or adapters already written by a native trainer.
+The operation sends the prepared configuration and examples to the native
+trainer. Klein preview generation uses the prepared prompt, model, seed, and
+adapter settings. A benchmark returns a benchmark outcome; a completed training
+run returns the adapter path. Cancellation can't return a successful outcome,
+but it doesn't remove checkpoints or adapters that a native trainer already
+wrote.
 
-Callers own machine admission. The CLI retains its process-level reservation;
-the operation does not acquire a second permit. Native optimizers, checkpoint
-formats, and sampling math remain unchanged.
+Callers own machine admission. The CLI keeps its process-level reservation, and
+the operation doesn't acquire a second permit. When `--visualize` is set, the
+CLI cancels and awaits the viewer task after execution finishes or fails.
 
-## Saved plans and validation
+## Saved plans
 
-The CLI's existing schema-v1 run plan remains the portable replay format. It
-now retains optional `base_quantization_bits` when you request Krea frozen-base
-quantization. Older plans without this field still decode and use the existing
-unquantized default. Output relocation retains the requested quantization.
+The CLI's schema-v1 run plan is the portable replay format. It keeps the
+optional `base_quantization_bits` field when you request Krea frozen-base
+quantization with `--base-quantization-bits`. Older plans without this field
+still decode and use the unquantized default. Output relocation keeps the
+requested quantization.
+
+## Validate a change
 
 Command and operation tests cover recipes, explicit overrides, native
 configurations, caption snapshots, preview preparation, benchmark outcomes,
 cancellation, preflight, and saved-plan replay. Model-manifest fixtures and
 injected trainers exercise these boundaries without loading real weights. They
-do not establish checkpoint training quality or GPU performance.
+don't establish checkpoint training quality or GPU performance.

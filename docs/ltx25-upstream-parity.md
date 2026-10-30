@@ -43,8 +43,8 @@ accept the other.
 mere.run adapter pull ltx25-pixel-spatial-upscaler-x2 --accept-license
 ```
 
-An existing checkpoint can instead be bound from any registered model-catalog
-location. Pulls verify immutable file sizes and hashes; a catalog entry alone
+Instead of pulling, you can bind an existing checkpoint from any registered
+model-catalog location. Pulls verify immutable file sizes and hashes; a catalog entry alone
 does not prove that every checkpoint file is installed.
 
 ## Pipeline matrix
@@ -150,7 +150,7 @@ transformer rather than copied from an older LTX release.
 ## Hardware-specific upstream options
 
 The following upstream switches are CUDA/PyTorch execution strategies, not
-model capabilities, and therefore have no one-for-one Apple-Silicon switch:
+model capabilities, so they have no one-for-one Apple Silicon switch:
 
 | Upstream option | Native disposition |
 | --- | --- |

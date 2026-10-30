@@ -1,11 +1,11 @@
-# AuK native qualification — September 18, 2026
+# AuK native qualification — 2026-09-18
 
 The native base and Flash FP32 paths passed trained-weight comparisons and
 **16 of 16 bounded audio checks** on Apple Silicon. The largest model-chain
 waveform error against upstream MLX was **0.0155% relative L2**. Direct PyTorch
 CPU component checks also passed.
 
-The audio checks establish the specific results below. Controls are approximate;
+The audio checks establish the specific results in the following sections. Controls are approximate;
 passing this batch does not establish exact pitch/gain control or subjective
 speech quality. [Machine-readable evidence](/qualification/auk-native-2026-09-18.json)
 includes asset hashes, the tested binary/source hashes, numerical errors, audio

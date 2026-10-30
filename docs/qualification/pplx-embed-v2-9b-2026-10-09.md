@@ -1,8 +1,8 @@
-# PPLX Embed v2 9B qualification — October 9, 2026
+# PPLX Embed v2 9B qualification, October 9, 2026
 
-Both packed checkpoints passed bounded native public CLI checks. No Python
-inference process is used locally. Users pull the packed artifacts directly;
-conversion is a publisher task.
+Both packed checkpoints passed bounded native checks through the public CLI.
+No Python inference process runs locally. You pull the packed artifacts
+directly; conversion is a publisher task.
 
 | Checkpoint | Weight files | FP32 vs packed mean cosine | Minimum cosine | Retrieval top choices |
 | --- | --- | --- | --- | --- |
@@ -20,8 +20,8 @@ contract is independent of weight quantization.
 
 The context Q4 candidate kept the same eight top choices but had mean cosine
 0.980567 and minimum cosine 0.970761. Q8 improved these to 0.999873 and 0.999813,
-so Q8 was selected. Selection used this same small suite: do not interpret it
-as an independent heldout benchmark. `quality_qualified` remains false.
+so Q8 was selected. Selection used this same small suite, so don't read it as
+an independent held-out benchmark. `quality_qualified` remains false.
 
 ## What was measured
 

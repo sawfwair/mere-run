@@ -9,10 +9,10 @@ The guide is a useful routing index, but model quality claims in it are not a
 runtime or licensing authority. This report therefore checks implementation,
 artifact, and license facts against the relevant upstream projects.
 
-The exploration produced a native runtime, managed model contract, and
+The exploration produced a native runtime, a managed model contract, and a
 public `music separate` command in this worktree. This report preserves the
-upstream/tool audit and records which admission and implementation claims are
-proven separately from the remaining parity and quality work.
+upstream and tool audit, and it separates the admission and implementation
+claims that are proven from the remaining parity and quality work.
 
 ## Decision
 
@@ -76,7 +76,7 @@ again before runtime load.
 The canonical architecture references are
 [`lucidrains/BS-RoFormer@84f2b25`](https://github.com/lucidrains/BS-RoFormer/tree/84f2b25297424e93f721d5fb9d42291c6d934284)
 and the ViperX config/checkpoint table in
-[`ZFTurbo/Music-Source-Separation-Training@e247dfe`](https://github.com/ZFTTurbo/Music-Source-Separation-Training/blob/e247dfe4abc1f17c69dff719207fe045dc04413a/docs/pretrained_models.md).
+[`ZFTurbo/Music-Source-Separation-Training@e247dfe`](https://github.com/ZFTurbo/Music-Source-Separation-Training/blob/e247dfe4abc1f17c69dff719207fe045dc04413a/docs/pretrained_models.md).
 Both codebases are MIT-licensed. The separately hosted AEmotion model release
 also carries its own explicit MIT license and is admitted only at the pinned
 recorded revision.

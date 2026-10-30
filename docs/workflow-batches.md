@@ -1,85 +1,107 @@
 # Fleet workflow batches
 
-Use a workflow batch to run independent inputs across a relay fleet. Each item
-executes its complete workflow graph on one worker, preserving intermediate files
-and dependencies on that machine.
+Use a workflow batch to run one workflow graph over many independent inputs on
+a relay fleet. Each item runs its complete graph on one worker, so its
+intermediate files and dependencies stay on that machine. Batches need a relay
+executor profile; see [Executor profiles](./workflows.md#executor-profiles).
 
-Create `shots.jsonl` with one typed input object per line:
+## Submit a batch
 
-```json
-{"key":"scene-001","inputs":{"prompt":"A lighthouse in morning fog"}}
-{"key":"scene-002","inputs":{"prompt":"A quiet harbor at dusk"}}
-```
+1. Create `shots.jsonl` with one item per line. Each item has a unique `key`
+   and an `inputs` object for the graph's declared inputs:
 
-Submit a workflow whose `prompt` input drives its generation node:
+   ```json
+   {"key":"scene-001","inputs":{"prompt":"A lighthouse in morning fog"}}
+   {"key":"scene-002","inputs":{"prompt":"A quiet harbor at dusk"}}
+   ```
 
-```bash
-mere.run graph batch submit workflow.json \
-  --items-jsonl shots.jsonl \
-  --executor relay:fleet \
-  --run-dir ./runs/lighthouse-batch \
-  --max-in-flight 8 \
-  --json
-```
+2. Submit a workflow whose `prompt` input drives its generation node:
 
-`--items-jsonl` also accepts a JSON array. Item keys must be unique and contain
-letters, numbers, dots, underscores, colons, or hyphens. Models and providers use
-the ordinary portable workflow contract.
+   ```bash
+   mere.run graph batch submit workflow.json \
+     --items-jsonl shots.jsonl \
+     --executor relay:fleet \
+     --run-dir ./runs/lighthouse-batch \
+     --max-in-flight 8 \
+     --json
+   ```
 
-The command persists `batch.json` with child IDs and seeds before materializing
-the bundles. Repeat the same command and directory to resume submission. Changed
-rows, graphs, or admission settings cannot reuse that directory. Interrupted
-preparation is preserved before reconstruction. Shared input assets upload once
-per account digest. The committed batch continues after the CLI exits.
+3. Copy the `batch_id` from the response. You need it for every other batch
+   command.
 
-The in-flight window shares the account's active graph quota. It includes queued
-and running children. Workers receive another complete graph as they become
-available; the batch does not distribute individual graph nodes or model tensors.
-The relay schedules batches fairly alongside ordinary work and requires Node
-agents that advertise assignment-token support.
+`--items-jsonl` also accepts a file that holds a JSON array of items. Item keys
+are 1–160 characters long and can contain letters, numbers, dots, underscores,
+colons, and hyphens. Models and providers follow the ordinary
+[portable workflow](./workflows.md) contract.
+
+Submission writes `batch.json`, with each item's child job ID and seed, before
+it materializes any bundle. To resume an interrupted submission, run the same
+command with the same `--run-dir`. A run directory can't be reused with changed
+items, a changed graph, or changed admission settings. Shared input assets
+upload once for each digest in the account. After the relay commits the batch,
+it keeps running when the CLI exits.
+
+### Admission and scheduling
+
+`--max-in-flight` sets how many children can be queued or running at once, from
+1 through 20. The default is 8, and the window counts against the account's
+active graph quota. As workers become free, the relay assigns each one a
+complete graph. It doesn't split individual nodes or model tensors across
+workers. The relay schedules batches fairly alongside ordinary jobs and
+requires Node agents that advertise assignment-token support.
 
 ## Inspect and retrieve results
 
-Copy the `batch_id` from the submission response:
+The following commands use the batch ID from the submission response:
 
 ```bash
+mere.run graph batch list --executor relay:fleet --json
 mere.run graph batch inspect <batch-id> --executor relay:fleet --json
 mere.run graph batch watch <batch-id> --executor relay:fleet --json
 mere.run graph batch fetch <batch-id> --executor relay:fleet --into ./outputs --json
 ```
 
-Inspection returns counts, ordered item keys, child job IDs, attempts, errors,
-placement diagnostics, and verified output metadata. Watch emits NDJSON changes
-until the batch finishes, fails, or is cancelled. `--timeout-seconds` limits the
-watch without stopping the batch.
+- `list` returns the durable batches in the relay account.
+- `inspect` returns counts, ordered item keys, child job IDs, attempts, errors,
+  placement diagnostics, and verified output metadata.
+- `watch` emits changes as newline-delimited JSON (NDJSON) until the batch
+  finishes, fails, or is cancelled. `--timeout-seconds` stops watching after
+  that many seconds without stopping the batch. The default, `0`, waits
+  indefinitely.
+- `fetch` writes each completed item into its own ordinal run directory and
+  saves `batch-results.json`, which maps directories to item keys. It uses the
+  ordinary run fetch to verify artifact size and SHA-256, so a repeated fetch
+  reuses verified local files.
 
-Fetch writes completed items into ordinal directories and saves
-`batch-results.json` with the item-key mapping. It uses ordinary run fetching to
-verify artifact size and SHA-256. Repeating fetch reuses verified local files.
+Batch commands always write machine-readable JSON to stdout.
 
 ## Retry and cancel
 
-Infrastructure retries are disabled by default. For replay-safe workflows, add
-`--max-attempts 2` to submission. This includes the initial attempt. A disconnect
-or stale assignment can restart that item's entire graph on another compatible
-worker. Model failures do not automatically rerun successful siblings. Old
-attempts cannot overwrite the active assignment's outputs. External effects must
-be idempotent because a disconnected attempt might still execute.
+Infrastructure retries are off by default. For a replay-safe workflow, add
+`--max-attempts 2` to `graph batch submit`. The count includes the first
+attempt, and the limit is 4. With retries on, a disconnect or a stale
+assignment can restart that item's entire graph on another compatible worker.
+A model failure doesn't rerun successful sibling items, and an old attempt
+can't overwrite the outputs of the active assignment. A disconnected attempt
+might still finish, so any external effects in the graph must be idempotent.
+
+To retry failed items or cancel the batch, run:
 
 ```bash
 mere.run graph batch retry <batch-id> --executor relay:fleet --json
 mere.run graph batch cancel <batch-id> --executor relay:fleet --json
 ```
 
-Retry reactivates settled failed items using their original bundles and seeds.
-Completed outputs remain available. Cancel first stops admission, then cancels
-unfinished children. Cancelled batches remain terminal.
+`retry` reactivates settled failed items with their original bundles and seeds.
+Completed outputs stay available. `cancel` stops admission first, then cancels
+unfinished children. A cancelled batch stays terminal.
 
-Batch v1 accepts 1–1000 portable items, a window of 1–20 children, and 1–4 attempts.
-The Relay API also bounds request and descriptor sizes, final output indexes,
-account batch metadata, and graph storage. Local-custody batches require a separate
-contract and are rejected. Real checkpoint performance and physical fleet
-throughput require qualification beyond the local protocol tests.
+## Limits
+
+A version 1 batch accepts 1–1000 items, an in-flight window of 1–20 children,
+and 1–4 attempts per item. The Relay API also bounds request and descriptor
+sizes, final output indexes, account batch metadata, and graph storage.
+Local-custody batches need a separate contract, and the relay rejects them.
 
 ## Local qualification
 
@@ -91,6 +113,6 @@ interrupted materialization, canonical 64-bit documents, HTTP submission and
 commit, input validation, and CLI parsing.
 
 The companion Relay gate qualifies simulated fleet dispatch and token fencing.
-Deploy its Worker and rebuild the desktop Node before using batches against a
-real fleet. Real checkpoint execution and physical fleet throughput remain
-separate qualification steps.
+Before you use batches against a real fleet, deploy that gate's Worker and
+rebuild the desktop Node. Real checkpoint execution and physical fleet
+throughput remain separate qualification steps.

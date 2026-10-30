@@ -30,6 +30,13 @@ The format is based on Keep a Changelog.
 - Declare the `MereRunAdmission` dependency of `MereRunCoreTests` and
   `AudioTTSTests`, so they link under the default Xcode 27 build system.
 
+- Refresh the documentation against the v0.67.1 command tree and managed
+  catalog: document about 85 commands missing from the CLI reference, add
+  source entries for 57 catalog models, correct stale flags, defaults, model
+  IDs, and guide invocations, and list every internals page in the sidebar.
+- Add the Nemotron backend to the offline `speech transcribe` guide, and
+  correct the `video session` guide, which said full LTX models were rejected.
+
 ## 0.67.1 - 2026-10-29
 
 - Complete selected full-precision checkpoint reads on the CPU before GPU

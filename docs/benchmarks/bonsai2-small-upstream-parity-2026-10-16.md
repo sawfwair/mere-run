@@ -1,4 +1,4 @@
-# Bonsai 2 Small upstream parity: precise Metal frequencies
+# Bonsai 2 Small upstream parity with precise Metal frequencies — 2026-10-16
 
 The native 2B, 4B, and 9B implementations now pass every frozen gate across the same 18 text/vision cases and 930 teacher-forced continuation positions used in the [October 15 comparison](./bonsai2-small-upstream-parity-2026-10-15.md). The correction uses an explicit precise Metal power intrinsic for checkpoint vision rotary frequencies. Checkpoints, upstream references, input corpus, and tolerances are unchanged.
 
@@ -11,6 +11,8 @@ The native GPU path now calls `metal::precise::pow` through a small MLX custom k
 The independent rotary fixture now requires bitwise equality on CPU and GPU, replacing its previous GPU-only component tolerance. Full-checkpoint gates remain unchanged: exact prompt IDs, image grids, mRoPE positions, and greedy decisions; normalized-patch maximum absolute delta at most `1e-6`; image-embedding relative L2 at most `0.01`; maximum conditional probability delta at most `0.01`.
 
 ## Results
+
+The following table shows each model's largest differences and gate result.
 
 | Model | Image embedding max relative L2 | Max probability delta | Greedy decisions | All gates |
 | --- | ---: | ---: | ---: | --- |
@@ -26,7 +28,7 @@ The comparison independently preprocesses and tokenizes native requests and expo
 
 New artifacts are under `/Volumes/T7/mere-run-qualification/bonsai2-small-2026-10-15/parity-precise-2026-10-16`. The previous failed comparisons remain intact under `parity`. Immutable reference exports are reused through links; all three native models loaded their original pinned checkpoints and acquired standard shared admission independently.
 
-The full-model result belongs to the preserved test executable and recorded source hashes. Release smoke and the final local gate are recorded separately below. This bounded comparison does not establish broad quality, sampled-output equivalence, maximum-context accuracy, or cross-device behavior. The original 16-case quality corpus and resident throughput were subsequently rerun for the corrected release; see the [fixed-runtime quality and throughput report](./bonsai2-small-fixed-2026-10-16.md).
+The full-model result belongs to the preserved test executable and recorded source hashes. Release smoke and the final local gate are recorded in the following section. This bounded comparison does not establish broad quality, sampled-output equivalence, maximum-context accuracy, or cross-device behavior. The original 16-case quality corpus and resident throughput were subsequently rerun for the corrected release; see the [fixed-runtime quality and throughput report](./bonsai2-small-fixed-2026-10-16.md).
 
 ## Release smoke and local validation
 

@@ -7,7 +7,9 @@ For instructions on reading guides, see [Cookbooks](./cookbooks.md).
 Inventory snapshot: September 4, 2026, repository commit
 `b4a692ec144f2e5f3c61504e657dbbb1989c6c09`. The table accounts for all 140 managed model IDs in the [canonical catalog](./model-sources.md#canonical-managed-model-ids),
 grouped into 59 rows. Each exact ID appears once. This inventory excludes aliases, separately managed
-adapters, and hidden companion artifacts.
+adapters, and hidden companion artifacts. Families added to the catalog after
+the snapshot are listed in
+[Families added after the snapshot](#families-added-after-the-snapshot).
 
 ## Status and coverage
 
@@ -663,6 +665,140 @@ Table 7 lists provider sources and local recipes for video models.
     </tr>
   </tbody>
 </table>
+
+## Families added after the snapshot
+
+The following managed families joined the catalog after the September 4, 2026
+snapshot. Each has a bundled local recipe, but this tracker hasn't recorded
+their provider sources yet. When you inventory a family, move it into the
+matching table with a source status and a Checked date. Table 8 lists these
+families.
+
+<table>
+  <caption>Table 8. Managed families not yet inventoried</caption>
+  <thead>
+    <tr>
+      <th scope="col">Domain</th>
+      <th scope="col">Family and provider</th>
+      <th scope="col">Managed model IDs</th>
+      <th scope="col">Local recipe</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Image</td>
+      <td>FLUX 3 Klein (Black Forest Labs)</td>
+      <td><code>image-flux3-klein</code></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-flux3-klein.md">FLUX 3 Klein (Black Forest Labs) guide (draft)</a></td>
+    </tr>
+    <tr>
+      <td>Image</td>
+      <td>Qwen Image 2.1 (Qwen)</td>
+      <td><code>image-qwen-21</code>, <code>image-qwen-21-turbo</code></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-qwen-image-21.md">Qwen Image 2.1 (Qwen) guide (draft)</a></td>
+    </tr>
+    <tr>
+      <td>Text</td>
+      <td>Bonsai 2 text (PrismML)</td>
+      <td><code>text-chat-bonsai-2-2b-2bit</code>, <code>text-chat-bonsai-2-4b-2bit</code>, <code>text-chat-bonsai-2-9b-2bit</code>, <code>text-chat-bonsai-2-27b-2bit</code></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-bonsai-text.md">Bonsai text (PrismML) guide (draft)</a></td>
+    </tr>
+    <tr>
+      <td>Text</td>
+      <td>Recursive Flint</td>
+      <td><code>text-chat-flint-4bit</code>, <code>text-chat-flint-bf16</code></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-flint.md">Recursive Flint guide (draft)</a></td>
+    </tr>
+    <tr>
+      <td>Text</td>
+      <td>GLiNER2.5 Decide</td>
+      <td><code>text-classify-gliner25-decide</code></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-gliner25-decide.md">GLiNER2.5 Decide guide (draft)</a></td>
+    </tr>
+    <tr>
+      <td>Text</td>
+      <td>Clef structured decisions (Cloudflare)</td>
+      <td><code>text-decide-clef-4bit</code>, <code>text-decide-clef-flash-4bit</code>, <code>text-decide-clef-omni</code></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-clef.md">Clef structured decisions (Cloudflare) guide (draft)</a></td>
+    </tr>
+    <tr>
+      <td>Text</td>
+      <td>D1 multimodal decisions (LiquidAI)</td>
+      <td><code>text-decide-d1-3b-bf16</code>, <code>text-decide-d1-omni-600m-fp32</code></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-d1.md">D1 multimodal decisions (LiquidAI) guide (draft)</a></td>
+    </tr>
+    <tr>
+      <td>Text</td>
+      <td>Laya decisions</td>
+      <td><code>text-decide-laya</code>, <code>text-decide-laya-multilingual</code>, <code>text-decide-laya-typed-decisions</code></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-laya.md">Laya decisions guide (draft)</a></td>
+    </tr>
+    <tr>
+      <td>Text</td>
+      <td>EmbeddingGemma 2 (Google)</td>
+      <td><code>text-embed-embeddinggemma2</code>, <code>text-embed-embeddinggemma2-coreml</code></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-embeddinggemma2.md">EmbeddingGemma 2 (Google) guide (draft)</a></td>
+    </tr>
+    <tr>
+      <td>Text</td>
+      <td>PPLX Embed v2 (Perplexity)</td>
+      <td><code>text-embed-pplx-v2-late-0.6b</code>, <code>text-embed-pplx-v2-late-9b</code>, <code>text-embed-pplx-v2-late-9b-mixed-4bit</code>, <code>text-embed-pplx-v2-context-9b-preview</code>, <code>text-embed-pplx-v2-context-9b-preview-8bit</code></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-pplx-embed-v2.md">PPLX Embed v2 (Perplexity) guide (draft)</a></td>
+    </tr>
+    <tr>
+      <td>Multimodal</td>
+      <td>Nemotron 3.5 Bolt (NVIDIA)</td>
+      <td><code>vision-chat-nemotron-35-bolt-24gb</code></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-nemotron-bolt.md">Nemotron 3.5 Bolt (NVIDIA) guide (draft)</a></td>
+    </tr>
+    <tr>
+      <td>Speech</td>
+      <td>Nemotron 3.5 Transcribe (NVIDIA)</td>
+      <td><code>speech-asr-nemotron-35-transcribe</code>, <code>speech-asr-nemotron-35-transcribe-bf16</code></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-nemotron-transcribe.md">Nemotron 3.5 Transcribe (NVIDIA) guide (draft)</a></td>
+    </tr>
+    <tr>
+      <td>Speech</td>
+      <td>Whistle speech recognition</td>
+      <td><code>speech-asr-whistle</code></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-whistle.md">Whistle speech recognition guide (draft)</a></td>
+    </tr>
+    <tr>
+      <td>Speech</td>
+      <td>Nemotron 3 Diarization (NVIDIA)</td>
+      <td><code>speech-diarization-nemotron3</code></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-nemotron3-diarization.md">Nemotron 3 Diarization (NVIDIA) guide (draft)</a></td>
+    </tr>
+    <tr>
+      <td>Speech</td>
+      <td>Breeze TTS 2 (BreezeBlue)</td>
+      <td><code>speech-tts-breeze-2</code></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-breeze-tts-2.md">Breeze TTS 2 (BreezeBlue) guide (draft)</a></td>
+    </tr>
+    <tr>
+      <td>Speech</td>
+      <td>DRAMA-3 (Fish Audio)</td>
+      <td><code>speech-tts-drama-3</code></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-drama-3.md">DRAMA-3 (Fish Audio) guide (draft)</a></td>
+    </tr>
+    <tr>
+      <td>Speech</td>
+      <td>Phonon 31m (Gradium)</td>
+      <td><code>speech-tts-phonon-31m</code></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-phonon.md">Phonon 31m (Gradium) guide (draft)</a></td>
+    </tr>
+    <tr>
+      <td>Audio</td>
+      <td>AuK (Tencent Hunyuan)</td>
+      <td><code>audio-auk-base</code>, <code>audio-auk-flash</code>, <code>audio-auk-thinker</code></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-auk.md">AuK (Tencent Hunyuan) guide (draft)</a></td>
+    </tr>
+  </tbody>
+</table>
+
+Later draft-model and companion IDs, such as `text-agent-ornith-35b-mtp` and
+`text-encoder-ltx-gemma3-12b-4bit`, follow the consuming model's recipe and
+don't need their own rows.
 
 ## Maintain the tracker
 

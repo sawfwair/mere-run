@@ -3,9 +3,10 @@
 This receipt records the official-source compact-artifact rollout and real
 native Swift/MLX inference on an Apple M4 Max with 128 GB unified memory. The
 test media uses 416 x 256 pixels, 22 frames at 24 frames per second, stereo AAC
-at 32 kHz, and matched
-prompts/seeds so several lanes could be reviewed without projecting a large
-production render.
+at 32 kHz, and matched prompts and seeds so several lanes could be reviewed
+without projecting a large production render. Compact BF16 reproduced the full
+BF16 root's MP4s exactly, and Q8 is promoted for disk, RAM, and quality rather
+than speed; Q4 was rejected.
 
 ## Artifact identity
 
@@ -51,6 +52,8 @@ contains the Metal receipt and exact 9-/21-point media parity.
 
 The old full BF16 root and compact BF16 candidate used the same release binary,
 prompt, seed, geometry, schedule, resident-BF16 policy, and compiled execution.
+The following table lists the shared MP4 hash and comparison result for each
+workload.
 
 | Workload | Full and compact MP4 SHA-256 | Video and audio result |
 | --- | --- | --- |
@@ -81,6 +84,9 @@ no Q8 collapse, lattice, identity loss, broken motion, or additional audio failu
 Q4 changed the character into a helmeted figure and materially changed motion,
 background, and lighthouse structure. This was an operator review rather than
 an independent blinded panel, so the latter remains a release-note limitation.
+
+The following table compares each Q8 and Q4 candidate against the BF16
+reference for the same lane.
 
 | Lane | Candidate | SSIM | PSNR | VMAF | Audio corr. | Audio rel. L2 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |

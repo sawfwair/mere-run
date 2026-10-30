@@ -96,21 +96,21 @@ of updating all model weights.
 
 | Area | Commands | Capabilities |
 | --- | --- | --- |
-| [Text, code, and agents](./docs/runtime/text.md) | `text chat`, `text code`, `text embed`, `text anonymize`, `text decide`, `agent` | Chat, code generation, tool calls, structured responses, embeddings, personal information redaction, [Laya decisions](./docs/runtime/laya.md), [D1 multimodal decisions](./docs/runtime/d1.md), and [Clef decisions](./docs/runtime/clef.md), including native Omni decisions over mixed text, image, audio, and video input. Models include Gemma 4, DiffusionGemma, Qwen3.8, LFM2.5, Laguna, Inkling, Nemotron Lightning, [Nemotron Bolt](./docs/runtime/nemotron-bolt.md), DeepSeek V4 Flash, and Ornith. |
-| [Multimodal chat](./docs/runtime/text.md) | `text chat`, `vision caption`, `vision inspect`, `vision embed` | Image understanding with Gemma, Qwen, LFM, Bonsai, and Muse Glimmer. Nemotron Nano Omni also supports audio and video understanding. Shared text and image embeddings support retrieval. [EmbeddingGemma 2](./docs/runtime/embeddinggemma2.md) adds native text, image, audio, and video vectors through `text embed`. [PPLX Embed v2](./docs/runtime/pplx-embed-v2.md) adds token vectors for text/image retrieval and contextual chunk vectors, with ready-to-load packed 9B variants. |
-| [Images](./docs/runtime/image.md) | `image generate` | Generation and editing with Klein, ZImage, HiDream O1, SenseNova U1.5, Krea 2, Qwen Image 2.1 and Turbo, Qwen Image Edit 2511, Ideogram 4, and Bonsai. Controls include ordered references, structured prompts, and LoRA adapters. |
+| [Text, code, and agents](./docs/runtime/text.md) | `text chat`, `text code`, `text embed`, `text anonymize`, `text classify`, `text extract`, `text decide`, `agent` | Chat, code generation, tool calls, structured responses, embeddings, and personal information redaction. Chat models include Gemma 4, DiffusionGemma, Qwen3.8, LFM2.5, Laguna, Inkling, Nemotron Lightning, [Nemotron Bolt](./docs/runtime/nemotron-bolt.md), [Recursive Flint](./docs/runtime/flint.md), DeepSeek V4 Flash, and Ornith; [Kolibri-1](./docs/runtime/kolibri.md) runs from a local checkpoint directory. [GLiNER2.5 Decide](./docs/runtime/gliner25-decide.md) classifies text and extracts entities, relations, and structures. [Laya](./docs/runtime/laya.md), [D1](./docs/runtime/d1.md), and [Clef](./docs/runtime/clef.md) score typed decisions, including Clef Omni decisions over mixed text, image, audio, and video input. |
+| [Multimodal chat](./docs/runtime/text.md) | `text chat`, `vision caption`, `vision inspect`, `vision embed` | Image understanding with Gemma, Qwen, LFM, Bonsai, Muse Glimmer, and Nemotron Bolt. Nemotron Nano Omni also supports audio and video understanding. Shared text and image embeddings support retrieval. [EmbeddingGemma 2](./docs/runtime/embeddinggemma2.md) adds text, image, audio, and video vectors through `text embed`, with an optional Core ML variant. [PPLX Embed v2](./docs/runtime/pplx-embed-v2.md) adds token vectors for text and image retrieval, contextual chunk vectors, and packed 9B variants. |
+| [Images](./docs/runtime/image.md) | `image generate` | Generation and editing with FLUX.2 and FLUX 3 Klein, FLUX.2 dev, FLUX.1 dev, Z-Image, HiDream O1, SenseNova U1.5, Krea 2, Qwen Image 2.1 and Turbo, Qwen Image Edit 2511, Ideogram 4, and Bonsai. Controls include ordered references, structured prompts, and LoRA adapters. |
 | [Video](./docs/runtime/video.md) | `video generate`, `video session`, `video animate`, `video prepare-masks` | Synchronized audio and video with LTX 2.5 and 2.3. MiniMax-H3 supports keyframes and ordered media references. Other workflows include Wan 2.2 generation and SCAIL-2 subject animation with SAM masks. |
 | [Worlds](./docs/runtime/world.md) | `video cosmos3`, `world serve` | Cosmos3-Edge generation, visual reasoning, and learned-action dynamics. DreamX and Cosmos3 support persistent world sessions. |
 | [Music](./docs/runtime/music.md) | `music generate`, `music analyze`, `music realtime`, `music transcribe`, `music serve` | MiniMax Music 3 songs and composition. Experimental YuE2 songs with ABC scores. ACE-Step generation, covers, and editing. Magenta RT2 realtime MIDI performance and MuScriptor transcription of full mixes into MIDI. |
 | [Sound effects](./docs/runtime/sfx.md) | `sfx generate`, `sfx video generate`, `sfx clap`, `sfx ae` | Woosh and MMAudio generation conditioned on text or video. Text and audio similarity scoring, plus audio latent encoding and decoding. |
-| [Speech](./docs/runtime/speech.md) | `speech synthesize`, `speech transcribe`, `speech listen`, `speech diarize`, `speech profile` | Qwen3 speech synthesis, saved voice profiles, Qwen3, Parakeet, Whistle, and [Nemotron 3.5 Transcribe](./docs/runtime/nemotron-transcribe.md) transcription, live microphone input, and Sortformer speaker timelines. |
-| [Audio generation and restoration](./docs/runtime/audio.md) | `audio enhance`, `music separate`, `audio generate` | AP-BWE speech bandwidth extension and UniverSR audio super-resolution. RoFormer stem separation, reverb removal, and noise removal. LTX 2.5 text-to-audio generation. |
+| [Speech](./docs/runtime/speech.md) | `speech synthesize`, `speech transcribe`, `speech listen`, `speech diarize`, `speech diarize-live`, `speech profile` | Speech synthesis with Qwen3, Breeze TTS 2, Phonon, and DRAMA-3, including voice cloning and saved voice profiles. Transcription with Parakeet, Qwen3-ASR, [Whistle](./docs/runtime/whistle.md), and [Nemotron 3.5 Transcribe](./docs/runtime/nemotron-transcribe.md), plus live microphone input. Sortformer and Nemotron 3 speaker timelines. |
+| [Audio generation and restoration](./docs/runtime/audio.md) | `audio enhance`, `audio edit`, `music separate`, `audio generate` | AP-BWE speech bandwidth extension and UniverSR audio super-resolution. AuK instruction-conditioned speech generation and editing. RoFormer stem separation, reverb removal, and noise removal. LTX 2.5 text-to-audio generation. |
 | [Vision](./docs/runtime/vision.md) | `vision ground`, `vision segment`, `vision track`, `vision face`, `vision pose`, `vision flow`, `vision ocr` | Falcon object grounding, SAM 3.1 masks and tracking, face analysis, body, hand, and face landmarks, and optical flow. LightOnOCR 3 (1B, 0.8B, and 4B), GLM, and Infinity extract text from images; LightOn grounding also returns labeled boxes and chart data. |
 | [Depth and 3D](./docs/runtime/vision.md) | `vision depth`, `vision depth-video`, `vision geometry`, `vision geometry-multiview`, `image reconstruct-3d`, `image reconstruct-3d-trellis2`, `image reconstruct-3d-multiview` | Depth, cameras, point clouds, meshes, and materials for physically based rendering. Models include Marigold V2, Video Depth Anything, MoGe-2, Depth Anything 3, TripoSR, TRELLIS.2, and InstantMesh. |
 | [Geospatial inference](./docs/runtime/geo.md) | `geo flood`, `geo fire`, `geo tessera`, `geo olmoearth` | TerraMind flood and fire class scores, TESSERA v2 Sentinel time-series embeddings, and OlmoEarth v1.2 multisensor spatial embeddings from prepared tensors. |
 | [Training and adapters](./docs/cli.md) | `image train-lora`, `text train-lora`, `music train-adapter`, `adapter` | Local image-generation, text, image-conditioned VLM, and music adapter training, named recipes, checkpoints, and public adapters verified by checksum. Support varies by model family. |
 | [Evaluation](./docs/evaluation-packs.md) | `eval pack validate`, `eval run`, `eval promote`, `model benchmark`, `gate` | External text-chat and image-conditioned VLM evaluation packs, structured responses, matched model and adapter runs, resumable reports, promotion receipts, benchmarks, and installed-model checks. |
-| [API serving](./docs/runtime/api-server.md) | `api serve`, `open-webui quickstart`, `model runtime`, `status` | OpenAI-compatible chat, embeddings, images, and speech, plus native vision routes. Model loading and pinning, idle expiry, memory limits, and runtime telemetry. |
+| [API serving](./docs/runtime/api-server.md) | `api serve`, `open-webui quickstart`, `model runtime`, `status` | OpenAI-compatible chat, embeddings, images, speech, and transcription, plus native routes for vision, diarization, and text decisions, classification, and extraction. Model loading and pinning, idle expiry, memory limits, and runtime telemetry. |
 | [Portable workflows](./docs/workflows.md) | `graph`, `executor`, `relay`, `run` | Typed graphs and immutable job bundles for local, SSH, or relay execution. Resumable runs, progress events, verified artifact downloads, cancellation, and retry. |
 
 Geospatial commands accept prepared tensors. Your workflow remains responsible
@@ -212,7 +212,7 @@ Review the music model's terms and memory requirements before downloading it.
 The command also saves composition metadata. The
 `--require-composer-installed` option prevents an implicit composer download,
 and `--lyrics-preflight strict` enables strict lyric-duration checks.
-The `q8-lm` mode quantizes the global language model while retaining the
+The `q8-lm` mode quantizes the global language model and keeps the
 residual-depth decoder in BF16.
 
 For supplied lyrics, ACE-Step covers, stem separation, MIDI transcription, and
@@ -438,7 +438,9 @@ uses `sudo` only if the destination requires it. For app integrations, see the
 ### Install on Linux
 
 Linux packages contain the headless CLI and runtime assets, not macOS Studio.
-Published Linux CUDA artifacts include x86_64 tarballs and Debian packages.
+When a release includes Linux artifacts, they're CUDA tarballs and Debian
+packages for x86_64 and arm64. Not every release includes them, so check the
+assets on the [GitHub releases page](https://github.com/sawfwair/mere-run/releases).
 Hosted CPU tests and release-hardware checks don't establish every model's
 compatibility on every Linux host.
 
@@ -447,7 +449,7 @@ For dependencies, CUDA setup, packaging, and validation limits, see the
 
 ### Build from source
 
-The package uses Swift tools 6.0 and declares macOS 15 and iOS 18 platforms.
+The package uses Swift tools 6.1 and declares macOS 15 and iOS 18 platforms.
 For development on Apple Silicon macOS:
 
 1. Install the validation tools:

@@ -4,7 +4,7 @@ Research snapshot: July 13, 2026.
 
 This report records five permissively licensed model lanes plus the separately
 license-gated DINOv3 dependency used by TRELLIS.2, all selected for native
-Swift/MLX execution in `mere.run`. It separates what each neural model actually
+Swift/MLX execution in `mere.run`. It separates what each neural model
 predicts from downstream files that `mere.run` derives, and it makes the
 InstantMesh and DINOv3 licensing boundaries explicit. Exact TRELLIS.2 artifact
 identities live in `Trellis2Resources`. The other geometry identities live in

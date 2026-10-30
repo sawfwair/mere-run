@@ -2,7 +2,10 @@
 
 This receipt records a real local end-to-end MiniMax-H3 FL2VA generation on an
 M4 Max with 128 GiB unified memory. It is an artifact benchmark, not a
-transformer-only extrapolation.
+transformer-only extrapolation. The locked 124-frame, 832 x 480 BF16 workload
+completed end to end in 1,653.711 seconds (27:33.711). Later sections add
+cache-policy, sliding-window, Turbo adapter, dynamic sparse, 768-line, VAE
+tile, and ten-second boundary receipts from the same managed checkpoint.
 
 ## Locked workload
 
@@ -20,13 +23,15 @@ This historical artifact is reproducible on the runtime with
 `MERERUN_H3_CACHE_STRATEGY=scheduled-tail`. Production `maximum` selects
 the adaptive first-block policy in the adaptive cache comparison.
 
-The command is reproducible with the repository benchmark harness:
+To reproduce the run, use the repository benchmark harness:
 
 ```bash
 scripts/h3-end-to-end-benchmark.sh target-maximum
 ```
 
 ## Result
+
+The following table lists the time spent in each phase of the locked run.
 
 | Phase | Time |
 | --- | ---: |
@@ -54,7 +59,8 @@ spatial lattice rejected in earlier aggressive cache experiments.
 A later release-build A/B held checkpoint, prompt, seed, geometry, schedule,
 weight residency, and packed layout fixed while changing only the cache
 decision. This practical proxy used resident BF16 at 416 x 256 pixels, 107 frames,
-20 schedule points and 19 evaluations, and 3,768 packed rows.
+20 schedule points and 19 evaluations, and 3,768 packed rows. The following
+table compares the two cache policies.
 
 | Policy | Full and cached evaluations | Executed blocks | Denoising | End to end |
 | --- | ---: | ---: | ---: | ---: |
@@ -82,6 +88,7 @@ same managed BF16 checkpoint. It generated 56 frames at 416 x 256 pixels using 3
 windows, an 18-frame video-and-audio overlap, nine schedule points per window,
 and the adaptive `maximum` policy. The second window reused the resident Qwen
 conditioner and transformer: both model-load phases measured 0.000 seconds.
+The following table lists each window's evaluations and timings.
 
 | Window | Full and cached evaluations | Executed blocks | Denoising | Generation |
 | --- | ---: | ---: | ---: | ---: |
@@ -106,10 +113,10 @@ SHA-256
 Contact-sheet inspection confirmed a coherent approach to and departure from
 the injected composition without collapse.
 
-These receipts prove FL2VA execution. Ref2VA now has a separate real-checkpoint
-validation receipt in
-[`minimax-h3-ref2va-mlx-8bit.md`](./minimax-h3-ref2va-mlx-8bit.md), in addition
-to the typed continuation-layout coverage here.
+These receipts prove FL2VA execution. Ref2VA has a separate real-checkpoint
+receipt in
+[MiniMax-H3 Ref2VA MLX 8-bit validation](./minimax-h3-ref2va-mlx-8bit.md), in
+addition to the typed continuation-layout coverage here.
 
 The locked MP4 predates the audio-VAE bias-loading correction documented in
 the kernel lab. Its video remains the accepted visual and timing receipt, but
@@ -138,6 +145,8 @@ test:
 - **Seed:** `20260804`.
 - **Packed rows:** 36,047.
 - **Execution:** Dense BF16, blockwise compiled, exact `quality` acceleration.
+
+The following table lists the phase timings for the Turbo run.
 
 | Phase | Time |
 | --- | ---: |
@@ -178,6 +187,8 @@ generation, not from random-tensor timing alone:
 - **Prompt:** A continuous rain-soaked railway-platform two-shot with a detective,
   a paramedic, a recorder handoff, a passing train, and two spoken lines
 
+The following table compares the dense and dynamic sparse arms phase by phase.
+
 | Phase | Dense | Dynamic sparse |
 | --- | ---: | ---: |
 | Conditioner preparation/load | 0.332 s | 0.311 s |
@@ -196,7 +207,7 @@ This is a 29.7% measured denoise reduction and 27.3% measured native
 end-to-end reduction. Both processes reported zero swaps and approximately
 68.0 GB peak footprint. The dense arm paid a larger first-evaluation compile
 cost, while the later sparse process could reuse system Metal compilation
-state. Therefore the complete-run delta is an observed receipt, not a claim
+state. Therefore, the complete-run delta is an observed receipt, not a claim
 that every second came from sparsity. The most comparable late dense arm took
 131.430 and 134.311 seconds; sparse steady state took 101.294 seconds. The
 sparse process's final protected dense evaluation took 127.645 seconds, giving
@@ -231,6 +242,8 @@ scripts/h3-end-to-end-benchmark.sh probe-768
 - **Execution:** Dense BF16, blockwise compiled, with 768-query single-evaluation attention chunks.
 - **Acceleration:** Exact `quality` with no tail reuse.
 
+The following table compares the baseline and optimized exact runs.
+
 | Phase | Baseline | Optimized exact |
 | --- | ---: | ---: |
 | Text encoding | 4.218 s | 4.078 s |
@@ -240,7 +253,7 @@ scripts/h3-end-to-end-benchmark.sh probe-768
 | Audio decode | 0.873 s | 0.829 s |
 | End to end | 1,253.425 s | **1,027.310 s (17:07.310)** |
 
-The full model evaluation itself fell from 953.192 to 775.062 seconds, a
+The full model evaluation itself fell from 953.192 to 775.062 seconds:
 1.230 times the throughput and 18.7% less wall time. End to end, the boundary
 is 3:46.115 faster (18.0%). Peak reported Metal memory remained 48.77 GiB, so
 this workload is compute-bound rather than blocked by unified-memory capacity.
@@ -297,7 +310,7 @@ A deterministic full-block dtype gate at these exact 73,470 rows measured
 29.679 seconds in BF16 and 30.204 seconds in FP16. The FP16 output remained
 numerically close for one block (`rel_l2=0.00243324`), but it was 1.7% slower;
 the shorter 14,958- and 37,966-row screens were also slower. The runtime keeps
-BF16 because changing precision does not unlock additional M4 throughput for
+BF16 because changing precision does not add M4 throughput for
 this workload.
 
 That number is the physical one-evaluation boundary, not a quality render.

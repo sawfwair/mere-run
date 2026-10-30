@@ -1,26 +1,34 @@
 # Cookbooks
 
-This page is for mere.run Studio and command-line users. Use the bundled
-cookbooks to prepare prompts, choose inputs, and review command options offline.
-For source research and recipe status, see the
+This page is for mere.run Studio and command-line users. The CLI and the
+macOS app bundle two kinds of offline guide: model guides, which describe one
+model family, and command cookbooks, which describe one command. Use them to
+prepare prompts, choose inputs, and review options without a network
+connection. For source research and recipe status, see the
 [provider prompting guide tracker](./provider-prompting-guides.md).
 
 ## Read a model guide
 
-The handbook contains original recipes for 140 managed model IDs, organized
-into 59 families. Each guide includes an example, supported controls, variant
-notes, review advice, and sources. Models without a text-prompt interface have
-input-preparation guidance.
+As of v0.67.1, the model handbook covers 181 managed model IDs in 77 families.
+Each guide includes an example, supported controls, variant notes,
+review advice, and sources. Guides for models without a text-prompt interface
+describe how to prepare inputs instead.
 
 To read a model guide in macOS Studio, follow these steps:
 
-1. In **Help**, select **mere.run Guide**.
+1. Click **Help > mere.run Guide**, or press <kbd>Command+?</kbd>.
 2. In **Guide collection**, select **Models**.
 3. In the search field, enter a family name or model ID.
 4. Select the guide.
 5. In **Model**, select a variant.
 
-To read a model guide in a terminal, run the following command:
+To list the model families and their managed model IDs, run:
+
+```bash
+mere.run guide --list-models
+```
+
+To read a model guide in a terminal, pass a model ID:
 
 ```bash
 mere.run guide --model image-klein-9b
@@ -31,28 +39,28 @@ Reading guides requires neither a network connection nor downloaded model
 weights. Source links require a network connection. Before running inference
 offline, download the checkpoint and the components required by your workflow.
 
-These recipes are editorial drafts. They aren't records of successful
-inference for every checkpoint. Guides distinguish provider material from
-local workflow advice when provider guidance remains unverified.
+The recipes are editorial drafts, not records of successful inference for
+every checkpoint. When provider guidance is unverified, a guide separates
+provider material from local workflow advice.
 
 ## Read a command cookbook
 
 The **Commands** collection contains command cookbooks. Each cookbook describes
 required models, options, prompting patterns, examples, and troubleshooting.
 
-To read the image generation cookbook in a terminal, run the following command:
+To read the image generation cookbook in a terminal, run:
 
 ```bash
 mere.run guide image generate
 ```
 
-To list the available command topics, run the following command:
+To list the command topics with the models each one covers, run:
 
 ```bash
 mere.run guide --list
 ```
 
-To save a Markdown index of command topics, run the following command:
+To save a Markdown index of command topics, run:
 
 ```bash
 mere.run guide --list --markdown > guides.md
@@ -60,14 +68,19 @@ mere.run guide --list --markdown > guides.md
 
 ## Available topics
 
-The following topics cover creative and runtime workflows:
+As of v0.67.1, `mere.run guide --list` includes the following topics for
+creating and analyzing media:
 
+- `audio edit`
 - `image generate`
 - `image train-lora`
 - `image validate`
 - `text chat`
 - `text code`
 - `text embed`
+- `text decide`
+- `text classify`
+- `text extract`
 - `text anonymize`
 - `speech synthesize`
 - `speech transcribe`
@@ -89,8 +102,8 @@ The following topics cover creative and runtime workflows:
 - `vision depth-video`
 - `vision ocr`
 - `audio enhance`
-- `music analyze`
 - `music generate`
+- `music analyze`
 - `music transcribe`
 - `music separate`
 - `sfx generate`
@@ -102,7 +115,7 @@ The following topics cover creative and runtime workflows:
 - `plugin`
 - `status`
 
-The following topics cover operational workflows:
+The following topics cover model management and setup:
 
 - `model list`
 - `model runtime`
@@ -115,14 +128,19 @@ The following topics cover operational workflows:
 - `model repair-manifests`
 - `setup`
 - `agent onboard`
+- `agent status`
 - `agent install-pi`
 - `agent start`
-- `agent status`
+
+Commands without a topic, such as `speech diarize`, `geo`, and `graph`, are
+covered by their `--help` text and the [CLI reference](./cli.md). Some of their
+models have model guides; for example, `mere.run guide --list-models` lists the
+Nemotron 3 diarization and TerraMind guides.
 
 ## Read a command guide for a model
 
 Some command cookbooks include model-specific advice. To read the image
-cookbook for Z-Image nano, run the following command:
+cookbook for Z-Image nano, run:
 
 ```bash
 mere.run guide image generate --model image-zimage-nano

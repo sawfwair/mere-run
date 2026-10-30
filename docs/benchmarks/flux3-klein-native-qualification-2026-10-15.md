@@ -1,8 +1,10 @@
 # FLUX 3 Klein native checkpoint qualification
 
 This report gives contributors the bounded checkpoint evidence for the native
-Swift/MLX FLUX 3 Klein runtime. All four cases pass execution and visual review.
-The images are AI-generated outputs from these qualification runs.
+Swift/MLX FLUX 3 Klein runtime, run on an Apple M3 Max with macOS 26.6.2. All
+four cases pass execution and visual review: two text-to-image sizes, a
+single-reference edit, and a two-reference composition. The images are
+AI-generated outputs from these qualification runs.
 
 ## Checkpoint and runtime
 
@@ -16,7 +18,7 @@ at `45e57c9fb06f9751cdced29a65c5d2171003be05`.
 All four weight files match their pinned SHA-256 hashes. The transformer has
 359 BF16 tensors; the autoencoder has 251 tensors and matches the upstream
 schema. The text encoder uses the original Qwen3-VL-4B shards. The
-[JSON receipt](/qualification/flux3-klein-native-2026-10-15.json) records the
+[FLUX 3 Klein JSON receipt](/qualification/flux3-klein-native-2026-10-15.json) records the
 weight hashes, inference-source hashes, prompts, input order, output hashes,
 and process measurements.
 
@@ -31,7 +33,8 @@ Generation seconds come from durable-run timestamps at one-second resolution
 and exclude admission waiting. The receipt also preserves raw process wall time,
 which includes queue delays. These shared-host runs are not isolated throughput
 benchmarks. Peak footprint is the operating system's process measurement, not
-an MLX allocation counter or a minimum supported RAM claim.
+an MLX allocation counter or a minimum supported RAM claim. The following table
+lists each case:
 
 | Case | Canvas | References | Generation seconds | Peak process footprint (GiB) |
 | --- | --- | ---: | ---: | ---: |
@@ -71,7 +74,8 @@ This exercises the multi-reference preprocessing and reference-coordinate path.
 ## Reproduce the cases
 
 Obtain gated checkpoint access, configure your Hugging Face token, and review
-the FLUX Kommunity License before acknowledging it during installation:
+the FLUX Kommunity License before acknowledging it during installation. Then
+install the model and run the 512-pixel text-to-image case:
 
 ```bash
 mere.run model pull image-flux3-klein --accept-model-license

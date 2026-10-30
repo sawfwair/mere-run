@@ -1,6 +1,6 @@
-# Bonsai 2 Small fixed-runtime quality and throughput
+# Bonsai 2 Small fixed-runtime quality and throughput — 2026-10-16
 
-This fresh run measures the native 2B, 4B, and 9B checkpoints after the [precise Metal correction](./bonsai2-small-upstream-parity-2026-10-16.md). It uses the same primary requests and scoring as the [original run](./bonsai2-small-2026-10-15.md), with release SHA-256 `6468cd000e7268c9ba1678892a96beccbf13f296fceacf970a4af7f72322d23a`. Python orchestrates and scores; inference is native Swift/MLX.
+This fresh run measures the native 2B, 4B, and 9B checkpoints on an Apple M3 Max after the [precise Metal correction](./bonsai2-small-upstream-parity-2026-10-16.md). Strict quality scores were 12/16 for 2B, 10/16 for 4B, and 12/16 for 9B, with median text decode rates of 133.32, 16.20, and 16.39 tok/s. It uses the same primary requests and scoring as the [original run](./bonsai2-small-2026-10-15.md), with release SHA-256 `6468cd000e7268c9ba1678892a96beccbf13f296fceacf970a4af7f72322d23a`. Python orchestrates and scores; inference is native Swift/MLX.
 
 All model storage and raw results are on T7. The [machine-readable summary](./bonsai2-small-fixed-2026-10-16-summary.json) contains scores, selected outputs, native timing samples, source identities, and validation receipts. Public email domains are redacted as in the original report; raw T7 data is unchanged.
 
@@ -12,7 +12,7 @@ Fresh loopback sessions use an 8,192-token context and serial requests. Quality 
 
 ## Quality
 
-The suite contains eight grounded cases, two generated Python functions with five tests each, four images, arithmetic, and reasoning. Strict scoring checks listed facts and parses JSON without fences; it is not a complete JSON schema or broad quality assessment. Code runs in the same closed evaluator with no imports, limited builtins/methods, a CPU limit, and a short wall timeout. Saved scores were independently recomputed.
+The suite contains eight grounded cases, two generated Python functions with five tests each, four images, arithmetic, and reasoning. Strict scoring checks listed facts and parses JSON without fences; it is not a complete JSON schema or broad quality assessment. Code runs in the same closed evaluator with no imports, limited builtins/methods, a CPU limit, and a short wall timeout. Saved scores were independently recomputed. The following table shows strict scores per model.
 
 | Model | Passed cases | Text cases | Grounded | Code tests | Vision strict | Arithmetic | Reasoning strict |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
@@ -20,7 +20,7 @@ The suite contains eight grounded cases, two generated Python functions with fiv
 | 4B | 10/16 | 9/12 | 6/8 | 6/10 | 1/4 | Pass | Pass |
 | 9B | 12/16 | 10/12 | 7/8 | 5/10 | 2/4 | Pass | Pass |
 
-One complete outer Markdown fence is removed only for a separate recovery diagnostic. Primary strict scores remain unchanged.
+One complete outer Markdown fence is removed only for a separate recovery diagnostic. Primary strict scores remain unchanged. The following tables show recovery and latency results, then the failed primary cases.
 
 | Model | Vision after fence recovery | Correct fields after recovery | Median quality request (s) | Slowest quality request (s) | 4,096-token caps |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -38,9 +38,9 @@ All three models counted every shape correctly but failed the exact heading chec
 
 ## Resident throughput
 
-The later [upstream comparison and performance fix](./bonsai2-small-throughput-2026-10-16.md) identifies a compiled-graph model-order penalty in this executable. The measurements below remain the original observations; use the later report for the corrected runtime.
+The later [upstream comparison and performance fix](./bonsai2-small-throughput-2026-10-16.md) identifies a compiled-graph model-order penalty in this executable. The measurements in this section remain the original observations; use the later report for the corrected runtime.
 
-Each model/modality has one discarded 128-token warm-up and three measured resident requests. Text budgets are 512 tokens; image budgets are 256. Native `lastRequest` timings provide decode seconds and token counts, checked against API usage. Prefix reuse follows the server default; the collector unloads each model between sizes. Decode TPS includes reasoning tokens and excludes model load and prefill. These capped requests are not scored for completion or quality.
+Each model/modality has one discarded 128-token warm-up and three measured resident requests. Text budgets are 512 tokens; image budgets are 256. Native `lastRequest` timings provide decode seconds and token counts, checked against API usage. Prefix reuse follows the server default; the collector unloads each model between sizes. Decode TPS includes reasoning tokens and excludes model load and prefill. These capped requests are not scored for completion or quality. The following tables show decode rates, then prefill, first-token, and request medians.
 
 | Model | Text median tok/s | Text range | Vision median tok/s | Vision range |
 | --- | ---: | --- | ---: | --- |
@@ -61,7 +61,7 @@ Process, memory-pressure, and thermal snapshots are retained for every request. 
 
 ## Original-run reference
 
-Both runs use the same request bodies, but each has one unseeded quality trial and three timing repetitions per reported cohort on an interactive desktop. Differences are fresh observations, not an isolated causal estimate of the numerical fix or statistically established speed gains.
+Both runs use the same request bodies, but each has one unseeded quality trial and three timing repetitions per reported cohort on an interactive desktop. Differences are fresh observations, not an isolated causal estimate of the numerical fix or statistically established speed gains. The following table compares the two runs.
 
 | Model | Original quality | Fixed quality | Original text tok/s | Fixed text tok/s | Original vision tok/s | Fixed vision tok/s |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |

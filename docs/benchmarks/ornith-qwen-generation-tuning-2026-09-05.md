@@ -6,6 +6,11 @@ and use pipelined target decoding after permanent greedy MTP fallback. These
 changes address repeated-request stalls. Other model IDs retain their scheduling
 defaults. Draft-cost and generation block-size defaults are unchanged.
 
+Measured on an Apple M4 Max, adaptive MTP decodes Qwen3.8 27B Q4 at 1.09× to
+2.38× its serial rate across five workloads. For Ornith 1.5 Q4 the ratio ranges
+from 0.50× to 1.15×. All 84 greedy requests preserved exact output hashes and
+token counts.
+
 This follow-up to the [Flash-Next transfer assessment](ornith-qwen-flash-transfer-2026-09-05.md)
 and [PR #442](https://github.com/sawfwair/mere-run/pull/442) measures complete
 generation. Target-verification rates from that assessment are not generation
@@ -15,7 +20,7 @@ scheduling changes and the repeated-request benchmark harness.
 The subsequent [Ornith upstream head comparison](ornith-mtp-upstream-check-2026-09-05.md)
 identifies weak stock-head acceptance on the code and prose prompts. A separate
 replacement-head experiment improves acceptance while preserving the tested
-outputs. The tables below retain the original installed-head measurements.
+outputs. The following tables retain the original installed-head measurements.
 
 ## Final workload results
 
@@ -117,7 +122,8 @@ Supported Q4 Qwen 27B and Ornith geometries submit short decoder blocks
 asynchronously. Final logits are evaluated before target acceptance or cache
 commit. Prefill and unsupported geometries retain blocking boundaries. Once the
 greedy adaptive policy permanently selects zero draft tokens, the remaining
-request uses the existing pipelined target decoder.
+request uses the existing pipelined target decoder. The following environment
+variables control this behavior:
 
 | Environment variable | Explicit control | Managed Q4 default |
 | --- | --- | --- |
@@ -159,7 +165,7 @@ results.
 Across final receipts, initial GPU utilization ranged from 0% to 72%,
 and the initial one-minute CPU load average ranged from 3.96 to 45.20.
 The maximum recorded memory-pressure level was 1; the largest per-receipt
-swap increase was 0.00 MiB.
+swap increase was 0.00 MiB. The following table lists peak resident memory:
 
 | Model | Max post-request serial RSS (GiB) | Max post-request MTP RSS (GiB) |
 | --- | ---: | ---: |
@@ -182,7 +188,8 @@ and numeric load samples. Machine-local paths and process identifiers are
 omitted. The receipt file's SHA-256 is
 `cb73aa4dfe4f007301277af9ab28354a0ed51faf196e8138bcdda73edb65fd76`.
 
-To reproduce the greedy workload sweep with installed models:
+To reproduce the greedy workload sweep with installed models, run the
+following commands:
 
 ```bash
 swift build -c release --product mere.run --disable-index-store

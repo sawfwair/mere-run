@@ -1,11 +1,9 @@
 # Architecture reading map
 
-Start at the CLI surface, and then follow one runtime family at a time. This map
-gives contributors a reliable reading order without explaining every model
-detail.
-
-For the broader documentation set, start at the
-[mere.run documentation home](/).
+Start at the CLI surface, and then follow one runtime family at a time. This
+map gives you a reading order for the source without explaining every model
+detail. For what each directory and target owns, see the
+[repository tour](./repository-tour.md).
 
 ## Start here
 
@@ -18,8 +16,8 @@ For the broader documentation set, start at the
   - `Sources/MereRunModelKit/MereRunModelManifest.swift`
   - `Sources/MereRunCore/ModelResolver.swift`
 
-If you want to understand what a command does end to end, start at the command
-file, and then use the table to open the family entry point.
+To follow a command end to end, start at its command file, and then open the
+family entry point listed on this page.
 
 ## Catalogs and contracts
 
@@ -207,11 +205,24 @@ Laya typed decisions:
 - Native ModernBERT encoder and decision heads: `Sources/MereRunLayaModel/`
 - [Usage and checkpoint selection](./runtime/laya.md)
 
+## Other text families
+
+Kolibri, Recursive Flint, and Nemotron Bolt follow the same split: Core loads
+checkpoints and runs requests, and an owned target holds the model computation.
+
+- Kolibri: `Sources/MereRunCore/Kolibri/KolibriGenerator.swift` and
+  `Sources/MereRunKolibriModel/`. See [Native Kolibri-1](./runtime/kolibri.md).
+- Recursive Flint: `Sources/MereRunCore/Flint/` and
+  `Sources/MereRunFlintModel/`, including learned attention sinks, mixed
+  attention, and sigmoid MoE routing. See [Run Recursive Flint](./runtime/flint.md).
+- Nemotron Bolt: `Sources/MereRunCore/NemotronBolt/NemotronBoltGenerator.swift`
+  and `Sources/MereRunNemotronBoltModel/`. See [Nemotron Bolt](./runtime/nemotron-bolt.md).
+
 ## Speech stack
 
 Read [Speech runtime boundaries](./internals/speech-runtime-boundaries.md) for
-the dependency map. Qwen ASR, Qwen TTS, Parakeet, and Sortformer build independently of
-`MereRunCore`; the speech orchestration modules retain compatibility exports.
+the dependency map. The speech model libraries build independently of
+`MereRunCore`; `AudioSTT` and `AudioTTS` keep compatibility exports.
 
 Speech synthesis command path:
 
@@ -222,6 +233,10 @@ Speech synthesis command path:
 - Runtime entry point: `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator.swift`
 - Breeze runtime entry point: `Sources/AudioTTS/BreezeTTS/BreezeTTSGenerator.swift`
 - Breeze Swift/MLX graph: `Sources/AudioBreezeTTSModel/BreezeTTSModel.swift`
+- DRAMA-3 runtime entry point: `Sources/AudioTTS/Drama3/Drama3Generator.swift`,
+  with model computation in `Sources/AudioDrama3Model/`
+- Phonon 31m runtime entry point: `Sources/AudioTTS/Phonon/PhononGenerator.swift`,
+  with model computation in `Sources/AudioPhononModel/`
 - Read next:
   - `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator+Loading.swift`
   - `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator+Generation.swift`
@@ -247,10 +262,17 @@ Speech transcription:
 - Runtime roots:
   - `Sources/AudioSTT/Qwen3ASR/Qwen3ASRGenerator.swift`
   - `Sources/AudioSTT/Parakeet/ParakeetGenerator.swift`
+  - `Sources/AudioSTT/Whistle/WhistleGenerator.swift`
+  - `Sources/AudioSTT/NemotronTranscribe/NemotronTranscribeGenerator.swift`
 - Loading and execution: the adjacent `+Loading.swift`, `+Generation.swift`,
   and `+Decoding.swift` files
 - Qwen model layers: `Sources/AudioQwen3ASRModel`
 - Parakeet model layers and decoders: `Sources/AudioParakeetModel`
+- Whistle encoder and cached decoder: `Sources/AudioWhistleModel`. See
+  [Native Whistle](./runtime/whistle.md).
+- Nemotron Transcribe encoders, speaker fusion, and hybrid decoder:
+  `Sources/AudioNemotronTranscribeModel`. See
+  [Nemotron Transcribe](./runtime/nemotron-transcribe.md).
 - Shared cache protocol and implementations: `Sources/MereRunKVCache`
 
 Speaker diarization:
@@ -389,7 +411,7 @@ Cosmos3-Edge omnimodal generation and world simulation:
 
 ## Validation and diagnostics
 
-The advanced image validator is intentionally separate from generation:
+The advanced image validator is separate from generation:
 
 - CLI root: `Sources/MereRunCLI/Commands/ImageValidateCommand.swift`
 - Read next:
@@ -404,16 +426,4 @@ The advanced image validator is intentionally separate from generation:
 3. Jump to that modality's runtime entry point.
 4. Follow companion files in order: loading or preparation, then generation,
    then output.
-5. If you need implementation detail, continue to the larger model-definition
-   files.
-
-Native Phonon 31m computation is owned by `Sources/AudioPhononModel/`.
-`Sources/AudioTTS/Phonon/PhononGenerator.swift` adapts it to shared speech
-synthesis, streaming, model resolution, and WAV publication.
-
-## Recursive Flint
-
-For install commands and validation scope, read [Run Recursive Flint](./runtime/flint.md).
-Core orchestration lives in `Sources/MereRunCore/Flint/`. Model computation lives
-in `Sources/MereRunFlintModel/`, including learned attention sinks, mixed attention,
-and sigmoid MoE routing.
+5. For implementation detail, continue to the larger model-definition files.

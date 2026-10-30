@@ -1,22 +1,30 @@
 # Native Kolibri-1
 
-Kolibri-1 runs through native Swift/MLX computation. It uses 50 transformer
-layers, 384 routed experts per layer, six selected experts per token, and one
-shared expert. Four sliding attention layers precede each full attention
-layer. Sliding layers apply RoPE; full layers use no positional encoding.
+Aleph Alpha's Kolibri-1 is a sparse mixture-of-experts chat model. `mere.run`
+runs converted Kolibri
+checkpoints natively in Swift/MLX for `text chat` and `api serve`. Kolibri isn't
+a managed download: you download a converted checkpoint yourself and pass its
+directory to `--model`.
 
-The checkpoint format supports a BF16 reference, an 8-bit variant, and explicit
+## Architecture and checkpoint formats
+
+The model has 50 transformer layers, 384 routed experts per layer, six selected
+experts per token, and one shared expert. Four sliding attention layers precede
+each full attention layer. Sliding layers apply RoPE; full layers use no
+positional encoding.
+
+The converted format supports a BF16 reference, an 8-bit variant, and explicit
 mixed quantization policies. Mixed 2-bit keeps routed experts at 2-bit with
-128-value affine groups, attention and shared experts at 8-bit, and embeddings,
-norms, routers, and output-head weights at their original precision. Routing
+128-value affine groups and attention and shared experts at 8-bit. Embeddings,
+norms, routers, and output-head weights keep their original precision. Routing
 and the output head compute in FP32.
 
-## Download a measured artifact
+## Install a converted checkpoint
 
 The selected [mixed 2-bit artifact](https://huggingface.co/Sawfwair/Kolibri-1-MLX-Mixed-2bit)
-and [Q8 control](https://huggingface.co/Sawfwair/Kolibri-1-MLX-8bit) are public.
-Both require mere.run v0.62.0 or later with the native Kolibri runtime.
-Use the immutable release revisions to reproduce the measured weights:
+and the [Q8 control](https://huggingface.co/Sawfwair/Kolibri-1-MLX-8bit) are
+public. Both require mere.run v0.62.0 or later. To reproduce the measured
+weights, download the immutable release revisions:
 
 ```bash
 hf download Sawfwair/Kolibri-1-MLX-Mixed-2bit \
@@ -29,46 +37,57 @@ hf download Sawfwair/Kolibri-1-MLX-8bit \
 ```
 
 The [publication receipt](../benchmarks/receipts/kolibri-publication-2026-10-04.json)
-records all 64 bundle file hashes and sizes for each release. Managed download
-registration remains separate; pass the explicit checkpoint directory today.
+records all 64 bundle file hashes and sizes for each release.
 
-## Run a converted checkpoint
+The mixed 2-bit tensors occupy 24.66 GB, which makes it a candidate for a 36 GB
+Mac. The 83.65 GB Q8 control is a candidate for 128 GB. Apple Silicon memory fit
+and throughput for the full checkpoints are still unvalidated.
+
+## Chat and serve
+
+Pass the converted checkpoint directory itself. The upstream FP8 and BF16
+repositories use a different tensor layout, so convert them first.
 
 ```bash
-swift run mere.run text chat \
-  --model /path/to/Kolibri-1-MLX-mixed2 \
+mere.run text chat \
+  --model ./Kolibri-1-MLX-Mixed-2bit \
   --prompt "Erkläre, wie ein Regenbogen entsteht." \
   --context-size 8192 --max-tokens 256
 
-swift run mere.run api serve \
-  --engine text-chat-kolibri --model /path/to/Kolibri-1-MLX-mixed2 \
+mere.run api serve \
+  --engine text-chat-kolibri --model ./Kolibri-1-MLX-Mixed-2bit \
   --context-size 8192
 ```
 
-Use the converted checkpoint directory itself. The upstream FP8 and BF16
-repositories use a different tensor layout and must be converted first.
+The runtime uses the checkpoint's chat template and tokenizer. It supports text,
+reasoning, tool messages, seeded sampling, stop sequences, and opt-in token log
+probabilities.
 
-The runtime uses the checkpoint's chat template and tokenizer, supports text,
-reasoning, tool messages, seeded sampling, stop sequences, and opt-in token
-logprobs. LoRA, constrained JSON, KV quantization, prefix reuse, and continuous
-batching are not implemented for this family. Native chat defaults to an
-8,192-token context budget; set it explicitly when serving through the API,
-which otherwise uses the server's shared default. The runtime rejects oversized
-prompts; it does not silently truncate them.
-The architecture's 262,144-token limit is not a memory-fit claim.
+`text chat` defaults to an 8,192-token context. `api serve` uses the server's
+shared default instead, so set `--context-size` explicitly when you serve
+Kolibri. The runtime rejects oversized prompts instead of truncating them. The
+architecture's 262,144-token limit isn't a memory-fit claim.
 
-## Conversion and quality measurements
+## Limits
+
+LoRA, constrained JSON, KV quantization, prefix reuse, and continuous batching
+aren't implemented for this family.
+
+## Convert and measure quality
 
 The remote conversion tools pin `Aleph-Alpha/Kolibri-1-BF16` at
 `7a8f290e7858825c3cf5e4c447ba68345de9f1d3`, verify source hashes, stack expert
-banks in numeric order, and record every output shard's checksum. Keep the
-156 GB source and BF16 reference on a sufficiently large remote worker.
+banks in numeric order, and record every output shard's checksum. Run them on a
+remote worker with room for the 156 GB source and the BF16 reference.
 
-On October 6, 2026, Hugging Face returns HTTP 404 (`Invalid rev id`) for that
-recorded upstream revision. The public converted release revisions above still
-resolve. Reproducing conversion requires a preserved original source snapshot
-with the recorded checksums; a replacement upstream revision needs separate
-validation.
+On October 6, 2026, Hugging Face returned HTTP 404 (`Invalid rev id`) for that
+recorded upstream revision. The public converted release revisions still
+resolve. To reproduce the conversion, you need a preserved original source
+snapshot with the recorded checksums; a replacement upstream revision needs
+separate validation.
+
+The following commands convert the checkpoint, prepare the diagnostic suite,
+score the reference and a candidate, and compare them:
 
 ```bash
 python scripts/model-conversion/convert_kolibri_mlx.py \
@@ -96,7 +115,7 @@ python scripts/reference-parity/compare_kolibri_logprobs.py \
 ```
 
 For an activation-weighted Q2 candidate, use the reference's calibration
-statistics and retain the separate scoring receipt:
+statistics and keep the separate scoring receipt:
 
 ```bash
 python scripts/model-conversion/refit_kolibri_mixed2.py \
@@ -110,22 +129,24 @@ python scripts/model-conversion/refit_kolibri_mixed2.py \
 Every comparison uses identical token IDs, prompt boundaries, and teacher-forced
 continuations. It reports full-vocabulary KL divergence, next-token agreement,
 changes in target-token log probabilities, and perplexity ratios by case and
-language. Only cases explicitly labeled `calibration` contribute input second
-moments. Candidate selection uses the calibration split; heldout cases report
-quality without changing the fit. The included small English/German suite is a
-diagnostic, not a standardized benchmark or a general capability guarantee.
-English and German must also pass their diagnostic gates separately. Select
-between the baseline and fitted Q2 candidates; report the Q8 and 2/3-bit
-variants as controls rather than allowing their larger weight budgets to
-replace that Q2 selection.
+language.
+
+Only cases labeled `calibration` contribute input second moments. Candidate
+selection uses the calibration split; held-out cases report quality without
+changing the fit. English and German must each pass their diagnostic gates.
+Select between the baseline and fitted Q2 candidates, and report the Q8 and
+2/3-bit variants as controls. Their larger weight budgets don't replace the Q2
+selection. The included English and German suite is a small diagnostic, not a
+standardized benchmark or a general capability guarantee.
+
+## Validation
 
 The independent PyTorch synthetic fixture checks attention, routing, shared
 experts, norms, and chunked cache semantics on CPU and Apple GPU. The original
-BF16 PyTorch operator reference provides an additional checkpoint cross-check;
-it does not certify bitwise parity with official vLLM fused kernels.
+BF16 PyTorch operator reference adds a checkpoint cross-check; it doesn't
+certify bitwise parity with official vLLM fused kernels.
 
 The [October 4 full-checkpoint diagnostic](../benchmarks/kolibri-native-qualification-2026-10-04.md)
 records the Runpod results and selects baseline mixed 2-bit by calibration KL.
-Its 24.66 GB tensor storage is a candidate for a 36 GB machine; the 83.65 GB Q8
-control is a candidate for 128 GB. Actual Apple full-checkpoint memory fit and
-throughput still require validation.
+
+For other text models, see the [text runtime](./text.md).

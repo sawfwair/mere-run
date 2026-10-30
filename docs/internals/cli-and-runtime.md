@@ -1,118 +1,114 @@
 # CLI and runtime internals
 
-This page explains how the public `mere.run` command tree maps to the package
-internals.
+This page shows how the public `mere.run` command tree maps to the package
+internals, and where to start reading for a given change. For the full target
+list, see the [source layout reference](./source-layout.md).
 
 ## Top-level flow
 
-1. `Sources/MereRunCLI/MereRunCLI.swift` defines the public modality-first tree.
-2. Each command in `Sources/MereRunCLI/Commands` parses arguments and performs
-   small amounts of orchestration.
-3. Shared CLI helpers in `Sources/MereRunCLI/Support` bootstrap the model store,
+1. `Sources/MereRunCLI/MereRunCLI.swift` defines the public modality-first
+   command tree.
+2. Each command in `Sources/MereRunCLI/Commands` parses arguments and does a
+   small amount of orchestration.
+3. Shared helpers in `Sources/MereRunCLI/Support` bootstrap the model store,
    expose the managed model registry, and provide output helpers.
-4. Runtime code in `MereRunCore`, `AudioSTT`, and `AudioTTS` performs the
-   inference work.
+4. Shared operations in `MereRunCore`, `AudioCore`, `AudioSTT`, and `AudioTTS`
+   prepare requests and own runtime lifetime.
+5. Model runtime targets, such as `MereRunGemmaModel` and `MereRunLTXModel`,
+   perform the tensor computation.
 
-The package is intentionally organized so public command concerns do not live in
-the deep model code.
+Public command concerns stay out of the model code by design.
 
 ## Model resolution path
 
-Almost every command eventually passes through the same model-resolution layer:
+Most commands pass through the same model-resolution layer:
 
 - `MereRunModelKit/MereRunModelPaths.swift`: configured storage paths
 - `MereRunModelKit/MereRunModelManifest.swift`: metadata and provenance
 - `MereRunModelKit/InstalledModelResolver.swift`: location policy and lookup
 - `MereRunCore/ModelResolver.swift`: catalog and runtime-validation adapter
 
-That shared path is what keeps the command surface coherent across image, text,
-speech, vision, music, SFX, and video.
+This shared path keeps model handling consistent across every modality. For
+the catalog and capability contracts that sit on this layer, see
+[catalog and contract ownership](./catalog-contracts.md).
 
 ## Resource ownership
 
 [Inference admission](./inference-admission.md) separates a server's machine
-reservation from its request queue. `MereRunAdmission` owns these coordinators
+reservation from its request queue; `MereRunAdmission` owns these coordinators
 and their leases. [Runtime residency](./runtime-residency.md) owns model
-generations, model leases, and eviction mechanics. Runtime adapters retain
-model construction, cache, and batching policy.
+generations, model leases, and eviction mechanics. Runtime adapters keep model
+construction, cache, and batching policy.
 
-The [shared transcription operation](./speech-transcription-operation.md)
-extends the typed operation boundary to file transcription and translation.
-CLI and API adapters resolve equivalent inputs through the same service.
+Each modality's shared operation gives the CLI and API adapters one typed
+boundary for planning and execution. Start with the operation page for the
+area you're changing:
+
+- [Chat execution](./chat-execution.md)
+- [Image generation](./image-generation-operation.md)
+- [Video generation](./video-generation-operation.md)
+- [Speech transcription](./speech-transcription-operation.md) and
+  [speech synthesis](./speech-synthesis-operation.md)
+- [Single-image geometry](./geometry-generation-operation.md) and
+  [vision reconstruction and depth](./vision-generation-operations.md)
+- [Image training](./image-training-execution.md) and
+  [text training](./text-training-execution.md)
+- [Workflow execution](./workflow-execution.md)
 
 ## CLI design conventions
 
-The public surface follows three rules:
+### Modality-first commands
 
-### 1. Modality-first commands
+Top-level commands group work by user intent: `image`, `text`, `speech`,
+`vision`, `geo`, `audio`, `music`, `sfx`, `video`, and `world` for inference;
+`graph`, `executor`, `relay`, `run`, and `eval` for workflows and evaluation;
+and `model`, `adapter`, `status`, `api`, and the setup commands for management.
+Run `mere.run --help` for the complete list.
 
-Commands are grouped by user intent:
+### Canonical public model IDs
 
-- image
-- text
-- speech
-- vision
-- music
-- sfx
-- video
-- model
-- status
-- api
+The runtime uses explicit public IDs, such as `image-klein-max`,
+`text-chat-gemma4`, `text-chat-q36-nano`, and `speech-tts-qwen3-nano`. Docs,
+tests, and examples use the canonical IDs that `mere.run model list` reports.
 
-### 2. Canonical public model IDs
+### Quiet default output
 
-The runtime uses explicit public IDs such as:
-
-- `image-klein-max`
-- `text-chat-gemma4`
-- `text-chat-q36-nano`
-- `text-chat-lfm25-a1b-8bit`
-- `text-chat-lfm25-2.6b-4bit`
-- `text-agent-deepseek-v4-flash`
-- `speech-tts-qwen3-nano`
-
-Docs, tests, and examples should use the canonical IDs reported by
-`mere.run model list`.
-
-### 3. Quiet default output
-
-Normal success-path runs should emit only intended user-facing output. Internal
-bring-up logging belongs behind the shared debug helper, not in default stdout.
+A normal successful run emits only its intended output. Stdout is
+machine-readable and stderr is diagnostic. Internal bring-up logging belongs
+behind the shared `MereRunRuntimeDebug` helper, not in default stdout.
 
 ## Runtime family pattern
 
-The runtime families now follow a consistent reading pattern:
+Large runtime families split one type across files:
 
-- root file owns the public type and high-level orchestration
-- companion files own loading, generation, decoding, support, or diagnostics
+- The root file owns the public type and high-level orchestration.
+- Companion `+` extension files own loading, generation, decoding, support, or
+  diagnostics.
 
-That pattern is used heavily in:
+Examples include `Qwen3TTSGenerator`, `LightOnOCRGenerator`,
+`ZImageTurboGenerator`, `QwenImageEditGenerator`, `ACEStepPipeline`, and
+`ImageValidateCommand`. The runtime boundary pages list each family's reading
+order, for example [Gemma](./gemma-runtime-boundaries.md),
+[Qwen](./qwen-runtime-boundaries.md), and [LTX](./ltx-runtime-boundaries.md).
 
-- `Qwen3TTSGenerator`
-- `LightOnOCRGenerator`
-- `ZImageTurboGenerator`
-- `QwenImageEditGenerator`
-- `ACEStepPipeline`
-- `ImageValidateCommand`
+## Choose a starting point
 
-## Choose the CLI or runtime starting point
+Start in the CLI when you're:
 
-### Start in the CLI when
+- Changing flags, help text, or output shape
+- Changing which runtime family a command dispatches to
+- Debugging how user input becomes a runtime request
 
-- you are changing flags, help text, or output shape
-- you are changing which runtime family a command dispatches to
-- you are debugging how user input becomes a runtime request
+Start in the runtime when you're:
 
-### Start in the runtime when
+- Changing inference behavior
+- Debugging loading, decoding, or generation internals
+- Working inside one modality family
 
-- you are changing inference behavior
-- you are debugging loading, decoding, or generation internals
-- you are working inside one modality family already
-
-## Contributor reading sequence
+## Contributor reading order
 
 1. Read the [repository tour](../repository-tour.md).
 2. Read the [architecture map](../architecture.md).
 3. Read one command file in `Sources/MereRunCLI/Commands`.
-4. Read the matching runtime family entry point.
+4. Read the matching shared operation and runtime family entry point.
 5. Read the related tests in `Tests/`.

@@ -6,8 +6,11 @@ history with prefix-cache snapshots, and exact verification through width
 nine. The source baseline is `03d619a7` (abbreviated), dated September 5, 2026.
 The measured runtime commit is `bcf630500de4b0103b2e43d2e11409b3b52af782`.
 
-Both installed Q4 checkpoints pass long-prompt retrieval, exact cache replay,
-follow-up reuse, and agreement with serial greedy decoding. Generation block
+On an Apple M4 Max, both installed Q4 checkpoints pass long-prompt retrieval,
+exact cache replay, follow-up reuse, and agreement with serial greedy decoding.
+Width eight provides 3.48 times Qwen's serial verification capacity and 3.72
+times Ornith's, but complete generation timing varies too much to support an
+end-to-end speedup claim. Generation block
 defaults remain eight for Qwen 27B and four for Ornith. Verification throughput
 and complete generation throughput are measured separately.
 
@@ -196,7 +199,8 @@ verification trial, and the expert-only control. Its SHA-256 is
 
 These are median target-only verified tokens per second over three trials,
 using a 128-token target-generated oracle. Width order reverses on trial two.
-Every candidate row passes greedy parity in all three trials.
+Every candidate row passes greedy parity in all three trials, as the following
+table shows:
 
 | Width | Qwen 27B Q4 | Ornith Q4 |
 | ---: | ---: | ---: |
@@ -223,8 +227,9 @@ result alone misses the code regression, so the installed-checkpoint test now
 includes the full 256-token LRU case alongside long-prompt cache checks.
 
 Complete generation timing varies substantially, including between variants
-with identical output and draft counts. The ranges below include all six
-candidate MTP measurements per workload: three automatic and three forced.
+with identical output and draft counts. The ranges in the following table
+include all six candidate MTP measurements per workload: three automatic and
+three forced.
 
 | Model | Workload | Observed decode tokens per second | Draft acceptance |
 | --- | --- | ---: | ---: |

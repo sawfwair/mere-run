@@ -3,15 +3,19 @@
 These completed local reference receipts were captured from August 18 through
 August 20, 2026. They are **not** upstream leaderboard scores. They measure the
 pinned Mere `comprehensive` subset, scorers, sampling profiles, and runtime
-listed on this page. Runner, fixture, sandbox, model, or profile changes require
-a new dated receipt; they do not replace these results.
+listed on this page, run with mere.run 0.40.1 on an Apple M4 Max. Qwen3.8 27B
+with low reasoning had the highest strict pass rate, 73.5% (404/550), followed by
+Laguna XS 2.1 at 49.4% (247/500 scored) and Nemotron 3.5 Lightning at 34.4%
+(172/500 scored). Runner, fixture, sandbox, model, or profile changes require a
+new dated receipt; they do not replace these results.
 
 ## Completed profile scope
 
 Laguna XS 2.1 and Nemotron Lightning each completed their single native profile.
 The Qwen3.8 plan declares low, medium, and xhigh reasoning profiles; this receipt
 intentionally stops after all 550 low-profile rows. Medium and xhigh remain at
-zero and are not represented by the score.
+zero and are not represented by the score. The following table summarizes each
+completed profile:
 
 | Model and profile | Completed scope | Scored | Unscored | Strict passes | Strict pass rate | Mean score |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -58,6 +62,8 @@ does not predict the unfinished Qwen medium or xhigh profiles and is not a claim
 about the complete upstream benchmark collections.
 
 ## Shared run contract
+
+All three receipts share the following run contract:
 
 | Field | Recorded value |
 | --- | --- |

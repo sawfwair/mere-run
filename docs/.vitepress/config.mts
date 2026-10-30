@@ -29,10 +29,15 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
   async buildEnd(config) {
-    for (const directory of ['benchmarks/receipts', 'benchmarks/lightonocr3-2026-10-08']) {
+    const rawAssets = [
+      'benchmarks/receipts',
+      'benchmarks/lightonocr3-2026-10-08',
+      'benchmarks/embeddinggemma2-coreml-tokenizer-2026-10-13.json'
+    ]
+    for (const asset of rawAssets) {
       await cp(
-        join(config.srcDir, directory),
-        join(config.outDir, directory),
+        join(config.srcDir, asset),
+        join(config.outDir, asset),
         { recursive: true }
       )
     }
@@ -151,8 +156,42 @@ export default defineConfig({
           { text: 'CLI and runtime internals', link: '/internals/cli-and-runtime' },
           { text: 'Structured runs, preflights, and declarative actions', link: '/internals/structured-runs-preflight-actions' },
           { text: 'Source layout reference', link: '/internals/source-layout' },
+          { text: 'Package responsibilities', link: '/internals/package-policy' },
+          { text: 'Catalog and contract ownership', link: '/internals/catalog-contracts' },
+          { text: 'Inference admission', link: '/internals/inference-admission' },
+          { text: 'Runtime residency', link: '/internals/runtime-residency' },
           { text: 'Guarded acceleration audit', link: '/internals/guarded-acceleration' },
           { text: 'DiT forward-pass performance', link: '/internals/dit-performance' }
+        ]
+      },
+      {
+        text: 'Runtime boundaries',
+        collapsed: true,
+        items: [
+          { text: 'Decode', link: '/internals/decode-runtime-boundaries' },
+          { text: 'Gemma', link: '/internals/gemma-runtime-boundaries' },
+          { text: 'Qwen', link: '/internals/qwen-runtime-boundaries' },
+          { text: 'H3 and Laguna', link: '/internals/h3-laguna-runtime-boundaries' },
+          { text: 'Image', link: '/internals/image-runtime-boundaries' },
+          { text: 'LTX', link: '/internals/ltx-runtime-boundaries' },
+          { text: 'Speech', link: '/internals/speech-runtime-boundaries' }
+        ]
+      },
+      {
+        text: 'Shared operations',
+        collapsed: true,
+        items: [
+          { text: 'Chat execution', link: '/internals/chat-execution' },
+          { text: 'Image generation', link: '/internals/image-generation-operation' },
+          { text: 'Single-image geometry', link: '/internals/geometry-generation-operation' },
+          { text: 'Vision generation', link: '/internals/vision-generation-operations' },
+          { text: 'Video generation', link: '/internals/video-generation-operation' },
+          { text: 'Speech synthesis', link: '/internals/speech-synthesis-operation' },
+          { text: 'Speech transcription', link: '/internals/speech-transcription-operation' },
+          { text: 'Image training', link: '/internals/image-training-execution' },
+          { text: 'Text training', link: '/internals/text-training-execution' },
+          { text: 'Workflow execution', link: '/internals/workflow-execution' },
+          { text: 'Studio prompt workspace', link: '/internals/studio-prompt-workspace' }
         ]
       }
     ],

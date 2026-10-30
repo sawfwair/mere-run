@@ -1,40 +1,38 @@
 # mere.run documentation
 
-Use this documentation to learn the public `mere.run` package, CLI, and optional
-macOS Studio. The pages are organized by task, runtime family, and contributor
-workflow so you can find the relevant command or source module directly.
+Use this documentation to learn the public `mere.run` package, CLI, and
+optional macOS Studio. The pages are organized by task, runtime family, and
+contributor workflow, so you can go straight to the command or source module
+you need.
 
 ## Run the docs site locally
 
-The repository includes a VitePress site for these docs. Install the site
-dependencies, and then start the local development server:
+The repository includes a VitePress site for these docs. It needs Node.js 20
+or later and the pnpm version pinned in `package.json`. To install the tools
+and start the local development server, run:
 
 ```bash
 brew install node pnpm
-```
-
-```bash
 pnpm install
 pnpm docs:dev
 ```
 
-Build the static site with:
+To build the static site, run:
 
 ```bash
 pnpm docs:build
 ```
 
-The repository also includes a GitHub Pages workflow at
-`.github/workflows/docs.yml`. On pull requests it builds the site as a docs-only
-CI job, and on `main` it deploys the VitePress output to Pages at
-`https://docs.mere.run/`.
+The GitHub Pages workflow at `.github/workflows/docs.yml` builds the site for
+pull requests. On `main`, it also deploys the output to
+[docs.mere.run](https://docs.mere.run/).
 
 ## Start here
 
-If you are new to the repo, read these in order:
+If you're new to the repository, read these pages in order:
 
 1. [Getting started](./getting-started.md)
-2. [macOS deep links](./macos-deep-links.md), if a local tool should preview or import artifacts in MereRun
+2. [macOS deep links](./macos-deep-links.md), if a local tool needs to preview or import artifacts in MereRun
 3. [Linux quickstart](./linux-quickstart.md), if you are installing the headless CLI on Linux
 4. [CLI reference](./cli.md)
 5. [Portable workflows](./workflows.md), if you are automating local or remote jobs
@@ -75,16 +73,8 @@ If you are new to the repo, read these in order:
 
 ### I want to understand the runtime families
 
-- [Image runtime](./runtime/image.md)
-- [Text runtime](./runtime/text.md)
-- [Speech runtime](./runtime/speech.md)
-- [Vision runtime](./runtime/vision.md)
-- [Music runtime](./runtime/music.md)
-- [SFX runtime](./runtime/sfx.md)
-- [Video runtime](./runtime/video.md)
-- [Persistent world runtime](./runtime/world.md)
-- [Model management](./runtime/model-management.md)
-- [Local API server](./runtime/api-server.md)
+See [Runtime family guides](#runtime-family-guides) for one page per runtime
+family, model management, and the local API server.
 
 ## Documentation map
 
@@ -98,8 +88,8 @@ If you are new to the repo, read these in order:
   public macOS deep-link surface
 - [Linux quickstart](./linux-quickstart.md): Linux package install, first
   commands, release asset verification, and CUDA validation boundaries
-- [Cookbooks](./cookbooks.md): `mere.run guide` command topics for practical
-  prompting, parameters, examples, and troubleshooting
+- [Cookbooks](./cookbooks.md): offline model guides and `mere.run guide`
+  command topics for prompting, parameters, examples, and troubleshooting
 - [Configuration](./configuration.md): supported environment variables and
   debug toggles
 - [Model sources](./model-sources.md): canonical model IDs, Hugging Face sources,
@@ -135,21 +125,39 @@ If you are new to the repo, read these in order:
 ### Runtime family guides
 
 - [Image runtime](./runtime/image.md)
-- [Text runtime](./runtime/text.md)
-- [Speech runtime](./runtime/speech.md)
+- [Text runtime](./runtime/text.md), with family pages for
+  [Recursive Flint](./runtime/flint.md),
+  [Nemotron 3.5 Bolt](./runtime/nemotron-bolt.md),
+  [Kolibri-1](./runtime/kolibri.md),
+  [EmbeddingGemma 2](./runtime/embeddinggemma2.md),
+  [PPLX Embed v2](./runtime/pplx-embed-v2.md),
+  [GLiNER2.5 Decide](./runtime/gliner25-decide.md),
+  [Laya](./runtime/laya.md), [Clef](./runtime/clef.md), and
+  [D1](./runtime/d1.md)
+- [Speech runtime](./runtime/speech.md), with family pages for
+  [Whistle](./runtime/whistle.md) and
+  [Nemotron 3.5 Transcribe](./runtime/nemotron-transcribe.md)
 - [Vision runtime](./runtime/vision.md)
-- [Music runtime](./runtime/music.md)
+- [Geospatial runtime](./runtime/geo.md)
+- [Audio enhancement runtime](./runtime/audio.md)
+- [Music runtime](./runtime/music.md) and
+  [ACE-Step validation](./runtime/acestep-validation.md)
 - [SFX runtime](./runtime/sfx.md)
 - [Video runtime](./runtime/video.md)
 - [Persistent world runtime](./runtime/world.md)
 - [Model management](./runtime/model-management.md)
 - [Local API server](./runtime/api-server.md)
 
+### Internal implementation guides
+
+- [CLI and runtime internals](./internals/cli-and-runtime.md)
+- [Source layout reference](./internals/source-layout.md)
+
 ## Keep command docs synchronized
 
 The generated command inventories on the docs home, Getting started, and CLI
 reference come directly from `MereRunCLI.configuration`. Every top-level command
-also has an explicit owner in `.vitepress/command-pages.tsv`.
+also has an explicit owner in `docs/.vitepress/command-pages.tsv`.
 
 After adding, renaming, removing, or redescribing a command, run:
 
@@ -158,28 +166,22 @@ After adding, renaming, removing, or redescribing a command, run:
 ```
 
 `DocumentationContractTests` fails the normal `swift test` and
-`./scripts/check.sh` gates when:
+`./scripts/check.sh` gates when any of the following is true:
 
-- a generated command inventory differs from the CLI configuration
-- a top-level command lacks a canonical docs owner or sidebar entry
-- a runtime guide is absent from the sidebar
-- a command invocation in Markdown names a subcommand that no longer exists
-
-### Internal implementation guides
-
-- [CLI and runtime internals](./internals/cli-and-runtime.md)
-- [Source layout reference](./internals/source-layout.md)
+- A generated command inventory differs from the CLI configuration.
+- A top-level command lacks a canonical docs owner or sidebar entry.
+- A runtime guide is absent from the sidebar.
+- A command invocation in Markdown names a subcommand that no longer exists.
 
 ## What this docs set is for
 
-These docs are intentionally split by audience:
+These docs are split by audience:
 
-- End users can install models and run commands without reading
-  source code
-- Contributors can understand the package layout and validation
-  flow before editing runtime code
+- End users can install models and run commands without reading source code.
+- Contributors can learn the package layout and validation flow before they
+  edit runtime code.
 - Code readers can follow a command into the correct subsystem without
-  searching unrelated modules
+  searching unrelated modules.
 
 Before you open the code, start with the
 [repository tour](./repository-tour.md).

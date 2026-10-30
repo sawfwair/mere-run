@@ -4,23 +4,22 @@ Describe a job once as a typed graph. The same bundle then runs on your laptop,
 over Secure Shell (SSH) on a graphics processing unit (GPU) host, or across a
 relay fleet with the same resolved seeds, fingerprints, and execution contract.
 
-Workflows are immutable and headless. Execution-location details do not enter
-the bundle: executor profiles, tokens, URLs, and machine paths remain external.
-bundle. Visual editors such as [Graph Studio](./graph/studio.md) author these
-documents, but execution behavior is defined here, not on the canvas.
+Workflows are immutable and headless. Executor profiles, tokens, URLs, and
+machine paths stay outside the bundle. Visual editors such as
+[Graph Studio](./graph/studio.md) author these documents, but this page, not
+the canvas, defines how they execute.
 
 ## Graph v2 runtime and v1 contract
 
 The runtime and serialized workflow contract use separate version numbers.
 
-**Graph v2** is the runtime generation with immutable job bundles, typed
-provider catalogs, executor preflight, resumable runs, parallel scheduling, and
-one execution contract shared by local, SSH, and Relay.
+**Graph v2** is the runtime generation: immutable job bundles, typed provider
+catalogs, executor preflight, resumable runs, parallel scheduling, and one
+execution contract shared by local, SSH, and Relay execution.
 
-The serialized workflow ABI is a separate thing, and it stays deliberately
-pinned at version 1. Graph v2 still reads and writes `mere.run/workflow-graph`
-documents with `schema_version: 1`. The runtime name is not a request to emit a
-`schema_version: 2` document.
+The serialized workflow ABI stays pinned at version 1. Graph v2 reads and
+writes `mere.run/workflow-graph` documents with `schema_version: 1`. Don't
+change a document to `schema_version: 2`.
 
 Every graph uses `schema_version: 1` and `kind: "mere.run/workflow-graph"`.
 Identifiers match `[a-z][a-z0-9-]{0,63}`. Supported graph input types are
@@ -39,12 +38,26 @@ References add dependency edges automatically. `depends_on` adds ordering-only
 edges. Validation blocks cycles, duplicate IDs, missing references, unknown node
 kinds, type mismatches, and incompatible artifact content types.
 
-Independent ready nodes may run concurrently when the graph declares
-`execution.max_parallel_nodes` from 1 through 32. The default remains one, and
-all scheduling, event commits, and final outputs retain stable topological order.
-Each node may independently set retry, timeout, and cache policy.
+Independent ready nodes can run concurrently when the graph sets
+`execution.max_parallel_nodes` to a value from 1 through 32. The default is 1.
+Scheduling, event commits, and final outputs keep a stable topological order.
 
-The version 1 node catalog contains:
+Each node can also set its own `execution` policy:
+
+```json
+{
+  "id": "render",
+  "kind": "image.generate",
+  "arguments": {"prompt": {"$ref": "inputs.prompt"}},
+  "execution": {"max_attempts": 3, "timeout_seconds": 1800, "cache": "auto"}
+}
+```
+
+`max_attempts` accepts 1 through 10 and defaults to 1. `timeout_seconds`
+accepts up to 7 days (604,800 seconds). `cache` is `auto` (the default),
+`refresh`, or `never`.
+
+The built-in version 1 node catalog contains these 32 kinds:
 
 - `text.value`, `integer.value`, `number.value`, `boolean.value`, `json.value`
 - `seed.value`, `choice.value`
@@ -62,7 +75,7 @@ The version 1 node catalog contains:
 
 The value and text nodes make authored creative material reusable without
 turning it into a runtime graph input. Literal values, seeds, joins, and
-templates execute as native deterministic intrinsics. `text.template` accepts
+templates run as native deterministic intrinsics. `text.template` accepts
 strict `{{name}}` identifiers, preserves escaped `\{{name}}` text, and blocks
 missing variables. `text.enhance` and `image.describe` require an explicit
 installed model and never trigger a hidden pull.
@@ -70,7 +83,7 @@ installed model and never trigger a hidden pull.
 `vision.ground` uses the managed `vision-ground-falcon-perception` model by
 default. It emits an annotated image, structured detections JSON, and a
 portable directory of per-detection PNG masks as verified artifacts. Grounding
-output is candidate geometry; graph execution does not promote it into evidence
+output is candidate geometry; graph execution doesn't promote it into evidence
 or findings.
 
 `vision.segment` and `vision.track` use the managed `vision-segment-sam31`
@@ -80,10 +93,10 @@ their masks remain review candidates until a mission workflow corroborates and
 accepts them.
 
 Catalog value schemas recursively describe array items, object properties, and
-additional properties. Editors may expose those nested slots as typed ports
-while the serialized graph continues to use ordinary nested JSON references.
+additional properties. Editors can expose those nested slots as typed ports
+while the serialized graph keeps using ordinary nested JSON references.
 
-Companion plugins may add typed nodes without adding arbitrary command or
+Companion plugins can add typed nodes without adding arbitrary command or
 Python execution to the graph ABI. Plugin nodes name their provider explicitly:
 
 ```json
@@ -112,14 +125,14 @@ preview, determinism, caching, and side-effect traits. `mere.run` validates the
 catalog and invokes only these fixed verbs. A plugin manifest cannot inject a
 command template.
 
-Providers may also declare minimum accelerator memory, system memory, free disk,
+Providers can also declare minimum accelerator memory, system memory, free disk,
 CPU cores, and network access. Secret fields accept only a named binding such as
 `{"$secret":"hugging-face-token"}`. Values are resolved from
 `MERERUN_SECRET_HUGGING_FACE_TOKEN` only inside the executing worker process;
 secret values never enter graphs, bundles, fingerprints, reports, events, or
 Relay payloads. Secret-bound nodes must disable caching.
 
-Inspect the exact typed fields and output descriptors with:
+To inspect the exact typed fields and output descriptors, run:
 
 ```bash
 mere.run graph catalog --json
@@ -130,12 +143,17 @@ them in a separate sidecar keyed by graph and node IDs.
 
 ## Validate and preflight
 
-Point discovery at a broad project data root to rank image-caption directories
-without loading a model or hashing the entire tree:
+To find training data for an image workflow, point discovery at a broad
+project data root. It ranks image-caption directories without loading a model
+or hashing the entire tree. `--max-depth` defaults to 6 and `--limit` to 100
+candidates:
 
 ```bash
 mere.run graph dataset discover /path/to/project/data --json
 ```
+
+Validate the graph, then preflight it against each executor you plan to use.
+`--executor` defaults to `local`:
 
 ```bash
 mere.run graph validate workflow.json --inputs-json inputs.json --json
@@ -148,16 +166,16 @@ Validation is executor-independent. Preflight combines graph diagnostics with a
 worker capability probe, including contract version, node kinds, installed
 models, exact provider versions and catalog digests, accelerator backend,
 accelerator and system memory, CPU capacity, available disk, network access, and
-named secret availability. Missing models produce declarative pull actions; V1
-never pulls models automatically on a worker.
+named secret availability. Missing models produce declarative pull actions;
+version 1 never pulls a model on a worker automatically.
 
 ## Portable job bundles
 
 Materialization records source graph and input fingerprints, resolves defaults
 and random seeds, fingerprints the portable graph and inputs, and copies
 declared file inputs into a content-addressed store. The optional source
-fingerprints also flow into `run.json`, allowing authoring clients to display
-results only when they match the source documents open in the editor.
+fingerprints also flow into `run.json`, so an authoring client can show results
+only when they match the source documents open in its editor.
 
 ```bash
 mere.run graph materialize workflow.json \
@@ -181,9 +199,9 @@ assets.json
 assets/sha256/<digest>
 ```
 
-An exported bundle can be executed directly without materializing the source
-graph again. The bundle remains immutable and the mutable run record must use a
-separate, non-nested directory:
+You can run an exported bundle directly without materializing the source graph
+again. The bundle stays immutable, so the mutable run record must use a
+separate directory that isn't nested inside it:
 
 ```bash
 mere.run graph run-job \
@@ -220,12 +238,16 @@ content-addressed. Symlinks, device files, path traversal, and files escaping a
 declared directory root are rejected. Executor profiles, tokens, URLs, and
 machine paths never enter the bundle.
 
-Bundles pin their minimum compatible `mere.run` worker version. Preflight and
-submission reject older SSH or Relay workers before transfer or queueing; the
-worker repeats the check before execution. Graphs using creative material nodes
-require `mere.run` 0.24.0 or newer.
+Each bundle records the version of the `mere.run` that created it as the
+minimum worker version. Preflight and submission reject older SSH or Relay
+workers before transfer or queueing, and the worker repeats the check before
+execution.
 
 ## Local execution
+
+Run a graph, run an exported bundle, or resume either one in the same run
+directory. Use `--json` for one final report or `--json-stream` for run events
+as NDJSON:
 
 ```bash
 mere.run graph run workflow.json \
@@ -247,17 +269,17 @@ mere.run graph run workflow.json \
 ```
 
 Nodes run in stable topological order and fail fast. Graphs are sequential by
-default; an explicit graph parallelism limit allows independent ready nodes to
-overlap without changing dependency semantics. Every node is
-adapted to deterministic public CLI arguments and launched as an isolated
-`mere.run` child process. The runner captures structured stdout, preserves
+default; an explicit parallelism limit lets independent ready nodes overlap
+without changing dependency semantics. The runner maps every node to
+deterministic public CLI arguments and launches it as an isolated `mere.run`
+child process. The runner captures structured stdout, preserves
 diagnostic stderr, records exit status, verifies every declared artifact, and
 honors a cooperative cancellation marker. Cancelling the caller also stops
 parallel child processes. Active nodes become `cancelled` before the run settles;
 finished nodes retain their verified outputs.
 
 Node execution policy supports bounded retries, hard subprocess timeouts, and a
-cross-run content-addressed cache. Cache keys include normalized arguments,
+content-addressed cache shared across runs. Cache keys include normalized arguments,
 provider identity, model provenance, and directly referenced artifact digests.
 `cache: refresh` recomputes and replaces an entry; `cache: never` bypasses it.
 
@@ -327,8 +349,7 @@ mere.run graph worker inspect --run-dir PATH --json
 mere.run graph worker cancel --run-dir PATH --json
 ```
 
-`execute --json-stream` emits the run event model as newline-delimited JSON
-(NDJSON) on standard output. It
+`execute --json-stream` writes the run event model as NDJSON to stdout. It
 preserves node progress, preview, artifact, diagnostic, metric, heartbeat, and
 lifecycle events. Diagnostics produced outside the machine protocol stay on
 stderr.
@@ -341,12 +362,14 @@ Swift tests.
 
 ## Executor profiles
 
-Profiles are stored in the application-support directory as `executors.json`
-with mode `0600`.
+Executor profiles name the machines that run remote work. `mere.run` stores
+them in its application support directory as `executors.json` with mode
+`0600`. An SSH profile also accepts `--port`, `--identity-file`, and
+`--mere-run-path` (default `mere.run`) for the remote executable.
 
 ```bash
 mere.run executor add ssh gpu-box \
-  --destination user@host \
+  --destination dana@gpu.example.com \
   --remote-root ~/.cache/mere.run
 
 mere.run executor add relay fleet \
@@ -375,8 +398,9 @@ retry once after an authenticated `401`. Raw token files and
 `executor fleet` reports stable device identity, scheduling status, graph-worker
 capability, installed models, and recent graph and modality history.
 `node-refresh` asks a connected node to rescan hardware, runtime, models,
-plugins, disk, and graph support without reconnecting. `node-configure` exposes
-headless enable, disable, drain, undrain, priority, and display-name controls.
+plugins, disk, and graph support without reconnecting. `node-configure` sets
+`--enable`, `--disable`, `--drain`, `--undrain`, `--priority` (0 through 100),
+and `--display-name` without a GUI.
 
 ## SSH execution
 
@@ -433,9 +457,9 @@ and reused bytes and parts.
 
 `mere.run relay serve` hosts the same client-facing graph-job HTTP surface
 directly on a machine and runs submitted jobs there without a broker or cloud
-hop. It is the single-machine, self-sovereign lane. Reach it over the local area network (LAN) or
-a tailnet (Tailscale users can front it with `tailscale serve` for HTTPS),
-and prompts, inputs, and outputs never leave your network.
+hop. It's the single-machine lane. Reach it over the local area network (LAN)
+or a tailnet; with Tailscale, you can front it with `tailscale serve` for HTTPS.
+Prompts, inputs, and outputs stay on your network.
 
 ```bash
 # On the machine that will run the work:
@@ -453,21 +477,27 @@ mere.run graph submit workflow.json --executor relay:lab --run-dir ./runs/job
 ```
 
 The iOS app pairs through **Connect to a machine** on its pairing screen.
-Because the API is byte-identical to the hosted relay's, every client —
-`graph submit`, fetch, events polling, the phone — works unchanged against
-either.
+The API is byte-identical to the hosted relay's, so every client, including
+`graph submit`, fetch, event polling, and the iOS app, works unchanged against
+either one.
 
-Pairing accepts new devices for a bounded window after startup (default 15
-minutes, `--pairing-window`) and locks after ten failed codes; issued tokens
-are stored hashed in the spool directory and survive restarts. Jobs are
-validated against the machine's live capability probe at commit, execute
-strictly serially through the same `WorkflowRunner` as every other lane
+By default, `relay serve` binds `0.0.0.0` on port 6373; use `--host`,
+`--port`, and `--name` to change the interface, port, and display name.
+Pairing accepts new devices for a limited window after startup (15 minutes by
+default; set it with `--pairing-window`) and locks after 10 failed codes.
+Issued tokens are stored hashed in the spool directory and survive restarts. Jobs are
+validated against the machine's live capability probe at commit and run
+strictly one at a time through the same `WorkflowRunner` as every other lane
 (events stream through `events.jsonl`, including `node_output_delta` for
 `text.generate`), and artifacts are served with digest verification from the
 run directory. Jobs interrupted by a shutdown come back as failed with an
 explanatory error and can be retried.
 
 ## Remote lifecycle
+
+`run watch` and `run fetch` accept `ssh://` and `relay://` job references.
+`run cancel` also accepts a local run directory. `run watch` polls every 2
+seconds by default; set `--poll-interval` to change it.
 
 ```bash
 mere.run run inspect relay://fleet/<job-id> --json

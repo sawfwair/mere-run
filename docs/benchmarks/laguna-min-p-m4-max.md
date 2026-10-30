@@ -3,7 +3,8 @@
 This report records the July 27, 2026, Laguna S 2.1 min-p promotion gate on an
 AC-powered Apple M4 Max with 128 GB unified memory, macOS 26.5.2, the official
 `Laguna-S-2.1-NVFP4-mlx` target, and the official
-`Laguna-S-2.1-DFlash` companion.
+`Laguna-S-2.1-DFlash` companion. The gate selected `min-p 0.02` as the Laguna
+evaluation default.
 
 ## Decision
 
@@ -21,7 +22,8 @@ slice by 23% and is not the richness-preserving choice.
 
 All stochastic runs used temperature 1, top-p 1, top-k 20, automatic DFlash,
 and identical fixtures. Chat contains two complete 40-case repetitions; tools
-and code contain one complete run.
+and code contain one complete run. The following table lists the results for
+each cutoff:
 
 | min-p | Chat cases | Chat checks | Mean chat latency | Mean chat decode | Chat tokens | Tool calls | HumanEval | Code tokens |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -39,7 +41,8 @@ while also increasing chat output volume.
 
 The resident release benchmark generated exactly 96 tokens per sample, five
 samples per mode, with mode order rotated. Stochastic target-only, forced
-DFlash, and automatic routing use the same normalized min-p distribution.
+DFlash, and automatic routing use the same normalized min-p distribution. The
+following table lists the median decode rate and acceptance for each mode:
 
 | min-p | Target-only median | Forced DFlash median | Forced acceptance | Automatic median | Automatic acceptance |
 | ---: | ---: | ---: | ---: | ---: | ---: |

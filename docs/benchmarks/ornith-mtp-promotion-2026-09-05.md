@@ -1,7 +1,8 @@
 # Ornith Q4 distilled MTP promotion
 
-The managed `text-agent-ornith-35b-mlx-4bit` bundle now uses Shisa's
-Ornith-distilled BF16 draft head. The target, tokenizer, configuration, and
+This promotion switches the managed `text-agent-ornith-35b-mlx-4bit` bundle to
+Shisa's Ornith-distilled BF16 draft head, after compatibility checks on an Apple
+M4 Max. The target, tokenizer, configuration, and
 vision files retain their previous hashes. The compact head is 1,689,376,032
 bytes, replacing a 4,378,994,104-byte shard that also contained unused target
 weights. Q6, Q8, and BF16 companion selection is unchanged.
@@ -36,7 +37,7 @@ vision components retain their upstream MIT declaration.
 
 The installed-checkpoint tests run on an Apple M4 Max with 128 GiB unified
 memory. They use the exact compact head layout and the same target and vision
-bytes as the published bundle.
+bytes as the published bundle. The following table lists each check:
 
 | Case | Check |
 |---|---|

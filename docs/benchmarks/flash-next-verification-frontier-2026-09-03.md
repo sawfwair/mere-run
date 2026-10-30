@@ -1,8 +1,12 @@
 # Flash-Next verification frontier on M4 Max
 
 This receipt records the first Uzu-inspired verification-width experiment for
-the Qwen3.8 Flash-Next 3-bit native-PLE checkpoint. It measures the optimized
-target only. It does not measure a speculative tree decoder.
+the Qwen3.8 Flash-Next 3-bit native-PLE checkpoint on an Apple M4 Max. It
+measures the optimized target only, not a speculative tree decoder. In the
+first run, widths 4 and 8 preserved greedy parity and widths 16 and 32 did not,
+so the production block default stays at four. A follow-up prototype made all
+four widths exact, with width 32 reaching 186.98-189.00 verified tokens per
+second in a five-trial readback.
 
 ## Environment
 
@@ -16,6 +20,9 @@ target only. It does not measure a speculative tree decoder.
 - Trials: two, with width order reversed for the second trial
 
 ## Target-only results
+
+The following table lists the verification rate and greedy parity at each
+width:
 
 | Width | Verification passes | Mean verified tokens per second | Greedy parity |
 | ---: | ---: | ---: | :---: |
@@ -75,6 +82,9 @@ mere.run model benchmark q38-verification \
   --json
 ```
 
+The following table compares the follow-up ranges with the previous target
+rates:
+
 | Width | Verified tokens per second | Greedy parity | Previous target |
 | ---: | ---: | :---: | ---: |
 | 4 | 70.59-75.70 | Yes, 3/3 | 49.7-51.0 exact |
@@ -97,9 +107,10 @@ The isolated width-32 receipt is
 
 ## Quality guardrail
 
-The Lite suite ran before the implementation, after the first exact-wide
+The fused Lite suite ran before the implementation, after the first exact-wide
 version, and after the final kernels. Each run completed 24 case-trials: 17
-were evaluable and seven required unavailable external fixtures.
+were evaluable and seven required unavailable external fixtures. The
+following table lists each build's result:
 
 | Build | Mean score | Passes |
 | --- | ---: | ---: |
