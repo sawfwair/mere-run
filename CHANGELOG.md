@@ -6,23 +6,20 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
-- Trace Unlimited-OCR-2's first receipt layout split with causal activation
-  substitutions and identical-input BF16 projection probes. The first SAM
-  convolution drift changes the coordinate; exact upstream parity remains open.
-- Match upstream DASH router scalar promotion for Unlimited-OCR-2. Add exact
-  PyTorch FP32 goldens and same-prefix price diagnostics. Verified receipt
-  comparisons retain the remaining `9.00` versus `9.000` transcription gap.
-
-- Bind MLX Metal provenance stamps to their compiled binaries and refresh
-  same-size compatibility copies by content. Correct XCTest's library placement
-  and add a real receipt comparison with the public CLI. This removes a kernel
-  artifact mismatch that made CLI and XCTest OCR output differ.
+## 0.68.0 - 2026-10-31
 
 - Add native Unlimited-OCR-2 document OCR through `vision ocr --backend unlimited`,
   with pinned BF16 checkpoint installation, ordered pages, dynamic image tiles,
   learned sparse reference attention, and the upstream serving repetition
   constraint. Include full-checkpoint Metal document tests and pinned upstream
   comparisons; see `docs/runtime/unlimited-ocr-2.md` for results and memory limits.
+
+- Add `vision image-to-3d-idol` for native Swift/MLX object Gaussian splats,
+  using explicit local IDOL, DINOv3 H+, and FLUX.2 VAE checkpoints. Export PLY,
+  prepared input, camera, and hashed provenance. Native Swin-L BiRefNet removes
+  opaque backgrounds; Pillow-compatible Lanczos preserves transparent input
+  framing. Real-checkpoint qualification covers default sampling and numerical
+  comparisons with upstream.
 
 - Match upstream Unlimited-OCR-2 activation, scalar, rotary, positional-grid,
   letterbox centering, and prefill/decode precision boundaries. Add isolated
@@ -34,15 +31,21 @@ The format is based on Keep a Changelog.
   progressive, grayscale, and CMYK goldens, malformed-input checks, and repeated
   Metal receipt comparisons. Other image formats retain their platform decoder.
 
+- Trace Unlimited-OCR-2's first receipt layout split with causal activation
+  substitutions and identical-input BF16 projection probes. The first SAM
+  convolution drift changes the coordinate; exact upstream parity remains open.
+
+- Match upstream DASH router scalar promotion for Unlimited-OCR-2. Add exact
+  PyTorch FP32 goldens and same-prefix price diagnostics. Verified receipt
+  comparisons retain the remaining `9.00` versus `9.000` transcription gap.
+
+- Bind MLX Metal provenance stamps to their compiled binaries and refresh
+  same-size compatibility copies by content. Correct XCTest's library placement
+  and add a real receipt comparison with the public CLI. This removes a kernel
+  artifact mismatch that made CLI and XCTest OCR output differ.
+
 - Resolve Studio's bundled Caveat wordmark font through Foundation bundles so
   flat SwiftPM and Xcode `Contents/Resources` layouts both find the font.
-
-- Add `vision image-to-3d-idol` for native Swift/MLX object Gaussian splats,
-  using explicit local IDOL, DINOv3 H+, and FLUX.2 VAE checkpoints. Export PLY,
-  prepared input, camera, and hashed provenance. Native Swin-L BiRefNet removes
-  opaque backgrounds; Pillow-compatible Lanczos preserves transparent input
-  framing. Real-checkpoint qualification covers default sampling and numerical
-  comparisons with upstream.
 
 - Add the pinned Gemma 4 26B-A4B MLX BF16 export as a separate managed text-chat
   model, with native chat, API, and LoRA routing and its existing Gemma handbook.
