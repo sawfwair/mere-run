@@ -298,6 +298,7 @@ extension Gemma4Generator {
                     mapper: quantizedMapper
                 )
             } else {
+                model.prepareForFullPrecisionExpertWeights()
                 try HFSafetensorsWeightsLoader.applyShardedWeights(
                     indexURL: resources.modelIndexURL,
                     to: model,
@@ -307,6 +308,7 @@ extension Gemma4Generator {
                 )
             }
         } else if FileManager.default.fileExists(atPath: resources.modelWeightsURL.path) {
+            model.prepareForFullPrecisionExpertWeights()
             try SafetensorsStreamingLoader.applyWeightsStreaming(
                 url: resources.modelWeightsURL,
                 to: model,

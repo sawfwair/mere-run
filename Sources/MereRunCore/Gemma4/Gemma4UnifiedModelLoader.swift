@@ -92,6 +92,7 @@ public enum Gemma4UnifiedModelLoader {
         }
 
         if FileManager.default.fileExists(atPath: resources.modelIndexURL.path) {
+            model.prepareForFullPrecisionExpertWeights()
             try HFSafetensorsWeightsLoader.applyShardedWeights(
                 indexURL: resources.modelIndexURL,
                 to: model,
@@ -100,6 +101,7 @@ public enum Gemma4UnifiedModelLoader {
                 mapper: mapper
             )
         } else if FileManager.default.fileExists(atPath: resources.modelWeightsURL.path) {
+            model.prepareForFullPrecisionExpertWeights()
             try SafetensorsStreamingLoader.applyWeightsStreaming(
                 url: resources.modelWeightsURL,
                 to: model,
