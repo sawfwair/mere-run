@@ -154,6 +154,7 @@ public enum Gemma4TextModelLoader {
                     mapper: quantizedMapper
                 )
             } else {
+                model.prepareForFullPrecisionExpertWeights()
                 try HFSafetensorsWeightsLoader.applyShardedWeights(
                     indexURL: resources.modelIndexURL,
                     to: model,
@@ -163,6 +164,7 @@ public enum Gemma4TextModelLoader {
                 )
             }
         } else if FileManager.default.fileExists(atPath: resources.modelWeightsURL.path) {
+            model.prepareForFullPrecisionExpertWeights()
             try SafetensorsStreamingLoader.applyWeightsStreaming(
                 url: resources.modelWeightsURL,
                 to: model,

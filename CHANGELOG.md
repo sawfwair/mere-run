@@ -8,6 +8,10 @@ The format is based on Keep a Changelog.
 
 ## 0.68.0 - 2026-10-31
 
+- Load Gemma 4 BF16 experts through floating-point matrix multiplication. Remove
+  unused quantized scale placeholders during full-precision loading to prevent
+  the `gather_qmm` scale-type failure. Preserve NVFP4 expert loading.
+
 - Add native Unlimited-OCR-2 document OCR through `vision ocr --backend unlimited`,
   with pinned BF16 checkpoint installation, ordered pages, dynamic image tiles,
   learned sparse reference attention, and the upstream serving repetition

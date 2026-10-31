@@ -24,6 +24,10 @@ templates, generation, and LoRA orchestration.
   a frozen vision stack and language-attention adapters.
 - `Gemma4ToolParser.swift`: tool-call parsing.
 
+Full-precision checkpoints remove the expert modules' quantized scale placeholders
+before loading weights. Keep this behavior shared by chat, text LoRA, and unified
+loading; quantized checkpoints retain their actual scales and packed expert kernels.
+
 Keep OpenAI-style tool/message adaptation typed before passing into tokenizer
 library boundaries.
 
