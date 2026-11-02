@@ -4,6 +4,33 @@ import XCTest
 @testable import MereRunCore
 
 final class ImageGenerationAdapterTests: XCTestCase {
+    func testQwenEditTextToImageAgreesAcrossCLIAPIAndPreflight() throws {
+        let root = try temporaryDirectory()
+        let output = root.appendingPathComponent("result.png")
+        for model in [ManagedModelID.qwenImageEdit2511, .qwenImageEdit2511Lightning] {
+            let manifest = MereRunModelManifest.template(for: model)
+            try manifest.write(to: root)
+            let command = try ImageGenerate.parse([
+                "--prompt", "A brass camera", "--model", root.path,
+                "--width", "512", "--height", "512", "--seed", "42"
+            ])
+            let cli = try MereRunCore.ImageGenerationPlan.resolve(
+                command.operationOptions(outputURL: output), modelRoot: root, manifest: manifest
+            )
+            let api = try apiPlan().operationPlan(modelRoot: root, outputURL: output, manifest: manifest)
+            XCTAssertEqual(cli.request, api.request)
+            XCTAssertEqual(cli.backend, .qwenImageEdit)
+            XCTAssertNil(cli.request.inputImage)
+            XCTAssertTrue(cli.request.referenceImages.isEmpty)
+            XCTAssertEqual(cli.request.steps, model == .qwenImageEdit2511Lightning ? 4 : 40)
+            XCTAssertEqual(cli.request.guidanceScale, model == .qwenImageEdit2511Lightning ? 1 : 4)
+            let preflight = command.makePreflightEnvelope(outputURL: output)
+            XCTAssertEqual(preflight.status, .ok)
+            XCTAssertEqual(preflight.result.plan.inputMode, "text_to_image")
+            XCTAssertEqual(preflight.result.plan.effectiveSteps, cli.request.steps)
+        }
+    }
+
     func testQwenTurboDefaultsAgreeAcrossCLIAndAPI() throws {
         let root = try temporaryDirectory()
         let output = root.appendingPathComponent("result.png")

@@ -27,7 +27,8 @@ package struct StudioConsoleView: View {
     package init() {}
 
     @EnvironmentObject private var controller: MereRunController
-    @EnvironmentObject private var library: StudioLibraryStore
+    @EnvironmentObject private var savedLibrary: StudioLibraryStore
+    private var library: StudioLibraryStore { controller.privateSession?.library ?? savedLibrary }
     @EnvironmentObject private var navigation: NavigationModel
 
     @State private var draft = StudioConsoleDraft()
@@ -56,7 +57,17 @@ package struct StudioConsoleView: View {
             .onDisappear { navigation.isConsoleOpen = false }
             // The console's values are read out of the template's own argv, so selecting a template,
             // syncing the composer into it, or opening a Library row all arrive the same way.
-            .onChange(of: controller.selectedTemplate.id) { reseed() }
+            .onChange(of: controller.selectedTemplate.id) { previous, next in
+                if previous != next, controller.privateSession != nil {
+                    do { try controller.discardPrivateWork() }
+                    catch { controller.status = error.localizedDescription }
+                }
+                reseed()
+            }
+            .onChange(of: controller.privateWorkspaceID) {
+                requestID = nil
+                reseed()
+            }
             .onChange(of: controller.draft) { reseed() }
             .onChange(of: controller.consoleSeedArguments) { reseed() }
             .focusedSceneValue(\.studioActions, sceneActions)

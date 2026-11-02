@@ -59,11 +59,13 @@ package enum MereRunProcessInputError: LocalizedError {
 
 package protocol MereRunRunningProcess: AnyObject {
     func terminate()
+    func terminateAndWait()
     func interrupt()
     func sendStandardInput(_ text: String) throws
 }
 
 extension MereRunRunningProcess {
+    package func terminateAndWait() { terminate() }
     package func interrupt() {
         terminate()
     }
@@ -110,6 +112,15 @@ package final class FoundationRunningProcess: MereRunRunningProcess, @unchecked 
         lock.withLock {
             cancellationRequested = true
             try? stdinPipe?.fileHandleForWriting.close()
+        }
+    }
+
+    package func terminateAndWait() {
+        terminate()
+        signalGroup(SIGKILL)
+        let deadline = ProcessInfo.processInfo.systemUptime + 1
+        while process.isRunning, ProcessInfo.processInfo.systemUptime < deadline {
+            Thread.sleep(forTimeInterval: 0.005)
         }
     }
 

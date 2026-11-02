@@ -65,7 +65,7 @@ public struct QwenImageEditConditioningPlan: Sendable, Hashable {
         outputHeight: Int,
         references: [QwenImageEditReferencePlan]
     ) {
-        precondition(!references.isEmpty && references.count <= Self.maximumReferenceCount)
+        precondition(references.count <= Self.maximumReferenceCount)
         self.outputSize = QwenImageEditSize(width: outputWidth, height: outputHeight)
         self.references = references
     }

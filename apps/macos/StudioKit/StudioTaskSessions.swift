@@ -11,6 +11,36 @@ package final class StudioTaskSessions {
     @ObservationIgnored private let url: URL?
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var canSave = true
+    @ObservationIgnored private var publicSnapshot: (entries: [String: Data], persisted: [String: Data])?
+    @ObservationIgnored package var privateOutputDirectory: URL?
+
+    package func beginPrivateSession(directory: URL) {
+        if publicSnapshot == nil {
+            flush()
+            publicSnapshot = (entries, persistedEntries)
+        }
+        saveTask?.cancel()
+        saveTask = nil
+        entries = [:]
+        persistedEntries = [:]
+        taskDraftCache = [:]
+        submittingTasks = [:]
+        privateOutputDirectory = directory
+        undo.manager?.removeAllActions()
+    }
+
+    package func endPrivateSession() {
+        guard let snapshot = publicSnapshot else { return }
+        saveTask?.cancel()
+        saveTask = nil
+        entries = snapshot.entries
+        persistedEntries = snapshot.persisted
+        publicSnapshot = nil
+        privateOutputDirectory = nil
+        taskDraftCache = [:]
+        submittingTasks = [:]
+        undo.manager?.removeAllActions()
+    }
     /// Where draft edits and the Library's "Use these settings" register their undo steps.
     @ObservationIgnored package let undo = StudioUndo()
     @ObservationIgnored private var restorationObservers: [(Set<String>) -> Void] = []
@@ -102,6 +132,7 @@ package final class StudioTaskSessions {
     }
 
     private func scheduleSave() {
+        guard publicSnapshot == nil else { return }
         saveTask?.cancel()
         saveTask = Task { [weak self] in
             do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
@@ -226,7 +257,7 @@ package final class StudioTaskSessions {
     package func flush() {
         saveTask?.cancel()
         saveTask = nil
-        guard let url, canSave else { return }
+        guard publicSnapshot == nil, let url, canSave else { return }
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try JSONEncoder.mereRunApp.encode(persistedEntries).write(to: url, options: .atomic)

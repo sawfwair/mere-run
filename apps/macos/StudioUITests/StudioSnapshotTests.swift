@@ -49,6 +49,27 @@ final class StudioSnapshotTests: XCTestCase {
     /// the Command view column in the inspector's place and the Library hidden, as the Command
     /// board shows it. Readiness is answered from a scripted `model capabilities` and
     /// `model list`, so the composer is live and no readiness card appears.
+    func testPrivateWorkspaceSnapshots() throws {
+        let fixture = try SnapshotFixture(outputDirectory: self.fixture.outputDirectory, seed: .mockup,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.readinessResponses))
+        defer { fixture.tearDown() }
+        for mode in [StudioMode.createImage, .chat] {
+            try fixture.controller.setPrivateMode(true, savedLibrary: fixture.library)
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environmentObject(navigation)
+                .frame(width: Self.shellSize.width, height: Self.shellSize.height)
+            try fixture.write(view, size: Self.shellSize, appearance: .dark,
+                name: "private-\(mode.rawValue)", settle: 2.0,
+                afterAppear: { navigation.open(task: mode.task) })
+            XCTAssertNotNil(fixture.controller.privateSession)
+            XCTAssertEqual(navigation.destination.task, mode.task)
+            try fixture.controller.setPrivateMode(false, savedLibrary: fixture.library)
+        }
+    }
+
     func testMainBoardFidelitySnapshots() throws {
         let fidelity = try SnapshotFixture(
             outputDirectory: fixture.outputDirectory,

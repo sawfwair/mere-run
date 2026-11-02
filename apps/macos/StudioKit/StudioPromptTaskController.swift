@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import Observation
 
@@ -23,6 +24,7 @@ package final class StudioPromptTaskController {
     /// A file "Send to" is carrying into a prompt mode that is not active yet: the arriving
     /// draft (parked, fresh, or a thread's) takes it once `activate` has resolved which it is.
     @ObservationIgnored private var pendingSend: (destination: StudioSendDestination, url: URL)?
+    @ObservationIgnored private var inventorySubscription: AnyCancellable?
 
     package init(controller: MereRunController, library: StudioLibraryStore,
                  seededDrafts: [StudioMode: StudioDraft] = [:]) {
@@ -31,6 +33,9 @@ package final class StudioPromptTaskController {
         self.runner = StudioTaskRunner(controller: controller, library: library)
         self.seededDrafts = seededDrafts
         controller.taskSessions.observeRestorations { [weak self] keys in self?.reloadDraft(after: keys) }
+        inventorySubscription = controller.modelStore.inventoryUpdates.sink { [weak self] in
+            self?.refreshModelDefault()
+        }
     }
 
     package var activatedMode: StudioMode? { active.mode }
@@ -41,13 +46,26 @@ package final class StudioPromptTaskController {
         get { active.draft }
         set {
             let previous = active.draft
-            active.draft = newValue
+            var next = newValue
+            if let mode = activatedMode, !mode.isConversational || activeConversationID == nil {
+                controller.applyInstalledModelDefault(to: &next, for: mode, inventory: controller.modelStore.rows)
+            }
+            active.draft = next
             persistDraft()
             guard let mode = activatedMode else { return }
-            sessions.registerDraftChange(keys: draftKeys(for: mode), from: previous, to: newValue) {
-                newValue.undoName(from: previous, mode: mode, source: controller.scopeSource)
+            sessions.registerDraftChange(keys: draftKeys(for: mode), from: previous, to: next) {
+                next.undoName(from: previous, mode: mode, source: controller.scopeSource)
             }
         }
+    }
+
+    private func refreshModelDefault() {
+        guard let mode = activatedMode, !mode.isConversational || activeConversationID == nil else { return }
+        var next = active.draft
+        controller.applyInstalledModelDefault(to: &next, for: mode, inventory: controller.modelStore.rows)
+        guard next != active.draft else { return }
+        active.draft = next
+        persistDraft()
     }
 
     /// Where the open draft is stored: the task's key, and the thread's for Chat and Code.
@@ -159,6 +177,7 @@ package final class StudioPromptTaskController {
         }
         pendingSend = nil
         active = ActiveTask(mode: newMode, draft: nextDraft, conversationID: conversationID)
+        refreshModelDefault()
         persistDraft()
         sessions.rememberSelection(selectedID, for: newMode)
         return Activation(mode: newMode, selectedLibraryID: selectedID)

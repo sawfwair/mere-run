@@ -17,6 +17,7 @@ package final class StudioLibraryStore: ObservableObject {
     @Published package private(set) var preservedRowCount = 0
 
     package let libraryURL: URL
+    package let persists: Bool
     let fileManager: FileManager
     /// `lineage`, built lazily and dropped whenever the rows change.
     var lineageCache: StudioLibraryLineage?
@@ -36,13 +37,17 @@ package final class StudioLibraryStore: ObservableObject {
     package init(
         libraryURL: URL = StudioLibraryStore.defaultLibraryURL(),
         fileManager: FileManager = .default,
-        trashItem: @escaping (URL) throws -> URL? = StudioLibraryStore.moveToTrash
+        trashItem: @escaping (URL) throws -> URL? = StudioLibraryStore.moveToTrash,
+        persists: Bool = true
     ) {
         self.libraryURL = libraryURL
+        self.persists = persists
         self.fileManager = fileManager
         self.trashItem = trashItem
-        load()
-        loadCollections()
+        if persists {
+            load()
+            loadCollections()
+        }
     }
 
     /// What the UI shows when the file holds rows this build cannot read.
@@ -184,6 +189,9 @@ package final class StudioLibraryStore: ObservableObject {
         arguments: [String]? = nil,
         source: StudioScopeSource
     ) -> StudioLibraryItem {
+        if let privateLibrary = observedController?.privateSession?.library, privateLibrary !== self {
+            return privateLibrary.start(request: request, commandPreview: commandPreview, status: status, arguments: arguments, source: source)
+        }
         let execution = request.execution ?? StudioExecution(
             templateID: request.templateID,
             arguments: arguments ?? request.template.arguments(from: request.draft, source: source)
@@ -295,6 +303,10 @@ package final class StudioLibraryStore: ObservableObject {
         content: String,
         imagePath: String? = nil
     ) -> StudioLibraryItem {
+        if let privateLibrary = observedController?.privateSession?.library, privateLibrary !== self {
+            return privateLibrary.appendUser(conversationID: conversationID, mode: mode, model: model,
+                systemPrompt: systemPrompt, content: content, imagePath: imagePath)
+        }
         if let index = items.firstIndex(where: { $0.id == conversationID }) {
             var item = items[index]
             item.messages = (item.messages ?? []) + [StudioMessage(role: .user, content: content, imagePath: imagePath, model: model, systemPrompt: systemPrompt, preset: mode)]
@@ -658,6 +670,7 @@ package final class StudioLibraryStore: ObservableObject {
     }
 
     private func save() {
+        guard persists else { return }
         do {
             try fileManager.createDirectory(
                 at: libraryURL.deletingLastPathComponent(),

@@ -6,6 +6,92 @@ import XCTest
 @testable import MereRunTextEncoder
 
 final class QwenImageEditRepositoryTests: MereRunCoreTestCase {
+    func testTextToImageReachesModelLoadingWithoutReferenceImages() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let request = GenerationRequest(
+            prompt: "A ceramic coffee mug in soft morning light",
+            width: 1_024, height: 1_024, steps: 4, guidanceScale: 1,
+            outputURL: root.appendingPathComponent("mug.png"), model: root.path
+        )
+        do {
+            _ = try await QwenImageEditGenerator().generate(request, progressHandler: nil)
+            XCTFail("Expected missing checkpoint files in the empty model directory")
+        } catch QwenImageEditModelContainer.ContainerError.missingModelFiles(let files) {
+            XCTAssertFalse(files.isEmpty)
+        }
+    }
+
+    func testTextToImageConditioningUsesOnlyTheOutputGrid() {
+        let plan = QwenImageEditConditioningPlan(
+            outputWidth: 1_024, outputHeight: 768, references: []
+        )
+        XCTAssertTrue(plan.references.isEmpty)
+        XCTAssertEqual(plan.transformerImageShapes.map { [$0.temporal, $0.height, $0.width] }, [[1, 48, 64]])
+    }
+
+    func testTextToImagePromptHasNoPicturePlaceholders() {
+        let instruction = "A ceramic coffee mug in soft morning light"
+        let prompt = Qwen25VLTokenizer.editingPrompt(prompt: instruction, numImageTokens: [])
+        XCTAssertTrue(prompt.contains("<|im_start|>user\n\(instruction)<|im_end|>"))
+        XCTAssertFalse(prompt.contains("Picture "))
+        XCTAssertFalse(prompt.contains("<|vision_start|>"))
+        XCTAssertFalse(prompt.contains("<|image_pad|>"))
+    }
+
+    func testTextToImageEncoderDropsTemplateWithoutVisionInputs() throws {
+        let config = try JSONDecoder().decode(QwenImageEditTextEncoderConfig.self, from: Data(#"""
+        {
+          "hidden_size": 16, "num_hidden_layers": 1, "num_attention_heads": 2,
+          "num_key_value_heads": 1, "intermediate_size": 32, "vocab_size": 128,
+          "rope_scaling": {"mrope_section": [1, 1, 2]},
+          "vision_config": {
+            "depth": 1, "hidden_size": 8, "intermediate_size": 12, "num_heads": 1,
+            "patch_size": 2, "spatial_merge_size": 2, "out_hidden_size": 16
+          }
+        }
+        """#.utf8))
+        let encoder = Qwen25VLEncoder.fromConfig(textEncoderConfig: config)
+        let tokens = QwenTokenBatch(
+            inputIds: MLXArray((0..<70).map(Int32.init), [1, 70]),
+            attentionMask: MLXArray.ones([1, 70], dtype: .int32)
+        )
+        let encoded = try encoder.encodeForEditing(
+            inputImages: [], tokenBatch: tokens, imageTokenId: 126, visionStartTokenId: 127
+        )
+        MLX.eval(encoded.embeddings, encoded.mask)
+        XCTAssertEqual(encoded.embeddings.shape, [1, 6, 16])
+        XCTAssertEqual(encoded.mask.asArray(Int32.self), Array(repeating: 1, count: 6))
+        XCTAssertTrue(encoded.embeddings.asArray(Float.self).allSatisfy(\.isFinite))
+    }
+
+    func testTextToImageTransformerSupportsSingleAndCFGBatchesWithoutReferences() throws {
+        for zeroCondT in [false, true] {
+            let json = """
+            {
+              "num_attention_heads": 1, "attention_head_dim": 8, "num_layers": 1,
+              "joint_attention_dim": 16, "in_channels": 4, "out_channels": 1,
+              "patch_size": 2, "axes_dims_rope": [2, 2, 4], "zero_cond_t": \(zeroCondT)
+            }
+            """
+            let config = try JSONDecoder().decode(QwenImageEditTransformerConfig.self, from: Data(json.utf8))
+            let model = MMDiT(config: config)
+            for batch in [1, 2] {
+                let prediction = model.forwardEdit(
+                    latents: MLXArray.ones([batch, 4, 4]),
+                    timestep: MLXArray.ones([batch]) * 0.5,
+                    semanticEmbeds: MLXArray.ones([batch, 3, 16]),
+                    semanticMask: MLXArray.ones([batch, 3], dtype: .int32),
+                    appearanceLatents: [], imageShapes: [(temporal: 1, height: 2, width: 2)]
+                )
+                MLX.eval(prediction)
+                XCTAssertEqual(prediction.shape, [batch, 4, 4])
+                XCTAssertTrue(prediction.asArray(Float.self).allSatisfy(\.isFinite))
+            }
+        }
+    }
+
     func testQwenImageEditDeduplicatesInputAndReferenceURLs() {
         let input = URL(fileURLWithPath: "/tmp/qwen-edit/source.png")
         let second = URL(fileURLWithPath: "/tmp/qwen-edit/second.png")

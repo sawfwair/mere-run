@@ -58,7 +58,17 @@ struct StudioTaskWorkspace: View {
     /// land in one place and a re-render never decodes the same bytes twice.
     private var draft: StudioTaskDraft {
         get { sessions?.taskDraft(for: task) ?? StudioTaskDraft(task: task) ?? StudioTaskDraft(templateID: .custom) }
-        nonmutating set { sessions?.setTaskDraft(newValue, for: task) }
+        nonmutating set {
+            var next = newValue
+            next.selectInstalledDefault(from: models.rows, source: scopeSource)
+            sessions?.setTaskDraft(next, for: task)
+        }
+    }
+
+    private func refreshModelDefault() {
+        var next = draft
+        next.selectInstalledDefault(from: models.rows, source: scopeSource)
+        if next != draft { draft = next }
     }
 
     private var draftBinding: Binding<StudioTaskDraft> {
@@ -99,7 +109,7 @@ struct StudioTaskWorkspace: View {
 
     // MARK: Body
 
-    var body: some View {
+    private var content: some View {
         VStack(spacing: 0) {
             if let compared = comparedItems {
                 StudioCompareView(items: compared,
@@ -180,18 +190,30 @@ struct StudioTaskWorkspace: View {
             StudioAttachmentPaste.paste(into: &draft, slots: draft.slots(source: scopeSource), allowsText: false)
         }
         .studioBatchConfirmation($pendingBatch, onRun: runBatch)
+    }
+
+    var body: some View {
+        content
         .onAppear {
             jobMonitor.attach(controller.jobs)
+            refreshModelDefault()
             refreshReadiness()
             takeComposerFocusRequest()
         }
+        .onReceive(models.inventoryUpdates) { refreshModelDefault() }
         .onChange(of: navigation.composerFocusRequest) { _, _ in takeComposerFocusRequest() }
         .onChange(of: StudioTaskSchema.requirement(for: draft, source: scopeSource)) { _, _ in
             error = nil
             refreshReadiness()
         }
         .onChange(of: draft.templateID) { _, _ in
+            if controller.privateSession != nil {
+                do { try controller.discardPrivateWork(preserving: draft.templateID) }
+                catch { self.error = error.localizedDescription }
+                return
+            }
             error = nil
+            refreshModelDefault()
             refreshReadiness()
         }
         .onChange(of: navigation.selectedLibraryID) { _, id in

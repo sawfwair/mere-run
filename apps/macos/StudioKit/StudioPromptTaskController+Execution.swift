@@ -16,7 +16,7 @@ extension StudioPromptTaskController {
         )
         let request = sessions.resolving(base, source: controller.scopeSource)
         try validate(request)
-        return request
+        return sessions.privatizing(request, source: controller.scopeSource)
     }
 
     private func validate(_ request: StudioRunRequest) throws {
@@ -74,6 +74,7 @@ extension StudioPromptTaskController {
     }
 
     private func submitLibraryRequest(_ request: StudioRunRequest) {
+        let request = sessions.privatizing(request, source: controller.scopeSource)
         let arguments = request.execution?.arguments ?? request.template.arguments(from: request.draft, source: controller.scopeSource)
         library.start(request: request, commandPreview: controller.commandPreview(arguments: arguments, masksSecrets: true),
                       status: controller.jobs.hasCapacity(in: .inference) ? .running : .queued,

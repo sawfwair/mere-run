@@ -24,6 +24,10 @@ struct StudioContentHeader: View {
     let onToggleLibrary: () -> Void
     let onToggleInspector: () -> Void
     let onToggleCommand: () -> Void
+    var isPrivateMode = false
+    var privateItems: [StudioLibraryItem] = []
+    var onTogglePrivateMode: () -> Void = {}
+    var onKeepPrivateItem: (StudioLibraryItem) -> Void = { _ in }
 
     static let height: CGFloat = 52
     /// Clears the native traffic lights while the sidebar is collapsed.
@@ -135,6 +139,32 @@ struct StudioContentHeader: View {
 
     private var toggles: some View {
         HStack(spacing: 4) {
+            if isPrivateMode {
+                Menu {
+                    Text("Temporary work is deleted when you switch task or quit.")
+                    ForEach(privateItems) { item in
+                        Button("Keep \(item.displayTitle)") { onKeepPrivateItem(item) }
+                            .disabled(item.status == .running || item.status == .queued)
+                    }
+                    if privateItems.isEmpty { Text("No results to keep yet") }
+                } label: {
+                    Text("Private").font(.caption.weight(.medium))
+                        .foregroundStyle(MereRunTheme.accent)
+                }
+                .menuStyle(.borderlessButton).fixedSize()
+                .help("Keep selected private work in your saved Library")
+            }
+            Button(action: onTogglePrivateMode) {
+                StudioPrivateModeIcon()
+                    .stroke(lineWidth: 1.5)
+                    .frame(width: 17, height: 19)
+                    .foregroundStyle(isPrivateMode ? MereRunTheme.accent : MereRunTheme.textSecondary)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .help(isPrivateMode ? "Turn off private mode and discard temporary work" : "Private mode: keep prompts and results out of saved history")
+            .accessibilityLabel("Private mode")
+            .accessibilityValue(isPrivateMode ? "On" : "Off")
             if showsPanelToggles {
                 MereToolbarIconButton(
                     systemImage: "sidebar.left",
@@ -161,6 +191,24 @@ struct StudioContentHeader: View {
             .help(StudioKeyboardShortcuts.help("Command", .showCommandView))
             .accessibilityLabel("Command")
         }
+    }
+}
+
+private struct StudioPrivateModeIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let scale = CGAffineTransform(scaleX: rect.width / 18, y: rect.height / 20)
+        path.move(to: CGPoint(x: 2, y: 17))
+        path.addLine(to: CGPoint(x: 2, y: 8))
+        path.addCurve(to: CGPoint(x: 16, y: 8), control1: CGPoint(x: 2, y: -1), control2: CGPoint(x: 16, y: -1))
+        path.addLine(to: CGPoint(x: 16, y: 17))
+        path.addQuadCurve(to: CGPoint(x: 12, y: 17), control: CGPoint(x: 16, y: 21))
+        path.addQuadCurve(to: CGPoint(x: 8, y: 17), control: CGPoint(x: 10, y: 21))
+        path.addQuadCurve(to: CGPoint(x: 2, y: 17), control: CGPoint(x: 4, y: 21))
+        path.closeSubpath()
+        path.addEllipse(in: CGRect(x: 6, y: 9, width: 0.8, height: 1.2))
+        path.addEllipse(in: CGRect(x: 11, y: 9, width: 0.8, height: 1.2))
+        return path.applying(scale)
     }
 }
 

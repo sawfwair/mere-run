@@ -78,6 +78,16 @@ publish a complete typed snapshot and reject results from older requests or CLI
 configurations. Downloads use the same typed inference jobs from either entry
 point. Read progress and cancellation from `JobStore`; do not copy them into view
 state. After a download, recheck the current readiness requests.
+Completed inventory snapshots also update drafts whose default is unavailable
+to a compatible installed model. `StudioModelScope.selectingInstalledDefault`
+owns that choice; prompt and task draft owners persist the selected model so
+the picker, readiness, and CLI arguments agree.
+
+`StudioPrivateSession` owns the private workspace's temporary files and
+in-memory Library. Shared request preparation relocates declared outputs before
+launch. Session drafts do not write to disk while private mode is on. Keep
+copies a selected result into saved storage; workspace changes and app
+termination remove the remaining temporary files after stopping their writers.
 
 `StudioTaskSessions` reconciles result focus when Library selection changes and
 clears references to deleted rows. `StudioFileExport` honors an explicit file

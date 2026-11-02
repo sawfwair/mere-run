@@ -45,6 +45,68 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         controller.readinessByMode[mode] = .ready
     }
 
+    private func refreshInventory(_ rows: String) async throws {
+        controller.cliPath = "/usr/bin/true"
+        let index = runner.starts.count
+        let refresh = Task { await controller.modelStore.refresh() }
+        func start(_ index: Int) async throws -> RecordingStart {
+            for _ in 0..<1_000 where runner.starts.count <= index {
+                try await Task.sleep(for: .milliseconds(1))
+            }
+            return try XCTUnwrap(runner.starts.dropFirst(index).first)
+        }
+        let inventory = try await start(index)
+        inventory.stdout("{\"inventory\":{\"rows\":\(rows)},\"usageTerms\":[]}")
+        inventory.termination(0)
+        let metadata = try await start(index + 1)
+        metadata.stdout("{\"models\":[]}")
+        metadata.termination(0)
+        await refresh.value
+    }
+
+    func testInventoryArrivalReplacesMissingDefaultAndKeepsTheDraftAndLaunchConsistent() async throws {
+        activate(.createImage)
+        prompt.draft.prompt = "A ceramic mug"
+        prompt.draft.seed = "42"
+        try await refreshInventory(#"[{"id":"image-zimage-nano","category":"image","status":"missing"},{"id":"image-klein-nano","category":"image","status":"installed"}]"#)
+        XCTAssertEqual(prompt.draft.model, "image-klein-nano")
+        XCTAssertEqual(prompt.draft.prompt, "A ceramic mug")
+        XCTAssertEqual(prompt.draft.seed, "42")
+        XCTAssertEqual(prompt.freshDraft(for: .createImage).model, "image-klein-nano")
+        XCTAssertEqual(controller.taskSessions.value(for: StudioTask.imageGenerate.rawValue + ".draft", default: StudioDraft()), prompt.draft)
+        let submission = try XCTUnwrap(prompt.runPrompt(inventory: controller.modelStore.rows, prepareOutput: temporaryOutput))
+        XCTAssertEqual(submission.request.draft.model, "image-klein-nano")
+        let args = submission.request.execution?.arguments ?? submission.request.template.arguments(from: submission.request.draft, source: .contract)
+        let index = try XCTUnwrap(args.firstIndex(of: "--model"))
+        XCTAssertEqual(args[index + 1], "image-klein-nano")
+    }
+
+    func testInventoryFallbackPreservesExplicitModelsAndExistingConversations() async throws {
+        activate(.createImage)
+        prompt.draft.model = "image-qwen-edit-2511"
+        try await refreshInventory(#"[{"id":"image-klein-nano","category":"image","status":"installed"}]"#)
+        XCTAssertEqual(prompt.draft.model, "image-qwen-edit-2511")
+        activate(.chat)
+        XCTAssertEqual(controller.taskSessions.value(for: StudioTask.imageGenerate.rawValue + ".draft", default: StudioDraft()).model, "image-qwen-edit-2511")
+        let id = UUID()
+        library.appendUser(conversationID: id, mode: .chat, model: StudioChatDefaults.fallbackModelID, systemPrompt: "", content: "Hello")
+        activate(.chat, selected: id)
+        try await refreshInventory(#"[{"id":"text-chat-q36-nano","category":"text-chat","status":"installed"}]"#)
+        XCTAssertEqual(prompt.activeConversationID, id)
+        XCTAssertEqual(prompt.draft.model, StudioChatDefaults.fallbackModelID)
+    }
+
+    func testMissingPreferredDefaultFallsBackWithoutChangingTheSavedPreference() async throws {
+        activate(.createImage)
+        prompt.setPreferredModel("image-qwen-edit-2511", for: .createImage)
+        try await refreshInventory(#"[{"id":"image-qwen-edit-2511","category":"image","status":"missing"},{"id":"image-klein-nano","category":"image","status":"installed"}]"#)
+        XCTAssertEqual(prompt.draft.model, "image-klein-nano")
+        XCTAssertEqual(controller.taskSessions.preferredModel(for: .createImage), "image-qwen-edit-2511")
+        XCTAssertEqual(prompt.freshDraft(for: .createImage).model, "image-klein-nano")
+        prompt.draft.model = ""
+        XCTAssertEqual(prompt.draft.model, "image-klein-nano", "Auto follows the installed default too")
+    }
+
     private func thread(mode: StudioMode = .chat, text: String = "First question", reply: String? = nil) -> UUID {
         let id = UUID()
         library.appendUser(conversationID: id, mode: mode, model: "chosen-model", systemPrompt: "Be precise", content: text)

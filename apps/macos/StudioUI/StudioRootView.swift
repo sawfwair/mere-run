@@ -18,8 +18,11 @@ package struct StudioRootView: View {
     }
 
     package var body: some View {
+        let activeLibrary = controller.privateSession?.library ?? library
         StudioModelTitlesScope(store: controller.modelStore) {
-            StudioWorkspaceView(controller: controller, library: library, navigation: navigation, seededDrafts: seededDrafts)
+            StudioWorkspaceView(controller: controller, library: activeLibrary, navigation: navigation, seededDrafts: seededDrafts)
+                .environmentObject(activeLibrary)
+                .id(controller.privateWorkspaceID)
         }
     }
 }
@@ -622,7 +625,19 @@ private struct StudioWorkspaceView: View {
             leadingInset: layout.showsLibrary ? 0 : windowChromeInset,
             onToggleLibrary: toggleLibrary,
             onToggleInspector: toggleInspector,
-            onToggleCommand: toggleCommand
+            onToggleCommand: toggleCommand,
+            isPrivateMode: controller.privateSession != nil,
+            privateItems: controller.privateSession?.library.items ?? [],
+            onTogglePrivateMode: {
+                do {
+                    let saved = controller.privateSession?.savedLibrary ?? library
+                    try controller.setPrivateMode(controller.privateSession == nil, savedLibrary: saved)
+                } catch { studioError = error.localizedDescription }
+            },
+            onKeepPrivateItem: { item in
+                do { try controller.privateSession?.keep(item) }
+                catch { studioError = error.localizedDescription }
+            }
         )
     }
 
@@ -1185,9 +1200,11 @@ private struct StudioWorkspaceView: View {
             // Restore goes through the model so remembered tasks and the Vision Lab variant learn
             // the persisted destination; the reconciled prompt mode replaces a stale studio.mode.
             library.observe(controller: controller)
-            let restoredMode = navigation.restore(destination: storedDestination, lastPromptMode: lastPromptMode)
+            let restoredMode = controller.privateSession != nil
+                ? navigation.destination.task.mode ?? lastPromptMode
+                : navigation.restore(destination: storedDestination, lastPromptMode: lastPromptMode)
             lastPromptMode = restoredMode
-            prompt.importLegacyDrafts(storedDrafts)
+            if controller.privateSession == nil { prompt.importLegacyDrafts(storedDrafts) }
             activateMode(restoredMode)
             refreshInstalledModels()
         }
@@ -1198,8 +1215,14 @@ private struct StudioWorkspaceView: View {
 
     private var navigationObservedShell: some View {
         lifecycleShell
-        .onChange(of: navigation.destination) { _, next in
+        .onChange(of: navigation.destination) { previous, next in
             storedDestination = next
+            if let nextMode = next.task.mode { lastPromptMode = nextMode }
+            if previous.task != next.task, controller.privateSession != nil {
+                do { try controller.discardPrivateWork() }
+                catch { studioError = error.localizedDescription }
+                return
+            }
             guard let nextMode = next.task.mode else { return }
             lastPromptMode = nextMode
             if nextMode != activatedMode {
@@ -1255,6 +1278,16 @@ private struct StudioWorkspaceView: View {
             refreshReadiness()
         }
         .onChange(of: draft.readImageAction) { _, _ in
+            if controller.privateSession != nil {
+                let action = draft.readImageAction
+                do {
+                    try controller.discardPrivateWork()
+                    var fresh = prompt.freshDraft(for: mode)
+                    fresh.readImageAction = action
+                    controller.taskSessions.set(fresh, for: mode.task.rawValue + ".draft")
+                } catch { studioError = error.localizedDescription }
+                return
+            }
             studioError = nil
             refreshReadiness()
         }

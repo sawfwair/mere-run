@@ -30,7 +30,7 @@ struct StudioModelPicker<Label: View>: View {
 
     var body: some View {
         Menu {
-            let defaultID = scope.defaultModelID
+            let defaultID = scope.resolvedModelID(model: scope.selectingInstalledDefault(model: "", from: modelInventory))
             Toggle(isOn: Binding(get: { model.isBlank }, set: { _ in model = "" })) {
                 Text(defaultID.isEmpty ? "Auto" : "Auto · \(StudioModelNaming.displayName(defaultID, titles: titles))")
             }

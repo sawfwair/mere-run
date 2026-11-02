@@ -397,6 +397,21 @@ package final class JobStore: ObservableObject {
         }
     }
 
+    package func discardFinished(requestIDs: Set<UUID>) {
+        let removed = Set(order.filter { id in
+            guard let job = jobs[id], let requestID = job.request.requestID else { return false }
+            return job.state.isTerminal && requestIDs.contains(requestID)
+        })
+        order.removeAll { removed.contains($0) }
+        for id in removed { jobs[id] = nil }
+    }
+
+    package func stopPrivateProcesses(requestIDs: Set<UUID>) {
+        for job in all where job.request.requestID.map(requestIDs.contains) == true && job.state.isActive {
+            job.process?.terminateAndWait()
+        }
+    }
+
     private func startOutputWatch(for job: Job) {
         let interval = outputWatchInterval
         job.outputWatchTask = Task { [weak self, weak job] in

@@ -234,6 +234,9 @@ package final class MereRunController: ObservableObject {
     /// This Mac's CPU, memory, and thermal load for the menu bar. `StudioAppSession` starts it.
     package let machineMonitor: StudioMachineMonitor
     package let taskSessions: StudioTaskSessions
+    @Published package internal(set) var privateSession: StudioPrivateSession?
+    @Published package internal(set) var privateWorkspaceID = UUID()
+    package var retiredPrivateSessions: [StudioPrivateSession] = []
     @Published package var selectedTemplate: CommandTemplate
     @Published package var draft: CommandDraft
     /// The exact `mere.run` arguments the Command Console should open on, when a Library row
@@ -573,6 +576,11 @@ package final class MereRunController: ObservableObject {
         var nextDraft = template.defaultDraft()
         applyRecommendedChatDefaults(to: &nextDraft, templateID: template.id, replacing: nil)
         applyRecommendedCodeDefaults(to: &nextDraft, templateID: template.id, replacing: nil)
+        if template.id.studioTask.usesTaskDraft || StudioMode.allCases.contains(where: { $0.defaultTemplateID == template.id }) {
+            var scope = StudioModelScope(templateID: template.id, source: scopeSource)
+            if !nextDraft.model.isBlank { scope.defaultModelID = nextDraft.model }
+            nextDraft.model = scope.selectingInstalledDefault(model: nextDraft.model, from: modelStore.rows)
+        }
         return nextDraft
     }
 
@@ -607,6 +615,21 @@ package final class MereRunController: ObservableObject {
            !modelStore.hasInventory || modelStore.rows.contains(where: { $0.id == preferred }) {
             studioDraft.model = preferred
         }
+        applyInstalledModelDefault(to: &studioDraft, for: mode, inventory: modelStore.rows)
+    }
+
+    package func applyInstalledModelDefault(
+        to studioDraft: inout StudioDraft, for mode: StudioMode, inventory: [StudioModelInventoryRow]
+    ) {
+        var scope = StudioModelScope(mode: mode, readImageAction: studioDraft.readImageAction, source: scopeSource)
+        var defaults = Set([scope.defaultModelID])
+        if mode == .chat { defaults.insert(recommendedChatModelForStudioDefault()) }
+        if mode == .code { defaults.insert(recommendedCodeModelForStudioDefault()) }
+        if let preferred = taskSessions.preferredModel(for: mode) { defaults.insert(preferred) }
+        let current = studioDraft.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard current.isEmpty || defaults.contains(current) else { return }
+        if !current.isEmpty { scope.defaultModelID = current }
+        studioDraft.model = scope.selectingInstalledDefault(model: studioDraft.model, from: inventory)
     }
 
     /// Selects the active Studio mode's canonical command and carries the quick composer's typed
@@ -1092,6 +1115,14 @@ package final class MereRunController: ObservableObject {
     /// the camera prompt goes ahead once access is granted, so a run stopped while the system was
     /// asking never starts the capture after all.
     package func run(studio request: StudioRunRequest, stillWanted: @escaping @MainActor () -> Bool = { true }) -> Bool {
+        let privateOrigin = privateSession?.directory
+        let request = taskSessions.privatizing(request, source: scopeSource)
+        privateSession?.requestIDs.insert(request.id)
+        do { try privateSession?.prepareDirectories(for: request) }
+        catch {
+            status = "Could not prepare private outputs: \(error.localizedDescription)"
+            return false
+        }
         // Track the conversation as in-flight at SUBMISSION time, not at start, so a turn that
         // queues behind the concurrency cap still blocks a second send into the same thread and
         // shows a pending bubble. Cleared on every exit.
@@ -1101,7 +1132,7 @@ package final class MereRunController: ObservableObject {
         if let shortCircuit = ensureCameraAccess(
             for: request.template.id,
             retry: { controller in
-                guard stillWanted() else { return }
+                guard stillWanted(), controller.privateSession?.directory == privateOrigin else { return }
                 _ = controller.run(studio: request, stillWanted: stillWanted)
             }
         ) {
@@ -1364,8 +1395,20 @@ package final class MereRunController: ObservableObject {
         requestID: UUID? = nil
     ) -> JobID {
         refreshResolvedCLI()
-        let execution = arguments.map { StudioExecution(templateID: template.id, arguments: $0) }
-        let draft = execution?.project(onto: draft) ?? draft
+        var execution = arguments.map { StudioExecution(templateID: template.id, arguments: $0) }
+        var draft = execution?.project(onto: draft) ?? draft
+        var arguments = arguments
+        var requestID = requestID
+        if let session = privateSession {
+            let base = StudioRunRequest(id: requestID ?? UUID(), mode: template.libraryMode, templateID: template.id,
+                template: template, draft: draft, execution: execution)
+            let request = taskSessions.privatizing(base, source: scopeSource)
+            session.requestIDs.insert(request.id)
+            execution = request.execution
+            draft = request.draft
+            arguments = execution?.arguments
+            requestID = request.id
+        }
         let launch = cliResolve(cliPath)
         let args = arguments.map(cliArguments) ?? commandArguments(template: template, draft: draft)
         return jobs.submit(JobRequest(
@@ -1391,9 +1434,28 @@ package final class MereRunController: ObservableObject {
         queueNotice: String?,
         arguments: [String]? = nil
     ) -> Bool {
+        if privateSession != nil, template.id == .speechProfileCreate {
+            status = "Voice profiles are permanent. Turn off private mode to save a voice profile."
+            return false
+        }
+        var draft = draft
+        var arguments = arguments
+        var requestID = requestID
+        if let session = privateSession {
+            let base = StudioRunRequest(id: requestID ?? UUID(), mode: template.libraryMode, templateID: template.id,
+                template: template, draft: draft, conversationID: conversationID,
+                execution: arguments.map { StudioExecution(templateID: template.id, arguments: $0) })
+            let request = taskSessions.privatizing(base, source: scopeSource)
+            session.requestIDs.insert(request.id)
+            do { try session.prepareDirectories(for: request) }
+            catch { status = "Could not prepare private outputs: \(error.localizedDescription)"; return false }
+            draft = request.draft
+            arguments = request.execution?.arguments
+            requestID = request.id
+        }
         refreshResolvedCLI()
         let execution = arguments.map { StudioExecution(templateID: template.id, arguments: $0) }
-        let draft = execution?.project(onto: draft) ?? draft
+        draft = execution?.project(onto: draft) ?? draft
         let launch = cliResolve(cliPath)
         let args = arguments.map(cliArguments) ?? commandArguments(template: template, draft: draft)
         let request = JobRequest(
@@ -1470,10 +1532,17 @@ package final class MereRunController: ObservableObject {
             return false
         }
 
+        var output = NSString(string: draft.outputPath).expandingTildeInPath
+        if let session = privateSession {
+            let directory = session.directory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            do { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
+            catch { status = "Could not prepare private video: \(error.localizedDescription)"; return false }
+            output = directory.appendingPathComponent("render.mp4").path
+        }
         let request = StudioVideoSessionRequest(
             id: UUID().uuidString,
             prompt: prompt,
-            output: NSString(string: draft.outputPath).expandingTildeInPath,
+            output: output,
             width: draft.width,
             height: draft.height,
             numFrames: draft.numFrames,
@@ -1549,6 +1618,15 @@ package final class MereRunController: ObservableObject {
     }
 
     private func finish(_ job: Job, result: JobResult) {
+        if let requestID = job.request.requestID,
+           retiredPrivateSessions.contains(where: { $0.requestIDs.contains(requestID) }) {
+            progressByRequestID[requestID] = nil
+            if let conversationID = job.request.conversationID {
+                conversationLiveReplies[conversationID] = nil
+                runningConversationIDs.remove(conversationID)
+            }
+            return
+        }
         if case .preflightFailed(let failure) = job.state {
             // Preflight failures never became the foreground: report them on the console the
             // user is looking at, as the run would have.
@@ -1579,7 +1657,7 @@ package final class MereRunController: ObservableObject {
             conversationLiveReplies[conversationID] = nil
             runningConversationIDs.remove(conversationID)
         }
-        if job.startedAt != nil {
+        if job.startedAt != nil, job.request.requestID.map({ privateSession?.requestIDs.contains($0) != true }) ?? true {
             notifyCompletionIfNeeded(
                 success: result.exitCode == 0,
                 summary: result.exitCode == 0
@@ -1594,6 +1672,19 @@ package final class MereRunController: ObservableObject {
         runCompletions.send(result)
     }
 
+    package func clearPrivatePresentation() {
+        foregroundJob = nil
+        logs = []
+        liveOutputText = ""
+        lastRunResult = nil
+        lastOutputURL = nil
+        lastExitCode = nil
+        currentProgress = nil
+        consoleSeedArguments = nil
+        draft = defaultDraft(for: selectedTemplate)
+        privateWorkspaceID = UUID()
+    }
+
     private func refreshQueuedRunCount() {
         let count = jobs.queued(in: .inference).count
         if queuedRunCount != count {
@@ -1606,6 +1697,10 @@ package final class MereRunController: ObservableObject {
     /// so child CLIs are never orphaned.
     package func terminateAllProcesses() {
         jobs.terminateAll()
+        let privateIDs = (privateSession?.requestIDs ?? []).union(retiredPrivateSessions.reduce(into: Set<UUID>()) { $0.formUnion($1.requestIDs) })
+        jobs.stopPrivateProcesses(requestIDs: privateIDs)
+        privateSession?.removeFiles()
+        for session in retiredPrivateSessions { session.removeFiles() }
     }
 
     private func requiresCameraAccess(_ templateID: CommandTemplateID) -> Bool {

@@ -154,6 +154,13 @@ package struct StudioTaskDraft: Codable, Equatable {
         templateID.capability
     }
 
+    package mutating func selectInstalledDefault(from inventory: [StudioModelInventoryRow], source: StudioScopeSource) {
+        guard capability?.options.contains(where: { $0.flag == "--model" }) == true else { return }
+        let scope = StudioTaskSchema.modelScope(for: self, source: source)
+        let selected = scope.selectingInstalledDefault(model: model, from: inventory)
+        if selected != model { model = selected }
+    }
+
     /// The `CommandDraft` the job lifecycle reads beside the argv: the template's defaults with
     /// the console's projection over them (`StudioConsoleRun`).
     package var seed: CommandDraft {

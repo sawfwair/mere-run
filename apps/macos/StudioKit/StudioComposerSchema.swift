@@ -519,6 +519,15 @@ package struct StudioModelScope: Equatable {
             }
     }
 
+    /// Keep the default when it is installed; otherwise use a compatible installed model.
+    /// Explicit choices stay selected, including local paths and models awaiting download.
+    package func selectingInstalledDefault(model: String, from inventory: [StudioModelInventoryRow]) -> String {
+        let current = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard current.isEmpty || current == defaultModelID else { return model }
+        let installed = choices(from: inventory).filter { $0.isInstalled && $0.supported != false }
+        return installed.first(where: { $0.id == defaultModelID })?.id ?? installed.first?.id ?? model
+    }
+
     /// The model id a draft actually runs with: its explicit model, else the default.
     package func resolvedModelID(model: String) -> String {
         let current = model.trimmingCharacters(in: .whitespacesAndNewlines)
