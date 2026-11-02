@@ -168,6 +168,82 @@ final class StudioPrivateSessionTests: XCTestCase {
         runner.starts[0].termination(130)
     }
 
+    func testDiscardingPrivateWorkDuringARunLeavesNothingMarkedRunning() throws {
+        try controller.setPrivateMode(true, savedLibrary: library)
+        let base = try request()
+        XCTAssertTrue(controller.run(studio: base))
+        XCTAssertTrue(controller.isRunning)
+        try controller.discardPrivateWork()
+        XCTAssertFalse(controller.isRunning)
+        XCTAssertNil(controller.activeRunRequestID)
+    }
+
+    func testAPublicRunStaysStoppableWhenPrivateModeStarts() throws {
+        let base = try request()
+        XCTAssertTrue(controller.run(studio: base))
+        try controller.setPrivateMode(true, savedLibrary: library)
+        XCTAssertTrue(controller.isRunning)
+        XCTAssertEqual(controller.activeRunRequestID, base.id)
+        controller.cancel()
+        XCTAssertEqual(runner.processes.first?.terminateCallCount, 1)
+    }
+
+    func testKeepCopiesEveryPathItRewrites() throws {
+        try controller.setPrivateMode(true, savedLibrary: library)
+        let session = try XCTUnwrap(controller.privateSession)
+        var item = try completed("keep inputs")
+        let recording = session.directory.appendingPathComponent("Recordings/take.png")
+        try FileManager.default.createDirectory(at: recording.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("input".utf8).write(to: recording)
+        item.commandArguments = (item.commandArguments ?? []) + ["--input", recording.path]
+        try session.keep(item)
+        let kept = try XCTUnwrap(library.items.first { $0.id == item.id })
+        let arguments = try XCTUnwrap(kept.commandArguments)
+        let index = try XCTUnwrap(arguments.firstIndex(of: "--input"))
+        XCTAssertFalse(arguments[index + 1].hasPrefix(session.directory.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: arguments[index + 1]))
+    }
+
+    func testACommandWithoutDeclaredOutputsIsRefusedPrivately() throws {
+        try controller.setPrivateMode(true, savedLibrary: library)
+        let base = try request(.custom)
+        XCTAssertFalse(controller.run(studio: base))
+        XCTAssertTrue(runner.starts.isEmpty)
+    }
+
+    func testPreferredModelsApplyInPrivateWorkspaces() throws {
+        controller.taskSessions.setPreferredModel("image-klein-nano", for: .createImage)
+        try controller.setPrivateMode(true, savedLibrary: library)
+        XCTAssertEqual(controller.taskSessions.preferredModel(for: .createImage), "image-klein-nano")
+        try controller.discardPrivateWork()
+        XCTAssertEqual(controller.taskSessions.preferredModel(for: .createImage), "image-klein-nano")
+    }
+
+    func testServiceOutputsHaveTheirDirectoryPrepared() throws {
+        try controller.setPrivateMode(true, savedLibrary: library)
+        let session = try XCTUnwrap(controller.privateSession)
+        let base = try request()
+        _ = controller.startService(template: base.template, draft: base.draft)
+        let arguments = try XCTUnwrap(runner.starts.first).configuration.arguments
+        let output = arguments[try XCTUnwrap(arguments.firstIndex(of: "--output")) + 1]
+        XCTAssertTrue(output.hasPrefix(session.directory.path + "/"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: URL(fileURLWithPath: output).deletingLastPathComponent().path))
+    }
+
+    func testLaunchRemovesOnlyWorkspacesWhoseOwnerIsGone() throws {
+        let parent = root.appendingPathComponent("temporary", isDirectory: true)
+        let abandoned = parent.appendingPathComponent("mere-run-private-123-\(UUID())", isDirectory: true)
+        let active = parent.appendingPathComponent("mere-run-private-456-\(UUID())", isDirectory: true)
+        let unrelated = parent.appendingPathComponent("mere-run-other", isDirectory: true)
+        for url in [abandoned, active, unrelated] {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        }
+        StudioPrivateSession.removeAbandonedWorkspaces(in: parent) { $0 == 456 }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: abandoned.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: active.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: unrelated.path))
+    }
+
     func testDeletingPrivateResultsDoesNotMoveTheirFilesToSystemTrash() throws {
         try controller.setPrivateMode(true, savedLibrary: library)
         let item = try completed("temporary result")

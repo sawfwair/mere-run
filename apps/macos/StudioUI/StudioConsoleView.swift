@@ -57,13 +57,7 @@ package struct StudioConsoleView: View {
             .onDisappear { navigation.isConsoleOpen = false }
             // The console's values are read out of the template's own argv, so selecting a template,
             // syncing the composer into it, or opening a Library row all arrive the same way.
-            .onChange(of: controller.selectedTemplate.id) { previous, next in
-                if previous != next, controller.privateSession != nil {
-                    do { try controller.discardPrivateWork() }
-                    catch { controller.status = error.localizedDescription }
-                }
-                reseed()
-            }
+            .onChange(of: controller.selectedTemplate.id) { reseed() }
             .onChange(of: controller.privateWorkspaceID) {
                 requestID = nil
                 reseed()
@@ -184,8 +178,22 @@ package struct StudioConsoleView: View {
 /// template's own default command.
 private struct StudioConsoleCatalog: View {
     @EnvironmentObject private var controller: MereRunController
+    @State private var pendingPrivateTemplate: CommandTemplate?
 
     var body: some View {
+        catalog
+            .confirmationDialog(
+                "Discard private work?",
+                isPresented: Binding(get: { pendingPrivateTemplate != nil }, set: { if !$0 { pendingPrivateTemplate = nil } }),
+                presenting: pendingPrivateTemplate
+            ) { template in
+                Button("Discard and Switch", role: .destructive) { switchPrivateCapability(to: template) }
+            } message: { _ in
+                Text("Changing capability stops private runs and removes results you have not kept.")
+            }
+    }
+
+    private var catalog: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 4) {
                 StudioWordmark()
@@ -221,10 +229,23 @@ private struct StudioConsoleCatalog: View {
         .accessibilityLabel("Command catalog")
     }
 
+    private func switchPrivateCapability(to template: CommandTemplate) {
+        do {
+            try controller.discardPrivateWork()
+            controller.select(template)
+        } catch { controller.status = error.localizedDescription }
+    }
+
     private func row(_ template: CommandTemplate) -> some View {
         let selected = template.id == controller.selectedTemplate.id
         return Button {
-            controller.select(template)
+            if selected || controller.privateSession == nil {
+                controller.select(template)
+            } else if controller.privateSession?.library.items.isEmpty != false {
+                switchPrivateCapability(to: template)
+            } else {
+                pendingPrivateTemplate = template
+            }
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: template.systemImage)

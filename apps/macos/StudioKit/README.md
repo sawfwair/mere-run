@@ -81,13 +81,16 @@ state. After a download, recheck the current readiness requests.
 Completed inventory snapshots also update drafts whose default is unavailable
 to a compatible installed model. `StudioModelScope.selectingInstalledDefault`
 owns that choice; prompt and task draft owners persist the selected model so
-the picker, readiness, and CLI arguments agree.
+the picker, readiness, and CLI arguments agree. `StudioModelSource` records
+whether a draft's model was chosen or filled in, so a choice stays selected and
+a stand-in is picked again when the scope or inventory changes.
 
 `StudioPrivateSession` owns the private workspace's temporary files and
 in-memory Library. Shared request preparation relocates declared outputs before
 launch. Session drafts do not write to disk while private mode is on. Keep
 copies a selected result into saved storage; workspace changes and app
 termination remove the remaining temporary files after stopping their writers.
+The next launch removes workspaces left behind by a crash or force quit.
 
 `StudioTaskSessions` reconciles result focus when Library selection changes and
 clears references to deleted rows. `StudioFileExport` honors an explicit file

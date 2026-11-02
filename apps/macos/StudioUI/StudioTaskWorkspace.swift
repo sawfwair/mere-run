@@ -60,6 +60,7 @@ struct StudioTaskWorkspace: View {
         get { sessions?.taskDraft(for: task) ?? StudioTaskDraft(task: task) ?? StudioTaskDraft(templateID: .custom) }
         nonmutating set {
             var next = newValue
+            next.noteModelEdit(from: draft)
             next.selectInstalledDefault(from: models.rows, source: scopeSource)
             sessions?.setTaskDraft(next, for: task)
         }
@@ -68,7 +69,7 @@ struct StudioTaskWorkspace: View {
     private func refreshModelDefault() {
         var next = draft
         next.selectInstalledDefault(from: models.rows, source: scopeSource)
-        if next != draft { draft = next }
+        if next != draft { sessions?.setTaskDraft(next, for: task) }
     }
 
     private var draftBinding: Binding<StudioTaskDraft> {

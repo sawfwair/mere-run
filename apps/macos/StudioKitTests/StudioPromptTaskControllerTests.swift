@@ -107,6 +107,27 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         XCTAssertEqual(prompt.draft.model, "image-klein-nano", "Auto follows the installed default too")
     }
 
+    func testChoosingTheMissingDefaultKeepsItAndAutoFollowsInventory() async throws {
+        activate(.createImage)
+        let defaultID = StudioModelNaming.defaultModelID(for: .createImage)
+        let missing = #"[{"id":"\#(defaultID)","category":"image","status":"missing"},{"id":"image-klein-nano","category":"image","status":"installed"}]"#
+        try await refreshInventory(missing)
+        XCTAssertEqual(prompt.draft.model, "image-klein-nano")
+        XCTAssertEqual(prompt.draft.modelSource, .automatic("image-klein-nano"))
+
+        prompt.draft.model = defaultID
+        XCTAssertEqual(prompt.draft.model, defaultID, "A model picked to download stays selected")
+        prompt.draft.prompt = "another edit"
+        try await refreshInventory(missing)
+        XCTAssertEqual(prompt.draft.model, defaultID)
+
+        prompt.draft.model = ""
+        XCTAssertEqual(prompt.draft.model, "image-klein-nano")
+        try await refreshInventory(#"[{"id":"\#(defaultID)","category":"image","status":"installed"},{"id":"image-klein-nano","category":"image","status":"installed"}]"#)
+        XCTAssertEqual(prompt.draft.model, defaultID, "A stand-in gives way once the default is installed")
+        XCTAssertNil(prompt.draft.modelSource)
+    }
+
     private func thread(mode: StudioMode = .chat, text: String = "First question", reply: String? = nil) -> UUID {
         let id = UUID()
         library.appendUser(conversationID: id, mode: mode, model: "chosen-model", systemPrompt: "Be precise", content: text)

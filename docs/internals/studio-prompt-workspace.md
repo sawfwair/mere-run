@@ -75,8 +75,11 @@ The fallback uses the model picker's task and capability filters, skips models
 reported as unsupported, and keeps the default when it is installed. Inventory
 updates reconcile an open default draft after startup; task activation checks
 restored defaults too. Explicit model choices and existing conversations keep
-their models. If no compatible model is installed, the default stays selected
-so readiness can offer a download. Saved default preferences remain unchanged.
+their models, including a default picked from **Needs download**. A filled-in
+model is not a choice: it returns to the default once that is installed and is
+picked again when the action or variant changes. If no compatible model is
+installed, the default stays selected so readiness can offer a download. Saved
+default preferences remain unchanged and apply in private workspaces.
 
 Submit downloads through `StudioModelStore.startPull`. It reuses an active pull
 for the same model and launch configuration, and submits new pulls through the
@@ -147,11 +150,17 @@ not send completion notifications. Their prompts, transcripts, settings, and
 logs remain available in memory for the active workspace.
 
 Changing task or capability cancels private runs, resets the workspace, and
-removes its files after its writers stop. Normal app termination stops private
-writers before removing their files. Keep copies only the selected result and
-its referenced temporary inputs into App Outputs/Kept, then saves its Library
-row. User input files outside the temporary workspace are never removed.
-Private mode is off when the app launches.
+removes its files after its writers stop. The Command view asks first when
+results would be lost; opening a Library row there does not reset the workspace.
+A public run already in progress stays on the console and can still be stopped.
+Normal app termination stops private writers before removing their files. Keep
+copies only the selected result, its sidecars, and its referenced temporary
+inputs into App Outputs/Kept, then saves its Library row. User input files
+outside the temporary workspace are never removed.
+Private mode is off when the app launches, and each launch removes workspaces
+abandoned by a crash or force quit.
+A command with no declared outputs, such as a custom command, can't run in
+private mode because Studio can't relocate what it writes.
 Creating a reusable voice profile requires leaving private mode because that
 command saves a permanent profile outside the Library. Voice generation can
 still use an existing profile privately.

@@ -10,6 +10,7 @@ package final class StudioAppSession: ObservableObject {
     package let runQueue = StudioRunQueueCounter()
 
     package init() {
+        StudioPrivateSession.removeAbandonedWorkspaces()
         controller = MereRunController(
             secretStore: KeychainSecretStore(),
             taskSessions: StudioTaskSessions(url: StudioTaskSessions.defaultURL)

@@ -272,6 +272,33 @@ final class StudioOptionScopeTests: XCTestCase {
         XCTAssertEqual(draft.model, "/tmp/custom-audio-model")
     }
 
+    func testTaskDraftKeepsAChosenDefaultAndReselectsItsStandIn() {
+        let template = StudioTaskDraft(templateID: .audioEnhance)
+        let defaultID = StudioTaskSchema.modelScope(for: template, source: .contract).defaultModelID
+        guard !defaultID.isEmpty else { return XCTFail("the task needs a default model") }
+        func row(_ id: String, status: String) -> StudioModelInventoryRow {
+            StudioModelInventoryRow(id: id, category: "audio", status: status, size: "1 GB", usageTerms: nil)
+        }
+        let scope = StudioTaskSchema.modelScope(for: template, source: .contract)
+        let standIn = StudioModelInventoryRow(id: "stand-in", category: scope.categories.first ?? "audio",
+                                              status: "installed", size: "1 GB", usageTerms: nil)
+
+        var draft = template
+        draft.model = "stand-in"
+        draft.modelSource = .automatic("stand-in")
+        var edited = draft
+        edited.model = defaultID
+        edited.noteModelEdit(from: draft)
+        XCTAssertEqual(edited.modelSource, .chosen)
+        edited.selectInstalledDefault(from: [row(defaultID, status: "missing"), standIn], source: .contract)
+        XCTAssertEqual(edited.model, defaultID)
+
+        draft = edited
+        edited.model = ""
+        edited.noteModelEdit(from: draft)
+        XCTAssertNil(edited.modelSource)
+    }
+
     func testAnExcludedModelIsNotOfferedAndBlocksWithItsReason() throws {
         let rows = ["vision-depth-marigold-v2", "vision-depth-vda-small"].map {
             StudioModelInventoryRow(id: $0, category: "vision-depth", status: "installed", size: "1 GB", usageTerms: nil)

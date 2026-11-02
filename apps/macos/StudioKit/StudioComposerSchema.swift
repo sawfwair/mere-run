@@ -463,6 +463,26 @@ extension StudioMode {
 /// categories to offer, what "Auto" resolves to, and the noun for "No image models listed yet".
 /// A prompt mode and a specialist template each make one, so the composer chip, the inspector
 /// row, and the readiness card share a single picker whichever draft is behind them.
+/// How a draft's model got there. nil is a default, or a draft saved before this was recorded.
+package enum StudioModelSource: Codable, Equatable, Sendable {
+    /// Studio filled in this installed stand-in, and picks again when the scope or inventory
+    /// changes. Naming it means an edit that bypassed `afterEdit` is not mistaken for a stand-in.
+    case automatic(String)
+    /// The user picked it, so it stays even when it is the default awaiting download.
+    case chosen
+
+    package func isStandIn(for model: String) -> Bool { self == .automatic(model) }
+
+    /// The source after an edit. Replacing a draft whole brings its own source; clearing the
+    /// model hands it back to Auto.
+    package static func afterEdit(
+        model: String, previousModel: String, source: Self?, previousSource: Self?
+    ) -> Self? {
+        guard source == previousSource, model != previousModel else { return source }
+        return model.isBlank ? nil : .chosen
+    }
+}
+
 package struct StudioModelScope: Equatable {
     package let noun: String
     package var defaultModelID: String
@@ -526,6 +546,11 @@ package struct StudioModelScope: Equatable {
         guard current.isEmpty || current == defaultModelID else { return model }
         let installed = choices(from: inventory).filter { $0.isInstalled && $0.supported != false }
         return installed.first(where: { $0.id == defaultModelID })?.id ?? installed.first?.id ?? model
+    }
+
+    /// Whether `selected`, the result of `selectingInstalledDefault`, stands in for the default.
+    package func isInstalledFallback(_ selected: String) -> Bool {
+        !selected.isBlank && selected != defaultModelID
     }
 
     /// The model id a draft actually runs with: its explicit model, else the default.

@@ -21,7 +21,8 @@ package final class StudioTaskSessions {
         }
         saveTask?.cancel()
         saveTask = nil
-        entries = [:]
+        // Which model a task defaults to is a setting, not private work.
+        entries = publicSnapshot?.entries.filter { $0.key.hasSuffix(".preferredModel") } ?? [:]
         persistedEntries = [:]
         taskDraftCache = [:]
         submittingTasks = [:]

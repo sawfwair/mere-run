@@ -621,15 +621,32 @@ package final class MereRunController: ObservableObject {
     package func applyInstalledModelDefault(
         to studioDraft: inout StudioDraft, for mode: StudioMode, inventory: [StudioModelInventoryRow]
     ) {
+        guard studioDraft.modelSource != .chosen else { return }
         var scope = StudioModelScope(mode: mode, readImageAction: studioDraft.readImageAction, source: scopeSource)
         var defaults = Set([scope.defaultModelID])
         if mode == .chat { defaults.insert(recommendedChatModelForStudioDefault()) }
         if mode == .code { defaults.insert(recommendedCodeModelForStudioDefault()) }
         if let preferred = taskSessions.preferredModel(for: mode) { defaults.insert(preferred) }
         let current = studioDraft.model.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard current.isEmpty || defaults.contains(current) else { return }
-        if !current.isEmpty { scope.defaultModelID = current }
-        studioDraft.model = scope.selectingInstalledDefault(model: studioDraft.model, from: inventory)
+        let automatic = studioDraft.modelSource?.isStandIn(for: current) == true
+        guard automatic || current.isEmpty || defaults.contains(current) else { return }
+        // A stand-in goes back to the default it replaced, so the choice follows the current scope.
+        if automatic {
+            scope.defaultModelID = taskSessions.preferredModel(for: mode) ?? recommendedModel(for: mode) ?? scope.defaultModelID
+        } else if !current.isEmpty {
+            scope.defaultModelID = current
+        }
+        let selected = scope.selectingInstalledDefault(model: automatic ? scope.defaultModelID : studioDraft.model, from: inventory)
+        studioDraft.model = selected
+        studioDraft.modelSource = scope.isInstalledFallback(selected) ? .automatic(selected) : nil
+    }
+
+    private func recommendedModel(for mode: StudioMode) -> String? {
+        switch mode {
+        case .chat: return recommendedChatModelForStudioDefault()
+        case .code: return recommendedCodeModelForStudioDefault()
+        default: return nil
+        }
     }
 
     /// Selects the active Studio mode's canonical command and carries the quick composer's typed
@@ -1404,6 +1421,9 @@ package final class MereRunController: ObservableObject {
                 template: template, draft: draft, execution: execution)
             let request = taskSessions.privatizing(base, source: scopeSource)
             session.requestIDs.insert(request.id)
+            // A service reports through its id, so a failure here surfaces as the job's own.
+            do { try session.prepareDirectories(for: request) }
+            catch { status = "Could not prepare private outputs: \(error.localizedDescription)" }
             execution = request.execution
             draft = request.draft
             arguments = execution?.arguments
@@ -1436,6 +1456,10 @@ package final class MereRunController: ObservableObject {
     ) -> Bool {
         if privateSession != nil, template.id == .speechProfileCreate {
             status = "Voice profiles are permanent. Turn off private mode to save a voice profile."
+            return false
+        }
+        if privateSession != nil, template.id.capability == nil {
+            status = "This command's outputs can't be kept private. Turn off private mode to run it."
             return false
         }
         var draft = draft
@@ -1672,17 +1696,30 @@ package final class MereRunController: ObservableObject {
         runCompletions.send(result)
     }
 
+    /// A public run stays on the console, where it can still be watched and stopped.
     package func clearPrivatePresentation() {
-        foregroundJob = nil
-        logs = []
-        liveOutputText = ""
-        lastRunResult = nil
-        lastOutputURL = nil
-        lastExitCode = nil
-        currentProgress = nil
+        if let job = foregroundJob, job.state.isActive, !isPrivate(job) {
+            lastRunResult = nil
+        } else {
+            foregroundJob = nil
+            isRunning = false
+            activeRunRequestID = nil
+            status = "Idle"
+            logs = []
+            liveOutputText = ""
+            lastRunResult = nil
+            lastOutputURL = nil
+            lastExitCode = nil
+            currentProgress = nil
+        }
         consoleSeedArguments = nil
         draft = defaultDraft(for: selectedTemplate)
         privateWorkspaceID = UUID()
+    }
+
+    private func isPrivate(_ job: Job) -> Bool {
+        guard let requestID = job.request.requestID else { return false }
+        return ([privateSession].compactMap { $0 } + retiredPrivateSessions).contains { $0.requestIDs.contains(requestID) }
     }
 
     private func refreshQueuedRunCount() {
