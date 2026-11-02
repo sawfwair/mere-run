@@ -55,8 +55,8 @@ recommends. Pass `--steps` or `--cfg` to override a default.
 | `image-flux2-dev` | Gated FLUX.2-dev with Dev LoRAs | 50, 4.0 | 78.1 GB | 96 / 128 GB |
 | `image-qwen-21` | Qwen Image 2.1 generation, 10-reference editing, and RGBA output | 40, 1 | 33.1 GB | 48 / 96 GB |
 | `image-qwen-21-turbo` | Eight-step Qwen Image 2.1 Turbo | 8, 1 | 32.5 GB | 48 / 96 GB |
-| `image-qwen-edit-2511` | One-to-three-image editing, quality recipe | 40, 4.0 | 57.7 GB | 96 / 128 GB |
-| `image-qwen-edit-2511-lightning` | One-to-three-image editing, four-step Lightning recipe | 4, 1 | 58.6 GB | 96 / 128 GB |
+| `image-qwen-edit-2511` | Text-to-image and one-to-three-image editing, quality recipe | 40, 4.0 | 57.7 GB | 96 / 128 GB |
+| `image-qwen-edit-2511-lightning` | Text-to-image and one-to-three-image editing, four-step Lightning recipe | 4, 1 | 58.6 GB | 96 / 128 GB |
 | `image-hidream-o1-dev` | Distilled HiDream O1 text, editing, and personalization | 28, 0 | 35.2 GB | 48 / 64 GB |
 | `image-hidream-o1` | Full HiDream O1 | 50, 5.0 | 35.2 GB | 96 / 128 GB |
 | `image-sensenova-u1-5-8b-mot` | Raw-pixel generation and multi-image editing | 50, 4 | 50.2 GB | 64 / 96 GB |
@@ -340,10 +340,11 @@ supported memory size.
 
 ### Qwen Image Edit 2511
 
-The 2511 path accepts one to three ordered pictures. `--input` is Picture 1,
+Both 2511 models support text-to-image without an input or reference image.
+For editing, supply up to three ordered pictures: `--input` is Picture 1,
 and each `--ref-image` appends the next picture. Every picture keeps its own
-aspect ratio and conditioning grid; `--width` and `--height` set the edited
-output independently.
+aspect ratio and conditioning grid; `--width` and `--height` set the output
+independently.
 
 ```bash
 mere.run model pull image-qwen-edit-2511
@@ -360,8 +361,19 @@ The quality model defaults to 40 steps and true CFG 4.0.
 requires exactly four steps and CFG 1.0. Passing four steps to the quality
 model doesn't activate Lightning weights.
 
+To generate an image from a prompt, omit `--input` and `--ref-image`:
+
 ```bash
 mere.run model pull image-qwen-edit-2511-lightning
+mere.run image generate \
+  --model image-qwen-edit-2511-lightning \
+  --prompt "A ceramic coffee mug in soft morning light" \
+  --output ./mug.png
+```
+
+To edit an existing image with Lightning, supply `--input`:
+
+```bash
 mere.run image generate \
   --model image-qwen-edit-2511-lightning \
   --input ./scene.png \

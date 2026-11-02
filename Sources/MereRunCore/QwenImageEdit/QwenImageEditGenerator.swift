@@ -13,7 +13,6 @@ import ImageIO
 /// edit pipeline reads in the same order it executes.
 public actor QwenImageEditGenerator: ImageGenerator {
     public enum GeneratorError: LocalizedError {
-        case inputImageRequired
         case tooManyReferenceImages(Int)
         case inputImageNotFound(URL)
         case inputImageDecodeFailed(URL)
@@ -27,8 +26,6 @@ public actor QwenImageEditGenerator: ImageGenerator {
 
         public var errorDescription: String? {
             switch self {
-            case .inputImageRequired:
-                return "Qwen-Image-Edit requires at least one input or reference image."
             case .tooManyReferenceImages(let count):
                 return "Qwen-Image-Edit supports up to 3 ordered images; received \(count)."
             case .inputImageNotFound(let url):
@@ -90,9 +87,6 @@ public actor QwenImageEditGenerator: ImageGenerator {
             inputImage: request.inputImage,
             referenceImages: request.referenceImages
         )
-        guard !referenceURLs.isEmpty else {
-            throw GeneratorError.inputImageRequired
-        }
         guard referenceURLs.count <= QwenImageEditConditioningPlan.maximumReferenceCount else {
             throw GeneratorError.tooManyReferenceImages(referenceURLs.count)
         }

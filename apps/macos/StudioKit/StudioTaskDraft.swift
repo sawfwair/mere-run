@@ -21,6 +21,7 @@ package struct StudioTaskDraft: Codable, Equatable {
     package private(set) var parked: [CommandTemplateID: StudioConsoleDraft] = [:]
     /// The files the primary slot runs one at a time when it batches; empty for a single run.
     package var batchInputPaths: [String] = []
+    package var modelSource: StudioModelSource?
 
     package init(templateID: CommandTemplateID, form: StudioConsoleDraft) {
         self.templateID = templateID
@@ -28,7 +29,7 @@ package struct StudioTaskDraft: Codable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case templateID, form, parked, batchInputPaths
+        case templateID, form, parked, batchInputPaths, modelSource
     }
 
     /// A draft saved before variants were parked has no `parked` entry; one parked for a
@@ -43,6 +44,7 @@ package struct StudioTaskDraft: Codable, Equatable {
             self.parked[id] = form
         }
         batchInputPaths = try container.decodeIfPresent([String].self, forKey: .batchInputPaths) ?? []
+        modelSource = try container.decodeIfPresent(StudioModelSource.self, forKey: .modelSource)
     }
 
     /// Parked forms are keyed by template id, so the file reads as an object of forms.
@@ -56,6 +58,7 @@ package struct StudioTaskDraft: Codable, Equatable {
         if !batchInputPaths.isEmpty {
             try container.encode(batchInputPaths, forKey: .batchInputPaths)
         }
+        try container.encodeIfPresent(modelSource, forKey: .modelSource)
     }
 
     /// A fresh draft for `templateID`: the console's reading of the template's default draft, so
@@ -152,6 +155,29 @@ package struct StudioTaskDraft: Codable, Equatable {
 
     package var capability: MereRunCommandCapability? {
         templateID.capability
+    }
+
+    package mutating func selectInstalledDefault(from inventory: [StudioModelInventoryRow], source: StudioScopeSource) {
+        guard modelSource != .chosen, capability?.options.contains(where: { $0.flag == "--model" }) == true else { return }
+        let scope = StudioTaskSchema.modelScope(for: self, source: source)
+        let automatic = modelSource?.isStandIn(for: model) == true
+        let requested = automatic ? "" : model
+        let selected = scope.selectingInstalledDefault(model: requested, from: inventory)
+        if selected != model { model = selected }
+        if automatic || selected != requested {
+            modelSource = scope.isInstalledFallback(selected) ? .automatic(selected) : nil
+        }
+    }
+
+    /// Records what an edit did to the model. A variant switch starts over on the new template:
+    /// only a stand-in carried across stays one.
+    package mutating func noteModelEdit(from previous: StudioTaskDraft) {
+        guard templateID == previous.templateID else {
+            if modelSource?.isStandIn(for: model) != true { modelSource = nil }
+            return
+        }
+        modelSource = .afterEdit(model: model, previousModel: previous.model,
+                                 source: modelSource, previousSource: previous.modelSource)
     }
 
     /// The `CommandDraft` the job lifecycle reads beside the argv: the template's defaults with

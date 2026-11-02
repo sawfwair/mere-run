@@ -231,6 +231,74 @@ final class StudioOptionScopeTests: XCTestCase {
 
     // MARK: Pickers and readiness
 
+    func testMissingDefaultSelectsOnlyAnInstalledSupportedModelForTheTask() {
+        let scope = StudioModelScope(
+            noun: "image", defaultModelID: "image-zimage-nano", categories: ["image"],
+            runnableModels: ["image-zimage-nano", "image-klein-nano", "image-qwen-edit-2511"]
+        )
+        func row(_ id: String, category: String = "image", status: String = "installed", supported: Bool? = nil) -> StudioModelInventoryRow {
+            StudioModelInventoryRow(id: id, category: category, status: status, size: "1 GB", usageTerms: nil, supported: supported)
+        }
+        let inventory = [
+            row("image-zimage-nano", status: "missing"), row("image-qwen-edit-2511"),
+            row("image-klein-nano", supported: false), row("image-3d-triposr"),
+            row("text-chat-q36-nano", category: "text-chat")
+        ]
+        XCTAssertEqual(scope.selectingInstalledDefault(model: scope.defaultModelID, from: inventory), "image-qwen-edit-2511")
+        XCTAssertEqual(scope.selectingInstalledDefault(model: "", from: inventory), "image-qwen-edit-2511")
+        XCTAssertEqual(scope.selectingInstalledDefault(model: scope.defaultModelID, from: inventory.reversed()), "image-qwen-edit-2511")
+        XCTAssertEqual(scope.selectingInstalledDefault(model: scope.defaultModelID, from: inventory + [row("image-zimage-nano")]), scope.defaultModelID)
+        for explicit in ["image-klein-nano", "/tmp/my-model"] {
+            XCTAssertEqual(scope.selectingInstalledDefault(model: explicit, from: inventory), explicit)
+        }
+        for unavailable in [[], [row("image-klein-nano", status: "invalid")], [row("image-klein-nano", status: "missing")]] {
+            XCTAssertEqual(scope.selectingInstalledDefault(model: scope.defaultModelID, from: unavailable), scope.defaultModelID)
+            XCTAssertEqual(scope.selectingInstalledDefault(model: "", from: unavailable), "")
+        }
+    }
+
+    func testTaskDraftUsesInstalledDefaultInItsModelAndArguments() throws {
+        var draft = StudioTaskDraft(templateID: .audioEnhance)
+        let rows = [StudioModelInventoryRow(
+            id: "audio-enhance-universr-audio", category: "audio", status: "installed", size: "1 GB", usageTerms: nil
+        )]
+        draft.selectInstalledDefault(from: rows, source: .contract)
+        XCTAssertEqual(draft.model, "audio-enhance-universr-audio")
+        let arguments = draft.arguments(source: .contract)
+        let modelIndex = try XCTUnwrap(arguments.firstIndex(of: "--model"))
+        XCTAssertEqual(arguments[modelIndex + 1], draft.model)
+        draft.model = "/tmp/custom-audio-model"
+        draft.selectInstalledDefault(from: rows, source: .contract)
+        XCTAssertEqual(draft.model, "/tmp/custom-audio-model")
+    }
+
+    func testTaskDraftKeepsAChosenDefaultAndReselectsItsStandIn() {
+        let template = StudioTaskDraft(templateID: .audioEnhance)
+        let defaultID = StudioTaskSchema.modelScope(for: template, source: .contract).defaultModelID
+        guard !defaultID.isEmpty else { return XCTFail("the task needs a default model") }
+        func row(_ id: String, status: String) -> StudioModelInventoryRow {
+            StudioModelInventoryRow(id: id, category: "audio", status: status, size: "1 GB", usageTerms: nil)
+        }
+        let scope = StudioTaskSchema.modelScope(for: template, source: .contract)
+        let standIn = StudioModelInventoryRow(id: "stand-in", category: scope.categories.first ?? "audio",
+                                              status: "installed", size: "1 GB", usageTerms: nil)
+
+        var draft = template
+        draft.model = "stand-in"
+        draft.modelSource = .automatic("stand-in")
+        var edited = draft
+        edited.model = defaultID
+        edited.noteModelEdit(from: draft)
+        XCTAssertEqual(edited.modelSource, .chosen)
+        edited.selectInstalledDefault(from: [row(defaultID, status: "missing"), standIn], source: .contract)
+        XCTAssertEqual(edited.model, defaultID)
+
+        draft = edited
+        edited.model = ""
+        edited.noteModelEdit(from: draft)
+        XCTAssertNil(edited.modelSource)
+    }
+
     func testAnExcludedModelIsNotOfferedAndBlocksWithItsReason() throws {
         let rows = ["vision-depth-marigold-v2", "vision-depth-vda-small"].map {
             StudioModelInventoryRow(id: $0, category: "vision-depth", status: "installed", size: "1 GB", usageTerms: nil)

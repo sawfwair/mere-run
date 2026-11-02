@@ -276,6 +276,7 @@ package struct StudioDraft: Codable, Equatable, Sendable {
     package var secondaryText = ""
     package var inputPath = ""
     package var model = ""
+    package var modelSource: StudioModelSource?
     package var width = 1024
     package var height = 1024
     package var steps = 4

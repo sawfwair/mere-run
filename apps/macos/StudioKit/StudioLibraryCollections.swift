@@ -170,6 +170,7 @@ extension StudioLibraryStore {
     }
 
     func saveCollections() {
+        guard persists else { return }
         do {
             try fileManager.createDirectory(at: collectionsURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             let data = try JSONEncoder.mereRunApp.encode(StudioLibraryCollectionsFile(collections: collections))

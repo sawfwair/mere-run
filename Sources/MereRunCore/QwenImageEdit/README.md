@@ -1,6 +1,7 @@
 # QwenImageEdit
 
-Qwen image-editing runtime.
+Qwen text-to-image and image-editing runtime. Input and reference images are
+optional; editing accepts up to three ordered pictures.
 
 - `QwenImageEditConfigs.swift`: typed runtime and model configuration.
 - `QwenImageEditGenerator*.swift`: loading, encoding, generation.

@@ -30,8 +30,9 @@ struct StudioModelPicker<Label: View>: View {
 
     var body: some View {
         Menu {
-            let defaultID = scope.defaultModelID
-            Toggle(isOn: Binding(get: { model.isBlank }, set: { _ in model = "" })) {
+            let defaultID = scope.resolvedModelID(model: scope.selectingInstalledDefault(model: "", from: modelInventory))
+            // Auto's installed stand-in is written into the draft so its arguments name it.
+            Toggle(isOn: Binding(get: { model.isBlank || model == defaultID }, set: { _ in model = "" })) {
                 Text(defaultID.isEmpty ? "Auto" : "Auto · \(StudioModelNaming.displayName(defaultID, titles: titles))")
             }
             let choices = scope.choices(from: modelInventory)

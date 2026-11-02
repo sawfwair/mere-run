@@ -9,6 +9,8 @@ package final class StudioModelStore: ObservableObject {
     /// one source and re-renders when a refresh brings titles in.
     @Published package private(set) var titles = StudioModelTitles.none
     @Published package private(set) var hasInventory = false
+    /// Sent after the complete snapshot and model identities are ready to use.
+    package let inventoryUpdates = PassthroughSubject<Void, Never>()
     @Published package private(set) var storage: StudioModelStorageReport?
     @Published package private(set) var isRefreshing = false
     @Published package private(set) var error: String?
@@ -129,6 +131,7 @@ package final class StudioModelStore: ObservableObject {
         error = nil
         // What is installed is what `catalog resolve` identifies against.
         controller.modelIdentities.forget()
+        inventoryUpdates.send()
     }
 
     private func isCurrent(_ token: UUID, context: [String]) -> Bool {

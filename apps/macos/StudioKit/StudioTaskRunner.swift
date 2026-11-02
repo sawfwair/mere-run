@@ -41,7 +41,7 @@ package final class StudioTaskRunner {
         validating: Bool = true,
         fileManager: FileManager = .default
     ) throws -> (request: StudioRunRequest, fallbackReason: String?) {
-        let resolved = sessions.resolving(base, source: source)
+        let resolved = sessions.privatizing(sessions.resolving(base, source: source), source: source)
         if validating, let message = resolved.template.validationMessage(
             for: resolved.draft, execution: resolved.execution, source: source
         ) {
@@ -152,7 +152,8 @@ package final class StudioTaskRunner {
     package func submitVariations(_ requests: [StudioRunRequest], task: StudioTask) -> StudioVariationSubmission {
         var fallbackReason: String?
         let prepared = requests.map { request in
-            let prepared = StudioOutputLocation.preparing(request)
+            let privateRequest = sessions.privatizing(request, source: controller.scopeSource)
+            let prepared = StudioOutputLocation.preparing(privateRequest)
             if let reason = prepared.fallbackReason {
                 controller.noteOutputFallback(reason)
                 fallbackReason = reason
@@ -199,6 +200,7 @@ package final class StudioTaskRunner {
     /// the inference lane has a slot, the same reading the feed's cards make.
     @discardableResult
     func submit(_ request: StudioRunRequest, task: StudioTask) -> Bool {
+        let request = sessions.privatizing(request, source: controller.scopeSource)
         sessions.set(Optional(request.id), for: task.rawValue + ".requestID")
         sessions.noteSubmission(request.id, from: task)
         let arguments = request.execution?.arguments ?? request.template.arguments(from: request.draft, source: controller.scopeSource)

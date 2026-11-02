@@ -483,6 +483,12 @@ app_path="$(./scripts/build_mere_run_app.sh debug)"
 open "$app_path"
 ```
 
+Studio prefers a compatible installed model when its default is unavailable.
+The ghost button in the header turns on private mode for chats and media tasks.
+Private prompts and history stay out of the saved Library. Temporary results
+are removed when you switch capability or quit; choose **Keep** in the
+**Private** menu to save selected work.
+
 Before opening a pull request, run `./scripts/check.sh`. To add runtime smoke
 tests, set `MERERUN_RUN_E2E=core` or `MERERUN_RUN_E2E=installed`.
 Installed-model checks require the relevant assets and hardware.

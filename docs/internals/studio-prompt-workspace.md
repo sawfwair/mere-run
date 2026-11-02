@@ -70,6 +70,17 @@ rejects responses from superseded requests or from another CLI or model
 location, and a location change clears the previous location's inventory
 before it loads the replacement.
 
+Fresh drafts prefer an installed model when their default is unavailable.
+The fallback uses the model picker's task and capability filters, skips models
+reported as unsupported, and keeps the default when it is installed. Inventory
+updates reconcile an open default draft after startup; task activation checks
+restored defaults too. Explicit model choices and existing conversations keep
+their models, including a default picked from **Needs download**. A filled-in
+model is not a choice: it returns to the default once that is installed and is
+picked again when the action or variant changes. If no compatible model is
+installed, the default stays selected so readiness can offer a download. Saved
+default preferences remain unchanged and apply in private workspaces.
+
 Submit downloads through `StudioModelStore.startPull`. It reuses an active pull
 for the same model and launch configuration, and submits new pulls through the
 inference queue. A pull for another model location stays with `JobStore` and
@@ -123,3 +134,38 @@ Model tests establish state, command, and fixture-backed job behavior; rendered
 screens establish layout. Neither establishes keyboard operation, VoiceOver
 announcements, real-model output quality, or GPU cancellation recovery. Record
 those checks separately when you validate the workflow.
+
+## Private workspaces
+
+The header's ghost button starts a private workspace for every task. The Private
+menu offers **Keep** for individual finished results or conversations.
+`StudioPrivateSession` owns an in-memory Library and a temporary directory;
+`StudioTaskSessions` suspends persistence and restores the saved session after
+private mode ends. Private mode does not change existing saved work.
+
+Prompt, task, and Console submissions relocate declared outputs and sidecars,
+including explicit output paths and run records, into that temporary directory.
+Microphone recordings and resident video renders use it too. Private runs do
+not send completion notifications. Their prompts, transcripts, settings, and
+logs remain available in memory for the active workspace.
+
+Changing task or capability cancels private runs, resets the workspace, and
+removes its files after its writers stop. The Command view asks first when
+results would be lost; opening a Library row there does not reset the workspace.
+A public run already in progress stays on the console and can still be stopped.
+Normal app termination stops private writers before removing their files. Keep
+copies only the selected result, its sidecars, and its referenced temporary
+inputs into App Outputs/Kept, then saves its Library row. User input files
+outside the temporary workspace are never removed.
+Private mode is off when the app launches, and each launch removes workspaces
+abandoned by a crash or force quit.
+A command with no declared outputs, such as a custom command, can't run in
+private mode because Studio can't relocate what it writes.
+Creating a reusable voice profile requires leaving private mode because that
+command saves a permanent profile outside the Library. Voice generation can
+still use an existing profile privately.
+
+`StudioPrivateSessionTests` checks saved-file isolation, media and sidecar
+routing, cancellation, late completion, Keep, and cleanup. These checks cover
+Studio-owned storage; they do not establish secure erasure or control files
+written by external tools invoked by a model.

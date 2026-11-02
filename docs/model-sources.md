@@ -1039,8 +1039,9 @@ four-step BF16 adapter named
 `22226e8d05d354bb356627d428809f5afd7819399b077238a2b70a82883a904f`, and
 requires exactly four steps with CFG disabled.
 
-Both managed IDs use the native 2511 edit path. It accepts one to three ordered
-images across `--input` followed by repeated `--ref-image` arguments. Each
+Both managed IDs support text-to-image without reference images through the
+native 2511 path. For editing, it accepts up to three ordered images across
+`--input` followed by repeated `--ref-image` arguments. Each
 reference retains its own aspect ratio for Qwen2.5-VL semantic conditioning and
 VAE appearance conditioning. The output starts from pure noise; packed
 reference latents remain conditioning tokens rather than being blended into

@@ -14,23 +14,35 @@ final class StudioAudioRecorder: NSObject, ObservableObject {
     @Published private(set) var errorMessage: String?
 
     private var recorder: AVAudioRecorder?
+    private var startCancelled = false
 
-    func start(domain: StudioDomain) async {
+    func cancelPendingStart() { startCancelled = true }
+
+    func start(domain: StudioDomain, privateDirectory: URL? = nil) async {
+        startCancelled = false
         errorMessage = nil
         let granted = await AVCaptureDevice.requestAccess(for: .audio)
+        guard !startCancelled else { return }
         guard granted else {
             errorMessage = "Microphone access was denied. Enable it in System Settings."
             return
         }
 
-        let proposed = StudioOutputLocation.specialistFile(
+        let proposed = privateDirectory?.appendingPathComponent("Recordings", isDirectory: true)
+            .appendingPathComponent("\(UUID()).wav") ?? StudioOutputLocation.specialistFile(
             domain: domain,
             name: "recording",
             fileExtension: "wav",
             now: StudioDisplayClock.now
         )
         do {
-            let url = Self.recordingURL(proposed)
+            let url: URL
+            if privateDirectory != nil {
+                try FileManager.default.createDirectory(at: proposed.deletingLastPathComponent(), withIntermediateDirectories: true)
+                url = proposed
+            } else {
+                url = Self.recordingURL(proposed)
+            }
             guard let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 48_000, channels: 1, interleaved: true) else {
                 throw CocoaError(.formatting)
             }
@@ -91,6 +103,7 @@ final class StudioAudioRecorder: NSObject, ObservableObject {
 /// recording, with the clock beside it. Stop hands the file to the slot and closes; Cancel
 /// discards it.
 struct StudioAudioRecordingPopover: View {
+    @Environment(\.studioTaskSessions) private var sessions
     let domain: StudioDomain
     let onRecorded: (URL) -> Void
 
@@ -111,7 +124,7 @@ struct StudioAudioRecordingPopover: View {
                         }
                         dismiss()
                     } else {
-                        Task { await recorder.start(domain: domain) }
+                        Task { await recorder.start(domain: domain, privateDirectory: sessions?.privateOutputDirectory) }
                     }
                 } label: {
                     ZStack {
@@ -164,6 +177,7 @@ struct StudioAudioRecordingPopover: View {
             if recorder.isRecording { recorder.refresh() }
         }
         .onDisappear {
+            recorder.cancelPendingStart()
             if recorder.isRecording { recorder.discard() }
         }
         .accessibilityElement(children: .contain)

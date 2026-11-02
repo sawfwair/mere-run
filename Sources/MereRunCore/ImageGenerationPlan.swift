@@ -268,7 +268,6 @@ public struct ImageGenerationPlan: Sendable {
         }
         if manifest.engine == .qwenImageEdit {
             let count = Set(([options.inputImage].compactMap { $0 } + options.referenceImages).map { $0.standardizedFileURL }).count
-            reject(count == 0, "edit_input_missing", "Qwen-Image-Edit requires at least one input or reference image.")
             reject(count > QwenImageEditConditioningPlan.maximumReferenceCount, "reference_count_invalid", "Qwen-Image-Edit supports up to 3 ordered images.")
         }
         return issues
