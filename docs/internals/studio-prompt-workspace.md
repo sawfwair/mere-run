@@ -63,6 +63,19 @@ even when another task submitted a newer job.
 
 ## Model setup and result recovery
 
+Sampling controls start at **Model default**. `StudioSamplingDefaults` leaves
+untouched step counts, guidance, schedule shifts, and text sampling options out
+of the command so the CLI applies the selected model's recipe. The composer,
+inspector, Command panel, task forms, and Console share this behavior. Choosing
+a number makes it an explicit override, including a number equal to an old app
+default. **Use model default** clears that override. Page defaults keep explicit
+choices; Library replay and **Use these settings** keep recorded arguments.
+
+Older drafts don't record which generic values were explicitly selected. On
+migration, sampling values equal to the old template's defaults follow the
+model; other values remain explicit. Saved page preferences and recorded
+Library commands retain their values.
+
 The composer and the Models page both read `MereRunController.modelStore`. The
 store publishes inventory and catalog metadata together. After a failed
 refresh in the same configuration, it keeps the last readable snapshot. It

@@ -235,6 +235,12 @@ struct StudioComposer: View {
                 }
                 Divider()
             }
+            if !usesAdaptiveSchedule && mode != .music {
+                Toggle(isOn: Binding(get: { !stepsAreExplicit }, set: { _ in
+                    StudioContractBindings.bindings(for: mode)["--steps"]?.write(&draft, .unset)
+                })) { Text("Model default") }
+                Divider()
+            }
             ForEach(StudioComposerPresets.durations(for: mode), id: \.self) { seconds in
                 Toggle(isOn: Binding(
                     get: { usesSeconds && draft.durationSeconds == seconds },
@@ -334,7 +340,8 @@ struct StudioComposer: View {
     }
 
     private var stepsAreExplicit: Bool {
-        mode != .music || draft.musicOverrideSteps
+        if mode == .music { return draft.musicOverrideSteps }
+        return StudioContractBindings.bindings(for: mode)["--steps"]?.read(draft) != .unset
     }
 
     private func setSteps(_ steps: Int) {
@@ -342,7 +349,7 @@ struct StudioComposer: View {
             draft.h3Steps = steps
             return
         }
-        draft.steps = steps
+        StudioContractBindings.bindings(for: mode)["--steps"]?.write(&draft, .integer(steps))
         if mode == .music { draft.musicOverrideSteps = true }
     }
 

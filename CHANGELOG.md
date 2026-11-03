@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Use the CLI's model-specific sampling defaults throughout Studio instead of
+  sending generic step counts and guidance values. Label untouched controls as
+  **Model default**, keep explicit overrides and saved preferences, and preserve
+  the settings recorded in Library commands.
+
 ## 0.69.0 - 2026-11-02
 
 - Add Studio private mode for chats and media tasks. The ghost button keeps

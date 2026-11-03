@@ -690,7 +690,7 @@ package enum StudioComposerPresets {
         case .video: return [20, 30, 40, 50]
         case .music: return [8, 27, 60]
         case .sfx: return [4, 8, 16, 32, 50]
-        default: return [1, 2, 4, 8, 12, 20, 28, 50]
+        default: return [1, 2, 4, 8, 12, 20, 28, 40, 50]
         }
     }
 
@@ -725,6 +725,7 @@ package enum StudioComposerPresets {
 
     package static func stepsTitle(_ draft: StudioDraft, mode: StudioMode) -> String {
         if mode == .music, !draft.musicOverrideSteps { return "Preset steps" }
+        if mode != .music, StudioContractBindings.bindings(for: mode)["--steps"]?.read(draft) == .unset { return "Model steps" }
         return draft.steps == 1 ? "1 step" : "\(draft.steps) steps"
     }
 

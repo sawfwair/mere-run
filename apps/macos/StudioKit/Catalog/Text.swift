@@ -91,8 +91,8 @@ extension CommandArguments {
         args.option(F.temperature, format(draft.temperature))
         args.option(F.topP, format(draft.topP))
         if draft.contextSize > 0 { args.option(F.contextSize, String(draft.contextSize)) }
-        if draft.topK > 0 { args.option(F.topK, String(draft.topK)) }
-        if draft.minP > 0 { args.option(F.minP, format(draft.minP)) }
+        if draft.topK > 0 || draft.samplingOverrides?.contains(F.topK) == true { args.option(F.topK, String(draft.topK)) }
+        if draft.minP > 0 || draft.samplingOverrides?.contains(F.minP) == true { args.option(F.minP, format(draft.minP)) }
         if draft.kvBits > 0 { args.option(F.kvBits, String(draft.kvBits)) }
         if !draft.kvQuantScheme.isBlank { args.option(F.kvQuantScheme, draft.kvQuantScheme) }
         if draft.kvGroupSize > 0 { args.option(F.kvGroupSize, String(draft.kvGroupSize)) }
@@ -135,7 +135,7 @@ extension CommandArguments {
         args.option(F.maxTokens, String(draft.maxTokens))
         args.option(F.temperature, format(draft.temperature))
         args.option(F.topP, format(draft.topP))
-        if draft.minP > 0 { args.option(F.minP, format(draft.minP)) }
+        if draft.minP > 0 || draft.samplingOverrides?.contains(F.minP) == true { args.option(F.minP, format(draft.minP)) }
         if !draft.model.isBlank { args.option(F.model, draft.model) }
         if draft.stream { args.flag(F.stream) }
         if draft.force { args.flag(F.stats) }
