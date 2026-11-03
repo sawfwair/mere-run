@@ -15,6 +15,7 @@ Options:
 Environment:
   MERERUN_CHECK_LINUX_ALLOW_NON_LINUX=1   Allow --manifest-only from macOS.
   MERERUN_CHECK_LINUX_MANIFEST_ONLY=1     Same as --manifest-only.
+  MERERUN_LINUX_CPU_TARGET               native (default) or x86-64-v3 for CPU CI.
 USAGE
 }
 
@@ -48,6 +49,8 @@ cd "$repo_root"
 
 # shellcheck source=scripts/linux-arm64-bf16-toolchain.sh
 source "$repo_root/scripts/linux-arm64-bf16-toolchain.sh"
+# shellcheck source=scripts/linux-cpu-target.sh
+source "$repo_root/scripts/linux-cpu-target.sh"
 
 host_os="$(uname -s)"
 if [[ "$host_os" != "Linux" ]]; then
@@ -132,6 +135,18 @@ case "$(uname -m)" in
     ;;
 esac
 configure_linux_arm64_bf16_toolchain "$arch" "check-linux"
+configure_linux_cpu_target "$arch" "${MERERUN_LINUX_ACCEL:-cpu}"
+verify_linux_cpu_target
+
+linux_swift() {
+  local subcommand="$1"
+  shift
+  if [[ "$linux_cpu_target" == native ]]; then
+    swift "$subcommand" --disable-index-store "$@"
+  else
+    swift "$subcommand" --disable-index-store "${linux_cpu_swift_flags[@]}" "$@"
+  fi
+}
 
 bash ./scripts/prepare-linux-native.sh
 native_root="$repo_root/.build/native/linux-$arch"
@@ -140,13 +155,17 @@ export LIBRARY_PATH="$native_root/llama/lib:${LIBRARY_PATH:-}"
 export LD_LIBRARY_PATH="$native_root/llama/lib:${LD_LIBRARY_PATH:-}"
 
 check_linux_package_view
-swift build --disable-index-store --product mere.run
-swift build --disable-index-store --product MediaIOSmoke
+linux_swift build --product mere.run
+linux_swift build --product MediaIOSmoke
 if [[ "$build_only" == "1" ]]; then
   echo "[check-linux] Linux cache build completed; compatibility smoke checks were not run."
   exit 0
 fi
-timeout 120s swift run --disable-index-store --skip-build MediaIOSmoke
+if [[ "$linux_cpu_target" == native ]]; then
+  timeout 120s swift run --disable-index-store --skip-build MediaIOSmoke
+else
+  timeout 120s swift run --disable-index-store "${linux_cpu_swift_flags[@]}" --skip-build MediaIOSmoke
+fi
 
 run_installer_fixture() {
   local fixture_root

@@ -30,6 +30,8 @@ Environment:
   MERERUN_NATIVE_BUILD_JOBS   Override CMake build parallelism. Defaults to
                               nproc. Useful in containers where nproc reports
                               the physical host instead of the rented worker.
+  MERERUN_LINUX_CPU_TARGET    native (default), or x86-64-v3 for reusable CPU CI
+                              artifacts. CUDA and arm64 keep the native default.
   MERERUN_CUDA_ARCHITECTURES  Optional CMake CUDA architecture list for llama.cpp
                               and mlx-swift CUDA builds, for example
                               "86-real;90-virtual".
@@ -99,6 +101,8 @@ cd "$repo_root"
 
 # shellcheck source=scripts/linux-arm64-bf16-toolchain.sh
 source "$repo_root/scripts/linux-arm64-bf16-toolchain.sh"
+# shellcheck source=scripts/linux-cpu-target.sh
+source "$repo_root/scripts/linux-cpu-target.sh"
 
 host_os="$(uname -s)"
 if [[ "$host_os" != "Linux" ]]; then
@@ -554,6 +558,10 @@ case "$linux_accel" in
     exit 64
     ;;
 esac
+configure_linux_cpu_target "$arch" "$linux_accel"
+if [[ "$linux_cpu_target" != native ]]; then
+  llama_build="${llama_build}-${linux_cpu_target}"
+fi
 if [[ "$check_only" != "1" ]]; then
   configure_linux_arm64_bf16_toolchain "$arch" "prepare-linux-native"
   if [[ "$linux_accel" == "cuda" ]]; then
@@ -643,6 +651,9 @@ build_llama() {
     -DLLAMA_BUILD_APP=OFF
     -DLLAMA_CURL=OFF
   )
+  if [[ "$linux_cpu_target" != native ]]; then
+    cmake_args+=("${linux_cpu_cmake_flags[@]}")
+  fi
 
   if [[ "$linux_accel" == "cuda" ]]; then
     require_tool nvcc

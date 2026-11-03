@@ -82,15 +82,21 @@ pushes to `main` write. Its key covers the Xcode version, `Package.swift`,
 saved: a stale one silently corrupts inference, so every run regenerates and
 re-stamps it from the checkout.
 
-Linux and iOS also restore caches that only pushes to `main` write. Linux keeps
-SwiftPM dependencies and native libraries separate from the rolling Swift build
-directory. iOS keeps downloaded packages separate from Release simulator build
-products and intermediates. Build keys include the toolchain, dependency pins,
-build configuration, and commit, with a fallback to the previous compatible
-commit. The Linux key includes the pinned container, compiler, and CPU features.
-The iOS key includes the Xcode build and simulator SDK build. Unchanged tracked
-files and the generated iOS project receive content-derived modification times
-so a fresh checkout can reuse compiled output.
+Linux and iOS also restore caches that only pushes to `main` write. Linux has
+three caches: downloads and patched source checkouts, compiled native libraries,
+and rolling Swift build output. Download keys depend on package pins and
+preparation scripts, without a compiler or host CPU fingerprint. Native and
+Swift build keys include the pinned container, compiler versions, build policy,
+and the declared `x86-64-v3` CPU target. The runner verifies support before
+executing cached binaries. CMake disables host-native, AVX-512, and AMX options;
+SwiftPM passes the fixed target to C, C++, and Swift compilation. Ordinary Linux
+builds use the existing `native` default unless `MERERUN_LINUX_CPU_TARGET` is set.
+
+iOS keeps downloaded packages separate from Release simulator build products
+and intermediates. Its build key includes the Xcode build and simulator SDK
+build. Rolling build keys advance with each commit and fall back to the previous
+compatible commit. Unchanged tracked files and the generated iOS project receive
+content-derived modification times so a fresh checkout can reuse compiled output.
 
 Post-merge Linux runs `scripts/check-linux.sh --build-only`; post-merge iOS runs
 `build-for-testing` without launching tests or repeating metadata checks. PRs
@@ -100,7 +106,8 @@ hit. The first merge seeds cold caches. Measure reuse on subsequent runs.
 The `ci-timings` job reports runner queue time, setup, cache operations, builds
 and gates, standalone tests, and validation. Its cache table distinguishes exact
 hits, fallback hits, misses, and failed restores, and lists archive sizes and
-keys. The `ci-timings-<attempt>` artifact stores the same measurements and each
+keys, including Linux native-library restores as a separate row.
+The `ci-timings-<attempt>` artifact stores the same measurements and each
 step's duration as JSON for 30 days. Compare runs with the same event and lane;
 main's build-only warm-up is not a validation benchmark.
 
