@@ -6,6 +6,26 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.69.0 - 2026-11-02
+
+- Add Studio private mode for chats and media tasks. The ghost button keeps
+  prompts, history, recordings, run records, and generated files in a temporary
+  workspace. Switching capability, leaving private mode, or quitting cancels
+  private work and removes its files. Choose **Keep** to save selected results
+  and their referenced temporary inputs. User-owned inputs remain untouched.
+  Private mode controls Studio-owned storage; it doesn't promise secure erasure
+  or remove files written by external tools.
+- Prefer a compatible installed model when a Studio task's default is
+  unavailable, including when inventory arrives after startup. Preserve explicit
+  model choices, existing conversations, and saved default preferences.
+- Generate images from a prompt with Qwen Image Edit 2511 quality and Lightning
+  models through the CLI and API without supplying a reference image. Editing
+  continues to accept up to three ordered references.
+- Preserve content-derived source timestamps, SwiftPM workspace state, Linux
+  native build output, and compiled tests in CI caches so warm builds can reuse
+  unchanged code. Keep macOS build-cache writes restricted to main and continue
+  regenerating MLX Metal libraries for each run.
+
 ## 0.68.0 - 2026-10-31
 
 - Load Gemma 4 BF16 experts through floating-point matrix multiplication. Remove
