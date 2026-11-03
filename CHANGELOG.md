@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Make the Studio private-mode ghost button respond across its full button area.
+
 - Use the CLI's model-specific sampling defaults throughout Studio instead of
   sending generic step counts and guidance values. Label untouched controls as
   **Model default**, keep explicit overrides and saved preferences, and preserve

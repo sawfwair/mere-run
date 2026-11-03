@@ -160,6 +160,7 @@ struct StudioContentHeader: View {
                     .frame(width: 17, height: 19)
                     .foregroundStyle(isPrivateMode ? MereRunTheme.accent : MereRunTheme.textSecondary)
                     .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help(isPrivateMode ? "Turn off private mode and discard temporary work" : "Private mode: keep prompts and results out of saved history")
