@@ -741,8 +741,8 @@ patch_mlx_swift_for_linux() {
   if [[ -f "$numerics_header" ]] && grep -Fq '#if !defined __wasm__ // No _Float16 on wasm' "$numerics_header"; then
     sed -i 's/#if !defined __wasm__ \/\/ No _Float16 on wasm/#if !defined __wasm__ \&\& defined(__FLT16_MANT_DIG__) \/\/ No _Float16 on wasm, or on targets whose C compiler lacks _Float16/' "$numerics_header"
   fi
-  if [[ -f "$numerics_float16" ]] && grep -Fq '#if !arch(wasm32)' "$numerics_float16"; then
-    sed -i 's/#if !arch(wasm32)/#if !arch(wasm32) \&\& !(os(Linux) \&\& arch(x86_64))/' "$numerics_float16"
+  if [[ -f "$numerics_float16" ]] && grep -Fxq '#if !arch(wasm32)' "$numerics_float16"; then
+    sed -i 's/^#if !arch(wasm32)$/#if !arch(wasm32) \&\& !(os(Linux) \&\& arch(x86_64))/' "$numerics_float16"
   fi
 
   echo "[prepare-linux-native] SwiftPM Linux package fixes applied."

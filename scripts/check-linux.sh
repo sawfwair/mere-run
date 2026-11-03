@@ -3,12 +3,13 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/check-linux.sh [--manifest-only] [--help]
+Usage: scripts/check-linux.sh [--manifest-only] [--build-only] [--help]
 
 Validate the Linux package/native plumbing for the mere.run CLI.
 
 Options:
   --manifest-only  Only validate the Linux Package.swift view.
+  --build-only     Prepare native dependencies and build products without smoke checks.
   -h, --help       Show this help.
 
 Environment:
@@ -18,11 +19,16 @@ USAGE
 }
 
 manifest_only="${MERERUN_CHECK_LINUX_MANIFEST_ONLY:-0}"
+build_only=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --manifest-only)
       manifest_only=1
+      shift
+      ;;
+    --build-only)
+      build_only=1
       shift
       ;;
     -h|--help)
@@ -136,6 +142,10 @@ export LD_LIBRARY_PATH="$native_root/llama/lib:${LD_LIBRARY_PATH:-}"
 check_linux_package_view
 swift build --disable-index-store --product mere.run
 swift build --disable-index-store --product MediaIOSmoke
+if [[ "$build_only" == "1" ]]; then
+  echo "[check-linux] Linux cache build completed; compatibility smoke checks were not run."
+  exit 0
+fi
 timeout 120s swift run --disable-index-store --skip-build MediaIOSmoke
 
 run_installer_fixture() {

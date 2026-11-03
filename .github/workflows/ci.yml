@@ -14,7 +14,9 @@ concurrency:
   # Merge-queue runs each get their own gh-readonly-queue ref, and cancelling
   # one would leave the queue waiting on a check that never reports.
   group: ci-${{ github.event_name }}-${{ github.event.merge_group.head_ref || github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'merge_group' }}
+  # Let a running main warm-up finish so frequent merges cannot starve the
+  # shared caches. Pending main runs still coalesce to the newest commit.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   changes:
@@ -54,6 +56,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Test CI support scripts
+        run: python3 -B -m unittest discover -s scripts/tests -p test_ci_support.py
       - name: Classify the changed paths
         id: filter
         env:
@@ -104,7 +108,10 @@ jobs:
 
           if [[ -n "$BASE_SHA" && ! "$BASE_SHA" =~ ^0+$ ]] \
               && git cat-file -e "${BASE_SHA}^{commit}"; then
-            mapfile -t changed_files < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+            changed_files=()
+            while IFS= read -r -d '' path; do
+              changed_files+=("$path")
+            done < <(git diff --name-only -z "$BASE_SHA" "$HEAD_SHA")
             if (( ${#changed_files[@]} > 0 )); then
               code_required=false
               lane=fast
@@ -124,6 +131,14 @@ jobs:
                   # here, so they cannot be trusted to validate themselves.
                   .github/*)
                     record_category workflows
+                    lane=full
+                    linux_required=true
+                    ios_required=true
+                    ;;
+                  # Timestamp reuse and its regressions cover both SwiftPM and
+                  # Xcode builds, so exercise both platform caches on edits.
+                  scripts/stabilize-ci-mtimes.py|scripts/tests/test_ci_support.py)
+                    record_category ci-cache-support
                     lane=full
                     linux_required=true
                     ios_required=true
@@ -191,8 +206,8 @@ jobs:
             # Keep main's trusted cache writer without repeating that matrix.
             code_required=true
             lane=warm
-            linux_required=false
-            ios_required=false
+            linux_required=true
+            ios_required=true
             categories='validated merge-queue commit'
           fi
 
@@ -235,6 +250,13 @@ jobs:
     needs: changes
     if: always()
     runs-on: macos-26
+    outputs:
+      dependencies-key: ${{ steps.dependencies-cache.outputs.cache-primary-key }}
+      dependencies-match: ${{ steps.dependencies-cache.outputs.cache-matched-key }}
+      dependencies-result: ${{ steps.dependencies-cache.outcome }}
+      build-key: ${{ steps.build-cache.outputs.cache-primary-key }}
+      build-match: ${{ steps.build-cache.outputs.cache-matched-key }}
+      build-result: ${{ steps.build-cache.outcome }}
     env:
       MERERUN_SWIFT_DISABLE_INDEX_STORE: '1'
       LANE: ${{ needs.changes.outputs.lane }}
@@ -282,8 +304,9 @@ jobs:
         with:
           xcode-version: '26.4'
       - name: Restore SwiftPM dependencies
+        id: dependencies-cache
         if: env.RUN_GATE == 'true'
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: |
             ~/Library/Caches/org.swift.swiftpm
@@ -395,6 +418,17 @@ jobs:
       # bundles are regenerated on demand, the assembled app bundle is rebuilt
       # from scratch by build_mere_run_app.sh, and the metallib is deliberately
       # never carried between runs.
+      - name: Save SwiftPM dependencies
+        if: env.RUN_GATE == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.dependencies-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            .build/artifacts
+            .build/checkouts
+            .build/repositories
+            .build/workspace-state.json
+          key: ${{ steps.dependencies-cache.outputs.cache-primary-key }}
       - name: Prune reproducible products before caching
         if: env.RUN_GATE == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
@@ -421,12 +455,19 @@ jobs:
             .build/swiftlint.cache
           key: swiftbuild-v2-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ env.LANE }}-${{ github.sha }}
 
-  # Not a required check, so this one is simply skipped when nothing the iOS
-  # project compiles has changed (apps/macos/** is not part of it).
+  # Not a required check. PRs and queue groups keep their existing path scope;
+  # validated main pushes build the Release products to seed shared caches.
   ios:
     needs: changes
-    if: github.event_name != 'push' && needs.changes.outputs.code == 'true' && needs.changes.outputs.ios == 'true'
+    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.ios == 'true'
     runs-on: macos-26
+    outputs:
+      dependencies-key: ${{ steps.dependencies-cache.outputs.cache-primary-key }}
+      dependencies-match: ${{ steps.dependencies-cache.outputs.cache-matched-key }}
+      dependencies-result: ${{ steps.dependencies-cache.outcome }}
+      build-key: ${{ steps.build-cache.outputs.cache-primary-key }}
+      build-match: ${{ steps.build-cache.outputs.cache-matched-key }}
+      build-result: ${{ steps.build-cache.outcome }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -434,18 +475,46 @@ jobs:
       - uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: '26.4'
+      - name: Stamp tracked files with content-derived times
+        run: python3 scripts/stabilize-ci-mtimes.py
+      - name: Identify iOS cache keys
+        id: cache-keys
+        env:
+          PACKAGE_HASH: ${{ hashFiles('Package.swift', 'Package.resolved') }}
+          BUILD_HASH: ${{ hashFiles('Package.swift', 'Package.resolved', 'apps/ios/project.yml', '.github/workflows/ci.yml') }}
+        run: |
+          set -euo pipefail
+          toolchain="$(xcodebuild -version | shasum -a 256 | cut -d ' ' -f 1)"
+          sdk="$(xcrun --sdk iphonesimulator --show-sdk-build-version)"
+          echo "dependencies=ios-swiftpm-v2-${RUNNER_OS}-${RUNNER_ARCH}-${toolchain}-${PACKAGE_HASH}" >> "$GITHUB_OUTPUT"
+          echo "build=ios-build-v1-${RUNNER_OS}-${RUNNER_ARCH}-${toolchain}-${sdk}-Release-${BUILD_HASH}" >> "$GITHUB_OUTPUT"
       - name: Restore iOS SwiftPM dependencies
-        uses: actions/cache@v6
+        id: dependencies-cache
+        uses: actions/cache/restore@v6
         with:
           path: .build/ios-source-packages
-          key: ios-swiftpm-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          key: ${{ steps.cache-keys.outputs.dependencies }}
+      - name: Restore iOS build directory
+        id: build-cache
+        uses: actions/cache/restore@v6
+        with:
+          # Exclude simulator state, logs, test results, and the index store.
+          path: |
+            .build/ios-derived/Build
+            .build/ios-derived/ModuleCache.noindex
+            .build/ios-derived/SDKStatCaches.noindex
+          key: ${{ steps.cache-keys.outputs.build }}-${{ github.sha }}
+          restore-keys: |
+            ${{ steps.cache-keys.outputs.build }}-
       - name: Install XcodeGen
         run: |
           # Keep this in sync with the native Swift job's runner workaround.
           brew untap --force aws/tap
           brew install xcodegen
       - name: Generate iOS project
-        run: xcodegen generate --spec apps/ios/project.yml --project apps/ios
+        run: |
+          xcodegen generate --spec apps/ios/project.yml --project apps/ios
+          python3 scripts/stabilize-ci-mtimes.py apps/ios/MereRunStudio.xcodeproj
       - name: Select iOS simulator
         run: |
           set -euo pipefail
@@ -481,6 +550,7 @@ jobs:
             ONLY_ACTIVE_ARCH=YES \
             CODE_SIGNING_ALLOWED=NO
       - name: Run iOS unit tests
+        if: github.event_name != 'push'
         run: |
           xcodebuild test-without-building \
             -project apps/ios/MereRunStudio.xcodeproj \
@@ -493,6 +563,7 @@ jobs:
             ONLY_ACTIVE_ARCH=YES \
             CODE_SIGNING_ALLOWED=NO
       - name: Verify iOS release metadata
+        if: github.event_name != 'push'
         run: |
           set -euo pipefail
 
@@ -533,6 +604,24 @@ jobs:
           release_setting="$(xcodebuild -project apps/ios/MereRunStudio.xcodeproj -scheme MereRunStudio -configuration Release -showBuildSettings | awk -F ' = ' '/CODE_SIGN_ENTITLEMENTS/ { print $2; exit }')"
           test "$debug_setting" = 'MereRunStudio/MereRunStudio.Debug.entitlements'
           test "$release_setting" = 'MereRunStudio/MereRunStudio.entitlements'
+
+      # Only successful builds of the trusted default branch publish caches.
+      # These jobs depend on the exact-SHA queue verification in `changes`.
+      - name: Save iOS SwiftPM dependencies
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.dependencies-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: .build/ios-source-packages
+          key: ${{ steps.cache-keys.outputs.dependencies }}
+      - name: Save iOS build directory
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            .build/ios-derived/Build
+            .build/ios-derived/ModuleCache.noindex
+            .build/ios-derived/SDKStatCaches.noindex
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
 
   # Keep the existing protected-check context while the real bundle build and
   # verification share the warm SwiftPM build directory in the swift job.
@@ -603,6 +692,13 @@ jobs:
     # Use the identical official image through its public mirror, avoiding
     # Docker Hub anonymous pull limits before the job can check out the repo.
     container: docker.io/library/swift:6.1-jammy@sha256:19792fa7ef68fb0e0ca5763ec3dfd40d6461afca7c081eb689e2e374fa80c0be
+    outputs:
+      dependencies-key: ${{ steps.dependencies-cache.outputs.cache-primary-key }}
+      dependencies-match: ${{ steps.dependencies-cache.outputs.cache-matched-key }}
+      dependencies-result: ${{ steps.dependencies-cache.outcome }}
+      build-key: ${{ steps.build-cache.outputs.cache-primary-key }}
+      build-match: ${{ steps.build-cache.outputs.cache-matched-key }}
+      build-result: ${{ steps.build-cache.outcome }}
     env:
       RUN_GATE: ${{ needs.changes.result == 'success' && needs.changes.outputs.code == 'true' && needs.changes.outputs.linux == 'true' }}
     steps:
@@ -617,7 +713,7 @@ jobs:
             exit 1
           fi
           if [[ "$RUN_GATE" == "true" ]]; then
-            echo "Running the Linux CLI compatibility gate."
+            echo "Running the Linux CLI build (compatibility checks on PRs and queue groups; cache warm on main)."
           else
             echo "No Linux-visible change; the Linux CLI gate has nothing to prove."
           fi
@@ -673,22 +769,108 @@ jobs:
       - name: Stamp tracked files with content-derived times
         if: env.RUN_GATE == 'true'
         run: python3 scripts/stabilize-ci-mtimes.py
-      - name: Restore SwiftPM and Linux native dependencies
+      - name: Identify Linux cache keys
         if: env.RUN_GATE == 'true'
-        uses: actions/cache@v6
+        id: cache-keys
+        env:
+          DEPENDENCY_HASH: ${{ hashFiles('Package.swift', 'Package.resolved', 'scripts/prepare-linux-native.sh', 'scripts/linux-arm64-bf16-toolchain.sh') }}
+          BUILD_HASH: ${{ hashFiles('scripts/check-linux.sh', '.github/workflows/ci.yml') }}
+        run: |
+          set -eu
+          # Include the pinned container identity as well as the Swift version.
+          # llama.cpp also specializes for the host CPU; never reuse those
+          # objects on a runner with a different feature set.
+          toolchain="$(
+            {
+              swift --version
+              cc --version
+              cmake --version
+              awk -F ': ' '/^flags/ {print $2; exit}' /proc/cpuinfo
+            } | sha256sum | cut -d ' ' -f 1
+          )"
+          echo "dependencies=linux-native-v3-${RUNNER_OS}-${RUNNER_ARCH}-swift-6.1-jammy-19792fa7-${toolchain}-${DEPENDENCY_HASH}" >> "$GITHUB_OUTPUT"
+          echo "build=linux-build-v3-${RUNNER_OS}-${RUNNER_ARCH}-swift-6.1-jammy-19792fa7-${toolchain}-${DEPENDENCY_HASH}-${BUILD_HASH}" >> "$GITHUB_OUTPUT"
+      - name: Restore Linux dependencies and native libraries
+        if: env.RUN_GATE == 'true'
+        id: dependencies-cache
+        uses: actions/cache/restore@v6
         with:
           path: |
             .build/artifacts
-            .build/build.db
             .build/checkouts
-            .build/debug.yaml
             .build/native/linux-x86_64
             .build/native/src
-            .build/plugin-tools.yaml
             .build/repositories
             .build/workspace-state.json
-            .build/x86_64-unknown-linux-gnu
-          key: swiftpm-v2-${{ runner.os }}-${{ runner.arch }}-swift-6.1-${{ hashFiles('Package.swift', 'Package.resolved', 'scripts/prepare-linux-native.sh', 'scripts/linux-arm64-bf16-toolchain.sh') }}
-      - name: Run Linux CLI compatibility gate
+          key: ${{ steps.cache-keys.outputs.dependencies }}
+      - name: Restore Linux build directory
         if: env.RUN_GATE == 'true'
+        id: build-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            .build/build.db
+            .build/debug.yaml
+            .build/plugin-tools.yaml
+            .build/plugins
+            .build/x86_64-unknown-linux-gnu
+          key: ${{ steps.cache-keys.outputs.build }}-${{ github.sha }}
+          restore-keys: |
+            ${{ steps.cache-keys.outputs.build }}-
+      - name: Run Linux CLI compatibility gate
+        if: env.RUN_GATE == 'true' && github.event_name != 'push'
         run: ./scripts/check-linux.sh
+      - name: Warm default-branch Linux build cache
+        if: env.RUN_GATE == 'true' && github.event_name == 'push'
+        run: ./scripts/check-linux.sh --build-only
+      - name: Save Linux dependencies and native libraries
+        if: env.RUN_GATE == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.dependencies-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            .build/artifacts
+            .build/checkouts
+            .build/native/linux-x86_64
+            .build/native/src
+            .build/repositories
+            .build/workspace-state.json
+          key: ${{ steps.cache-keys.outputs.dependencies }}
+      - name: Save Linux build directory
+        if: env.RUN_GATE == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            .build/build.db
+            .build/debug.yaml
+            .build/plugin-tools.yaml
+            .build/plugins
+            .build/x86_64-unknown-linux-gnu
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
+
+  ci-timings:
+    needs: [changes, swift, ios, linux-cli, macos-app-bundle, linux-cli-compatibility-docs]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Summarize CI timings and cache reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}/jobs?per_page=100" > /tmp/ci-jobs.json
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/actions/caches?per_page=100" > /tmp/ci-caches.json
+          python3 scripts/ci-summary.py --jobs /tmp/ci-jobs.json --caches /tmp/ci-caches.json \
+            --json-output /tmp/ci-timings.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload CI timing data
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-timings-${{ github.run_attempt }}
+          path: /tmp/ci-timings.json
+          if-no-files-found: error
+          retention-days: 30
