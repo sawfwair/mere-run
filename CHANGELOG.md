@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Make the Studio private-mode ghost button respond across its full button area.
+
 ## 0.69.0 - 2026-11-02
 
 - Add Studio private mode for chats and media tasks. The ghost button keeps
