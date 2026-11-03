@@ -274,6 +274,9 @@ jobs:
         if: env.RUN_GATE == 'true'
         with:
           persist-credentials: false
+      - name: Stamp tracked files with content-derived times
+        if: env.RUN_GATE == 'true'
+        run: python3 scripts/stabilize-ci-mtimes.py
       - uses: maxim-lobanov/setup-xcode@v1
         if: env.RUN_GATE == 'true'
         with:
@@ -287,13 +290,15 @@ jobs:
             .build/artifacts
             .build/checkouts
             .build/repositories
-          key: swiftpm-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}
+            .build/workspace-state.json
+          key: swiftpm-v2-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}
       # Compiled objects are restored on every run and re-saved only from main,
       # so pull requests start from the warm build directory of the commit they
       # branched from without every PR writing a multi-gigabyte cache entry.
-      # llbuild revalidates restored outputs by path, size, and modification
-      # time, so the dependency checkouts restored above keep their C++ objects
-      # valid while every freshly checked-out first-party source recompiles.
+      # llbuild revalidates restored outputs by modification time. The workspace
+      # state restored above keeps SwiftPM from recreating dependency checkouts,
+      # and first-party sources carry content-derived times, so only edited code
+      # recompiles.
       # The lane is part of the key, and the lane-agnostic restore key lets
       # either lane seed the other: both compile the same package graph with the
       # same flags.
@@ -309,10 +314,10 @@ jobs:
             .build/plugin-tools.yaml
             .build/plugins
             .build/swiftlint.cache
-          key: swiftbuild-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ env.LANE }}-${{ github.sha }}
+          key: swiftbuild-v2-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ env.LANE }}-${{ github.sha }}
           restore-keys: |
-            swiftbuild-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ env.LANE }}-
-            swiftbuild-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}-
+            swiftbuild-v2-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ env.LANE }}-
+            swiftbuild-v2-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}-
       - name: Discard cached MLX Metal libraries
         if: env.RUN_GATE == 'true'
         run: |
@@ -342,7 +347,7 @@ jobs:
         run: ./scripts/check.sh
       - name: Warm default-branch Swift build cache
         if: env.RUN_GATE == 'true' && env.LANE == 'warm'
-        run: swift build --disable-index-store
+        run: swift build --disable-index-store --build-tests
       - name: Run app-scoped package checks
         if: env.RUN_GATE == 'true' && env.LANE == 'fast'
         run: |
@@ -390,8 +395,9 @@ jobs:
       # bundles are regenerated on demand, the assembled app bundle is rebuilt
       # from scratch by build_mere_run_app.sh, and the metallib is deliberately
       # never carried between runs.
+      # TEMPORARY: the experiment branch seeds its own cache. Remove before merge.
       - name: Prune reproducible products before caching
-        if: env.RUN_GATE == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: env.RUN_GATE == 'true' && (github.head_ref == 'ci/stable-build-cache' || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
         run: |
           set -euo pipefail
           rm -rf .build/arm64-apple-macosx/debug/ModuleCache
@@ -404,7 +410,7 @@ jobs:
           \) -delete
           du -sh .build/arm64-apple-macosx
       - name: Save SwiftPM build directory
-        if: env.RUN_GATE == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: env.RUN_GATE == 'true' && (github.head_ref == 'ci/stable-build-cache' || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
         uses: actions/cache/save@v6
         with:
           path: |
@@ -414,7 +420,7 @@ jobs:
             .build/plugin-tools.yaml
             .build/plugins
             .build/swiftlint.cache
-          key: swiftbuild-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ env.LANE }}-${{ github.sha }}
+          key: swiftbuild-v2-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ env.LANE }}-${{ github.sha }}
 
   # Not a required check, so this one is simply skipped when nothing the iOS
   # project compiles has changed (apps/macos/** is not part of it).
@@ -659,21 +665,31 @@ jobs:
             libopenblas-dev \
             ninja-build \
             pkg-config \
+            python3 \
             ripgrep \
             unzip \
             zip \
             zlib1g-dev \
             zstd
+      - name: Stamp tracked files with content-derived times
+        if: env.RUN_GATE == 'true'
+        run: python3 scripts/stabilize-ci-mtimes.py
       - name: Restore SwiftPM and Linux native dependencies
         if: env.RUN_GATE == 'true'
         uses: actions/cache@v6
         with:
           path: |
             .build/artifacts
+            .build/build.db
             .build/checkouts
+            .build/debug.yaml
             .build/native/linux-x86_64
+            .build/native/src
+            .build/plugin-tools.yaml
             .build/repositories
-          key: swiftpm-${{ runner.os }}-${{ runner.arch }}-swift-6.1-${{ hashFiles('Package.swift', 'Package.resolved', 'scripts/prepare-linux-native.sh', 'scripts/linux-arm64-bf16-toolchain.sh') }}
+            .build/workspace-state.json
+            .build/x86_64-unknown-linux-gnu
+          key: swiftpm-v2-${{ runner.os }}-${{ runner.arch }}-swift-6.1-${{ hashFiles('Package.swift', 'Package.resolved', 'scripts/prepare-linux-native.sh', 'scripts/linux-arm64-bf16-toolchain.sh') }}
       - name: Run Linux CLI compatibility gate
         if: env.RUN_GATE == 'true'
         run: ./scripts/check-linux.sh
