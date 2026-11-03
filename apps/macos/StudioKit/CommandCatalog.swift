@@ -483,6 +483,7 @@ package struct CommandDraft: Equatable, Codable {
     package var width = 1024
     package var height = 1024
     package var steps = 4
+    package var samplingOverrides: Set<String>?
     package var seed = ""
     package var cfgScale = 1.0
     package var strength = 0.75
@@ -1145,7 +1146,7 @@ package struct CommandTemplate: Identifiable, Equatable {
     /// it always states, a value the model hides); the scope drops it here, while Extra
     /// arguments stay a raw escape hatch that the CLI's gate answers.
     package func arguments(from draft: CommandDraft, source: StudioScopeSource) -> [String] {
-        let generated = CommandArguments.build(for: id, draft: draft, source: source)
+        let generated = generatedArguments(from: draft, source: source)
         guard let capability = source.capability(for: id) else { return withExtraArguments(generated, draft) }
         let scope = source.scope(capability: capability, commandLine: withExtraArguments(generated, draft))
         return withExtraArguments(StudioOptionScopes.filtered(generated, scope: scope), draft)
@@ -1155,7 +1156,17 @@ package struct CommandTemplate: Identifiable, Equatable {
     /// from, and what a task draft is first seeded with, so a value only another model uses is
     /// there when the user switches to it.
     package func unscopedArguments(from draft: CommandDraft, source: StudioScopeSource) -> [String] {
-        withExtraArguments(CommandArguments.build(for: id, draft: draft, source: source), draft)
+        withExtraArguments(generatedArguments(from: draft, source: source), draft)
+    }
+
+    private func generatedArguments(from draft: CommandDraft, source: StudioScopeSource) -> [String] {
+        let generated = CommandArguments.build(for: id, draft: draft, source: source)
+        guard let capability = source.capability(for: id) else { return generated }
+        let baseline = CommandArguments.build(for: id, draft: StudioSamplingDefaults.baseline(for: draft, template: self), source: source)
+        var overrides = draft.samplingOverrides ?? []
+        if draft.musicOverrideSteps { overrides.insert("--steps") }
+        return StudioSamplingDefaults.filtering(generated, baseline: baseline, capability: capability,
+                                               overrides: overrides)
     }
 
     private func withExtraArguments(_ generated: [String], _ draft: CommandDraft) -> [String] {

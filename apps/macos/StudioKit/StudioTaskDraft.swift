@@ -38,10 +38,13 @@ package struct StudioTaskDraft: Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         templateID = try container.decode(CommandTemplateID.self, forKey: .templateID)
         form = try container.decode(StudioConsoleDraft.self, forKey: .form)
+        if let capability = templateID.capability {
+            form = StudioSamplingDefaults.migrating(form, capability: capability)
+        }
         let parked = try container.decodeIfPresent([String: StudioConsoleDraft].self, forKey: .parked) ?? [:]
         for (key, form) in parked {
             guard let id = CommandTemplateID(rawValue: key) else { continue }
-            self.parked[id] = form
+            self.parked[id] = id.capability.map { StudioSamplingDefaults.migrating(form, capability: $0) } ?? form
         }
         batchInputPaths = try container.decodeIfPresent([String].self, forKey: .batchInputPaths) ?? []
         modelSource = try container.decodeIfPresent(StudioModelSource.self, forKey: .modelSource)

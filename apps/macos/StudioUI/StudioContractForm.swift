@@ -90,6 +90,28 @@ struct ContractFormControl<Draft>: View {
         if let fixed = field.fixedValue {
             StudioFixedValueRow(label: field.label, value: fixed)
                 .help(field.flag)
+        } else if StudioSamplingDefaults.isSamplingOption(field.option) {
+            VStack(alignment: .leading, spacing: 6) {
+                if field.value(in: draft) == .unset {
+                    StudioInspectorLabeledRow(field.label) {
+                        Menu("Model default") {
+                            Button("Custom…") {
+                                let number = field.defaultValue.numericValue ?? field.option.range?.min ?? 1
+                                field.write(field.kind == .integer ? .integer(Int(number)) : .number(number), to: &draft)
+                            }
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                        .accessibilityLabel("\(field.label): Model default")
+                    }
+                } else {
+                    control
+                    Button("Use model default") { field.write(.unset, to: &draft) }
+                        .buttonStyle(.link)
+                        .font(.caption)
+                        .accessibilityLabel("Use model default for \(field.label)")
+                }
+            }
         } else {
             control
         }
@@ -165,7 +187,7 @@ struct ContractFormControl<Draft>: View {
             // not round `0.0001` to what a slider would show, and an empty field means no flag.
             flagRow {
                 StudioInspectorTextField(
-                    placeholder: field.option.defaultValue ?? "",
+                    placeholder: StudioSamplingDefaults.isSamplingOption(field.option) ? "Model default" : field.option.defaultValue ?? "",
                     text: textBinding,
                     isMonospaced: true
                 )
@@ -288,7 +310,10 @@ struct ContractFormControl<Draft>: View {
 
     private var textBinding: Binding<String> {
         Binding(
-            get: { field.value(in: draft).text ?? "" },
+            get: {
+                let value = field.value(in: draft)
+                return value.text ?? value.numericValue.map(StudioComposerPresets.argumentText) ?? ""
+            },
             set: { field.write(.text($0), to: &draft) }
         )
     }

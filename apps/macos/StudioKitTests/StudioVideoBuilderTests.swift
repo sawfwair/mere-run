@@ -58,7 +58,8 @@ final class StudioVideoBuilderTests: XCTestCase {
         XCTAssertFalse(try arguments("video-minimax-h3-fasth3-vsa-datafree-mlx").contains("--end-image"))
         // Wan takes the start image but not its strength, and no end keyframe.
         let wan = try arguments("video-wan22-ti2v-5b-mlx")
-        XCTAssertTrue(wan.contains("--image") && wan.contains("--steps"))
+        XCTAssertTrue(wan.contains("--image"))
+        XCTAssertFalse(wan.contains("--steps"))
         XCTAssertFalse(wan.contains("--image-strength") || wan.contains("--end-image"))
         // LTX reads no step count, and the non-audio checkpoints drop source audio.
         let distilled = try arguments("video-ltx25-distilled-bf16") { $0.audioPath = "song.wav" }

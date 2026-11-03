@@ -21,9 +21,12 @@ name. It resolves the family with the contract, asks `StudioModelIdentifying`
 about the whole command line when only the CLI can settle it (a model the
 contract doesn't list, an `identified_models` id, a machine-chosen default, or a
 `routed_by_command` capability), and hands every surface `options(forFamily:)`.
-Builders emit everything the draft holds; `CommandTemplate.arguments(from:)`
-scopes it with `StudioOptionScopes.filtered`, which drops what the family does
-not take or runs by default. Drafts keep hidden values;
+Builders carry explicit draft values; `CommandTemplate.arguments(from:)`
+scopes them with `StudioOptionScopes.filtered`, which drops what the family does
+not take or runs by default. `StudioSamplingDefaults` also omits inherited
+sampling values so the CLI chooses the selected model's recipe. Explicit
+overrides remain in drafts, including values equal to an old app default.
+Drafts keep hidden values;
 `StudioDraft.scoped(to:mode:)` and `StudioConsoleDraft.scoped(to:)` reset them in
 the copy that validates and launches. Each `MereRunController` owns a
 `StudioModelIdentityStore` that caches its `catalog resolve` answers by the

@@ -104,8 +104,10 @@ extension CommandArguments {
         args.option(F.steps, String(draft.steps))
         if !draft.model.isBlank { args.option(F.model, draft.model) }
         if !draft.secondaryText.isBlank { args.option(F.negativePrompt, draft.secondaryText) }
-        if draft.cfgScale != 1.0 { args.option(F.cfg, format(draft.cfgScale)) }
-        if draft.sigmaShift > 0 { args.option(F.sigmaShift, format(draft.sigmaShift)) }
+        if draft.cfgScale != 1.0 || draft.samplingOverrides?.contains(F.cfg) == true {
+            args.option(F.cfg, format(draft.cfgScale))
+        }
+        if draft.sigmaShift > 0 || draft.samplingOverrides?.contains(F.sigmaShift) == true { args.option(F.sigmaShift, format(draft.sigmaShift)) }
         if !draft.seed.isBlank { args.option(F.seed, draft.seed) }
         if !draft.inputPath.isBlank {
             args.option(F.input, draft.inputPath)

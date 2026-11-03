@@ -277,6 +277,8 @@ package struct StudioDraft: Codable, Equatable, Sendable {
     package var inputPath = ""
     package var model = ""
     package var modelSource: StudioModelSource?
+    /// Explicit sampling choices, including choices equal to an old app default.
+    package var samplingOverrides: Set<String>? = []
     package var width = 1024
     package var height = 1024
     package var steps = 4
@@ -415,6 +417,7 @@ package struct StudioDraft: Codable, Equatable, Sendable {
 
     package mutating func reset(for mode: StudioMode) {
         let base = CommandCatalog.template(id: mode.defaultTemplateID)?.defaultDraft()
+        samplingOverrides = []
         prompt = modeDefaultPrompt(mode)
         secondaryText = modeDefaultSecondaryText(mode)
         inputPath = ""
@@ -665,6 +668,7 @@ package enum StudioCommandAdapter {
     ) -> CommandDraft {
         let templateID = template.id
         var draft = template.defaultDraft()
+        draft.samplingOverrides = studioDraft.samplingOverrides
         let prompt = studioDraft.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let secondary = studioDraft.secondaryText.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -898,6 +902,11 @@ package enum StudioCommandAdapter {
             draft.seed = studioDraft.seed
         }
 
+        if mode == .music, studioDraft.musicOverrideSteps {
+            if draft.samplingOverrides == nil { draft.samplingOverrides = [] }
+            draft.samplingOverrides?.insert("--steps")
+        }
+        if mode == .video, studioDraft.h3Steps != nil { draft.samplingOverrides?.insert("--steps") }
         return draft
     }
 

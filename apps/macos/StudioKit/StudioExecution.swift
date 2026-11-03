@@ -152,7 +152,7 @@ package enum StudioLibraryReplay {
         guard let templateID = item.templateID, let template = CommandCatalog.template(id: templateID),
               let stored = item.commandDraft else { return nil }
         let original = StudioExecution(templateID: templateID,
-                                       arguments: item.commandArguments ?? template.arguments(from: stored, source: source))
+                                       arguments: item.commandArguments ?? StudioLibraryDraftRestoration.recordedArguments(stored, template: template, source: source))
         let draft = original.project(onto: stored)
         // A command whose file follows its `--format` (a JSON transcription, an RTTM diarization)
         // wrote the recorded file's extension, not the template's default one.
@@ -206,7 +206,7 @@ package enum StudioLibraryDraftRestoration {
         guard !item.isConversation, let templateID = item.templateID,
               let recorded = item.commandDraft, let template = CommandCatalog.template(id: templateID),
               let capability = templateID.capability else { return nil }
-        let arguments = item.commandArguments ?? template.arguments(from: recorded, source: source)
+        let arguments = item.commandArguments ?? recordedArguments(recorded, template: template, source: source)
         let draft = StudioTaskDraft(templateID: templateID, form: StudioConsoleCommand.seed(capability: capability, arguments: arguments))
         // A trainer's preflight row restores as the training run it checked.
         return StudioTrainingRun.withoutCheckSwitches(draft).withoutDestinations()
@@ -217,7 +217,7 @@ package enum StudioLibraryDraftRestoration {
         guard canRestore(item), let templateID = item.templateID, let recorded = item.commandDraft,
               let template = CommandCatalog.template(id: templateID), let capability = templateID.capability
         else { return nil }
-        let arguments = item.commandArguments ?? template.arguments(from: recorded, source: source)
+        let arguments = item.commandArguments ?? recordedArguments(recorded, template: template, source: source)
         let form = StudioConsoleCommand.seed(capability: capability, arguments: arguments)
         var draft = baseline
         form.applyingChanges(from: StudioConsoleDraft(), to: &draft, mode: item.mode, templateID: templateID)
@@ -230,6 +230,20 @@ package enum StudioLibraryDraftRestoration {
     /// mode's composer runs exactly its default template.
     private static func composerBuilds(_ templateID: CommandTemplateID, for mode: StudioMode) -> Bool {
         mode == .readImage ? readImageAction(for: templateID) != nil : templateID == mode.defaultTemplateID
+    }
+
+    package static func recordedArguments(_ recorded: CommandDraft, template: CommandTemplate, source: StudioScopeSource) -> [String] {
+        var recorded = recorded
+        if recorded.samplingOverrides == nil, let capability = template.id.capability {
+            let generated = CommandArguments.build(for: template.id, draft: recorded, source: source)
+            recorded.samplingOverrides = Set(StudioArgvToken.read(Array(generated.dropFirst(capability.command.count)), capability: capability)
+                .compactMap { token in
+                    guard case let .option(flag, _, _) = token,
+                          StudioSamplingDefaults.applies(to: flag, in: capability) else { return nil }
+                    return flag
+                })
+        }
+        return template.arguments(from: recorded, source: source)
     }
 
     private static func readImageAction(for templateID: CommandTemplateID) -> StudioReadImageAction? {

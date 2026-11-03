@@ -1715,9 +1715,10 @@ final class StudioTypesTests: XCTestCase {
         draft.prompt = "the camera walks forward"
         draft.model = "video-wan22-ti2v-5b-mlx"
         draft.inputPath = "/tmp/frame.png"
-        draft.steps = 40
-        draft.cfgScale = 5
-        draft.scheduleShift = 5
+        let bindings = StudioContractBindings.bindings(for: .video)
+        bindings["--steps"]?.write(&draft, .integer(40))
+        bindings["--guidance-scale"]?.write(&draft, .number(5))
+        bindings["--shift"]?.write(&draft, .number(5))
 
         let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft, source: .contract)
         let args = request.template.arguments(from: request.draft, source: .contract)

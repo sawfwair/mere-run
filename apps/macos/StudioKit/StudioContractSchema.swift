@@ -835,8 +835,6 @@ package enum StudioContractOverrides {
             overrides += [
                 StudioContractOverride(id: .dimensions, flags: ["--width", "--height"]),
                 StudioContractOverride(id: .seed, flags: ["--seed"]),
-                StudioContractOverride(id: .steps, flags: ["--steps"]),
-                StudioContractOverride(id: .guidance, flags: ["--cfg"]),
                 StudioContractOverride(id: .lora, flags: ["--lora", "--lora-scale"]),
                 StudioContractOverride(
                     id: .imageCanvas,
@@ -858,7 +856,6 @@ package enum StudioContractOverrides {
                     id: .steps, flags: ["--steps"],
                     companions: [.optionalInteger("h3Steps", \.h3Steps)]
                 ),
-                StudioContractOverride(id: .guidance, flags: ["--guidance-scale"]),
                 StudioContractOverride(
                     id: .duration, flags: ["--duration", "--num-frames"],
                     companions: [.flag("useDuration", \.useDuration)]
@@ -889,7 +886,6 @@ package enum StudioContractOverrides {
         case .sfx:
             overrides += [
                 StudioContractOverride(id: .seed, flags: ["--seed"]),
-                StudioContractOverride(id: .steps, flags: ["--steps"]),
             ]
         case .speak:
             overrides += [
@@ -933,6 +929,13 @@ package enum StudioContractOverrides {
 /// would look live and change nothing.
 package enum StudioContractBindings {
     package static func bindings(for mode: StudioMode) -> [String: StudioContractBinding<StudioDraft>] {
+        let baseline = StudioDraft.baseline(for: mode)
+        return Dictionary(uniqueKeysWithValues: rawBindings(for: mode).map { flag, binding in
+            (flag, StudioSamplingDefaults.binding(binding, flag: flag, mode: mode, baseline: baseline))
+        })
+    }
+
+    private static func rawBindings(for mode: StudioMode) -> [String: StudioContractBinding<StudioDraft>] {
         switch mode {
         case .createImage: return image
         case .video: return video

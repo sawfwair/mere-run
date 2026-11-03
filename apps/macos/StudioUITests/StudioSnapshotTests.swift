@@ -70,6 +70,43 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    func testModelSamplingDefaultsSnapshots() throws {
+        let installed: [(id: String, category: String, title: String)] = [
+            ("image-qwen-edit-2511", "image", "Qwen Edit 2511 Quality"),
+            ("image-qwen-edit-2511-lightning", "image", "Qwen Edit 2511 Lightning"),
+            ("video-wan22-ti2v-5b-mlx", "video", "Wan 2.2")
+        ]
+        for (model, mode, custom) in [
+            (installed[0].id, StudioMode.createImage, false),
+            (installed[1].id, .createImage, false),
+            (installed[0].id, .createImage, true),
+            (installed[2].id, .video, false)
+        ] {
+            let fixture = try SnapshotFixture(outputDirectory: self.fixture.outputDirectory, seed: .mockup,
+                processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.readinessResponses(installing: installed)))
+            defer { fixture.tearDown() }
+            var draft = StudioDraft.baseline(for: mode)
+            draft.model = model
+            if custom {
+                let bindings = StudioContractBindings.bindings(for: mode)
+                bindings["--steps"]?.write(&draft, .integer(40))
+                bindings["--cfg"]?.write(&draft, .number(4))
+            }
+            let navigation = NavigationModel()
+            let view = StudioRootView(seededDrafts: [mode: draft])
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environmentObject(navigation)
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try fixture.write(view, size: Self.fidelitySize, appearance: .dark,
+                name: "sampling-\(model)-\(custom ? "custom" : "default")", settle: 2,
+                afterAppear: {
+                    navigation.open(task: mode.task)
+                    navigation.toggleInspector(for: mode.task)
+                })
+        }
+    }
+
     func testMainBoardFidelitySnapshots() throws {
         let fidelity = try SnapshotFixture(
             outputDirectory: fixture.outputDirectory,

@@ -230,7 +230,7 @@ final class StudioComposerSchemaTests: XCTestCase {
     func testChipTitlesFollowTheDraft() {
         var image = StudioDraft()
         image.reset(for: .createImage)
-        XCTAssertEqual(StudioComposerPresets.stepsTitle(image, mode: .createImage), "4 steps")
+        XCTAssertEqual(StudioComposerPresets.stepsTitle(image, mode: .createImage), "Model steps")
         image.steps = 1
         XCTAssertEqual(StudioComposerPresets.stepsTitle(image, mode: .createImage), "1 step")
 

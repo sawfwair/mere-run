@@ -38,6 +38,11 @@ following table lists every managed generation model with its defaults, its
 download size, and the unified memory the capability catalog requires and
 recommends. Pass `--steps` or `--cfg` to override a default.
 
+In macOS Studio, leave sampling controls at **Model default** to use the selected
+model's recipe. Choosing a value creates an override that stays when you switch
+models. Choose **Use model default** to clear it. For example, Qwen Image Edit
+2511 Quality uses 40 steps and CFG 4; Lightning uses four steps and CFG 1.
+
 | Model ID | Use it for | Default steps, CFG | Download | Memory (min / rec) |
 | --- | --- | --- | --- | --- |
 | `image-zimage-nano` | Fast general and photorealistic text-to-image (4-bit Z-Image Turbo) | 4, 1 | 20.5 GB | 12 / 16 GB |

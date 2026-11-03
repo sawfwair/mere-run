@@ -58,7 +58,7 @@ package enum StudioVariations {
     package static func applies(to item: StudioLibraryItem, source: StudioScopeSource) -> Bool {
         guard !item.isConversation, let templateID = item.templateID, templateID.studioTask.archetype != .project,
               let template = CommandCatalog.template(id: templateID), let draft = item.commandDraft else { return false }
-        let arguments = item.commandArguments ?? template.arguments(from: draft, source: source)
+        let arguments = item.commandArguments ?? StudioLibraryDraftRestoration.recordedArguments(draft, template: template, source: source)
         return takesSeed(templateID: templateID, arguments: arguments, source: source)
     }
 

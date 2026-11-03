@@ -89,7 +89,7 @@ extension CommandArguments {
         if !draft.model.isBlank { args.option(F.model, draft.model) }
         args.option(F.duration, format(draft.durationSeconds))
         args.option(F.steps, String(draft.steps))
-        if draft.cfgScale != 1.0 { args.option(F.cfg, format(draft.cfgScale)) }
+        if draft.cfgScale != 1.0 || draft.samplingOverrides?.contains(F.cfg) == true { args.option(F.cfg, format(draft.cfgScale)) }
         if !draft.seed.isBlank { args.option(F.seed, draft.seed) }
         if !draft.sfxRenoise.isBlank { args.option(F.renoise, draft.sfxRenoise) }
         if draft.quiet { args.flag(F.quiet) }

@@ -20,6 +20,8 @@ package struct StudioConsoleDraft: Codable, Equatable, Sendable {
     package var values: [String: StudioContractValue] = [:]
     /// Arguments the contract does not describe, split as a shell would and appended verbatim.
     package var extraArguments = ""
+    /// nil identifies forms saved before inherited sampling values were omitted.
+    package var modelSamplingDefaults: Bool? = true
 
     package init(
         arguments: [String] = [],
@@ -112,7 +114,16 @@ package enum StudioConsoleCommand {
         scope: StudioOptionScope? = nil
     ) -> [StudioContractField<StudioConsoleDraft>] {
         (scope?.options ?? capability.options).map {
-            StudioContractField(option: $0, bindings: [.flag($0.flag)], family: scope?.family?.id)
+            let flag = $0.flag
+            let binding = StudioContractBinding<StudioConsoleDraft>(
+                fieldID: flag,
+                read: { StudioSamplingDefaults.migrating($0, capability: capability)[flag] },
+                write: { draft, value in
+                    draft = StudioSamplingDefaults.migrating(draft, capability: capability)
+                    draft[flag] = value
+                }
+            )
+            return StudioContractField(option: $0, bindings: [binding], family: scope?.family?.id)
         }
     }
 
@@ -158,6 +169,7 @@ package enum StudioConsoleCommand {
         draft: StudioConsoleDraft,
         secretFlags: Set<String> = []
     ) -> [String] {
+        let draft = StudioSamplingDefaults.migrating(draft, capability: capability)
         var argv = capability.command
         // A repeatable last positional (`vision face batch a b c`) takes every value after it.
         let positionals = capability.arguments.last?.repeatable == true
@@ -306,6 +318,9 @@ package enum StudioConsoleCommand {
         draft: StudioConsoleDraft
     ) -> CommandDraft {
         var command = seed
+        command.samplingOverrides = Set(capability.options.filter {
+            StudioSamplingDefaults.applies(to: $0.flag, in: capability) && carries($0, in: draft)
+        }.map(\.flag))
         let defaults = Dictionary(capability.options.map { ($0.flag, $0.defaultValue ?? "") }, uniquingKeysWith: { first, _ in first })
         func value(_ flag: String) -> String { draft.values[flag] == nil ? (defaults[flag] ?? "") : draft.text(flag) }
         func argument(ofKind kinds: [MereRunCapabilityValueKind]) -> String? {
@@ -333,9 +348,9 @@ package enum StudioConsoleCommand {
         command.outputPath = outputPath(for: capability, draft: draft)
         command.width = Int(value("--width")) ?? 0
         command.height = Int(value("--height")) ?? 0
-        command.steps = Int(value("--steps")) ?? 0
+        command.steps = Int(value("--steps")) ?? seed.steps
         command.seed = value("--seed")
-        command.cfgScale = Double(value("--cfg")) ?? 1
+        command.cfgScale = Double(value("--cfg")) ?? seed.cfgScale
         command.strength = Double(value("--strength")) ?? 0
         command.sigmaShift = Double(value("--sigma-shift")) ?? 0
         command.referenceImagePaths = value("--ref-image")
@@ -346,8 +361,8 @@ package enum StudioConsoleCommand {
         command.loraScale = Double(value("--lora-scale")) ?? 1
         command.maxTokens = Int(value("--max-tokens")) ?? 0
         command.contextSize = Int(value("--context-size")) ?? 0
-        command.temperature = Double(value("--temperature")) ?? 0
-        command.topP = Double(value("--top-p")) ?? 1
+        command.temperature = Double(value("--temperature")) ?? seed.temperature
+        command.topP = Double(value("--top-p")) ?? seed.topP
         command.visionJSONOutputPath = value("--json-output")
         command.visionMaskOutputDirectory = value("--mask-output-dir")
         command.structuredPromptOutputPath = value("--structured-prompt-output")

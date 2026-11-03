@@ -329,6 +329,7 @@ enum CommandDraftProbes {
         case is Double.Type: return 0.5
         case is String.Type: return genericString
         case is [String].Type: return [genericString]
+        case is Set<String>.Type: return [genericString]
         default: return nil
         }
     }
