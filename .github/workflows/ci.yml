@@ -395,9 +395,8 @@ jobs:
       # bundles are regenerated on demand, the assembled app bundle is rebuilt
       # from scratch by build_mere_run_app.sh, and the metallib is deliberately
       # never carried between runs.
-      # TEMPORARY: the experiment branch seeds its own cache. Remove before merge.
       - name: Prune reproducible products before caching
-        if: env.RUN_GATE == 'true' && (github.head_ref == 'ci/stable-build-cache' || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+        if: env.RUN_GATE == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
           rm -rf .build/arm64-apple-macosx/debug/ModuleCache
@@ -410,7 +409,7 @@ jobs:
           \) -delete
           du -sh .build/arm64-apple-macosx
       - name: Save SwiftPM build directory
-        if: env.RUN_GATE == 'true' && (github.head_ref == 'ci/stable-build-cache' || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+        if: env.RUN_GATE == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v6
         with:
           path: |
