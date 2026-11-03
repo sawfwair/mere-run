@@ -41,11 +41,7 @@ extension StudioInspector {
                 }
             }
         } else {
-            if let scope = scopeSource.scope(mode: .video, draft: draft),
-               let option = scope.option("--steps"),
-               let binding = StudioContractBindings.bindings(for: .video)["--steps"] {
-                ContractFormControl(field: StudioContractField(option: option, bindings: [binding], family: scope.family?.id), draft: $draft)
-            }
+            stepsSlider(range: 1...60)
         }
     }
 

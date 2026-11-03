@@ -464,7 +464,14 @@ struct StudioInspector: View {
         case .createImage:
             stepsSlider(range: 1...30)
         case .video:
-            videoStepsControl
+            if let scope = scopeSource.scope(mode: .video, draft: draft),
+               (scope.family == nil || !scope.allows(CommandFlags.VideoGenerate.h3Acceleration)),
+               let option = scope.option("--steps"),
+               let binding = StudioContractBindings.bindings(for: .video)["--steps"] {
+                ContractFormControl(field: StudioContractField(option: option, bindings: [binding], family: scope.family?.id), draft: $draft)
+            } else {
+                videoStepsControl
+            }
         case .music:
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("Override preset steps", isOn: $draft.musicOverrideSteps)
