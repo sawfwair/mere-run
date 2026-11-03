@@ -22,8 +22,8 @@ in its job summary, together with the lane it selected:
 | --- | --- | --- |
 | No native change | Only `docs/**`, `README.md`, `CHANGELOG.md`, `CODEBASE.md`, `CONTRIBUTING.md`, `SECURITY.md`, `LICENSE`, or the pnpm workspace files changed | Nothing; the job reports success from a no-op step |
 | Fast | Only `apps/macos/**`, `apps/ios/**`, `docs/**`, Markdown, ordinary `scripts/**`, or `assets/`, `integrations/`, `skills/` changed | SwiftLint, the agent readiness, evaluation boundary, and documentation example checks, `swift build`, the MLX metallib verification, and the three Studio test targets (`StudioKitTests`, `StudioUITests`, `MereRunAppTests`) |
-| Full | Anything under `Sources/**`, `Tests/**`, `vendor/**`, `Package.swift`, `Package.resolved`, `.github/**`, or the gate scripts themselves changed | `./scripts/check.sh`, which is every package test target |
-| Post-merge cache warm | A push to `main` whose exact SHA passed the required merge-queue checks | `swift build` only, then saves the trusted default-branch build cache |
+| Full | Anything under `Sources/**`, `Tests/**`, `vendor/**`, `Package.swift`, `Package.resolved`, `.github/**`, the gate scripts, or cache timestamp support and its tests changed | `./scripts/check.sh`, which is every package test target |
+| Post-merge cache warm | A push to `main` whose exact SHA passed the required merge-queue checks | Builds macOS products and tests, Linux CLI products, and iOS Release app and test products, then saves default-branch caches |
 
 The fast and full lanes build and verify the ad-hoc `MereRun.app` bundle, and
 both verify the vendored MLX Metal library against the pinned kernel sources.
@@ -66,7 +66,9 @@ Two rules keep the queue moving:
   `main`.
 
 Concurrency never cancels a merge-queue run, because a canceled run reports
-nothing and stalls the queue.
+nothing and stalls the queue. A running post-merge warm-up also finishes even
+if another commit reaches `main`, so frequent merges cannot prevent cache
+seeding. Pending warm-ups coalesce to the newest commit.
 
 After the merge, the `push` workflow verifies that the exact commit passed the
 required CI and security jobs on a `merge_group` run. It then warms the
@@ -79,6 +81,28 @@ pushes to `main` write. Its key covers the Xcode version, `Package.swift`,
 `Package.resolved`, and the lane. The MLX Metal library is never restored or
 saved: a stale one silently corrupts inference, so every run regenerates and
 re-stamps it from the checkout.
+
+Linux and iOS also restore caches that only pushes to `main` write. Linux keeps
+SwiftPM dependencies and native libraries separate from the rolling Swift build
+directory. iOS keeps downloaded packages separate from Release simulator build
+products and intermediates. Build keys include the toolchain, dependency pins,
+build configuration, and commit, with a fallback to the previous compatible
+commit. The Linux key includes the pinned container, compiler, and CPU features.
+The iOS key includes the Xcode build and simulator SDK build. Unchanged tracked
+files and the generated iOS project receive content-derived modification times
+so a fresh checkout can reuse compiled output.
+
+Post-merge Linux runs `scripts/check-linux.sh --build-only`; post-merge iOS runs
+`build-for-testing` without launching tests or repeating metadata checks. PRs
+and queue groups still run their selected validation gates, including on a cache
+hit. The first merge seeds cold caches. Measure reuse on subsequent runs.
+
+The `ci-timings` job reports runner queue time, setup, cache operations, builds
+and gates, standalone tests, and validation. Its cache table distinguishes exact
+hits, fallback hits, misses, and failed restores, and lists archive sizes and
+keys. The `ci-timings-<attempt>` artifact stores the same measurements and each
+step's duration as JSON for 30 days. Compare runs with the same event and lane;
+main's build-only warm-up is not a validation benchmark.
 
 ## Writing documentation
 

@@ -54,10 +54,20 @@ the CLI or Core. CLI-only source and test changes still run the full macOS
 package and Linux gates, but skip the iOS build because the iOS project does
 not link the CLI target. Core and shared-package changes still run iOS.
 The merge queue runs the required matrix. After merge, the push workflow checks
-the exact commit against the required queue jobs before `main` warms the Swift
-build cache. A direct push without that evidence fails instead of bypassing the
-matrix. `./scripts/check.sh` remains the local gate for everything. See the
-root `CONTRIBUTING.md` file for the lane rules.
+the exact commit against the required queue jobs before `main` warms the macOS,
+Linux, and iOS caches. Linux builds the CLI products, and iOS builds the Release
+app and test products; neither repeats its validation gate during the warm-up.
+A direct push without queue evidence fails instead of bypassing the matrix.
+`./scripts/check.sh` remains the local gate for everything. See the root
+`CONTRIBUTING.md` file for the lane rules.
+
+Linux and iOS keep dependency caches separate from compiled output. Only `main`
+writes these caches, so PRs and merge groups can restore a shared baseline.
+Compiled-output keys advance with each commit and fall back to the previous
+compatible build. The `ci-timings` summary reports cache hits and misses,
+archive sizes, queue time, and time spent in each job phase. Download the
+`ci-timings-<attempt>` JSON artifact to compare step durations across runs.
+The first merge creates the baseline; subsequent runs measure the improvement.
 
 ## MLX shader compatibility
 

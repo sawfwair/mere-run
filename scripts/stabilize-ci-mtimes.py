@@ -9,6 +9,8 @@ content keeps its objects and any edit still recompiles.
 
 import os
 import subprocess
+import sys
+from pathlib import Path
 
 EPOCH = 1_000_000_000
 SPAN = 500_000_000
@@ -34,6 +36,15 @@ def main() -> None:
         os.utime(path, (stamp, stamp))
         stamped += 1
     print(f"Stamped {stamped} tracked files.")
+
+    # XcodeGen recreates its untracked project on each runner. Give those files
+    # stable times too, so an identical project can reuse restored DerivedData.
+    for directory in sys.argv[1:]:
+        for path in sorted(Path(directory).rglob("*")):
+            if path.is_file() and not path.is_symlink():
+                blob = subprocess.check_output(["git", "hash-object", "--", str(path)]).strip()
+                stamp = EPOCH + int(blob[:8], 16) % SPAN
+                os.utime(path, (stamp, stamp))
 
 
 if __name__ == "__main__":
