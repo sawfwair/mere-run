@@ -88,9 +88,11 @@ and rolling Swift build output. Download keys depend on package pins and
 preparation scripts, without a compiler or host CPU fingerprint. Native and
 Swift build keys include the pinned container, compiler versions, build policy,
 and the declared `x86-64-v3` CPU target. The runner verifies support before
-executing cached binaries. CMake disables host-native, AVX-512, and AMX options;
-SwiftPM passes the fixed target to C, C++, and Swift compilation. Ordinary Linux
-builds use the existing `native` default unless `MERERUN_LINUX_CPU_TARGET` is set.
+executing cached binaries. CMake uses v3 and disables host-native, AVX-512, and
+AMX options. SwiftPM uses generic `x86-64` for C, C++, and Swift to avoid a
+Swift 6.1 libstdc++ import cycle with SSE3 enabled. Both targets are fixed across
+runners and covered by the build-policy hash. Ordinary Linux builds use the
+existing `native` default unless `MERERUN_LINUX_CPU_TARGET` is set.
 
 iOS keeps downloaded packages separate from Release simulator build products
 and intermediates. Its build key includes the Xcode build and simulator SDK

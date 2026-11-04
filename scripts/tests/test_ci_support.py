@@ -326,7 +326,7 @@ class LinuxCPUTargetTests(unittest.TestCase):
         result = subprocess.run(["bash", "-ec", script], env=env, capture_output=True, check=True)
         args = result.stdout.decode().strip("\0").split("\0")
         for compiler in ("-Xcc", "-Xcxx"):
-            self.assertTrue(any(args[i:i+2] == [compiler, "-march=x86-64-v3"]
+            self.assertTrue(any(args[i:i+2] == [compiler, "-march=x86-64"]
                                 for i in range(len(args) - 1)))
         self.assertEqual(args[-2:], ["--product", "mere.run"])
 
@@ -350,13 +350,35 @@ class LinuxCPUTargetTests(unittest.TestCase):
                             "-emit-ir", str(source), "-o", str(root / "probe.ll")],
                            text=True, capture_output=True, check=True)
             ir = (root / "probe.ll").read_text()
-            self.assertIn('"target-cpu"="x86-64-v3"', ir)
+            self.assertIn('"target-cpu"="x86-64"', ir)
             features = re.findall(r'"target-features"="([^"]+)"', ir)
             self.assertTrue(features)
             for feature_set in features:
-                self.assertIn("+avx2", feature_set)
+                self.assertNotIn("+sse3", feature_set)
+                self.assertNotIn("+avx", feature_set)
                 self.assertNotIn("+avx512", feature_set)
                 self.assertNotIn("+amx", feature_set)
+
+    @unittest.skipUnless(sys.platform == "linux" and platform.machine() == "x86_64"
+                         and shutil.which("swiftc"), "requires Linux x86_64 Swift")
+    def test_swift_cpp_interop_imports_linux_standard_libraries(self):
+        result = self.configure()
+        swift_flags = result.stdout.decode().strip("\0").split("\0--\0")[1].split("\0")
+        compiler_flags = []
+        for wrapper, flag in zip(swift_flags[::2], swift_flags[1::2]):
+            if wrapper == "-Xcc":
+                compiler_flags.extend([wrapper, flag])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            # Enabling C++ interoperability is essential: the old arithmetic-only
+            # IR probe never imported libstdc++ or exercised its intrinsic headers.
+            (root / "probe.swift").write_text("import Glibc\nimport CxxStdlib\n")
+            result = subprocess.run([
+                "swiftc", "-typecheck", "-cxx-interoperability-mode=default",
+                "-Xcc", "-std=c++17", *compiler_flags,
+                "-module-cache-path", str(root / "modules"), str(root / "probe.swift"),
+            ], text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_runner_probe_uses_generic_code_and_rejects_an_incompatible_cpu(self):
         for supported, status in (("0", 0), ("1", 65)):

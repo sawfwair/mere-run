@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# CI uses one declared instruction set across GCC, Clang, and Swift. Ordinary
+# CI uses fixed instruction sets for native libraries and SwiftPM. Ordinary
 # Linux builds retain their existing compiler and llama.cpp defaults.
 configure_linux_cpu_target() {
   local arch="$1"
@@ -34,10 +34,12 @@ configure_linux_cpu_target() {
     -DGGML_AMX_TILE=OFF -DGGML_AMX_INT8=OFF -DGGML_AMX_BF16=OFF
   )
   linux_cpu_swift_flags=(
-    # Swift derives its code-generation target from Clang's target info too.
-    # Its -target-cpu parser does not accept the x86-64-v3 alias directly.
-    -Xcc -march=x86-64-v3 -Xcc -mtune=generic
-    -Xcxx -march=x86-64-v3 -Xcxx -mtune=generic
+    # Swift 6.1's libstdc++ importer cycles through std -> _Builtin_intrinsics
+    # with SSE3 enabled. Keep SwiftPM (including C/C++) at generic x86-64;
+    # llama's separately built libraries retain the fixed v3 target above.
+    # Swift code generation inherits Clang's target info through -Xcc.
+    -Xcc -march=x86-64 -Xcc -mtune=generic
+    -Xcxx -march=x86-64 -Xcxx -mtune=generic
   )
 }
 
