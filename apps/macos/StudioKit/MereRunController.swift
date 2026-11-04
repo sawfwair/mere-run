@@ -1134,7 +1134,6 @@ package final class MereRunController: ObservableObject {
     package func run(studio request: StudioRunRequest, stillWanted: @escaping @MainActor () -> Bool = { true }) -> Bool {
         let privateOrigin = privateSession?.directory
         let request = taskSessions.privatizing(request, source: scopeSource)
-        privateSession?.requestIDs.insert(request.id)
         do { try privateSession?.prepareDirectories(for: request) }
         catch {
             status = "Could not prepare private outputs: \(error.localizedDescription)"
@@ -1420,7 +1419,6 @@ package final class MereRunController: ObservableObject {
             let base = StudioRunRequest(id: requestID ?? UUID(), mode: template.libraryMode, templateID: template.id,
                 template: template, draft: draft, execution: execution)
             let request = taskSessions.privatizing(base, source: scopeSource)
-            session.requestIDs.insert(request.id)
             // A service reports through its id, so a failure here surfaces as the job's own.
             do { try session.prepareDirectories(for: request) }
             catch { status = "Could not prepare private outputs: \(error.localizedDescription)" }
@@ -1470,7 +1468,6 @@ package final class MereRunController: ObservableObject {
                 template: template, draft: draft, conversationID: conversationID,
                 execution: arguments.map { StudioExecution(templateID: template.id, arguments: $0) })
             let request = taskSessions.privatizing(base, source: scopeSource)
-            session.requestIDs.insert(request.id)
             do { try session.prepareDirectories(for: request) }
             catch { status = "Could not prepare private outputs: \(error.localizedDescription)"; return false }
             draft = request.draft
@@ -1594,7 +1591,7 @@ package final class MereRunController: ObservableObject {
             // folded state on `.changed`. Queue moves change no run's state.
             return
         case .changed(let job):
-            guard job.lane == .inference else { return }
+            guard job.lane == .inference, !isRetiredPrivateJob(job) else { return }
             mirrorForeground(job)
             mirrorCrossRunState(job)
         case .finished(let job, let result):
@@ -1642,9 +1639,8 @@ package final class MereRunController: ObservableObject {
     }
 
     private func finish(_ job: Job, result: JobResult) {
-        if let requestID = job.request.requestID,
-           retiredPrivateSessions.contains(where: { $0.requestIDs.contains(requestID) }) {
-            progressByRequestID[requestID] = nil
+        if isRetiredPrivateJob(job) {
+            if let requestID = job.request.requestID { progressByRequestID[requestID] = nil }
             if let conversationID = job.request.conversationID {
                 conversationLiveReplies[conversationID] = nil
                 runningConversationIDs.remove(conversationID)
@@ -1722,6 +1718,11 @@ package final class MereRunController: ObservableObject {
         return ([privateSession].compactMap { $0 } + retiredPrivateSessions).contains { $0.requestIDs.contains(requestID) }
     }
 
+    private func isRetiredPrivateJob(_ job: Job) -> Bool {
+        guard let requestID = job.request.requestID else { return false }
+        return retiredPrivateSessions.contains { $0.requestIDs.contains(requestID) }
+    }
+
     private func refreshQueuedRunCount() {
         let count = jobs.queued(in: .inference).count
         if queuedRunCount != count {
@@ -1733,11 +1734,18 @@ package final class MereRunController: ObservableObject {
     /// including a long-lived `api serve`) and drops every queued job. Called on app termination
     /// so child CLIs are never orphaned.
     package func terminateAllProcesses() {
+        let sessions = [privateSession].compactMap { $0 } + retiredPrivateSessions
+        privateSession = nil
+        taskSessions.endPrivateSession()
+        for session in sessions { session.retire(controller: self) }
+        if !sessions.isEmpty { clearPrivatePresentation() }
         jobs.terminateAll()
-        let privateIDs = (privateSession?.requestIDs ?? []).union(retiredPrivateSessions.reduce(into: Set<UUID>()) { $0.formUnion($1.requestIDs) })
-        jobs.stopPrivateProcesses(requestIDs: privateIDs)
-        privateSession?.removeFiles()
-        for session in retiredPrivateSessions { session.removeFiles() }
+        let privateIDs = sessions.reduce(into: Set<UUID>()) { $0.formUnion($1.requestIDs) }
+        let stopped = jobs.stopPrivateProcesses(requestIDs: privateIDs)
+        for session in sessions {
+            session.confirmStoppedJobs(stopped, controller: self)
+            session.retryRemoval(controller: self)
+        }
     }
 
     private func requiresCameraAccess(_ templateID: CommandTemplateID) -> Bool {

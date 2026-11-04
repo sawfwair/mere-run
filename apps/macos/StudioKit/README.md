@@ -92,8 +92,14 @@ a stand-in is picked again when the scope or inventory changes.
 in-memory Library. Shared request preparation relocates declared outputs before
 launch. Session drafts do not write to disk while private mode is on. Keep
 copies a selected result into saved storage; workspace changes and app
-termination remove the remaining temporary files after stopping their writers.
-The next launch removes workspaces left behind by a crash or force quit.
+termination remove the remaining temporary files after confirming their job
+writers stopped. Retirement tracks pending jobs, file removal, removal failures,
+and completion callbacks still awaiting delivery. A removal failure keeps the
+workspace available for an explicit retry. During termination, the native process
+runner confirms shutdown and output drainage before files can be removed; an
+unconfirmed process keeps its workspace. Retired sessions continue owning late
+callbacks after file removal so those callbacks cannot publish private history.
+The next launch removes abandoned workspaces after their owning app process exits.
 
 `StudioTaskSessions` reconciles result focus when Library selection changes and
 clears references to deleted rows. `StudioFileExport` honors an explicit file

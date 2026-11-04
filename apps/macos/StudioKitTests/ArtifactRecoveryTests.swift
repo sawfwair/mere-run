@@ -69,7 +69,7 @@ final class ArtifactRecoveryTests: XCTestCase {
         job.markRunning(status: "Ready")
         job.consume("{\"status\":\"result\",\"output\":\"\(output.path)\"}\n", stream: .stdout, resolver: resolver)
         job.setPrimaryArtifact(nil)
-        job.cancelRequested = true
+        job.requestStop(.terminate)
         let result = job.finish(exitCode: 15, resolver: resolver)
         XCTAssertEqual(result.outputURL, output)
         XCTAssertEqual(result.artifactURLs, [output])

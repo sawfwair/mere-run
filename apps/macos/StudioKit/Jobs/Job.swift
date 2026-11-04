@@ -198,6 +198,11 @@ package enum JobPreflightFailure: Equatable {
     }
 }
 
+package enum JobStopRequest: Equatable {
+    case interrupt
+    case terminate
+}
+
 package enum JobState: Equatable {
     case queued
     case running(since: Date)
@@ -244,7 +249,7 @@ package enum JobState: Equatable {
     }
 }
 
-package enum LogStream {
+package enum LogStream: Sendable {
     case system
     case stdout
     case stderr
@@ -468,10 +473,15 @@ package final class Job: ObservableObject, Identifiable {
     /// When the process launched; nil for jobs that never ran (queued, cancelled early, preflight).
     package private(set) var startedAt: Date?
 
-    // Store-owned process state. Not published: none of it is meaningful to a view.
+    /// Stop intent is separate from execution: output is still accepted and the lane remains
+    /// occupied until the process runner has exited and drained both streams.
+    @Published package private(set) var stopRequest: JobStopRequest?
+    package var cancelRequested: Bool { stopRequest == .terminate }
+
+    // Store-owned process handles and timers.
     package var process: MereRunRunningProcess?
     package var outputWatchTask: Task<Void, Never>?
-    package var cancelRequested = false
+    package var stopEscalationTask: Task<Void, Never>?
     /// The job's place in its lane's queue while it waits (0 is next); nil once it leaves it.
     package var queuePosition: Int?
 
@@ -542,6 +552,20 @@ package final class Job: ObservableObject, Identifiable {
     private var resultTemplateID: CommandTemplateID { request.templateID ?? .custom }
 
     // MARK: Lifecycle (JobStore only)
+
+    /// Stop requests only advance: no request → interrupt → terminate. Repeated requests do
+    /// not send another signal or restart the grace period.
+    @discardableResult
+    package func requestStop(_ request: JobStopRequest) -> Bool {
+        guard state.isRunning else { return false }
+        switch (stopRequest, request) {
+        case (nil, _), (.interrupt?, .terminate):
+            stopRequest = request
+            return true
+        case (.interrupt?, .interrupt), (.terminate?, _):
+            return false
+        }
+    }
 
     package func markRunning(status: String, at date: Date = Date()) {
         state = .running(since: date)

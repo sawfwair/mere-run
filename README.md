@@ -486,8 +486,10 @@ open "$app_path"
 Studio prefers a compatible installed model when its default is unavailable.
 The ghost button in the header turns on private mode for chats and media tasks.
 Private prompts and history stay out of the saved Library. Temporary results
-are removed when you switch capability or quit; choose **Keep** in the
-**Private** menu to save selected work.
+are removed after their jobs stop when you switch capability or quit; choose
+**Keep** in the **Private** menu to save selected work. If Studio can't confirm
+that a private process stopped during quit, it preserves that workspace for
+cleanup at the next launch after the owning app process exits.
 
 Before opening a pull request, run `./scripts/check.sh`. To add runtime smoke
 tests, set `MERERUN_RUN_E2E=core` or `MERERUN_RUN_E2E=installed`.
