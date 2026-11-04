@@ -258,7 +258,10 @@ package final class MereRunController: ObservableObject {
     /// Conversation ids with a turn currently in flight. Tracked across ALL sessions (not just
     /// the foreground one) so the UI can disable a thread's composer and stream into the right
     /// thread even when a different conversation is in the foreground.
-    @Published package private(set) var runningConversationIDs: Set<UUID> = []
+    package var runningConversationIDs: Set<UUID> { Set(conversationRequests.keys) }
+    /// The per-turn request owns the thread through completion delivery. Mutate this before
+    /// notifying observers so synchronous subscribers also see an already-reserved thread.
+    private var conversationRequests: [UUID: UUID] = [:]
     /// The live reply per in-flight conversation — the answer so far, split from any reasoning —
     /// so a streaming bubble can render even for a background conversation (the foreground-only
     /// liveOutputText cannot).
@@ -1132,18 +1135,21 @@ package final class MereRunController: ObservableObject {
     /// the camera prompt goes ahead once access is granted, so a run stopped while the system was
     /// asking never starts the capture after all.
     package func run(studio request: StudioRunRequest, stillWanted: @escaping @MainActor () -> Bool = { true }) -> Bool {
+        if let conversationID = request.conversationID {
+            guard conversationRequests[conversationID] == nil else { return false }
+            conversationRequests[conversationID] = request.id
+            objectWillChange.send()
+        }
+        var handedOff = false
+        defer {
+            if !handedOff { releaseConversation(requestID: request.id, conversationID: request.conversationID) }
+        }
         let privateOrigin = privateSession?.directory
         let request = taskSessions.privatizing(request, source: scopeSource)
         do { try privateSession?.prepareDirectories(for: request) }
         catch {
             status = "Could not prepare private outputs: \(error.localizedDescription)"
             return false
-        }
-        // Track the conversation as in-flight at SUBMISSION time, not at start, so a turn that
-        // queues behind the concurrency cap still blocks a second send into the same thread and
-        // shows a pending bubble. Cleared on every exit.
-        if let conversationID = request.conversationID {
-            runningConversationIDs.insert(conversationID)
         }
         if let shortCircuit = ensureCameraAccess(
             for: request.template.id,
@@ -1154,7 +1160,7 @@ package final class MereRunController: ObservableObject {
         ) {
             return shortCircuit
         }
-        return submitInferenceJob(
+        handedOff = submitInferenceJob(
             template: request.template,
             draft: request.draft,
             requestID: request.id,
@@ -1162,6 +1168,7 @@ package final class MereRunController: ObservableObject {
             queueNotice: "Queued \(request.mode.title.lowercased()) job.",
             arguments: request.execution?.arguments
         )
+        return handedOff
     }
 
     /// Resolves whether `mode` can run with `studioDraft`'s model: a `model capabilities` probe
@@ -1632,19 +1639,26 @@ package final class MereRunController: ObservableObject {
         if let requestID = job.request.requestID, progressByRequestID[requestID] != job.progress {
             progressByRequestID[requestID] = job.progress
         }
-        if let conversationID = job.request.conversationID,
+        if let conversationID = job.request.conversationID, let requestID = job.request.requestID,
+           conversationRequests[conversationID] == requestID,
            conversationLiveReplies[conversationID] != job.conversationLiveReply {
             conversationLiveReplies[conversationID] = job.conversationLiveReply
         }
     }
 
+    private func releaseConversation(requestID: UUID?, conversationID: UUID?) {
+        guard let requestID, let conversationID, conversationRequests[conversationID] == requestID else { return }
+        conversationLiveReplies[conversationID] = nil
+        conversationRequests[conversationID] = nil
+        objectWillChange.send()
+    }
+
     private func finish(_ job: Job, result: JobResult) {
+        // A subscriber can synchronously attempt another send. Keep the thread reserved until
+        // every completion subscriber, including the Library, has received the previous reply.
+        defer { releaseConversation(requestID: job.request.requestID, conversationID: job.request.conversationID) }
         if isRetiredPrivateJob(job) {
             if let requestID = job.request.requestID { progressByRequestID[requestID] = nil }
-            if let conversationID = job.request.conversationID {
-                conversationLiveReplies[conversationID] = nil
-                runningConversationIDs.remove(conversationID)
-            }
             return
         }
         if case .preflightFailed(let failure) = job.state {
@@ -1672,10 +1686,6 @@ package final class MereRunController: ObservableObject {
 
         if let requestID = job.request.requestID {
             progressByRequestID[requestID] = nil
-        }
-        if let conversationID = job.request.conversationID {
-            conversationLiveReplies[conversationID] = nil
-            runningConversationIDs.remove(conversationID)
         }
         if job.startedAt != nil, job.request.requestID.map({ privateSession?.requestIDs.contains($0) != true }) ?? true {
             notifyCompletionIfNeeded(

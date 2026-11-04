@@ -6,7 +6,11 @@ Keep it independent of SwiftUI and model runtimes. Read the
 
 `StudioPromptTaskController` owns the active prompt draft, conversation identity,
 task transitions, and run preparation. Its conversation methods prepare sends
-and retries before changing history. `StudioTaskSessions` owns inactive drafts,
+and retries before changing history. The controller reserves a conversation for
+one request at submission, including queued turns, and releases it after all
+completion subscribers receive the reply. Failed submissions release their
+reservation even when no job was created. Live replies publish only for the
+request that owns the conversation. `StudioTaskSessions` owns inactive drafts,
 selection memory, result focus, command overrides, and persistence. Keep session keys stable.
 
 `StudioCommandAdapter` translates prompt controls into a CLI request.
