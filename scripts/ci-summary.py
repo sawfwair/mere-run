@@ -63,7 +63,8 @@ def summarize_caches(needs, pages):
     rows = []
     for job in ("swift", "linux-cli", "ios"):
         outputs = needs[job]["outputs"]
-        for kind in ("dependencies", "build"):
+        kinds = ("dependencies", "native", "build") if job == "linux-cli" else ("dependencies", "build")
+        for kind in kinds:
             primary = outputs.get(f"{kind}-key", "")
             matched = outputs.get(f"{kind}-match", "")
             outcome = outputs.get(f"{kind}-result", "skipped")

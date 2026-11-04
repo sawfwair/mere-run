@@ -61,7 +61,16 @@ A direct push without queue evidence fails instead of bypassing the matrix.
 `./scripts/check.sh` remains the local gate for everything. See the root
 `CONTRIBUTING.md` file for the lane rules.
 
-Linux and iOS keep dependency caches separate from compiled output. Only `main`
+Linux keeps downloads, compiled native libraries, and Swift build output in
+separate caches. Its CI builds use `MERERUN_LINUX_CPU_TARGET=x86-64-v3`, with
+host-native compilation disabled. Native libraries target v3; SwiftPM uses
+generic `x86-64` for C, C++, and Swift to avoid a Swift 6.1 libstdc++ import
+cycle with SSE3 enabled. Cache keys include compiler versions and the target
+policy rather than the runner's CPU features. A runtime probe checks compatibility
+before running cached binaries. Download caches remain reusable when the compiler changes.
+Local Linux builds retain the `native` default.
+
+iOS keeps dependency caches separate from compiled output. Only `main`
 writes these caches, so PRs and merge groups can restore a shared baseline.
 Compiled-output keys advance with each commit and fall back to the previous
 compatible build. The `ci-timings` summary reports cache hits and misses,

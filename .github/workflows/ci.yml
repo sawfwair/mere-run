@@ -696,10 +696,14 @@ jobs:
       dependencies-key: ${{ steps.dependencies-cache.outputs.cache-primary-key }}
       dependencies-match: ${{ steps.dependencies-cache.outputs.cache-matched-key }}
       dependencies-result: ${{ steps.dependencies-cache.outcome }}
+      native-key: ${{ steps.native-cache.outputs.cache-primary-key }}
+      native-match: ${{ steps.native-cache.outputs.cache-matched-key }}
+      native-result: ${{ steps.native-cache.outcome }}
       build-key: ${{ steps.build-cache.outputs.cache-primary-key }}
       build-match: ${{ steps.build-cache.outputs.cache-matched-key }}
       build-result: ${{ steps.build-cache.outcome }}
     env:
+      MERERUN_LINUX_CPU_TARGET: x86-64-v3
       RUN_GATE: ${{ needs.changes.result == 'success' && needs.changes.outputs.code == 'true' && needs.changes.outputs.linux == 'true' }}
     steps:
       - name: Verify change detection
@@ -766,6 +770,9 @@ jobs:
             zip \
             zlib1g-dev \
             zstd
+      - name: Test Linux build policy
+        if: env.RUN_GATE == 'true'
+        run: python3 -B -m unittest discover -s scripts/tests -p test_ci_support.py
       - name: Stamp tracked files with content-derived times
         if: env.RUN_GATE == 'true'
         run: python3 scripts/stabilize-ci-mtimes.py
@@ -774,23 +781,30 @@ jobs:
         id: cache-keys
         env:
           DEPENDENCY_HASH: ${{ hashFiles('Package.swift', 'Package.resolved', 'scripts/prepare-linux-native.sh', 'scripts/linux-arm64-bf16-toolchain.sh') }}
-          BUILD_HASH: ${{ hashFiles('scripts/check-linux.sh', '.github/workflows/ci.yml') }}
+          NATIVE_HASH: ${{ hashFiles('scripts/prepare-linux-native.sh', 'scripts/linux-cpu-target.sh') }}
+          BUILD_HASH: ${{ hashFiles('scripts/check-linux.sh', 'scripts/linux-cpu-target.sh', '.github/workflows/ci.yml') }}
         run: |
           set -eu
-          # Include the pinned container identity as well as the Swift version.
-          # llama.cpp also specializes for the host CPU; never reuse those
-          # objects on a runner with a different feature set.
-          toolchain="$(
+          # Cached binaries target the declared baseline, not the current
+          # runner. Refuse host-native builds under this shared cache policy.
+          test "$MERERUN_LINUX_CPU_TARGET" = x86-64-v3
+          versions="$(
             {
               swift --version
               cc --version
+              c++ --version
+              clang --version
               cmake --version
-              awk -F ': ' '/^flags/ {print $2; exit}' /proc/cpuinfo
-            } | sha256sum | cut -d ' ' -f 1
+            }
           )"
-          echo "dependencies=linux-native-v3-${RUNNER_OS}-${RUNNER_ARCH}-swift-6.1-jammy-19792fa7-${toolchain}-${DEPENDENCY_HASH}" >> "$GITHUB_OUTPUT"
-          echo "build=linux-build-v3-${RUNNER_OS}-${RUNNER_ARCH}-swift-6.1-jammy-19792fa7-${toolchain}-${DEPENDENCY_HASH}-${BUILD_HASH}" >> "$GITHUB_OUTPUT"
-      - name: Restore Linux dependencies and native libraries
+          printf '%s\n' "$versions"
+          toolchain="$(printf '%s\n' "$versions" | sha256sum | cut -d ' ' -f 1)"
+          {
+            echo "dependencies=linux-downloads-v1-${RUNNER_OS}-${RUNNER_ARCH}-swift-6.1-${DEPENDENCY_HASH}"
+            echo "native=linux-native-v4-${RUNNER_OS}-${RUNNER_ARCH}-jammy-19792fa7-${toolchain}-${MERERUN_LINUX_CPU_TARGET}-${NATIVE_HASH}"
+            echo "build=linux-build-v4-${RUNNER_OS}-${RUNNER_ARCH}-jammy-19792fa7-${toolchain}-${MERERUN_LINUX_CPU_TARGET}-${DEPENDENCY_HASH}-${NATIVE_HASH}-${BUILD_HASH}"
+          } >> "$GITHUB_OUTPUT"
+      - name: Restore Linux downloads
         if: env.RUN_GATE == 'true'
         id: dependencies-cache
         uses: actions/cache/restore@v6
@@ -798,11 +812,17 @@ jobs:
           path: |
             .build/artifacts
             .build/checkouts
-            .build/native/linux-x86_64
             .build/native/src
             .build/repositories
             .build/workspace-state.json
           key: ${{ steps.cache-keys.outputs.dependencies }}
+      - name: Restore Linux native libraries
+        if: env.RUN_GATE == 'true'
+        id: native-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .build/native/linux-x86_64
+          key: ${{ steps.cache-keys.outputs.native }}
       - name: Restore Linux build directory
         if: env.RUN_GATE == 'true'
         id: build-cache
@@ -823,18 +843,23 @@ jobs:
       - name: Warm default-branch Linux build cache
         if: env.RUN_GATE == 'true' && github.event_name == 'push'
         run: ./scripts/check-linux.sh --build-only
-      - name: Save Linux dependencies and native libraries
+      - name: Save Linux downloads
         if: env.RUN_GATE == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.dependencies-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
           path: |
             .build/artifacts
             .build/checkouts
-            .build/native/linux-x86_64
             .build/native/src
             .build/repositories
             .build/workspace-state.json
           key: ${{ steps.cache-keys.outputs.dependencies }}
+      - name: Save Linux native libraries
+        if: env.RUN_GATE == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.native-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: .build/native/linux-x86_64
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
       - name: Save Linux build directory
         if: env.RUN_GATE == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
