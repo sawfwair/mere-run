@@ -6,12 +6,17 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
-- Make the Studio private-mode ghost button respond across its full button area.
+## 0.69.1 - 2026-11-04
 
+- Make the Studio private-mode ghost button respond across its full button area.
 - Use the CLI's model-specific sampling defaults throughout Studio instead of
   sending generic step counts and guidance values. Label untouched controls as
   **Model default**, keep explicit overrides and saved preferences, and preserve
   the settings recorded in Library commands.
+
+- Seed Linux and iOS CI caches from successful main builds and report cache
+  reuse and job timings. Keep cached Linux native libraries and Swift interop
+  builds on a portable CPU baseline across runners.
 
 ## 0.69.0 - 2026-11-02
 
