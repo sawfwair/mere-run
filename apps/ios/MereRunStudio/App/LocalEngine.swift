@@ -139,7 +139,12 @@ final class LocalEngine: ObservableObject {
     }
 
     @Published private(set) var states: [String: ModelState] = [:]
-    @Published private(set) var activity: RuntimeResidencyState.Activity = .idle
+    // Publish each residency transition as a unit. @Published on this state crashes
+    // Swift 6.4.2's Release optimizer in the async model-deletion path.
+    private var residency = RuntimeResidencyState() {
+        willSet { objectWillChange.send() }
+    }
+    var activity: RuntimeResidencyState.Activity { residency.activity }
     @Published private(set) var lastImage: UIImage?
     @Published private(set) var lastImageURL: URL?
     @Published var selectedImageModelID = LocalEngine.imageModels[0].id {
@@ -158,7 +163,7 @@ final class LocalEngine: ObservableObject {
         }
     }
     /// Which chat model currently has its weights resident, if any.
-    @Published private(set) var warmChatModelID: String?
+    var warmChatModelID: String? { residency.warmChatModelID }
     /// Human status for the pending bubble ("Loading Liquid Chat…").
     @Published private(set) var chatStatus: String?
     #if DEBUG
@@ -172,10 +177,8 @@ final class LocalEngine: ObservableObject {
     private var lfm2Generators: [String: LFM2Generator] = [:]
     private let pendingDownloadStore = PendingModelDownloadStore()
     private var activeDownloadIDs: Set<String> = []
-    private var warmTask: Task<Void, Never>?
-    private var warmRequestID: UUID?
+    private let warmup = RuntimeWarmup()
     private var idleEvictionTask: Task<Void, Never>?
-    private var residency = RuntimeResidencyState()
 
     private static let idleResidencySeconds: Duration = .seconds(120)
 
@@ -227,39 +230,32 @@ final class LocalEngine: ObservableObject {
     /// Loads the selected chat model's weights ahead of the first message so
     /// it answers immediately. Safe to call repeatedly; the generators cache.
     func warmChat() {
-        guard Self.isSupported, activity == .idle,
-              warmTask == nil,
+        guard Self.isSupported, !warmup.isRunning,
               let model = Self.model(withID: selectedChatModelID),
-              warmChatModelID != model.id,
-              let root = ManagedModelResolver.resolveInstalledModel(id: model.id) else { return }
+              let root = ManagedModelResolver.resolveInstalledModel(id: model.id),
+              let lease = residency.beginWarmup(modelID: model.id) else { return }
         idleEvictionTask?.cancel()
-        let requestID = UUID()
-        warmRequestID = requestID
         let generator = chatGenerator(for: model)
         chatStatus = "Loading \(model.title)…"
-        warmTask = Task { [weak self] in
-            do {
+        warmup.start(
+            lease,
+            prepare: { [weak self] in
+                guard let self else { throw CancellationError() }
+                await self.unloadImageRuntime()
+                try Task.checkCancellation()
                 try await generator.prepare(modelPath: root.path, progressHandler: nil)
-                guard let self else { return }
-                if !Task.isCancelled,
-                   self.warmRequestID == requestID,
-                   self.selectedChatModelID == model.id,
-                   self.activity == .idle {
-                    self.warmChatModelID = model.id
-                    self.chatStatus = nil
-                    self.warmTask = nil
-                    self.scheduleIdleEviction()
-                } else if self.selectedChatModelID != model.id
-                            || self.activity != .chatting {
-                    await generator.unload()
-                    self.removeChatGenerator(modelID: model.id)
-                }
-            } catch {
-                guard let self, self.warmRequestID == requestID else { return }
+            },
+            completed: { [weak self] lease, succeeded in
+                guard let self, self.residency.completeWarmup(lease, succeeded: succeeded) else { return }
+                guard self.residency.isIdle else { return }
                 self.chatStatus = nil
-                self.warmTask = nil
+                if succeeded {
+                    self.scheduleIdleEviction()
+                } else {
+                    self.releaseRuntime()
+                }
             }
-        }
+        )
     }
 
     /// Frees resident chat weights (an image generation is about to need the
@@ -273,9 +269,8 @@ final class LocalEngine: ObservableObject {
     /// then releases before another request can begin.
     func releaseRuntime() {
         idleEvictionTask?.cancel()
-        warmTask?.cancel()
+        warmup.cancel()
         guard residency.requestRelease() else { return }
-        activity = residency.activity
         performRuntimeRelease()
     }
 
@@ -284,18 +279,15 @@ final class LocalEngine: ObservableObject {
             guard let self else { return }
             await self.unloadRuntimeNow()
             self.residency.completeRelease()
-            self.activity = self.residency.activity
         }
     }
 
     private func unloadRuntimeNow() async {
         idleEvictionTask?.cancel()
         idleEvictionTask = nil
-        warmTask?.cancel()
-        warmTask = nil
-        warmRequestID = nil
+        await warmup.drain(cancel: true)
         chatStatus = nil
-        warmChatModelID = nil
+        residency.clearChatModel()
 
         let chatGenerators = lfm2Generators.values.map(AnyChatGenerator.lfm2)
             + q35Generators.values.map(AnyChatGenerator.q35)
@@ -311,11 +303,9 @@ final class LocalEngine: ObservableObject {
     }
 
     private func unloadChatRuntime() async {
-        warmTask?.cancel()
-        warmTask = nil
-        warmRequestID = nil
+        await warmup.drain(cancel: true)
         chatStatus = nil
-        warmChatModelID = nil
+        residency.clearChatModel()
         let generators = lfm2Generators.values.map(AnyChatGenerator.lfm2)
             + q35Generators.values.map(AnyChatGenerator.q35)
         lfm2Generators.removeAll()
@@ -331,20 +321,11 @@ final class LocalEngine: ObservableObject {
         await generator?.unload()
     }
 
-    private func removeChatGenerator(modelID: String) {
-        lfm2Generators[modelID] = nil
-        q35Generators[modelID] = nil
-        if warmChatModelID == modelID {
-            warmChatModelID = nil
-        }
-    }
-
-    private func finishActivity() {
-        if residency.completeActivity() {
-            activity = residency.activity
+    private func finishActivity(_ lease: RuntimeResidencyState.ActivityLease) {
+        guard residency.isCurrent(lease) else { return }
+        if residency.completeActivity(lease) {
             performRuntimeRelease()
         } else {
-            activity = residency.activity
             scheduleIdleEviction()
         }
     }
@@ -494,7 +475,7 @@ final class LocalEngine: ObservableObject {
         guard Self.isSupported,
               let installURL = ManagedModelResolver.resolveInstalledModel(id: modelID),
               residency.beginRelease() else { return }
-        activity = residency.activity
+        defer { residency.completeRelease() }
         await unloadRuntimeNow()
         lastError = nil
         do {
@@ -508,8 +489,6 @@ final class LocalEngine: ObservableObject {
         }
         refresh()
         refreshReclaimable()
-        residency.completeRelease()
-        activity = residency.activity
     }
 
     /// Bytes a full garbage-collection pass would free: orphaned payloads
@@ -525,7 +504,7 @@ final class LocalEngine: ObservableObject {
     /// Frees everything no installed model references — the way partial
     /// downloads and crash leftovers come back.
     func reclaimSpace() {
-        guard Self.isSupported, activity == .idle else { return }
+        guard Self.isSupported, residency.isIdle else { return }
         lastError = nil
         do {
             let storage = try ModelStorageManager()
@@ -541,11 +520,11 @@ final class LocalEngine: ObservableObject {
     func generateImage(prompt: String, width: Int = 512, height: Int = 512, steps: Int = 4) async {
         guard Self.isSupported else { return }
         let modelID = selectedImageModelID
-        guard state(of: modelID) == .ready, residency.begin(.generatingImage) else { return }
-        activity = residency.activity
+        guard state(of: modelID) == .ready,
+              let lease = residency.begin(.generatingImage, modelID: modelID) else { return }
         idleEvictionTask?.cancel()
         lastError = nil
-        defer { finishActivity() }
+        defer { finishActivity(lease) }
         await unloadChatRuntime()
         let generator = imageGenerator ?? Flux2KleinGeneratoriOS()
         imageGenerator = generator
@@ -583,15 +562,13 @@ final class LocalEngine: ObservableObject {
         guard let root = ManagedModelResolver.resolveInstalledModel(id: model.id) else {
             throw RelayAppError("Download \(model.title) before chatting on-device.")
         }
-        guard residency.begin(.chatting) else {
+        guard let lease = residency.begin(.chatting, modelID: model.id) else {
             throw RelayAppError("The on-device engine is busy with another run.")
         }
-        activity = residency.activity
         idleEvictionTask?.cancel()
-        warmTask?.cancel()
-        warmTask = nil
-        warmRequestID = nil
-        defer { finishActivity() }
+        defer { finishActivity(lease) }
+        let prepared = await warmup.drain(cancel: false)
+        if prepared == false { await unloadChatRuntime() }
         await unloadImageRuntime()
 
         let sampling = Q35Resources.recommendedSampling(forModelId: model.id)
@@ -610,13 +587,15 @@ final class LocalEngine: ObservableObject {
         let progressHandler: @Sendable (ChatProgress) -> Void = { progress in
             #if DEBUG
             Task { @MainActor in
-                LocalEngine.shared.debugRecord(stage: progress.stage, piece: progress.message)
+                guard self.residency.isCurrent(lease) else { return }
+                self.debugRecord(stage: progress.stage, piece: progress.message)
             }
             #endif
             guard progress.stage == .generating,
                   let piece = progress.message, !piece.isEmpty else { return }
             Task { @MainActor in
-                LocalEngine.shared.chatStatus = nil
+                guard self.residency.isCurrent(lease) else { return }
+                self.chatStatus = nil
                 let text = accumulated.append(piece)
                 let visible = GeneratedTextFilters.strippingThinking(text, streaming: true)
                 onDelta(visible.isEmpty ? text : visible)
@@ -628,7 +607,7 @@ final class LocalEngine: ObservableObject {
         defer { chatStatus = nil }
         let generator = chatGenerator(for: model)
         let response = try await generator.chat(request, modelPath: root.path, progressHandler: progressHandler)
-        warmChatModelID = model.id
+        residency.recordChatPrepared(lease)
         let cleaned = GeneratedTextFilters.strippingThinking(response.response)
         guard !cleaned.isEmpty else {
             throw RelayAppError("The model returned an empty reply.")

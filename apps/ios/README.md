@@ -69,6 +69,28 @@ transition. Live Activities use one bounded poller per run with exponential
 backoff and stop after persistent transport failures. Artifact refreshes are
 staged and validated before replacing an earlier verified local copy.
 
+Chat can reuse an in-progress warmup for the same model. Switching to image
+generation or releasing the runtime waits for preparation to finish, even if
+the native loader ignores cancellation. Each operation owns its completion and
+progress callbacks, so an earlier operation cannot mark a newer model ready or
+update a later chat turn.
+
+Run-detail updates retry initial and later connection failures with bounded
+backoff. After six consecutive failures, **Resume updates** starts another
+watch. Retrying a run, changing the relay profile, or returning to the foreground
+also starts a fresh watch. Responses from an earlier watch cannot replace the
+current snapshot or its error.
+
+From the repository root, run the residency, warmup, and polling tests without a
+simulator or model files:
+
+```bash
+./scripts/test-ios-state-machines.sh
+```
+
+The script compiles the app's SwiftUI-independent sources and their XCTest files in a
+temporary Swift package. The same tests run in the iOS unit test target.
+
 Local chat choices are attributed by physical-memory band. The 1.2B QAD MLX
 model is available from 4 GB and is the default below 6 GB; the standard 2.6B
 MLX model remains the faster default from 6 GB; the 2.6B QAD quality-recovery
