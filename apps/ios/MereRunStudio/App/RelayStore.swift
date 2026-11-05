@@ -21,6 +21,7 @@ public final class RelayStore: ObservableObject {
     }
 
     @Published public private(set) var profile: WorkflowExecutorProfile?
+    @Published public private(set) var connectionID = UUID()
     @Published public private(set) var pairing: PairingState = .unpaired
     @Published private(set) var authStatus: RelayAuthStatusResult?
 
@@ -31,6 +32,11 @@ public final class RelayStore: ObservableObject {
     private let credentialStorageFactory: (String) -> any RelayCredentialStorage
     private let directAuthorization: DirectAuthorization
     private var pairingID: UUID?
+    private struct Connection {
+        let profile: WorkflowExecutorProfile
+        let credentials: RelayCredentialScope
+    }
+    private var connection: Connection?
     private var profilesURL: URL { supportBase.appendingPathComponent("executors.json") }
 
     /// Keychain is the credential's home on iOS; the legacy protected file
@@ -65,7 +71,7 @@ public final class RelayStore: ObservableObject {
                 profileName: stored.name,
                 applicationSupportBase: base
             )
-            profile = WorkflowExecutorProfile(
+            let restoredProfile = WorkflowExecutorProfile(
                 name: stored.name,
                 kind: stored.kind,
                 destination: stored.destination,
@@ -82,6 +88,8 @@ public final class RelayStore: ObservableObject {
                 try? storage.save(legacy)
                 try? FileCredentialStorage(url: legacyTokenFile).clear()
             }
+            connection = Connection(profile: restoredProfile, credentials: RelayCredentialScope(storage: storage))
+            profile = restoredProfile
             pairing = .paired
             refreshAuthStatus()
         }
@@ -95,7 +103,7 @@ public final class RelayStore: ObservableObject {
     }
 
     public var client: RelayWorkflowExecutor? {
-        profile.map { RelayWorkflowExecutor(profile: $0, credentialStorage: credentialStorage(for: $0.name)) }
+        connection.map { RelayWorkflowExecutor(profile: $0.profile, credentialStorage: $0.credentials) }
     }
 
     var executionPrivacyLane: ExecutionPrivacyLane {
@@ -148,14 +156,7 @@ public final class RelayStore: ObservableObject {
                 url: trimmed,
                 tokenFile: nil
             )
-            try credentialStorage(for: profileName).save(tokenSet)
-            try WorkflowExecutorProfileStore.save(
-                WorkflowExecutorProfiles(schemaVersion: 1, profiles: [candidate]),
-                to: profilesURL
-            )
-            profile = candidate
-            pairing = .paired
-            refreshAuthStatus()
+            try commitPairing(tokenSet, profile: candidate, attempt: attempt)
         } catch let error as RelayClientError {
             guard pairingIsCurrent(attempt) else { return }
             pairing = .failed(AppErrorText.presentable(error.message))
@@ -221,14 +222,7 @@ public final class RelayStore: ObservableObject {
                 redirectURI: Self.iosRedirectURI
             )
             try checkPairing(attempt)
-            try credentialStorage(for: profileName).save(tokenSet)
-            try WorkflowExecutorProfileStore.save(
-                WorkflowExecutorProfiles(schemaVersion: 1, profiles: [candidate]),
-                to: profilesURL
-            )
-            profile = candidate
-            pairing = .paired
-            refreshAuthStatus()
+            try commitPairing(tokenSet, profile: candidate, attempt: attempt)
         } catch let error as RelayClientError {
             guard pairingIsCurrent(attempt) else { return }
             pairing = .failed(AppErrorText.presentable(error.message))
@@ -288,14 +282,7 @@ public final class RelayStore: ObservableObject {
                 configuration: configuration
             )
             try checkPairing(attempt)
-            try credentialStorage(for: profileName).save(tokenSet)
-            try WorkflowExecutorProfileStore.save(
-                WorkflowExecutorProfiles(schemaVersion: 1, profiles: [candidate]),
-                to: profilesURL
-            )
-            profile = candidate
-            pairing = .paired
-            refreshAuthStatus()
+            try commitPairing(tokenSet, profile: candidate, attempt: attempt)
         } catch let error as RelayClientError {
             guard pairingIsCurrent(attempt) else { return }
             pairing = .failed(error.message)
@@ -311,14 +298,19 @@ public final class RelayStore: ObservableObject {
 
     func refreshWorkerProbe() async {
         guard let client else { return }
-        workerProbe = try? await client.probe()
+        let requestedConnection = connectionID
+        let probe = try? await client.probe()
+        guard requestedConnection == connectionID, !Task.isCancelled else { return }
+        workerProbe = probe
     }
 
     /// Builds a single-node graph from the Create form, materializes it with
     /// the portable environment (models are always pinned explicitly on the
     /// phone), and submits it through relay. Returns the created job.
-    func submit(kind: String, arguments: [String: WorkflowValue]) async throws -> WorkflowRemoteJob {
-        guard let client else {
+    func submit(
+        kind: String, arguments: [String: WorkflowValue], using suppliedClient: RelayWorkflowExecutor? = nil
+    ) async throws -> WorkflowRemoteJob {
+        guard let client = suppliedClient ?? client else {
             throw RelayClientError("Pair with a relay before submitting.")
         }
         guard let entry = WorkflowNodeRegistry.entry(for: kind) else {
@@ -369,9 +361,7 @@ public final class RelayStore: ObservableObject {
 
     public func unpair() {
         pairingID = nil
-        #if canImport(ActivityKit)
-        RunActivityTracker.cancelAll()
-        #endif
+        retireConnection()
         if let profile {
             try? credentialStorage(for: profile.name).clear()
             if let tokenFile = profile.tokenFile {
@@ -382,6 +372,31 @@ public final class RelayStore: ObservableObject {
         profile = nil
         authStatus = nil
         pairing = .unpaired
+    }
+
+    private func retireConnection() {
+        connection?.credentials.invalidate()
+        connection = nil
+        workerProbe = nil
+        connectionID = UUID()
+        #if canImport(ActivityKit)
+        RunActivityTracker.cancelAll()
+        #endif
+    }
+
+    private func commitPairing(_ tokenSet: RelayOAuthTokenSet, profile candidate: WorkflowExecutorProfile, attempt: UUID) throws {
+        try checkPairing(attempt)
+        retireConnection()
+        try checkPairing(attempt)
+        let storage = credentialStorage(for: candidate.name)
+        // No token may survive paired with a different endpoint if either durable write fails.
+        try storage.clear()
+        try WorkflowExecutorProfileStore.save(WorkflowExecutorProfiles(schemaVersion: 1, profiles: [candidate]), to: profilesURL)
+        try storage.save(tokenSet)
+        connection = Connection(profile: candidate, credentials: RelayCredentialScope(storage: storage))
+        profile = candidate
+        pairing = .paired
+        refreshAuthStatus()
     }
 
     private func beginPairing() -> UUID {

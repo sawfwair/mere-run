@@ -27,6 +27,7 @@ struct RunDetailView: View {
     private struct WatchTarget: Equatable {
         let jobID: String
         let profile: WorkflowExecutorProfile?
+        let connectionID: UUID
     }
 
     private struct WatchRequest: Equatable {
@@ -44,7 +45,9 @@ struct RunDetailView: View {
         }
     }
 
-    private var watchTarget: WatchTarget { WatchTarget(jobID: jobID, profile: relay.profile) }
+    private var watchTarget: WatchTarget {
+        WatchTarget(jobID: jobID, profile: relay.profile, connectionID: relay.connectionID)
+    }
 
     var body: some View {
         List {

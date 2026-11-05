@@ -5,6 +5,79 @@ import mere_run
 
 @MainActor
 final class RelayStoreTests: XCTestCase {
+    func testRepairingTheSameEndpointStillReplacesConnectionIdentity() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("client-scope-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let storage = MemoryCredentialStorage()
+        var count = 0
+        let store = RelayStore(supportBase: root, credentialStorageFactory: { _ in storage }, directAuthorization: { _, _, _ in
+            count += 1
+            return self.testToken("account-\(count)")
+        })
+        await store.pairDirect(urlString: "same.test:6373", code: "first")
+        let identity = store.connectionID
+        let profile = store.profile
+        let old = try XCTUnwrap(store.client?.credentialStorage)
+        await store.pairDirect(urlString: "same.test:6373", code: "second")
+
+        XCTAssertEqual(store.profile, profile)
+        XCTAssertNotEqual(store.connectionID, identity)
+        XCTAssertThrowsError(try old.load())
+        XCTAssertEqual(try store.client?.credentialStorage?.load(), testToken("account-2"))
+    }
+
+    func testFailedProfileReplacementDoesNotRetainTheNewEndpointsToken() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("client-scope-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let storage = MemoryCredentialStorage()
+        let store = RelayStore(supportBase: root, credentialStorageFactory: { _ in storage },
+                               directAuthorization: { url, _, _ in self.testToken(url) })
+        await store.pairDirect(urlString: "first.test:6373", code: "first")
+        let old = try XCTUnwrap(store.client?.credentialStorage)
+        let profileURL = root.appendingPathComponent("executors.json")
+        try FileManager.default.removeItem(at: profileURL)
+        try FileManager.default.createDirectory(at: profileURL, withIntermediateDirectories: false)
+        try Data("block replacement".utf8).write(to: profileURL.appendingPathComponent("blocker"))
+        await store.pairDirect(urlString: "second.test:6373", code: "second")
+
+        guard case .failed = store.pairing else { return XCTFail("profile replacement must fail") }
+        XCTAssertNil(store.client)
+        XCTAssertNil(try storage.load(), "an old profile must not be reopened with the new endpoint's token")
+        XCTAssertThrowsError(try old.load())
+    }
+
+    func testOldClientCannotReadOrOverwriteCredentialsAfterRepairing() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("client-scope-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let storage = MemoryCredentialStorage()
+        let store = RelayStore(supportBase: root, credentialStorageFactory: { _ in storage },
+                               directAuthorization: { url, _, _ in self.testToken(url) })
+        await store.pairDirect(urlString: "first.test:6373", code: "first")
+        let old = try XCTUnwrap(store.client?.credentialStorage)
+        await store.pairDirect(urlString: "second.test:6373", code: "second")
+        let current = try storage.load()
+
+        XCTAssertThrowsError(try old.load(), "old requests cannot read another connection's token")
+        XCTAssertThrowsError(try old.save(testToken("late refresh")))
+        XCTAssertThrowsError(try old.clear())
+        XCTAssertEqual(try storage.load(), current)
+        XCTAssertEqual(try store.client?.credentialStorage?.load(), current)
+    }
+
+    func testUnpairPreventsAnOldClientFromRestoringItsRefreshedCredentials() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("client-scope-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let storage = MemoryCredentialStorage()
+        let store = RelayStore(supportBase: root, credentialStorageFactory: { _ in storage },
+                               directAuthorization: { _, _, _ in self.testToken() })
+        await store.pairDirect(urlString: "first.test:6373", code: "first")
+        let old = try XCTUnwrap(store.client?.credentialStorage)
+        store.unpair()
+
+        XCTAssertThrowsError(try old.save(testToken("late refresh")))
+        XCTAssertNil(try storage.load())
+    }
+
     func testUnpairRejectsLateAuthorizationBeforeSavingCredentialsOrProfile() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("pairing-\(UUID())")
         defer { try? FileManager.default.removeItem(at: root) }

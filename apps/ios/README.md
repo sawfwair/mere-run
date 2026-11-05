@@ -53,6 +53,20 @@ Each pairing attempt owns its authorization results. Unpair and subsequent
 attempts invalidate earlier responses before they can save credentials or a
 profile. Discovery and browser/device-approval continuations check that ownership
 before advancing the sign-in flow.
+Clients keep a credential scope for their connection. Re-pairing and Unpair
+invalidate that scope before changing stored credentials, including when the
+profile name and URL stay the same. Old clients cannot borrow new credentials
+or restore tokens through a delayed refresh.
+Credential replacement clears the target credential before saving the new
+profile and token. A failed write requires sign-in again and cannot leave a new
+token attached to an old endpoint.
+
+Each chat turn owns its transcript, streaming reply, and completion. Resetting
+the thread rejects old replies and errors before they reach memory or disk.
+A relay connection change stops observation of a remote reply and leaves an
+on-device reply running. Submission and reply polling use the same captured
+client. The pending bubble describes the active turn's lane even when the next
+turn's model selection changes.
 
 ## Model downloads and runtime residency
 

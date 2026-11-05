@@ -50,7 +50,7 @@ struct ChatView: View {
                                     .id(message.id)
                             }
                             if chat.awaitingReply {
-                                if chat.runLocally {
+                                if chat.replyIsLocal {
                                     thoughtBubble
                                         .id("pending")
                                 } else if let partial = chat.streamingReply {
