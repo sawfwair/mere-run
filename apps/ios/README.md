@@ -49,17 +49,28 @@ Browser sign-in uses Authorization Code + PKCE and returns through the
 `mere.world` universal link. Device-code authorization remains the browserless
 fallback.
 
+Each pairing attempt owns its authorization results. Unpair and subsequent
+attempts invalidate earlier responses before they can save credentials or a
+profile. Discovery and browser/device-approval continuations check that ownership
+before advancing the sign-in flow.
+
 ## Model downloads and runtime residency
 
 On-device model installs use a fixed iOS background URL session. The app stores
 pending install intent in `UserDefaults`, rejoins the matching system transfer
-after relaunch, moves completed files into durable staging, and only removes
-the pending record after the managed snapshot is pinned and validated. Leaving
+after relaunch, moves completed files into durable staging, and completes the
+pending install after the managed snapshot is pinned and validated. Leaving
 the app does not cancel an active payload transfer. New transfers default to
 unmetered, unconstrained Wi-Fi; Settings can opt a new download into cellular,
 expensive, and constrained networks. The selected policy is persisted with that
 pending download across relaunch. User force-quit behavior is owned by iOS and
 is not a supported continuation path.
+
+Network interruption and cancellation preserve pending install intent for
+recovery. Invalid credentials, certificates, and payloads clear it so the app
+does not automatically repeat a permanent failure. Progress updates belong to
+one attempt and cannot return a completed or failed download to a downloading
+state.
 
 The local engine unloads chat and image runtime state when the app backgrounds,
 on memory warnings, on model or inference-lane switches, before model removal,

@@ -132,11 +132,7 @@ final class LocalEngine: ObservableObject {
         allModels.first { $0.id == id }
     }
 
-    enum ModelState: Equatable {
-        case notInstalled
-        case downloading(String)
-        case ready
-    }
+    typealias ModelState = ModelDownloadOperation.State
 
     @Published private(set) var states: [String: ModelState] = [:]
     // Publish each residency transition as a unit. @Published on this state crashes
@@ -176,7 +172,7 @@ final class LocalEngine: ObservableObject {
     private var q35Generators: [String: Q35Generator] = [:]
     private var lfm2Generators: [String: LFM2Generator] = [:]
     private let pendingDownloadStore = PendingModelDownloadStore()
-    private var activeDownloadIDs: Set<String> = []
+    private lazy var downloads = ModelDownloadOperation(store: pendingDownloadStore)
     private let warmup = RuntimeWarmup()
     private var idleEvictionTask: Task<Void, Never>?
 
@@ -423,49 +419,33 @@ final class LocalEngine: ObservableObject {
         persistRequest: Bool
     ) async {
         let modelID = pending.modelID
-        guard Self.isSupported,
-              Self.model(withID: modelID) != nil,
-              !activeDownloadIDs.contains(modelID) else { return }
-        activeDownloadIDs.insert(modelID)
-        defer { activeDownloadIDs.remove(modelID) }
-        states[modelID] = .downloading("Starting…")
+        guard Self.isSupported, Self.model(withID: modelID) != nil else { return }
         lastError = nil
-        do {
-            if persistRequest {
-                try pendingDownloadStore.save(pending)
-            }
+        await downloads.run(pending, persistRequest: persistRequest, install: { pending, progress in
             _ = try await ManagedModelResolver.installManagedModel(
-                id: modelID,
+                id: pending.modelID,
                 usageTermsAcknowledged: pending.usageTermsAcknowledged,
                 useBackgroundSession: true,
                 backgroundNetworkPolicy: pending.allowsCellular ? .allNetworks : .wifiOnly,
-                progress: { progress in
+                progress: { update in
                     let label: String
-                    switch progress {
+                    switch update {
                     case .downloadingBytes(let completed, let total):
                         if let total, total > 0 {
                             label = "\(completed / 1_048_576) of \(total / 1_048_576) MB"
                         } else {
                             label = "\(completed / 1_048_576) MB"
                         }
-                    case .downloadingPercent(let percent, _):
-                        label = "\(percent)%"
-                    case .extracting:
-                        label = "Preparing…"
+                    case .downloadingPercent(let percent, _): label = "\(percent)%"
+                    case .extracting: label = "Preparing…"
                     }
-                    Task { @MainActor in
-                        LocalEngine.shared.states[modelID] = .downloading(label)
-                    }
+                    progress(label)
                 }
             )
-            try pendingDownloadStore.remove(modelID: modelID)
-            states[modelID] = .ready
-            refreshReclaimable()
-        } catch {
-            try? pendingDownloadStore.remove(modelID: modelID)
-            states[modelID] = .notInstalled
-            lastError = error.localizedDescription
-        }
+        }, retryable: { ManagedModelResolver.canResumeDownload(after: $0) }, publish: { state in
+            self.states[modelID] = state
+            if state == .ready { self.refreshReclaimable() }
+        }, failed: { self.lastError = $0.localizedDescription })
     }
 
     /// Removes an installed model and reclaims its unshared hub-cache

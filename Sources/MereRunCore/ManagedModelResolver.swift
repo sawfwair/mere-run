@@ -1,6 +1,37 @@
 import Foundation
+import Hub
 
 public enum ManagedModelResolver {
+    /// Interrupted transfers keep their durable install intent. Invalid input, credentials,
+    /// certificates, and payloads require an explicit correction rather than automatic retry.
+    public static func canResumeDownload(after error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let error = error as? URLError {
+            switch error.code {
+            case .cancelled, .timedOut, .cannotFindHost, .cannotConnectToHost, .networkConnectionLost,
+                 .dnsLookupFailed, .notConnectedToInternet, .internationalRoamingOff, .dataNotAllowed:
+                return true
+            default: return false
+            }
+        }
+        if let error = error as? Hub.HubClientError {
+            switch error {
+            case .networkError(let underlying): return canResumeDownload(after: underlying)
+            case .httpStatusCode(let code): return code == 408 || code == 429 || (500..<600).contains(code)
+            default: return false
+            }
+        }
+        #if os(iOS)
+        if let error = error as? HubBackgroundTransferError, case .httpStatus(let code) = error {
+            return code == 408 || code == 429 || (500..<600).contains(code)
+        }
+        #endif
+        return false
+    }
+
+    static func downloadFailure(_ error: Error) -> Error {
+        canResumeDownload(after: error) ? error : ResolverError.downloadFailed(error.localizedDescription)
+    }
     public enum RuntimeSource: String, Hashable, Sendable {
         case explicitPath
         case managedStore
@@ -505,7 +536,7 @@ public enum ManagedModelResolver {
                 progress?(.downloading(percent: percent))
             }
         } catch {
-            throw ResolverError.downloadFailed(error.localizedDescription)
+            throw downloadFailure(error)
         }
     }
 
@@ -546,7 +577,7 @@ public enum ManagedModelResolver {
                 ))
             }
         } catch {
-            throw ResolverError.downloadFailed(error.localizedDescription)
+            throw downloadFailure(error)
         }
     }
 
