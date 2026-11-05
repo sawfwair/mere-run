@@ -25,15 +25,29 @@ actor Qwen3ASRStreamingSession: ASRStreamingSession {
     private var decodeCount = 0
     private var lastPartialText: String?
     private var lastResult: ASRResult?
-    private var finalEmitted = false
-    private var didFinish = false
-    private var canceled = false
-    private var decodeInFlight = false
-    private var pendingDecode = false
-    private var forcePendingDecode = false
-    private var forcedDecodeSampleCount: Int?
+    private enum Phase {
+        case accepting
+        case finishing(Task<Void, Error>)
+        case finished
+        case cancelled
+        case failed(Error)
+    }
+
+    private enum PendingDecode {
+        case cadence
+        case forced(Int)
+    }
+
+    private var phase: Phase = .accepting
+    private var pendingDecode: PendingDecode?
     private var decodeTask: Task<Void, Never>?
-    private var decodeFailure: Error?
+
+    private var canDecode: Bool {
+        switch phase {
+        case .accepting, .finishing: return true
+        case .finished, .cancelled, .failed: return false
+        }
+    }
 
     init(
         request: ASRStreamingRequest,
@@ -57,7 +71,8 @@ actor Qwen3ASRStreamingSession: ASRStreamingSession {
 
     func feed(samples: [Float]) async throws {
         guard !samples.isEmpty else { return }
-        guard !didFinish, !canceled else {
+        if case .failed(let error) = phase { throw error }
+        guard case .accepting = phase else {
             throw ASRStreamingError.invalidState("Cannot feed samples after finish/cancel.")
         }
 
@@ -94,46 +109,62 @@ actor Qwen3ASRStreamingSession: ASRStreamingSession {
         requiredSampleCount: Int,
         alwaysForceDecode: Bool
     ) async throws {
-        if canceled || didFinish { return }
+        switch phase {
+        case .finished, .cancelled: return
+        case .failed(let error): throw error
+        case .finishing(let task): return try await task.value
+        case .accepting: break
+        }
         guard requiredSampleCount >= 0, requiredSampleCount <= melBuffer.sampleCount else {
             throw ASRStreamingError.invalidInput(
                 "requiredSampleCount must be within the streamed audio range."
             )
         }
 
-        didFinish = true
+        let task = Task {
+            try await self.finalize(requiredSampleCount: requiredSampleCount, alwaysForceDecode: alwaysForceDecode)
+        }
+        phase = .finishing(task)
+        try await task.value
+    }
+
+    private func finalize(requiredSampleCount: Int, alwaysForceDecode: Bool) async throws {
         if let decodeTask {
             await decodeTask.value
         }
-        if let decodeFailure {
-            throw decodeFailure
-        }
+        if case .failed(let error) = phase { throw error }
+        guard canDecode else { return }
         if alwaysForceDecode || decodeCadence.lastDecodedSampleCount < requiredSampleCount {
             scheduleDecode(force: true, sampleCount: requiredSampleCount)
             if let decodeTask {
                 await decodeTask.value
             }
-            if let decodeFailure {
-                throw decodeFailure
-            }
+            if case .failed(let error) = phase { throw error }
         }
-        emitFinalIfNeeded()
+        guard canDecode else { return }
+        phase = .finished
+        emitFinal()
         continuation.finish()
     }
 
     func cancel() async {
-        guard !canceled else { return }
-        canceled = true
-        didFinish = true
-        decodeTask?.cancel()
-        continuation.finish()
+        switch phase {
+        case .finished, .failed: return
+        case .accepting, .finishing, .cancelled:
+            phase = .cancelled
+            pendingDecode = nil
+            decodeTask?.cancel()
+            continuation.finish()
+            if let decodeTask { await decodeTask.value }
+        }
     }
 
     private func scheduleDecode(force: Bool, sampleCount: Int? = nil) {
-        pendingDecode = true
-        forcePendingDecode = forcePendingDecode || force
+        guard canDecode else { return }
         if force {
-            forcedDecodeSampleCount = sampleCount ?? melBuffer.sampleCount
+            pendingDecode = .forced(sampleCount ?? melBuffer.sampleCount)
+        } else if pendingDecode == nil {
+            pendingDecode = .cadence
         }
         guard decodeTask == nil else { return }
 
@@ -146,27 +177,30 @@ actor Qwen3ASRStreamingSession: ASRStreamingSession {
         do {
             try await performDecodeLoop()
         } catch is CancellationError {
-            // Cancellation is terminal and intentionally does not surface as a decode error.
+            if canDecode {
+                phase = .cancelled
+                continuation.finish()
+            }
         } catch {
-            decodeFailure = error
-            continuation.finish(throwing: error)
+            if canDecode {
+                phase = .failed(error)
+                continuation.finish(throwing: error)
+            }
         }
+        pendingDecode = nil
         decodeTask = nil
     }
 
     private func performDecodeLoop() async throws {
-        if decodeInFlight { return }
-
-        decodeInFlight = true
-        defer { decodeInFlight = false }
-
-        while pendingDecode || forcePendingDecode {
-            let forceNextDecode = forcePendingDecode
-            let requestedSampleCount = forceNextDecode ? forcedDecodeSampleCount : nil
-            pendingDecode = false
-            forcePendingDecode = false
-            forcedDecodeSampleCount = nil
-            if canceled { return }
+        while let pending = pendingDecode {
+            let forceNextDecode: Bool
+            let requestedSampleCount: Int?
+            switch pending {
+            case .cadence: forceNextDecode = false; requestedSampleCount = nil
+            case .forced(let count): forceNextDecode = true; requestedSampleCount = count
+            }
+            pendingDecode = nil
+            guard canDecode else { return }
 
             let snapshot = if let requestedSampleCount {
                 melBuffer.snapshotSamples(count: requestedSampleCount)
@@ -186,7 +220,7 @@ actor Qwen3ASRStreamingSession: ASRStreamingSession {
                 value: melBuffer.extract(using: melExtractor, sampleCount: snapshot.count)
             )
             let output = try await decode(snapshot, melSpec)
-            if canceled { return }
+            guard canDecode else { return }
 
             let latencyMs = Date().timeIntervalSince(start) * 1_000
             decodeCount += 1
@@ -208,10 +242,7 @@ actor Qwen3ASRStreamingSession: ASRStreamingSession {
         }
     }
 
-    private func emitFinalIfNeeded() {
-        guard !finalEmitted else { return }
-        finalEmitted = true
-
+    private func emitFinal() {
         if let lastResult {
             continuation.yield(.final(result: lastResult))
             return
