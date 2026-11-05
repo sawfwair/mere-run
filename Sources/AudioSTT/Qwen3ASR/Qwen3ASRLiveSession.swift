@@ -70,7 +70,6 @@ public actor Qwen3ASRLiveSession {
     private var eventTask: Task<(result: ASRResult, revision: Int), Error>?
     private var pendingSamples: [Float] = []
     private var processingTask: Task<Void, Never>?
-    private var processingError: Error?
     private var preRoll: [Float] = []
     private var totalSampleCount = 0
     private var utteranceStartSample = 0
@@ -78,9 +77,9 @@ public actor Qwen3ASRLiveSession {
     private var utteranceId = UUID().uuidString.lowercased()
     private var revision = 0
     private var noiseRMS: Float = 0.002
-    private var finished = false
-    private var cancelled = false
-    private var finalEmitted = false
+    private var phase: ASRLivePhase = .accepting
+    private var finalizationTask: Task<Void, Error>?
+    private var cancellationTask: Task<Void, Never>?
 
     public init(
         generator: Qwen3ASRGenerator,
@@ -111,8 +110,8 @@ public actor Qwen3ASRLiveSession {
     }
 
     public func feed(samples: [Float]) async throws {
-        if let processingError { throw processingError }
-        guard !finished else {
+        if let error = phase.failure { throw error }
+        guard phase.isAccepting else {
             throw ASRStreamingError.invalidState("Cannot feed live ASR after finish.")
         }
         guard !samples.isEmpty else { return }
@@ -135,24 +134,17 @@ public actor Qwen3ASRLiveSession {
     private func drainPendingAudio() async {
         let analysisWindowSamples = max(1, request.sampleRate / 10)
         do {
-            while !pendingSamples.isEmpty {
+            while !pendingSamples.isEmpty, phase.canProcess {
                 try Task.checkCancellation()
                 let count = min(pendingSamples.count, analysisWindowSamples)
                 let window = Array(pendingSamples.prefix(count))
                 pendingSamples.removeFirst(count)
                 try await feedAnalysisWindow(window)
             }
-        } catch is CancellationError where cancelled {
-            // Cancel deliberately tears down pending processing without surfacing a runtime error.
         } catch {
-            processingError = error
-            finished = true
-            pendingSamples.removeAll(keepingCapacity: false)
-            await session?.cancel()
-            eventTask?.cancel()
-            session = nil
-            eventTask = nil
-            continuation.finish(throwing: error)
+            if !phase.isCancelled {
+                await fail(error)
+            }
         }
         processingTask = nil
     }
@@ -161,6 +153,7 @@ public actor Qwen3ASRLiveSession {
         let chunkStart = totalSampleCount
         totalSampleCount += samples.count
         await audioClock.set(totalSampleCount)
+        guard phase.canProcess else { return }
         let rms = rootMeanSquare(samples)
         let speechThreshold = max(Float(0.005), noiseRMS * Float(3.5))
         let containsSpeech = rms >= speechThreshold
@@ -177,11 +170,13 @@ public actor Qwen3ASRLiveSession {
             utteranceStartSample = max(0, totalSampleCount - buffered.count)
             lastSpeechSample = totalSampleCount
             try await startUtterance()
+            guard phase.canProcess else { return }
             try await session?.feed(samples: buffered)
             return
         }
 
         try await session?.feed(samples: samples)
+        guard phase.canProcess else { return }
         if containsSpeech {
             lastSpeechSample = totalSampleCount
         }
@@ -196,39 +191,83 @@ public actor Qwen3ASRLiveSession {
         }
     }
 
-    public func finish(reason: Qwen3ASRLiveFinishReason = .eof) async throws {
-        if let processingError { throw processingError }
-        guard !finished else { return }
-        finished = true
-        if let processingTask {
-            await processingTask.value
+    public func finish(reason: ASRLiveFinishReason = .eof) async throws {
+        if let cancellationTask { return await cancellationTask.value }
+        if let finalizationTask { return try await awaitFinalization(finalizationTask) }
+        if let error = phase.failure {
+            if let processingTask { await processingTask.value }
+            throw error
         }
-        if let processingError { throw processingError }
-        if session != nil {
-            try await commitUtterance(endSample: totalSampleCount, startNext: false)
+        guard phase.isAccepting else { return }
+        phase = .finishing
+        let task = Task { try await self.finalize(reason: reason) }
+        finalizationTask = task
+        try await awaitFinalization(task)
+    }
+
+    private func awaitFinalization(_ task: Task<Void, Error>) async throws {
+        let result = await task.result
+        if let cancellationTask { await cancellationTask.value }
+        try result.get()
+    }
+
+    private func finalize(reason: ASRLiveFinishReason) async throws {
+        do {
+            if let processingTask { await processingTask.value }
+            if let error = phase.failure { throw error }
+            guard phase.canProcess else { return }
+            if session != nil { try await commitUtterance(endSample: totalSampleCount, startNext: false) }
+            guard phase.canProcess else { return }
+            phase = .finished
+            emitFinal(reason)
+            continuation.finish()
+        } catch {
+            guard !phase.isCancelled else { return }
+            await fail(error)
+            throw error
         }
-        emitFinal(reason)
-        continuation.finish()
     }
 
     public func cancel() async {
-        guard !finished else { return }
-        cancelled = true
-        finished = true
-        processingTask?.cancel()
-        pendingSamples.removeAll(keepingCapacity: false)
-        await session?.cancel()
-        eventTask?.cancel()
-        session = nil
-        eventTask = nil
+        if let cancellationTask { return await cancellationTask.value }
+        if phase.failure != nil {
+            if let processingTask { await processingTask.value }
+            if let finalizationTask { _ = await finalizationTask.result }
+            return
+        }
+        guard phase.canProcess else { return }
+        phase = .cancelling
+        let task = Task { await self.cancelAndDrain() }
+        cancellationTask = task
         emitFinal(.cancelled)
         continuation.finish()
+        await task.value
+    }
+
+    private func cancelAndDrain() async {
+        processingTask?.cancel()
+        finalizationTask?.cancel()
+        pendingSamples.removeAll(keepingCapacity: false)
+        let reader = eventTask
+        reader?.cancel()
+        await session?.cancel()
+        if let processingTask { await processingTask.value }
+        if let finalizationTask { _ = await finalizationTask.result }
+        if let reader { _ = await reader.result }
+        session = nil
+        eventTask = nil
+        preRoll.removeAll(keepingCapacity: false)
+        phase = .cancelled
     }
 
     private func startUtterance() async throws {
         utteranceId = UUID().uuidString.lowercased()
         revision = 0
         let next = try await makeSession(request)
+        guard phase.canProcess else {
+            await next.cancel()
+            return
+        }
         session = next
         let id = utteranceId
         let start = utteranceStartSample
@@ -273,7 +312,9 @@ public actor Qwen3ASRLiveSession {
     private func commitUtterance(endSample: Int, startNext: Bool = true) async throws {
         guard let active = session, let eventTask else { return }
         try await active.finish(requiredSampleCount: max(0, endSample - utteranceStartSample))
+        guard phase.canProcess else { return }
         let output = try await eventTask.value
+        guard phase.canProcess else { return }
         let result = output.result
         let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !text.isEmpty {
@@ -289,9 +330,22 @@ public actor Qwen3ASRLiveSession {
         session = nil
         self.eventTask = nil
         preRoll.removeAll(keepingCapacity: true)
-        if startNext, !finished {
+        if startNext, phase.isAccepting {
             utteranceStartSample = totalSampleCount
         }
+    }
+
+    private func fail(_ error: Error) async {
+        phase = .failed(error)
+        pendingSamples.removeAll(keepingCapacity: false)
+        continuation.finish(throwing: error)
+        let reader = eventTask
+        reader?.cancel()
+        await session?.cancel()
+        if let reader { _ = await reader.result }
+        session = nil
+        eventTask = nil
+        preRoll.removeAll(keepingCapacity: false)
     }
 
     private func appendPreRoll(_ samples: [Float]) {
@@ -303,8 +357,6 @@ public actor Qwen3ASRLiveSession {
     }
 
     private func emitFinal(_ reason: Qwen3ASRLiveFinishReason) {
-        guard !finalEmitted else { return }
-        finalEmitted = true
         continuation.yield(.final(reason))
     }
 
