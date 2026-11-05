@@ -3,6 +3,13 @@ import Foundation
 
 @MainActor
 package final class StudioServingMonitor: ObservableObject {
+    private let fetch: @Sendable (URLRequest) async throws -> (Data, URLResponse)
+
+    package init(fetch: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse) = {
+        try await URLSession.shared.data(for: $0)
+    }) {
+        self.fetch = fetch
+    }
     @Published package private(set) var runtime: StudioRuntimeSnapshot?
     @Published package private(set) var agentStatus: StudioAgentStatus?
     @Published package private(set) var isReachable = false
@@ -27,7 +34,22 @@ package final class StudioServingMonitor: ObservableObject {
     private var pollingTask: Task<Void, Never>?
     /// The `/runtime/status` request in flight. A poll that finds one waits for its answer
     /// rather than sending a second.
-    private var runtimePoll: Task<Void, Never>?
+    private struct RuntimeEndpoint: Equatable {
+        let statusURL: URL
+        let healthURL: URL
+        let authorization: String?
+    }
+
+    private struct RuntimePoll {
+        let id: UUID
+        let endpoint: RuntimeEndpoint
+        let task: Task<Void, Never>
+    }
+
+    private var runtimePoll: RuntimePoll?
+    private var currentEndpoint: RuntimeEndpoint?
+    private var lifetime = UUID()
+    private var agentRefreshID: UUID?
 
     package func start(controller: MereRunController) {
         guard pollingTask == nil else { return }
@@ -45,23 +67,32 @@ package final class StudioServingMonitor: ObservableObject {
     package func stop() {
         pollingTask?.cancel()
         pollingTask = nil
+        runtimePoll?.task.cancel()
+        runtimePoll = nil
+        agentRefreshID = nil
+        lifetime = UUID()
+        isRefreshing = false
     }
 
     package func refreshNow(controller: MereRunController) async {
+        let lifetime = lifetime
         await refreshRuntime(controller: controller)
+        guard lifetime == self.lifetime, !Task.isCancelled else { return }
         await refreshAgent(controller: controller)
     }
 
     /// Polls the endpoint now instead of at the next tick: after a server exits, or after the
     /// endpoint changes. A poll already in flight was sent before whatever prompted this one, so
-    /// this waits for it and then sends its own.
+    /// this invalidates it and sends a fresh request. Superseded replies cannot publish.
     package func refreshRuntimeNow(controller: MereRunController) async {
-        if let runtimePoll { await runtimePoll.value }
         await startRuntimePoll(controller: controller)
     }
 
     package func refreshAgent(controller: MereRunController) async {
+        let ticket = UUID()
+        agentRefreshID = ticket
         let result = await controller.utilityCommandResult(args: ["agent", "status", "--json"])
+        guard agentRefreshID == ticket, !Task.isCancelled else { return }
         guard result.exitCode == 0,
               let data = Self.jsonObjectData(in: result.stdout) else {
             agentDetail = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -83,6 +114,8 @@ package final class StudioServingMonitor: ObservableObject {
     /// records the outcome in the activity feed, and re-reads the pool. Returns the error to show,
     /// or nil once the runtime accepted the request.
     package func setModel(_ id: String, loaded: Bool, controller: MereRunController) async -> String? {
+        let endpoint = endpoint(controller)
+        let lifetime = lifetime
         let action = loaded ? "load" : "unload"
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
         var request = URLRequest(url: controller.runtimeURL(path: "/runtime/models/\(encoded)/\(action)"))
@@ -93,11 +126,14 @@ package final class StudioServingMonitor: ObservableObject {
         }
         let failure: String?
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await fetch(request)
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             failure = (200..<300).contains(code) ? nil : String(data: data, encoding: .utf8) ?? "HTTP \(code)"
         } catch {
             failure = error.localizedDescription
+        }
+        guard lifetime == self.lifetime, endpoint == self.endpoint(controller), !Task.isCancelled else {
+            return "The runtime connection changed before the request completed."
         }
         if let failure {
             note("Model \(action) failed", detail: failure, level: .error)
@@ -116,47 +152,74 @@ package final class StudioServingMonitor: ObservableObject {
         append([StudioServiceActivity(level: level, title: title, detail: detail)])
     }
 
+    private func endpoint(_ controller: MereRunController) -> RuntimeEndpoint {
+        RuntimeEndpoint(statusURL: controller.runtimeURL(path: "/runtime/status"),
+                        healthURL: controller.runtimeURL(path: "/health"),
+                        authorization: controller.runtimeAuthorizationHeader)
+    }
+
     private func refreshRuntime(controller: MereRunController) async {
-        if let runtimePoll { return await runtimePoll.value }
+        if let poll = runtimePoll, poll.endpoint == endpoint(controller) { return await poll.task.value }
         await startRuntimePoll(controller: controller)
     }
 
     private func startRuntimePoll(controller: MereRunController) async {
-        let poll = Task { @MainActor [weak self, weak controller] in
-            guard let self, let controller else { return }
-            await self.pollRuntime(controller: controller)
+        guard !Task.isCancelled else { return }
+        let endpoint = endpoint(controller)
+        runtimePoll?.task.cancel()
+        if currentEndpoint != endpoint {
+            currentEndpoint = endpoint
+            runtime = nil
+            lastAnsweredAt = nil
+            lastUpdated = nil
+            isReachable = false
+            lastTokenCount = nil
+            throughputHistory = []
+            slowStatusPolls = 0
+            activities = []
+            connectionDetail = "Waiting for runtime"
         }
-        runtimePoll = poll
+        let ticket = UUID()
+        let task = Task { @MainActor [weak self, weak controller] in
+            guard let self, let controller else { return }
+            await self.pollRuntime(controller: controller, endpoint: endpoint, ticket: ticket)
+        }
+        runtimePoll = RuntimePoll(id: ticket, endpoint: endpoint, task: task)
         isRefreshing = true
-        await poll.value
-        if runtimePoll == poll {
+        await task.value
+        if runtimePoll?.id == ticket {
             runtimePoll = nil
             isRefreshing = false
         }
     }
 
-    private func pollRuntime(controller: MereRunController) async {
+    private func isCurrent(_ ticket: UUID, endpoint: RuntimeEndpoint, controller: MereRunController) -> Bool {
+        runtimePoll?.id == ticket && endpoint == self.endpoint(controller) && !Task.isCancelled
+    }
+
+    private func pollRuntime(controller: MereRunController, endpoint: RuntimeEndpoint, ticket: UUID) async {
+        guard isCurrent(ticket, endpoint: endpoint, controller: controller) else { return }
         if slowStatusPolls > 0, !slowStatusPolls.isMultiple(of: Self.slowStatusRetryInterval) {
-            slowStatusPolls += 1
             let sentAt = Date()
-            if await healthAnswers(controller: controller) {
+            let healthy = await healthAnswers(endpoint: endpoint)
+            guard isCurrent(ticket, endpoint: endpoint, controller: controller) else { return }
+            slowStatusPolls += 1
+            if healthy {
                 lastAnsweredAt = sentAt
             } else {
                 markUnreachable(detail: "Runtime is not reachable")
             }
             return
         }
-        var request = URLRequest(url: controller.runtimeURL(path: "/runtime/status"))
+        var request = URLRequest(url: endpoint.statusURL)
         request.timeoutInterval = 3
-        if let authorization = controller.runtimeAuthorizationHeader {
+        if let authorization = endpoint.authorization {
             request.setValue(authorization, forHTTPHeaderField: "Authorization")
         }
-
         do {
-            // An answer is stamped with when it was asked for: a reply that crosses a server's exit
-            // was the exiting server's, not a sign that another one took the port.
             let sentAt = Date()
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await fetch(request)
+            guard isCurrent(ticket, endpoint: endpoint, controller: controller) else { return }
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             lastAnsweredAt = sentAt
             guard (200..<300).contains(code) else {
@@ -170,7 +233,6 @@ package final class StudioServingMonitor: ObservableObject {
                 }
                 return
             }
-
             let decoded = try JSONDecoder().decode(StudioRuntimeSnapshot.self, from: data)
             slowStatusPolls = 0
             let previous = runtime
@@ -180,23 +242,22 @@ package final class StudioServingMonitor: ObservableObject {
             connectionDetail = "Connected"
             lastUpdated = Date()
             recordThroughput(decoded, at: sentAt)
-            if wasReachable {
-                append(StudioServiceActivityDiff.events(previous: previous, current: decoded))
-            } else {
-                append(StudioServiceActivityDiff.events(previous: nil, current: decoded))
-            }
+            append(StudioServiceActivityDiff.events(previous: wasReachable ? previous : nil, current: decoded))
         } catch {
-            // A status request that times out may be a server that is up but stuck gathering its
-            // status (a model volume that stalls, say). `/health` tells the two apart.
-            if (error as? URLError)?.code == .timedOut, await healthAnswers(controller: controller) {
-                if slowStatusPolls == 0 {
-                    note("Runtime is slow to report status", detail: "The server answers /health but not /runtime/status", level: .warning)
+            guard isCurrent(ticket, endpoint: endpoint, controller: controller) else { return }
+            if (error as? URLError)?.code == .timedOut {
+                let healthy = await healthAnswers(endpoint: endpoint)
+                guard isCurrent(ticket, endpoint: endpoint, controller: controller) else { return }
+                if healthy {
+                    if slowStatusPolls == 0 {
+                        note("Runtime is slow to report status", detail: "The server answers /health but not /runtime/status", level: .warning)
+                    }
+                    slowStatusPolls += 1
+                    lastAnsweredAt = Date()
+                    isReachable = false
+                    connectionDetail = "Up, but not reporting its status"
+                    return
                 }
-                slowStatusPolls += 1
-                lastAnsweredAt = Date()
-                isReachable = false
-                connectionDetail = "Up, but not reporting its status"
-                return
             }
             markUnreachable(detail: error.localizedDescription)
         }
@@ -216,10 +277,10 @@ package final class StudioServingMonitor: ObservableObject {
     }
 
     /// Whether `/health` answers within two seconds: the server is up, whatever its status says.
-    private func healthAnswers(controller: MereRunController) async -> Bool {
-        var request = URLRequest(url: controller.runtimeURL(path: "/health"))
+    private func healthAnswers(endpoint: RuntimeEndpoint) async -> Bool {
+        var request = URLRequest(url: endpoint.healthURL)
         request.timeoutInterval = 2
-        guard let (_, response) = try? await URLSession.shared.data(for: request) else { return false }
+        guard let (_, response) = try? await fetch(request) else { return false }
         return ((response as? HTTPURLResponse)?.statusCode ?? 0) > 0
     }
 

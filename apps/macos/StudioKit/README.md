@@ -77,8 +77,14 @@ adopted from the Command Console, and start, stop, restart, and preflight.
 options, its `StudioServiceProcess`, and a phase derived from that process and
 `StudioServingMonitor`'s last answer from the endpoint. The Server page and the
 menu bar extra both drive it; neither keeps its own copy of the server's state.
+Stop revokes any restart waiting for the old process to exit. If multiple
+restarts overlap, only the latest request can launch its configuration.
 The endpoint and key stay on `MereRunController`, so the key is read from the
 Keychain at launch and never stored with the options.
+Runtime polls capture that endpoint and key, and publish only while their poll
+identity is current. Stop invalidates in-flight results and follow-up agent
+probes. Connection changes clear the old snapshot and telemetry baseline;
+late responses cannot restore them.
 
 `StudioModelStore` owns the inventory shared by Models and the composer. Refreshes
 publish a complete typed snapshot and reject results from older requests or CLI
