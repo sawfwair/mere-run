@@ -42,6 +42,7 @@ final class RelayStoreTests: XCTestCase {
 
         guard case .failed = store.pairing else { return XCTFail("profile replacement must fail") }
         XCTAssertNil(store.client)
+        XCTAssertNil(store.profile, "a failed replacement must not keep presenting the retired endpoint")
         XCTAssertNil(try storage.load(), "an old profile must not be reopened with the new endpoint's token")
         XCTAssertThrowsError(try old.load())
     }

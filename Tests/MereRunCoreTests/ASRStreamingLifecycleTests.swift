@@ -54,6 +54,22 @@ final class ASRStreamingLifecycleTests: XCTestCase {
         await session.cancel()
     }
 
+    func testUnrequestedDecodeCancellationIsReportedAsAFailure() async throws {
+        let session = Qwen3ASRStreamingSession(
+            request: ASRStreamingRequest(sampleRate: 1_000, decodeIntervalMs: 100, minDecodeAudioMs: 100),
+            decode: { _, _ in throw CancellationError() }
+        )
+        try await session.feed(samples: Array(repeating: 0, count: 100))
+        do {
+            for try await _ in session.events {}
+            XCTFail("a decode that cancels itself must fail the stream, not end it silently")
+        } catch is CancellationError {}
+        do {
+            try await session.finish()
+            XCTFail("finish must report the decode failure instead of succeeding without a final")
+        } catch is CancellationError {}
+    }
+
     func testCancelWaitsForNativeDecodeAndPreventsFinalPublication() async throws {
         let gate = StreamingDecodeBarrier()
         let session = heldSession(gate)

@@ -74,6 +74,20 @@ final class StudioServingMonitorOwnershipTests: XCTestCase {
         XCTAssertFalse(monitor.activities.contains { $0.detail?.contains("old") == true })
     }
 
+    func testChangingCredentialsKeepsTheActivityHistory() async {
+        let controller = controller()
+        let monitor = StudioServingMonitor(fetch: { request in
+            (Data(#"{"object":"new"}"#.utf8), HTTPURLResponse(url: request.url!, statusCode: 200,
+                                                            httpVersion: nil, headerFields: nil)!)
+        })
+        monitor.note("Model load failed", detail: "earlier server", level: .error)
+        controller.runtimeAPIKey = "replacement-test-key"
+        await monitor.refreshRuntimeNow(controller: controller)
+        XCTAssertEqual(monitor.runtime?.object, "new")
+        XCTAssertTrue(monitor.activities.contains { $0.detail == "earlier server" },
+                      "an endpoint change hides the old snapshot, not the user's activity history")
+    }
+
     private func controller() -> MereRunController {
         MereRunController(secretStore: InMemorySecretStore(), processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false,
                           taskSessions: StudioTaskSessions())

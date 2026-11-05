@@ -5,6 +5,7 @@ public enum ManagedModelResolver {
     /// Interrupted transfers keep their durable install intent. Invalid input, credentials,
     /// certificates, and payloads require an explicit correction rather than automatic retry.
     public static func canResumeDownload(after error: Error) -> Bool {
+        if let error = error as? ResolverError, case .downloadInterrupted = error { return true }
         if error is CancellationError { return true }
         if let error = error as? URLError {
             switch error.code {
@@ -21,7 +22,7 @@ public enum ManagedModelResolver {
             default: return false
             }
         }
-        #if os(iOS)
+        #if !canImport(FoundationNetworking)
         if let error = error as? HubBackgroundTransferError, case .httpStatus(let code) = error {
             return code == 408 || code == 429 || (500..<600).contains(code)
         }
@@ -29,8 +30,11 @@ public enum ManagedModelResolver {
         return false
     }
 
-    static func downloadFailure(_ error: Error) -> Error {
-        canResumeDownload(after: error) ? error : ResolverError.downloadFailed(error.localizedDescription)
+    /// Every download failure leaves the resolver as a `ResolverError`; the case records whether
+    /// the transfer may resume, so callers that map resolver errors keep handling both.
+    static func downloadFailure(_ error: Error) -> ResolverError {
+        let message = error.localizedDescription
+        return canResumeDownload(after: error) ? .downloadInterrupted(message) : .downloadFailed(message)
     }
     public enum RuntimeSource: String, Hashable, Sendable {
         case explicitPath
@@ -83,6 +87,9 @@ public enum ManagedModelResolver {
         case usageTermsNotAcknowledged(String)
         case unsupportedInstallShape(String)
         case downloadFailed(String)
+        /// A transient transfer failure: the network dropped, the server was briefly unavailable,
+        /// or the download was cancelled. The same install may be retried unchanged.
+        case downloadInterrupted(String)
         case invalidInstalledModel(String)
 
         public var errorDescription: String? {
@@ -99,7 +106,7 @@ public enum ManagedModelResolver {
                 return "Model \(id) has third-party usage terms that must be reviewed and accepted before download."
             case .unsupportedInstallShape(let id):
                 return "Managed install shape is not supported for \(id)."
-            case .downloadFailed(let message):
+            case .downloadFailed(let message), .downloadInterrupted(let message):
                 return message
             case .invalidInstalledModel(let message):
                 return message

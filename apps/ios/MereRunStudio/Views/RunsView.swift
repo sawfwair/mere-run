@@ -65,10 +65,7 @@ struct RunsView: View {
             connectionID: connectionID,
             read: { try await client.list(limit: 50) },
             isCurrentConnection: { relay.connectionID == connectionID },
-            presentError: { error in
-                if let error = error as? RelayClientError { return AppErrorText.presentable(error.message) }
-                return error.localizedDescription
-            }
+            presentError: AppErrorText.presentable
         )
     }
 }

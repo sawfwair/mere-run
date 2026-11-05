@@ -135,6 +135,36 @@ final class ChatTurnStoreTests: XCTestCase {
         XCTAssertFalse(store.awaitingReply)
     }
 
+    func testNextLocalTurnWaitsForTheRetiredLocalTurnToReleaseTheEngine() async {
+        let store = ChatTurnStore(threadURL: threadURL)
+        let old = ChatReplyGate()
+        let first = Task { await store.send("old", origin: .local, generate: { _, _ in try await old.reply() }) }
+        await old.waitUntilStarted()
+        store.newChat()
+        XCTAssertFalse(store.awaitingReply)
+
+        var generating = false
+        let current = ChatReplyGate()
+        let second = Task {
+            await store.send("new", origin: .local, generate: { _, _ in
+                generating = true
+                return try await current.reply()
+            })
+        }
+        await Task.yield()
+        await Task.yield()
+        XCTAssertTrue(store.awaitingReply, "the new turn owns the thread while it waits")
+        XCTAssertFalse(generating, "the retired on-device turn still holds the engine")
+
+        old.finish(.success(.init(text: "stale reply")))
+        await first.value
+        await current.waitUntilStarted()
+        XCTAssertTrue(generating)
+        current.finish(.success(.init(text: "new reply")))
+        await second.value
+        XCTAssertEqual(store.messages.map(\.content), ["new", "new reply"])
+    }
+
     func testCallerCancellationRejectsUncooperativeProgressAndCompletion() async {
         let store = ChatTurnStore(threadURL: threadURL)
         let gate = ChatReplyGate()

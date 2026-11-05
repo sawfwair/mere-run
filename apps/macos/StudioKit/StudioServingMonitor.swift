@@ -176,7 +176,8 @@ package final class StudioServingMonitor: ObservableObject {
             lastTokenCount = nil
             throughputHistory = []
             slowStatusPolls = 0
-            activities = []
+            // The activity feed is the user's history across restarts and key changes. Only the
+            // old endpoint's snapshot is hidden; superseded replies cannot append to the feed.
             connectionDetail = "Waiting for runtime"
         }
         let ticket = UUID()

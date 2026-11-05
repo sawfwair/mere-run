@@ -67,6 +67,9 @@ final class ChatTurnStore: @preconcurrency ObservableObject {
 
     private var state = State()
     private var work: Work?
+    /// An on-device turn retired by New Chat may still hold the engine after observation ends.
+    /// The next on-device turn starts generating only once it settles.
+    private var retiredLocalTask: Task<Reply, Error>?
     private let threadURL: URL
 
     var messages: [Message] { state.messages }
@@ -83,7 +86,10 @@ final class ChatTurnStore: @preconcurrency ObservableObject {
     }
 
     func newChat() {
-        work?.task.cancel()
+        if let work {
+            work.task.cancel()
+            if work.origin == .local { retiredLocalTask = work.task }
+        }
         work = nil
         state = State()
         publish()
@@ -111,7 +117,10 @@ final class ChatTurnStore: @preconcurrency ObservableObject {
         guard !trimmed.isEmpty, work == nil, !Task.isCancelled else { return }
         let ticket = UUID()
         let messages = state.messages + [Message(role: .user, content: trimmed)]
+        let previous = origin == .local ? retiredLocalTask : nil
+        if origin == .local { retiredLocalTask = nil }
         let task = Task { [weak self] in
+            _ = await previous?.result
             try Task.checkCancellation()
             return try await generate(messages) { [weak self] partial in
                 guard let self, self.work?.id == ticket, self.work?.task.isCancelled == false else { return }

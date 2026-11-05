@@ -242,11 +242,7 @@ struct RunDetailView: View {
             },
             failed: { error in
                 guard watchTarget == target else { return }
-                if let error = error as? RelayClientError {
-                    errorMessage = AppErrorText.presentable(error.message)
-                } else {
-                    errorMessage = error.localizedDescription
-                }
+                errorMessage = AppErrorText.presentable(error)
             }
         )
     }
@@ -264,12 +260,9 @@ struct RunDetailView: View {
             let current = try await client.cancel(jobID: jobID)
             guard watchTarget == target else { return }
             job = current
-        } catch let error as RelayClientError {
-            guard watchTarget == target else { return }
-            errorMessage = AppErrorText.presentable(error.message)
         } catch {
             guard watchTarget == target else { return }
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorText.presentable(error)
         }
     }
 
@@ -288,12 +281,9 @@ struct RunDetailView: View {
             job = current
             events = []
             fetchedFiles = []
-        } catch let error as RelayClientError {
-            guard watchTarget == target else { return }
-            errorMessage = AppErrorText.presentable(error.message)
         } catch {
             guard watchTarget == target else { return }
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorText.presentable(error)
         }
     }
 
@@ -316,12 +306,9 @@ struct RunDetailView: View {
             }
             guard watchTarget == target else { return }
             fetchedFiles = files
-        } catch let error as RelayClientError {
-            guard watchTarget == target else { return }
-            errorMessage = AppErrorText.presentable(error.message)
         } catch {
             guard watchTarget == target else { return }
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorText.presentable(error)
         }
     }
 }

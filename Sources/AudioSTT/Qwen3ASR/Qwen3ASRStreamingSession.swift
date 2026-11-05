@@ -176,12 +176,9 @@ actor Qwen3ASRStreamingSession: ASRStreamingSession {
     private func runDecodeLoop() async {
         do {
             try await performDecodeLoop()
-        } catch is CancellationError {
-            if canDecode {
-                phase = .cancelled
-                continuation.finish()
-            }
         } catch {
+            // `cancel()` leaves the decoding phase before cancelling this task, so a decode that
+            // still may publish failed on its own, including with a CancellationError it raised.
             if canDecode {
                 phase = .failed(error)
                 continuation.finish(throwing: error)

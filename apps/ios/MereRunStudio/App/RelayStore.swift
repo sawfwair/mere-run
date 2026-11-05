@@ -387,6 +387,10 @@ public final class RelayStore: ObservableObject {
     private func commitPairing(_ tokenSet: RelayOAuthTokenSet, profile candidate: WorkflowExecutorProfile, attempt: UUID) throws {
         try checkPairing(attempt)
         retireConnection()
+        // The old connection is gone from here on. Until both durable writes succeed nothing is
+        // paired, so a failed write cannot leave the old endpoint presented without a client.
+        profile = nil
+        authStatus = nil
         try checkPairing(attempt)
         let storage = credentialStorage(for: candidate.name)
         // No token may survive paired with a different endpoint if either durable write fails.
@@ -454,6 +458,12 @@ enum WebSignIn {
 /// Translates client errors into the app's voice. RelayKit speaks the CLI's
 /// language ("executor login", flag names); the phone never should.
 enum AppErrorText {
+    /// Relay failures carry server text worth translating; anything else shows its own description.
+    static func presentable(_ error: any Error) -> String {
+        guard let error = error as? RelayClientError else { return error.localizedDescription }
+        return presentable(error.message)
+    }
+
     static func presentable(_ message: String) -> String {
         if message.contains("executor login") || message.contains("MERERUN_RELAY_TOKEN") {
             return "Your session expired. Sign out in Settings and pair again."

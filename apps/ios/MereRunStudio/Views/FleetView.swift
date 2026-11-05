@@ -107,10 +107,7 @@ struct FleetView: View {
             connectionID: connectionID,
             read: { try await client.fleet() },
             isCurrentConnection: { relay.connectionID == connectionID },
-            presentError: { error in
-                if let error = error as? RelayClientError { return AppErrorText.presentable(error.message) }
-                return error.localizedDescription
-            }
+            presentError: AppErrorText.presentable
         )
     }
 
