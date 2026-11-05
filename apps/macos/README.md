@@ -1220,7 +1220,9 @@ recording in an attachment well (chosen, dropped, or recorded with Record…),
 an optional transcript, and a language — run as `speech profile create`
 through the task runner. Any audio attachment well offers Record… in its
 context menu (`StudioUI/StudioAudioRecorder.swift`); the recording is filed
-with the task's domain.
+with the task's domain. Start stays disabled while microphone permission is
+pending. Cancel and closing the popover prevent a pending request from starting
+later and discard an active recording; Stop keeps the file and attaches it.
 
 **3D** ▸ From image is a Generate task on the shared task workspace for
 TripoSR, native TRELLIS.2 PBR reconstruction, and ordered 4- and 6-view
