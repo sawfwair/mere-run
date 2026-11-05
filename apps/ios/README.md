@@ -68,6 +68,12 @@ on-device reply running. Submission and reply polling use the same captured
 client. The pending bubble describes the active turn's lane even when the next
 turn's model selection changes.
 
+Runs and Fleet accept only the latest refresh for the active relay connection.
+Connection changes hide the previous account's snapshot and errors immediately,
+reload both pages, and clear the Runs navigation path. Failed refreshes on the
+same connection retain its last snapshot; cancelled or superseded responses
+cannot replace it.
+
 ## Model downloads and runtime residency
 
 On-device model installs use a fixed iOS background URL session. The app stores

@@ -4,11 +4,14 @@ import MereRunRelayKit
 /// The run inbox: recent relay jobs, newest first.
 struct RunsView: View {
     @EnvironmentObject private var relay: RelayStore
-    @State private var jobs: [WorkflowRemoteJob] = []
-    @State private var errorMessage: String?
+    @StateObject private var snapshots = RelaySnapshotStore<[WorkflowRemoteJob]>()
+    @State private var path: [String] = []
+
+    private var jobs: [WorkflowRemoteJob] { snapshots.value(for: relay.connectionID) ?? [] }
+    private var errorMessage: String? { snapshots.errorMessage(for: relay.connectionID) }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 ForEach(jobs, id: \.jobID) { job in
                     NavigationLink(value: job.jobID) {
@@ -50,19 +53,22 @@ struct RunsView: View {
                 RunDetailView(jobID: jobID)
             }
             .refreshable { await load() }
-            .task { await load() }
+            .task(id: relay.connectionID) { await load() }
         }
+        .onChange(of: relay.connectionID) { path = [] }
     }
 
     private func load() async {
-        guard let client = relay.client else { return }
-        do {
-            jobs = try await client.list(limit: 50)
-            errorMessage = nil
-        } catch let error as RelayClientError {
-            errorMessage = AppErrorText.presentable(error.message)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        guard let client = relay.client else { snapshots.reset(); return }
+        let connectionID = relay.connectionID
+        await snapshots.load(
+            connectionID: connectionID,
+            read: { try await client.list(limit: 50) },
+            isCurrentConnection: { relay.connectionID == connectionID },
+            presentError: { error in
+                if let error = error as? RelayClientError { return AppErrorText.presentable(error.message) }
+                return error.localizedDescription
+            }
+        )
     }
 }
