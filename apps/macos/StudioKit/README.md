@@ -116,6 +116,13 @@ clears references to deleted rows. `StudioFileExport` honors an explicit file
 destination and preserves existing names during folder exports. It reports missing
 sources and copy failures without modifying original artifacts.
 
+`StudioCrashReporter` owns one MetricKit subscription per opt-in lifetime.
+Disabling capture closes that subscriber permanently, so late callbacks cannot
+write reports after opt-out or join a later subscription. Deleting reports also
+invalidates pending deliveries, including callbacks still encoding a payload,
+without disabling capture. Each payload gets a unique filename so batches cannot
+overwrite reports that share a timestamp.
+
 Run `swift test --filter StudioPromptTaskControllerTests` for prompt journeys.
 The full repository gate also checks command argument fixtures, persistence,
 job behavior, and view contracts. See

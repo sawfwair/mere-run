@@ -1655,7 +1655,10 @@ and recent run outcomes. It contains no configuration values, API keys, or
 tokens; command previews are already secret-masked when they are recorded.
 Settings adds opt-in local crash and hang capture over MetricKit. It is off
 until enabled, writes payloads to Application Support, never transmits them, and
-lets the user reveal or delete them in one action.
+lets the user reveal or delete them in one action. Disabling capture rejects
+pending and late callbacks. Deleting reports rejects pending deliveries while
+keeping capture enabled, so queued reports cannot restore the deleted files.
+Reports received together keep separate files even when their timestamps match.
 
 The packaged app embeds Sparkle and exposes **Check for Updates…** in the app
 menu. Release builds use the stable HTTPS appcast, automatic daily discovery,
