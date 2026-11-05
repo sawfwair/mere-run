@@ -67,6 +67,10 @@ A relay connection change stops observation of a remote reply and leaves an
 on-device reply running. Submission and reply polling use the same captured
 client. The pending bubble describes the active turn's lane even when the next
 turn's model selection changes.
+Cancelling reply observation requests cancellation of the submitted relay job
+from a separate task, including when an in-flight URLSession request reports
+the cancellation as a transport error. Retired connections cannot use replacement
+credentials for that cleanup request.
 
 Runs and Fleet accept only the latest refresh for the active relay connection.
 Connection changes hide the previous account's snapshot and errors immediately,

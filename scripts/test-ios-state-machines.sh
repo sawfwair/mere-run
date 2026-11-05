@@ -9,6 +9,7 @@ trap 'rm -rf "$test_package"' EXIT
 mkdir "$test_package/Tests"
 cp "$repo_root/apps/ios/MereRunStudio/App/RuntimeResidencyState.swift" \
    "$repo_root/apps/ios/MereRunStudio/App/ChatTurnStore.swift" \
+   "$repo_root/apps/ios/MereRunStudio/App/RemoteChatReply.swift" \
    "$repo_root/apps/ios/MereRunStudio/App/RelaySnapshotStore.swift" \
    "$repo_root/apps/ios/MereRunStudio/App/PendingModelDownloadStore.swift" \
    "$repo_root/apps/ios/MereRunStudio/App/ModelDownloadOperation.swift" \
@@ -17,6 +18,7 @@ cp "$repo_root/apps/ios/MereRunStudio/App/RuntimeResidencyState.swift" \
    "$repo_root/apps/ios/MereRunStudio/App/RunSnapshotPoller.swift" \
    "$repo_root/apps/ios/MereRunStudioTests/RuntimeResidencyStateTests.swift" \
    "$repo_root/apps/ios/MereRunStudioTests/ChatTurnStoreTests.swift" \
+   "$repo_root/apps/ios/MereRunStudioTests/RemoteChatReplyTests.swift" \
    "$repo_root/apps/ios/MereRunStudioTests/RelaySnapshotStoreTests.swift" \
    "$repo_root/apps/ios/MereRunStudioTests/ModelDownloadOperationTests.swift" \
    "$repo_root/apps/ios/MereRunStudioTests/PendingModelDownloadStoreTests.swift" \

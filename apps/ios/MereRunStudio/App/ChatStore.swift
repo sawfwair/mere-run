@@ -53,16 +53,14 @@ final class ChatStore: ObservableObject {
             var arguments: [String: WorkflowValue] = ["prompt": .string(self.renderTranscript(messages))]
             if !model.isEmpty { arguments["model"] = .string(model) }
             let job = try await self.store.submit(kind: "text.generate", arguments: arguments, using: client)
-            do {
+            return try await RemoteChatReply.observe(read: {
                 try Task.checkCancellation()
                 let reply = try await self.awaitReply(jobID: job.jobID, client: client, onDelta: onDelta)
                 return ChatTurnStore.Reply(text: reply)
-            } catch is CancellationError {
-                // Nobody observes this reply any more. Stop it on the fleet from an unstructured
-                // task, since this one is cancelled; a retired connection's credentials refuse it.
-                Task { _ = try? await client.cancel(jobID: job.jobID) }
-                throw CancellationError()
-            }
+            }, cancelJob: {
+                // A retired connection's credentials refuse cancellation of its old job.
+                _ = try? await client.cancel(jobID: job.jobID)
+            })
         }, presentError: AppErrorText.presentable)
     }
 

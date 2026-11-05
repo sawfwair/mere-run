@@ -17,10 +17,12 @@ final class ModelDownloadFailureTests: XCTestCase {
         }
     }
 
-    func testBackgroundTransferServerUnavailabilityResumesOnEveryPlatform() {
+    #if !canImport(FoundationNetworking)
+    func testBackgroundTransferServerUnavailabilityResumesOnSupportedPlatforms() {
         XCTAssertTrue(ManagedModelResolver.canResumeDownload(after: HubBackgroundTransferError.httpStatus(503)))
         XCTAssertFalse(ManagedModelResolver.canResumeDownload(after: HubBackgroundTransferError.httpStatus(404)))
     }
+    #endif
 
     func testInvalidCredentialsCertificatesAndPayloadsDoNotAutomaticallyResume() {
         let errors: [Error] = [URLError(.serverCertificateUntrusted), Hub.HubClientError.authorizationRequired,
