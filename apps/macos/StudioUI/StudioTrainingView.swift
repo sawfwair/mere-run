@@ -364,6 +364,8 @@ struct StudioTrainingView: View {
         }
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
+        // Run ▸ Run (⌘↩) starts the page's training, not the Command view's template draft.
+        .focusedSceneValue(\.studioPageRun, StudioPageRun(isEnabled: !isRunning && !readiness.blocksRun, run: startTraining))
         .onReceive(refreshTimer) { _ in refreshSnapshot() }
         .onReceive(controller.runCompletions) { result in
             guard Self.trainingTemplates.contains(result.templateID) else { return }
@@ -786,7 +788,6 @@ struct StudioTrainingView: View {
                     }
                     .buttonStyle(.mereSecondary)
                     .help("Stop the training run (⌘.)")
-                    .keyboardShortcut(".", modifiers: .command)
                     .accessibilityLabel("Stop training")
                 } else {
                     Button {
@@ -796,7 +797,6 @@ struct StudioTrainingView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.merePrimary)
-                    .keyboardShortcut(.return, modifiers: .command)
                     .help(readiness.blocksRun ? readiness.message(titles: titles) : "Start training (⌘↩)")
                 }
             }

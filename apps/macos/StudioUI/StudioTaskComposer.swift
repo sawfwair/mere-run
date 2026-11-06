@@ -285,7 +285,6 @@ struct StudioTaskComposer: View {
         .help(readiness.blocksRun ? readiness.message(titles: titles) : "Run (⌘↩)")
         .accessibilityLabel("Run")
         .accessibilityHint(readiness.blocksRun ? readiness.message(titles: titles) : "")
-        .keyboardShortcut(.return, modifiers: .command)
     }
 
     private var sendEnabled: Bool {

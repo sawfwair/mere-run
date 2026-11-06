@@ -128,6 +128,7 @@ struct StudioLayaDecisionView: View {
                 .menuIndicator(.hidden)
                 .fixedSize()
                 .help("Example, import, and export")
+                .accessibilityLabel("Example, import, and export")
             }
             Text("Ask choice, score, and yes-or-no questions about a text. Each answer comes with its probabilities.")
                 .font(MereRunTheme.captionFont)

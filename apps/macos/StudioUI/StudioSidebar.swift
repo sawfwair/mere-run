@@ -85,18 +85,19 @@ struct StudioSidebar: View {
         let unavailable = unavailableMessages[domain]
         let selected = domain == selectedDomain
         return HStack(spacing: 10) {
+            // `.body` in a sidebar list follows System Settings ▸ Appearance ▸ Sidebar icon size.
             Image(systemName: domain.systemImage)
-                .font(.system(size: 13, weight: .medium))
-                .frame(width: 16, height: 16)
+                .font(.body.weight(.medium))
+                .frame(minWidth: 16, minHeight: 16)
                 .foregroundStyle(selected ? MereRunTheme.onAccent : MereRunTheme.textMuted)
             Text(domain.title)
-                .font(.system(size: 13, weight: selected ? .semibold : .medium))
+                .font(.body.weight(selected ? .semibold : .medium))
                 .foregroundStyle(selected ? MereRunTheme.onAccent : MereRunTheme.textPrimary)
                 .lineLimit(1)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 10)
-        .frame(height: Self.rowHeight)
+        .frame(minHeight: Self.rowHeight)
         .background {
             RoundedRectangle(cornerRadius: MereRunTheme.Radius.md)
                 .fill(selected ? MereRunTheme.accent : Color.clear)

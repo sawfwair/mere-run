@@ -137,6 +137,7 @@ struct StudioGLiNERClassificationView: View {
                 .menuIndicator(.hidden)
                 .fixedSize()
                 .help("Example, import, and export")
+                .accessibilityLabel("Example, import, and export")
             }
             Text("GLiNER2.5 Decide scores labels you supply for each task. Select one label or multiple labels above a threshold.")
                 .font(MereRunTheme.captionFont)

@@ -1186,8 +1186,8 @@ final class StudioSnapshotTests: XCTestCase {
     /// The Settings scene content at the width the app gives it.
     func testSettingsSnapshots() throws {
         for appearance in StudioSnapshotAppearance.allCases {
-            for (tab, suffix) in [(MereRunSettingsView.Tab.general, ""), (.server, "-server")] {
-                let view = MereRunSettingsView(tab: tab)
+            for (tab, suffix) in [(MereRunSettingsView.Tab.general, ""), (.models, "-models"), (.server, "-server"), (.advanced, "-advanced")] {
+                let view = MereRunSettingsView(tab: tab, automaticUpdateChecks: .constant(true))
                     .environmentObject(fixture.controller)
                     .environmentObject(fixture.crashReporter)
                     .frame(width: Self.settingsSize.width)

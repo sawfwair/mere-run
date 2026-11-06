@@ -270,7 +270,6 @@ struct StudioBatchRunButton: View {
         .help(blockedReason ?? "Run once for each of the \(count) files (⌘↩)")
         .accessibilityLabel("Run \(count) files")
         .accessibilityHint(blockedReason ?? "Runs the task once for each file")
-        .keyboardShortcut(.return, modifiers: .command)
     }
 }
 

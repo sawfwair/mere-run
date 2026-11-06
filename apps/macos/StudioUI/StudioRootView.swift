@@ -1172,8 +1172,8 @@ private struct StudioWorkspaceView: View {
             canShowCommand: baseTaskRequest != nil,
             open: { navigation.open(destination: $0) },
             openDomain: { navigation.open(domain: $0) },
-            newChat: startNewConversation,
-            canNewChat: showsPromptWorkspace && mode.isConversational,
+            newChat: startNewChat,
+            canNewChat: true,
             runComposer: runStudioCommand,
             canRun: canRunCurrentTask,
             stop: stopCurrentRun,
@@ -1965,6 +1965,18 @@ private struct StudioWorkspaceView: View {
         if activation.mode != mode { navigation.open(task: activation.mode.task) }
         studioError = nil
         promptFocused = true
+    }
+
+    /// File ▸ New Chat: a new thread here on Chat or Code, otherwise Chat ▸ Chat on a new thread.
+    /// The mode activates now rather than on the destination change, so the new thread replaces
+    /// the one Chat would restore. A private session starts empty when the task changes.
+    private func startNewChat() {
+        if !(showsPromptWorkspace && mode.isConversational) {
+            navigation.open(task: .chatChat)
+            guard controller.privateSession == nil else { return }
+            activateMode(.chat)
+        }
+        startNewConversation()
     }
 
     /// Starts a fresh, not-yet-persisted conversation (no library row until the first message).

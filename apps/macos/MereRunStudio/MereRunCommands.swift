@@ -21,6 +21,7 @@ struct MereRunCommands: Commands {
     @Environment(\.openWindow) private var openWindow
     @FocusedValue(\.studioActions) private var actions: StudioSceneActions?
     @FocusedValue(\.studioLibraryDeletion) private var libraryDeletion: StudioLibraryDeletion?
+    @FocusedValue(\.studioPageRun) private var pageRun: StudioPageRun?
 
     /// The output of the run the Library has selected, for File ▸ Quick Look.
     private var selectedOutput: URL? {
@@ -38,6 +39,21 @@ struct MereRunCommands: Commands {
             actions.showLibrary.wrappedValue = true
         }
         navigation.requestSearchFocus(field)
+    }
+
+    /// Go ▸ Next Task (1) or Previous Task (-1): the current domain's tasks, wrapping around.
+    private func adjacentTask(_ offset: Int) -> StudioTask? {
+        actions.flatMap { StudioKeyboardShortcuts.adjacentTask(to: $0.destination.task, offset: offset) }
+    }
+
+    /// A View menu item that shows or hides a column, titled the way the system's sidebar item is.
+    private func columnItem(_ name: String, _ id: StudioShortcutID, isShown: Binding<Bool>?, isEnabled: Bool) -> some View {
+        let shown = isShown?.wrappedValue == true
+        return Button(shown ? "Hide \(name)" : "Show \(name)") {
+            isShown?.wrappedValue.toggle()
+        }
+        .studioShortcut(id)
+        .disabled(!isEnabled)
     }
 
     /// Writes a secret-free support report the user can attach to an issue.
@@ -110,8 +126,9 @@ struct MereRunCommands: Commands {
 
 
         CommandGroup(before: .windowList) {
-            Button("Open Studio") { openWindow(id: "studio") }
-                .disabled(isStudioOpen)
+            Button("Studio") {
+                StudioMainWindow.bringForward(isOpen: isStudioOpen, openWindow: openWindow)
+            }
             // The Console carries the current task's command when a Studio window can hand it one;
             // from anywhere else it opens as it was left.
             Button("Command Console") {
@@ -123,18 +140,14 @@ struct MereRunCommands: Commands {
 
         // The system Show/Hide Sidebar item already lives in this group (NavigationSplitView owns it).
         CommandGroup(after: .sidebar) {
-            Toggle("Show Library", isOn: actions?.showLibrary ?? .constant(false))
-                .studioShortcut(.showLibrary)
-                .disabled(actions?.canShowLibrary != true)
-
-            Toggle("Show Inspector", isOn: actions?.showInspector ?? .constant(false))
-                .studioShortcut(.showInspector)
-                .disabled(actions?.canShowInspector != true)
-
+            columnItem("Library", .showLibrary, isShown: actions?.showLibrary, isEnabled: actions?.canShowLibrary == true)
+            columnItem(
+                "Inspector", .showInspector, isShown: actions?.showInspector, isEnabled: actions?.canShowInspector == true
+            )
             // ⌥⌘C is always the task's Command view; the Console window is Window ▸ Command Console.
-            Toggle("Show Command View", isOn: actions?.showCommand ?? .constant(false))
-                .studioShortcut(.showCommandView)
-                .disabled(actions?.canShowCommand != true)
+            columnItem(
+                "Command View", .showCommandView, isShown: actions?.showCommand, isEnabled: actions?.canShowCommand == true
+            )
 
             Divider()
         }
@@ -151,6 +164,15 @@ struct MereRunCommands: Commands {
 
             if let actions, actions.destination.domain.tasks.count > 1 {
                 Divider()
+                Button("Next Task") {
+                    if let task = adjacentTask(1) { actions.open(task.destination) }
+                }
+                .studioShortcut(.nextTask)
+                Button("Previous Task") {
+                    if let task = adjacentTask(-1) { actions.open(task.destination) }
+                }
+                .studioShortcut(.previousTask)
+                Divider()
                 ForEach(actions.destination.domain.tasks) { task in
                     Toggle(
                         task.title,
@@ -166,11 +188,12 @@ struct MereRunCommands: Commands {
         }
 
         CommandMenu("Run") {
+            // A page whose own form runs (Training, Voices) publishes its Run; otherwise the task's.
             Button("Run") {
-                actions?.runComposer()
+                if let pageRun { pageRun.run() } else { actions?.runComposer() }
             }
             .studioShortcut(.run)
-            .disabled(actions?.canRun != true)
+            .disabled(pageRun.map { !$0.isEnabled } ?? (actions?.canRun != true))
 
             Button("Stop") {
                 actions?.stop()
@@ -204,7 +227,7 @@ struct MereRunCommands: Commands {
                 openWindow(id: StudioKeyboardShortcutsWindow.id)
             }
 
-            Link("mere.run", destination: URL(string: "https://mere.run")!)
+            Link("mere.run Website", destination: URL(string: "https://mere.run")!)
             Divider()
             Button("Export Diagnostics…") { exportDiagnostics() }
         }

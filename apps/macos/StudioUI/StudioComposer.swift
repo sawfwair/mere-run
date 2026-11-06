@@ -595,7 +595,6 @@ struct StudioComposer: View {
         .help(sendHelp)
         .accessibilityLabel("Run")
         .accessibilityHint(accessibilityRunHint)
-        .keyboardShortcut(.return, modifiers: .command)
     }
 
     private var sendEnabled: Bool {

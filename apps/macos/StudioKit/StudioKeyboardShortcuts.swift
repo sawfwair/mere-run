@@ -86,6 +86,8 @@ package enum StudioShortcutID: Hashable, Sendable {
     case showInspector
     case showCommandView
     case domain(StudioDomain)
+    case nextTask
+    case previousTask
     case run
     case stop
     case openLastOutput
@@ -137,7 +139,8 @@ package enum StudioKeyboardShortcuts {
                 id: .showLibrary, menu: "View", title: "Show Library", combo: .init("l", [.shift, .command]), context: .window
             ),
             StudioShortcut(
-                id: .showInspector, menu: "View", title: "Show Inspector", combo: .init("e", .command), context: .window
+                id: .showInspector, menu: "View", title: "Show Inspector", combo: .init("i", [.option, .command]),
+                context: .window
             ),
             StudioShortcut(
                 id: .showCommandView, menu: "View", title: "Show Command View",
@@ -149,6 +152,13 @@ package enum StudioKeyboardShortcuts {
             return StudioShortcut(id: .domain(domain), menu: "Go", title: domain.title, combo: combo, context: .window)
         }
         let rest: [StudioShortcut] = [
+            StudioShortcut(
+                id: .nextTask, menu: "Go", title: "Next Task", combo: .init("]", [.shift, .command]), context: .window
+            ),
+            StudioShortcut(
+                id: .previousTask, menu: "Go", title: "Previous Task", combo: .init("[", [.shift, .command]),
+                context: .window
+            ),
             StudioShortcut(id: .run, menu: "Run", title: "Run", combo: .init(.returnKey, .command), context: .window),
             StudioShortcut(id: .stop, menu: "Run", title: "Stop", combo: .init(".", .command), context: .window),
             StudioShortcut(
@@ -213,6 +223,15 @@ package enum StudioKeyboardShortcuts {
         return StudioKeyCombo(key, modifiers)
     }
 
+    /// The task Go ▸ Next Task (`offset` 1) or Previous Task (-1) opens from `task`: the next or
+    /// previous of its domain's tasks, wrapping around. nil when the domain has one task.
+    package static func adjacentTask(to task: StudioTask, offset: Int) -> StudioTask? {
+        let tasks = task.domain.tasks
+        guard tasks.count > 1, let index = tasks.firstIndex(of: task) else { return nil }
+        let next = (index + offset) % tasks.count
+        return tasks[next < 0 ? next + tasks.count : next]
+    }
+
     /// The search ⌘F focuses on `task`: its page's own list, or the Library column beside a
     /// Generate, Converse, or Analyze task. nil where there is no list to search.
     package static func findField(for task: StudioTask) -> StudioSearchField? {
@@ -272,6 +291,8 @@ package enum StudioKeyboardShortcuts {
         .init("t", .command): "Show Fonts",
         .init(";", .command): "Check Spelling",
         .init(":", .command): "Spelling and Grammar",
+        .init("e", .command): "Use Selection for Find",
+        .init("g", .command): "Find Next",
     ]
 
     /// Every clash the table has, described; empty when it is clean. Two shortcuts clash when

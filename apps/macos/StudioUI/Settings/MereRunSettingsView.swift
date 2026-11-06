@@ -13,11 +13,16 @@ package struct MereRunSettingsView: View {
     }
 
     /// `tab` is where the window opens: General, unless a snapshot board asks for another.
-    package init(tab: Tab = .general) {
+    /// `automaticUpdateChecks` is the updater's own setting; nil, in a build without an updater,
+    /// leaves the toggle out.
+    package init(tab: Tab = .general, automaticUpdateChecks: Binding<Bool>? = nil) {
         _tab = State(initialValue: tab)
+        self.automaticUpdateChecks = automaticUpdateChecks
     }
 
     @State private var tab: Tab
+    private let automaticUpdateChecks: Binding<Bool>?
+    @State private var confirmsReportDeletion = false
 
     @EnvironmentObject private var crashReporter: StudioCrashReporter
     @EnvironmentObject private var controller: MereRunController
@@ -80,23 +85,6 @@ package struct MereRunSettingsView: View {
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
         }
-        EditorSection("Command line") {
-            PathField(label: "command line", path: $controller.cliPath, placeholder: "Auto-detect executable", mode: .openFile([.unixExecutable, .item]))
-            Text("The app uses a bundled `mere.run` first, then nearby SwiftPM build products, common install locations, and the current package checkout.")
-                .font(MereRunTheme.captionFont)
-                .foregroundStyle(MereRunTheme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        EditorSection("Working directory") {
-            PathField(label: "working directory", path: $controller.workingDirectory, placeholder: "Same as the app", mode: .openDirectory)
-        }
-        EditorSection("Models root") {
-            PathField(label: "models root", path: $controller.modelsRoot, placeholder: "Default: the managed model store", mode: .openDirectory)
-            Text("A folder of model links or local model files to search before the managed store.")
-                .font(MereRunTheme.captionFont)
-                .foregroundStyle(MereRunTheme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-        }
         EditorSection("Where generations are saved") {
             PathField(label: "output folder", path: $outputRoot, placeholder: outputRootPlaceholder, mode: .openDirectory)
             Text("Leave this empty to file work by what it is: pictures and clips in `~/Pictures/mere.run`, audio in `~/Music/mere.run`, everything else in `~/Documents/mere.run`, each under a folder named for the domain. Set a folder to keep every domain together there instead. Runs already in the Library keep the paths they recorded.")
@@ -104,6 +92,16 @@ package struct MereRunSettingsView: View {
                 .foregroundStyle(MereRunTheme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        if let automaticUpdateChecks {
+            EditorSection("Updates") {
+                Toggle("Automatically check for updates", isOn: automaticUpdateChecks)
+                Text("mere.run checks for a new version once a day and asks before installing it.")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        menuBarAndStartup
     }
 
     private var outputRootPlaceholder: String {
@@ -164,6 +162,13 @@ package struct MereRunSettingsView: View {
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
         }
+        EditorSection("Models root") {
+            PathField(label: "models root", path: $controller.modelsRoot, placeholder: "Default: the managed model store", mode: .openDirectory)
+            Text("A folder of model links or local model files to search before the managed store.")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     @ViewBuilder
@@ -213,6 +218,10 @@ package struct MereRunSettingsView: View {
         .onChange(of: controller.runtimeHost) { _, host in runtimeHost = host }
         .onChange(of: controller.runtimePort) { _, port in runtimePort = port }
         .onChange(of: controller.runtimeAPIKey) { _, key in runtimeAPIKey = key }
+    }
+
+    @ViewBuilder
+    private var menuBarAndStartup: some View {
         EditorSection("Menu bar and startup") {
             Toggle("Show mere.run in the menu bar", isOn: $showsMenuBarExtra)
             Text("Start, stop, and watch the servers, their models, and this Mac's load from the menu bar, with or without a Studio window open.")
@@ -257,7 +266,7 @@ package struct MereRunSettingsView: View {
             }
             loginItemError = nil
         } catch {
-            loginItemError = "mere.run could not change its login item: \(error.localizedDescription)"
+            loginItemError = "Couldn't change the login item. \(error.localizedDescription)"
         }
         loginItemStatus = SMAppService.mainApp.status
     }
@@ -285,6 +294,16 @@ package struct MereRunSettingsView: View {
 
     @ViewBuilder
     private var advancedTab: some View {
+        EditorSection("Command line") {
+            PathField(label: "command line", path: $controller.cliPath, placeholder: "Auto-detect executable", mode: .openFile([.unixExecutable, .item]))
+            Text("The app uses a bundled `mere.run` first, then nearby SwiftPM build products, common install locations, and the current package checkout.")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        EditorSection("Working directory") {
+            PathField(label: "working directory", path: $controller.workingDirectory, placeholder: "Same as the app", mode: .openDirectory)
+        }
         EditorSection("Install") {
             VStack(alignment: .leading, spacing: 8) {
                 Label(
@@ -416,10 +435,19 @@ package struct MereRunSettingsView: View {
                     NSWorkspace.shared.activateFileViewerSelecting([directory])
                 }
                 .buttonStyle(.mereSecondary)
-                Button("Delete reports") { crashReporter.deleteStoredPayloads() }
+                Button("Delete reports") { confirmsReportDeletion = true }
                     .buttonStyle(.mereSecondary)
                     .disabled(crashReporter.storedPayloadCount == 0)
             }
+        }
+        .confirmationDialog(
+            "Delete the stored crash and hang reports?",
+            isPresented: $confirmsReportDeletion,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Reports", role: .destructive) { crashReporter.deleteStoredPayloads() }
+        } message: {
+            Text("This removes every report from your Application Support folder. You can't undo this.")
         }
         .task { crashReporter.refreshStoredPayloadCount() }
     }

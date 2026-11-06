@@ -264,7 +264,7 @@ Mach host statistics every two seconds; the decode rate is the change in
 generated tokens between endpoint polls); the resident text models (each with
 Unload), sidecars, and a Load menu of the server's other text models; the same
 job rows as the Activity popover, and Open Studio, Show Activity (which opens
-the Studio window with the run queue showing), Server Settings…, and Quit. While
+the Studio window with the run queue showing), Open Server, and Quit. While
 runs are in flight the glyph carries their count, and so does the Dock icon's
 badge (`StudioRunQueueCounter`: running plus queued inference runs, republished
 only when the number changes).
@@ -273,7 +273,7 @@ disagree. Quit asks first while a server Studio started or an inference job is
 still running, since every child process ends with the app; the app delegate owns
 the session, so that holds with no Studio window. With the extra in place,
 mere.run leaves the Dock while no window is open and returns when one opens.
-Settings ▸ Server ▸ Menu bar and startup turns off the extra or the Dock hiding,
+Settings ▸ General ▸ Menu bar and startup turns off the extra or the Dock hiding,
 starts the API server when mere.run opens (unless something already answers on
 the endpoint), and registers mere.run as a login item (`SMAppService`; only the
 packaged app can register). A server Studio started that exits on its own posts
@@ -480,16 +480,22 @@ registered.
 
 Menus follow macOS convention: File ▸ New Chat, Quick Look, Delete from
 Library…, and Import Receipt…; Edit ▸ Find in List and Search Library; View ▸
-Show Library, Show Inspector, Show Command View, and the system sidebar toggle;
-Go ▸ every domain plus the current domain's tasks; Run ▸ Run, Stop, Open Last
-Output, and Reveal Last Output in Finder, acting on the current composer;
-Window ▸ Open Studio and Command Console; Help ▸ mere.run Guide, Keyboard
-Shortcuts, the mere.run link, and Export Diagnostics…. The keys are in
-[Keyboard shortcuts](#keyboard-shortcuts). ⌥⌘C is always the task's Command
-view, disabled on the few tasks without one. Settings has
-General, Models, Server, and Advanced tabs; its path settings are pickers with
-Choose…, Reveal, and Reset, and the Server tab's endpoint and key
-apply on Apply or Return, not per keystroke. First run shows the Image empty state with its "Get the model"
+Show or Hide Library, Inspector, and Command View, titled like the system
+sidebar item beside them; Go ▸ every domain, Next Task and Previous Task, and
+the current domain's tasks; Run ▸ Run, Stop, Open Last Output, and Reveal Last
+Output in Finder, acting on the current composer; Window ▸ Studio (always
+enabled: it brings the Studio window forward or opens one) and Command Console;
+Help ▸ mere.run Guide, Keyboard Shortcuts, mere.run Website, and Export
+Diagnostics…. New Chat works from any task: on Chat or Code it starts a new
+thread there, and elsewhere it opens Chat ▸ Chat on a new thread. The keys are
+in [Keyboard shortcuts](#keyboard-shortcuts). ⌥⌘C is always the task's Command
+view, disabled on the few tasks without one. Settings has General (output
+folder, update checks, menu bar and startup), Models (Hugging Face, model
+payload storage, models root), Server (the runtime endpoint), and Advanced
+(command line, working directory, install, configuration, diagnostics) tabs;
+its path settings are pickers with Choose…, Reveal, and Reset, the Server tab's
+endpoint and key apply on Apply or Return, not per keystroke, and Delete
+reports asks first. First run shows the Image empty state with its "Get the model"
 path and a one-time dismissible banner; there is no Welcome sheet.
 
 ### Keyboard shortcuts
@@ -511,9 +517,10 @@ feed has focus. ↑ and ↓ act only in the composer's prompt.
 | ⌘L | Search Library, showing the Library column first | Edit |
 | ⌃⌘S | Show or hide the sidebar | View |
 | ⇧⌘L | Show or hide the Library column | View |
-| ⌘E | Show or hide the inspector | View |
+| ⌥⌘I | Show or hide the inspector | View |
 | ⌥⌘C | Show or hide the Command view | View |
 | ⌘1–⌘9, ⌥⌘1–⌥⌘6 | The sidebar's sections, in sidebar order | Go |
+| ⇧⌘] / ⇧⌘[ | Next Task / Previous Task in the current section, wrapping around | Go |
 | ⌘↩ | Run the current task | Run |
 | ⌘. | Stop | Run |
 | ⇧⌘O | Open Last Output | Run |
@@ -524,8 +531,10 @@ feed has focus. ↑ and ↓ act only in the composer's prompt.
 | ↑ / ↓ | Recall an earlier prompt on this page / step back to what you typed | Composer prompt, on its first / last line |
 
 ⇧⌘L takes precedence over the system's Search With Google service while
-Studio is in front. Studio has no Find panel, so ⌘E does not shadow Use
-Selection for Find.
+Studio is in front. ⌘E (Use Selection for Find) and ⌘G (Find Next) stay with
+text fields. ⌘↩ and ⌘. are bound only in the Run menu: a page whose own form
+runs, such as Training or Voices, publishes its Run as a focused scene value
+(`StudioPageRun`) that the menu prefers over the task's command.
 
 ## Composer, feed, and Analyze
 
@@ -724,7 +733,7 @@ first, naming the thread.
 
 ## Inspector, Command view, and Command Console
 
-The **inspector** (⌘E, the header's Inspector toggle, remembered per task under
+The **inspector** (⌥⌘I, the header's Inspector toggle, remembered per task under
 `studio.inspectorTasks`) is a 300pt column rendered from the capability
 contract. `StudioKit/StudioContractSchema.swift` binds each option
 `MereRunCapabilityCatalog` declares to the `StudioDraft` field the app keeps it

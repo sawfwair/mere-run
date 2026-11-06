@@ -27,6 +27,10 @@ final class StudioKeyboardShortcutsTests: XCTestCase {
         XCTAssertEqual(StudioKeyboardShortcuts.conflicts(in: [
             shortcut("One", .init(.space), .list), shortcut("Two", .init(.space), .prompt),
         ]), [], "two views never have focus at once")
+        XCTAssertEqual(StudioKeyboardShortcuts.conflicts(in: [shortcut("Inspect", .init("e", .command), .window)]).count, 1,
+                       "⌘E is Use Selection for Find in every text view")
+        XCTAssertEqual(StudioKeyboardShortcuts.conflicts(in: [shortcut("Go", .init("g", .command), .window)]).count, 1,
+                       "⌘G is Find Next")
     }
 
     func testTheSettledKeys() {
@@ -36,7 +40,9 @@ final class StudioKeyboardShortcutsTests: XCTestCase {
         XCTAssertEqual(symbols(.find), "⌘F")
         XCTAssertEqual(symbols(.quickLookSelection), "Space")
         XCTAssertEqual(symbols(.deleteFromLibrary), "⌘⌫")
-        XCTAssertEqual(symbols(.showInspector), "⌘E")
+        XCTAssertEqual(symbols(.showInspector), "⌥⌘I")
+        XCTAssertEqual(symbols(.nextTask), "⇧⌘]")
+        XCTAssertEqual(symbols(.previousTask), "⇧⌘[")
         XCTAssertEqual(symbols(.showCommandView), "⌥⌘C")
         XCTAssertEqual(symbols(.showLibrary), "⇧⌘L")
         XCTAssertEqual(StudioKeyboardShortcuts.shortcut(.deleteFromLibrary).context, .list)
@@ -71,6 +77,40 @@ final class StudioKeyboardShortcutsTests: XCTestCase {
             return true
         }
         XCTAssertEqual(rows.count, listed.count + 1)
-        XCTAssertEqual(sections.first { $0.title == "Go" }?.rows.map(\.keys), ["⌘1–⌘9, ⌥⌘1–⌥⌘6"])
+        XCTAssertEqual(sections.first { $0.title == "Go" }?.rows.map(\.keys), ["⌘1–⌘9, ⌥⌘1–⌥⌘6", "⇧⌘]", "⇧⌘["])
+    }
+
+    func testNextAndPreviousTaskCycleTheDomainsTasks() throws {
+        for domain in StudioDomain.allCases {
+            let tasks = domain.tasks
+            guard tasks.count > 1 else {
+                XCTAssertNil(StudioKeyboardShortcuts.adjacentTask(to: try XCTUnwrap(tasks.first), offset: 1),
+                             "\(domain.title) has nothing to cycle")
+                continue
+            }
+            var forward: [StudioTask] = []
+            var task = try XCTUnwrap(tasks.first)
+            for _ in tasks {
+                forward.append(task)
+                task = try XCTUnwrap(StudioKeyboardShortcuts.adjacentTask(to: task, offset: 1))
+            }
+            XCTAssertEqual(forward, tasks, "Next Task walks \(domain.title) in order")
+            XCTAssertEqual(task, tasks.first, "and wraps from the last task to the first")
+            XCTAssertEqual(StudioKeyboardShortcuts.adjacentTask(to: tasks[0], offset: -1), tasks.last,
+                           "Previous Task wraps from the first task to the last")
+            XCTAssertEqual(StudioKeyboardShortcuts.adjacentTask(to: tasks[1], offset: -1), tasks[0])
+        }
+    }
+
+    func testEveryTaskHasATooltipThatTellsItFromItsSiblings() {
+        for domain in StudioDomain.allCases {
+            let tips = domain.tasks.map(\.helpText)
+            for (task, tip) in zip(domain.tasks, tips) {
+                XCTAssertFalse(tip.isEmpty, "\(task) has a tooltip")
+                XCTAssertFalse(tip.hasSuffix("."), "\(task)'s tooltip is a phrase, not a sentence")
+            }
+            XCTAssertEqual(Set(tips).count, tips.count, "\(domain.title)'s tasks have distinct tooltips: \(tips)")
+        }
+        XCTAssertEqual(StudioTask.musicSeparate.helpText, "Pull the mix apart")
     }
 }

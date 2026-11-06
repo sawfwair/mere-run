@@ -67,6 +67,10 @@ struct StudioVoicesView: View {
         activeJob?.request.templateID == .speechProfileCreate
     }
 
+    private var showsCreateForm: Bool {
+        isCreating || (profiles.isEmpty && selectedProfile == nil)
+    }
+
     private var deletingProfileID: UUID? {
         guard let job = activeJob, job.request.templateID == .speechProfileDelete,
               let form = job.request.execution?.form else { return nil }
@@ -96,6 +100,8 @@ struct StudioVoicesView: View {
         }
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
+        // While the create form shows, Run ▸ Run (⌘↩) creates the voice from it.
+        .focusedSceneValue(\.studioPageRun, showsCreateForm ? StudioPageRun(isEnabled: !isCreatingProfile, run: create) : nil)
         .onAppear {
             jobMonitor.attach(controller.jobs)
             controller.checkReadiness(for: Self.task, requirement: StudioTaskSchema.requirement(for: draft, source: scopeSource))
@@ -236,7 +242,7 @@ struct StudioVoicesView: View {
 
     @ViewBuilder
     private var detail: some View {
-        if isCreating || (profiles.isEmpty && selectedProfile == nil) {
+        if showsCreateForm {
             ScrollView {
                 createForm
                     .frame(maxWidth: 560, alignment: .leading)
@@ -377,7 +383,6 @@ struct StudioVoicesView: View {
                 }
                 .buttonStyle(.merePrimary)
                 .disabled(isCreatingProfile)
-                .keyboardShortcut(.return, modifiers: .command)
             }
         }
     }
