@@ -125,6 +125,18 @@ extension StudioContractBinding where Draft == StudioDraft {
         )
     }
 
+    /// A switch the draft leaves nil until the user sets it; nil reads as off.
+    package static func optionalFlag(_ id: String, _ keyPath: WritableKeyPath<StudioDraft, Bool?>) -> Self {
+        Self(
+            fieldID: id,
+            read: { .flag($0[keyPath: keyPath] ?? false) },
+            write: { draft, value in
+                guard let flag = value.flag else { return }
+                draft[keyPath: keyPath] = flag
+            }
+        )
+    }
+
     /// A flag the CLI states negatively: `--no-timestamps` is on exactly when `timestamps` is off.
     package static func invertedFlag(_ id: String, _ keyPath: WritableKeyPath<StudioDraft, Bool>) -> Self {
         Self(
@@ -317,6 +329,7 @@ package enum StudioContractChoiceTitles {
         "--backend lighton": "LightOnOCR",
         "--backend glm": "GLM-OCR",
         "--backend infinity": "Infinity-Parser2",
+        "--backend unlimited": "Unlimited-OCR-2",
     ]
 }
 
@@ -992,6 +1005,8 @@ package enum StudioContractBindings {
         "--num-frames": .integer("numFrames", \.numFrames),
         "--duration": .number("durationSeconds", \.durationSeconds),
         "--fps": .integer("fps", \.fps),
+        "--enhance-prompt": .optionalFlag("videoEnhancePrompt", \.videoEnhancePrompt),
+        "--lora": .optionalText("videoLoRAs", \.videoLoRAs),
         "--steps": .integer("steps", \.steps),
         "--seed": .integerText("seed", \.seed),
         "--guidance-scale": .number("cfgScale", \.cfgScale),
@@ -1050,11 +1065,18 @@ package enum StudioContractBindings {
         "--daw-bundle": .text("musicDAWBundle", \.musicDAWBundle),
         "--export-format": .text("musicExportFormat", \.musicExportFormat),
         "--no-recipe": .flag("musicNoRecipe", \.musicNoRecipe),
+        "--bpm": .optionalInteger("musicBPM", \.musicBPM),
+        "--keyscale": .optionalText("musicKeyScale", \.musicKeyScale),
+        "--timesignature": .optionalText("musicTimeSignature", \.musicTimeSignature),
+        "--vocal-language": .optionalText("musicVocalLanguage", \.musicVocalLanguage),
+        "--guidance-scale": .optionalNumber("musicGuidanceScale", \.musicGuidanceScale),
     ]) { first, _ in first } }
 
     private static var sfx: [String: StudioContractBinding<StudioDraft>] { model.merging([
+        "--negative-prompt": .text("secondaryText", \.secondaryText),
         "--duration": .number("durationSeconds", \.durationSeconds),
         "--steps": .integer("steps", \.steps),
+        "--cfg": .number("cfgScale", \.cfgScale),
         "--seed": .integerText("seed", \.seed),
     ]) { first, _ in first } }
 
@@ -1065,6 +1087,8 @@ package enum StudioContractBindings {
         "--speaker": .optionalText("voiceSpeaker", \.voiceSpeaker),
         "--ref-audio": .text("refAudioPath", \.refAudioPath),
         "--ref-text": .text("refText", \.refText),
+        "--language": .text("language", \.language),
+        "--temperature": .number("temperature", \.temperature),
         "--seed": .integerText("seed", \.seed),
         "--cfg-scale": .optionalNumber("speechCFGScale", \.speechCFGScale),
         "--save-profile": .text("saveProfileName", \.saveProfileName),
@@ -1074,6 +1098,11 @@ package enum StudioContractBindings {
         "--backend": .text("backend", \.backend),
         "--language": .text("language", \.language),
         "--no-timestamps": .invertedFlag("timestamps", \.timestamps),
+        "--max-tokens": .integer("maxTokens", \.maxTokens),
+        "--task": .optionalText("transcribeTask", \.transcribeTask),
+        "--provider": .optionalText("speechProvider", \.speechProvider),
+        "--beam-size": .optionalInteger("speechBeamSize", \.speechBeamSize),
+        "--keyword": .optionalText("speechKeywords", \.speechKeywords),
     ]) { first, _ in first } }
 
     private static var chat: [String: StudioContractBinding<StudioDraft>] { model.merging([
@@ -1111,9 +1140,25 @@ package enum StudioContractBindings {
         "--top-p": .number("topP", \.topP),
         "--min-p": .number("minP", \.minP),
         "--max-tokens": .integer("maxTokens", \.maxTokens),
+        // `text code` takes only the "show" half of Chat's pair, so it is a switch over the same
+        // draft field: on shows reasoning, off leaves the CLI's default.
+        "--thinking": StudioContractBinding(
+            fieldID: "thinkingMode",
+            read: { .flag($0.thinkingMode == .show) },
+            write: { draft, value in
+                guard let show = value.flag else { return }
+                draft.thinkingMode = show ? .show : .automatic
+            }
+        ),
     ]) { first, _ in first } }
 
-    private static var readImage: [String: StudioContractBinding<StudioDraft>] { model }
+    private static var readImage: [String: StudioContractBinding<StudioDraft>] { model.merging([
+        "--max-tokens": .optionalInteger("readMaxTokens", \.readMaxTokens),
+        "--temperature": .number("temperature", \.temperature),
+        "--top-p": .number("topP", \.topP),
+        "--focus": .optionalText("captionFocus", \.captionFocus),
+        "--trigger-token": .optionalText("captionTriggerToken", \.captionTriggerToken),
+    ]) { first, _ in first } }
 
     private static var findObjects: [String: StudioContractBinding<StudioDraft>] { model }
 
@@ -1125,6 +1170,8 @@ package enum StudioContractBindings {
         "--point": .text("visionPointPrompts", \.visionPointPromptsText),
         "--init-frame": .integer("visionInitFrame", \.visionInitFrameValue),
         "--end-frame": .integerText("visionEndFrame", \.visionEndFrameText),
+        "--show-boxes": .optionalFlag("visionShowBoxes", \.visionShowBoxes),
+        "--multimask": .optionalFlag("visionMultimask", \.visionMultimask),
     ]) { first, _ in first } }
 }
 

@@ -847,6 +847,10 @@ package struct CommandDraft: Equatable, Codable {
     package var h3Steps: Int?
     /// Ordered `image:path`, `video:path`, and `audio:path` reference specifications.
     package var h3ReferenceInputs: [String]?
+    /// LTX runtime LoRAs as `PATH[=STRENGTH]`, one per line or comma-separated, and
+    /// `--enhance-prompt`. Optional preserves older Library rows.
+    package var videoLoRAs: String?
+    package var videoEnhancePrompt: Bool?
     package var modelRoot = ""
     package var referenceMaskPath = ""
     package var drivingVideoPath = ""
@@ -893,6 +897,11 @@ package struct CommandDraft: Equatable, Codable {
     package var speechDiarizationThreshold: Double?
     package var speechDiarizationMinDuration: Double?
     package var speechDiarizationMergeGap: Double?
+    /// Optional fields preserve decoding of Library rows created before Studio bound transcribe's
+    /// `--provider`, `--beam-size`, and `--keyword` (phrases one per line or comma-separated).
+    package var speechProvider: String?
+    package var speechBeamSize: Int?
+    package var speechKeywords: String?
     // Vision chat (vision-capable chat models) and the agentic tool loop for `text chat`.
     package var imagePath = ""
     package var tools = ""

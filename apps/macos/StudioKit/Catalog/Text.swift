@@ -137,6 +137,7 @@ extension CommandArguments {
         args.option(F.topP, format(draft.topP))
         if draft.minP > 0 || draft.samplingOverrides?.contains(F.minP) == true { args.option(F.minP, format(draft.minP)) }
         if !draft.model.isBlank { args.option(F.model, draft.model) }
+        if draft.thinkingMode == .show { args.flag(F.thinking) }
         if draft.stream { args.flag(F.stream) }
         if draft.force { args.flag(F.stats) }
         if draft.quiet { args.flag(F.quiet) }

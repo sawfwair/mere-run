@@ -414,6 +414,30 @@ package struct StudioDraft: Codable, Equatable, Sendable {
     package var h3AccelerationMode: String?
     package var h3Steps: Int?
     package var h3ReferenceInputs: [String]?
+    /// Optional fields preserve saved Studio drafts from before the inspector bound these
+    /// options; nil leaves the flag off so the CLI (or the model's recipe) applies its own value.
+    package var musicBPM: Int?
+    package var musicKeyScale: String?
+    package var musicTimeSignature: String?
+    package var musicVocalLanguage: String?
+    package var musicGuidanceScale: Double?
+    /// Transcribe's `--task`, `--provider`, `--beam-size`, and `--keyword` (one phrase per line or
+    /// separated by commas).
+    package var transcribeTask: String?
+    package var speechProvider: String?
+    package var speechBeamSize: Int?
+    package var speechKeywords: String?
+    /// Video's LTX LoRAs as `PATH[=STRENGTH]`, one per line or separated by commas.
+    package var videoLoRAs: String?
+    package var videoEnhancePrompt: Bool?
+    /// Segment's and Track's `--show-boxes`, and Segment's `--multimask`.
+    package var visionShowBoxes: Bool?
+    package var visionMultimask: Bool?
+    /// Read Image's `--max-tokens`, nil for the action's own default (Inspect's and Caption's
+    /// differ), and Caption's `--focus` and `--trigger-token`.
+    package var readMaxTokens: Int?
+    package var captionFocus: String?
+    package var captionTriggerToken: String?
 
     package mutating func reset(for mode: StudioMode) {
         let base = CommandCatalog.template(id: mode.defaultTemplateID)?.defaultDraft()
@@ -542,6 +566,22 @@ package struct StudioDraft: Codable, Equatable, Sendable {
         h3AccelerationMode = nil
         h3Steps = nil
         h3ReferenceInputs = nil
+        musicBPM = nil
+        musicKeyScale = nil
+        musicTimeSignature = nil
+        musicVocalLanguage = nil
+        musicGuidanceScale = nil
+        transcribeTask = nil
+        speechProvider = nil
+        speechBeamSize = nil
+        speechKeywords = nil
+        videoLoRAs = nil
+        videoEnhancePrompt = nil
+        visionShowBoxes = nil
+        visionMultimask = nil
+        readMaxTokens = nil
+        captionFocus = nil
+        captionTriggerToken = nil
     }
 
     private func modeDefaultPrompt(_ mode: StudioMode) -> String {
@@ -738,6 +778,7 @@ package enum StudioCommandAdapter {
             draft.topP = studioDraft.topP
             draft.minP = studioDraft.minP
             draft.maxTokens = studioDraft.maxTokens
+            draft.thinkingMode = studioDraft.thinkingMode
             if mode == .chat {
                 draft.contextSize = studioDraft.contextSize
                 draft.topK = studioDraft.topK
@@ -746,7 +787,6 @@ package enum StudioCommandAdapter {
                 draft.kvGroupSize = studioDraft.kvGroupSize
                 draft.quantizedKVStart = studioDraft.quantizedKVStart
                 draft.responseFormat = studioDraft.responseFormat
-                draft.thinkingMode = studioDraft.thinkingMode
                 draft.reasoningEffort = studioDraft.reasoningEffort
                 draft.loraPath = studioDraft.loraPath
                 draft.loraScale = studioDraft.loraScale
@@ -782,6 +822,8 @@ package enum StudioCommandAdapter {
             } else {
                 draft.voiceSpeaker = studioDraft.voiceSpeaker
             }
+            draft.language = studioDraft.language
+            draft.temperature = studioDraft.temperature
 
         case .listen:
             draft.inputPath = studioDraft.inputPath
@@ -789,11 +831,23 @@ package enum StudioCommandAdapter {
             draft.language = studioDraft.language
             draft.backend = studioDraft.backend
             draft.timestamps = studioDraft.timestamps
+            draft.maxTokens = studioDraft.maxTokens
+            draft.task = studioDraft.transcribeTask ?? draft.task
+            draft.speechProvider = studioDraft.speechProvider
+            draft.speechBeamSize = studioDraft.speechBeamSize
+            draft.speechKeywords = studioDraft.speechKeywords
 
         case .readImage:
             draft.inputPath = studioDraft.inputPath
             draft.prompt = prompt.isEmpty ? draft.prompt : prompt
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
+            // Inspect and Caption keep their own defaults until a value is chosen: one draft
+            // serves both actions, so a value only rides along once it is an explicit choice.
+            if let maxTokens = studioDraft.readMaxTokens { draft.maxTokens = maxTokens }
+            if studioDraft.samplingOverrides?.contains("--temperature") == true { draft.temperature = studioDraft.temperature }
+            if studioDraft.samplingOverrides?.contains("--top-p") == true { draft.topP = studioDraft.topP }
+            draft.visionFocus = studioDraft.captionFocus ?? ""
+            draft.visionTriggerToken = studioDraft.captionTriggerToken ?? ""
 
         case .findObjects, .segment, .track:
             draft.prompt = prompt
@@ -807,6 +861,8 @@ package enum StudioCommandAdapter {
                 draft.visionBoxPrompts = StudioRegionPromptText.boxText(region)
                 draft.visionPointPrompts = StudioRegionPromptText.pointText(region)
             }
+            if mode != .findObjects { draft.force = studioDraft.visionShowBoxes ?? false }
+            if mode == .segment { draft.visionMultimask = studioDraft.visionMultimask ?? false }
             if mode == .track {
                 draft.visionInitFrame = studioDraft.visionInitFrame ?? 0
                 draft.visionEndFrame = studioDraft.visionEndFrame.map(String.init) ?? ""
@@ -857,6 +913,11 @@ package enum StudioCommandAdapter {
             draft.musicDAWBundle = studioDraft.musicDAWBundle
             draft.musicExportFormat = studioDraft.musicExportFormat
             draft.musicNoRecipe = studioDraft.musicNoRecipe
+            draft.musicBPM = studioDraft.musicBPM.map(String.init) ?? ""
+            draft.musicKey = studioDraft.musicKeyScale ?? ""
+            draft.musicTimeSignature = studioDraft.musicTimeSignature ?? ""
+            draft.musicVocalLanguage = studioDraft.musicVocalLanguage ?? draft.musicVocalLanguage
+            draft.musicGuidanceScale = studioDraft.musicGuidanceScale.map(CommandArguments.format) ?? ""
 
         case .video:
             draft.prompt = prompt
@@ -893,10 +954,14 @@ package enum StudioCommandAdapter {
             draft.h3AccelerationMode = studioDraft.h3AccelerationMode
             draft.h3Steps = studioDraft.h3Steps
             draft.h3ReferenceInputs = studioDraft.h3ReferenceInputs
+            draft.videoLoRAs = studioDraft.videoLoRAs
+            draft.videoEnhancePrompt = studioDraft.videoEnhancePrompt
 
         case .sfx:
             draft.prompt = prompt
+            draft.secondaryText = secondary
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
+            draft.cfgScale = studioDraft.cfgScale
             draft.durationSeconds = studioDraft.durationSeconds
             draft.steps = studioDraft.steps
             draft.seed = studioDraft.seed
