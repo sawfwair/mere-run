@@ -15,9 +15,9 @@ extension CommandCatalog {
             id: .pluginInstall,
             category: .server,
             title: "Install plugin",
-            subtitle: "Install an official plugin by id",
+            subtitle: "Install an official plugin by ID",
             systemImage: "square.and.arrow.down",
-            promptLabel: "Plugin id",
+            promptLabel: "Plugin ID",
             defaultPrompt: "mere-runpod"
         ),
         CommandTemplate(
@@ -26,7 +26,7 @@ extension CommandCatalog {
             title: "Plugin doctor",
             subtitle: "Run an installed plugin's doctor",
             systemImage: "stethoscope",
-            promptLabel: "Plugin id",
+            promptLabel: "Plugin ID",
             defaultPrompt: "mere-runpod"
         ),
         CommandTemplate(
@@ -51,7 +51,7 @@ extension CommandCatalog {
             title: "Plugin details",
             subtitle: "Catalog entry and install command for one plugin",
             systemImage: "info.circle",
-            promptLabel: "Plugin id"
+            promptLabel: "Plugin ID"
         ),
         CommandTemplate(
             id: .pluginRun,
@@ -67,7 +67,7 @@ extension CommandCatalog {
             title: "Roll back plugin",
             subtitle: "Restore a retained signed plugin bundle",
             systemImage: "arrow.uturn.backward.circle",
-            promptLabel: "Plugin id"
+            promptLabel: "Plugin ID"
         ),
         CommandTemplate(
             id: .visionServe,

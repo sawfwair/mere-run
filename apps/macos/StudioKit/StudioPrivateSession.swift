@@ -115,7 +115,7 @@ package final class StudioPrivateSession {
             $0.request.requestID.map(requestIDs.contains) == true && $0.state.isActive
         }) else { return }
         guard removeFiles() else {
-            controller.status = library.lastPersistenceError ?? "Could not remove private files."
+            controller.status = library.lastPersistenceError ?? "Couldn't remove private files."
             return
         }
         controller.jobs.discardFinished(requestIDs: requestIDs)
@@ -127,7 +127,7 @@ package final class StudioPrivateSession {
     package func removeFiles() -> Bool {
         guard FileManager.default.fileExists(atPath: directory.path) else { return true }
         do { try FileManager.default.removeItem(at: directory); return true }
-        catch { library.lastPersistenceError = "Could not remove private files: \(error.localizedDescription)"; return false }
+        catch { library.lastPersistenceError = "Couldn't remove private files. \(error.localizedDescription)"; return false }
     }
 }
 

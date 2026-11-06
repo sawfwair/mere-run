@@ -53,7 +53,7 @@ package enum MereRunProcessInputError: LocalizedError {
     case unavailable
 
     package var errorDescription: String? {
-        "This command does not accept interactive input."
+        "This command doesn't accept interactive input."
     }
 }
 
@@ -195,7 +195,7 @@ package final class FoundationRunningProcess: MereRunRunningProcess, @unchecked 
         stdout.finish()
         stderr.finish()
         if let error = stdout.failure ?? stderr.failure {
-            stderr.report("Could not read process output: \(error.localizedDescription)\n")
+            stderr.report("Couldn't read process output. \(error.localizedDescription)\n")
             return -1
         }
         return process.terminationStatus

@@ -259,7 +259,9 @@ package enum StudioContractGroup: String, CaseIterable, Identifiable, Hashable {
 
     package var id: String { rawValue }
 
-    package var title: String { rawValue }
+    /// The heading the inspector and the Command view show. The raw value is the contract's group
+    /// name and must match it; the heading spells out "and".
+    package var title: String { self == .model ? "Model and adapters" : rawValue }
 
     package init(contractGroup: String?) {
         self = StudioContractGroup(rawValue: contractGroup ?? "") ?? .options
@@ -305,7 +307,7 @@ package enum StudioContractChoiceTitles {
         "--input-rate 16000": "16 kHz",
         "--input-rate 24000": "24 kHz",
         "--output-mode video-only": "Video",
-        "--output-mode audio-video": "Audio + Video",
+        "--output-mode audio-video": "Audio and video",
         "--backend auto": "Auto",
         "--kv-quant-scheme uniform": "Uniform",
         "--kv-quant-scheme polar": "Polar",

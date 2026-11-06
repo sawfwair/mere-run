@@ -219,7 +219,7 @@ struct StudioTrackFrameEditor: View {
         HStack(spacing: 6) {
             if onSeedFrame {
                 markState("Prompt frame", systemImage: "flag.fill", iconsOnly: iconsOnly)
-                    .help("The prompts are drawn on this frame; the tracker segments them here")
+                    .help("The prompts are drawn on this frame, and the tracker segments them here")
             } else {
                 markButton("Prompts here", systemImage: "flag", iconsOnly: iconsOnly) {
                     initFrame = currentFrame
@@ -239,7 +239,7 @@ struct StudioTrackFrameEditor: View {
                 .help(
                     canEndHere
                         ? "Stop tracking after this frame instead of at the end of the clip"
-                        : "Tracking cannot end before the prompt frame; move the prompts here first"
+                        : "Tracking can't end before the prompt frame. Move the prompts here first."
                 )
             }
 

@@ -48,7 +48,7 @@ final class JobStoreTests: XCTestCase {
         XCTAssertTrue(store.cancel(queued))
         let cancelled = try XCTUnwrap(results.first)
         XCTAssertEqual(store.job(queued)?.state, .cancelled(exit: JobResult.cancelledBeforeStartExitCode, at: cancelled.completedAt))
-        XCTAssertEqual(store.job(queued)?.status, "Cancelled")
+        XCTAssertEqual(store.job(queued)?.status, "Canceled")
         XCTAssertEqual(results.map(\.requestID), [cancelledRequestID])
         XCTAssertEqual(cancelled.exitCode, JobResult.cancelledBeforeStartExitCode)
         XCTAssertEqual(store.queued(in: .inference).map(\.id), [survivor])

@@ -112,7 +112,7 @@ package struct MereRunSettingsView: View {
     private var modelsTab: some View {
         EditorSection("Hugging Face token") {
             HStack(spacing: 10) {
-                SecureField("hf_… (for gated/private model pulls)", text: $hfToken)
+                SecureField("hf_… (for gated or private model downloads)", text: $hfToken)
                     .textFieldStyle(.plain)
                     .font(MereRunTheme.bodyFont)
                     .padding(10)
@@ -120,7 +120,7 @@ package struct MereRunSettingsView: View {
                 Button("Save") {
                     Task {
                         let ok = await controller.saveHuggingFaceToken(hfToken)
-                        hfStatus = ok ? "Saved" : "Could not save token"
+                        hfStatus = ok ? "Saved" : "Couldn't save the token"
                         if ok { hfToken = "" }
                     }
                 }
@@ -142,7 +142,7 @@ package struct MereRunSettingsView: View {
                 Button("Save") {
                     Task {
                         let ok = await controller.saveHuggingFaceEndpoint(hfEndpoint)
-                        hfEndpointStatus = ok ? "Saved" : "Could not save endpoint"
+                        hfEndpointStatus = ok ? "Saved" : "Couldn't save the endpoint"
                     }
                 }
                 .buttonStyle(.merePrimary)
@@ -158,7 +158,7 @@ package struct MereRunSettingsView: View {
         }
         EditorSection("Model payload storage") {
             PathField(label: "model payload storage", path: $controller.hubCache, placeholder: "Default: Application Support", mode: .openDirectory)
-            Text("Downloads land here. Browsing, cleanup, and locations live in the Models domain.")
+            Text("Downloaded models are stored here. To browse, clean up, or add locations, use Models.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
         }
@@ -230,7 +230,7 @@ package struct MereRunSettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
             Toggle("Hide the Dock icon while no window is open", isOn: $hidesDockIcon)
                 .disabled(!showsMenuBarExtra)
-                .help("mere.run keeps running in the menu bar; opening the Studio brings the Dock icon back")
+                .help("mere.run keeps running in the menu bar. Opening a Studio window brings the Dock icon back.")
             Toggle("Start the API server when mere.run opens", isOn: $servesAtLaunch)
             Toggle("Open mere.run at login", isOn: Binding(
                 get: { loginItemStatus == .enabled || loginItemStatus == .requiresApproval },
@@ -294,8 +294,8 @@ package struct MereRunSettingsView: View {
 
     @ViewBuilder
     private var advancedTab: some View {
-        EditorSection("Command line") {
-            PathField(label: "command line", path: $controller.cliPath, placeholder: "Auto-detect executable", mode: .openFile([.unixExecutable, .item]))
+        EditorSection("CLI") {
+            PathField(label: "CLI", path: $controller.cliPath, placeholder: "Detect automatically", mode: .openFile([.unixExecutable, .item]))
             Text("The app uses a bundled `mere.run` first, then nearby SwiftPM build products, common install locations, and the current package checkout.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
@@ -354,11 +354,11 @@ package struct MereRunSettingsView: View {
                 Button {
                     controller.installCodexSkills()
                 } label: {
-                    Label("Install Skill", systemImage: "sparkles")
+                    Label("Install skill", systemImage: "sparkles")
                 }
                 .buttonStyle(.mereSecondary)
             }
-            Text("Studio-managed CLI payloads keep every runtime asset in Application Support and activate the command with an atomic symlink. Skill install copies the bundled `use-mere-run` Codex skill to `~/.codex/skills`.")
+            Text("Studio installs the CLI and its runtime assets in Application Support, then links the `mere.run` command to them. Install skill copies the bundled `use-mere-run` Codex skill to `~/.codex/skills`.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)

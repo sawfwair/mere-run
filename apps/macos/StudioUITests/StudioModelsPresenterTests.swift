@@ -125,8 +125,8 @@ final class StudioModelsPresenterTests: XCTestCase {
 
         XCTAssertEqual(StudioModelsPresenter.meta(for: installed, status: .installed), "Image · 2.1 GB")
         XCTAssertEqual(StudioModelsPresenter.meta(for: flagged, status: .attention), "Audio · 2.4 GB")
-        XCTAssertEqual(StudioModelsPresenter.meta(for: pulling, status: .pulling(0.25)), "Vision · pulling 25%")
-        XCTAssertEqual(StudioModelsPresenter.meta(for: pulling, status: .pulling(nil)), "Vision · pulling…")
+        XCTAssertEqual(StudioModelsPresenter.meta(for: pulling, status: .pulling(0.25)), "Vision · downloading 25%")
+        XCTAssertEqual(StudioModelsPresenter.meta(for: pulling, status: .pulling(nil)), "Vision · downloading…")
         XCTAssertEqual(StudioModelsPresenter.meta(for: missing, status: .missing), "Chat · 2.6 GB download")
         XCTAssertEqual(
             StudioModelsPresenter.meta(for: row("x", category: "image", size: "not measured"), status: .installed),
@@ -173,7 +173,7 @@ final class StudioModelsPresenterTests: XCTestCase {
         )
     }
 
-    /// A domain with one prompt task names the default after the domain, since "Create Image"
+    /// A domain with one prompt task names the default after the domain, since "Create image"
     /// and "Speak" are verbs the Models page has no sentence for; shared domains name the mode.
     func testDefaultTargetTitleUsesTheDomainWhereItHasOnePromptTask() {
         XCTAssertEqual(StudioModelsPresenter.defaultTargetTitle(for: .createImage), "Image")
@@ -271,10 +271,10 @@ final class StudioModelsPresenterTests: XCTestCase {
 
     func testQueuedDownloadExplainsItsStateAndCanShowCancellation() {
         let job = StudioModelsJob(kind: .pull, modelID: "image-zimage-nano", subject: "Z-Image", isQueued: true)
-        XCTAssertEqual(job.label, "Models · Pull Z-Image")
+        XCTAssertEqual(job.label, "Models · Download Z-Image")
         XCTAssertEqual(job.detail, "Queued")
         let cancelled = StudioModelsJob(kind: .pull, modelID: "image-zimage-nano", subject: "Z-Image", isCancelling: true, isQueued: true)
-        XCTAssertEqual(cancelled.detail, "Cancelling…")
+        XCTAssertEqual(cancelled.detail, "Canceling…")
     }
 
     func testJobLabelsAndCancellingDetail() {
@@ -284,7 +284,7 @@ final class StudioModelsPresenterTests: XCTestCase {
         let cleanup = StudioModelsJob(kind: .cleanup, modelID: nil, subject: "model storage")
         XCTAssertEqual(cleanup.label, "Models · Clean up model storage")
         let cancelling = StudioModelsJob(kind: .pull, modelID: "x", subject: "X", isCancelling: true)
-        XCTAssertEqual(cancelling.detail, "Cancelling…")
+        XCTAssertEqual(cancelling.detail, "Canceling…")
     }
 
     // MARK: model info facts
@@ -344,7 +344,7 @@ final class StudioModelsPresenterTests: XCTestCase {
         )
         XCTAssertEqual(
             StudioModelsPresenter.adapterMeta(format: "safetensors", byteCount: 0, version: "", installed: false),
-            "SAFETENSORS · not pulled"
+            "SAFETENSORS · not downloaded"
         )
     }
 }

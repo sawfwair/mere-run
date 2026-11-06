@@ -60,7 +60,7 @@ struct MereRunCommands: Commands {
     private func exportDiagnostics() {
         let report = controller.diagnosticsReport(libraryItems: library.items)
         guard let url = StudioFilePanels.saveFile(
-            title: "Export diagnostics",
+            title: "Export Diagnostics",
             suggestedName: StudioDiagnostics.suggestedFilename(),
             allowedContentTypes: [.plainText]
         ) else { return }

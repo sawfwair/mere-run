@@ -57,8 +57,8 @@ package final class StudioModelStore: ObservableObject {
 
     package var downloadMessage: String? {
         guard let job = lastCompletedDownload else { return nil }
-        if case .cancelled = job.state { return "Download cancelled. Pull the model again to resume." }
-        return job.exitCode == 0 ? "Download complete." : "Download failed. Open the log, then pull the model again."
+        if case .cancelled = job.state { return "Download canceled. To resume, download the model again." }
+        return job.exitCode == 0 ? "Download complete." : "Download failed. Open the log, then download the model again."
     }
 
     package func download(modelID: String) -> Job? {
@@ -98,14 +98,14 @@ package final class StudioModelStore: ObservableObject {
         let inventory = await controller.utilityCommandResult(args: ["model", "list", "--json"])
         guard isCurrent(token, context: context) else { return }
         guard inventory.exitCode == 0 else {
-            error = "Could not refresh models. Check the CLI and model location, then refresh."
+            error = "Couldn't refresh models. Check the CLI and model location, then refresh."
             return
         }
         let freshRows: [StudioModelInventoryRow]
         do {
             freshRows = try StudioModelInventoryParser.decodeRows(from: inventory.stdout)
         } catch {
-            self.error = "Could not read the model inventory. Check the CLI version, then refresh."
+            self.error = "Couldn't read the model inventory. Check the CLI version, then refresh."
             return
         }
         var freshMetadata = metadata

@@ -123,7 +123,7 @@ package enum StudioFailureSummary {
         }
         if let exitCode {
             switch exitCode {
-            case JobResult.cancelledBeforeStartExitCode: return "Cancelled."
+            case JobResult.cancelledBeforeStartExitCode: return "Canceled."
             case 64: return "The request was invalid."
             default: return "The run exited with code \(exitCode)."
             }

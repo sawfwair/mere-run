@@ -60,7 +60,7 @@ package struct StudioKeyboardShortcutsView: View {
                     Text("Keyboard shortcuts")
                         .font(MereRunTheme.titleFont)
                         .foregroundStyle(MereRunTheme.textPrimary)
-                    Text("Menu shortcuts work anywhere in the Studio window. Library and feed keys work while that list has focus; prompt keys while you type a prompt.")
+                    Text("Menu shortcuts work anywhere in the Studio window. Library and feed keys work while that list has focus. Prompt keys work while you type a prompt.")
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.textMuted)
                         .fixedSize(horizontal: false, vertical: true)

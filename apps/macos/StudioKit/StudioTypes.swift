@@ -25,12 +25,12 @@ package enum StudioMode: String, CaseIterable, Codable, Identifiable {
 
     package var title: String {
         switch self {
-        case .createImage: return "Create Image"
+        case .createImage: return "Create image"
         case .chat: return "Chat"
         case .code: return "Code"
         case .speak: return "Speak"
         case .listen: return "Listen"
-        case .readImage: return "Read Image"
+        case .readImage: return "Read image"
         case .findObjects: return "Find"
         case .segment: return "Segment"
         case .track: return "Track"
@@ -117,44 +117,44 @@ package enum StudioMode: String, CaseIterable, Codable, Identifiable {
 
     package var promptPlaceholder: String {
         switch self {
-        case .createImage: return "Describe the image..."
-        case .chat: return "Ask anything..."
-        case .code: return "Describe the code you want..."
-        case .speak: return "Type what to say..."
-        case .listen: return "Attach audio to transcribe..."
-        case .readImage: return "Ask about the image..."
+        case .createImage: return "Describe the image"
+        case .chat: return "Ask anything"
+        case .code: return "Describe the code you want"
+        case .speak: return "Type what to say"
+        case .listen: return "Attach audio to transcribe"
+        case .readImage: return "Ask about the image"
         case .findObjects: return "What should mere.run find?"
         case .segment: return "What should mere.run segment?"
         case .track: return "What should mere.run track?"
-        case .music: return "Describe the song..."
-        case .video: return "Describe the video..."
-        case .sfx: return "Describe the sound..."
+        case .music: return "Describe the song"
+        case .video: return "Describe the video"
+        case .sfx: return "Describe the sound"
         }
     }
 
     package var emptyTitle: String {
         switch self {
-        case .createImage: return "Make something visible."
-        case .chat: return "Ask locally, keep it local."
-        case .code: return "Turn intent into code."
-        case .speak: return "Give text a voice."
-        case .listen: return "Drop in audio."
-        case .readImage: return "Let the image answer."
-        case .findObjects: return "Find what matters."
-        case .segment: return "Separate subject from scene."
-        case .track: return "Follow motion through time."
-        case .music: return "Score the moment."
-        case .video: return "Make the frame move."
-        case .sfx: return "Design a sound."
+        case .createImage: return "Generate an image"
+        case .chat: return "Chat with a local model"
+        case .code: return "Write code with a local model"
+        case .speak: return "Turn text into speech"
+        case .listen: return "Transcribe a recording"
+        case .readImage: return "Ask about an image"
+        case .findObjects: return "Find objects in an image"
+        case .segment: return "Cut a subject out of its scene"
+        case .track: return "Track objects through a clip"
+        case .music: return "Compose a song"
+        case .video: return "Generate a video"
+        case .sfx: return "Generate a sound effect"
         }
     }
 
     package var emptyMessage: String {
         switch self {
         case .createImage: return "Write a prompt, attach a reference if you have one, then create."
-        case .chat: return "Ask a question and mere.run will answer with a local model."
-        case .code: return "Describe a function, script, or refactor and run it on-device."
-        case .speak: return "Enter the line, pick a voice style, and render a WAV."
+        case .chat: return "Ask a question, and a local model answers it."
+        case .code: return "Describe a function, script, or refactor, and a local model writes it."
+        case .speak: return "Enter the line, choose a voice style, and render a WAV."
         case .listen: return "Attach an audio file to create a transcript."
         case .readImage: return "Attach an image and ask about it, or caption it. To read text from pages, use Document."
         case .findObjects: return "Attach an image and name the thing to locate."
@@ -1377,7 +1377,7 @@ package enum ModelReadinessState: Equatable {
         case .ready:
             return "Ready to run on this Mac."
         case .missingModel(let model):
-            return "\(StudioModelNaming.displayName(model, titles: titles)) isn't on this Mac yet. Get it once and it stays."
+            return "\(StudioModelNaming.displayName(model, titles: titles)) isn't on this Mac. Download it once and it stays."
         case .unsupported(let reason):
             return reason
         case .unknown(let reason, _):

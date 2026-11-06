@@ -392,8 +392,8 @@ struct StudioSubjectsStageCopy: Equatable {
             return StudioSubjectsStageCopy(
                 title: "Animate the reference",
                 description: progress.tracked
-                    ? "Direct the finished shot, pick a profile, and render with the tracked masks."
-                    : "Track the clip first; animation renders from the tracked masks.",
+                    ? "Direct the finished shot, choose a profile, and render with the tracked masks."
+                    : "Track the clip first. Animation renders from the tracked masks.",
                 secondary: Button(label: "Validate run", action: .validateRun, isEnabled: progress.tracked && !busy),
                 primary: Button(
                     label: animating ? "Animating…" : "Animate",

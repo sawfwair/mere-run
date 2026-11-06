@@ -2250,7 +2250,7 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(ModelReadinessState.missingModel("video-ltx2-fast").title, "Model needed")
         XCTAssertEqual(
             ModelReadinessState.missingModel("video-ltx2-fast").message(titles: .none),
-            "LTX-2 Fast isn't on this Mac yet. Get it once and it stays."
+            "LTX-2 Fast isn't on this Mac. Download it once and it stays."
         )
         XCTAssertEqual(ModelReadinessState.unsupported("x").title, "Can't run on this Mac")
         XCTAssertEqual(ModelReadinessState.unknown("x").title, "Couldn't check the model")

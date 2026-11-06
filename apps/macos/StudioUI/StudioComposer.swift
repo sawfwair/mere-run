@@ -566,7 +566,7 @@ struct StudioComposer: View {
             .frame(width: Metrics.sendDiameter, height: Metrics.sendDiameter)
         }
         .buttonStyle(.plain)
-        .help(queuedCount == 0 ? "Stop (⌘.) · ⌘↩ queues another run" : "Stop (⌘.) · \(queuedCount) queued")
+        .help(queuedCount == 0 ? "Stop (⌘.). Press ⌘↩ to queue another run." : "Stop (⌘.). \(queuedCount) queued.")
         .accessibilityLabel("Stop current run")
     }
 
@@ -739,7 +739,7 @@ struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
             StudioAttachmentPaste.paste(into: &draft, slots: [slot], allowsText: false)
         }
         .contextMenu {
-            Button("Choose from Disk…", action: onPick)
+            Button("Choose from disk…", action: onPick)
             if hasLibraryChoices {
                 Button("Choose from Library…") { isPickingFromLibrary = true }
             }

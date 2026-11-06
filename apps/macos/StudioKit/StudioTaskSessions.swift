@@ -59,7 +59,7 @@ package final class StudioTaskSessions {
             persistedEntries = entries
         } catch {
             canSave = false
-            lastPersistenceError = "Saved task settings could not be read. The original file has been preserved."
+            lastPersistenceError = "Couldn't read saved task settings. The original file is kept."
         }
     }
 
@@ -128,7 +128,7 @@ package final class StudioTaskSessions {
             persistedEntries[key] = persisted
             scheduleSave()
         } catch {
-            lastPersistenceError = "Task settings could not be saved: \(error.localizedDescription)"
+            lastPersistenceError = "Couldn't save task settings. \(error.localizedDescription)"
         }
     }
 
@@ -264,7 +264,7 @@ package final class StudioTaskSessions {
             try JSONEncoder.mereRunApp.encode(persistedEntries).write(to: url, options: .atomic)
             lastPersistenceError = nil
         } catch {
-            lastPersistenceError = "Task settings could not be saved: \(error.localizedDescription)"
+            lastPersistenceError = "Couldn't save task settings. \(error.localizedDescription)"
         }
     }
 }

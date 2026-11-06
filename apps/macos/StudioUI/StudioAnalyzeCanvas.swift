@@ -248,7 +248,7 @@ struct StudioAnalyzeCanvas: View {
                 .help(inputURL?.path ?? "No input attached")
             if inputKind != .text, inputKind != .none, let input = analyze.input {
                 StudioAttachButton(target: input, title: inputURL == nil ? "Choose…" : "Replace")
-                    .help("Pick a different \(inputKind.noun)")
+                    .help("Choose a different \(inputKind.noun)")
             }
         }
         .accessibilityElement(children: .contain)
@@ -412,7 +412,7 @@ struct StudioAnalyzeCanvas: View {
                                 Label("Adjust prompts and frames", systemImage: "rectangle.dashed")
                             }
                             .buttonStyle(.mereSecondary)
-                            .help("Draw on the start frame and pick where tracking starts and ends")
+                            .help("Draw on the start frame and choose where tracking starts and ends")
                             Spacer()
                         }
                     }

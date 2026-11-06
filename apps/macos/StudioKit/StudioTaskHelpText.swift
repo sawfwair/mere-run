@@ -1,7 +1,7 @@
 import Foundation
 
 extension StudioTask {
-    /// The header task control's tooltip: the task's empty-state line ("Pull the mix apart"), or,
+    /// The header task control's tooltip: the task's empty-state line ("Separate a mix into stems"), or,
     /// where its domain's tasks share one line (Models, Server), its primary command's catalog
     /// subtitle. Sentence case, without the closing period.
     package var helpText: String {

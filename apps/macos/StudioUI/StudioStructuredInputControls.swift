@@ -59,7 +59,7 @@ struct StudioInstrumentPicker: View {
             if loadFailed {
                 StudioInspectorTextField(placeholder: "voice, drums, electric_bass", text: $value)
                     .accessibilityLabel(Self.label)
-                Text("The instrument list could not be read from the CLI; type group names separated by commas, or leave it blank for automatic.")
+                Text("Couldn't read the instrument list from the CLI. Type group names separated by commas, or leave the field blank to detect them automatically.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)

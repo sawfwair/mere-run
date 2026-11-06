@@ -111,6 +111,6 @@ final class StudioKeyboardShortcutsTests: XCTestCase {
             }
             XCTAssertEqual(Set(tips).count, tips.count, "\(domain.title)'s tasks have distinct tooltips: \(tips)")
         }
-        XCTAssertEqual(StudioTask.musicSeparate.helpText, "Pull the mix apart")
+        XCTAssertEqual(StudioTask.musicSeparate.helpText, "Separate a mix into stems")
     }
 }

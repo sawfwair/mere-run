@@ -412,7 +412,7 @@ package enum StudioOutputLocation {
             reserve(moved.outputPath)
             return Preparation(
                 draft: moved,
-                fallbackReason: "Could not write to \(abbreviate(intended)): \(error.localizedDescription)",
+                fallbackReason: "Couldn't write to \(abbreviate(intended)). \(error.localizedDescription)",
                 move: move
             )
         }
@@ -501,7 +501,7 @@ package enum StudioOutputLocation {
     /// beside the primary is kept as it is. A sidecar the app named earlier moves with the
     /// primary, and an app-named `--context-output` is dropped once `--no-musical-context` is on. The identifier is derived from what the run does
     /// (template, prompt, model, inputs, options) and never from where it writes, so calling
-    /// this again on its own result names the same files: the Command view's "Will run" and the
+    /// this again on its own result names the same files: the Command view's "Command to run" and the
     /// run agree. The task runner calls it at submit time, when `reserve` makes two runs in one
     /// second step apart.
     package static func destination(

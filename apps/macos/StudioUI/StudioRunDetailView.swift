@@ -179,7 +179,7 @@ struct StudioRunFailureDetail: View {
                         Text("\(StudioModelNaming.displayName(missingModel)) isn't on this Mac yet.")
                         Spacer()
                         if missingModel.usageTerms == nil {
-                            Button("Get the model") { getModel(missingModel.id) }
+                            Button("Download the model") { getModel(missingModel.id) }
                                 .buttonStyle(.merePrimary)
                         } else {
                             Button("Open in Models") { navigation.open(task: .modelsInstalled) }
@@ -221,6 +221,6 @@ struct StudioRunFailureDetail: View {
         let request = StudioRunRequest(mode: item.mode, templateID: .modelPull, template: template, draft: draft)
         let started = models.startPull(request)
         let reason = controller.status
-        pullProblem = started ? nil : (reason.isBlank || reason == "Idle" ? "Studio could not start the download." : reason)
+        pullProblem = started ? nil : (reason.isBlank || reason == "Idle" ? "Couldn't start the download." : reason)
     }
 }

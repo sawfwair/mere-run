@@ -1203,7 +1203,7 @@ final class StudioSnapshotTests: XCTestCase {
 
     /// The Command Console: the catalog, `image generate` rendered from the contract, and the run
     /// pane. At the mockup size so it can be read against the Command board, whose grouped rows,
-    /// monospaced flag column and "Will run" block it follows.
+    /// monospaced flag column and "Command to run" block it follows.
     func testCommandConsoleSnapshots() throws {
         for appearance in StudioSnapshotAppearance.allCases {
             let view = StudioConsoleView()
@@ -1779,8 +1779,8 @@ final class StudioSnapshotTests: XCTestCase {
     /// Compare, "Use these settings", and the readiness card's next steps, light and dark. First
     /// the Library column with its two newest image rows batched, so the bar offers Compare. Then
     /// the feed with a finished mockup run (its card carries the settings icon beside Vary), a
-    /// run that failed for want of its model (a plain reason and Get the model beside "Use these
-    /// settings" and Retry), and the readiness card for that model — Get the model and Choose
+    /// run that failed for want of its model (a plain reason and Download the model beside "Use these
+    /// settings" and Retry), and the readiness card for that model — Download the model and Choose
     /// another model — followed by the same card before any check, when the Mac cannot run the
     /// model, and when the check failed with the CLI's line kept as muted detail.
     func testLibraryReuseAndReadinessSnapshots() throws {
@@ -2042,7 +2042,7 @@ final class StudioSnapshotTests: XCTestCase {
 
     /// Library items as inputs. Music ▸ Transcribe empty in the window, with a composed song and a
     /// four-stem separation in the Library, so its "Choose audio…" and the well's plus open the
-    /// From Disk / From Library menu (light and dark); the From Library picker for that audio
+    /// From disk / From Library menu (light and dark); the From Library picker for that audio
     /// slot, the stems listed under their run (light and dark); the picker for an image slot over
     /// a batch of pictures; the picker with nothing to offer; and the attach controls side by
     /// side with and without Library choices, so the chevron appears only where a menu opens.

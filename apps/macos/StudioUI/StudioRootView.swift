@@ -416,7 +416,7 @@ private struct StudioWorkspaceView: View {
                 )
                 .padding(.leading, 10)
                 .padding(.bottom, 56)
-                Button("Close Activity") { navigation.showActivity = false }
+                Button("Close activity") { navigation.showActivity = false }
                     .keyboardShortcut(.cancelAction)
                     .frame(width: 0, height: 0)
                     .opacity(0)
@@ -558,7 +558,7 @@ private struct StudioWorkspaceView: View {
         if !hasCompletedWelcome {
             MereBanner(
                 severity: .info,
-                text: "Nothing leaves your Mac. Pick a domain, get its model once, and create.",
+                text: "Nothing leaves your Mac. Choose a domain, download its model once, and create.",
                 systemImage: "lock.shield",
                 onDismiss: { hasCompletedWelcome = true }
             )
@@ -681,7 +681,7 @@ private struct StudioWorkspaceView: View {
         if let taskDraft = taskDraftBinding {
             // The Command view previews the task draft's own form with its launch-time defaults
             // applied and its destination named the way the runner names it at submit time, so
-            // "Will run" shows the argv that runs.
+            // "Command to run" shows the argv that runs.
             return StudioTaskRunner.launchPreview(taskDraft.wrappedValue, source: scopeSource).request(source: scopeSource)
         }
         let key = destination.task.rawValue
@@ -1132,7 +1132,7 @@ private struct StudioWorkspaceView: View {
                 Button("Cancel", role: .cancel) {
                     pendingRestrictedPull = nil
                 }
-                Button("Accept & Download") {
+                Button("Accept and Download") {
                     pendingRestrictedPull = nil
                     startPull(request, acknowledgingUsageTerms: true)
                 }
@@ -1148,7 +1148,7 @@ private struct StudioWorkspaceView: View {
                 )
             }
             .alert(
-                "Couldn’t open MereRun link",
+                "Couldn’t open mere.run link",
                 isPresented: Binding(
                     get: { navigation.deepLinkError != nil },
                     set: { if !$0 { navigation.deepLinkError = nil } }
@@ -1156,7 +1156,7 @@ private struct StudioWorkspaceView: View {
             ) {
                 Button("OK") { navigation.deepLinkError = nil }
             } message: {
-                Text(navigation.deepLinkError ?? "The MereRun link is invalid.")
+                Text(navigation.deepLinkError ?? "The mere.run link isn't valid.")
             }
             .focusedSceneValue(\.studioActions, sceneActions)
     }
@@ -1460,8 +1460,8 @@ private struct StudioWorkspaceView: View {
         controller.taskSessions.forgetLibraryItems(ids)
         if let first = failures.first {
             studioError = failures.count == 1
-                ? "Could not move \(first.lastPathComponent) to the Trash."
-                : "Could not move \(failures.count) files to the Trash."
+                ? "Couldn't move \(first.lastPathComponent) to the Trash."
+                : "Couldn't move \(failures.count) files to the Trash."
         }
         if let selected = navigation.selectedLibraryID, ids.contains(selected) {
             navigation.selectedLibraryID = nil
@@ -1497,7 +1497,7 @@ private struct StudioWorkspaceView: View {
             panel.canCreateDirectories = true
             guard panel.runModal() == .OK, let destination = panel.url else { return }
             do { try StudioFileExport.copy(source, to: destination) }
-            catch { studioError = "Could not save \(source.lastPathComponent): \(error.localizedDescription)" }
+            catch { studioError = "Couldn't save \(source.lastPathComponent). \(error.localizedDescription)" }
             return
         }
 
@@ -1510,7 +1510,7 @@ private struct StudioWorkspaceView: View {
         guard panel.runModal() == .OK, let directory = panel.url else { return }
         let report = StudioFileExport.copy(urls, into: directory)
         if !report.failures.isEmpty {
-            studioError = "Saved \(report.destinations.count) of \(urls.count) files. Could not save: "
+            studioError = "Saved \(report.destinations.count) of \(urls.count) files. Couldn't save "
                 + report.failures.map(\.lastPathComponent).joined(separator: ", ") + "."
         }
     }
@@ -1760,7 +1760,7 @@ private struct StudioWorkspaceView: View {
         do {
             try text.write(to: destination, atomically: true, encoding: .utf8)
         } catch {
-            studioError = "Could not save \(destination.lastPathComponent): \(error.localizedDescription)"
+            studioError = "Couldn't save \(destination.lastPathComponent). \(error.localizedDescription)"
         }
     }
 
@@ -1824,7 +1824,7 @@ private struct StudioWorkspaceView: View {
         do {
             try StudioFileExport.copy(url, to: destination)
         } catch {
-            studioError = "Could not save \(url.lastPathComponent): \(error.localizedDescription)"
+            studioError = "Couldn't save \(url.lastPathComponent). \(error.localizedDescription)"
         }
     }
 

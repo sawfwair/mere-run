@@ -505,7 +505,7 @@ package struct StudioRunPlanReport: Decodable, Equatable {
         var notes: [String] = []
         if output.exists { notes.append("already exists") }
         if !output.extensionValid { notes.append("unexpected extension") }
-        if output.parentWillBeCreated { notes.append("folder will be created") }
+        if output.parentWillBeCreated { notes.append("creates the folder") }
         if !notes.isEmpty { rows.append(.init("Note", notes.joined(separator: ", "))) }
         return rows
     }

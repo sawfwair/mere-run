@@ -383,7 +383,7 @@ struct StudioLibraryPanel: View {
     }
 
     private var emptyMessage: String {
-        if items.isEmpty { return "Runs you create will land here." }
+        if items.isEmpty { return "Runs you create appear here." }
         if scopedItems.isEmpty { return "No \(domain.title) runs yet. Choose All to see every run." }
         if let selectedCollection, !scopedItems.contains(where: { selectedCollection.contains($0.id) }) {
             return "Nothing in \(selectedCollection.name) here yet. Drag a run onto it, or use Add to collection."
@@ -510,7 +510,7 @@ struct StudioLibraryPanel: View {
                 Button("Reveal in Finder") { onReveal([url]) }
                 Button("Save to…") { onExport([item]) }
             }
-            Button(item.isStarred ? "Remove from Favorites" : "Add to Favorites") {
+            Button(item.isStarred ? "Remove from favorites" : "Add to favorites") {
                 onToggleFavorite(item.id)
             }
             collectionItems(for: [item.id])
@@ -835,8 +835,8 @@ private struct StudioLibraryRow: View {
                             .frame(width: 20, height: 24)
                     }
                     .buttonStyle(.mereIcon(tint: item.isStarred ? MereRunTheme.yellow : MereRunTheme.textMuted))
-                    .help(item.isStarred ? "Remove from Favorites" : "Add to Favorites")
-                    .accessibilityLabel(item.isStarred ? "Remove from Favorites" : "Add to Favorites")
+                    .help(item.isStarred ? "Remove from favorites" : "Add to favorites")
+                    .accessibilityLabel(item.isStarred ? "Remove from favorites" : "Add to favorites")
                     .transition(.opacity)
                 }
 
@@ -951,8 +951,8 @@ private struct StudioLibraryTile: View {
                         }
                         .buttonStyle(.plain)
                         .padding(3)
-                        .help(item.isStarred ? "Remove from Favorites" : "Add to Favorites")
-                        .accessibilityLabel(item.isStarred ? "Remove from Favorites" : "Add to Favorites")
+                        .help(item.isStarred ? "Remove from favorites" : "Add to favorites")
+                        .accessibilityLabel(item.isStarred ? "Remove from favorites" : "Add to favorites")
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm))
@@ -1003,7 +1003,7 @@ enum StudioLibraryRowMeta {
             return "Running"
         case .queued:
             return "Queued"
-        case .cancelled: return "Cancelled"
+        case .cancelled: return "Canceled"
         case .interrupted: return "Interrupted"
         case .failed:
             return "Failed · \(formatter.string(from: item.createdAt))"

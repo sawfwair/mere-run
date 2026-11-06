@@ -311,7 +311,7 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertFalse(controller.isRunning)
         XCTAssertEqual(controller.lastRunResult?.templateID, .imageGenerate)
         XCTAssertEqual(controller.lastRunResult?.exitCode, -1)
-        XCTAssertTrue(controller.lastRunResult?.outputText?.contains("Could not create output directory") == true)
+        XCTAssertTrue(controller.lastRunResult?.outputText?.contains("Couldn't create the output folder") == true)
     }
 
     func testModelPullUsesDownloadingStatusWhileRunning() throws {

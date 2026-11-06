@@ -210,21 +210,21 @@ extension StudioTask {
         case .imageDatasets:
             return StudioTaskPresentation(
                 title: title, systemImage: "folder.badge.questionmark",
-                emptyTitle: "Find what's worth training on.",
+                emptyTitle: "Find training data in a folder",
                 emptyMessage: "Point at a folder of images and captions to discover datasets, check a run plan, or validate an image model.",
                 requiresAttachment: true
             )
         case .imageTrain:
             return StudioTaskPresentation(
                 title: title, systemImage: "slider.horizontal.3",
-                emptyTitle: "Teach the image model a look.",
+                emptyTitle: "Train an image adapter",
                 emptyMessage: "Choose a dataset and an output folder, then start training. The dashboard follows every step."
             )
         case .videoEdit:
             return StudioTaskPresentation(
                 title: title, systemImage: "timeline.selection",
                 emptyTitle: "Rework part of a clip",
-                emptyMessage: "Attach a clip and describe the change. Retake regenerates a timed region; Dub-It carries a performance onto a new scene.",
+                emptyMessage: "Attach a clip and describe the change. Retake regenerates a timed region. Dub-It carries a performance onto a new scene.",
                 promptPlaceholder: "Describe the replacement",
                 examplePrompts: ["The speaker turns toward the window and smiles", "Rain starts falling halfway through"],
                 requiresAttachment: true,
@@ -241,48 +241,48 @@ extension StudioTask {
         case .videoSubjects:
             return StudioTaskPresentation(
                 title: title, systemImage: "person.and.background.dotted",
-                emptyTitle: "Animate a subject.",
-                emptyMessage: "Pick a subject image and a driving clip, prepare masks, then animate."
+                emptyTitle: "Animate a subject",
+                emptyMessage: "Choose a subject image and a driving clip, prepare masks, then animate."
             )
         case .musicRealtime:
             return StudioTaskPresentation(
                 title: title, systemImage: "waveform.path",
-                emptyTitle: "Play music live.",
+                emptyTitle: "Play music live",
                 emptyMessage: "Start a session and steer it with prompts while it plays."
             )
         case .musicAnalyze:
             return StudioTaskPresentation(
                 title: title, systemImage: "waveform.and.magnifyingglass",
-                emptyTitle: "Hear what's in the song.",
+                emptyTitle: "Analyze a song",
                 emptyMessage: "Attach a track to read its tempo, key, meter, and a caption of what it sounds like.",
                 requiresAttachment: true
             )
         case .musicTranscribe:
             return StudioTaskPresentation(
                 title: title, systemImage: "pianokeys",
-                emptyTitle: "Turn audio into notes.",
+                emptyTitle: "Transcribe a recording to MIDI",
                 emptyMessage: "Attach a recording to transcribe it to MIDI, with the instruments it hears.",
                 requiresAttachment: true
             )
         case .musicSeparate:
             return StudioTaskPresentation(
                 title: title, systemImage: "square.stack.3d.down.forward",
-                emptyTitle: "Pull the mix apart.",
+                emptyTitle: "Separate a mix into stems",
                 emptyMessage: "Attach a track to separate it into vocals, drums, bass, and the rest.",
                 requiresAttachment: true
             )
         case .musicTrain:
             return StudioTaskPresentation(
                 title: title, systemImage: "slider.horizontal.3",
-                emptyTitle: "Teach the music model a style.",
+                emptyTitle: "Train a music adapter",
                 emptyMessage: "Assemble a manifest of clips and an output folder, then start training."
             )
         case .soundFoley:
             return StudioTaskPresentation(
                 title: title, systemImage: "film.stack",
-                emptyTitle: "Give the picture a sound.",
-                emptyMessage: "Attach a clip and describe the sound; the effect lands in sync with what happens on screen.",
-                promptPlaceholder: "Describe the sound the clip should make...",
+                emptyTitle: "Add sound to a video",
+                emptyMessage: "Attach a clip and describe the sound. The effect follows the timing of what happens on screen.",
+                promptPlaceholder: "Describe the sound for the clip",
                 examplePrompts: ["Footsteps on wet gravel", "A door slamming in a hallway", "Rain on a tent"],
                 requiresAttachment: true
             )
@@ -296,8 +296,8 @@ extension StudioTask {
         case .soundScore:
             return StudioTaskPresentation(
                 title: title, systemImage: "gauge.with.needle",
-                emptyTitle: "Score a sound against words.",
-                emptyMessage: "Attach audio and describe what it should be; CLAP says how well they match.",
+                emptyTitle: "Score a sound against a description",
+                emptyMessage: "Attach audio and describe the sound you expect. CLAP scores how well they match.",
                 promptPlaceholder: "What should the sound be?",
                 examplePrompts: ["a dog barking", "rain on a tin roof"],
                 requiresAttachment: true
@@ -314,174 +314,174 @@ extension StudioTask {
         case .voiceVoices:
             return StudioTaskPresentation(
                 title: title, systemImage: "person.wave.2",
-                emptyTitle: "Keep the voices you use.",
-                emptyMessage: "Save a reference recording as a named voice and pick it from Speak."
+                emptyTitle: "Save the voices you use",
+                emptyMessage: "Save a reference recording as a named voice, then choose it in Speak."
             )
         case .threeDFromImage:
             return StudioTaskPresentation(
                 title: title, systemImage: "cube.transparent",
-                emptyTitle: "Lift a picture into 3D.",
-                emptyMessage: "Attach a single image (or ordered views) and reconstruct a mesh.",
+                emptyTitle: "Turn an image into 3D",
+                emptyMessage: "Attach an image, or ordered views, to reconstruct a mesh or generate a Gaussian splat.",
                 requiresAttachment: true
             )
         case .chatTrain:
             return StudioTaskPresentation(
                 title: title, systemImage: "slider.horizontal.3",
-                emptyTitle: "Teach the text model a voice.",
+                emptyTitle: "Train a text adapter",
                 emptyMessage: "Choose a JSONL dataset and an output folder, then start training."
             )
         case .visionDocument:
             return StudioTaskPresentation(
                 title: title, systemImage: "doc.text.viewfinder",
                 emptyTitle: "Read the text in a document",
-                emptyMessage: "Attach one or more page images in order. Unlimited-OCR-2 reads them as one document; LightOnOCR, GLM-OCR, and Infinity-Parser2 read each page.",
+                emptyMessage: "Attach one or more page images in order. Unlimited-OCR-2 reads them as one document. LightOnOCR, GLM-OCR, and Infinity-Parser2 read each page.",
                 requiresAttachment: true
             )
         case .visionDepth:
             return StudioTaskPresentation(
                 title: title, systemImage: "square.3.layers.3d.down.right",
-                emptyTitle: "See how far things are.",
+                emptyTitle: "Estimate depth",
                 emptyMessage: "Attach an image or a clip to estimate depth for every pixel.",
                 requiresAttachment: true
             )
         case .visionPose:
             return StudioTaskPresentation(
                 title: title, systemImage: "figure.stand",
-                emptyTitle: "Find the body in the frame.",
+                emptyTitle: "Mark body, hand, and face landmarks",
                 emptyMessage: "Attach an image to mark body, hand, and face landmarks.",
                 requiresAttachment: true
             )
         case .visionFaces:
             return StudioTaskPresentation(
                 title: title, systemImage: "face.dashed",
-                emptyTitle: "Find every face.",
+                emptyTitle: "Detect and compare faces",
                 emptyMessage: "Attach an image to detect faces, embed one, or compare two.",
                 requiresAttachment: true
             )
         case .visionFlow:
             return StudioTaskPresentation(
                 title: title, systemImage: "arrow.triangle.2.circlepath",
-                emptyTitle: "Measure the motion between frames.",
+                emptyTitle: "Measure the motion between frames",
                 emptyMessage: "Attach two equal-size images to estimate dense optical flow from one to the other.",
                 requiresAttachment: true
             )
         case .visionGeometry:
             return StudioTaskPresentation(
                 title: title, systemImage: "view.3d",
-                emptyTitle: "Recover the scene.",
+                emptyTitle: "Recover scene geometry",
                 emptyMessage: "Attach an image, or several views, to estimate metric depth, normals, and a point cloud.",
                 requiresAttachment: true
             )
         case .visionLive:
             return StudioTaskPresentation(
                 title: title, systemImage: "video.badge.waveform",
-                emptyTitle: "Track through the camera.",
-                emptyMessage: "Name what to follow and start; the annotated clip lands in the Library when you stop.",
+                emptyTitle: "Track objects live from a camera",
+                emptyMessage: "Name what to follow, then start. When you stop, the annotated clip appears in the Library.",
                 promptPlaceholder: "What should mere.run track?",
                 examplePrompts: ["the person", "the red mug"]
             )
         case .audioWhoSpoke:
             return StudioTaskPresentation(
                 title: title, systemImage: "person.2.wave.2",
-                emptyTitle: "Tell the voices apart.",
+                emptyTitle: "Tell speakers apart",
                 emptyMessage: "Attach a recording to find who spoke when.",
                 requiresAttachment: true
             )
         case .audioEnhance:
             return StudioTaskPresentation(
                 title: title, systemImage: "waveform.badge.magnifyingglass",
-                emptyTitle: "Give a recording more air.",
+                emptyTitle: "Extend a recording's bandwidth",
                 emptyMessage: "Attach narrow-band audio to extend it to 48 kHz.",
                 requiresAttachment: true
             )
         case .audioLive:
             return StudioTaskPresentation(
                 title: title, systemImage: "mic.badge.plus",
-                emptyTitle: "Transcribe as you speak.",
-                emptyMessage: "Pick an input and start; words appear as they are heard."
+                emptyTitle: "Transcribe as you speak",
+                emptyMessage: "Choose an input and start. Words appear as they're heard."
             )
         case .textEmbeddings:
             return StudioTaskPresentation(
                 title: title, systemImage: "point.3.connected.trianglepath.dotted",
-                emptyTitle: "Measure meaning.",
+                emptyTitle: "Compare texts by meaning",
                 emptyMessage: "Type one text per line to embed them and compare how close they are.",
-                promptPlaceholder: "One text per line..."
+                promptPlaceholder: "One text per line"
             )
         case .textAnonymize:
             return StudioTaskPresentation(
                 title: title, systemImage: "eye.slash",
-                emptyTitle: "Take the names out.",
+                emptyTitle: "Remove personal information",
                 emptyMessage: "Paste text to find and replace personal information.",
-                promptPlaceholder: "Paste the text to protect..."
+                promptPlaceholder: "Paste the text to protect"
             )
         case .textDecide:
             return StudioTaskPresentation(
                 title: title, systemImage: "checklist",
-                emptyTitle: "Decide with evidence.",
+                emptyTitle: "Decide with evidence",
                 emptyMessage: "Frame the question, add the options and facts, and ask for a ranked answer."
             )
         case .textClassify:
             return StudioTaskPresentation(
                 title: title, systemImage: "tag",
-                emptyTitle: "Classify text.",
+                emptyTitle: "Classify text",
                 emptyMessage: "Add text and label tasks to classify with GLiNER2.5 Decide."
             )
         case .textExtract:
             return StudioTaskPresentation(
                 title: title, systemImage: "text.viewfinder",
-                emptyTitle: "Extract from text.",
+                emptyTitle: "Extract information from text",
                 emptyMessage: "Add text and an extraction schema for GLiNER2.5 Decide."
             )
         case .earthFlood:
             return StudioTaskPresentation(
                 title: title, systemImage: "water.waves",
-                emptyTitle: "Map the flood.",
+                emptyTitle: "Map flooded ground",
                 emptyMessage: "Attach a normalized S2L2A, S1RTC, and DEM tile batch to segment flooded ground.",
                 requiresAttachment: true
             )
         case .earthFire:
             return StudioTaskPresentation(
                 title: title, systemImage: "flame",
-                emptyTitle: "Map the burn.",
+                emptyTitle: "Map burned ground",
                 emptyMessage: "Attach a normalized S2L2A, S1RTC, and DEM tile batch to segment burned ground.",
                 requiresAttachment: true
             )
         case .earthTessera:
             return StudioTaskPresentation(
                 title: title, systemImage: "square.stack.3d.down.right",
-                emptyTitle: "Embed a year of observations.",
+                emptyTitle: "Embed a year of observations",
                 emptyMessage: "Attach raw Sentinel-1/2 observations with their day-of-year tensors.",
                 requiresAttachment: true
             )
         case .earthOlmoEarth:
             return StudioTaskPresentation(
                 title: title, systemImage: "globe.europe.africa",
-                emptyTitle: "Embed multisensor observations.",
+                emptyTitle: "Embed multisensor observations",
                 emptyMessage: "Attach a tile bundle with a TIMESTAMPS tensor to encode it.",
                 requiresAttachment: true
             )
         case .modelsInstalled, .modelsLocations, .modelsHealth, .modelsBenchmarks, .modelsAdapters:
             return StudioTaskPresentation(
                 title: title, systemImage: domain.systemImage,
-                emptyTitle: "Your models, on this Mac.",
-                emptyMessage: "Install, locate, check, and benchmark the models Studio runs."
+                emptyTitle: "Manage the models on this Mac",
+                emptyMessage: "Download, locate, check, and benchmark the models Studio runs."
             )
         case .serverServing, .serverMusic, .serverVision, .serverWorld:
             return StudioTaskPresentation(
                 title: title, systemImage: domain.systemImage,
-                emptyTitle: "Serve a model locally.",
+                emptyTitle: "Serve a model locally",
                 emptyMessage: "Start the server and point your tools at it."
             )
         case .runsRuns:
             return StudioTaskPresentation(
                 title: title, systemImage: domain.systemImage,
-                emptyTitle: "Every run, durable.",
+                emptyTitle: "Inspect every run",
                 emptyMessage: "Inspect local and Relay runs and fetch what they produced."
             )
         case .pluginsCatalog:
             return StudioTaskPresentation(
                 title: title, systemImage: domain.systemImage,
-                emptyTitle: "Extend mere.run.",
+                emptyTitle: "Extend mere.run",
                 emptyMessage: "Install verified companion tools and run them here."
             )
         case .imageGenerate, .videoGenerate, .musicCompose, .soundGenerate, .voiceSpeak, .chatChat, .chatCode,

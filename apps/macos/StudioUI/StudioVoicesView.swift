@@ -126,7 +126,7 @@ struct StudioVoicesView: View {
                 let reason = StudioFailureSummary.summary(
                     outputText: result.outputText, logLines: job?.log.lines.map(\.text) ?? [], exitCode: result.exitCode
                 )
-                error = (result.templateID == .speechProfileCreate ? "The voice could not be created. " : "The voice could not be deleted. ") + reason
+                error = (result.templateID == .speechProfileCreate ? "Couldn't create the voice. " : "Couldn't delete the voice. ") + reason
             }
         }
         .confirmationDialog(
@@ -138,7 +138,7 @@ struct StudioVoicesView: View {
             Button("Delete voice", role: .destructive) { delete(profile) }
             Button("Cancel", role: .cancel) {}
         } message: { _ in
-            Text("Speak's clone mode will no longer offer it. The reference recording is removed with it.")
+            Text("Speak's clone mode no longer offers it. The reference recording is removed with it.")
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Saved voices")

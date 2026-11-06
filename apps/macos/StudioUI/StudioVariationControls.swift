@@ -71,7 +71,7 @@ struct StudioVaryMenuButton: View {
         .fixedSize()
         .frame(height: 28)
         .foregroundStyle(MereRunTheme.textSecondary)
-        .help("Vary with a new seed; hold for more variations")
+        .help("Vary with a new seed. Hold for more variations.")
         .accessibilityLabel("Vary with a new seed")
         .accessibilityHint("Open the menu to run 2, 4, or 8 variations")
     }

@@ -60,7 +60,7 @@ final class StudioSidebarTests: XCTestCase {
         )
         XCTAssertEqual(StudioMachineStatus.serving(installedModels: 3, loadedModel: nil).serverDetail, "Up")
         XCTAssertEqual(StudioMachineStatus.ready(installedModels: 2).serverDetail, "Not running — starts on demand")
-        XCTAssertTrue(StudioMachineStatus.cliNotResponding.serverDetail.contains("did not answer"))
+        XCTAssertTrue(StudioMachineStatus.cliNotResponding.serverDetail.contains("didn't answer"))
         XCTAssertEqual(StudioMachineStatus.cliNotResponding.modelsDetail, "—")
         XCTAssertEqual(StudioMachineStatus.ready(installedModels: 2).modelsDetail, "2 installed")
     }
@@ -79,7 +79,7 @@ final class StudioSidebarTests: XCTestCase {
         XCTAssertEqual(machine.locationNotice?.title, "Model drive not responding")
         XCTAssertEqual(
             machine.locationNotice?.detail,
-            "/Volumes/MODELS and 1 more did not answer. macOS may be asking to allow access to it."
+            "/Volumes/MODELS and 1 more didn't answer. macOS might be asking you to allow access to it."
         )
 
         let deniedOnly = StudioMachineStatus.serving(installedModels: 3, loadedModel: nil, skippedLocations: [denied])

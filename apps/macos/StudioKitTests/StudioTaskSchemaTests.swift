@@ -20,7 +20,7 @@ final class StudioTaskSchemaTests: XCTestCase {
     /// A fresh task draft runs the template's own default command (the same option/value pairs
     /// the catalog builder emits, plus the `--json` and face numbers a page set on every run,
     /// minus the stamped destination that routing names at submit time instead), and a
-    /// populated draft's argv is exactly what `StudioTaskCommandView` shows as "Will run"
+    /// populated draft's argv is exactly what `StudioTaskCommandView` shows as "Command to run"
     /// (`StudioConsoleRun`), so the composer, the inspector, and the Command view cannot disagree.
     func testEveryTaskDraftBuildsTheCommandViewsArgv() throws {
         for task in migratingTasks {
@@ -402,7 +402,7 @@ final class StudioTaskSchemaTests: XCTestCase {
     }
 
     /// A recipe decides Image ▸ Train's base when `--model` is left to it, so readiness, the
-    /// picker, and "Get the model" name the base the CLI will train, not the template's default.
+    /// picker, and "Download the model" name the base the CLI will train, not the template's default.
     func testARecipeNamesTheBaseItTrains() {
         var draft = StudioTaskDraft(templateID: .imageTrainLoRA)
         draft.model = ""
@@ -520,7 +520,7 @@ final class StudioTaskSchemaTests: XCTestCase {
         let broken = root.appendingPathComponent("broken.json")
         try Data("not json".utf8).write(to: broken)
         draft.form["--cameras"] = .text(broken.path)
-        XCTAssertTrue(StudioCommandChecks.message(for: capability, draft: draft.form)?.hasPrefix("The camera file at broken.json could not be read") ?? false)
+        XCTAssertTrue(StudioCommandChecks.message(for: capability, draft: draft.form)?.hasPrefix("Couldn't read the camera file broken.json") ?? false)
     }
 
     /// The 3D page kept scalar keys, not a draft. Its command is rebuilt for every engine the

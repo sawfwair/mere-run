@@ -267,7 +267,7 @@ final class StudioThreeDTaskTests: XCTestCase {
 
         let broken = root.appendingPathComponent("broken.cameras.json")
         try Data("not cameras".utf8).write(to: broken)
-        XCTAssertEqual(try refusal(draft(views: views, cameras: broken))?.hasPrefix("The camera file at broken.cameras.json could not be read"), true)
+        XCTAssertEqual(try refusal(draft(views: views, cameras: broken))?.hasPrefix("Couldn't read the camera file broken.cameras.json"), true)
 
         // The Command view's Run validates the same form and shows the same reason.
         let template = try XCTUnwrap(CommandCatalog.template(id: .imageReconstruct3DMultiview))

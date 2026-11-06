@@ -90,7 +90,7 @@ struct StudioConverseView: View {
                 .lineLimit(2)
             Spacer(minLength: 8)
             if error == nil, readiness.canPull {
-                Button("Get the model", action: readinessActions.pullModel)
+                Button("Download the model", action: readinessActions.pullModel)
                     .buttonStyle(.mereSecondary)
             }
         }

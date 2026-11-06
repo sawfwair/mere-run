@@ -244,14 +244,14 @@ struct StudioOperationsView: View {
                     title: Text("Cancel this run?"),
                     message: Text(reference),
                     primaryButton: .destructive(Text("Cancel Run")) {
-                        Task { await perform(["run", "cancel", reference, "--json"], label: "Cancelling") }
+                        Task { await perform(["run", "cancel", reference, "--json"], label: "Canceling") }
                     },
                     secondaryButton: .cancel()
                 )
             case .retry(let reference):
                 Alert(
                     title: Text("Retry this Relay run?"),
-                    message: Text("Relay will submit the same immutable job bundle as a new attempt."),
+                    message: Text("Relay submits the same immutable job bundle as a new attempt."),
                     primaryButton: .default(Text("Retry")) {
                         Task { await perform(["run", "retry", reference, "--json"], label: "Retrying") }
                     },
@@ -309,7 +309,7 @@ struct StudioOperationsView: View {
                         }
                     }
                     .frame(minWidth: 220)
-                    Button(showProfileSetup ? "Hide Setup" : "Add Relay…") {
+                    Button(showProfileSetup ? "Hide setup" : "Add Relay…") {
                         showProfileSetup.toggle()
                     }
                     .buttonStyle(.mereSecondary)
@@ -334,7 +334,7 @@ struct StudioOperationsView: View {
                         .frame(width: 170)
                     TextField("Relay base URL", text: $newRelayURL)
                         .textFieldStyle(.roundedBorder)
-                    Button("Save Profile") {
+                    Button("Save profile") {
                         Task { await saveRelayProfile() }
                     }
                     .buttonStyle(.merePrimary)
@@ -369,7 +369,7 @@ struct StudioOperationsView: View {
                 Text(
                     scope == .relay
                         ? "Studio controls your runs. Relay owns nodes, placement, scheduling policy, model distribution, and fleet telemetry."
-                        : "Local discovery reads durable run folders and structured reports; it never starts or manages a node worker."
+                        : "Local discovery reads durable run folders and structured reports. It never starts or manages a node worker."
                 )
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textSecondary)
@@ -426,7 +426,7 @@ struct StudioOperationsView: View {
                                     reference: run.jobReference,
                                     title: run.jobID,
                                     state: run.state,
-                                    subtitle: run.error ?? "\(run.artifacts.count) artifact(s)"
+                                    subtitle: run.error ?? (run.artifacts.count == 1 ? "1 artifact" : "\(run.artifacts.count) artifacts")
                                 )
                             }
                         }
@@ -667,7 +667,7 @@ struct StudioOperationsView: View {
                 return
             }
             remoteRuns = decoded.jobs
-            statusMessage = "\(decoded.jobs.count) recent Relay job(s)"
+            statusMessage = decoded.jobs.count == 1 ? "1 recent Relay job" : "\(decoded.jobs.count) recent Relay jobs"
         }
 
         if preserveDetail, let selectedReference {

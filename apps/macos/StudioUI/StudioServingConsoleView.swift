@@ -212,7 +212,7 @@ struct StudioServingConsoleView: View {
 
     private var overview: some View {
         VStack(alignment: .leading, spacing: MereRunTheme.Spacing.lg) {
-            sectionTitle("Local inference service", subtitle: "One operational surface for the API and every resident model lane")
+            sectionTitle("Local inference service", subtitle: "The API server and every resident model lane")
 
             StudioServingCard {
                 HStack(alignment: .top, spacing: MereRunTheme.Spacing.lg) {
@@ -322,7 +322,7 @@ struct StudioServingConsoleView: View {
                 }
             } else {
                 StudioServingCard {
-                    unavailable("The runtime pool will appear here when a server is reachable.")
+                    unavailable("The runtime pool appears here when a server is reachable.")
                 }
             }
         }
@@ -395,7 +395,7 @@ struct StudioServingConsoleView: View {
                         cardTitle("Request lifecycle", systemImage: "arrow.triangle.branch")
                         keyValue("Admitted", "\(admission?.totalAdmittedRequests ?? 0)")
                         keyValue("Completed", "\(admission?.totalCompletedRequests ?? 0)")
-                        keyValue("Cancelled", "\(admission?.totalCancelledRequests ?? 0)")
+                        keyValue("Canceled", "\(admission?.totalCancelledRequests ?? 0)")
                         keyValue("Load", StudioServingFormat.number(traffic?.averageLoadSeconds, suffix: "s"))
                         keyValue("Prefill", StudioServingFormat.number(traffic?.averagePrefillSeconds, suffix: "s"))
                         keyValue("Decode", StudioServingFormat.number(traffic?.averageDecodeSeconds, suffix: "s"))
@@ -601,7 +601,7 @@ struct StudioServingConsoleView: View {
 
             StudioServingCard {
                 VStack(alignment: .leading, spacing: MereRunTheme.Spacing.md) {
-                    cardTitle("Connection & safety", systemImage: "network.badge.shield.half.filled")
+                    cardTitle("Connection and safety", systemImage: "network.badge.shield.half.filled")
                     HStack {
                         TextField("Host", text: $connectionHost)
                             .mereField()
@@ -613,7 +613,7 @@ struct StudioServingConsoleView: View {
                         .mereField()
                     safetySummary
                     HStack {
-                        Button("Apply & reconnect") { reconnect() }
+                        Button("Apply and reconnect") { reconnect() }
                         .buttonStyle(.mereSecondary)
                         Spacer()
                         Button("Run preflight") { runPreflight() }
@@ -640,9 +640,9 @@ struct StudioServingConsoleView: View {
                         Text("LFM2").tag("text-chat-lfm2")
                         Text("DeepSeek V4").tag("text-chat-deepseek-v4-flash")
                     }
-                    TextField("Default model id", text: $server.options.model)
+                    TextField("Default model ID", text: $server.options.model)
                         .mereField()
-                    TextField("Default adapter id or LoRA path", text: $server.options.apiLoRA)
+                    TextField("Default adapter ID or LoRA path", text: $server.options.apiLoRA)
                         .mereField()
                     HStack {
                         integerField("Requests / min", value: $server.options.apiRateLimitPerMinute)
@@ -750,7 +750,7 @@ struct StudioServingConsoleView: View {
                         TextField("Min P", text: $settingsMinP).mereField()
                     }
                 } else {
-                    Text("Sidecars use lifecycle settings (pin and TTL); generation settings remain request-scoped.")
+                    Text("Sidecars use lifecycle settings (pin and TTL). Generation settings stay with each request.")
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.textMuted)
                 }

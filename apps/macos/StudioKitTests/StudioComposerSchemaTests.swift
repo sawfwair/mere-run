@@ -343,7 +343,7 @@ final class StudioComposerSchemaTests: XCTestCase {
         XCTAssertEqual(StudioModelNaming.displayLabel(for: .createImage, model: "image-zimage-nano", titles: titles), "Z-Image Nano (4-bit)")
         XCTAssertEqual(
             ModelReadinessState.missingModel("image-zimage-nano").message(titles: titles),
-            "Z-Image Nano (4-bit) isn't on this Mac yet. Get it once and it stays."
+            "Z-Image Nano (4-bit) isn't on this Mac. Download it once and it stays."
         )
         XCTAssertEqual(StudioModelNaming.displayName("image-zimage-nano", titles: .none), "Zimage Nano")
         XCTAssertEqual(StudioModelTitles(rows: [untitled]), .none, "rows without titles add nothing")

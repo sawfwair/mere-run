@@ -54,7 +54,7 @@ struct StudioBatchWellTile<Draft: StudioAttachmentDraft>: View {
                 Divider()
                 Button("Clear") { slot.clear(in: &draft) }
             }
-            .help("\(countLabel) · each runs on its own. Click to see or change them.")
+            .help("\(countLabel). Each runs on its own. Click to see or change them.")
             .accessibilityLabel(slot.label)
             .accessibilityValue(countLabel)
             .accessibilityHint("Shows the files. Each runs on its own when you run the task.")
@@ -312,7 +312,7 @@ enum StudioBatchLaunch {
     static func failureMessage(_ submission: StudioBatchSubmission) -> String? {
         guard let first = submission.failures.first else { return nil }
         let others = submission.failures.count - 1
-        return "\(first.fileName) couldn't start: \(first.problem ?? "")" + (others > 0 ? " (and \(others) more)" : "")
+        return "\(first.fileName) couldn't start. \(first.problem ?? "")" + (others > 0 ? " (and \(others) more)" : "")
     }
 }
 

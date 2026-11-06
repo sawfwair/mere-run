@@ -43,8 +43,8 @@ struct StudioContentHeader: View {
                 isActive: isSidebarShown,
                 action: onToggleSidebar
             )
-            .help(StudioKeyboardShortcuts.help(isSidebarShown ? "Hide Sidebar" : "Show Sidebar", .showSidebar))
-            .accessibilityLabel(isSidebarShown ? "Hide Sidebar" : "Show Sidebar")
+            .help(StudioKeyboardShortcuts.help(isSidebarShown ? "Hide sidebar" : "Show sidebar", .showSidebar))
+            .accessibilityLabel(isSidebarShown ? "Hide sidebar" : "Show sidebar")
             .studioShortcut(.showSidebar)
             ViewThatFits(in: .horizontal) {
                 row(sideBlockWidth: 220)
@@ -180,8 +180,8 @@ struct StudioContentHeader: View {
                     isActive: isInspectorShown,
                     action: onToggleInspector
                 )
-                .help(StudioKeyboardShortcuts.help(isInspectorShown ? "Hide Inspector" : "Show Inspector", .showInspector))
-                .accessibilityLabel(isInspectorShown ? "Hide Inspector" : "Show Inspector")
+                .help(StudioKeyboardShortcuts.help(isInspectorShown ? "Hide inspector" : "Show inspector", .showInspector))
+                .accessibilityLabel(isInspectorShown ? "Hide inspector" : "Show inspector")
             }
 
             MereToolbarIconButton(

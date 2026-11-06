@@ -92,7 +92,7 @@ package enum StudioCommandChecks {
         do {
             return problems(try importing(cameraFileContents(at: url))).first
         } catch {
-            return "The camera file at \(url.lastPathComponent) could not be read: \(error.localizedDescription)"
+            return "Couldn't read the camera file \(url.lastPathComponent). \(error.localizedDescription)"
         }
     }
 

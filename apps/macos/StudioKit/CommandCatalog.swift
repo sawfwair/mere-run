@@ -14,7 +14,7 @@ package enum CommandCategory: String, CaseIterable, Identifiable {
     case speech = "Speech"
     case vision = "Vision"
     case geospatial = "Geospatial"
-    case media = "Music & Video"
+    case media = "Music and video"
     case sfx = "Sound FX"
     case operations = "Operations"
     case server = "Server"
@@ -318,7 +318,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
 /// result receipt it resolves artifacts from, and the progress event stream it renders.
 ///
 /// They are transport rather than user intent, so they are appended to the launched argv only —
-/// never to the "Will run" preview, a library row's command, or the console's echo of the
+/// never to the "Command to run" preview, a library row's command, or the console's echo of the
 /// command, all of which stay the command a person would type. `--preflight` runs get neither:
 /// the CLI rejects `--receipt --preflight`, and a preflight report has no progress to stream.
 package enum StudioMachineOutputFlags {

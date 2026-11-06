@@ -99,7 +99,7 @@ struct StudioAttachMenu<Face: View, ExtraItems: View>: View {
             if hasLibraryChoices {
                 Menu {
                     Button(action: diskChoice) {
-                        Label("From Disk…", systemImage: "folder")
+                        Label("From disk…", systemImage: "folder")
                     }
                     Button {
                         pickingBinding.wrappedValue = true
@@ -491,7 +491,7 @@ struct StudioLibraryInputPicker: View {
             }
             Spacer(minLength: 8)
             Button(action: onChooseFromDisk) {
-                Label("From Disk…", systemImage: "folder")
+                Label("From disk…", systemImage: "folder")
             }
             .buttonStyle(.mereSecondary)
             .help("Choose a file in Finder instead")
@@ -590,7 +590,7 @@ private struct StudioLibraryInputRow<Content: View>: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help(check.isChecked ? "Uncheck" : "Check to add several at once")
+                .help(check.isChecked ? "Clear" : "Select to add several at once")
                 .accessibilityLabel(check.isChecked ? "Checked" : "Not checked")
                 .accessibilityAddTraits(check.isChecked ? [.isButton, .isSelected] : .isButton)
             }

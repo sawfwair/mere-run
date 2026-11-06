@@ -20,7 +20,7 @@ extension StudioSecretStoreError: LocalizedError {
             return "Keychain \(operation.rawValue) was denied."
         case .failed(let operation, let status):
             let message = SecCopyErrorMessageString(status, nil).map { $0 as String } ?? "OSStatus \(status)"
-            return "Keychain \(operation.rawValue) failed: \(message)"
+            return "Keychain \(operation.rawValue) failed. \(message)"
         }
     }
 }

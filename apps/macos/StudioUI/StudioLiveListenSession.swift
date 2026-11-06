@@ -231,7 +231,7 @@ private struct StudioLiveListenSessionContent: View {
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help(session.devicesUnavailable ? "The CLI could not list microphones; the system input is used." : "The microphone the session captures")
+        .help(session.devicesUnavailable ? "The CLI couldn't list microphones, so the system input is used." : "The microphone the session captures")
         .accessibilityLabel("Microphone")
         .accessibilityValue(deviceTitle)
     }
@@ -413,7 +413,7 @@ private struct StudioLiveListenSessionContent: View {
         do {
             try session.text.write(to: url, atomically: true, encoding: .utf8)
         } catch {
-            self.error = "Could not save \(url.lastPathComponent): \(error.localizedDescription)"
+            self.error = "Couldn't save \(url.lastPathComponent). \(error.localizedDescription)"
         }
     }
 }

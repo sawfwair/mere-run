@@ -53,7 +53,7 @@ package final class StudioTaskRunner {
     /// The draft as a run launches it: the launch-time defaults a task's page applies (a Klein
     /// base gets its checkpoint and preview cadence; Audio ▸ Live's commands print events only,
     /// as JSON lines where the transcript reads them). The runner and the Command view's
-    /// "Will run" both go through this, so a Run from either surface and the preview agree;
+    /// "Command to run" both go through this, so a Run from either surface and the preview agree;
     /// every other task's draft is left as it is.
     package static func launching(_ draft: StudioTaskDraft, source: StudioScopeSource) -> StudioTaskDraft {
         switch draft.templateID {
@@ -63,7 +63,7 @@ package final class StudioTaskRunner {
     }
 
     /// The draft a Run launches, destinations and all: `launching`, then named by
-    /// `StudioOutputLocation.destination(for:)`. The Command view's "Will run" reads this, so it
+    /// `StudioOutputLocation.destination(for:)`. The Command view's "Command to run" reads this, so it
     /// shows the files the run will write rather than the draft's blank destination.
     package static func launchPreview(_ draft: StudioTaskDraft, source: StudioScopeSource) -> StudioTaskDraft {
         StudioOutputLocation.destination(for: launching(draft, source: source), source: source)
@@ -225,7 +225,7 @@ package final class StudioTaskRunner {
             let reason = request.template.id == .visionTrackLive
                 && AVCaptureDevice.authorizationStatus(for: .video) != .authorized
                 ? Self.cameraDeniedMessage
-                : (result?.outputText ?? "The run could not be started.")
+                : (result?.outputText ?? "Couldn't start the run.")
             library.complete(
                 id: request.id, exitCode: result?.exitCode ?? 1, outputURL: result?.outputURL,
                 outputText: reason, commandPreview: preview,

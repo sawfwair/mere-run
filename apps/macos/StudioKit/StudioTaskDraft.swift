@@ -190,7 +190,7 @@ package struct StudioTaskDraft: Codable, Equatable {
         template?.defaultDraft() ?? CommandDraft()
     }
 
-    /// Exactly what the Command view's "Will run" shows for the same form: the form scoped to the
+    /// Exactly what the Command view's "Command to run" shows for the same form: the form scoped to the
     /// model it runs, so a value that model does not use is kept in the form but not run.
     package func arguments(source: StudioScopeSource) -> [String] {
         guard let capability = source.capability(for: templateID) else { return [] }

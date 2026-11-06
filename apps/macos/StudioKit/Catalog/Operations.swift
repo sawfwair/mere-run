@@ -15,7 +15,7 @@ extension CommandCatalog {
         CommandTemplate(
             id: .adapterPull,
             category: .operations,
-            title: "Pull adapter",
+            title: "Download adapter",
             subtitle: "Download and verify a cataloged LoRA",
             systemImage: "arrow.down.circle",
             promptLabel: "Adapter ID",
@@ -156,7 +156,7 @@ extension CommandCatalog {
         CommandTemplate(
             id: .nodeConsole,
             category: .operations,
-            title: "Manage Nodes & Relay",
+            title: "Manage nodes and Relay",
             subtitle: "Pair GPUs, schedule fleet work, and inspect nodes",
             systemImage: "server.rack",
             externalURL: URL(string: "https://relay.mere.run")
@@ -396,7 +396,7 @@ extension CommandCatalog {
         switch id {
         case .adapterPull:
             if draft.prompt.isBlank {
-                return "Adapter id is required."
+                return "Adapter ID is required."
             }
         case .runList:
             if draft.operationsRoot.isBlank == draft.operationsExecutor.isBlank {
@@ -445,7 +445,7 @@ extension CommandCatalog {
             }
         case .worldServe:
             if draft.model.isBlank || draft.operationsBaseModel.isBlank {
-                return "Base and world model ids are required."
+                return "Base and world model IDs are required."
             }
             if !(1...65_535).contains(draft.port) {
                 return "Port must be between 1 and 65535."
@@ -474,7 +474,7 @@ extension CommandCatalog {
             }
         case .modelRuntimeGet, .modelRuntimeSet:
             if draft.model.isBlank {
-                return "Managed model id or alias is required."
+                return "Managed model ID or alias is required."
             }
             if draft.operationsPinned && draft.operationsUnpinned {
                 return "Choose pinned or unpinned, not both."

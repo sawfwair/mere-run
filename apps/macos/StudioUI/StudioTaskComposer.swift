@@ -259,7 +259,7 @@ struct StudioTaskComposer: View {
             .frame(width: Metrics.sendDiameter, height: Metrics.sendDiameter)
         }
         .buttonStyle(.plain)
-        .help(queuedCount == 0 ? "Stop (⌘.) · ⌘↩ queues another run" : "Stop (⌘.) · \(queuedCount) queued")
+        .help(queuedCount == 0 ? "Stop (⌘.). Press ⌘↩ to queue another run." : "Stop (⌘.). \(queuedCount) queued.")
         .accessibilityLabel("Stop current run")
     }
 

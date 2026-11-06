@@ -79,7 +79,7 @@ final class StudioTaskRunnerTests: XCTestCase {
         XCTAssertNil(runner.currentJob(for: .audioEnhance), "a cancelled job is no longer the task's current one")
     }
 
-    /// The Command view's "Will run" is the launch preview: the draft's own blank destination
+    /// The Command view's "Command to run" is the launch preview: the draft's own blank destination
     /// named the way the runner names it, so the argv it shows is the argv that runs.
     func testTheLaunchPreviewShowsTheDestinationTheRunWrites() throws {
         controller.readinessByTask[.audioEnhance] = .ready

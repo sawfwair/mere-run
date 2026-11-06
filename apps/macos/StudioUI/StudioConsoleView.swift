@@ -16,7 +16,7 @@ package enum StudioConsoleWindow {
 ///
 /// The middle pane is `ContractForm` over `MereRunCapabilityCatalog`, so the console has no
 /// per-command view of its own: a capability's options come from the contract, in the contract's
-/// groups, with the control each option's `kind` and `range` call for, and the "Will run" block
+/// groups, with the control each option's `kind` and `range` call for, and the "Command to run" block
 /// shows the argv `StudioConsoleCommand` builds from the same values. A capability nobody has
 /// designed a surface for is reachable here the day the contract declares it.
 ///
@@ -78,7 +78,7 @@ package struct StudioConsoleView: View {
 
             Group {
                 if let job { StudioConsoleLog(job: job) }
-                else { ContentUnavailableView("Run output", systemImage: "terminal", description: Text("Your Console run will appear here.")) }
+                else { ContentUnavailableView("Run output", systemImage: "terminal", description: Text("Your Console run appears here.")) }
             }
                 .frame(minWidth: 320, idealWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -425,7 +425,7 @@ private struct StudioConsoleForm: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                MereEyebrow("Will run")
+                MereEyebrow("Command to run")
                 Spacer()
                 Button {
                     copyCommand()

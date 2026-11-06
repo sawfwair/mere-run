@@ -355,7 +355,7 @@ final class StudioLocalServerTests: XCTestCase {
             message(["API server", "vision server", "music server"], 0, 0),
             "Quitting stops the API server, vision server, and music server Studio started."
         )
-        XCTAssertEqual(message([], 1, 3), "Quitting stops 1 running job. 3 queued jobs will not start.")
+        XCTAssertEqual(message([], 1, 3), "Quitting stops 1 running job. 3 queued jobs don't start.")
         XCTAssertEqual(message([], 0, 1), "Quitting drops 1 queued job.")
     }
 
