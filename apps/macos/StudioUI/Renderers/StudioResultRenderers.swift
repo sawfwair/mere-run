@@ -52,6 +52,8 @@ enum StudioResultRendering: Equatable {
 /// What a renderer draws in the Analyze input column, in place of the input, when the chosen
 /// view is about the result rather than the picture it came from.
 enum StudioResultCanvasRendering: Equatable {
+    /// An Earth run's logits as a class mask, or its embeddings as false color.
+    case earthMap(StudioEarthMapSource)
     /// The input picture with face boxes and landmarks, or pose landmarks, over it.
     case overlay(image: URL, StudioVisionOverlay)
     /// A dense flow field as vectors.
@@ -89,7 +91,8 @@ enum StudioResultRenderers {
         item: StudioLibraryItem
     ) -> StudioResultRendering? {
         switch (view, document) {
-        case (.tensor, .tensor(let header)):
+        case (.tensor, .tensor(let header)), (.map, .tensor(let header)):
+            // The map takes the input column; the panel keeps the tensor's header.
             return .tensor(header)
         case (.score, .clap(let output)):
             return .clap(output)
@@ -167,6 +170,8 @@ enum StudioResultRenderers {
         inputURL: URL?
     ) -> StudioResultCanvasRendering? {
         switch (view, document) {
+        case (.map, _):
+            return item.flatMap { StudioEarthMapSource(item: $0, inputURL: inputURL) }.map { .earthMap($0) }
         case (.points, .faces(let faces)):
             return inputURL.map { .overlay(image: $0, .faces(faces)) }
         case (.points, .pose(let pose)):
@@ -327,6 +332,8 @@ struct StudioResultCanvasView: View {
 
     var body: some View {
         switch rendering {
+        case .earthMap(let source):
+            StudioEarthMapView(source: source, maxHeight: maxHeight)
         case .overlay(let image, let overlay):
             StudioVisionOverlayView(imageURL: image, overlay: overlay)
                 .frame(maxHeight: maxHeight)
