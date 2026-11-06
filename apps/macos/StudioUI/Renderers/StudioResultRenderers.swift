@@ -47,6 +47,8 @@ enum StudioResultRendering: Equatable {
     case validationArtifacts(StudioImageValidationReport)
     /// The counts a 3D run's manifest reports, under the mesh tile on its feed card.
     case meshSummary(StudioMeshSummary)
+    /// A Gaussian splat PLY drawn by the Metal splat viewer, with the manifest's Gaussian count.
+    case gaussianSplat(StudioGaussianSplatResult, summary: StudioMeshSummary?)
 }
 
 /// What a renderer draws in the Analyze input column, in place of the input, when the chosen
@@ -192,6 +194,10 @@ enum StudioResultRenderers {
     /// header, each in place of the output grid a WAV or a `.safetensors` file has no picture
     /// for; a 3D run's manifests are summarized under its mesh tile. Nil leaves the grid alone.
     static func cardRendering(for item: StudioLibraryItem, files: [URL]) -> StudioCardRendering? {
+        // A splat PLY (found by its header) gets the splat viewer; a mesh keeps its Quick Look tile.
+        if let splat = StudioGaussianSplatResult.find(in: files) {
+            return StudioCardRendering(rendering: .gaussianSplat(splat, summary: StudioMeshSummary.load(item: item)), placement: .replacesOutputs)
+        }
         if item.templateID?.studioTask == .threeDFromImage, let summary = StudioMeshSummary.load(item: item) {
             return StudioCardRendering(rendering: .meshSummary(summary), placement: .belowOutputs)
         }
@@ -217,6 +223,8 @@ enum StudioResultRenderers {
             return []
         case .syncReview(_, let audio), .audioOutput(let audio):
             return [audio]
+        case .gaussianSplat(let splat, _):
+            return [splat.splatURL]
         }
     }
 }
@@ -245,7 +253,7 @@ struct StudioCardRenderingView: View {
             StudioResultRendererView(rendering: rendering, item: item)
                 .background(MereRunTheme.surfaceRaised.opacity(0.6))
                 .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
-        case .syncReview:
+        case .syncReview, .gaussianSplat:
             StudioResultRendererView(rendering: rendering, item: item)
         }
     }
@@ -299,6 +307,8 @@ struct StudioResultRendererView: View {
             StudioImageValidationArtifacts(report: report)
         case .meshSummary(let summary):
             StudioMeshSummaryRow(summary: summary)
+        case .gaussianSplat(let splat, let summary):
+            StudioGaussianSplatCard(result: splat, summary: summary)
         }
     }
 }

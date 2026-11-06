@@ -1267,9 +1267,22 @@ counts under it
 IDOL (`vision image-to-3d-idol`) reads local checkpoint folders instead of a
 managed model, so the composer shows no model chip for it. Its `--model`,
 `--dino`, and `--vae` folders are folder rows in the inspector's Model section
-(`StudioTaskSchema.takesModelFolder`), and the card shows `object.ply` with the
-Gaussian count from `manifest.json`. Quick Look draws the PLY as points, not as
-rendered splats.
+(`StudioTaskSchema.takesModelFolder`). Its card draws `object.ply` in a Metal
+splat viewer in place of the Quick Look tile, with the prepared `input.png`
+beside it and the Gaussian count from `manifest.json` under both. The card
+picks the viewer by the PLY header, not the file name: any PLY with the 3DGS
+splat properties gets it, and a mesh or point cloud keeps Quick Look.
+`StudioKit/StudioGaussianSplat.swift` reads binary little-endian 3DGS PLY files
+off the main thread in the property order the header declares. It applies the
+splat activations and reads a file larger than 300,000 Gaussians at a stride.
+`StudioUI/Renderers/StudioGaussianSplatRenderer.swift` draws each Gaussian as a
+screen-space ellipse with Gaussian falloff, blended back to front after a
+depth sort that runs off the main thread whenever the camera moves.
+`StudioUI/Renderers/StudioGaussianSplatView.swift` hosts it. The view stands
+the file upright, since 3DGS and IDOL PLY files put +y down, and starts from
+the input camera in `camera.json`. Drag to orbit, pinch to zoom, Shift-drag to
+pan, and double-click to reset. In the feed, a plain scroll scrolls the page
+and Command-scroll zooms. With Reduce Motion on, reset jumps instead of easing.
 InstantMesh's ordered views are reordered in the inspector, and its optional
 calibrated cameras are edited per view there
 (`StudioUI/StudioInstantMeshCameraEditor.swift`,

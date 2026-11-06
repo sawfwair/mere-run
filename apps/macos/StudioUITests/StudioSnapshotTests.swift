@@ -2374,6 +2374,33 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    /// 3D ▸ From image with a finished IDOL run: the card draws `object.ply` in the Metal splat
+    /// viewer from the run's input camera, with the prepared input beside it and the Gaussian
+    /// count under both, light and dark. The harness captures with `cacheDisplay`, which the
+    /// viewer answers with an offscreen Metal frame.
+    func testThreeDSplatSnapshots() throws {
+        let workspace = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.readinessResponses)
+        )
+        defer { workspace.tearDown() }
+        try workspace.seedSplatRun()
+        let task = StudioTask.threeDFromImage
+        let runner = StudioTaskRunner(controller: workspace.controller, library: workspace.library)
+        for appearance in StudioSnapshotAppearance.allCases {
+            let view = StudioTaskWorkspace(task: task, models: workspace.controller.modelStore)
+                .environmentObject(workspace.controller)
+                .environmentObject(workspace.library)
+                .environmentObject(NavigationModel(destination: task.destination))
+                .environment(\.studioTaskSessions, workspace.controller.taskSessions)
+                .environment(\.studioTaskScope, task.rawValue)
+                .environment(\.studioTaskRunner, runner)
+                .frame(width: 1_440, height: 820)
+            try workspace.write(view, size: CGSize(width: 1_440, height: 820), appearance: appearance,
+                                name: "three-d-splat-\(appearance.rawValue)", settle: 3)
+        }
+    }
+
     /// Earth on the shared task workspace, through the root: TESSERA with a finished run — the
     /// attached bundle read against the tensors the command needs on the left, the embedding's
     /// header in the result panel on the right, the inspector open with the constrained
@@ -4362,6 +4389,60 @@ private final class SnapshotFixture {
             try Self.writeMugPNG(to: url, side: 256)
             return url
         }
+    }
+
+    /// A finished 3D ▸ IDOL run of the mug: the folder `vision image-to-3d-idol` writes, with a
+    /// 65,536-Gaussian sphere standing in for `object.ply`, the mug as the prepared input, the
+    /// input camera, and the run manifest's Gaussian count; the task draft is on the IDOL engine.
+    func seedSplatRun() throws {
+        guard let template = CommandCatalog.template(id: .visionImageTo3DIdol) else {
+            throw StudioSnapshotError.noContentView
+        }
+        let folder = root.appendingPathComponent("3D/mug-idol", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let ply = folder.appendingPathComponent("object.ply", isDirectory: false)
+        try SplatFixtures.ply(SplatFixtures.sphere(count: 65_536)).write(to: ply, options: .atomic)
+        let input = folder.appendingPathComponent("input.png", isDirectory: false)
+        try Self.writeMugPNG(to: input, side: 512)
+        let camera = folder.appendingPathComponent("camera.json", isDirectory: false)
+        try #"{"fov": 23.643785, "pitch": 0.21155815, "radius": 3.9961631, "yaw": 2.2415354}"#
+            .write(to: camera, atomically: true, encoding: .utf8)
+        let manifest = folder.appendingPathComponent("manifest.json", isDirectory: false)
+        try #"{"schemaVersion": 1, "status": "completed", "gaussianCount": 65536}"#
+            .write(to: manifest, atomically: true, encoding: .utf8)
+
+        var draft = template.defaultDraft()
+        draft.inputPath = mugURL.path
+        draft.outputPath = folder.path
+        let startedAt = Self.mockupTime(hour: 10, minute: 30)
+        let request = StudioRunRequest(mode: .createImage, templateID: .visionImageTo3DIdol, template: template, draft: draft)
+        var row = StudioLibraryItem(
+            id: UUID(),
+            mode: .createImage,
+            prompt: "",
+            inputURL: mugURL,
+            outputURL: manifest,
+            createdAt: startedAt,
+            updatedAt: startedAt.addingTimeInterval(130),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run vision image-to-3d-idol mug.png --output 3D/mug-idol",
+            outputText: nil,
+            templateID: .visionImageTo3DIdol,
+            commandDraft: draft,
+            commandArguments: template.arguments(from: request.draft, source: .contract),
+            artifactURLs: [ply, input, camera, manifest],
+            artifactRoles: [
+                camera.standardizedFileURL.path: "camera-json",
+                manifest.standardizedFileURL.path: "run-manifest-json",
+            ]
+        )
+        row.inputIdentity = StudioInputIdentity.read(mugURL)
+        library.upsert(row)
+        var taskDraft = StudioTaskDraft(templateID: .visionImageTo3DIdol)
+        taskDraft.setArgument(0, mugURL.path)
+        controller.taskSessions.setTaskDraft(taskDraft, for: .threeDFromImage)
+        controller.taskSessions.set(Optional(row.id), for: StudioTask.threeDFromImage.rawValue + ".requestID")
     }
 
     /// A unit cube as binary glTF: eight corners and twelve triangles in one buffer, the shape the

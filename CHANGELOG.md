@@ -43,6 +43,11 @@ The format is based on Keep a Changelog.
   checkpoint folders in the inspector; the composer shows no model chip because
   IDOL has no managed model. The result card shows `object.ply` and the
   Gaussian count from `manifest.json`.
+- Studio draws Gaussian splats. An IDOL result card shows `object.ply` in a
+  Metal splat viewer instead of a Quick Look tile, which drew the PLY as
+  uncolored points. The viewer starts from the input camera; drag to orbit,
+  pinch to zoom, and double-click to reset. Studio detects a splat by its PLY
+  header, so meshes and point clouds still open in Quick Look.
 - Show more of each Studio prompt task's options in the inspector: BPM, key,
   time signature, vocal language, and guidance for Music; language and
   temperature for Speak; task, Parakeet provider, beam size, and keyword bias
