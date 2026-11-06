@@ -67,7 +67,7 @@ struct StudioConsoleLog: View {
                     Image(systemName: "terminal")
                         .font(.system(size: 28, weight: .medium))
                         .foregroundStyle(MereRunTheme.textMuted)
-                    Text("Run output will appear here.")
+                    Text("Run output appears here.")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(MereRunTheme.textMuted)
                 }

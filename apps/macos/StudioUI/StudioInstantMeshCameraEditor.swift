@@ -81,7 +81,7 @@ struct StudioInstantMeshCameraEditor: View {
             enabled = true
             message = nil
         } catch {
-            message = "That file is not an InstantMesh camera document: \(error.localizedDescription)"
+            message = "That file isn't an InstantMesh camera document. \(error.localizedDescription)"
         }
     }
 
@@ -92,7 +92,7 @@ struct StudioInstantMeshCameraEditor: View {
         do {
             try document.json().write(to: url, options: .atomic)
         } catch {
-            message = "Studio could not save the camera file: \(error.localizedDescription)"
+            message = "Couldn't save the camera file. \(error.localizedDescription)"
         }
     }
 }
@@ -269,7 +269,7 @@ struct StudioInstantMeshCamerasOverride: View {
             savedPath = url.path
             if camerasPath != url.path { draft.form[Self.camerasFlag] = .text(url.path) }
         } catch {
-            message = "Studio could not write the camera file: \(error.localizedDescription)"
+            message = "Couldn't write the camera file. \(error.localizedDescription)"
         }
     }
 
@@ -286,7 +286,7 @@ struct StudioInstantMeshCamerasOverride: View {
             suppliesCameras = true
             message = nil
         } catch {
-            message = "The camera file at \(url.lastPathComponent) could not be read into the editor: \(error.localizedDescription)"
+            message = "Couldn't open \(url.lastPathComponent) in the editor. \(error.localizedDescription)"
         }
     }
 

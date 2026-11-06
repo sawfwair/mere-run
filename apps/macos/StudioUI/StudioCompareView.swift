@@ -505,8 +505,8 @@ private struct StudioComparePaneFooter: View {
             }
         }
         .buttonStyle(.mereIcon(tint: kept ? MereRunTheme.yellow : MereRunTheme.textSecondary))
-        .help(kept ? "Remove from Favorites" : "Keep this one in Favorites")
-        .accessibilityLabel(kept ? "Remove \(pane.letter) from Favorites" : "Keep \(pane.letter)")
+        .help(kept ? "Remove from favorites" : "Keep this one in favorites")
+        .accessibilityLabel(kept ? "Remove \(pane.letter) from favorites" : "Keep \(pane.letter)")
     }
 
     private func useSettings(labelled: Bool) -> some View {

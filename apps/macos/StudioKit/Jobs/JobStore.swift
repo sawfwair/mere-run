@@ -5,7 +5,7 @@ package enum JobStoreError: LocalizedError {
     case notRunning
 
     package var errorDescription: String? {
-        "This job is not running."
+        "This job isn't running."
     }
 }
 
@@ -494,7 +494,7 @@ package final class JobStore: ObservableObject {
             try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
             return nil
         } catch {
-            return "Could not create output directory \(directoryURL.path): \(error.localizedDescription)"
+            return "Couldn't create the output folder \(directoryURL.path). \(error.localizedDescription)"
         }
     }
 }

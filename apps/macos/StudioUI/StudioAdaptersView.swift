@@ -141,6 +141,8 @@ struct StudioAdaptersView: View {
                         Image(systemName: "xmark.circle.fill")
                     }
                     .buttonStyle(.mereIcon(tint: MereRunTheme.textMuted))
+                    .help("Clear search")
+                    .accessibilityLabel("Clear search")
                 }
             }
             .padding(.horizontal, MereRunTheme.Spacing.sm)
@@ -325,7 +327,7 @@ struct StudioAdaptersView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Train your own")
                         .font(.system(size: 16, weight: .semibold))
-                    Text("Launch a typed training run; progress and outputs stay in the Library.")
+                    Text("Start a training run. Its progress and outputs stay in the Library.")
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.textMuted)
                 }
@@ -335,7 +337,7 @@ struct StudioAdaptersView: View {
             HStack(spacing: 10) {
                 trainingButton("Image LoRA", symbol: "photo.badge.plus", templateID: .imageTrainLoRA)
                 trainingButton("Text LoRA", symbol: "text.badge.plus", templateID: .textTrainLoRA)
-                trainingButton("Music Adapter", symbol: "music.note.list", templateID: .musicTrainAdapter)
+                trainingButton("Music adapter", symbol: "music.note.list", templateID: .musicTrainAdapter)
             }
 
             if !trainingRuns.isEmpty {
@@ -418,7 +420,7 @@ struct StudioAdaptersView: View {
         guard result.exitCode == 0,
               let data = result.stdout.data(using: .utf8),
               let decoded = try? JSONDecoder().decode(StudioAdapterCatalogPayload.self, from: data) else {
-            statusMessage = "Could not load adapters"
+            statusMessage = "Couldn't load adapters"
             return
         }
         payload = decoded
@@ -555,7 +557,7 @@ private struct StudioTrainingRunDetail: View {
             }
 
             if lossPoints.isEmpty && samples.isEmpty {
-                Text("Metrics and sample images will appear here as the trainer writes them.")
+                Text("Metrics and sample images appear here as the trainer writes them.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
             }

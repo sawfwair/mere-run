@@ -107,8 +107,8 @@ struct StudioPluginsView: View {
                 return Alert(
                     title: Text("Roll back \(pending.plugin.name)?"),
                     message: Text(
-                        "mere.run will restore the retained signed bundle for \(pending.plugin.id) and "
-                            + "make it the active version. The current version stays on disk."
+                        "mere.run restores the retained signed bundle for \(pending.plugin.id) and "
+                            + "makes it the active version. The current version stays on disk."
                     ),
                     primaryButton: .destructive(Text("Roll back")) {
                         Task { await rollback(pending.plugin) }
@@ -119,8 +119,8 @@ struct StudioPluginsView: View {
             return Alert(
                 title: Text(pending.force ? "Update \(pending.plugin.name)?" : "Install \(pending.plugin.name)?"),
                 message: Text(
-                    "mere.run will execute the catalog-pinned \(pending.channel) install through pipx, "
-                        + "then verify the plugin manifest."
+                    "mere.run runs the catalog-pinned \(pending.channel) install through pipx, "
+                        + "then verifies the plugin manifest."
                 ),
                 primaryButton: .default(Text(pending.force ? "Update" : "Install")) {
                     Task { await install(pending) }
@@ -338,7 +338,7 @@ struct StudioPluginsView: View {
                                     }
                                     .buttonStyle(.mereSecondary)
                                 }
-                                Button("Run Doctor") {
+                                Button("Run doctor") {
                                     Task { await doctor(plugin) }
                                 }
                                 .buttonStyle(.mereSecondary)
@@ -412,7 +412,7 @@ struct StudioPluginsView: View {
 
     private func statusBadge(_ plugin: StudioPluginCatalogEntry) -> some View {
         Label(
-            plugin.verified ? "Installed & verified" : plugin.installed ? "Needs attention" : "Not installed",
+            plugin.verified ? "Installed and verified" : plugin.installed ? "Needs attention" : "Not installed",
             systemImage: plugin.verified ? "checkmark.seal.fill" : plugin.installed
                 ? "exclamationmark.triangle.fill" : "arrow.down.circle"
         )
@@ -504,7 +504,7 @@ struct StudioPluginsView: View {
         operationOutput = result.outputText
         statusMessage = result.exitCode == 0
             ? "Read the catalog entry for \(plugin.id)"
-            : "Could not read \(plugin.id)"
+            : "Couldn't read \(plugin.id)"
     }
 
     /// `plugin run` — runs the installed entrypoint out of process without touching PATH.
@@ -530,7 +530,7 @@ struct StudioPluginsView: View {
         operationOutput = result.outputText
         statusMessage = result.exitCode == 0
             ? "Restored the retained bundle for \(plugin.id)"
-            : "Could not roll back \(plugin.id)"
+            : "Couldn't roll back \(plugin.id)"
         await refresh()
     }
 

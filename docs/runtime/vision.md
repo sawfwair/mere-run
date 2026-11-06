@@ -70,7 +70,10 @@ reconstruct-3d-multiview`. For the image-family spellings, see the
 `vision image-to-3d-idol` turns one object image into a standard 3D Gaussian
 Splatting PLY. It runs the IDOL denoiser and decoders, DINOv3 H+, and the
 FLUX.2 VAE in Swift and MLX. The command requires local checkpoints and does
-not have a managed model ID or Studio task.
+not have a managed model ID. In Studio, choose **IDOL Gaussian splats** as the
+engine in **3D** ▸ **From image**, and then pick the three checkpoint folders in
+the inspector's **Model & adapters** section. The command is also in the
+capability catalog (`mere.run catalog --json`) as `vision.image-to-3d-idol`.
 
 Prepare these directories before running it:
 
@@ -154,21 +157,24 @@ Some downloads require you to acknowledge upstream terms with
 ## macOS Studio
 
 The macOS Studio app exposes the same commands through its shared capability
-contract, as the ten tasks of the **Vision** domain. **Read**, **Find**,
-**Segment**, and **Track** show the answer beside the input: boxes drawn over
-the picture, masks composited on it, track spans under the video's scrubber,
-and the raw result document one segment away. **Depth**, **Pose**, **Faces**,
-**Flow**, **Geometry**, and **Live** cover still and video depth, native pose
-and optical flow, Buffalo-L detection, embedding, comparison and batch
-analysis, single- and multi-view geometry, and live camera tracking. They draw
-face and pose overlays and direction-colored flow vectors, play annotated and
-depth video, embed orbitable point clouds, report request-scoped progress, and
-keep structured and visual sidecars in the Library.
+contract, as the nine tasks of the **Vision** domain. **Read** runs inspection
+and captioning. **Read**, **Find**, **Segment**, and **Track** show the answer
+beside the input: boxes drawn over the picture, masks composited on it, track
+spans under the video's scrubber, and the raw result document one segment away.
+**Document** runs `vision ocr` with every backend: Unlimited-OCR-2 reads several
+page images as one document, and LightOnOCR, GLM-OCR, and Infinity-Parser2 read
+each page. **Pose**, **Faces**, **Flow**, and **Live** cover native pose and
+optical flow, Buffalo-L detection, embedding, comparison and batch analysis, and
+live camera tracking. They draw face and pose overlays and direction-colored
+flow vectors, play annotated video, report request-scoped progress, and keep
+structured and visual sidecars in the Library.
 
-Managed image-to-3D commands live in the **3D** domain so the app has one
-reconstruction flow. The grounding server has its own **Server ▸ Vision
-server** task. The **Command view** (⌥⌘C) and the **Command Console** show and
-run the raw command for any of these tasks.
+Depth, geometry, and managed image-to-3D commands live in the **3D** domain, so
+the app has one reconstruction flow. **3D ▸ Depth** covers still and video depth
+and plays depth video. **3D ▸ Geometry** covers single- and multi-view geometry
+and embeds orbitable point clouds. The grounding server has its own
+**Server ▸ Vision** task. The **Command view** (⌥⌘C) and the **Command Console**
+show and run the raw command for any of these tasks.
 
 ## Understand images
 
@@ -658,7 +664,7 @@ Options:
 - `--receipt` prints a final JSON line that names the EXR, preview, and
   manifest. You can't combine it with `--dry-run`.
 
-`vision depth` runs from the CLI and Studio's **Vision ▸ Depth** task only. It
+`vision depth` runs from the CLI and Studio's **3D ▸ Depth** task only. It
 has no API route: the depth API serves video depth, and the catalog declares
 `vision-depth-marigold-v2` CLI-only so API discovery doesn't list it. Machine
 admission treats every run as a large job from the catalog's 64 GB minimum,

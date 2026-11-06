@@ -27,12 +27,13 @@ loop: create or edit, source or reference audio, quality and language-model (LM)
 planning, ranked candidates, adapter stacks, stems, LRC, recipes, and DAW
 export. **Music ▸ Analyze** provides structured audio analysis and
 **Music ▸ Transcribe** the MuScriptor controls with an embedded MIDI piano roll;
-the resident server's start, stop, and health live under **Server ▸ Music
-server**. **Music ▸ Realtime** owns Magenta playback and MIDI steering, with the
+the resident server's start, stop, and health live under **Server ▸ Music**.
+**Music ▸ Realtime** owns Magenta playback and MIDI steering, with the
 transport, the recording's waveform, and Prompt A/B steering sent over the CLI's
 stdin protocol. **Music ▸ Train** owns LoRA/LoKr dataset inspection, launch,
-metrics, and run comparison. **Music ▸ Separate** shares the restoration surface
-with Audio. The Command Console remains available for raw command-level control.
+metrics, and run comparison. **Music ▸ Separate** runs stem separation and
+restoration and lists every stem with its own player. The Command Console
+remains available for raw command-level control.
 App-to-CLI tests reject any emitted flag absent from `mere.run catalog --json`.
 
 ## Model families

@@ -124,7 +124,7 @@ final class MereRunControllerAPIKeyStorageTests: XCTestCase {
         XCTAssertTrue(store.secrets.isEmpty)
         XCTAssertNil(UserDefaults.standard.object(forKey: legacyDefaultsKey), "No fallback to defaults")
         let notice = try XCTUnwrap(controller.runtimeAPIKeyStorageNotice)
-        XCTAssertTrue(notice.contains("could not be saved to the Keychain"), notice)
+        XCTAssertTrue(notice.contains("Couldn't save the runtime API key to the Keychain"), notice)
 
         store.writeError = nil
         controller.runtimeAPIKey = "session-key-2"

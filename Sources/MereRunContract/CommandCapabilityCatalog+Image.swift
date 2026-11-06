@@ -402,4 +402,57 @@ extension MereRunCapabilityCatalog {
         output: .init(kind: .directory, flag: "--output"),
         routing: imageReconstruct3DMultiviewRouting
     )
+
+    /// IDOL reads local checkpoint folders rather than a managed model: DINOv3 and FLUX.2-dev
+    /// require separately accepted terms, so `--model`, `--dino`, and `--vae` are directories and
+    /// the command declares no routing.
+    public static let visionImageTo3DIdol = MereRunCommandCapability(
+        id: "vision.image-to-3d-idol",
+        command: ["vision", "image-to-3d-idol"],
+        title: "IDOL Gaussian splats",
+        summary: "Generate an object Gaussian splat from one image with native IDOL and local checkpoints.",
+        arguments: [
+            .init(name: "input", label: "Input image", kind: .file, required: true)
+        ],
+        options: [
+            .init(
+                flag: "--model", label: "IDOL checkpoints", kind: .directory, required: true,
+                group: Group.modelAndAdapters, tier: .standard
+            ),
+            .init(
+                flag: "--dino", label: "DINOv3 encoder", kind: .directory, required: true,
+                group: Group.modelAndAdapters, tier: .standard
+            ),
+            .init(
+                flag: "--vae", label: "FLUX.2 VAE", kind: .directory, required: true,
+                group: Group.modelAndAdapters, tier: .standard
+            ),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .directory, required: true, group: Group.output),
+            .init(
+                flag: "--mode", label: "Framing", kind: .choice, choices: ["synthetic", "real"],
+                defaultValue: "synthetic", group: Group.inputs, tier: .essential
+            ),
+            .init(flag: "--already-framed", label: "Already framed", kind: .boolean, group: Group.inputs, tier: .standard),
+            .init(flag: "--seed", label: "Seed", kind: .integer, defaultValue: "42", group: Group.sampling, tier: .essential),
+            .init(
+                flag: "--steps", label: "Steps", kind: .integer, defaultValue: "50",
+                group: Group.sampling, tier: .standard, range: .init(min: 1, max: 1_000, step: 1)
+            ),
+            .init(
+                flag: "--guidance", label: "Guidance", kind: .number, defaultValue: "3.0",
+                group: Group.sampling, tier: .standard, range: .init(min: 0, max: 100, step: 0.5)
+            ),
+            .init(
+                flag: "--time-shift", label: "Time shift", kind: .number, defaultValue: "3.0",
+                group: Group.sampling, tier: .expert, range: .init(min: 0.1, max: 100, step: 0.1)
+            ),
+            .init(
+                flag: "--num-gaussians", label: "Gaussians", kind: .integer, defaultValue: "262144",
+                group: Group.sampling, tier: .standard, range: .init(min: 32_768, max: 1_048_576, step: 32_768)
+            ),
+            .init(flag: "--dry-run", label: "Dry run", kind: .boolean, group: Group.run, tier: .standard),
+            .init(flag: "--json", label: "JSON", kind: .boolean, group: Group.run, tier: .expert)
+        ],
+        output: .init(kind: .directory, flag: "--output")
+    )
 }

@@ -37,6 +37,7 @@ package enum StudioSamplingDefaults {
         baseline.audioODESteps = defaults.audioODESteps
         baseline.speechCFGScale = defaults.speechCFGScale
         baseline.h3Steps = defaults.h3Steps
+        baseline.idolGuidance = defaults.idolGuidance
         baseline.musicGuidanceScale = defaults.musicGuidanceScale
         baseline.musicShift = defaults.musicShift
         baseline.operationsRuntimeTemperature = defaults.operationsRuntimeTemperature

@@ -742,7 +742,7 @@ private struct StudioOutputGrid: View {
         .studioOutputContextMenu(url)
         .help(url.lastPathComponent)
         .accessibilityLabel("Output \(url.lastPathComponent)")
-        .accessibilityHint("Click to inspect the output; drag it onto an input or out to Finder; right-click to send or share it")
+        .accessibilityHint("Click to inspect the output. Drag it onto an input or out to Finder. Right-click to send or share it.")
     }
 }
 
@@ -951,7 +951,7 @@ struct StudioFailureCard: View {
 
     private var summary: String {
         if item.status == .interrupted { return "Interrupted when Studio closed. Retry to start a new run." }
-        if item.status == .cancelled { return "Cancelled. Your previous results are preserved." }
+        if item.status == .cancelled { return "Canceled. Your previous results are kept." }
         if let missingModel { return "\(StudioModelNaming.displayName(missingModel)) isn't on this Mac yet." }
         return failureLine
     }
@@ -1016,7 +1016,7 @@ struct StudioFailureCard: View {
                     Button {
                         actions.pullModel(missingModel.id)
                     } label: {
-                        Label("Get the model", systemImage: "arrow.down.circle.fill")
+                        Label("Download the model", systemImage: "arrow.down.circle.fill")
                     }
                     .buttonStyle(.merePrimary)
                     .help("Download \(StudioModelNaming.displayName(missingModel)) to this Mac")
@@ -1045,7 +1045,7 @@ struct StudioFailureCard: View {
             Button("Delete", role: .destructive) { actions.delete(item) }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(wasCancelled ? "Cancelled" : "Failed"): \(item.displayTitle). \(summary)")
+        .accessibilityLabel("\(wasCancelled ? "Canceled" : "Failed"): \(item.displayTitle). \(summary)")
     }
 }
 
@@ -1145,7 +1145,7 @@ struct StudioReadinessCard: View {
             Button {
                 actions.pullModel()
             } label: {
-                Label("Get the model", systemImage: "arrow.down.circle.fill")
+                Label("Download the model", systemImage: "arrow.down.circle.fill")
             }
             .buttonStyle(.merePrimary)
             chooseModelMenu
@@ -1176,7 +1176,7 @@ struct StudioReadinessCard: View {
             MereSecondaryMenuLabel("Choose another model", systemImage: "chevron.up.chevron.down")
         }
         .fixedSize()
-        .help("Pick a different model for this task")
+        .help("Choose a different model for this task")
         .accessibilityLabel("Choose another model")
     }
 

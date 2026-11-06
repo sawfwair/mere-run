@@ -97,8 +97,8 @@ enum StudioModelRowStatus: Equatable {
         case .installed: return "installed"
         case .attention: return "needs attention"
         case .pulling(let fraction):
-            guard let fraction else { return "pulling" }
-            return "pulling \(Int((fraction * 100).rounded())) percent"
+            guard let fraction else { return "downloading" }
+            return "downloading \(Int((fraction * 100).rounded())) percent"
         case .missing: return "not installed"
         }
     }
@@ -113,7 +113,7 @@ struct StudioModelsJob: Equatable {
 
         var verb: String {
             switch self {
-            case .pull: return "Pull"
+            case .pull: return "Download"
             case .optimize: return "Optimize"
             case .cleanup: return "Clean up"
             }
@@ -148,7 +148,7 @@ struct StudioModelsJob: Equatable {
     }
 
     var detail: String? {
-        if isCancelling { return "Cancelling…" }
+        if isCancelling { return "Canceling…" }
         if isQueued { return "Queued" }
         return progress?.detail
     }
@@ -240,13 +240,13 @@ enum StudioModelsPresenter {
         return .installed
     }
 
-    /// "Image · 2.1 GB", "Vision · pulling 25%", "Chat · 4.8 GB download".
+    /// "Image · 2.1 GB", "Vision · downloading 25%", "Chat · 4.8 GB download".
     static func meta(for row: StudioModelInventoryRow, status: StudioModelRowStatus) -> String {
         let family = family(of: row).title
         switch status {
         case .pulling(let fraction):
-            guard let fraction else { return "\(family) · pulling…" }
-            return "\(family) · pulling \(Int((fraction * 100).rounded()))%"
+            guard let fraction else { return "\(family) · downloading…" }
+            return "\(family) · downloading \(Int((fraction * 100).rounded()))%"
         case .missing:
             let size = row.displayedSize
             return size == "—" ? "\(family) · not installed" : "\(family) · \(size) download"
@@ -423,7 +423,7 @@ enum StudioModelsPresenter {
         var parts = [format.lowercased() == "lora" ? "LoRA" : format.uppercased()]
         if byteCount > 0 { parts.append(bytes(byteCount)) }
         if !version.isBlank { parts.append("v\(version)") }
-        if !installed { parts.append("not pulled") }
+        if !installed { parts.append("not downloaded") }
         return parts.joined(separator: " · ")
     }
 

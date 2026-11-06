@@ -497,7 +497,7 @@ final class StudioOptionScopeTests: XCTestCase {
 
     // MARK: Task drafts and the console
 
-    /// M3: "Will run" and the run are the scoped command; the draft keeps the rest.
+    /// M3: "Command to run" and the run are the scoped command; the draft keeps the rest.
     func testATaskDraftRunsItsScopedForm() throws {
         let capability = StudioScopeContracts.routed(
             "audio.enhance",

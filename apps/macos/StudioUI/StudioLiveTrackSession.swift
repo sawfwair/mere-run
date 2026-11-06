@@ -357,11 +357,11 @@ struct StudioLiveTrackSession: View {
                     )
                 )
             } else if item.status == .running {
-                Text("The capture never started. Check the log below, then start again.")
+                Text("The capture never started. Check the log, then start again.")
                     .font(.system(size: 13))
                     .foregroundStyle(MereRunTheme.textSecondary)
             } else {
-                Text("The capture finished but no clip was found. Check the log below.")
+                Text("The capture finished but no clip was found. Check the log.")
                     .font(.system(size: 13))
                     .foregroundStyle(MereRunTheme.textSecondary)
             }
@@ -430,7 +430,7 @@ struct StudioLiveTrackSession: View {
                             }
                         }
                     }
-                    Text("Stop ends the capture without a clip; the session ends on its own after \(Self.seconds(durationSeconds)). The Command view shows the exact arguments.")
+                    Text("Stop ends the capture without a clip. The session ends on its own after \(Self.seconds(durationSeconds)). The Command view shows the exact arguments.")
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -509,7 +509,7 @@ struct StudioLiveTrackSession: View {
         do {
             try StudioFileExport.copy(url, to: destination)
         } catch {
-            self.error = "Could not save \(url.lastPathComponent): \(error.localizedDescription)"
+            self.error = "Couldn't save \(url.lastPathComponent). \(error.localizedDescription)"
         }
     }
 

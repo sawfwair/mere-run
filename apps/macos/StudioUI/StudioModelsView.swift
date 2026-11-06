@@ -320,7 +320,7 @@ struct StudioModelsView: View {
                 Alert(
                     title: Text("Accept third-party model terms"),
                     message: Text(downloadTermsMessage(row)),
-                    primaryButton: .default(Text("Accept & Pull")) {
+                    primaryButton: .default(Text("Accept and Download")) {
                         Task { await download(row, acknowledgingUsageTerms: true) }
                     },
                     secondaryButton: .cancel()
@@ -339,7 +339,7 @@ struct StudioModelsView: View {
                     title: Text("Clean up model storage?"),
                     message: Text(
                         "This deletes \(Self.bytes(plan.reclaimableBytes)) across \(plan.items.count) "
-                            + "unreferenced items. Installed and legacy-linked payloads are preserved."
+                            + "unreferenced items. Installed and legacy-linked payloads are kept."
                     ),
                     primaryButton: .destructive(Text("Clean Up")) {
                         Task { await cleanStorage() }
@@ -362,12 +362,12 @@ struct StudioModelsView: View {
                     searchField: .page
                 )
 
-                Button("Pull…") {
+                Button("Download…") {
                     showPullSheet = true
                 }
                 .buttonStyle(ModelsPrimaryButtonStyle())
                 .disabled(isRefreshing || !modelStore.hasInventory)
-                .help("Pull a model into managed storage")
+                .help("Download a model into managed storage")
             }
             .padding(EdgeInsets(top: 14, leading: 14, bottom: 8, trailing: 14))
 
@@ -466,7 +466,7 @@ struct StudioModelsView: View {
             return "No models match the search."
         }
         if selectedFamily != nil { return "No installed models in this family." }
-        return "No models installed yet. Pull one to get started."
+        return "No models are installed. Download one to get started."
     }
 
     // MARK: - Detail column
@@ -619,6 +619,7 @@ struct StudioModelsView: View {
                             .strokeBorder(MereRunTheme.border.opacity(0.6), lineWidth: 1)
                     }
             }
+            .help("More model actions")
             .accessibilityLabel("More model actions")
         }
     }
@@ -787,7 +788,7 @@ struct StudioModelsView: View {
                         }
                         .buttonStyle(ModelsSecondaryButtonStyle())
                         .disabled(!adapter.installed)
-                        .help(adapter.installed ? "Apply this adapter to the composer" : "Pull the adapter first")
+                        .help(adapter.installed ? "Apply this adapter to the composer" : "Download the adapter first")
                     }
                     .padding(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
                     .overlay(alignment: .bottom) {
@@ -888,7 +889,7 @@ struct StudioModelsView: View {
             if let usageTerms = row.usageTerms {
                 Text(modelStore.download(modelID: row.id)?.request.draft?.acceptModelLicense == true
                     ? "Third-party usage terms · accepted for this download"
-                    : "Third-party usage terms · acceptance required before pulling")
+                    : "Third-party usage terms · accept them before downloading")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.yellow)
                 Text(usageTerms.summary)
@@ -911,7 +912,7 @@ struct StudioModelsView: View {
 
             HStack(spacing: 8) {
                 if downloadingID == row.id {
-                    Button("Cancel pull") {
+                    Button("Cancel download") {
                         cancelDownload()
                     }
                     .buttonStyle(ModelsSecondaryButtonStyle())
@@ -921,7 +922,7 @@ struct StudioModelsView: View {
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.textMuted)
                 } else {
-                    Button("Pull") {
+                    Button("Download") {
                         requestDownload(row)
                     }
                     .buttonStyle(ModelsPrimaryButtonStyle())
@@ -1117,7 +1118,7 @@ struct StudioModelsView: View {
             statusMessage = "Saved runtime settings for \(displayName(for: row.id))"
             await loadRuntimeSettings(for: row)
         } else {
-            statusMessage = "Could not save runtime settings for \(displayName(for: row.id))"
+            statusMessage = "Couldn't save runtime settings for \(displayName(for: row.id))"
             detailText = result.outputText
             showDetails = true
         }
@@ -1199,7 +1200,7 @@ struct StudioModelsView: View {
         if result.exitCode == 0 {
             infoFactsByID[row.id] = StudioModelsPresenter.facts(fromInfo: result.stdout)
         } else {
-            statusMessage = "Could not inspect \(displayName(for: row.id))"
+            statusMessage = "Couldn't inspect \(displayName(for: row.id))"
         }
         if selectedID == row.id {
             detailText = result.outputText
@@ -1217,7 +1218,7 @@ struct StudioModelsView: View {
         let result = await controller.utilityCommandResult(args: ["model", "info", row.id])
         loadingInfoID = nil
         guard let root = StudioModelInventoryParser.modelRoot(from: result.outputText) else {
-            statusMessage = "Could not resolve the \(displayName(for: row.id)) folder"
+            statusMessage = "Couldn't find the \(displayName(for: row.id)) folder"
             detailText = result.outputText
             showDetails = true
             return
@@ -1236,7 +1237,7 @@ struct StudioModelsView: View {
             onModelsChanged()
             await refresh()
         } else {
-            statusMessage = "Could not remove \(displayName(for: row.id))"
+            statusMessage = "Couldn't remove \(displayName(for: row.id))"
             showDetails = true
         }
     }
@@ -1261,7 +1262,7 @@ struct StudioModelsView: View {
         }
         statusMessage = result.exitCode == 0
             ? "Optimized \(displayName(for: row.id))"
-            : "Could not optimize \(displayName(for: row.id))"
+            : "Couldn't optimize \(displayName(for: row.id))"
     }
 
     @MainActor
@@ -1276,7 +1277,7 @@ struct StudioModelsView: View {
         guard command.exitCode == 0,
               let data = command.stdout.data(using: .utf8),
               let output = try? JSONDecoder().decode(StudioModelGarbageCollectOutput.self, from: data) else {
-            statusMessage = "Could not inspect model storage"
+            statusMessage = "Couldn't inspect model storage"
             detailText = command.outputText
             showDetails = true
             return
@@ -1307,7 +1308,7 @@ struct StudioModelsView: View {
               let data = command.stdout.data(using: .utf8),
               let output = try? JSONDecoder().decode(StudioModelGarbageCollectOutput.self, from: data),
               let result = output.result else {
-            statusMessage = "Could not clean model storage"
+            statusMessage = "Couldn't clean up model storage"
             detailText = command.outputText
             showDetails = true
             return
@@ -1318,14 +1319,14 @@ struct StudioModelsView: View {
 
     private func removalMessage(_ row: StudioModelInventoryRow) -> String {
         guard let reclaimable = row.reclaimableBytes else {
-            return "This model references \(row.size). Shared payloads used by other models will be preserved."
+            return "This model references \(row.size). Shared payloads that other models use are kept."
         }
-        var message = "This model references \(row.size) and will reclaim \(Self.bytes(reclaimable)) now."
+        var message = "This model references \(row.size). Removing it reclaims \(Self.bytes(reclaimable))."
         if let shared = row.sharedBytes, shared > 0 {
-            message += " \(Self.bytes(shared)) shared with other models will be preserved."
+            message += " \(Self.bytes(shared)) shared with other models is kept."
         }
         if let external = row.externalBytes, external > 0 {
-            message += " \(Self.bytes(external)) stored outside MereRun will be preserved."
+            message += " \(Self.bytes(external)) stored outside mere.run is kept."
         }
         return message
     }
@@ -1376,7 +1377,7 @@ struct StudioModelPullSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Pull a model")
+                    Text("Download a model")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(MereRunTheme.textPrimary)
                     Text("\(rows.count) available · downloads into managed storage")
@@ -1445,9 +1446,9 @@ struct StudioModelPullSheet: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 10)
-            Button("Pull") { onPull(row) }
+            Button("Download") { onPull(row) }
                 .buttonStyle(ModelsSecondaryButtonStyle())
-                .help(row.usageTerms == nil ? "Pull \(row.id)" : "Requires accepting third-party usage terms")
+                .help(row.usageTerms == nil ? "Download \(row.id)" : "Requires accepting third-party usage terms")
         }
         .padding(.horizontal, 10)
         .frame(minHeight: ModelsMetrics.rowHeight)

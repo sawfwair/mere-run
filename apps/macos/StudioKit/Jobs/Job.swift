@@ -790,8 +790,8 @@ package final class Job: ObservableObject, Identifiable {
 
     package func cancelBeforeStart(at date: Date = Date()) -> JobResult {
         state = .cancelled(exit: JobResult.cancelledBeforeStartExitCode, at: date)
-        status = "Cancelled"
-        log.append(LogLine(stream: .system, text: "Cancelled before start."))
+        status = "Canceled"
+        log.append(LogLine(stream: .system, text: "Canceled before start."))
         let result = JobResult(
             requestID: request.requestID,
             templateID: resultTemplateID,

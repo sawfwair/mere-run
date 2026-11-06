@@ -14,7 +14,7 @@ package enum CommandCategory: String, CaseIterable, Identifiable {
     case speech = "Speech"
     case vision = "Vision"
     case geospatial = "Geospatial"
-    case media = "Music & Video"
+    case media = "Music and video"
     case sfx = "Sound FX"
     case operations = "Operations"
     case server = "Server"
@@ -45,6 +45,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
     case imageReconstruct3D
     case imageReconstruct3DTrellis2
     case imageReconstruct3DMultiview
+    case visionImageTo3DIdol
     case textChat
     case textCode
     case textEmbed
@@ -180,6 +181,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
         case .imageReconstruct3D: return "image.reconstruct-3d"
         case .imageReconstruct3DTrellis2: return "image.reconstruct-3d-trellis2"
         case .imageReconstruct3DMultiview: return "image.reconstruct-3d-multiview"
+        case .visionImageTo3DIdol: return "vision.image-to-3d-idol"
         case .textChat: return "text.chat"
         case .textCode: return "text.code"
         case .textEmbed: return "text.embed"
@@ -316,7 +318,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
 /// result receipt it resolves artifacts from, and the progress event stream it renders.
 ///
 /// They are transport rather than user intent, so they are appended to the launched argv only —
-/// never to the "Will run" preview, a library row's command, or the console's echo of the
+/// never to the "Command to run" preview, a library row's command, or the console's echo of the
 /// command, all of which stay the command a person would type. `--preflight` runs get neither:
 /// the CLI rejects `--receipt --preflight`, and a preflight report has no progress to stream.
 package enum StudioMachineOutputFlags {
@@ -582,6 +584,14 @@ package struct CommandDraft: Equatable, Codable {
     package var trellisNoRemesh: Bool?
     package var trellisRemeshBand: Double?
     package var trellisSealRadius: Int?
+    /// IDOL's local encoder folders and sampling controls. Optional so Library rows written before
+    /// IDOL joined 3D ▸ From image keep decoding.
+    package var idolDINOPath: String?
+    package var idolVAEPath: String?
+    package var idolMode: String?
+    package var idolGuidance: Double?
+    package var idolTimeShift: Double?
+    package var idolGaussianCount: Int?
     package var durationSeconds = 10.0
     // Music production workspace. Empty strings intentionally mean "let the CLI quality
     // preset choose" for optional numeric overrides.
@@ -847,6 +857,10 @@ package struct CommandDraft: Equatable, Codable {
     package var h3Steps: Int?
     /// Ordered `image:path`, `video:path`, and `audio:path` reference specifications.
     package var h3ReferenceInputs: [String]?
+    /// LTX runtime LoRAs as `PATH[=STRENGTH]`, one per line or comma-separated, and
+    /// `--enhance-prompt`. Optional preserves older Library rows.
+    package var videoLoRAs: String?
+    package var videoEnhancePrompt: Bool?
     package var modelRoot = ""
     package var referenceMaskPath = ""
     package var drivingVideoPath = ""
@@ -893,8 +907,17 @@ package struct CommandDraft: Equatable, Codable {
     package var speechDiarizationThreshold: Double?
     package var speechDiarizationMinDuration: Double?
     package var speechDiarizationMergeGap: Double?
+    /// Optional fields preserve decoding of Library rows created before Studio bound transcribe's
+    /// `--provider`, `--beam-size`, and `--keyword` (phrases one per line or comma-separated).
+    package var speechProvider: String?
+    package var speechBeamSize: Int?
+    package var speechKeywords: String?
     // Vision chat (vision-capable chat models) and the agentic tool loop for `text chat`.
     package var imagePath = ""
+    /// The audio and video an omni chat turn carries (`--audio`, `--video`). Optional so Library
+    /// rows and saved drafts written before omni attachments still decode.
+    package var chatAudioPath: String?
+    package var chatVideoPath: String?
     package var tools = ""
     package var toolLoop = false
     package var allowShellExec = false
@@ -1205,7 +1228,8 @@ extension CommandTemplate {
              .imageVisualizeRun,
              .imageReconstruct3D,
              .imageReconstruct3DTrellis2,
-             .imageReconstruct3DMultiview:
+             .imageReconstruct3DMultiview,
+             .visionImageTo3DIdol:
             return .createImage
 
         case .textChat, .textEmbed, .textAnonymize, .textDecide, .textClassify, .textExtract, .textTrainLoRA:

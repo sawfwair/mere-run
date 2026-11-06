@@ -78,7 +78,7 @@ final class StudioMenuBarTests: XCTestCase {
         XCTAssertEqual(StudioMenuBarCopy.rate(41.6), "42 tok/s")
         XCTAssertEqual(StudioMenuBarCopy.memoryUsage(used: 44_023_414_784, total: 68_719_476_736), "41.0 of 64 GB")
         XCTAssertNil(StudioMenuBarCopy.thermal(.nominal))
-        XCTAssertEqual(StudioMenuBarCopy.thermal(.serious), "Thermal: Serious")
+        XCTAssertEqual(StudioMenuBarCopy.thermal(.serious), "Thermal: serious")
         XCTAssertEqual(StudioMenuBarCopy.residentCount(3), "3 resident")
         XCTAssertEqual(StudioMenuBarCopy.size(115_762_790), "110 MB")
         XCTAssertEqual(StudioMenuBarCopy.size(60_687_468_380), "56.5 GB")

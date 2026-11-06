@@ -64,7 +64,7 @@ final class StudioFeedCardTests: XCTestCase {
             StudioFailureSummary.summary(outputText: text, exitCode: 1),
             "Model image-zimage-nano is not installed. Run `mere.run model pull image-zimage-nano`."
         )
-        XCTAssertEqual(StudioFailureSummary.summary(outputText: nil, exitCode: 15), "Cancelled.")
+        XCTAssertEqual(StudioFailureSummary.summary(outputText: nil, exitCode: 15), "Canceled.")
         XCTAssertEqual(StudioFailureSummary.summary(outputText: "", exitCode: 64), "The request was invalid.")
         XCTAssertEqual(StudioFailureSummary.summary(outputText: "   ", exitCode: 3), "The run exited with code 3.")
         XCTAssertEqual(
@@ -154,7 +154,7 @@ final class StudioFeedCardTests: XCTestCase {
         XCTAssertEqual(StudioFeedChips.chips(for: item, titles: .none, source: .contract), [])
     }
 
-    /// A failed card offers Get the model only when that is what went wrong: the run's model
+    /// A failed card offers Download the model only when that is what went wrong: the run's model
     /// is one the inventory lists as missing (not invalid, offline, or awaiting conversion,
     /// which a pull would not fix) and the failure line names it. A model removed after an
     /// unrelated failure keeps the CLI's own reason.

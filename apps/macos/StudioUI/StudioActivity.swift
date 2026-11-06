@@ -5,7 +5,7 @@ import SwiftUI
 /// lanes. Probe jobs never appear — a readiness check is not work the user started.
 struct StudioActivityRow: Identifiable, Equatable {
     let id: JobID
-    /// "Image · Generate", "Models · Pull image-zimage-nano": the job's domain and its task.
+    /// "Image · Generate", "Models · Download image-zimage-nano": the job's domain and its task.
     let title: String
     let isRunning: Bool
     /// The first job waiting for a lane slot, which reads "Queued · next".
@@ -102,7 +102,7 @@ enum StudioActivity {
             let model = (job.request.draft?.model ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             // The same friendly name the composer's model chip shows, so one model reads the same
             // way wherever it appears.
-            return model.isEmpty ? "Pull model" : "Pull \(StudioModelNaming.displayName(model, titles: titles))"
+            return model.isEmpty ? "Download model" : "Download \(StudioModelNaming.displayName(model, titles: titles))"
         }
         // A prompt task names itself the way the task control does ("Generate", "Transcribe");
         // everything else falls back to the template's own title.
@@ -131,7 +131,7 @@ enum StudioActivity {
         case ("model", "runtime", "get"): return "Reading runtime settings"
         case ("model", "runtime", _): return "Saving runtime settings"
         case ("model", "remove", _): return "Removing a model"
-        case ("model", "pull", _): return "Getting a model"
+        case ("model", "pull", _): return "Downloading a model"
         case ("model", "location", _): return "Updating model locations"
         case ("model", _, _): return "Checking models"
         case ("adapter", _, _): return "Checking adapters"
@@ -143,7 +143,7 @@ enum StudioActivity {
         case ("run", "inspect", _): return "Inspecting a run"
         case ("run", "list", _): return "Finding runs"
         case ("run", "fetch", _): return "Fetching run outputs"
-        case ("run", "cancel", _): return "Cancelling a run"
+        case ("run", "cancel", _): return "Canceling a run"
         case ("run", "retry", _): return "Retrying a run"
         case ("run", _, _): return "Checking runs"
         case ("agent", _, _): return "Checking agents"
@@ -243,7 +243,7 @@ extension StudioActivity {
         }
     }
 
-    /// How a finished run ended: "Completed in 1:32", "Failed · exit 1", "Cancelled", or why it
+    /// How a finished run ended: "Completed in 1:32", "Failed · exit 1", "Canceled", or why it
     /// never started.
     @MainActor
     static func outcomeText(for job: Job) -> String {
@@ -253,7 +253,7 @@ extension StudioActivity {
         case .finished(let exit, _):
             return "Failed · exit \(exit)"
         case .cancelled:
-            return "Cancelled"
+            return "Canceled"
         case .preflightFailed(let failure):
             return "Didn't start · \(failure.message)"
         case .queued, .running:
@@ -424,7 +424,7 @@ struct StudioActivityPopover: View {
                     .buttonStyle(.plain)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(MereRunTheme.accent)
-                    .help("Take every waiting job out of the queue; running jobs keep going")
+                    .help("Take every waiting job out of the queue. Running jobs keep going.")
                     .accessibilityLabel(queued == 1 ? "Cancel 1 queued job" : "Cancel \(queued) queued jobs")
             }
         }

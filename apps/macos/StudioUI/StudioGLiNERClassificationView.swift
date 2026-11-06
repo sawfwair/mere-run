@@ -94,7 +94,7 @@ struct StudioGLiNERClassificationView: View {
                         .disabled(document.tasks.count >= 16)
                     }
                     if document.tasks.isEmpty {
-                        Text("Add a task, name it, then provide the labels the model should compare.")
+                        Text("Add a task, name it, then enter the labels for the model to compare.")
                             .font(MereRunTheme.captionFont)
                             .foregroundStyle(MereRunTheme.textMuted)
                     }
@@ -124,8 +124,8 @@ struct StudioGLiNERClassificationView: View {
                 Menu {
                     Button("Load the example", action: loadExample)
                     Divider()
-                    Button("Import Request…", action: importRequest)
-                    Button("Export Request…", action: exportRequest)
+                    Button("Import request…", action: importRequest)
+                    Button("Export request…", action: exportRequest)
                         .disabled(!document.problems.isEmpty)
                     Divider()
                     Button("Clear", role: .destructive) { document = StudioClassificationDocument() }
@@ -137,6 +137,7 @@ struct StudioGLiNERClassificationView: View {
                 .menuIndicator(.hidden)
                 .fixedSize()
                 .help("Example, import, and export")
+                .accessibilityLabel("Example, import, and export")
             }
             Text("GLiNER2.5 Decide scores labels you supply for each task. Select one label or multiple labels above a threshold.")
                 .font(MereRunTheme.captionFont)
@@ -207,7 +208,7 @@ struct StudioGLiNERClassificationView: View {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try document.requestJSON().write(to: requestURL, options: .atomic)
         } catch {
-            message = "Studio could not write the request: \(error.localizedDescription)"
+            message = "Couldn't write the request. \(error.localizedDescription)"
             return
         }
         var command = CommandDraft()
@@ -255,7 +256,7 @@ struct StudioGLiNERClassificationView: View {
             document = try StudioClassificationDocument.importing(Data(contentsOf: url))
             message = nil
         } catch {
-            message = "That file is not a classification request: \(error.localizedDescription)"
+            message = "That file isn't a classification request. \(error.localizedDescription)"
         }
     }
 
@@ -265,7 +266,7 @@ struct StudioGLiNERClassificationView: View {
         do {
             try document.requestJSON().write(to: url, options: .atomic)
         } catch {
-            message = "Studio could not save the request: \(error.localizedDescription)"
+            message = "Couldn't save the request. \(error.localizedDescription)"
         }
     }
 }
@@ -285,15 +286,15 @@ private struct StudioClassificationTaskEditor: View {
                 Text("\(number)")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(MereRunTheme.textMuted)
-                TextField("Task name, e.g. department", text: $task.name)
+                TextField("Task name, for example department", text: $task.name)
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("Task name")
                 Menu {
-                    Button("Move Up") { onMove(-1) }.disabled(!canMoveUp)
-                    Button("Move Down") { onMove(1) }.disabled(!canMoveDown)
+                    Button("Move up") { onMove(-1) }.disabled(!canMoveUp)
+                    Button("Move down") { onMove(1) }.disabled(!canMoveDown)
                     Button(showsPrompt ? "Hide prompt" : "Edit prompt") { showsPrompt.toggle() }
                     Divider()
-                    Button("Delete Task", role: .destructive, action: onDelete)
+                    Button("Delete task", role: .destructive, action: onDelete)
                 } label: {
                     Image(systemName: "ellipsis")
                 }
@@ -386,7 +387,7 @@ private struct StudioClassificationResultPane: View {
             case .failed, .interrupted:
                 StudioRunFailureDetail(models: controller.modelStore, item: item)
             case .cancelled:
-                ContentUnavailableView("Cancelled", systemImage: "stop.circle")
+                ContentUnavailableView("Canceled", systemImage: "stop.circle")
             }
         } else {
             VStack(spacing: 12) {

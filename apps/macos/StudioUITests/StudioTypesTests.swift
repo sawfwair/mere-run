@@ -1249,6 +1249,15 @@ final class StudioTypesTests: XCTestCase {
                 ].joined(separator: "\n")
                 $0.dryRun = true
                 $0.json = true
+            }),
+            (.visionImageTo3DIdol, "vision.image-to-3d-idol", {
+                $0.inputPath = "/tmp/object.png"
+                $0.model = "/tmp/idol"
+                $0.idolDINOPath = "/tmp/dinov3"
+                $0.idolVAEPath = "/tmp/flux2-vae"
+                $0.idolMode = "real"
+                $0.dryRun = true
+                $0.json = true
             })
         ]
 
@@ -1275,9 +1284,6 @@ final class StudioTypesTests: XCTestCase {
 
         draft.readImageAction = .inspect
         XCTAssertEqual(try StudioCommandAdapter.makeRequest(mode: .readImage, draft: draft, source: .contract).templateID, .visionInspect)
-
-        draft.readImageAction = .ocr
-        XCTAssertEqual(try StudioCommandAdapter.makeRequest(mode: .readImage, draft: draft, source: .contract).templateID, .visionOCR)
 
         draft.readImageAction = .caption
         XCTAssertEqual(try StudioCommandAdapter.makeRequest(mode: .readImage, draft: draft, source: .contract).templateID, .visionCaption)
@@ -1317,13 +1323,14 @@ final class StudioTypesTests: XCTestCase {
 
         draft.readImageAction = .caption
         XCTAssertNil(StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft, source: .contract))
+    }
 
-        // OCR has a managed default model, so it remains readiness-gated.
-        draft.readImageAction = .ocr
-        XCTAssertEqual(
-            StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft, source: .contract),
-            .managedModel("vision-ocr-lighton")
-        )
+    /// OCR moved to Vision ▸ Document; a saved Read draft that still names it opens on Inspect.
+    func testASavedReadDraftThatChoseOCRDecodesAsInspect() throws {
+        let decoded = try JSONDecoder().decode([StudioReadImageAction].self, from: Data(#"["ocr","caption"]"#.utf8))
+        XCTAssertEqual(decoded, [.inspect, .caption])
+        XCTAssertEqual(StudioReadImageAction.allCases.map(\.templateID), [.visionInspect, .visionCaption])
+        XCTAssertEqual(CommandTemplateID.visionOCR.studioTask, .visionDocument)
     }
 
     func testReadImageModelOverrideGatesOnThatManagedModel() throws {
@@ -1522,6 +1529,115 @@ final class StudioTypesTests: XCTestCase {
         let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: UUID(), source: .contract)
         XCTAssertEqual(request.draft.imagePath, "/tmp/pic.png")
         assertPair(request.template.arguments(from: request.draft, source: .contract), "--image", "/tmp/pic.png")
+    }
+
+    func testChatBuildsOmniAudioAndVideoFlags() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .textChat))
+        var draft = template.defaultDraft()
+        draft.model = "omni-chat-nemotron3-nano-30b-a3b-bf16"
+        draft.imagePath = "/tmp/in.png"
+        draft.chatAudioPath = "/tmp/clip.wav"
+        draft.chatVideoPath = "/tmp/clip.mp4"
+        draft.stream = true
+        let args = template.arguments(from: draft, source: .contract)
+        assertPair(args, "--image", "/tmp/in.png")
+        assertPair(args, "--audio", "/tmp/clip.wav")
+        assertPair(args, "--video", "/tmp/clip.mp4")
+        XCTAssertTrue(args.contains("--stream"), "an omni turn still streams")
+
+        // Each kind on its own.
+        var audioOnly = template.defaultDraft()
+        audioOnly.model = "omni-chat-nemotron3-nano-30b-a3b-bf16"
+        audioOnly.chatAudioPath = "/tmp/clip.wav"
+        let audioArgs = template.arguments(from: audioOnly, source: .contract)
+        assertPair(audioArgs, "--audio", "/tmp/clip.wav")
+        XCTAssertFalse(audioArgs.contains("--video"))
+        XCTAssertFalse(audioArgs.contains("--image"))
+        var videoOnly = template.defaultDraft()
+        videoOnly.model = "omni-chat-nemotron3-nano-30b-a3b-bf16"
+        videoOnly.chatVideoPath = "/tmp/clip.mov"
+        let videoArgs = template.arguments(from: videoOnly, source: .contract)
+        assertPair(videoArgs, "--video", "/tmp/clip.mov")
+        XCTAssertFalse(videoArgs.contains("--audio"))
+
+        // Blank paths and models whose family reads neither leave both flags out.
+        var blank = videoOnly
+        blank.chatVideoPath = ""
+        XCTAssertFalse(template.arguments(from: blank, source: .contract).contains("--video"))
+        for model in ["text-chat-gemma4-12b-4bit", "vision-chat-gemma4-12b"] {
+            var other = draft
+            other.model = model
+            let otherArgs = template.arguments(from: other, source: .contract)
+            XCTAssertFalse(otherArgs.contains("--audio"), model)
+            XCTAssertFalse(otherArgs.contains("--video"), model)
+        }
+    }
+
+    func testChatRequestCarriesTheTurnsAudioAndVideoToAnOmniModel() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+        draft.prompt = "What happens in this clip?"
+        draft.model = "omni-chat-nemotron3-nano-30b-a3b-bf16"
+        draft.chatAudioPath = "/tmp/clip.wav"
+        draft.chatVideoPath = "/tmp/clip.mp4"
+        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: UUID(), source: .contract)
+        XCTAssertEqual(request.draft.chatAudioPath, "/tmp/clip.wav")
+        XCTAssertEqual(request.draft.chatVideoPath, "/tmp/clip.mp4")
+        XCTAssertTrue(request.draft.imagePath.isEmpty)
+        let args = request.template.arguments(from: request.draft, source: .contract)
+        assertPair(args, "--audio", "/tmp/clip.wav")
+        assertPair(args, "--video", "/tmp/clip.mp4")
+
+        var code = StudioDraft()
+        code.reset(for: .code)
+        code.prompt = "hi"
+        code.chatAudioPath = "/tmp/clip.wav"
+        let codeRequest = try StudioCommandAdapter.makeRequest(mode: .code, draft: code, source: .contract)
+        XCTAssertNil(codeRequest.draft.chatAudioPath)
+        XCTAssertNil(codeRequest.draft.chatVideoPath)
+    }
+
+    func testChatRefusesAnAttachmentTheModelCannotRead() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+        draft.prompt = "Describe it"
+        draft.model = "vision-chat-gemma4-12b"
+        draft.chatAudioPath = "/tmp/clip.wav"
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, source: .contract)) { error in
+            XCTAssertEqual(
+                error.localizedDescription,
+                "Gemma 4 12B vision can't read audio. Choose an omni model or remove the attachment."
+            )
+        }
+        draft.chatAudioPath = nil
+        draft.chatVideoPath = "/tmp/clip.mp4"
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, source: .contract)) { error in
+            XCTAssertEqual(
+                error.localizedDescription,
+                "Gemma 4 12B vision can't read video. Choose an omni model or remove the attachment."
+            )
+        }
+
+        var text = StudioDraft()
+        text.reset(for: .chat)
+        text.prompt = "Describe it"
+        text.model = "text-chat-gemma4-12b-4bit"
+        text.inputPath = "/tmp/pic.png"
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .chat, draft: text, source: .contract)) { error in
+            XCTAssertEqual(
+                error.localizedDescription,
+                "Gemma 4 can't read images. Choose a vision model or remove the attachment."
+            )
+        }
+        // A preview (the Command view) still builds, without the file.
+        let preview = try StudioCommandAdapter.makeRequest(mode: .chat, draft: text, validating: false, source: .contract)
+        XCTAssertFalse(preview.template.arguments(from: preview.draft, source: .contract).contains("--image"))
+
+        // The omni model reads all three.
+        draft.model = "omni-chat-nemotron3-nano-30b-a3b-bf16"
+        draft.inputPath = "/tmp/pic.png"
+        draft.chatAudioPath = "/tmp/clip.wav"
+        XCTAssertNoThrow(try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, source: .contract))
     }
 
     func testCodeConversationRequestIgnoresImage() throws {
@@ -2243,7 +2359,7 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(ModelReadinessState.missingModel("video-ltx2-fast").title, "Model needed")
         XCTAssertEqual(
             ModelReadinessState.missingModel("video-ltx2-fast").message(titles: .none),
-            "LTX-2 Fast isn't on this Mac yet. Get it once and it stays."
+            "LTX-2 Fast isn't on this Mac. Download it once and it stays."
         )
         XCTAssertEqual(ModelReadinessState.unsupported("x").title, "Can't run on this Mac")
         XCTAssertEqual(ModelReadinessState.unknown("x").title, "Couldn't check the model")

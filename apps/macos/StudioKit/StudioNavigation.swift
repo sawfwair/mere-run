@@ -68,19 +68,19 @@ package enum StudioDomain: String, CaseIterable, Codable, Identifiable {
     /// One line under the title in the toolbar.
     package var subtitle: String {
         switch self {
-        case .image: return "Text or reference to PNG · stays on this Mac"
-        case .video: return "Prompt to clip · subject animation"
-        case .music: return "Prompt to song · live steering"
-        case .sound: return "Prompt to sound effect · Foley and scoring"
-        case .voice: return "Text to natural speech · cloned and saved voices"
-        case .threeD: return "Single image to mesh"
-        case .chat: return "Local model · nothing leaves this Mac"
-        case .vision: return "Images and video, understood locally"
-        case .audio: return "Transcribe, identify, enhance, and separate"
-        case .text: return "Decisions, embeddings, and anonymization"
-        case .earth: return "Native Earth-observation inference"
+        case .image: return "Images from text or a reference, on this Mac"
+        case .video: return "Generate, edit, and animate clips"
+        case .music: return "Songs from prompts, with live steering"
+        case .sound: return "Sound effects from prompts, Foley, and scoring"
+        case .voice: return "Speech with cloned and saved voices"
+        case .threeD: return "Meshes, depth, and scene geometry"
+        case .chat: return "Chat with a local model on this Mac"
+        case .vision: return "Read, find, and track in images and video"
+        case .audio: return "Transcribe, identify speakers, and enhance"
+        case .text: return "Embed, anonymize, classify, and extract"
+        case .earth: return "Earth-observation inference on this Mac"
         case .models: return "Local models, locations, and health"
-        case .server: return "The local API and resident engines"
+        case .server: return "The local API and resident servers"
         case .runs: return "Durable runs and Relay jobs"
         case .plugins: return "Companion tools, verified and installed"
         }
@@ -132,7 +132,8 @@ package enum StudioDomain: String, CaseIterable, Codable, Identifiable {
         case .imageGenerate, .imageTrainLoRA, .imageValidate, .imageDatasetDiscover, .imageRunPlan,
              .imageVisualizeRun:
             self = .image
-        case .imageReconstruct3D, .imageReconstruct3DTrellis2, .imageReconstruct3DMultiview:
+        case .imageReconstruct3D, .imageReconstruct3DTrellis2, .imageReconstruct3DMultiview, .visionImageTo3DIdol,
+             .visionDepth, .visionDepthVideo, .visionGeometry, .visionGeometryMultiview:
             self = .threeD
         case .videoGenerate, .videoRetake, .videoDubIt, .videoAnimate, .videoCosmos3, .videoPrepareMasks,
              .videoExportLatents, .videoSession:
@@ -143,16 +144,15 @@ package enum StudioDomain: String, CaseIterable, Codable, Identifiable {
         case .sfxGenerate, .sfxVideo, .sfxAEEncode, .sfxAEDecode, .sfxClapScore, .sfxConditionText,
              .audioGenerate:
             self = .sound
-        case .speechSynthesize, .speechProfileList, .speechProfileCreate, .speechProfileDelete:
+        case .speechSynthesize, .speechProfileList, .speechProfileCreate, .speechProfileDelete, .audioEdit:
             self = .voice
         case .textChat, .textCode, .textTrainLoRA:
             self = .chat
         case .visionInspect, .visionEmbed, .visionCaption, .visionOCR, .visionGround, .visionSegment,
              .visionTrack, .visionTrackLive, .visionFaceDetect, .visionFaceEmbed, .visionFaceCompare,
-             .visionFaceBatch, .visionPose, .visionFlow, .visionDepth, .visionDepthVideo, .visionGeometry,
-             .visionGeometryMultiview:
+             .visionFaceBatch, .visionPose, .visionFlow:
             self = .vision
-        case .speechTranscribe, .speechDiarize, .speechDiarizeLive, .speechListen, .audioEnhance, .audioEdit:
+        case .speechTranscribe, .speechDiarize, .speechDiarizeLive, .speechListen, .audioEnhance:
             self = .audio
         case .textEmbed, .textAnonymize, .textDecide, .textClassify, .textExtract:
             self = .text
@@ -188,6 +188,8 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
     case imageTrain = "image.train"
 
     case videoGenerate = "video.generate"
+    case videoEdit = "video.edit"
+    case videoCosmos = "video.cosmos"
     case videoSubjects = "video.subjects"
 
     case musicCompose = "music.compose"
@@ -199,15 +201,18 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
 
     case soundGenerate = "sound.generate"
     case soundFoley = "sound.foley"
-    case soundCondition = "sound.condition"
-    case soundEncode = "sound.encode"
-    case soundDecode = "sound.decode"
     case soundScore = "sound.score"
+    case soundLatents = "sound.latents"
 
     case voiceSpeak = "voice.speak"
+    case voiceEdit = "voice.edit"
     case voiceVoices = "voice.voices"
 
     case threeDFromImage = "threeD.fromImage"
+    // Depth and Geometry keep their `vision.` raw values so Library rows and saved task drafts
+    // still find them; only the sidebar domain moved.
+    case visionDepth = "vision.depth"
+    case visionGeometry = "vision.geometry"
 
     case chatChat = "chat.chat"
     case chatCode = "chat.code"
@@ -217,17 +222,15 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
     case visionFind = "vision.find"
     case visionSegment = "vision.segment"
     case visionTrack = "vision.track"
-    case visionDepth = "vision.depth"
-    case visionPose = "vision.pose"
+    case visionDocument = "vision.document"
     case visionFaces = "vision.faces"
+    case visionPose = "vision.pose"
     case visionFlow = "vision.flow"
-    case visionGeometry = "vision.geometry"
     case visionLive = "vision.live"
 
     case audioTranscribe = "audio.transcribe"
     case audioWhoSpoke = "audio.whoSpoke"
     case audioEnhance = "audio.enhance"
-    case audioSeparate = "audio.separate"
     case audioLive = "audio.live"
 
     case textEmbeddings = "text.embeddings"
@@ -250,6 +253,7 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
     case serverServing = "server.serving"
     case serverMusic = "server.music"
     case serverVision = "server.vision"
+    case serverWorld = "server.world"
 
     case runsRuns = "runs.runs"
 
@@ -260,23 +264,22 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
     package var domain: StudioDomain {
         switch self {
         case .imageGenerate, .imageDatasets, .imageTrain: return .image
-        case .videoGenerate, .videoSubjects: return .video
+        case .videoGenerate, .videoEdit, .videoCosmos, .videoSubjects: return .video
         case .musicCompose, .musicRealtime, .musicAnalyze, .musicTranscribe, .musicSeparate, .musicTrain:
             return .music
-        case .soundGenerate, .soundFoley, .soundCondition, .soundEncode, .soundDecode, .soundScore:
-            return .sound
-        case .voiceSpeak, .voiceVoices: return .voice
-        case .threeDFromImage: return .threeD
+        case .soundGenerate, .soundFoley, .soundScore, .soundLatents: return .sound
+        case .voiceSpeak, .voiceEdit, .voiceVoices: return .voice
+        case .threeDFromImage, .visionDepth, .visionGeometry: return .threeD
         case .chatChat, .chatCode, .chatTrain: return .chat
-        case .visionRead, .visionFind, .visionSegment, .visionTrack, .visionDepth, .visionPose,
-             .visionFaces, .visionFlow, .visionGeometry, .visionLive:
+        case .visionRead, .visionFind, .visionSegment, .visionTrack, .visionDocument, .visionFaces,
+             .visionPose, .visionFlow, .visionLive:
             return .vision
-        case .audioTranscribe, .audioWhoSpoke, .audioEnhance, .audioSeparate, .audioLive: return .audio
+        case .audioTranscribe, .audioWhoSpoke, .audioEnhance, .audioLive: return .audio
         case .textEmbeddings, .textAnonymize, .textDecide, .textClassify, .textExtract: return .text
         case .earthFlood, .earthFire, .earthTessera, .earthOlmoEarth: return .earth
         case .modelsInstalled, .modelsLocations, .modelsHealth, .modelsBenchmarks, .modelsAdapters:
             return .models
-        case .serverServing, .serverMusic, .serverVision: return .server
+        case .serverServing, .serverMusic, .serverVision, .serverWorld: return .server
         case .runsRuns: return .runs
         case .pluginsCatalog: return .plugins
         }
@@ -287,18 +290,19 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
         case .imageGenerate, .videoGenerate, .soundGenerate: return "Generate"
         case .imageDatasets: return "Datasets"
         case .imageTrain, .musicTrain, .chatTrain: return "Train"
-        case .videoSubjects: return "Subjects"
+        case .videoEdit: return "Edit"
+        case .videoCosmos: return "Cosmos"
+        case .videoSubjects: return "Animate"
         case .musicCompose: return "Compose"
         case .musicRealtime: return "Realtime"
         case .musicAnalyze: return "Analyze"
         case .musicTranscribe, .audioTranscribe: return "Transcribe"
-        case .musicSeparate, .audioSeparate: return "Separate"
+        case .musicSeparate: return "Separate"
         case .soundFoley: return "Video Foley"
-        case .soundCondition: return "Condition"
-        case .soundEncode: return "Encode"
-        case .soundDecode: return "Decode"
         case .soundScore: return "Score"
+        case .soundLatents: return "Latents"
         case .voiceSpeak: return "Speak"
+        case .voiceEdit: return "Edit"
         case .voiceVoices: return "Voices"
         case .threeDFromImage: return "From image"
         case .chatChat: return "Chat"
@@ -307,18 +311,19 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
         case .visionFind: return "Find"
         case .visionSegment: return "Segment"
         case .visionTrack: return "Track"
+        case .visionDocument: return "Document"
         case .visionDepth: return "Depth"
         case .visionPose: return "Pose"
         case .visionFaces: return "Faces"
         case .visionFlow: return "Flow"
         case .visionGeometry: return "Geometry"
         case .visionLive, .audioLive: return "Live"
-        case .audioWhoSpoke: return "Who Spoke"
+        case .audioWhoSpoke: return "Speakers"
         case .audioEnhance: return "Enhance"
-        case .textDecide: return "Decisions"
+        case .textDecide: return "Decide"
         case .textClassify: return "Classify"
         case .textExtract: return "Extract"
-        case .textEmbeddings: return "Embeddings"
+        case .textEmbeddings: return "Embed"
         case .textAnonymize: return "Anonymize"
         case .earthFlood: return "Flood"
         case .earthFire: return "Fire"
@@ -329,9 +334,10 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
         case .modelsHealth: return "Health"
         case .modelsBenchmarks: return "Benchmarks"
         case .modelsAdapters: return "Adapters"
-        case .serverServing: return "Serving"
-        case .serverMusic: return "Music server"
-        case .serverVision: return "Vision server"
+        case .serverServing: return "API"
+        case .serverMusic: return "Music"
+        case .serverVision: return "Vision"
+        case .serverWorld: return "World"
         case .runsRuns: return "Runs"
         case .pluginsCatalog: return "Catalog"
         }

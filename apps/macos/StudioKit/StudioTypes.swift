@@ -25,12 +25,12 @@ package enum StudioMode: String, CaseIterable, Codable, Identifiable {
 
     package var title: String {
         switch self {
-        case .createImage: return "Create Image"
+        case .createImage: return "Create image"
         case .chat: return "Chat"
         case .code: return "Code"
         case .speak: return "Speak"
         case .listen: return "Listen"
-        case .readImage: return "Read Image"
+        case .readImage: return "Read image"
         case .findObjects: return "Find"
         case .segment: return "Segment"
         case .track: return "Track"
@@ -47,7 +47,7 @@ package enum StudioMode: String, CaseIterable, Codable, Identifiable {
         case .code: return "Draft code locally"
         case .speak: return "Text to natural speech"
         case .listen: return "Audio to text"
-        case .readImage: return "Inspect, OCR, or caption"
+        case .readImage: return "Inspect or caption an image"
         case .findObjects: return "Ground prompted objects"
         case .segment: return "Cut out prompted objects"
         case .track: return "Follow objects through video"
@@ -117,46 +117,46 @@ package enum StudioMode: String, CaseIterable, Codable, Identifiable {
 
     package var promptPlaceholder: String {
         switch self {
-        case .createImage: return "Describe the image..."
-        case .chat: return "Ask anything..."
-        case .code: return "Describe the code you want..."
-        case .speak: return "Type what to say..."
-        case .listen: return "Attach audio to transcribe..."
-        case .readImage: return "Ask about the image..."
+        case .createImage: return "Describe the image"
+        case .chat: return "Ask anything"
+        case .code: return "Describe the code you want"
+        case .speak: return "Type what to say"
+        case .listen: return "Attach audio to transcribe"
+        case .readImage: return "Ask about the image"
         case .findObjects: return "What should mere.run find?"
         case .segment: return "What should mere.run segment?"
         case .track: return "What should mere.run track?"
-        case .music: return "Describe the song..."
-        case .video: return "Describe the video..."
-        case .sfx: return "Describe the sound..."
+        case .music: return "Describe the song"
+        case .video: return "Describe the video"
+        case .sfx: return "Describe the sound"
         }
     }
 
     package var emptyTitle: String {
         switch self {
-        case .createImage: return "Make something visible."
-        case .chat: return "Ask locally, keep it local."
-        case .code: return "Turn intent into code."
-        case .speak: return "Give text a voice."
-        case .listen: return "Drop in audio."
-        case .readImage: return "Let the image answer."
-        case .findObjects: return "Find what matters."
-        case .segment: return "Separate subject from scene."
-        case .track: return "Follow motion through time."
-        case .music: return "Score the moment."
-        case .video: return "Make the frame move."
-        case .sfx: return "Design a sound."
+        case .createImage: return "Generate an image"
+        case .chat: return "Chat with a local model"
+        case .code: return "Write code with a local model"
+        case .speak: return "Turn text into speech"
+        case .listen: return "Transcribe a recording"
+        case .readImage: return "Ask about an image"
+        case .findObjects: return "Find objects in an image"
+        case .segment: return "Cut a subject out of its scene"
+        case .track: return "Track objects through a clip"
+        case .music: return "Compose a song"
+        case .video: return "Generate a video"
+        case .sfx: return "Generate a sound effect"
         }
     }
 
     package var emptyMessage: String {
         switch self {
         case .createImage: return "Write a prompt, attach a reference if you have one, then create."
-        case .chat: return "Ask a question and mere.run will answer with a local model."
-        case .code: return "Describe a function, script, or refactor and run it on-device."
-        case .speak: return "Enter the line, pick a voice style, and render a WAV."
+        case .chat: return "Ask a question, and a local model answers it."
+        case .code: return "Describe a function, script, or refactor, and a local model writes it."
+        case .speak: return "Enter the line, choose a voice style, and render a WAV."
         case .listen: return "Attach an audio file to create a transcript."
-        case .readImage: return "Attach an image and ask for an inspection, OCR pass, or caption."
+        case .readImage: return "Attach an image and ask about it, or caption it. To read text from pages, use Document."
         case .findObjects: return "Attach an image and name the thing to locate."
         case .segment: return "Attach an image and name the object to isolate."
         case .track: return "Attach a video and name the subject to follow."
@@ -242,17 +242,22 @@ package enum StudioMode: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+/// What Vision ▸ Read does with one picture. OCR moved to Vision ▸ Document, which reads ordered
+/// pages with every backend; a saved draft that still says `ocr` decodes as Inspect.
 package enum StudioReadImageAction: String, CaseIterable, Codable, Identifiable, Sendable {
     case inspect
-    case ocr
     case caption
+
+    package init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = Self(rawValue: raw) ?? .inspect
+    }
 
     package var id: String { rawValue }
 
     package var title: String {
         switch self {
         case .inspect: return "Inspect"
-        case .ocr: return "OCR"
         case .caption: return "Caption"
         }
     }
@@ -260,7 +265,6 @@ package enum StudioReadImageAction: String, CaseIterable, Codable, Identifiable,
     package var templateID: CommandTemplateID {
         switch self {
         case .inspect: return .visionInspect
-        case .ocr: return .visionOCR
         case .caption: return .visionCaption
         }
     }
@@ -414,6 +418,34 @@ package struct StudioDraft: Codable, Equatable, Sendable {
     package var h3AccelerationMode: String?
     package var h3Steps: Int?
     package var h3ReferenceInputs: [String]?
+    /// Optional fields preserve saved Studio drafts from before the inspector bound these
+    /// options; nil leaves the flag off so the CLI (or the model's recipe) applies its own value.
+    package var musicBPM: Int?
+    package var musicKeyScale: String?
+    package var musicTimeSignature: String?
+    package var musicVocalLanguage: String?
+    package var musicGuidanceScale: Double?
+    /// Transcribe's `--task`, `--provider`, `--beam-size`, and `--keyword` (one phrase per line or
+    /// separated by commas).
+    package var transcribeTask: String?
+    package var speechProvider: String?
+    package var speechBeamSize: Int?
+    package var speechKeywords: String?
+    /// Video's LTX LoRAs as `PATH[=STRENGTH]`, one per line or separated by commas.
+    package var videoLoRAs: String?
+    package var videoEnhancePrompt: Bool?
+    /// Segment's and Track's `--show-boxes`, and Segment's `--multimask`.
+    package var visionShowBoxes: Bool?
+    package var visionMultimask: Bool?
+    /// Read Image's `--max-tokens`, nil for the action's own default (Inspect's and Caption's
+    /// differ), and Caption's `--focus` and `--trigger-token`.
+    package var readMaxTokens: Int?
+    package var captionFocus: String?
+    package var captionTriggerToken: String?
+    /// The audio and video a Chat turn carries to an omni model (`--audio`, `--video`); the
+    /// image rides in `inputPath`. Optional preserves saved Studio drafts from before them.
+    package var chatAudioPath: String?
+    package var chatVideoPath: String?
 
     package mutating func reset(for mode: StudioMode) {
         let base = CommandCatalog.template(id: mode.defaultTemplateID)?.defaultDraft()
@@ -542,6 +574,24 @@ package struct StudioDraft: Codable, Equatable, Sendable {
         h3AccelerationMode = nil
         h3Steps = nil
         h3ReferenceInputs = nil
+        musicBPM = nil
+        musicKeyScale = nil
+        musicTimeSignature = nil
+        musicVocalLanguage = nil
+        musicGuidanceScale = nil
+        transcribeTask = nil
+        speechProvider = nil
+        speechBeamSize = nil
+        speechKeywords = nil
+        videoLoRAs = nil
+        videoEnhancePrompt = nil
+        visionShowBoxes = nil
+        visionMultimask = nil
+        readMaxTokens = nil
+        captionFocus = nil
+        captionTriggerToken = nil
+        chatAudioPath = nil
+        chatVideoPath = nil
     }
 
     private func modeDefaultPrompt(_ mode: StudioMode) -> String {
@@ -610,6 +660,9 @@ package enum StudioCommandError: LocalizedError, Equatable {
     /// Every drawn prompt is a negative point, which only ever refines a box or a positive point.
     case negativePointsOnly
     case missingTemplate(CommandTemplateID)
+    /// A per-turn attachment the chosen model does not read: the model's name, what it can't
+    /// read ("audio"), and the kind of model that can ("an omni model").
+    case unreadAttachment(model: String, kind: String, alternative: String)
 
     package var errorDescription: String? {
         switch self {
@@ -621,6 +674,8 @@ package enum StudioCommandError: LocalizedError, Equatable {
             return "Add a box or a positive point for the negative points to refine."
         case .missingTemplate(let id):
             return "No command template found for \(id.rawValue)."
+        case .unreadAttachment(let model, let kind, let alternative):
+            return "\(model) can't read \(kind). Choose \(alternative) or remove the attachment."
         }
     }
 }
@@ -643,11 +698,15 @@ package enum StudioCommandAdapter {
         guard let template = CommandCatalog.template(id: templateID) else {
             throw StudioCommandError.missingTemplate(templateID)
         }
-        let effective = source.scope(mode: mode, draft: studioDraft).map { studioDraft.scoped(to: $0, mode: mode) }
-            ?? studioDraft
+        let scope = source.scope(mode: mode, draft: studioDraft)
+        let effective = scope.map { studioDraft.scoped(to: $0, mode: mode) } ?? studioDraft
 
         if validating {
             try validate(mode: mode, templateID: templateID, draft: effective)
+            // Scoping would drop a file the model can't read; a run says so instead.
+            if let scope, let slot = mode.unreadAttachmentSlots(for: studioDraft, scope: scope).first {
+                throw StudioCommandError.unread(slot, family: scope.family?.title)
+            }
         }
 
         return StudioRunRequest(
@@ -738,6 +797,7 @@ package enum StudioCommandAdapter {
             draft.topP = studioDraft.topP
             draft.minP = studioDraft.minP
             draft.maxTokens = studioDraft.maxTokens
+            draft.thinkingMode = studioDraft.thinkingMode
             if mode == .chat {
                 draft.contextSize = studioDraft.contextSize
                 draft.topK = studioDraft.topK
@@ -746,7 +806,6 @@ package enum StudioCommandAdapter {
                 draft.kvGroupSize = studioDraft.kvGroupSize
                 draft.quantizedKVStart = studioDraft.quantizedKVStart
                 draft.responseFormat = studioDraft.responseFormat
-                draft.thinkingMode = studioDraft.thinkingMode
                 draft.reasoningEffort = studioDraft.reasoningEffort
                 draft.loraPath = studioDraft.loraPath
                 draft.loraScale = studioDraft.loraScale
@@ -764,8 +823,12 @@ package enum StudioCommandAdapter {
             // Conversation turns stream so the canvas renders tokens live; the reply is
             // accumulated and think-stripped app-side.
             if conversationID != nil { draft.stream = true }
-            // Vision chat: a single attached image rides with this turn (chat only, not code).
-            if mode == .chat, !studioDraft.inputPath.isBlank { draft.imagePath = studioDraft.inputPath }
+            // Vision and omni chat: the turn's image, audio, and video ride with it (chat only).
+            if mode == .chat {
+                if !studioDraft.inputPath.isBlank { draft.imagePath = studioDraft.inputPath }
+                draft.chatAudioPath = studioDraft.chatAudioPath.flatMap { $0.isBlank ? nil : $0 }
+                draft.chatVideoPath = studioDraft.chatVideoPath.flatMap { $0.isBlank ? nil : $0 }
+            }
 
         case .speak:
             draft.prompt = prompt
@@ -782,6 +845,8 @@ package enum StudioCommandAdapter {
             } else {
                 draft.voiceSpeaker = studioDraft.voiceSpeaker
             }
+            draft.language = studioDraft.language
+            draft.temperature = studioDraft.temperature
 
         case .listen:
             draft.inputPath = studioDraft.inputPath
@@ -789,11 +854,23 @@ package enum StudioCommandAdapter {
             draft.language = studioDraft.language
             draft.backend = studioDraft.backend
             draft.timestamps = studioDraft.timestamps
+            draft.maxTokens = studioDraft.maxTokens
+            draft.task = studioDraft.transcribeTask ?? draft.task
+            draft.speechProvider = studioDraft.speechProvider
+            draft.speechBeamSize = studioDraft.speechBeamSize
+            draft.speechKeywords = studioDraft.speechKeywords
 
         case .readImage:
             draft.inputPath = studioDraft.inputPath
             draft.prompt = prompt.isEmpty ? draft.prompt : prompt
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
+            // Inspect and Caption keep their own defaults until a value is chosen: one draft
+            // serves both actions, so a value only rides along once it is an explicit choice.
+            if let maxTokens = studioDraft.readMaxTokens { draft.maxTokens = maxTokens }
+            if studioDraft.samplingOverrides?.contains("--temperature") == true { draft.temperature = studioDraft.temperature }
+            if studioDraft.samplingOverrides?.contains("--top-p") == true { draft.topP = studioDraft.topP }
+            draft.visionFocus = studioDraft.captionFocus ?? ""
+            draft.visionTriggerToken = studioDraft.captionTriggerToken ?? ""
 
         case .findObjects, .segment, .track:
             draft.prompt = prompt
@@ -807,6 +884,8 @@ package enum StudioCommandAdapter {
                 draft.visionBoxPrompts = StudioRegionPromptText.boxText(region)
                 draft.visionPointPrompts = StudioRegionPromptText.pointText(region)
             }
+            if mode != .findObjects { draft.force = studioDraft.visionShowBoxes ?? false }
+            if mode == .segment { draft.visionMultimask = studioDraft.visionMultimask ?? false }
             if mode == .track {
                 draft.visionInitFrame = studioDraft.visionInitFrame ?? 0
                 draft.visionEndFrame = studioDraft.visionEndFrame.map(String.init) ?? ""
@@ -857,6 +936,11 @@ package enum StudioCommandAdapter {
             draft.musicDAWBundle = studioDraft.musicDAWBundle
             draft.musicExportFormat = studioDraft.musicExportFormat
             draft.musicNoRecipe = studioDraft.musicNoRecipe
+            draft.musicBPM = studioDraft.musicBPM.map(String.init) ?? ""
+            draft.musicKey = studioDraft.musicKeyScale ?? ""
+            draft.musicTimeSignature = studioDraft.musicTimeSignature ?? ""
+            draft.musicVocalLanguage = studioDraft.musicVocalLanguage ?? draft.musicVocalLanguage
+            draft.musicGuidanceScale = studioDraft.musicGuidanceScale.map(CommandArguments.format) ?? ""
 
         case .video:
             draft.prompt = prompt
@@ -893,10 +977,14 @@ package enum StudioCommandAdapter {
             draft.h3AccelerationMode = studioDraft.h3AccelerationMode
             draft.h3Steps = studioDraft.h3Steps
             draft.h3ReferenceInputs = studioDraft.h3ReferenceInputs
+            draft.videoLoRAs = studioDraft.videoLoRAs
+            draft.videoEnhancePrompt = studioDraft.videoEnhancePrompt
 
         case .sfx:
             draft.prompt = prompt
+            draft.secondaryText = secondary
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
+            draft.cfgScale = studioDraft.cfgScale
             draft.durationSeconds = studioDraft.durationSeconds
             draft.steps = studioDraft.steps
             draft.seed = studioDraft.seed
@@ -1064,6 +1152,9 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
     /// The image attached to this user turn (vision chat), so edit/retry resend it. Optional so
     /// older persisted threads decode unchanged.
     package var imagePath: String?
+    /// The audio and video attached to this user turn (omni chat), optional for the same reason.
+    package var audioPath: String?
+    package var videoPath: String?
     /// The model that produced this assistant turn, recorded when the reply lands so a thread
     /// whose model changed mid-way says which turn ran on what. nil on user turns and on threads
     /// persisted before turns recorded it.
@@ -1094,6 +1185,8 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
         failed: Bool = false,
         cancelled: Bool? = nil,
         imagePath: String? = nil,
+        audioPath: String? = nil,
+        videoPath: String? = nil,
         model: String? = nil,
         systemPrompt: String? = nil,
         tokensPerSecond: Double? = nil,
@@ -1109,6 +1202,8 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
         self.failed = failed
         self.cancelled = cancelled
         self.imagePath = imagePath
+        self.audioPath = audioPath
+        self.videoPath = videoPath
         self.model = model
         self.systemPrompt = systemPrompt
         self.tokensPerSecond = tokensPerSecond
@@ -1308,7 +1403,7 @@ package enum ModelReadinessState: Equatable {
         case .ready:
             return "Ready to run on this Mac."
         case .missingModel(let model):
-            return "\(StudioModelNaming.displayName(model, titles: titles)) isn't on this Mac yet. Get it once and it stays."
+            return "\(StudioModelNaming.displayName(model, titles: titles)) isn't on this Mac. Download it once and it stays."
         case .unsupported(let reason):
             return reason
         case .unknown(let reason, _):

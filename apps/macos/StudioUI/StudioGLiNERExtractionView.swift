@@ -177,8 +177,8 @@ struct StudioGLiNERExtractionView: View {
                 Menu {
                     Button("Load the example", action: loadExample)
                     Divider()
-                    Button("Import Request…", action: importRequest)
-                    Button("Export Request…", action: exportRequest).disabled(!document.problems.isEmpty)
+                    Button("Import request…", action: importRequest)
+                    Button("Export request…", action: exportRequest).disabled(!document.problems.isEmpty)
                     Divider()
                     Button("Clear", role: .destructive) { document = StudioExtractionDocument() }
                         .disabled(document == StudioExtractionDocument())
@@ -188,6 +188,8 @@ struct StudioGLiNERExtractionView: View {
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
+                .help("Example, import, and export")
+                .accessibilityLabel("Example, import, and export")
             }
             Text("Find named entities, relation pairs, and structured fields using GLiNER2.5 Decide.")
                 .font(MereRunTheme.captionFont)
@@ -263,7 +265,7 @@ struct StudioGLiNERExtractionView: View {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try document.requestJSON().write(to: requestURL, options: .atomic)
         } catch {
-            message = "Studio could not write the request: \(error.localizedDescription)"
+            message = "Couldn't write the request. \(error.localizedDescription)"
             return
         }
         var command = CommandDraft()
@@ -308,7 +310,7 @@ struct StudioGLiNERExtractionView: View {
             document = try StudioExtractionDocument.importing(Data(contentsOf: url))
             message = nil
         } catch {
-            message = "That file is not an extraction request: \(error.localizedDescription)"
+            message = "That file isn't an extraction request. \(error.localizedDescription)"
         }
     }
 
@@ -318,7 +320,7 @@ struct StudioGLiNERExtractionView: View {
         do {
             try document.requestJSON().write(to: url, options: .atomic)
         } catch {
-            message = "Studio could not save the request: \(error.localizedDescription)"
+            message = "Couldn't save the request. \(error.localizedDescription)"
         }
     }
 }
@@ -351,7 +353,7 @@ private struct StudioExtractionResultPane: View {
             case .failed, .interrupted:
                 StudioRunFailureDetail(models: controller.modelStore, item: item)
             case .cancelled:
-                ContentUnavailableView("Cancelled", systemImage: "stop.circle")
+                ContentUnavailableView("Canceled", systemImage: "stop.circle")
             }
         } else {
             VStack(spacing: 12) {

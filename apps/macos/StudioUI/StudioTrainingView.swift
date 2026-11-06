@@ -92,7 +92,7 @@ struct StudioTrainingDatasetSnapshot: Equatable {
                 totalRecords: 0,
                 usableRecords: 0,
                 previews: [],
-                diagnostics: ["The dataset directory could not be read."]
+                diagnostics: ["Couldn't read the dataset folder."]
             )
         }
         let images = urls.filter { imageExtensions.contains($0.pathExtension.lowercased()) }
@@ -119,7 +119,7 @@ struct StudioTrainingDatasetSnapshot: Equatable {
         }
         let diagnostics = missingCaptions == 0
             ? ["All discovered images have matching caption files."]
-            : ["\(missingCaptions) image(s) are missing matching .txt captions."]
+            : [missingCaptions == 1 ? "1 image is missing a matching .txt caption." : "\(missingCaptions) images are missing matching .txt captions."]
         return .init(
             source: root,
             totalRecords: images.count,
@@ -136,7 +136,7 @@ struct StudioTrainingDatasetSnapshot: Equatable {
                 totalRecords: 0,
                 usableRecords: 0,
                 previews: [],
-                diagnostics: ["The JSONL dataset could not be read."]
+                diagnostics: ["Couldn't read the JSONL dataset."]
             )
         }
         let lines = text.split(whereSeparator: \.isNewline)
@@ -167,7 +167,7 @@ struct StudioTrainingDatasetSnapshot: Equatable {
             previews: previews,
             diagnostics: valid == lines.count
                 ? ["Every JSONL row parses as JSON."]
-                : ["\(lines.count - valid) malformed JSONL row(s) need attention."]
+                : [lines.count - valid == 1 ? "1 JSONL row is malformed." : "\(lines.count - valid) JSONL rows are malformed."]
         )
     }
 }
@@ -364,6 +364,8 @@ struct StudioTrainingView: View {
         }
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
+        // Run ▸ Run (⌘↩) starts the page's training, not the Command view's template draft.
+        .focusedSceneValue(\.studioPageRun, StudioPageRun(isEnabled: !isRunning && !readiness.blocksRun, run: startTraining))
         .onReceive(refreshTimer) { _ in refreshSnapshot() }
         .onReceive(controller.runCompletions) { result in
             guard Self.trainingTemplates.contains(result.templateID) else { return }
@@ -437,9 +439,9 @@ struct StudioTrainingView: View {
                 // The well offers a checkpoint only to a trainer that resumes (Klein, not Krea 2).
                 Text(kind == .image
                     ? slots.count > 1
-                        ? "A folder of images with matching .txt captions; a checkpoint to resume from is optional."
+                        ? "A folder of images with matching .txt captions. A checkpoint to resume from is optional."
                         : "A folder of images with matching .txt captions."
-                    : "Chat SFT examples as JSONL, one per line; evaluation prompts and a resume checkpoint are optional.")
+                    : "Chat SFT examples as JSONL, one for each line. Evaluation prompts and a resume checkpoint are optional.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -577,7 +579,7 @@ struct StudioTrainingView: View {
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 if case .missingModel = readiness {
-                    Button("Get the model") { pull(modelID: StudioTaskSchema.modelID(for: draft, source: scopeSource)) }
+                    Button("Download the model") { pull(modelID: StudioTaskSchema.modelID(for: draft, source: scopeSource)) }
                         .buttonStyle(.mereSecondary)
                         .disabled(jobMonitor.pullJob(for: StudioTaskSchema.modelID(for: draft, source: scopeSource)) != nil)
                 }
@@ -739,8 +741,8 @@ struct StudioTrainingView: View {
                         .lineLimit(2)
                         .truncationMode(.middle)
                     Text(kind == .music
-                        ? "The adapter is named when the run starts; the clip list is written beside it."
-                        : "The adapter is named after the dataset when the run starts; events, samples, and checkpoints land beside it.")
+                        ? "The adapter is named when the run starts. The clip list is written beside it."
+                        : "The adapter is named after the dataset when the run starts. Events, samples, and checkpoints are written beside it.")
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -786,7 +788,6 @@ struct StudioTrainingView: View {
                     }
                     .buttonStyle(.mereSecondary)
                     .help("Stop the training run (⌘.)")
-                    .keyboardShortcut(".", modifiers: .command)
                     .accessibilityLabel("Stop training")
                 } else {
                     Button {
@@ -796,7 +797,6 @@ struct StudioTrainingView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.merePrimary)
-                    .keyboardShortcut(.return, modifiers: .command)
                     .help(readiness.blocksRun ? readiness.message(titles: titles) : "Start training (⌘↩)")
                 }
             }
@@ -894,7 +894,7 @@ struct StudioTrainingView: View {
                     comparisonCard("B", snapshot: second)
                 }
             } else {
-                Text("Completed and in-progress training runs will appear here.")
+                Text("Completed and in-progress training runs appear here.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
             }
@@ -1145,7 +1145,7 @@ struct StudioTrainingView: View {
             musicManifest = try StudioMusicTrainingManifest.importing(Data(contentsOf: url), from: url)
             statusMessage = nil
         } catch {
-            statusMessage = "The manifest at \(url.lastPathComponent) could not be read into the clip list: \(error.localizedDescription)"
+            statusMessage = "Couldn't read \(url.lastPathComponent) into the clip list. \(error.localizedDescription)"
         }
     }
 

@@ -115,8 +115,8 @@ struct StudioLayaDecisionView: View {
                 Menu {
                     Button("Load the example", action: loadExample)
                     Divider()
-                    Button("Import Request…", action: importRequest)
-                    Button("Export Request…", action: exportRequest)
+                    Button("Import request…", action: importRequest)
+                    Button("Export request…", action: exportRequest)
                         .disabled(document == StudioDecisionDocument())
                     Divider()
                     Button("Clear", role: .destructive) { document = StudioDecisionDocument() }
@@ -128,6 +128,7 @@ struct StudioLayaDecisionView: View {
                 .menuIndicator(.hidden)
                 .fixedSize()
                 .help("Example, import, and export")
+                .accessibilityLabel("Example, import, and export")
             }
             Text("Ask choice, score, and yes-or-no questions about a text. Each answer comes with its probabilities.")
                 .font(MereRunTheme.captionFont)
@@ -174,7 +175,7 @@ struct StudioLayaDecisionView: View {
             HStack(spacing: 8) {
                 Button("Check fit") { run(preflight: true) }
                     .buttonStyle(.mereSecondary)
-                    .help("Count tokens and show what the model would cut, without loading it")
+                    .help("Count tokens and show what the model cuts, without loading it")
                 Spacer()
                 Button("Decide") { run(preflight: false) }
                     .buttonStyle(.merePrimary)
@@ -222,7 +223,7 @@ struct StudioLayaDecisionView: View {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try document.requestJSON().write(to: requestURL, options: .atomic)
         } catch {
-            message = "Studio could not write the request: \(error.localizedDescription)"
+            message = "Couldn't write the request. \(error.localizedDescription)"
             return
         }
         var command = CommandDraft()
@@ -272,7 +273,7 @@ struct StudioLayaDecisionView: View {
             document = try StudioDecisionDocument.importing(Data(contentsOf: url))
             message = nil
         } catch {
-            message = "That file is not a decision request: \(error.localizedDescription)"
+            message = "That file isn't a decision request. \(error.localizedDescription)"
         }
     }
 
@@ -285,7 +286,7 @@ struct StudioLayaDecisionView: View {
         do {
             try document.requestJSON().write(to: url, options: .atomic)
         } catch {
-            message = "Studio could not save the request: \(error.localizedDescription)"
+            message = "Couldn't save the request. \(error.localizedDescription)"
         }
     }
 }
@@ -325,11 +326,11 @@ private struct StudioDecisionQuestionEditor: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 Menu {
-                    Button("Move Up") { onMove(-1) }.disabled(!canMoveUp)
-                    Button("Move Down") { onMove(1) }.disabled(!canMoveDown)
+                    Button("Move up") { onMove(-1) }.disabled(!canMoveUp)
+                    Button("Move down") { onMove(1) }.disabled(!canMoveDown)
                     Button(showsKey ? "Hide ID" : "Edit ID") { showsKey.toggle() }
                     Divider()
-                    Button("Delete Question", role: .destructive, action: onDelete)
+                    Button("Delete question", role: .destructive, action: onDelete)
                 } label: {
                     Image(systemName: "ellipsis")
                         .frame(width: 20, height: 20)
@@ -364,7 +365,7 @@ private struct StudioDecisionQuestionEditor: View {
                         .padding(6)
                         .merePanel()
                 }
-                .help("The question's id in the request and the result. Blank derives one from the question.")
+                .help("The question's ID in the request and the result. If it's blank, the ID comes from the question.")
             }
         }
         .padding(12)
@@ -536,7 +537,7 @@ private struct StudioDecisionResultPane: View {
             case .failed, .interrupted:
                 StudioRunFailureDetail(models: controller.modelStore, item: item)
             case .cancelled:
-                ContentUnavailableView("Cancelled", systemImage: "stop.circle")
+                ContentUnavailableView("Canceled", systemImage: "stop.circle")
             }
         } else {
             VStack(spacing: 12) {
@@ -706,7 +707,7 @@ private struct StudioDecisionAnswerCard: View {
                     .foregroundStyle(MereRunTheme.yellow)
             }
             if answer.temperatureClamped {
-                Text("Calibration was clamped for this question; treat its confidence as approximate.")
+                Text("Calibration was clamped for this question, so treat its confidence as approximate.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
             }

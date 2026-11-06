@@ -256,7 +256,7 @@ struct StudioModelHealthView: View {
                         "Baseline updates change the expected local quality results. "
                             + "Review the completed JSON report before treating the new values as trusted."
                     ),
-                    primaryButton: .destructive(Text("Run & Update")) {
+                    primaryButton: .destructive(Text("Run and Update")) {
                         startQualityGate(updatingBaselines: true)
                     },
                     secondaryButton: .cancel {
@@ -403,7 +403,7 @@ struct StudioModelHealthView: View {
                         startQualityGate(updatingBaselines: false)
                     }
                 } label: {
-                    Label("Run Quality Gate", systemImage: "play.fill")
+                    Label("Run quality gate", systemImage: "play.fill")
                 }
                 .buttonStyle(.merePrimary)
                 .disabled(selectedSuites.isEmpty || qualityItem?.status == .running || qualityItem?.status == .queued)

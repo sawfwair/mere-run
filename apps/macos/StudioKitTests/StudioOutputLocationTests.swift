@@ -548,7 +548,7 @@ final class StudioOutputLocationTests: XCTestCase {
             depth.setArgument(0, "/tmp/street.png")
             let directory = StudioOutputLocation.destination(for: depth, source: .contract).text("--output")
             XCTAssertEqual(StudioOutputLocation.destination(for: StudioOutputLocation.destination(for: depth, source: .contract), source: .contract).text("--output"), directory)
-            XCTAssertEqual(URL(fileURLWithPath: directory).deletingLastPathComponent().path, root.appendingPathComponent("Vision").path)
+            XCTAssertEqual(URL(fileURLWithPath: directory).deletingLastPathComponent().path, root.appendingPathComponent("3D").path)
             XCTAssertTrue(URL(fileURLWithPath: directory).lastPathComponent.hasPrefix("street-"), "a directory output, named the same way")
             XCTAssertTrue(URL(fileURLWithPath: directory).pathExtension.isEmpty)
 

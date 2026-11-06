@@ -69,9 +69,9 @@ struct StudioModelLocationConfirmation: Identifiable {
     var message: String {
         switch kind {
         case .removeRoot(let path):
-            return "mere.run will stop searching \(path). No files are deleted."
+            return "mere.run stops searching \(path). No files are deleted."
         case .unbind(let modelID, _):
-            return "mere.run will stop resolving \(modelID) from its bound directory. No files are deleted."
+            return "mere.run stops resolving \(modelID) from its bound directory. No files are deleted."
         }
     }
 }
@@ -144,7 +144,7 @@ struct StudioModelLocationsView: View {
         card {
             Text("Writable store")
                 .font(MereRunTheme.sectionFont)
-            Text("Downloads and manifests are written here. It cannot be removed.")
+            Text("Downloads and manifests are written here. You can't remove this location.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
             if let store = snapshot?.primaryStore {
@@ -179,7 +179,7 @@ struct StudioModelLocationsView: View {
                 .disabled(busy)
             }
             Text(
-                "Each root holds directories named for canonical model ids. mere.run reads from them "
+                "Each root holds directories named for canonical model IDs. mere.run reads from them "
                     + "and never writes to them, so an external volume stays untouched."
             )
             .font(MereRunTheme.captionFont)
@@ -226,7 +226,7 @@ struct StudioModelLocationsView: View {
         card {
             Text("Explicit bindings")
                 .font(MereRunTheme.sectionFont)
-            Text("Point one canonical model id at a directory that is not named for it.")
+            Text("Point one canonical model ID at a directory that isn't named for it.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
 
@@ -332,7 +332,7 @@ struct StudioModelLocationsView: View {
             masksSecrets: false
         )
         guard result.exitCode == 0, let decoded = StudioModelLocationSnapshot.decode(result.stdout) else {
-            statusMessage = "Could not read model locations."
+            statusMessage = "Couldn't read model locations."
             return
         }
         snapshot = decoded

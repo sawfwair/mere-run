@@ -177,7 +177,7 @@ struct StudioMusicManifestEditor: View {
             draft = try StudioMusicTrainingManifest.importing(Data(contentsOf: url), from: url)
             message = nil
         } catch {
-            message = "That file is not a training manifest: \(error.localizedDescription)"
+            message = "That file isn't a training manifest. \(error.localizedDescription)"
         }
     }
 
@@ -186,7 +186,7 @@ struct StudioMusicManifestEditor: View {
         do {
             try draft.jsonl().write(to: url, options: .atomic)
         } catch {
-            message = "Studio could not save the manifest: \(error.localizedDescription)"
+            message = "Couldn't save the manifest. \(error.localizedDescription)"
         }
     }
 }

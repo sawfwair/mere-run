@@ -455,6 +455,37 @@ extension CommandFlags {
     }
 }
 
+// MARK: - vision image-to-3d-idol
+
+extension CommandFlags {
+    /// `mere.run vision image-to-3d-idol` — IDOL Gaussian splats
+    package enum VisionImageTo3DIdol: CommandFlagNamespace {
+        package static let command = ["vision", "image-to-3d-idol"]
+        package static let defaultValues = [
+            "--mode": "synthetic",
+            "--seed": "42",
+            "--steps": "50",
+            "--guidance": "3.0",
+            "--time-shift": "3.0",
+            "--num-gaussians": "262144"
+        ]
+
+        package static let model = "--model"
+        package static let dino = "--dino"
+        package static let vae = "--vae"
+        package static let output = "--output"
+        package static let mode = "--mode"
+        package static let alreadyFramed = "--already-framed"
+        package static let seed = "--seed"
+        package static let steps = "--steps"
+        package static let guidance = "--guidance"
+        package static let timeShift = "--time-shift"
+        package static let numGaussians = "--num-gaussians"
+        package static let dryRun = "--dry-run"
+        package static let json = "--json"
+    }
+}
+
 // MARK: - vision embed
 
 extension CommandFlags {

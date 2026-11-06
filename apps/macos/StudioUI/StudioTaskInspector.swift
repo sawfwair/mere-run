@@ -103,8 +103,8 @@ struct StudioTaskInspector: View {
                     .frame(width: 22, height: 22)
             }
             .buttonStyle(.mereIcon(tint: MereRunTheme.textMuted))
-            .help(StudioKeyboardShortcuts.help("Hide Inspector", .showInspector))
-            .accessibilityLabel("Hide Inspector")
+            .help(StudioKeyboardShortcuts.help("Hide inspector", .showInspector))
+            .accessibilityLabel("Hide inspector")
         }
         .padding(.horizontal, 16)
         .frame(height: 44)

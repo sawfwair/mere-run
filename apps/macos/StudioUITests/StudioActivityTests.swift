@@ -42,8 +42,8 @@ final class StudioActivityTests: XCTestCase {
         XCTAssertEqual(StudioActivity.title(for: try XCTUnwrap(store.job(transcribe)), titles: .none), "Audio · Transcribe")
         XCTAssertEqual(
             StudioActivity.title(for: try XCTUnwrap(store.job(pull)), titles: .none),
-            "Models · Pull Qwen3.6-VL 4B",
-            "a pull names its model the way the composer's model chip does"
+            "Models · Download Qwen3.6-VL 4B",
+            "a download names its model the way the composer's model chip does"
         )
         // A job with no task of its own falls back to the template's title.
         XCTAssertEqual(StudioActivity.title(for: try XCTUnwrap(store.job(gate)), titles: .none), "Models · Quality gate")

@@ -1110,10 +1110,10 @@ final class StudioSnapshotTests: XCTestCase {
                 StudioMessage(role: .user, content: "Show the sampling loop in Swift with MLX.", createdAt: asked.addingTimeInterval(180)),
                 StudioMessage(
                     role: .assistant, content: "", createdAt: asked.addingTimeInterval(200), failed: true, model: model,
-                    failureReason: "Model 'text-chat-qwen3.6-4b' is not installed.",
+                    failureReason: "Model 'text-chat-gemma4-nano' is not installed.",
                     logTail: [
-                        "Loading text-chat-qwen3.6-4b…",
-                        "error: model 'text-chat-qwen3.6-4b' is not installed",
+                        "Loading text-chat-gemma4-nano…",
+                        "error: model 'text-chat-gemma4-nano' is not installed",
                         "Exited with code 1.",
                     ]
                 ),
@@ -1186,8 +1186,8 @@ final class StudioSnapshotTests: XCTestCase {
     /// The Settings scene content at the width the app gives it.
     func testSettingsSnapshots() throws {
         for appearance in StudioSnapshotAppearance.allCases {
-            for (tab, suffix) in [(MereRunSettingsView.Tab.general, ""), (.server, "-server")] {
-                let view = MereRunSettingsView(tab: tab)
+            for (tab, suffix) in [(MereRunSettingsView.Tab.general, ""), (.models, "-models"), (.server, "-server"), (.advanced, "-advanced")] {
+                let view = MereRunSettingsView(tab: tab, automaticUpdateChecks: .constant(true))
                     .environmentObject(fixture.controller)
                     .environmentObject(fixture.crashReporter)
                     .frame(width: Self.settingsSize.width)
@@ -1203,7 +1203,7 @@ final class StudioSnapshotTests: XCTestCase {
 
     /// The Command Console: the catalog, `image generate` rendered from the contract, and the run
     /// pane. At the mockup size so it can be read against the Command board, whose grouped rows,
-    /// monospaced flag column and "Will run" block it follows.
+    /// monospaced flag column and "Command to run" block it follows.
     func testCommandConsoleSnapshots() throws {
         for appearance in StudioSnapshotAppearance.allCases {
             let view = StudioConsoleView()
@@ -1779,8 +1779,8 @@ final class StudioSnapshotTests: XCTestCase {
     /// Compare, "Use these settings", and the readiness card's next steps, light and dark. First
     /// the Library column with its two newest image rows batched, so the bar offers Compare. Then
     /// the feed with a finished mockup run (its card carries the settings icon beside Vary), a
-    /// run that failed for want of its model (a plain reason and Get the model beside "Use these
-    /// settings" and Retry), and the readiness card for that model — Get the model and Choose
+    /// run that failed for want of its model (a plain reason and Download the model beside "Use these
+    /// settings" and Retry), and the readiness card for that model — Download the model and Choose
     /// another model — followed by the same card before any check, when the Mac cannot run the
     /// model, and when the check failed with the CLI's line kept as muted detail.
     func testLibraryReuseAndReadinessSnapshots() throws {
@@ -1912,7 +1912,7 @@ final class StudioSnapshotTests: XCTestCase {
         defer { pages.tearDown() }
         try pages.seedDiarizationRun()
         try pages.seedEnhanceRun()
-        try pages.seedSeparateRun(task: .audioSeparate)
+        try pages.seedSeparateRun(task: .musicSeparate)
         let voices = try pages.voiceProfileSeed()
         let wide = CGSize(width: 1_440, height: 820)
         let narrow = CGSize(width: 960, height: 760)
@@ -1938,13 +1938,13 @@ final class StudioSnapshotTests: XCTestCase {
             let suffix = appearance.rawValue
             try render(.audioWhoSpoke, name: "audio-who-spoke-\(suffix)", size: wide, appearance: appearance)
             try render(.audioEnhance, name: "audio-enhance-\(suffix)", size: wide, appearance: appearance)
-            try render(.audioSeparate, name: "audio-separate-\(suffix)", size: wide, appearance: appearance)
+            try render(.musicSeparate, name: "music-separate-\(suffix)", size: wide, appearance: appearance)
             try render(.voiceVoices, name: "voice-voices-\(suffix)", size: wide, appearance: appearance, profiles: voices)
             try render(.audioLive, name: "audio-live-idle-\(suffix)", size: wide, appearance: appearance)
         }
         try render(.audioWhoSpoke, name: "audio-who-spoke-compact-light", size: narrow, appearance: .light)
         try render(.audioEnhance, name: "audio-enhance-compact-light", size: narrow, appearance: .light)
-        try render(.audioSeparate, name: "audio-separate-compact-light", size: narrow, appearance: .light)
+        try render(.musicSeparate, name: "music-separate-compact-light", size: narrow, appearance: .light)
         try render(.voiceVoices, name: "voice-voices-new-compact-light", size: narrow, appearance: .light)
         try render(.audioLive, name: "audio-live-compact-light", size: narrow, appearance: .light)
 
@@ -2042,7 +2042,7 @@ final class StudioSnapshotTests: XCTestCase {
 
     /// Library items as inputs. Music ▸ Transcribe empty in the window, with a composed song and a
     /// four-stem separation in the Library, so its "Choose audio…" and the well's plus open the
-    /// From Disk / From Library menu (light and dark); the From Library picker for that audio
+    /// From disk / From Library menu (light and dark); the From Library picker for that audio
     /// slot, the stems listed under their run (light and dark); the picker for an image slot over
     /// a batch of pictures; the picker with nothing to offer; and the attach controls side by
     /// side with and without Library choices, so the chevron appears only where a menu opens.
@@ -2191,9 +2191,7 @@ final class StudioSnapshotTests: XCTestCase {
             try render(.soundScore, name: "task-workspace-sound-score-\(appearance.rawValue)", appearance: appearance, size: wide)
         }
         try render(.soundFoley, name: "task-workspace-sound-foley-narrow-light", appearance: .light, size: CGSize(width: 820, height: 760))
-        try render(.soundCondition, name: "task-workspace-sound-condition-light", appearance: .light, size: wide)
-        try render(.soundEncode, name: "task-workspace-sound-encode-light", appearance: .light, size: wide)
-        try render(.soundDecode, name: "task-workspace-sound-decode-light", appearance: .light, size: wide)
+        try render(.soundLatents, name: "task-workspace-sound-latents-light", appearance: .light, size: wide)
 
         let draft = try XCTUnwrap(sessions.taskDraft(for: .soundFoley))
         let inspector = StudioTaskInspector(
@@ -2376,12 +2374,40 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    /// 3D ▸ From image with a finished IDOL run: the card draws `object.ply` in the Metal splat
+    /// viewer from the run's input camera, with the prepared input beside it and the Gaussian
+    /// count under both, light and dark. The harness captures with `cacheDisplay`, which the
+    /// viewer answers with an offscreen Metal frame.
+    func testThreeDSplatSnapshots() throws {
+        let workspace = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.readinessResponses)
+        )
+        defer { workspace.tearDown() }
+        try workspace.seedSplatRun()
+        let task = StudioTask.threeDFromImage
+        let runner = StudioTaskRunner(controller: workspace.controller, library: workspace.library)
+        for appearance in StudioSnapshotAppearance.allCases {
+            let view = StudioTaskWorkspace(task: task, models: workspace.controller.modelStore)
+                .environmentObject(workspace.controller)
+                .environmentObject(workspace.library)
+                .environmentObject(NavigationModel(destination: task.destination))
+                .environment(\.studioTaskSessions, workspace.controller.taskSessions)
+                .environment(\.studioTaskScope, task.rawValue)
+                .environment(\.studioTaskRunner, runner)
+                .frame(width: 1_440, height: 820)
+            try workspace.write(view, size: CGSize(width: 1_440, height: 820), appearance: appearance,
+                                name: "three-d-splat-\(appearance.rawValue)", settle: 3)
+        }
+    }
+
     /// Earth on the shared task workspace, through the root: TESSERA with a finished run — the
-    /// attached bundle read against the tensors the command needs on the left, the embedding's
-    /// header in the result panel on the right, the inspector open with the constrained
-    /// dimensions picker — light and dark at the board size and at a narrow width; Flood with a
-    /// bundle missing its DEM, so the checklist warns before any run; OlmoEarth with nothing
-    /// attached, the serif empty state; and TESSERA's inspector column on its own.
+    /// Map view's false color on the left, the embedding's header in the result panel on the
+    /// right, the inspector open with the constrained dimensions picker — light and dark at the
+    /// board size and at a narrow width; Flood with a bundle missing its DEM, so the checklist
+    /// warns before any run; OlmoEarth with nothing attached, the serif empty state; Fire with a
+    /// finished two-tile run, its mask over natural color, light and dark; OlmoEarth's false
+    /// color drawn on its own; and TESSERA's inspector column on its own.
     func testEarthWorkspaceSnapshots() throws {
         let earth = try SnapshotFixture(
             outputDirectory: fixture.outputDirectory,
@@ -2408,6 +2434,13 @@ final class StudioSnapshotTests: XCTestCase {
         try render(.earthFlood, name: "earth-flood-missing-dem-light", appearance: .light, size: board)
         try render(.earthFlood, name: "earth-flood-missing-dem-dark", appearance: .dark, size: board)
         try render(.earthOlmoEarth, name: "earth-olmoearth-empty-light", appearance: .light, size: board)
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(.earthFire, name: "earth-fire-map-\(appearance.rawValue)", appearance: appearance, size: board)
+        }
+        try earth.write(
+            StudioEarthMapView(source: try earth.olmoEarthMapSource(), maxHeight: 560).padding(20).frame(width: 640, height: 640),
+            size: CGSize(width: 640, height: 640), appearance: .light, name: "earth-olmoearth-map-light", settle: 1.5
+        )
 
         let draft = try XCTUnwrap(earth.controller.taskSessions.taskDraft(for: .earthTessera))
         let inspector = StudioTaskInspector(
@@ -3217,7 +3250,7 @@ private final class SnapshotFixture {
 
     /// The id of the mockup's open thread, whose last user turn is answered live.
     static let converseThreadID = UUID()
-    static let converseChatModelID = "text-chat-qwen3.6-4b"
+    static let converseChatModelID = "text-chat-gemma4-nano"
 
     /// The Converse board's threads: today's diffusion thread (with a Python block and a turn
     /// awaiting its reply), yesterday's Code thread, and two older chats.
@@ -3366,7 +3399,7 @@ private final class SnapshotFixture {
 
         var draft = template.defaultDraft()
         draft.prompt = "slow-burn synthwave, hopeful bridge, brushed drums, dusty piano"
-        draft.model = "music-magenta-rt2-medium"
+        draft.model = "music-magenta-rt2-base"
         draft.durationSeconds = 300
         draft.outputPath = recordingURL.path
         draft.musicPlay = true
@@ -3392,7 +3425,7 @@ private final class SnapshotFixture {
         guard controller.run(studio: request), let live = runner.liveStarts.last else {
             throw StudioSnapshotError.noContentView
         }
-        live.stderr("Starting Magenta RT2 realtime model music-magenta-rt2-medium\n")
+        live.stderr("Starting Magenta RT2 realtime model music-magenta-rt2-base\n")
         live.stderr("Interactive steering enabled. Commands: prompt <text> | temp | topk | mc | quit\n")
         live.stderr("Realtime frame 6226/7500\n")
         live.stderr("Realtime frame 6251/7500\n")
@@ -3925,11 +3958,11 @@ private final class SnapshotFixture {
                 $0.sfxRenoise = "0.35"
                 $0.seed = "11"
             },
-            Run(task: .soundCondition, templateID: .sfxConditionText, prompt: "Heavy wooden door creaking open", input: nil,
+            Run(task: .soundLatents, templateID: .sfxConditionText, prompt: "Heavy wooden door creaking open", input: nil,
                 output: conditioning, outputText: nil, startedAt: Self.mockupTime(hour: 13, minute: 48), elapsed: 3.2) { _ in },
-            Run(task: .soundEncode, templateID: .sfxAEEncode, prompt: "", input: hit, output: latents, outputText: nil,
+            Run(task: .soundLatents, templateID: .sfxAEEncode, prompt: "", input: hit, output: latents, outputText: nil,
                 startedAt: Self.mockupTime(hour: 13, minute: 40), elapsed: 2.1) { _ in },
-            Run(task: .soundDecode, templateID: .sfxAEDecode, prompt: "", input: latents, output: decoded, outputText: nil,
+            Run(task: .soundLatents, templateID: .sfxAEDecode, prompt: "", input: latents, output: decoded, outputText: nil,
                 startedAt: Self.mockupTime(hour: 13, minute: 42), elapsed: 1.7) { _ in },
             Run(task: .soundScore, templateID: .sfxClapScore, prompt: "A glass bottle breaking on concrete", input: bottle,
                 output: nil, outputText: """
@@ -4282,7 +4315,9 @@ private final class SnapshotFixture {
         var draft = StudioTaskDraft(templateID: .speechListen)
         draft.form["--language"] = .text("en")
         controller.taskSessions.setTaskDraft(draft, for: .audioLive)
-        controller.checkReadiness(for: .audioLive, modelID: StudioTaskSchema.modelID(for: draft, source: .contract))
+        // The readiness probe answers asynchronously through the scripted runner; the session is
+        // seeded as already running, so its model is ready rather than still being checked.
+        controller.readinessByTask[.audioLive] = .ready
         let request = try StudioTaskRunner(controller: controller, library: library).run(draft.liveListenLaunch(), task: .audioLive)
         guard let live = runner.liveStarts.last else {
             throw StudioSnapshotError.noContentView
@@ -4366,6 +4401,60 @@ private final class SnapshotFixture {
         }
     }
 
+    /// A finished 3D ▸ IDOL run of the mug: the folder `vision image-to-3d-idol` writes, with a
+    /// 65,536-Gaussian sphere standing in for `object.ply`, the mug as the prepared input, the
+    /// input camera, and the run manifest's Gaussian count; the task draft is on the IDOL engine.
+    func seedSplatRun() throws {
+        guard let template = CommandCatalog.template(id: .visionImageTo3DIdol) else {
+            throw StudioSnapshotError.noContentView
+        }
+        let folder = root.appendingPathComponent("3D/mug-idol", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let ply = folder.appendingPathComponent("object.ply", isDirectory: false)
+        try SplatFixtures.ply(SplatFixtures.sphere(count: 65_536)).write(to: ply, options: .atomic)
+        let input = folder.appendingPathComponent("input.png", isDirectory: false)
+        try Self.writeMugPNG(to: input, side: 512)
+        let camera = folder.appendingPathComponent("camera.json", isDirectory: false)
+        try #"{"fov": 23.643785, "pitch": 0.21155815, "radius": 3.9961631, "yaw": 2.2415354}"#
+            .write(to: camera, atomically: true, encoding: .utf8)
+        let manifest = folder.appendingPathComponent("manifest.json", isDirectory: false)
+        try #"{"schemaVersion": 1, "status": "completed", "gaussianCount": 65536}"#
+            .write(to: manifest, atomically: true, encoding: .utf8)
+
+        var draft = template.defaultDraft()
+        draft.inputPath = mugURL.path
+        draft.outputPath = folder.path
+        let startedAt = Self.mockupTime(hour: 10, minute: 30)
+        let request = StudioRunRequest(mode: .createImage, templateID: .visionImageTo3DIdol, template: template, draft: draft)
+        var row = StudioLibraryItem(
+            id: UUID(),
+            mode: .createImage,
+            prompt: "",
+            inputURL: mugURL,
+            outputURL: manifest,
+            createdAt: startedAt,
+            updatedAt: startedAt.addingTimeInterval(130),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run vision image-to-3d-idol mug.png --output 3D/mug-idol",
+            outputText: nil,
+            templateID: .visionImageTo3DIdol,
+            commandDraft: draft,
+            commandArguments: template.arguments(from: request.draft, source: .contract),
+            artifactURLs: [ply, input, camera, manifest],
+            artifactRoles: [
+                camera.standardizedFileURL.path: "camera-json",
+                manifest.standardizedFileURL.path: "run-manifest-json",
+            ]
+        )
+        row.inputIdentity = StudioInputIdentity.read(mugURL)
+        library.upsert(row)
+        var taskDraft = StudioTaskDraft(templateID: .visionImageTo3DIdol)
+        taskDraft.setArgument(0, mugURL.path)
+        controller.taskSessions.setTaskDraft(taskDraft, for: .threeDFromImage)
+        controller.taskSessions.set(Optional(row.id), for: StudioTask.threeDFromImage.rawValue + ".requestID")
+    }
+
     /// A unit cube as binary glTF: eight corners and twelve triangles in one buffer, the shape the
     /// 3D commands' GLB exports take.
     private static func cubeGLB() -> Data {
@@ -4414,16 +4503,26 @@ private final class SnapshotFixture {
             throw StudioSnapshotError.noContentView
         }
         let bundle = root.appendingPathComponent("valley-2024.safetensors", isDirectory: false)
+        // 1,024 pixels of a 32 × 32 tile, flattened row by row, so the map's false color wraps
+        // back into the tile.
+        let pixels = 1_024
         try TensorFixtures.write(to: bundle, tensors: [
-            .float32("S2", shape: [1, 4, 10], value: 1_200),
-            .float32("S2_DOY", shape: [1, 4], value: 120),
-            .float32("S1_ASC", shape: [1, 4, 2], value: -12),
-            .float32("S1_ASC_DOY", shape: [1, 4], value: 118),
+            .float32("S2", shape: [pixels, 4, 10], value: 1_200),
+            .float32("S2_DOY", shape: [pixels, 4], value: 120),
+            .float32("S1_ASC", shape: [pixels, 4, 2], value: -12),
+            .float32("S1_ASC_DOY", shape: [pixels, 4], value: 118),
         ])
         let embedding = root.appendingPathComponent("Earth/valley-2024-a1b2c3.safetensors", isDirectory: false)
+        let vectors = (0..<(pixels * 64)).map { index -> Float in
+            let (pixel, channel) = (index / 64, Float(index % 64))
+            let (x, y) = (Float(pixel % 32), Float(pixel / 32))
+            let ridge = sin(x * 0.21 + y * 0.09)
+            let valley = cos(hypot(x - 20, y - 12) * 0.32)
+            return ridge * sin(channel * 0.37) + valley * cos(channel * 0.23) + 0.2 * sin(x * y * 0.01 + channel)
+        }
         try TensorFixtures.write(
             to: embedding,
-            tensors: [.float32("embeddings", shape: [1, 64], value: 0.031)],
+            tensors: [.float32("embeddings", shape: [pixels, 64], values: vectors)],
             metadata: [
                 "format": "mere.run/tessera-v2-embeddings-v1", "model_id": "vision-embed-tessera-v2-large",
                 "source_revision": "4f1c2e9", "dimensions": "64",
@@ -4450,7 +4549,7 @@ private final class SnapshotFixture {
             commandPreview: "mere.run geo tessera valley-2024.safetensors --output valley-2024-a1b2c3.safetensors --dimensions 64 --json",
             outputText: """
             {
-              "batch_size" : 1,
+              "batch_size" : 1024,
               "device" : "metal",
               "inference_seconds" : 0.41,
               "input_path" : "\(bundle.path)",
@@ -4486,6 +4585,125 @@ private final class SnapshotFixture {
         var flood = StudioTaskDraft(templateID: .geoFlood)
         flood.setArgument(0, incomplete.path)
         controller.taskSessions.setTaskDraft(flood, for: .earthFlood)
+
+        try seedEarthFireRun()
+    }
+
+    /// A finished Fire run over two 64 × 64 tiles: fields, a river, and a burn scar in the
+    /// bundle's S2L2A (TerraMind order, last observation), and logits that call the scar fire.
+    func seedEarthFireRun() throws {
+        guard let template = CommandCatalog.template(id: .geoFire) else { throw StudioSnapshotError.noContentView }
+        let (tiles, side) = (2, 64)
+        let plane = side * side
+        func scar(_ tile: Int, _ x: Int, _ y: Int) -> Bool {
+            let (cx, cy) = tile == 0 ? (40.0, 38.0) : (22.0, 26.0)
+            let wobble = 1 + 0.18 * sin(Double(x) * 0.5) * cos(Double(y) * 0.4)
+            return pow((Double(x) - cx) / 15, 2) + pow((Double(y) - cy) / 10, 2) < wobble
+        }
+        func ground(_ tile: Int, _ x: Int, _ y: Int) -> (Float, Float, Float) {
+            if abs(Double(y) - (14 + Double(tile) * 30 + 6 * sin(Double(x) / 9))) < 2.5 { return (0.10, 0.22, 0.42) }
+            if scar(tile, x, y) { return (0.30, 0.20, 0.15) }
+            let field = ((x / 16) + (y / 16) + tile).isMultiple(of: 2)
+            let texture = Float(0.03 * sin(Double(x * 7 + y * 3)))
+            return field ? (0.22 + texture, 0.42 + texture, 0.18) : (0.42 + texture, 0.40 + texture, 0.24)
+        }
+        var bands: [Float] = []
+        for tile in 0..<tiles {
+            for band in 0..<12 {
+                for _ in 0..<4 {
+                    for y in 0..<side {
+                        for x in 0..<side {
+                            let (red, green, blue) = ground(tile, x, y)
+                            bands.append(band == 3 ? red : band == 2 ? green : band == 1 ? blue : 0.3)
+                        }
+                    }
+                }
+            }
+        }
+        let bundle = root.appendingPathComponent("ridge-fire-2024.safetensors", isDirectory: false)
+        try TensorFixtures.write(to: bundle, tensors: [
+            .float32("S2L2A", shape: [tiles, 12, 4, side, side], values: bands),
+            .float32("S1RTC", shape: [tiles, 2, 4, side, side], value: -0.4),
+            .float32("DEM", shape: [tiles, 1, 4, side, side], value: 0.1),
+        ])
+        var logits: [Float] = []
+        for tile in 0..<tiles {
+            let burned = (0..<plane).map { scar(tile, $0 % side, $0 / side) }
+            logits += burned.map { $0 ? -1.5 : 2.0 } + burned.map { $0 ? 2.5 : -1.0 }
+        }
+        let output = root.appendingPathComponent("Earth/ridge-fire-2024-d4e5f6.safetensors", isDirectory: false)
+        try TensorFixtures.write(
+            to: output,
+            tensors: [.float32("logits", shape: [tiles, 2, side, side], values: logits)],
+            metadata: ["format": "mere.run/terramind-fire-logits-v1", "model_id": "vision-fire-terramind-base"]
+        )
+
+        var draft = template.defaultDraft()
+        draft.inputPath = bundle.path
+        draft.outputPath = output.path
+        let startedAt = Self.mockupTime(hour: 10, minute: 31)
+        let request = StudioRunRequest(mode: template.libraryMode, templateID: .geoFire, template: template, draft: draft)
+        var row = StudioLibraryItem(
+            id: UUID(), mode: template.libraryMode, prompt: "", inputURL: bundle, outputURL: output,
+            createdAt: startedAt, updatedAt: startedAt.addingTimeInterval(14.8), status: .completed, exitCode: 0,
+            commandPreview: "mere.run geo fire ridge-fire-2024.safetensors --output ridge-fire-2024-d4e5f6.safetensors --json",
+            outputText: nil, templateID: .geoFire, commandDraft: draft,
+            commandArguments: template.arguments(from: request.draft, source: .contract), artifactURLs: [output]
+        )
+        row.inputIdentity = StudioInputIdentity.read(bundle)
+        library.upsert(row)
+        var fire = StudioTaskDraft(templateID: .geoFire)
+        fire.setArgument(0, bundle.path)
+        controller.taskSessions.setTaskDraft(fire, for: .earthFire)
+        controller.taskSessions.set(Optional(row.id), for: StudioTask.earthFire.rawValue + ".requestID")
+    }
+
+    /// An OlmoEarth result to draw on its own: raw S2L2A for one 64 × 64 tile (OlmoEarth order,
+    /// B02, B03, B04 first) of a lake, fields, and a town, and a 16 × 16 grid of 128-wide
+    /// embeddings (patch size 4) whose vectors follow what each patch covers.
+    func olmoEarthMapSource() throws -> StudioEarthMapSource {
+        let side = 64
+        enum Cover: Int { case lake, crop, forest, town }
+        func cover(_ x: Int, _ y: Int) -> Cover {
+            if hypot(Double(x) - 18, Double(y) - 20) < 12 { return .lake }
+            if x > 40, y > 36 { return .town }
+            return (x / 12 + y / 20).isMultiple(of: 2) ? .crop : .forest
+        }
+        let reflectance: [Cover: (red: Float, green: Float, blue: Float)] = [
+            .lake: (300, 500, 900), .crop: (900, 1_300, 600), .forest: (400, 800, 450), .town: (1_600, 1_550, 1_500),
+        ]
+        var raw: [Float] = []
+        for y in 0..<side {
+            for x in 0..<side {
+                let color = reflectance[cover(x, y)] ?? (0, 0, 0)
+                let grain = Float((x * 13 + y * 7) % 9) * 15
+                for _ in 0..<2 {
+                    raw += [color.blue + grain, color.green + grain, color.red + grain] + [Float](repeating: 2_000, count: 9)
+                }
+            }
+        }
+        let input = root.appendingPathComponent("lakeshore-2024.safetensors", isDirectory: false)
+        try TensorFixtures.write(to: input, tensors: [
+            .int32("TIMESTAMPS", shape: [1, 2, 3], values: [12, 4, 2024, 3, 7, 2024]),
+            .float32("S2L2A", shape: [1, side, side, 2, 12], values: raw),
+        ])
+        let (grid, dimension) = (16, 128)
+        var vectors: [Float] = []
+        for row in 0..<grid {
+            for column in 0..<grid {
+                let kind = Float(cover(column * 4 + 2, row * 4 + 2).rawValue)
+                for channel in 0..<dimension {
+                    let index = Float(channel)
+                    vectors.append(sin(index * 0.3 + kind * 1.7) + 0.15 * sin(Float(row) * 0.4 + index) + 0.1 * cos(Float(column) * 0.5 - index))
+                }
+            }
+        }
+        let output = try TensorFixtures.write(
+            to: root.appendingPathComponent("Earth/lakeshore-2024-embeddings.safetensors", isDirectory: false),
+            tensors: [.float32("S2L2A_EMBEDDINGS", shape: [1, grid, grid, dimension], values: vectors)],
+            metadata: ["format": "mere.run/olmoearth-v1.2-embeddings-v1", "patch_size": "4"]
+        )
+        return StudioEarthMapSource(kind: .olmoEarth, output: output, input: input)
     }
 
     /// Two finished Image ▸ Train runs the dashboard can follow and compare: a dataset folder of
@@ -5149,11 +5367,11 @@ private enum ModelsInventoryScript {
     ID                         Category     Status     Referenced
     ---------------------------------------------------------------
     image-zimage-nano          image        installed  2.1 GB
-    text-chat-qwen3.6-4b       text-chat    installed  2.6 GB
+    text-chat-gemma4-nano       text-chat    installed  2.6 GB
     vision-chat-qwen3.6-vl-4b  vision-chat  missing    —
     video-ltx2-fast            video        installed  9.4 GB
     music-ace-step-1.5         music        installed  3.3 GB
-    music-magenta-rt2-medium   music        installed  1.9 GB
+    music-magenta-rt2-base   music        installed  1.9 GB
     speech-tts-kokoro-82m      speech-tts   installed  330 MB
     speech-asr-parakeet-tdt    speech-asr   installed  2.4 GB
 
@@ -5174,11 +5392,11 @@ private enum ModelsInventoryScript {
     static let capabilities = """
     {"models": [
       {"id": "image-zimage-nano", "title": "Zimage Nano", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 2100000000, "sourceRepository": "mere-run/zimage-nano-q4", "publisher": "mere.run"},
-      {"id": "text-chat-qwen3.6-4b", "title": "Qwen3.6 4B", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 2600000000, "sourceRepository": "mere-run/qwen3.6-4b-q4", "publisher": "mere.run"},
+      {"id": "text-chat-gemma4-nano", "title": "Gemma 4 Nano", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 2600000000, "sourceRepository": "mere-run/gemma4-nano", "publisher": "mere.run"},
       {"id": "vision-chat-qwen3.6-vl-4b", "title": "Qwen3.6-VL 4B", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 4800000000, "sourceRepository": "mere-run/qwen3.6-vl-4b-q4", "publisher": "mere.run"},
       {"id": "video-ltx2-fast", "title": "LTX-2 Fast", "summary": "", "minimumUnifiedMemoryGB": 16, "recommendedUnifiedMemoryGB": 32, "supported": true, "reasons": [], "estimatedDownloadBytes": 9400000000, "sourceRepository": "mere-run/ltx2-fast", "publisher": "mere.run"},
       {"id": "music-ace-step-1.5", "title": "ACE-Step 1.5", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 3300000000, "sourceRepository": "mere-run/ace-step-1.5", "publisher": "mere.run"},
-      {"id": "music-magenta-rt2-medium", "title": "Magenta RT2 medium", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 1900000000, "sourceRepository": "mere-run/magenta-rt2-medium", "publisher": "mere.run"},
+      {"id": "music-magenta-rt2-base", "title": "Magenta RT2 base", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 1900000000, "sourceRepository": "mere-run/magenta-rt2-base", "publisher": "mere.run"},
       {"id": "speech-tts-kokoro-82m", "title": "Kokoro 82M", "summary": "", "minimumUnifiedMemoryGB": 4, "recommendedUnifiedMemoryGB": 8, "supported": true, "reasons": [], "estimatedDownloadBytes": 330000000, "sourceRepository": "mere-run/kokoro-82m", "publisher": "mere.run"},
       {"id": "speech-asr-parakeet-tdt", "title": "Parakeet TDT", "summary": "", "minimumUnifiedMemoryGB": 16, "recommendedUnifiedMemoryGB": 16, "supported": false, "reasons": ["Needs 16 GB of unified memory; this Mac has 8 GB."], "estimatedDownloadBytes": 2400000000, "sourceRepository": "mere-run/parakeet-tdt", "publisher": "mere.run"}
     ]}

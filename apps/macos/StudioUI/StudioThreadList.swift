@@ -147,7 +147,7 @@ struct StudioThreadList: View {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 28, weight: .semibold))
                 .foregroundStyle(MereRunTheme.textMuted)
-            Text(threads.isEmpty ? "Threads you start will land here." : "No matching threads.")
+            Text(threads.isEmpty ? "Threads you start appear here." : "No matching threads.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
                 .multilineTextAlignment(.center)

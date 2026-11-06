@@ -135,13 +135,13 @@ The macOS app compiles against the same `MereRunContract` that
   controls; key-value (KV) cache quantization; a catalog adapter ID or local
   LoRA file; tool permissions; preflight; and installed-model enforcement. The
   controls render from the contract's own option metadata.
-- **Text ▸ Embeddings** is a vector explorer with dimensions, norms, previews,
+- **Text ▸ Embed** is a vector explorer with dimensions, norms, previews,
   and cosine similarity. Select EmbeddingGemma 2 to add image, audio, video, or
-  mixed JSON inputs. Sending media from another Studio page to Embeddings
+  mixed JSON inputs. Sending media from another Studio page to Embed
   selects a compatible managed model.
 - **Text ▸ Anonymize** shows the original and protected text with labeled PII
   spans.
-- **Text ▸ Decisions**, **Text ▸ Classify**, and **Text ▸ Extract** build Laya
+- **Text ▸ Decide**, **Text ▸ Classify**, and **Text ▸ Extract** build Laya
   and GLiNER requests; see the [Laya](./laya.md) and
   [GLiNER2.5 Decide](./gliner25-decide.md) guides.
 - **Chat ▸ Train** opens a text-dataset preview, preflight, live metrics,

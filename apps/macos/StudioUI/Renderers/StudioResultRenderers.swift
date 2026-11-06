@@ -47,11 +47,15 @@ enum StudioResultRendering: Equatable {
     case validationArtifacts(StudioImageValidationReport)
     /// The counts a 3D run's manifest reports, under the mesh tile on its feed card.
     case meshSummary(StudioMeshSummary)
+    /// A Gaussian splat PLY drawn by the Metal splat viewer, with the manifest's Gaussian count.
+    case gaussianSplat(StudioGaussianSplatResult, summary: StudioMeshSummary?)
 }
 
 /// What a renderer draws in the Analyze input column, in place of the input, when the chosen
 /// view is about the result rather than the picture it came from.
 enum StudioResultCanvasRendering: Equatable {
+    /// An Earth run's logits as a class mask, or its embeddings as false color.
+    case earthMap(StudioEarthMapSource)
     /// The input picture with face boxes and landmarks, or pose landmarks, over it.
     case overlay(image: URL, StudioVisionOverlay)
     /// A dense flow field as vectors.
@@ -89,7 +93,8 @@ enum StudioResultRenderers {
         item: StudioLibraryItem
     ) -> StudioResultRendering? {
         switch (view, document) {
-        case (.tensor, .tensor(let header)):
+        case (.tensor, .tensor(let header)), (.map, .tensor(let header)):
+            // The map takes the input column; the panel keeps the tensor's header.
             return .tensor(header)
         case (.score, .clap(let output)):
             return .clap(output)
@@ -167,6 +172,8 @@ enum StudioResultRenderers {
         inputURL: URL?
     ) -> StudioResultCanvasRendering? {
         switch (view, document) {
+        case (.map, _):
+            return item.flatMap { StudioEarthMapSource(item: $0, inputURL: inputURL) }.map { .earthMap($0) }
         case (.points, .faces(let faces)):
             return inputURL.map { .overlay(image: $0, .faces(faces)) }
         case (.points, .pose(let pose)):
@@ -192,6 +199,10 @@ enum StudioResultRenderers {
     /// header, each in place of the output grid a WAV or a `.safetensors` file has no picture
     /// for; a 3D run's manifests are summarized under its mesh tile. Nil leaves the grid alone.
     static func cardRendering(for item: StudioLibraryItem, files: [URL]) -> StudioCardRendering? {
+        // A splat PLY (found by its header) gets the splat viewer; a mesh keeps its Quick Look tile.
+        if let splat = StudioGaussianSplatResult.find(in: files) {
+            return StudioCardRendering(rendering: .gaussianSplat(splat, summary: StudioMeshSummary.load(item: item)), placement: .replacesOutputs)
+        }
         if item.templateID?.studioTask == .threeDFromImage, let summary = StudioMeshSummary.load(item: item) {
             return StudioCardRendering(rendering: .meshSummary(summary), placement: .belowOutputs)
         }
@@ -217,6 +228,8 @@ enum StudioResultRenderers {
             return []
         case .syncReview(_, let audio), .audioOutput(let audio):
             return [audio]
+        case .gaussianSplat(let splat, _):
+            return [splat.splatURL]
         }
     }
 }
@@ -245,7 +258,7 @@ struct StudioCardRenderingView: View {
             StudioResultRendererView(rendering: rendering, item: item)
                 .background(MereRunTheme.surfaceRaised.opacity(0.6))
                 .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
-        case .syncReview:
+        case .syncReview, .gaussianSplat:
             StudioResultRendererView(rendering: rendering, item: item)
         }
     }
@@ -299,6 +312,8 @@ struct StudioResultRendererView: View {
             StudioImageValidationArtifacts(report: report)
         case .meshSummary(let summary):
             StudioMeshSummaryRow(summary: summary)
+        case .gaussianSplat(let splat, let summary):
+            StudioGaussianSplatCard(result: splat, summary: summary)
         }
     }
 }
@@ -327,6 +342,8 @@ struct StudioResultCanvasView: View {
 
     var body: some View {
         switch rendering {
+        case .earthMap(let source):
+            StudioEarthMapView(source: source, maxHeight: maxHeight)
         case .overlay(let image, let overlay):
             StudioVisionOverlayView(imageURL: image, overlay: overlay)
                 .frame(maxHeight: maxHeight)
