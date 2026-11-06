@@ -1110,10 +1110,10 @@ final class StudioSnapshotTests: XCTestCase {
                 StudioMessage(role: .user, content: "Show the sampling loop in Swift with MLX.", createdAt: asked.addingTimeInterval(180)),
                 StudioMessage(
                     role: .assistant, content: "", createdAt: asked.addingTimeInterval(200), failed: true, model: model,
-                    failureReason: "Model 'text-chat-qwen3.6-4b' is not installed.",
+                    failureReason: "Model 'text-chat-gemma4-nano' is not installed.",
                     logTail: [
-                        "Loading text-chat-qwen3.6-4b…",
-                        "error: model 'text-chat-qwen3.6-4b' is not installed",
+                        "Loading text-chat-gemma4-nano…",
+                        "error: model 'text-chat-gemma4-nano' is not installed",
                         "Exited with code 1.",
                     ]
                 ),
@@ -3250,7 +3250,7 @@ private final class SnapshotFixture {
 
     /// The id of the mockup's open thread, whose last user turn is answered live.
     static let converseThreadID = UUID()
-    static let converseChatModelID = "text-chat-qwen3.6-4b"
+    static let converseChatModelID = "text-chat-gemma4-nano"
 
     /// The Converse board's threads: today's diffusion thread (with a Python block and a turn
     /// awaiting its reply), yesterday's Code thread, and two older chats.
@@ -3399,7 +3399,7 @@ private final class SnapshotFixture {
 
         var draft = template.defaultDraft()
         draft.prompt = "slow-burn synthwave, hopeful bridge, brushed drums, dusty piano"
-        draft.model = "music-magenta-rt2-medium"
+        draft.model = "music-magenta-rt2-base"
         draft.durationSeconds = 300
         draft.outputPath = recordingURL.path
         draft.musicPlay = true
@@ -3425,7 +3425,7 @@ private final class SnapshotFixture {
         guard controller.run(studio: request), let live = runner.liveStarts.last else {
             throw StudioSnapshotError.noContentView
         }
-        live.stderr("Starting Magenta RT2 realtime model music-magenta-rt2-medium\n")
+        live.stderr("Starting Magenta RT2 realtime model music-magenta-rt2-base\n")
         live.stderr("Interactive steering enabled. Commands: prompt <text> | temp | topk | mc | quit\n")
         live.stderr("Realtime frame 6226/7500\n")
         live.stderr("Realtime frame 6251/7500\n")
@@ -4315,7 +4315,9 @@ private final class SnapshotFixture {
         var draft = StudioTaskDraft(templateID: .speechListen)
         draft.form["--language"] = .text("en")
         controller.taskSessions.setTaskDraft(draft, for: .audioLive)
-        controller.checkReadiness(for: .audioLive, modelID: StudioTaskSchema.modelID(for: draft, source: .contract))
+        // The readiness probe answers asynchronously through the scripted runner; the session is
+        // seeded as already running, so its model is ready rather than still being checked.
+        controller.readinessByTask[.audioLive] = .ready
         let request = try StudioTaskRunner(controller: controller, library: library).run(draft.liveListenLaunch(), task: .audioLive)
         guard let live = runner.liveStarts.last else {
             throw StudioSnapshotError.noContentView
@@ -5365,11 +5367,11 @@ private enum ModelsInventoryScript {
     ID                         Category     Status     Referenced
     ---------------------------------------------------------------
     image-zimage-nano          image        installed  2.1 GB
-    text-chat-qwen3.6-4b       text-chat    installed  2.6 GB
+    text-chat-gemma4-nano       text-chat    installed  2.6 GB
     vision-chat-qwen3.6-vl-4b  vision-chat  missing    —
     video-ltx2-fast            video        installed  9.4 GB
     music-ace-step-1.5         music        installed  3.3 GB
-    music-magenta-rt2-medium   music        installed  1.9 GB
+    music-magenta-rt2-base   music        installed  1.9 GB
     speech-tts-kokoro-82m      speech-tts   installed  330 MB
     speech-asr-parakeet-tdt    speech-asr   installed  2.4 GB
 
@@ -5390,11 +5392,11 @@ private enum ModelsInventoryScript {
     static let capabilities = """
     {"models": [
       {"id": "image-zimage-nano", "title": "Zimage Nano", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 2100000000, "sourceRepository": "mere-run/zimage-nano-q4", "publisher": "mere.run"},
-      {"id": "text-chat-qwen3.6-4b", "title": "Qwen3.6 4B", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 2600000000, "sourceRepository": "mere-run/qwen3.6-4b-q4", "publisher": "mere.run"},
+      {"id": "text-chat-gemma4-nano", "title": "Gemma 4 Nano", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 2600000000, "sourceRepository": "mere-run/gemma4-nano", "publisher": "mere.run"},
       {"id": "vision-chat-qwen3.6-vl-4b", "title": "Qwen3.6-VL 4B", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 4800000000, "sourceRepository": "mere-run/qwen3.6-vl-4b-q4", "publisher": "mere.run"},
       {"id": "video-ltx2-fast", "title": "LTX-2 Fast", "summary": "", "minimumUnifiedMemoryGB": 16, "recommendedUnifiedMemoryGB": 32, "supported": true, "reasons": [], "estimatedDownloadBytes": 9400000000, "sourceRepository": "mere-run/ltx2-fast", "publisher": "mere.run"},
       {"id": "music-ace-step-1.5", "title": "ACE-Step 1.5", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 3300000000, "sourceRepository": "mere-run/ace-step-1.5", "publisher": "mere.run"},
-      {"id": "music-magenta-rt2-medium", "title": "Magenta RT2 medium", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 1900000000, "sourceRepository": "mere-run/magenta-rt2-medium", "publisher": "mere.run"},
+      {"id": "music-magenta-rt2-base", "title": "Magenta RT2 base", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 1900000000, "sourceRepository": "mere-run/magenta-rt2-base", "publisher": "mere.run"},
       {"id": "speech-tts-kokoro-82m", "title": "Kokoro 82M", "summary": "", "minimumUnifiedMemoryGB": 4, "recommendedUnifiedMemoryGB": 8, "supported": true, "reasons": [], "estimatedDownloadBytes": 330000000, "sourceRepository": "mere-run/kokoro-82m", "publisher": "mere.run"},
       {"id": "speech-asr-parakeet-tdt", "title": "Parakeet TDT", "summary": "", "minimumUnifiedMemoryGB": 16, "recommendedUnifiedMemoryGB": 16, "supported": false, "reasons": ["Needs 16 GB of unified memory; this Mac has 8 GB."], "estimatedDownloadBytes": 2400000000, "sourceRepository": "mere-run/parakeet-tdt", "publisher": "mere.run"}
     ]}
