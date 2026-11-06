@@ -1549,6 +1549,10 @@ with the reason it stays CLI-only.
   and variant drafts for every local template and asserts that the subcommand
   path matches the contract and that every emitted flag is one the contract
   declares.
+- `StudioKitTests/StudioPromptBindingCoverageTests` asserts that every essential
+  and standard option a prompt task's command declares has a binding in
+  `StudioContractBindings`, a composite editor, or a one-line reason in its
+  `unbound` list, and rejects a stale reason.
 - `StudioKitTests/CommandFlagsGenerationTests` regenerates
   `StudioKit/Catalog/CommandFlags.swift` from the contract and diffs it against
   the committed file.

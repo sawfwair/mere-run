@@ -25,6 +25,11 @@ The format is based on Keep a Changelog.
   checkpoint folders in the inspector; the composer shows no model chip because
   IDOL has no managed model. The result card shows `object.ply` and the
   Gaussian count from `manifest.json`.
+- Show more of each Studio prompt task's options in the inspector: BPM, key,
+  time signature, vocal language, and guidance for Music; language and
+  temperature for Speak; task, Parakeet provider, beam size, and keyword bias
+  for Transcribe; LTX LoRAs and prompt enhancement for Video; negative prompt
+  and CFG for Sound; and box overlays and multiple masks for Segment and Track.
 
 ## 0.69.1 - 2026-11-04
 

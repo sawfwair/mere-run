@@ -129,6 +129,8 @@ extension CommandArguments {
         args.option(F.fps, String(draft.fps))
         if !draft.seed.isBlank { args.option(F.seed, draft.seed) }
         if !draft.secondaryText.isBlank { args.option(F.negativePrompt, draft.secondaryText) }
+        if draft.videoEnhancePrompt == true { args.flag(F.enhancePrompt) }
+        args.repeated(F.lora, pathList(draft.videoLoRAs ?? ""))
         // MiniMax-H3 picks its schedule from the packed geometry unless the draft overrides it.
         if scope.uses(F.h3Acceleration) {
             if let h3Steps = draft.h3Steps { args.option(F.steps, String(h3Steps)) }
