@@ -6,6 +6,24 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Reorganize Studio's tasks. **Vision** ▸ **Document** runs `vision ocr` with
+  every backend, including Unlimited-OCR-2 for multi-page documents, and
+  **Vision** ▸ **Read** keeps Inspect and Caption; a saved Read draft that chose
+  OCR opens on Inspect. New tasks cover commands that only the Command Console
+  reached: **Video** ▸ **Edit** (Retake and Dub-It), **Video** ▸ **Cosmos**
+  (Cosmos3), **Voice** ▸ **Edit** (`audio edit`), and **Server** ▸ **World**
+  (`world serve`). **Sound** ▸ **Latents** replaces Condition, Encode, and
+  Decode with one task that has three variants. Depth and Geometry move from
+  Vision to **3D**. Audio ▸ Separate is removed; use **Music** ▸ **Separate**.
+  Renamed tasks: Who Spoke is Speakers, Embeddings is Embed, Decisions is
+  Decide, Subjects is Animate, and the Server tasks are API, Music, and Vision.
+- Studio's UI text follows the Google developer documentation style guide:
+  sentence case inside the window, with title case kept for the menu bar,
+  alert buttons, and window titles; **Download** instead of Pull for getting a
+  model; errors that start with "Couldn't" and give the reason as a second
+  sentence; present tense; US spelling ("Canceled"); and no ampersands.
+  Empty-state titles drop idioms and closing periods, so the task tooltips
+  built from them read as plain descriptions.
 - Studio menus and shortcuts: Show Inspector moves to ⌥⌘I so ⌘E stays Use
   Selection for Find; Go ▸ Next Task (⇧⌘]) and Previous Task (⇧⌘[) cycle the
   current section's tasks; ⌘↩ and ⌘. are bound once, in the Run menu, which now
@@ -14,7 +32,7 @@ The format is based on Keep a Changelog.
   always brings the Studio window forward, and Help links to the mere.run
   website.
 - Studio Settings: Menu bar and startup moves to General, which also gains
-  **Automatically check for updates**; command line and working directory move
+  **Automatically check for updates**; the CLI path and working directory move
   to Advanced and models root to Models; Delete reports asks first.
 - Studio task segments show a tooltip, the sidebar follows the system sidebar
   size, and icon-only buttons and menus carry accessibility labels.

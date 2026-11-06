@@ -27,13 +27,14 @@ on-screen action.
 
 ## macOS Studio
 
-The **Sound** domain covers all six commands. **Sound ▸ Generate** is
-the prompt task for text-to-audio and **Sound ▸ Video Foley** synchronizes to a
-clip; **Condition**, **Encode**, **Decode**, and **Score** cover
-negative-conditioning and renoise controls, text-conditioning export, Woosh-AE
-encode and decode, and CLAP prompt and audio scoring. Generated audio and source
-video are reviewable in place. Encoded NPY results show their data type, shape,
-NumPy version, layout, and size. Progress and every output stay durable in the
+The **Sound** domain covers all six commands in four tasks. **Sound ▸ Generate**
+is the prompt task for text-to-audio, with negative-conditioning and renoise
+controls, and **Sound ▸ Video Foley** synchronizes to a clip. **Sound ▸
+Latents** has three variants: Encode and Decode run the Woosh-AE, and Condition
+exports a text-conditioning tensor that later runs can reuse. **Sound ▸ Score**
+runs CLAP prompt and audio scoring. Generated audio and source video are
+reviewable in place. Encoded NPY results show their data type, shape, NumPy
+version, layout, and size. Progress and every output stay durable in the
 Library.
 
 ## Writing prompts

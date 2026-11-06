@@ -48,29 +48,32 @@ The window is one `NavigationSplitView`. The sidebar lists fifteen **domains**;
 each domain has **tasks** in a segmented control at the top of the content
 column. `StudioDestination` — one domain and one of its tasks — is the whole
 navigation state. Three sheets remain, each a true task: the image mask editor,
-Models ▸ Installed's Pull… catalog, and the Guide. Everything else that
+Models ▸ Installed's Download… catalog, and the Guide. Everything else that
 interrupts is an alert or a confirmation dialog — third-party model terms,
 removals, thread rename, Library delete, and a bad `mererun://` link.
 
-Fifty-six tasks use six surface archetypes:
+The 59 tasks use six surface archetypes: 10 Generate, 2 Converse, 28 Analyze,
+7 Session, 4 Project, and 8 Manage.
 
 - Twelve **prompt tasks** back a `StudioMode` and render the composer, a canvas,
   and the Library column: Image ▸ Generate, Video ▸ Generate, Music ▸ Compose,
   Sound ▸ Generate, Voice ▸ Speak, Chat ▸ Chat, Chat ▸ Code, Vision ▸ Read,
   Find, Segment, Track, and Audio ▸ Transcribe.
-- Five of those twelve — Vision ▸ Read, Find, Segment, Track and
+- Five of those twelve — Vision ▸ Read, Find, Segment, and Track, and
   Audio ▸ Transcribe — are input-first, so their canvas is the **Analyze**
   surface rather than the generation feed. Chat and Code get the **Converse**
   surface and a thread list in place of the Library.
-- Contract-backed Generate and Analyze tasks use the shared task
-  workspace (`StudioUI/StudioTaskWorkspace.swift`). They cover Sound's Foley,
-  Condition, Encode, Decode, and Score; Music's Analyze, Transcribe, and Separate;
-  Vision's Depth, Pose, Faces, Flow, and Geometry; Audio's Who Spoke, Enhance,
-  and Separate; Text's Embeddings and Anonymize; Image's Datasets; 3D's From
-  image; and all four Earth tasks.
-- The remaining tasks use their own Session, Project, or Manage surface, except Text ▸
-  Decisions and Text ▸ Classify, which keep their editors and result panes. These include the
-  three Train projects, Video ▸ Subjects, Music ▸ Realtime, Audio ▸ Live,
+- The shared task workspace (`StudioUI/StudioTaskWorkspace.swift`) runs 25
+  contract-backed Generate and Analyze tasks. The Generate tasks are
+  Video ▸ Edit and Cosmos, Voice ▸ Edit, Sound ▸ Video Foley, and 3D ▸ From
+  image. The Analyze tasks are Sound ▸ Score and Latents; Music ▸ Analyze,
+  Transcribe, and Separate; 3D ▸ Depth and Geometry; Vision ▸ Document, Pose,
+  Faces, and Flow; Audio ▸ Speakers and Enhance; Text ▸ Embed and Anonymize;
+  Image ▸ Datasets; and all four Earth tasks.
+- Text ▸ Decide, Classify, and Extract are Analyze tasks that keep their own
+  request editors and result panes.
+- The remaining tasks use their own Session, Project, or Manage surface: the
+  three Train projects, Video ▸ Animate, Music ▸ Realtime, Audio ▸ Live,
   Vision ▸ Live, Voice ▸ Voices, Models, Server, Runs, and Plugins.
 
 Every task has an editable **Command** panel. A separate **Command Console**
@@ -95,7 +98,7 @@ surface for is still reachable the day the contract declares it.
 - `StudioKit/StudioTypes.swift`: user-facing mode, draft, and request types.
 - `StudioKit/CommandCatalog.swift`: `CommandTemplateID`, `CommandDraft`, and the
   `CommandTemplate` record type.
-- `StudioKit/Catalog/`: one file per command category, with Music & Video split
+- `StudioKit/Catalog/`: one file per command category, with Music and video split
   into `Audio.swift`, `Video.swift`, and `Music.swift`, holding that category's
   `CommandTemplate` records, the function that builds each template's argv, and
   the checks a template's draft must pass before it runs.
@@ -169,16 +172,17 @@ live under `StudioUI/Renderers/` and register by `(view, document)` in
 rendering in place of, or under, its output grid); a task that can say more
 about its input file than its name registers an input view the same way in
 `StudioInputRenderers`; the Session pages share their transport chrome from
-`StudioUI/StudioSessionControls.swift`. Sound ▸ Video Foley and Condition and 3D ▸
-From image (Generate); Sound ▸ Encode, Decode, and Score, Music ▸ Analyze and
-Transcribe, Vision ▸ Depth, Pose, Faces, Flow, and Geometry, Audio ▸ Who Spoke,
-Enhance, and Separate, Text ▸ Embeddings and Anonymize, Image ▸ Datasets, and
-the four Earth tasks (Analyze) render on it; Vision ▸ Live and Audio ▸ Live
-(Session) and Voice ▸ Voices (Manage) render their own pages over the same task
-draft. The SFX Lab, Music Tools, Vision Lab, Voice, Audio Tools, Utility Lab,
-3D Creation, and Geo Lab pages they replaced are gone. Text ▸ Decisions keeps
-its question editor; Video ▸ Subjects, Music ▸ Realtime, Models, Server, Runs,
-and Plugins keep task-specific surfaces.
+`StudioUI/StudioSessionControls.swift`. The Generate tasks that render on it
+are Video ▸ Edit and Cosmos, Voice ▸ Edit, Sound ▸ Video Foley, and 3D ▸ From
+image. The Analyze tasks are Sound ▸ Score and Latents, Music ▸ Analyze,
+Transcribe, and Separate, 3D ▸ Depth and Geometry, Vision ▸ Document, Pose,
+Faces, and Flow, Audio ▸ Speakers and Enhance, Text ▸ Embed and Anonymize,
+Image ▸ Datasets, and the four Earth tasks. Vision ▸ Live and Audio ▸ Live
+(Session), Voice ▸ Voices (Manage), and the three Train projects render their
+own pages over the same task draft. The SFX Lab, Music Tools, Vision Lab, Voice,
+Audio Tools, Utility Lab, 3D Creation, and Geo Lab pages they replaced are gone.
+Text ▸ Decide, Classify, and Extract keep their request editors. Video ▸ Animate,
+Music ▸ Realtime, Models, Server, Runs, and Plugins keep task-specific surfaces.
 
 To open the offline handbook, in **Help**, select **mere.run Guide**. The
 **Models** collection contains original recipes for 139 managed IDs, grouped
@@ -231,7 +235,7 @@ own path (SIGINT first for a Session task, SIGTERM otherwise, removal for a
 queued job); Open goes to the job's page; a waiting job has Move up and Move
 down. `JobStore` admission always takes the head of a lane's queue, so
 `JobStore.moveQueued` reorders exactly what starts next. It never puts a run
-ahead of the queued pull of the model it needs; that row's Move up is disabled
+ahead of the queued download of the model it needs; that row's Move up is disabled
 with "Waits for its model download." A feed's queued
 cards number themselves from the same order. Cancel all queued empties every
 queue and leaves running jobs alone. The last few finished runs sit at the
@@ -263,7 +267,7 @@ a tinted thermal warning when the Mac is throttling (`StudioMachineMonitor` read
 Mach host statistics every two seconds; the decode rate is the change in
 generated tokens between endpoint polls); the resident text models (each with
 Unload), sidecars, and a Load menu of the server's other text models; the same
-job rows as the Activity popover, and Open Studio, Show Activity (which opens
+job rows as the Activity popover, and Open Studio, Show activity (which opens
 the Studio window with the run queue showing), Open Server, and Quit. While
 runs are in flight the glyph carries their count, and so does the Dock icon's
 badge (`StudioRunQueueCounter`: running plus queued inference runs, republished
@@ -285,7 +289,7 @@ sidebar, and the header background supports window dragging. Native traffic
 lights remain available. The header sits at the top of the content column, beside
 the Library (the window toolbar stays empty so the Library column runs to the
 top of the window): one segmented pill for up to six tasks, or five segments
-plus a "More" menu segment, which today only Vision's ten tasks reach. The
+plus a "More" menu segment, which only Vision's nine tasks reach. The
 header's leading item is the domain glyph, title, and one-line subtitle;
 trailing are the Library, Inspector, and Command toggles (Library and Inspector
 appear on prompt tasks only). `StudioDestination` persists per window under
@@ -293,8 +297,8 @@ appear on prompt tasks only). `StudioDestination` persists per window under
 draft and readiness survive a detour through a System task.
 
 The Library column appears on the prompt tasks and on tasks that have moved onto
-the shared task workspace (`StudioTask.showsPromptChrome`); every other task —
-Subjects, Realtime, Models, Train, and Decisions — takes the full content width even
+the shared task workspace (`StudioTask.showsPromptChrome`). Every other task,
+such as Animate, Realtime, Models, Train, and Decide, takes the full content width even
 inside a Create domain. Chat and Code fill that column with
 their thread list instead (threads never file into the media Library). It is
 filtered to the current domain by default with an All segment — a row is filed
@@ -492,10 +496,10 @@ in [Keyboard shortcuts](#keyboard-shortcuts). ⌥⌘C is always the task's Comma
 view, disabled on the few tasks without one. Settings has General (output
 folder, update checks, menu bar and startup), Models (Hugging Face, model
 payload storage, models root), Server (the runtime endpoint), and Advanced
-(command line, working directory, install, configuration, diagnostics) tabs;
+(CLI, working directory, install, configuration, diagnostics) tabs;
 its path settings are pickers with Choose…, Reveal, and Reset, the Server tab's
 endpoint and key apply on Apply or Return, not per keystroke, and Delete
-reports asks first. First run shows the Image empty state with its "Get the model"
+reports asks first. First run shows the Image empty state with its "Download the model"
 path and a one-time dismissible banner; there is no Welcome sheet.
 
 ### Keyboard shortcuts
@@ -593,8 +597,8 @@ meaningful stderr line; a `Searched:` list of model locations is never it), keep
 "Show log", and offers Retry. Validation errors ("Prompt is required.") render
 as a banner under the composer; readiness (missing model, missing CLI) is a card
 at the bottom of the feed, so it never hides earlier work. The card speaks
-plainly ("LTX-2 Fast isn't on this Mac yet.") and carries the next step for its
-state: **Get the model** with the pull's own progress (a publisher's terms are
+plainly ("LTX-2 Fast isn't on this Mac.") and carries the next step for its
+state: **Download the model** with the download's own progress (a publisher's terms are
 acknowledged in a sheet first, the same one the composer uses), beside
 **Choose another model**, the composer's own picker; the picker with **Open in
 Models** when the Mac cannot run the model; **Check again** and the picker when
@@ -602,7 +606,7 @@ the check itself failed, with the CLI's last line kept as a muted detail so a
 wrong model location stays diagnosable; and **Check the model** before the first
 check, which has its own neutral state (`ModelReadinessState.notChecked`,
 `StudioReadinessActions`). A run that failed because its model is not on this
-Mac says so plainly and offers **Get the model** on its card instead of the
+Mac says so plainly and offers **Download the model** on its card instead of the
 CLI's error line. Completion never moves the Library selection; a
 result that finishes off-screen shows a "New result ↓" pill. Picking a Library
 row scrolls to its card and outlines it briefly.
@@ -679,19 +683,20 @@ of running under the composer. Once a tracked clip exists it plays in place,
 with "Adjust prompts and frames" bringing the scrubber back.
 
 `StudioKit/StudioAnalyzeSchema.swift` declares the surface — the result views and the next
-steps — for every input-first task. Sound ▸ Score, Encode, and Decode render on
-this canvas through the shared task workspace (Score's result is the CLAP gauge,
-Encode's the `.npy` header, Decode's the decoded audio), as do Music ▸ Analyze
-and Transcribe, Vision ▸ Depth, Pose, Faces, Flow, and Geometry, and Audio ▸
-Who Spoke, Enhance, and Separate. Text ▸ Embeddings, Text ▸ Anonymize, and
-Image ▸ Datasets render on it too: the typed text or the folder, plan file, or
+steps — for every input-first task. Sound ▸ Score and Latents render on this
+canvas through the shared task workspace. Score's result is the CLAP gauge.
+Latents shows the tensor header for Encode and Condition and the decoded audio
+for Decode. Music ▸ Analyze, Transcribe, and Separate, 3D ▸ Depth and Geometry,
+Vision ▸ Document, Pose, Faces, and Flow, and Audio ▸ Speakers and Enhance
+render there too. Text ▸ Embed, Text ▸ Anonymize, and
+Image ▸ Datasets render on it as well: the typed text or the folder, plan file, or
 nothing a Datasets variant takes on the left, and the cosine matrix, the
 protected text and spans, the candidate folders (each with "Train on it"), the
 run plan report, or the validation artifacts as the result panel's rows
 (`StudioUI/Renderers/`). The four Earth tasks reach it through the shared task
 workspace too, with a checklist of the tensors their bundle needs in the input
 column. Every contract-backed input-first task renders on this canvas. Text ▸
-Decisions keeps its question editor and answer pane.
+Decide, Classify, and Extract keep their request editors and result panes.
 A view that is about the result rather than the input — Points, Vectors, Depth,
 Scene — takes the input column from a renderer registered in
 `StudioUI/Renderers/StudioResultRenderers.swift` (`canvasRendering`), the same
@@ -796,7 +801,7 @@ whole command line, less any key, to `mere.run catalog resolve --json`
 (`StudioModelIdentity.swift`). It asks once typing stops, reads folder dates off
 the main thread, asks again after a failed answer, and keeps each answer until a
 flag that can change the family or the folder it names changes, a model is
-pulled or removed, or the inventory refreshes. While a question is out, the
+downloaded or removed, or the inventory refreshes. While a question is out, the
 surface shows the family the contract names (adding `--task translate` to a
 Parakeet transcription shows Qwen3-ASR's options at once), or, for a model only
 the CLI can place, its last answer for the same model and routing flags. A
@@ -831,7 +836,7 @@ with the flag rather than the label at the head of each row and with numbers
 typed rather than dragged, so the console has no per-command view of its own:
 `StudioConsoleDraft` keeps one value per flag, `StudioConsoleCommand` reads a
 template's own argv into those values and builds the argv back out of them, and
-the eyebrows, controls, dependencies, positional arguments and "Will run" block
+the eyebrows, controls, dependencies, positional arguments and "Command to run" block
 all come from `MereRunCapabilityCatalog`. Nothing is filtered by tier, and the
 form shows the options of the model the command runs: the rest keep their
 values, listed under the form's note, and are left off the command line.
@@ -859,9 +864,9 @@ can go straight into another task's input. Every attachment entry point shares
 one control, `StudioAttachMenu` (`StudioUI/StudioLibraryInputPicker.swift`): a
 well slot's plus, the empty state's primary button ("Choose audio…"), the
 Analyze canvas's Choose…/Replace, the inspector's and project pages' path rows
-(`ContractFormPathRow`), 3D ▸ From image's Add views…, and Video ▸ Subjects'
+(`ContractFormPathRow`), 3D ▸ From image's Add views…, and Video ▸ Animate's
 driving clip. When the Library holds a finished run with a file the entry
-point takes, the click opens a menu of **From Disk…** and **From Library…**
+point takes, the click opens a menu of **From disk…** and **From Library…**
 (plus Record… on an audio well), and the control shows a pull-down chevron.
 When it holds none, the click goes straight to the open panel, so an empty
 Library never costs a click.
@@ -902,11 +907,11 @@ menus (`StudioUI/StudioOutputActions.swift`):
   takes the file.
 - **Send to** lists every other page and slot that takes the file, grouped by
   domain in sidebar order: a picture goes to Video ▸ Generate's start or end
-  frame, the Vision tasks, 3D ▸ From image, Image ▸ Generate's input or
-  reference, or Chat; a song or a stem goes to Music ▸ Separate, Transcribe, and
-  Analyze, Audio ▸ Transcribe, Enhance, and Who Spoke, Voice ▸ Speak's and
-  Voices' reference audio, and Sound ▸ Video Foley; a clip goes to Vision ▸
-  Track and Depth and to Video Foley. An item names its slot only when the task
+  frame, the Vision tasks, 3D ▸ From image, Depth, and Geometry, Image ▸
+  Generate's input or reference, or Chat; a song or a stem goes to Music ▸
+  Separate, Transcribe, and Analyze, Audio ▸ Transcribe, Enhance, and Speakers,
+  Voice ▸ Speak's and Voices' reference audio, and Sound ▸ Video Foley; a clip
+  goes to Vision ▸ Track, 3D ▸ Depth, and Video Foley. An item names its slot only when the task
   takes the file in more than one ("Generate · Start frame").
 - **Share…** opens the system share picker (`NSSharingServicePicker`) for the
   output file or files, anchored to the card or row.
@@ -928,7 +933,7 @@ Choosing a destination fills that slot through its own `attach`
 (`StudioPromptTaskController.send(_:to:)`), leaves the rest of that page's
 draft as the user left it, opens the page on its composer, and focuses the
 prompt. A task-draft page switches to the variant that declares the slot when
-its current variant does not take the file (a clip sent to Vision ▸ Depth moves
+its current variant does not take the file (a clip sent to 3D ▸ Depth moves
 it to Depth's video variant). A prompt mode that is not active takes the file
 as it activates, over the draft it parked. The window root supplies
 `studioOutputRouting` for whatever page is showing; a view hosted without it
@@ -971,7 +976,7 @@ Which inputs batch comes from the slot schema, not a per-page table:
 marks a task's first slot when it holds one required file (not a list or a
 folder), stays in the well between runs, and belongs to a Generate or Analyze
 task that is not a conversation. Transcribe, Read, Find, Segment, Track,
-Enhance, Separate, Depth, Pose, Faces, Who Spoke, 3D ▸ From image, and the
+Enhance, Separate, Depth, Pose, Faces, Speakers, 3D ▸ From image, and the
 Earth tasks batch. Slots that already take a list, such as Faces ▸ Batch's
 pictures or 3D's views, keep their own list; optional inputs such as Image ▸
 Generate's input picture, live sessions, and training projects never batch.
@@ -1062,7 +1067,7 @@ The app appends `--receipt` and `--progress-json` to the launched argv for the
 capabilities the contract lists in `receiptCapabilityIDs` (nine) and
 `progressJSONCapabilityIDs` (five), never on a `--preflight` run (the CLI
 rejects `--receipt --preflight`, and a preflight has no progress to stream) and
-never in the "Will run" preview or a Library row's command, which stay the
+never in the "Command to run" preview or a Library row's command, which stay the
 command a person would type. A run that prints a receipt skips the 350 ms output
 poll; every other command with an output file keeps it.
 
@@ -1082,10 +1087,10 @@ saved draft is read without any that sits in one of Studio's folders (under the
 root, a per-media `mere.run` folder, or App Outputs). A destination typed into
 the Command view elsewhere keeps its folder, with `-2`, `-3`… added while that
 path exists or a submitted run holds it, so no run writes over another's. The
-Command view's "Will run" shows the destination the run will write. The
+Command view's "Command to run" shows the destination the run writes to. The
 task-specific pages use the same domain roots: training adapters are filed under
-the domain they train for, Decisions uses `outputDirectoryURL`, and Music ▸
-Realtime, Video ▸ Subjects, and the audio recorder use timestamped file names
+the domain they train for, Decide uses `outputDirectoryURL`, and Music ▸
+Realtime, Video ▸ Animate, and the audio recorder use timestamped file names
 from `specialistFile`. A task-specific or
 Command view run is prepared the same way a prompt run is
 (`StudioOutputLocation.preparing`): the folder is created, or the run moves to
@@ -1155,7 +1160,16 @@ cadence, adaptive or explicit denoising schedule, weight-residency policy,
 exact/balanced/maximum denoise acceleration, and ordered Ref2VA image, video,
 and audio references, without emitting incompatible LTX flags. Its attachment
 well offers only the start image, end keyframe, and source audio inputs that the
-selected model supports. Video ▸ Subjects is
+selected model supports.
+
+Video ▸ Edit is a Generate task on the shared task workspace with two variants:
+Retake (`video retake`) regenerates a timed region of a clip from a prompt, and
+Dub-It (`video dub-it`) carries a performance onto a new scene. The clip goes in
+the composer's well and the prompt describes the change. Video ▸ Cosmos runs
+`video cosmos3`: describe a scene to make an image or a clip, or attach an image
+or a video to continue from it, and choose the mode in the inspector.
+
+Video ▸ Animate is
 the SCAIL subject flow as a three-stage project board (Plan → Track → Animate)
 with a stage rail, a mask preview that scrubs by frame and flips between masks
 and the driving clip, subject rows, and stats read only from the CLI's manifest,
@@ -1169,8 +1183,8 @@ reference selector on the reference image in its own pixels, and the driving
 selector or correction on the driving frame center-cropped to the plan's
 width × height, which is the space `video prepare-masks` segments in; the
 drawing is written back to the plan's box and point text. The
-guided SCAIL-2, Cosmos3, mask-preparation, latent-export, and resident-session
-commands live in the Command Console.
+guided SCAIL-2, mask-preparation, latent-export, and resident-session
+commands also run from the Command Console.
 
 **Music** is a production surface, not a prompt-only wrapper: quality planning,
 covers, repaint and flow edits, source and timbre-reference audio, candidate
@@ -1190,7 +1204,10 @@ transcription is named after the recording and filed by what it is — a MIDI
 file under `~/Music/mere.run/Music`, a JSON or JSON Lines event list under
 `~/Documents/mere.run/Music` — with its musical-context document beside it
 as `<name>-context.json`; none is asked for when musical context is off.
-Music ▸ Separate shares the restoration surface with Audio. Music ▸
+Music ▸ Separate runs `music separate` (ViperX two-stem, four-stem, dereverb,
+and denoise from the model chip) and lists every stem with its own player
+(`StudioUI/Renderers/StudioStemsList.swift`), read from the manifest the CLI
+writes. Music ▸
 Realtime is the Magenta RT2 session: a transport with the live clock, the
 recording's waveform, Prompt A/B steering with a blend slider, temperature,
 top-k, and guidance sent over the CLI's stdin protocol as you release each
@@ -1206,7 +1223,7 @@ per line the way `music train-adapter --dataset` reads it; manifests made
 elsewhere import, and the clip list exports. The clip list is the task draft's
 `--dataset` editor, and ACE-Step's checkpoint root (a folder chooser), decoder,
 VAE, and text-encoder folders sit under the model picker. The resident ACE-Step server's
-health and lifecycle live under Server ▸ Music server.
+health and lifecycle live under Server ▸ Music.
 
 **Sound** ▸ Generate and Video Foley produce effects, with Woosh renoise as the
 model's default, one amount on a slider, or one amount per step (the task
@@ -1214,11 +1231,12 @@ inspector's Renoise editor; a per-step schedule that does not match the step
 count is refused before the run starts). Video Foley is a Generate task on the
 shared task workspace: the clip goes in the well, the prompt in the composer,
 and the finished card plays the picture over the waveform it produced.
-Condition (prompt to conditioning tensors, shown as their header), Encode
-(audio to `.npy` latents, shown as the tensor header), Decode (latents back to
-audio), and Score (the CLAP gauge over the audio) run on the same workspace, so
-the Library, "Use these settings", Stop, readiness, and output routing behave
-as they do for every other task.
+Sound ▸ Latents and Sound ▸ Score run on the same workspace, so the Library,
+"Use these settings", Stop, readiness, and output routing behave as they do for
+every other task. Latents is one task with three variants on its variant chip:
+Encode (audio to `.npy` latents, shown as the tensor header), Decode (latents
+back to audio), and Condition (a prompt to a text-conditioning tensor that later
+runs can reuse, shown as its header). Score shows the CLAP gauge over the audio.
 
 **Voice** ▸ Speak is styled or cloned synthesis: attaching a reference recording
 to its composer well switches it to clone mode, and its inspector picks a saved
@@ -1229,7 +1247,9 @@ recording in an attachment well (chosen, dropped, or recorded with Record…),
 an optional transcript, and a language — run as `speech profile create`
 through the task runner. Any audio attachment well offers Record… in its
 context menu (`StudioUI/StudioAudioRecorder.swift`); the recording is filed
-with the task's domain.
+with the task's domain. Voice ▸ Edit is a Generate task on the shared task
+workspace over `audio edit`: describe the speech you want, and attach a
+reference recording to keep its voice.
 
 **3D** ▸ From image is a Generate task on the shared task workspace for
 TripoSR, native TRELLIS.2 PBR reconstruction, ordered 4- and 6-view
@@ -1258,6 +1278,24 @@ not match them, is refused with the reason before anything is created
 family; the `vision image-to-3d` aliases stay CLI-only rather than being
 duplicated under Vision.
 
+3D ▸ Depth and 3D ▸ Geometry are Analyze tasks on the same workspace. Depth runs
+still (Marigold V2) or video depth and shows the preview PNG, or the review
+clip, from the run's directory. Geometry runs MoGe single-image geometry or DA3
+ordered multi-view reconstruction and embeds Quick Look over the point cloud,
+with the depth and normal previews in a strip. Geometry's
+multi-view variant edits optional calibrated cameras per view in the inspector:
+image size, normalized focal length and center, and a world-to-camera rotation
+and translation. The editor applies the CLI's own checks (positive size and
+focal length, a proper rotation, and an image size equal to the image's decoded
+size, which new cameras take from the image) and writes its saved draft file
+into `--cameras` whenever cameras are on. A camera file that doesn't match the
+views, or doesn't read, refuses the run with the reason rather than letting the
+model estimate cameras (`StudioCommandChecks`). A camera file the draft names
+from elsewhere, such as a restored run or the Command view, is read into the
+editor, not overwritten. At submit, the runner copies the file beside the run's
+output directory as `<folder>.cameras.json` and points `--cameras` there, so the
+run's folder is self-contained. Camera files import and export.
+
 **Chat** covers native and MLX chat and code with typed text/JSON response
 format, reasoning policy, context and KV controls, LoRA application, tool
 permissions, and preflight. Chat ▸ Train hosts the text trainer over its task
@@ -1268,42 +1306,33 @@ reasoning effort is available in chat and training, and omitted target modules
 preserve the runtime's full attention, MLP, expert, shared-outer, and
 unembedding training defaults.
 
-**Vision** covers the whole VLM and VFX family: multi-image captioning,
-LightOn/GLM/Infinity OCR, grounding, text/box/point segmentation and tracking,
-camera capture, Buffalo-L face analysis, native pose and optical flow, still
-(Marigold V2) and video depth, MoGe geometry, and DA3 ordered multiview
-reconstruction. Read, Find, Segment, Track, Depth, Pose, Faces, Flow, and
-Geometry are Analyze tasks. The last five run on the shared task workspace
+**Vision** covers the VLM and VFX family: multi-image inspection and captioning,
+document OCR, grounding, text, box, and point segmentation and tracking, camera
+capture, Buffalo-L face analysis, and native pose and optical flow. Read, Find,
+Segment, Track, Document, Pose, Faces, and Flow are Analyze tasks. Read runs
+Inspect and Caption. A saved Read draft that chose OCR opens on Inspect, because
+OCR belongs to Document. The last four run on the shared task workspace
 (`StudioUI/StudioTaskWorkspace.swift`): the picture (or two, or an ordered set)
-in the composer's well, the variant as a chip — Faces: Detect, Embed, Compare,
-Batch; Depth: still, video; Geometry: single, multi-view — the contract's options
-in the inspector, and one `StudioTaskDraft` behind the well, the chips, the
-Command view, and the argv. Their renderers live under `StudioUI/Renderers/`:
-Faces draws boxes, then the five landmarks per face in the Points view and reads
-the embedding, comparison, and batch documents by name; Pose draws its landmarks
-over the picture with one row per subject; Flow draws the field as
-direction-colored vectors with its motion statistics; Depth shows the preview
-PNG (or the review clip) from the run's directory; Geometry embeds Quick Look
-over the point cloud with the depth and normal previews in a strip. Every JSON,
-EXR, mask, camera, and 3D sidecar stays a durable Library artifact, and the
-destination is named by routing rather than a path field. Faces ▸ Embed and
-Compare choose their face by clicking it on the picture in the inspector once a
-Detect run has drawn boxes on that image (a number field remains for a picture
-nobody has detected faces in); Compare offers one picker per picture. Geometry's
-multi-view variant edits optional calibrated cameras per view in the inspector —
-image size, normalized focal length and center, and a world-to-camera rotation
-and translation — with the CLI's own checks (positive size and focal length, a
-proper rotation, and an image size equal to the image's decoded size, which new
-cameras take from the image), writing its saved draft file into `--cameras`
-whenever cameras are on; a camera file that does not match the views, or will
-not read, refuses the run with the reason rather than letting the model estimate
-cameras (`StudioCommandChecks`). A camera file the draft names from elsewhere — a
-restored run, the Command view — is read into the editor, not overwritten. At
-submit the runner copies the file beside
-the run's output directory as `<folder>.cameras.json` and points `--cameras`
-there, so the run's folder is self-contained. Camera files import and export.
-Faces are numbered from one everywhere the picture is read; the flag counts
-from zero.
+in the composer's well, the variant as a chip (Faces: Detect, Embed, Compare,
+Batch), the contract's options in the inspector, and one `StudioTaskDraft`
+behind the well, the chips, the Command view, and the argv.
+
+Vision ▸ Document runs `vision ocr` with every backend: the backend chip picks
+Unlimited-OCR-2, LightOnOCR, GLM-OCR, or Infinity-Parser2. Attach one or more
+page images in order. Unlimited-OCR-2 reads them as one multi-page document, and
+the other backends read each page.
+
+The renderers live under `StudioUI/Renderers/`. Faces draws boxes, then the five
+landmarks per face in the Points view, and reads the embedding, comparison, and
+batch documents by name. Pose draws its landmarks over the picture with one row
+for each subject. Flow draws the field as direction-colored vectors with its
+motion statistics. Every JSON, EXR, mask, camera, and 3D sidecar stays a durable
+Library artifact, and the destination is named by routing rather than a path
+field. Faces ▸ Embed and Compare choose their face by clicking it on the picture
+in the inspector after a Detect run has drawn boxes on that image (a number
+field remains for a picture nobody has detected faces in). Compare offers one
+picker for each picture. Faces are numbered from one everywhere the picture is
+read, and the flag counts from zero.
 
 **Vision ▸ Live** is a Session page (`StudioUI/StudioLiveTrackSession.swift`) over
 `vision track-live`: Start/Stop, the camera (this Mac's cameras by name, in the
@@ -1316,8 +1345,8 @@ still asking cancels the run, so the capture does not start once access is
 granted. Stop ends the capture without a clip; the session ends on its own after
 the duration.
 
-**Audio** ▸ Transcribe, Who Spoke, Enhance, and Separate are Analyze tasks on
-the shared task workspace. Who Spoke runs `speech diarize` with native
+**Audio** ▸ Transcribe, Speakers, and Enhance are Analyze tasks, and Speakers
+and Enhance run on the shared task workspace. Speakers runs `speech diarize` with native
 Sortformer or Nemotron 3 (the model chip), the output format and the Nemotron
 input buffer as chips, and the threshold, minimum segment, and merge gap in
 the inspector; a JSON or RTTM timeline is drawn as one lane per speaker over
@@ -1325,11 +1354,8 @@ the recording (`StudioUI/Renderers/StudioSpeakerTimeline.swift`) and as the
 panel's turn rows, with Save timeline…. Enhance runs `audio enhance` (AP-BWE
 or UniverSR from the model chip, compute as a chip, the UniverSR bandwidth,
 ODE, guidance, chunk, and seed controls in the inspector) and plays the
-enhanced file; Separate — under Audio and under Music — runs `music separate`
-(ViperX two-stem, four-stem, dereverb, and denoise from the model chip) and
-lists every stem with its own player
-(`StudioUI/Renderers/StudioStemsList.swift`), read from the manifest the CLI
-writes. Audio ▸ Live (`StudioUI/StudioLiveListenSession.swift`) is the Session
+enhanced file. To separate stems, use Music ▸ Separate. Audio ▸ Live
+(`StudioUI/StudioLiveListenSession.swift`) is the Session
 surface over `speech listen` and `speech diarize-live`: Start submits the task
 draft through the task runner as an inference job with a Library row, the
 transport row carries the operation, microphone, options, and model chips,
@@ -1343,17 +1369,17 @@ Library row's artifact, so the row reads like Transcribe's. The packaged
 app and embedded CLI carry the microphone usage description and audio-input
 entitlement those capture paths require.
 
-**Text** ▸ Embeddings and Text ▸ Anonymize are Analyze tasks whose input is
-typed on the canvas: Embeddings takes one text per line and shows each vector's
+**Text** ▸ Embed and Text ▸ Anonymize are Analyze tasks whose input is
+typed on the canvas: Embed takes one text per line and shows each vector's
 norm with the cosine similarity of every pair
 (`StudioUI/Renderers/StudioEmbeddingsMatrix.swift`); Anonymize takes the paste
 as one text and shows it beside the protected text with every span the filter
 marked (`StudioUI/Renderers/StudioAnonymizationSpans.swift`), or the protected
-text alone in its Text view. Both file their JSON under Text. Text ▸ Decisions
+text alone in its Text view. Both file their JSON under Text. Text ▸ Decide
 (`StudioUI/StudioLayaDecisionView.swift`, `StudioKit/StudioDecisions.swift`) builds
 the Laya request instead of asking for one: the text to judge, then ordered
 choice, score (levels lowest first), and yes-or-no questions, with optional
-option descriptions and editable ids derived from each question. It checks the
+option descriptions and editable IDs derived from each question. It checks the
 request the way `text decide` does, writes it beside the run's output in the Text
 folder, and reads the result back as each question's answer, probabilities, and
 confidence, with what was cut to fit; **Check fit** runs `--preflight` and shows
@@ -1365,7 +1391,7 @@ Text ▸ Classify (`StudioUI/StudioGLiNERClassificationView.swift`,
 from text and ordered label tasks. Each task can carry descriptions, an optional
 prompt, and a multi-label threshold. The result pane shows selected labels and
 all scores in the task's label order. **Check fit** reports the input token
-count. Like Decisions, Classify saves its draft for the Command panel and can
+count. Like Decide, Classify saves its draft for the Command panel and can
 import or export request JSON.
 
 Text ▸ Extract (`StudioUI/StudioGLiNERExtractionView.swift`,
@@ -1400,10 +1426,10 @@ model to open its full-width details. Choose **All models** or press Escape to
 return to the list. The content header's subtitle
 reports the real inventory ("92 installed · 48 GB on this Mac", from `model list`
 and `model storage`). The 320pt list shows installed models plus any model being
-pulled, with a family chip row (Image, Chat, Vision, …) and a status dot: green
-installed, accent pulling, yellow when the CLI reports the model as unsupported
-on this Mac. Pull… opens a sheet of the models that are not installed yet; a
-pull keeps its explicit third-party terms acceptance, live CLI output, and
+downloaded, with a family chip row (Image, Chat, Vision, …) and a status dot: green
+installed, accent downloading, yellow when the CLI reports the model as unsupported
+on this Mac. **Download…** opens a sheet of the models that aren't installed. A
+download keeps its explicit third-party terms acceptance, live CLI output, and
 cancellation with resumable partials. The detail column shows the model's facts
 (store, source, last used and run count from the Library, manifest verification
 from `model info`), a Health panel (latest quality gate and manifest audit, with
@@ -1419,14 +1445,14 @@ once (a model the user picked by hand in a parked draft stays), turning it off
 returns the task to the built-in default, and a choice whose model has since
 left the inventory is ignored rather than left pointing at nothing. Rows whose data
 the CLI or Library does not have are omitted rather than
-faked. A job bar at the page bottom reports a pull, MiniMax-H3 optimize or
+faked. A job bar at the page bottom reports a download, MiniMax-H3 optimize or
 rebuild, or storage clean-up in flight with Cancel and Log. Downloads started
 from either the composer or Models use the same job, including queued downloads.
 You can leave Models and return to its progress and cancellation controls.
-After failure or cancellation, use **Download log** for details and **Pull…**
+After failure or cancellation, use **Download log** for details and **Download…**
 to retry. The latest failed download stays listed so you can also retry from its
 details.
-Pulling the same model again reuses its active download. After a download
+Downloading the same model again reuses its active download. After a download
 finishes, Studio refreshes inventory and readiness for your current selection.
 The composer and Models share one inventory; a failed refresh reports an error
 and keeps the previous inventory for that location. Reveal, Remove…, refresh, opening the store,
@@ -1457,10 +1483,10 @@ lmms-eval run.
 **Models ▸ Adapters** lists adapter catalogs and local adapters and applies one
 to a domain's composer or opens its trainer.
 
-The **Server** domain has one task per resident server: Serving (the API),
-Music server, and Vision server.
+The **Server** domain has one task for each resident server: API, Music, Vision,
+and World.
 
-**Server ▸ Serving** is one operational page over the local API and the resident
+**Server ▸ API** is one page over the local API and the resident
 model lanes, in six sections — Overview, Models, Telemetry, Clients, Activity,
 Configuration — under one header that carries the state, the last operation's
 result, and the only Start, Stop, Restart, and Preflight controls: text and
@@ -1477,17 +1503,21 @@ Command Console, restarts only after the old process has exited, and reads its
 phase (stopped, starting, running, stopping, running outside Studio, stopped
 unexpectedly) from the job and the endpoint monitor together.
 
-**Server ▸ Vision server** and **Server ▸ Music server**
-(`StudioUI/StudioResidentServerViews.swift`, `StudioUI/StudioMusicServerView.swift`)
-run `vision serve` and `music serve` (and `world serve`, which has no page) through
-`StudioKit/StudioServiceProcess.swift`, the same service-lane owner the API
-server's process uses. Both pages start, stop, and restart their server; show why
-it stopped and its live log; and use the task's Command view edits. Vision server
-also offers preflight. Music server edits its checkpoint and adapter stack.
-Neither server is a Library run, and the menu bar lists each while it runs, with
-Stop. A server started from the Command Console goes to the same service lane —
-the console still shows its log — and its owner adopts it; a `--preflight` run
-stays an ordinary console run. Agent sessions stay durable Library runs. Open
+**Server ▸ Vision**, **Server ▸ Music**, and **Server ▸ World**
+(`StudioUI/StudioResidentServerViews.swift`, `StudioUI/StudioMusicServerView.swift`,
+`StudioUI/StudioWorldServerView.swift`) run `vision serve`, `music serve`, and
+`world serve` through `StudioKit/StudioServiceProcess.swift`, the same
+service-lane owner the API server's process uses. Each page starts, stops, and
+restarts its server, shows why it stopped and its live log, and uses the task's
+Command view edits. Vision also offers preflight. Music edits its checkpoint and
+adapter stack. World keeps one conditioned-video world warm so a client can step
+it with actions: choose DreamX World or Cosmos3 Edge, an optional base model and
+state folder, an API key, and whether to load the models before the first
+request, then copy the endpoint. No resident server is a Library run, and the
+menu bar lists each one while it runs, with Stop. A server started from the
+Command Console goes to the same service lane, where its owner adopts it, and
+the console still shows its log. A `--preflight` run stays an ordinary console
+run. Agent sessions stay durable Library runs. Open
 WebUI is a Docker launcher, not a resident server, and runs from the Command
 Console.
 
@@ -1573,7 +1603,7 @@ the Settings content, and fidelity renders at the 1440×900 mockup size for
 comparing against the design boards — the Command Console on `image generate`,
 the Main board (Image ▸ Generate with a finished generation of two in-test
 images, a run held open by the process seam mid-denoise, a queued run behind a
-concurrent model pull, and the inspector open with two changed settings; then
+concurrent model download, and the inspector open with two changed settings; then
 the same feed with the Command view column), the Library column in list, grid,
 mixed-kind, and batch states, the Activity popover over those jobs and idle, the
 run queue with running, waiting, and finished rows, the
@@ -1586,11 +1616,11 @@ and Track on the Analyze board with prompts drawn and Track's frame scrubber
 over an in-test clip,
 Chat with the boards' sample thread, Music ▸ Realtime mid-session (a run the
 process seam holds open, fed the CLI's frame progress and steering echoes, with
-its recording synthesized on disk), Video ▸ Subjects at each stage of a seeded
+its recording synthesized on disk), Video ▸ Animate at each stage of a seeded
 three-subject project, and Models ▸ Installed with a scripted model inventory
 (`model list`, `capabilities`, `storage`, `info`, `runtime get`, and
 `adapter list` answered from fixtures, plus Library rows for usage, a quality
-gate, a benchmark, and a running composer pull). It is skipped unless
+gate, a benchmark, and a running composer download). It is skipped unless
 `MERERUN_STUDIO_SNAPSHOT_DIR` names a directory, so CI and a plain `swift test`
 never render anything:
 
@@ -1603,7 +1633,7 @@ never ordered
 on screen and captures it with `cacheDisplay`, so nothing appears on the Mac
 running it. The controller uses a process runner that refuses every launch
 (answering only the sidebar's status probe; for the fidelity renders it holds
-the generation, pull, or session launches open and answers the scripted
+the generation, download, or session launches open and answers the scripted
 inventory and readiness commands) and the Library is a temporary `library.json`
 seeded with fixture rows, so no CLI process starts and the user's Library is
 never read or written. Two fidelity gaps are deliberate: macOS 26 glass and
@@ -1637,10 +1667,10 @@ composer tasks, a `StudioTaskDraft` through `StudioTaskRunner.prepare` for
 tasks on the shared task workspace, or a task-specific page's `CommandDraft`),
 runs it,
 and decodes the output with the page's decoder, asserting what the page would
-show — Decisions, Segment with a drawn box and points on a generated photo
+show — Decide, Segment with a drawn box and points on a generated photo
 (with an EXIF-rotated copy), Track's prompt frame and range, Find handing its
 boxes to Segment, Faces, Depth, multi-view geometry and InstantMesh cameras,
-Who Spoke, Music analyze and transcribe, instruments, and the training manifest, run plans and
+Speakers, Music analyze and transcribe, instruments, and the training manifest, run plans and
 `run inspect`, Sound's renoise through the task draft and the runner, a CLAP
 score decoding for the gauge, the Woosh latents round trip through Encode and
 Decode, a short Video Foley run on a synthesized clip, a chat turn with thinking shown, and a failed

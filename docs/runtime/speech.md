@@ -70,7 +70,7 @@ attaches a reference and runs `speech profile create`.
 
 **Audio ▸ Transcribe** shows the timestamped transcript beside the recording's
 waveform, with a Timeline and a raw JSON view, and saves the transcript as a
-durable artifact. **Audio ▸ Who Spoke** is `speech diarize` on the same
+durable artifact. **Audio ▸ Speakers** is `speech diarize` on the same
 surface: the recording in the well, Sortformer or Nemotron 3 from the model
 chip, the output format and Nemotron 3 input buffer as chips, the segment
 controls in the inspector, and a JSON or RTTM timeline drawn as speaker lanes

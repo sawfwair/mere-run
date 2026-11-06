@@ -92,12 +92,12 @@ that ID. Both commands preserve every payload byte.
 
 ## macOS Studio
 
-Open **Models ▸ Installed** and use **Pull…** to pick any model that is not
-installed yet and download it directly. Studio streams the underlying
+Open **Models ▸ Installed** and use **Download…** to choose any model that isn't
+installed and download it directly. Studio streams the underlying
 `model pull` output, keeps canceled partial downloads resumable, and refreshes
 the inventory after a successful install. Models with restricted third-party
 terms show their source links and require an explicit acceptance
-(**Accept & Pull** here, **Accept & Download** when a pull starts from a
+(**Accept and Download**, here or when a download starts from a
 composer's readiness card) before transfer. Continuing confirms that you
 reviewed and accept the listed terms and agree to comply. **Open model store in
 Finder** opens the configured store; it does not start a download.
@@ -275,7 +275,7 @@ revenue-limited terms require `--accept-model-license` for restricted downloads 
 never auto-download at runtime. A custom license alone does not trigger the
 flag. The CLI and macOS app show the
 applicable model/component terms before acceptance. Passing the flag or choosing
-**Accept & Download** confirms that you reviewed and accept those terms and
+**Accept and Download** confirms that you reviewed and accept those terms and
 agree to comply. Schema 3 of the installed `mererun_model.json` records the
 immutable source revisions, term URLs, and acceptance confirmation. mere.run
 does not determine whether your intended use is
@@ -439,7 +439,7 @@ Reads and updates typed per-model API runtime settings that control how a model
 behaves when served by `mere.run api serve`. `get` prints the stored settings
 for one managed model ID or configured alias; `set` updates them.
 
-The macOS Studio's **Server ▸ Serving ▸ Model Pool** view uses these
+The macOS Studio's **Server ▸ API ▸ Models** view uses these
 same settings for both text models and managed sidecars. Text rows additionally
 support explicit HTTP load/unload. Sidecars load on first request and expose
 their lifecycle, readiness, queue, replacement, failure, and eviction state;
