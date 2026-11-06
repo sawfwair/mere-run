@@ -1372,9 +1372,27 @@ command requires and ticks each one off with its dtype and shape, so a missing
 command would refuse it with, and an empty well names what a bundle must carry
 (`StudioKit/StudioEarthInputRequirement.swift`,
 `StudioUI/Renderers/StudioEarthInputChecklist.swift`, registered by template in
-`StudioUI/Renderers/StudioInputRenderers.swift`). The result panel shows the
-written safetensors file's header — the logits or embedding tensor, its shape,
-and the writer's metadata — with the command's JSON as the second view. The
+`StudioUI/Renderers/StudioInputRenderers.swift`). Once a run finishes, the
+**Map** view draws the result in the input column
+(`StudioKit/StudioEarthMap.swift`, `StudioKit/StudioSafetensors.swift`, and
+`StudioUI/Renderers/StudioEarthMapRenderer.swift`):
+
+- Flood and Fire take the argmax over the logits' class axis and color the
+  event class (water blue for Flood, orange-red for Fire) over a natural-color
+  layer built from the bundle's `S2L2A` B04, B03, and B02 in TerraMind band
+  order, last observation, each band stretched from its 2nd to 98th
+  percentile. An opacity slider fades the mask, the legend gives each class's
+  share of the tile, and arrows step through the tiles of a batch.
+- TESSERA and OlmoEarth project their embeddings on the first three principal
+  components (fitted on up to 4,096 sampled pixels across all tiles) and show
+  them as red, green, and blue, with the embedding width. OlmoEarth draws its
+  grid over the bundle's `S2L2A` natural color. TESSERA's output has no grid,
+  so its pixels wrap in input order and the map says so.
+
+When the bundle is gone or its `S2L2A` doesn't line up with the result, the map
+draws alone and says why. The result panel shows the written safetensors
+file's header — the logits or embedding tensor, its shape, and the writer's
+metadata — and **Tensor** and **JSON** remain as views. The
 inspector holds the model, Preflight, TESSERA's output dimensions as the picker
 of the widths the command accepts (`StudioUI/StudioEarthControls.swift`), and
 OlmoEarth's patch size, ground sample distance, and space-time tokens. Outputs

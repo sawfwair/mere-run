@@ -2377,11 +2377,12 @@ final class StudioSnapshotTests: XCTestCase {
     }
 
     /// Earth on the shared task workspace, through the root: TESSERA with a finished run — the
-    /// attached bundle read against the tensors the command needs on the left, the embedding's
-    /// header in the result panel on the right, the inspector open with the constrained
-    /// dimensions picker — light and dark at the board size and at a narrow width; Flood with a
-    /// bundle missing its DEM, so the checklist warns before any run; OlmoEarth with nothing
-    /// attached, the serif empty state; and TESSERA's inspector column on its own.
+    /// Map view's false color on the left, the embedding's header in the result panel on the
+    /// right, the inspector open with the constrained dimensions picker — light and dark at the
+    /// board size and at a narrow width; Flood with a bundle missing its DEM, so the checklist
+    /// warns before any run; OlmoEarth with nothing attached, the serif empty state; Fire with a
+    /// finished two-tile run, its mask over natural color, light and dark; OlmoEarth's false
+    /// color drawn on its own; and TESSERA's inspector column on its own.
     func testEarthWorkspaceSnapshots() throws {
         let earth = try SnapshotFixture(
             outputDirectory: fixture.outputDirectory,
@@ -2408,6 +2409,13 @@ final class StudioSnapshotTests: XCTestCase {
         try render(.earthFlood, name: "earth-flood-missing-dem-light", appearance: .light, size: board)
         try render(.earthFlood, name: "earth-flood-missing-dem-dark", appearance: .dark, size: board)
         try render(.earthOlmoEarth, name: "earth-olmoearth-empty-light", appearance: .light, size: board)
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(.earthFire, name: "earth-fire-map-\(appearance.rawValue)", appearance: appearance, size: board)
+        }
+        try earth.write(
+            StudioEarthMapView(source: try earth.olmoEarthMapSource(), maxHeight: 560).padding(20).frame(width: 640, height: 640),
+            size: CGSize(width: 640, height: 640), appearance: .light, name: "earth-olmoearth-map-light", settle: 1.5
+        )
 
         let draft = try XCTUnwrap(earth.controller.taskSessions.taskDraft(for: .earthTessera))
         let inspector = StudioTaskInspector(
@@ -4414,16 +4422,26 @@ private final class SnapshotFixture {
             throw StudioSnapshotError.noContentView
         }
         let bundle = root.appendingPathComponent("valley-2024.safetensors", isDirectory: false)
+        // 1,024 pixels of a 32 × 32 tile, flattened row by row, so the map's false color wraps
+        // back into the tile.
+        let pixels = 1_024
         try TensorFixtures.write(to: bundle, tensors: [
-            .float32("S2", shape: [1, 4, 10], value: 1_200),
-            .float32("S2_DOY", shape: [1, 4], value: 120),
-            .float32("S1_ASC", shape: [1, 4, 2], value: -12),
-            .float32("S1_ASC_DOY", shape: [1, 4], value: 118),
+            .float32("S2", shape: [pixels, 4, 10], value: 1_200),
+            .float32("S2_DOY", shape: [pixels, 4], value: 120),
+            .float32("S1_ASC", shape: [pixels, 4, 2], value: -12),
+            .float32("S1_ASC_DOY", shape: [pixels, 4], value: 118),
         ])
         let embedding = root.appendingPathComponent("Earth/valley-2024-a1b2c3.safetensors", isDirectory: false)
+        let vectors = (0..<(pixels * 64)).map { index -> Float in
+            let (pixel, channel) = (index / 64, Float(index % 64))
+            let (x, y) = (Float(pixel % 32), Float(pixel / 32))
+            let ridge = sin(x * 0.21 + y * 0.09)
+            let valley = cos(hypot(x - 20, y - 12) * 0.32)
+            return ridge * sin(channel * 0.37) + valley * cos(channel * 0.23) + 0.2 * sin(x * y * 0.01 + channel)
+        }
         try TensorFixtures.write(
             to: embedding,
-            tensors: [.float32("embeddings", shape: [1, 64], value: 0.031)],
+            tensors: [.float32("embeddings", shape: [pixels, 64], values: vectors)],
             metadata: [
                 "format": "mere.run/tessera-v2-embeddings-v1", "model_id": "vision-embed-tessera-v2-large",
                 "source_revision": "4f1c2e9", "dimensions": "64",
@@ -4450,7 +4468,7 @@ private final class SnapshotFixture {
             commandPreview: "mere.run geo tessera valley-2024.safetensors --output valley-2024-a1b2c3.safetensors --dimensions 64 --json",
             outputText: """
             {
-              "batch_size" : 1,
+              "batch_size" : 1024,
               "device" : "metal",
               "inference_seconds" : 0.41,
               "input_path" : "\(bundle.path)",
@@ -4486,6 +4504,125 @@ private final class SnapshotFixture {
         var flood = StudioTaskDraft(templateID: .geoFlood)
         flood.setArgument(0, incomplete.path)
         controller.taskSessions.setTaskDraft(flood, for: .earthFlood)
+
+        try seedEarthFireRun()
+    }
+
+    /// A finished Fire run over two 64 × 64 tiles: fields, a river, and a burn scar in the
+    /// bundle's S2L2A (TerraMind order, last observation), and logits that call the scar fire.
+    func seedEarthFireRun() throws {
+        guard let template = CommandCatalog.template(id: .geoFire) else { throw StudioSnapshotError.noContentView }
+        let (tiles, side) = (2, 64)
+        let plane = side * side
+        func scar(_ tile: Int, _ x: Int, _ y: Int) -> Bool {
+            let (cx, cy) = tile == 0 ? (40.0, 38.0) : (22.0, 26.0)
+            let wobble = 1 + 0.18 * sin(Double(x) * 0.5) * cos(Double(y) * 0.4)
+            return pow((Double(x) - cx) / 15, 2) + pow((Double(y) - cy) / 10, 2) < wobble
+        }
+        func ground(_ tile: Int, _ x: Int, _ y: Int) -> (Float, Float, Float) {
+            if abs(Double(y) - (14 + Double(tile) * 30 + 6 * sin(Double(x) / 9))) < 2.5 { return (0.10, 0.22, 0.42) }
+            if scar(tile, x, y) { return (0.30, 0.20, 0.15) }
+            let field = ((x / 16) + (y / 16) + tile).isMultiple(of: 2)
+            let texture = Float(0.03 * sin(Double(x * 7 + y * 3)))
+            return field ? (0.22 + texture, 0.42 + texture, 0.18) : (0.42 + texture, 0.40 + texture, 0.24)
+        }
+        var bands: [Float] = []
+        for tile in 0..<tiles {
+            for band in 0..<12 {
+                for _ in 0..<4 {
+                    for y in 0..<side {
+                        for x in 0..<side {
+                            let (red, green, blue) = ground(tile, x, y)
+                            bands.append(band == 3 ? red : band == 2 ? green : band == 1 ? blue : 0.3)
+                        }
+                    }
+                }
+            }
+        }
+        let bundle = root.appendingPathComponent("ridge-fire-2024.safetensors", isDirectory: false)
+        try TensorFixtures.write(to: bundle, tensors: [
+            .float32("S2L2A", shape: [tiles, 12, 4, side, side], values: bands),
+            .float32("S1RTC", shape: [tiles, 2, 4, side, side], value: -0.4),
+            .float32("DEM", shape: [tiles, 1, 4, side, side], value: 0.1),
+        ])
+        var logits: [Float] = []
+        for tile in 0..<tiles {
+            let burned = (0..<plane).map { scar(tile, $0 % side, $0 / side) }
+            logits += burned.map { $0 ? -1.5 : 2.0 } + burned.map { $0 ? 2.5 : -1.0 }
+        }
+        let output = root.appendingPathComponent("Earth/ridge-fire-2024-d4e5f6.safetensors", isDirectory: false)
+        try TensorFixtures.write(
+            to: output,
+            tensors: [.float32("logits", shape: [tiles, 2, side, side], values: logits)],
+            metadata: ["format": "mere.run/terramind-fire-logits-v1", "model_id": "vision-fire-terramind-base"]
+        )
+
+        var draft = template.defaultDraft()
+        draft.inputPath = bundle.path
+        draft.outputPath = output.path
+        let startedAt = Self.mockupTime(hour: 10, minute: 31)
+        let request = StudioRunRequest(mode: template.libraryMode, templateID: .geoFire, template: template, draft: draft)
+        var row = StudioLibraryItem(
+            id: UUID(), mode: template.libraryMode, prompt: "", inputURL: bundle, outputURL: output,
+            createdAt: startedAt, updatedAt: startedAt.addingTimeInterval(14.8), status: .completed, exitCode: 0,
+            commandPreview: "mere.run geo fire ridge-fire-2024.safetensors --output ridge-fire-2024-d4e5f6.safetensors --json",
+            outputText: nil, templateID: .geoFire, commandDraft: draft,
+            commandArguments: template.arguments(from: request.draft, source: .contract), artifactURLs: [output]
+        )
+        row.inputIdentity = StudioInputIdentity.read(bundle)
+        library.upsert(row)
+        var fire = StudioTaskDraft(templateID: .geoFire)
+        fire.setArgument(0, bundle.path)
+        controller.taskSessions.setTaskDraft(fire, for: .earthFire)
+        controller.taskSessions.set(Optional(row.id), for: StudioTask.earthFire.rawValue + ".requestID")
+    }
+
+    /// An OlmoEarth result to draw on its own: raw S2L2A for one 64 × 64 tile (OlmoEarth order,
+    /// B02, B03, B04 first) of a lake, fields, and a town, and a 16 × 16 grid of 128-wide
+    /// embeddings (patch size 4) whose vectors follow what each patch covers.
+    func olmoEarthMapSource() throws -> StudioEarthMapSource {
+        let side = 64
+        enum Cover: Int { case lake, crop, forest, town }
+        func cover(_ x: Int, _ y: Int) -> Cover {
+            if hypot(Double(x) - 18, Double(y) - 20) < 12 { return .lake }
+            if x > 40, y > 36 { return .town }
+            return (x / 12 + y / 20).isMultiple(of: 2) ? .crop : .forest
+        }
+        let reflectance: [Cover: (red: Float, green: Float, blue: Float)] = [
+            .lake: (300, 500, 900), .crop: (900, 1_300, 600), .forest: (400, 800, 450), .town: (1_600, 1_550, 1_500),
+        ]
+        var raw: [Float] = []
+        for y in 0..<side {
+            for x in 0..<side {
+                let color = reflectance[cover(x, y)] ?? (0, 0, 0)
+                let grain = Float((x * 13 + y * 7) % 9) * 15
+                for _ in 0..<2 {
+                    raw += [color.blue + grain, color.green + grain, color.red + grain] + [Float](repeating: 2_000, count: 9)
+                }
+            }
+        }
+        let input = root.appendingPathComponent("lakeshore-2024.safetensors", isDirectory: false)
+        try TensorFixtures.write(to: input, tensors: [
+            .int32("TIMESTAMPS", shape: [1, 2, 3], values: [12, 4, 2024, 3, 7, 2024]),
+            .float32("S2L2A", shape: [1, side, side, 2, 12], values: raw),
+        ])
+        let (grid, dimension) = (16, 128)
+        var vectors: [Float] = []
+        for row in 0..<grid {
+            for column in 0..<grid {
+                let kind = Float(cover(column * 4 + 2, row * 4 + 2).rawValue)
+                for channel in 0..<dimension {
+                    let index = Float(channel)
+                    vectors.append(sin(index * 0.3 + kind * 1.7) + 0.15 * sin(Float(row) * 0.4 + index) + 0.1 * cos(Float(column) * 0.5 - index))
+                }
+            }
+        }
+        let output = try TensorFixtures.write(
+            to: root.appendingPathComponent("Earth/lakeshore-2024-embeddings.safetensors", isDirectory: false),
+            tensors: [.float32("S2L2A_EMBEDDINGS", shape: [1, grid, grid, dimension], values: vectors)],
+            metadata: ["format": "mere.run/olmoearth-v1.2-embeddings-v1", "patch_size": "4"]
+        )
+        return StudioEarthMapSource(kind: .olmoEarth, output: output, input: input)
     }
 
     /// Two finished Image ▸ Train runs the dashboard can follow and compare: a dataset folder of

@@ -23,7 +23,8 @@ package enum StudioAnalyzeResultView: String, CaseIterable, Identifiable, Hashab
     case vectors
     /// A reconstructed scene or point cloud.
     case scene
-    /// A georeferenced raster over the input.
+    /// A raster drawn from the result over the input's pixel grid: an Earth class mask over
+    /// natural color, or embeddings as false color. Not georeferenced; the bundle has no CRS.
     case map
     /// Spoken text with timestamps.
     case transcript
@@ -317,9 +318,11 @@ extension StudioAnalyzeArchetype {
             .save("Save text", .text)
         ])
 
-        // Earth: the CLI writes safetensors, so the result is the tensor's header, not a raster.
+        // Earth: the CLI writes safetensors. The map draws Flood and Fire logits as a class mask
+        // over the bundle's natural color, and TESSERA and OlmoEarth embeddings as false color
+        // (`StudioEarthMap`); the tensor view keeps the file's header.
         for task in [StudioTask.earthFlood, .earthFire, .earthTessera, .earthOlmoEarth] {
-            add(task, .file, [.tensor, .json], [.save("Save tensor", .media)])
+            add(task, .file, [.map, .tensor, .json], [.save("Save tensor", .media)])
         }
 
         // Sound analysis
