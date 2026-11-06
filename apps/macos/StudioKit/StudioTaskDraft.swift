@@ -161,7 +161,8 @@ package struct StudioTaskDraft: Codable, Equatable {
     }
 
     package mutating func selectInstalledDefault(from inventory: [StudioModelInventoryRow], source: StudioScopeSource) {
-        guard modelSource != .chosen, capability?.options.contains(where: { $0.flag == "--model" }) == true else { return }
+        guard modelSource != .chosen, capability?.options.contains(where: { $0.flag == "--model" }) == true,
+              !StudioTaskSchema.takesModelFolder(templateID) else { return }
         let scope = StudioTaskSchema.modelScope(for: self, source: source)
         let automatic = modelSource?.isStandIn(for: model) == true
         let requested = automatic ? "" : model

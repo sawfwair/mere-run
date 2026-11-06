@@ -71,7 +71,11 @@ package enum CommandDefaults {
             .value(\.trellisSealRadius, 12),
             .value(\.maxTokens, 2_097_152)
         ]),
-        (.imageReconstruct3DMultiview, [.value(\.reconstructionResolution, 256)])
+        (.imageReconstruct3DMultiview, [.value(\.reconstructionResolution, 256)]),
+        (.visionImageTo3DIdol, [
+            .contract(\.seed, CommandFlags.VisionImageTo3DIdol.seed),
+            .contract(\.steps, CommandFlags.VisionImageTo3DIdol.steps)
+        ])
     ]
 
     private static let text: [(CommandTemplateID, [DraftDefault])] = [

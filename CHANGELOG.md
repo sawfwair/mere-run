@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add `vision image-to-3d-idol` to the capability catalog as
+  `vision.image-to-3d-idol`, so `mere.run catalog --json` lists it and shells
+  can build its command line. Studio offers it as the **IDOL Gaussian splats**
+  engine in **3D** ▸ **From image**. Pick the IDOL, DINOv3, and FLUX.2 VAE
+  checkpoint folders in the inspector; the composer shows no model chip because
+  IDOL has no managed model. The result card shows `object.ply` and the
+  Gaussian count from `manifest.json`.
+
 ## 0.69.1 - 2026-11-04
 
 - Make the Studio private-mode ghost button respond across its full button area.

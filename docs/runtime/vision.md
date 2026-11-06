@@ -70,7 +70,10 @@ reconstruct-3d-multiview`. For the image-family spellings, see the
 `vision image-to-3d-idol` turns one object image into a standard 3D Gaussian
 Splatting PLY. It runs the IDOL denoiser and decoders, DINOv3 H+, and the
 FLUX.2 VAE in Swift and MLX. The command requires local checkpoints and does
-not have a managed model ID or Studio task.
+not have a managed model ID. In Studio, choose **IDOL Gaussian splats** as the
+engine in **3D** ▸ **From image**, and then pick the three checkpoint folders in
+the inspector's **Model & adapters** section. The command is also in the
+capability catalog (`mere.run catalog --json`) as `vision.image-to-3d-idol`.
 
 Prepare these directories before running it:
 

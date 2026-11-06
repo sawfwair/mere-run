@@ -1249,6 +1249,15 @@ final class StudioTypesTests: XCTestCase {
                 ].joined(separator: "\n")
                 $0.dryRun = true
                 $0.json = true
+            }),
+            (.visionImageTo3DIdol, "vision.image-to-3d-idol", {
+                $0.inputPath = "/tmp/object.png"
+                $0.model = "/tmp/idol"
+                $0.idolDINOPath = "/tmp/dinov3"
+                $0.idolVAEPath = "/tmp/flux2-vae"
+                $0.idolMode = "real"
+                $0.dryRun = true
+                $0.json = true
             })
         ]
 

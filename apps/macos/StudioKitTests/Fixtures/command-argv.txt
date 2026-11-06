@@ -2726,6 +2726,28 @@ visionGround	videoOutputMode=video-only	vision ground 1 --query 1 --model 1 --ou
 visionGround	videoQuality=draft	vision ground 1 --query 1 --model 1 --output 1 --json-output 1 --mask-output-dir 1 1
 visionGround	videoQuality=final	vision ground 1 --query 1 --model 1 --output 1 --json-output 1 --mask-output-dir 1 1
 visionGround	voiceMode=clone	vision ground 1 --query 1 --model 1 --output 1 --json-output 1 --mask-output-dir 1 1
+visionImageTo3DIdol	default	vision image-to-3d-idol '' --output ~/Documents/mere.run/3D/idol-gaussian-splats-<stamp> --seed 42
+visionImageTo3DIdol	maximal	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	maximal-booleans-off	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 1
+visionImageTo3DIdol	modelRoot=video-minimax-h3-ref2va	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	modelRoot=video-wan22-ti2v-5b-mlx	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	musicLMMode=disable	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	musicLMMode=use	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	musicMIDINoteOffset=-12	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	musicTask=lego	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	musicTask=repaint	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	musicTrainingKind=lokr	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	renderProfile=quality	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	responseFormat=json_object	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	responseFormat=text	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	thinkingMode=automatic	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	thinkingMode=hide	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	thinkingMode=show	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	videoOutputMode=audio-video	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	videoOutputMode=video-only	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	videoQuality=draft	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	videoQuality=final	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	voiceMode=clone	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
 visionInspect	default	vision inspect '' --prompt 'Describe this image.' --max-tokens 2048
 visionInspect	maximal	vision inspect 1 --prompt 1 --model 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 1
 visionInspect	maximal-booleans-off	vision inspect 1 --prompt 1 --model 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 1

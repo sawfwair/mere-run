@@ -220,7 +220,7 @@ enum CommandDraftProbes {
     /// benchmarks). Until each is either emitted from the draft or listed in
     /// `declaredButNeverEmitted` with its reason, the guard covers the templates added since
     /// the shell consolidation. Add a template here when its builder is complete.
-    static let bidirectionalTemplates: Set<CommandTemplateID> = [.visionDepth]
+    static let bidirectionalTemplates: Set<CommandTemplateID> = [.visionDepth, .visionImageTo3DIdol]
 
     /// Flags `StudioMachineOutputFlags` appends at run time from the contract's own lists, so no
     /// builder spells them from the draft.

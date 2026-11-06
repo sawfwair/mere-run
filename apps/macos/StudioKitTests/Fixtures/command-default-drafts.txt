@@ -280,6 +280,9 @@ visionGeometryMultiview	outputPath	~/Documents/mere.run/Vision/multi-view-geomet
 visionGround	model	vision-ground-falcon-perception
 visionGround	outputPath	~/Pictures/mere.run/Vision/ground-objects-<stamp>.png
 visionGround	prompt	a person
+visionImageTo3DIdol	outputPath	~/Documents/mere.run/3D/idol-gaussian-splats-<stamp>
+visionImageTo3DIdol	seed	42
+visionImageTo3DIdol	steps	50
 visionInspect	prompt	Describe this image.
 visionOCR	backend	lighton
 visionOCR	maxTokens	4096

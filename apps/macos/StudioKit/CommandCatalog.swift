@@ -45,6 +45,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
     case imageReconstruct3D
     case imageReconstruct3DTrellis2
     case imageReconstruct3DMultiview
+    case visionImageTo3DIdol
     case textChat
     case textCode
     case textEmbed
@@ -180,6 +181,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
         case .imageReconstruct3D: return "image.reconstruct-3d"
         case .imageReconstruct3DTrellis2: return "image.reconstruct-3d-trellis2"
         case .imageReconstruct3DMultiview: return "image.reconstruct-3d-multiview"
+        case .visionImageTo3DIdol: return "vision.image-to-3d-idol"
         case .textChat: return "text.chat"
         case .textCode: return "text.code"
         case .textEmbed: return "text.embed"
@@ -582,6 +584,14 @@ package struct CommandDraft: Equatable, Codable {
     package var trellisNoRemesh: Bool?
     package var trellisRemeshBand: Double?
     package var trellisSealRadius: Int?
+    /// IDOL's local encoder folders and sampling controls. Optional so Library rows written before
+    /// IDOL joined 3D ▸ From image keep decoding.
+    package var idolDINOPath: String?
+    package var idolVAEPath: String?
+    package var idolMode: String?
+    package var idolGuidance: Double?
+    package var idolTimeShift: Double?
+    package var idolGaussianCount: Int?
     package var durationSeconds = 10.0
     // Music production workspace. Empty strings intentionally mean "let the CLI quality
     // preset choose" for optional numeric overrides.
@@ -1205,7 +1215,8 @@ extension CommandTemplate {
              .imageVisualizeRun,
              .imageReconstruct3D,
              .imageReconstruct3DTrellis2,
-             .imageReconstruct3DMultiview:
+             .imageReconstruct3DMultiview,
+             .visionImageTo3DIdol:
             return .createImage
 
         case .textChat, .textEmbed, .textAnonymize, .textDecide, .textClassify, .textExtract, .textTrainLoRA:
