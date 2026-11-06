@@ -81,6 +81,59 @@ final class ProcessRecoveryTests: XCTestCase {
         await writer.value
     }
 
+    func testSynchronousStopConfirmsOutputCallbacksDrainedBeforeReturning() async throws {
+        let root = try temporaryDirectory()
+        let ready = expectation(description: "output callback entered")
+        let finished = expectation(description: "termination callback delivered")
+        let output = ProcessRecoveryOutput()
+        let process = try XCTUnwrap(FoundationMereRunProcessRunner().start(
+            configuration: configuration("printf 'ready\\n'; sleep 30", root: root),
+            stdout: { text in
+                output.append(text, error: false)
+                if text.contains("ready") {
+                    ready.fulfill()
+                    Thread.sleep(forTimeInterval: 0.1)
+                    output.append("callback drained\n", error: false)
+                }
+            },
+            stderr: { output.append($0, error: true) },
+            termination: { output.finish($0); finished.fulfill() }
+        ) as? FoundationRunningProcess)
+        await fulfillment(of: [ready], timeout: 3)
+
+        let stopped = await Task.detached { process.terminateAndWait() }.value
+
+        XCTAssertTrue(stopped)
+        XCTAssertEqual(output.capturedStandardOutput, "ready\ncallback drained\n")
+        await fulfillment(of: [finished], timeout: 3)
+    }
+
+    func testSynchronousStopCannotConfirmShutdownWhileAnOutputCallbackIsBlocked() async throws {
+        let root = try temporaryDirectory()
+        let ready = expectation(description: "output callback blocked")
+        let finished = expectation(description: "output and termination drained")
+        let releaseCallback = DispatchSemaphore(value: 0)
+        let process = try XCTUnwrap(FoundationMereRunProcessRunner().start(
+            configuration: configuration("printf 'ready\\n'; sleep 30", root: root),
+            stdout: { text in
+                if text.contains("ready") {
+                    ready.fulfill()
+                    _ = releaseCallback.wait(timeout: .now() + 5)
+                }
+            },
+            stderr: { _ in },
+            termination: { _ in finished.fulfill() }
+        ) as? FoundationRunningProcess)
+        defer { releaseCallback.signal(); process.terminate() }
+        await fulfillment(of: [ready], timeout: 3)
+
+        let stopped = await Task.detached { process.terminateAndWait() }.value
+
+        XCTAssertFalse(stopped, "parent exit alone cannot confirm output drainage")
+        releaseCallback.signal()
+        await fulfillment(of: [finished], timeout: 3)
+    }
+
     @MainActor
     func testNativeJobQueueDeliversFinalReceiptsAndStartsNextJobAfterCancellation() async throws {
         let root = try temporaryDirectory()
@@ -202,4 +255,5 @@ private final class ProcessRecoveryOutput: @unchecked Sendable {
     }
 
     var completed: Result? { lock.withLock { result } }
+    var capturedStandardOutput: String { lock.withLock { stdout } }
 }

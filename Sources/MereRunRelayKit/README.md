@@ -35,6 +35,12 @@ without a coordinated contract revision.
 
 Tests live in `Tests/MereRunRelayKitTests`.
 
+`RelayCredentialScope` binds a client's credential reads and refresh writes to
+one connection lifetime. App callers invalidate the old scope before replacing
+credentials or unpairing, then create a new scope for the new connection. An old
+client cannot read a replacement token, overwrite it with a delayed refresh, or
+clear the new connection's credentials.
+
 `WorkflowBatchMaterializer` pins child IDs and seeds before bundle preparation.
 `RelayWorkflowExecutor` submits, inspects, cancels, and retries durable batches over
 the account graph-batch API. Each child keeps the ordinary immutable job contract.

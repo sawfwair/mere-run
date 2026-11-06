@@ -5016,6 +5016,8 @@ private final class SnapshotLiveProcess: MereRunRunningProcess, @unchecked Senda
 
     func terminate() {}
 
+    func terminateAndWait() -> Bool { true }
+
     func sendStandardInput(_ text: String) throws {
         lock.lock()
         _standardInputs.append(text)

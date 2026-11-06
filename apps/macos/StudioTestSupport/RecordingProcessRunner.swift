@@ -47,6 +47,7 @@ package final class RecordingProcess: MereRunRunningProcess {
     package private(set) var terminateCallCount = 0
     package private(set) var interruptCallCount = 0
     package private(set) var standardInputs: [String] = []
+    package var stopsWhenWaited = true
     private let acceptsStandardInput: Bool
 
     package init(acceptsStandardInput: Bool = true) {
@@ -55,6 +56,11 @@ package final class RecordingProcess: MereRunRunningProcess {
 
     package func terminate() {
         terminateCallCount += 1
+    }
+
+    package func terminateAndWait() -> Bool {
+        terminate()
+        return stopsWhenWaited
     }
 
     package func interrupt() {

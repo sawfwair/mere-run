@@ -347,7 +347,7 @@ extension HubBackgroundTransferSession: URLSessionDownloadDelegate {
     }
 }
 
-private enum HubBackgroundTransferError: LocalizedError {
+enum HubBackgroundTransferError: LocalizedError {
     case httpStatus(Int)
     case missingPayload
     case missingResponse

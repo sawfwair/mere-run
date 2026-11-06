@@ -14,3 +14,7 @@ and typed configuration live in `AudioQwen3ASRModel` and are re-exported by
 Keep tokenizer and checkpoint compatibility typed and covered by focused tests.
 Preserve the pipelined decode toggle and token-readback schedule when editing
 generation. Streaming producers own their work until finish or cancellation.
+Concurrent streaming finishes join one finalization task and emit one final
+event. Cancellation closes the event stream and waits for native decode to
+settle without publishing late results. Decode failure rejects further audio;
+every subsequent finish reports the same failure.

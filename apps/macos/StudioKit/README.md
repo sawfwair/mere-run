@@ -6,7 +6,11 @@ Keep it independent of SwiftUI and model runtimes. Read the
 
 `StudioPromptTaskController` owns the active prompt draft, conversation identity,
 task transitions, and run preparation. Its conversation methods prepare sends
-and retries before changing history. `StudioTaskSessions` owns inactive drafts,
+and retries before changing history. The controller reserves a conversation for
+one request at submission, including queued turns, and releases it after all
+completion subscribers receive the reply. Failed submissions release their
+reservation even when no job was created. Live replies publish only for the
+request that owns the conversation. `StudioTaskSessions` owns inactive drafts,
 selection memory, result focus, command overrides, and persistence. Keep session keys stable.
 
 `StudioCommandAdapter` translates prompt controls into a CLI request.
@@ -73,8 +77,14 @@ adopted from the Command Console, and start, stop, restart, and preflight.
 options, its `StudioServiceProcess`, and a phase derived from that process and
 `StudioServingMonitor`'s last answer from the endpoint. The Server page and the
 menu bar extra both drive it; neither keeps its own copy of the server's state.
+Stop revokes any restart waiting for the old process to exit. If multiple
+restarts overlap, only the latest request can launch its configuration.
 The endpoint and key stay on `MereRunController`, so the key is read from the
 Keychain at launch and never stored with the options.
+Runtime polls capture that endpoint and key, and publish only while their poll
+identity is current. Stop invalidates in-flight results and follow-up agent
+probes. Connection changes clear the old snapshot and telemetry baseline;
+late responses cannot restore them.
 
 `StudioModelStore` owns the inventory shared by Models and the composer. Refreshes
 publish a complete typed snapshot and reject results from older requests or CLI
@@ -92,13 +102,26 @@ a stand-in is picked again when the scope or inventory changes.
 in-memory Library. Shared request preparation relocates declared outputs before
 launch. Session drafts do not write to disk while private mode is on. Keep
 copies a selected result into saved storage; workspace changes and app
-termination remove the remaining temporary files after stopping their writers.
-The next launch removes workspaces left behind by a crash or force quit.
+termination remove the remaining temporary files after confirming their job
+writers stopped. Retirement tracks pending jobs, file removal, removal failures,
+and completion callbacks still awaiting delivery. A removal failure keeps the
+workspace available for an explicit retry. During termination, the native process
+runner confirms shutdown and output drainage before files can be removed; an
+unconfirmed process keeps its workspace. Retired sessions continue owning late
+callbacks after file removal so those callbacks cannot publish private history.
+The next launch removes abandoned workspaces after their owning app process exits.
 
 `StudioTaskSessions` reconciles result focus when Library selection changes and
 clears references to deleted rows. `StudioFileExport` honors an explicit file
 destination and preserves existing names during folder exports. It reports missing
 sources and copy failures without modifying original artifacts.
+
+`StudioCrashReporter` owns one MetricKit subscription per opt-in lifetime.
+Disabling capture closes that subscriber permanently, so late callbacks cannot
+write reports after opt-out or join a later subscription. Deleting reports also
+invalidates pending deliveries, including callbacks still encoding a payload,
+without disabling capture. Each payload gets a unique filename so batches cannot
+overwrite reports that share a timestamp.
 
 Run `swift test --filter StudioPromptTaskControllerTests` for prompt journeys.
 The full repository gate also checks command argument fixtures, persistence,

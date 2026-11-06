@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import StudioTestSupport
 import XCTest
@@ -275,5 +276,182 @@ final class StudioPrivateSessionTests: XCTestCase {
         XCTAssertTrue(library.items.isEmpty)
         XCTAssertNil(controller.jobs.job(requestID: base.id))
         XCTAssertNil(controller.lastRunResult)
+    }
+
+    func testRetirementCancelsQueuedJobsFirstAndWaitsForEveryRunningJob() async throws {
+        try controller.setPrivateMode(true, savedLibrary: library)
+        let session = try XCTUnwrap(controller.privateSession)
+        let requests = try (0..<3).map { try request(prompt: "private \($0)") }
+        for request in requests { XCTAssertTrue(controller.run(studio: request)) }
+        let jobs = try requests.map { try XCTUnwrap(controller.jobs.job(requestID: $0.id)) }
+        XCTAssertEqual(runner.starts.count, 2)
+
+        try controller.discardPrivateWork()
+        XCTAssertEqual(session.phase, .waitingForJobs(Set(jobs.prefix(2).map(\.id))))
+        XCTAssertTrue(jobs[2].state.isTerminal)
+        XCTAssertEqual(runner.starts.count, 2, "retirement cannot launch queued private work")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: session.directory.path))
+        session.retire(controller: controller)
+        XCTAssertEqual(runner.processes.map(\.terminateCallCount), [1, 1])
+        XCTAssertEqual(controller.retiredPrivateSessions.count, 1)
+
+        runner.starts[0].termination(130)
+        _ = await controller.jobs.result(for: jobs[0].id)
+        XCTAssertEqual(session.phase, .waitingForJobs([jobs[1].id]))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: session.directory.path))
+        runner.starts[1].termination(130)
+        _ = await controller.jobs.result(for: jobs[1].id)
+        XCTAssertEqual(session.phase, .removed)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: session.directory.path))
+        XCTAssertTrue(controller.retiredPrivateSessions.isEmpty)
+        XCTAssertTrue(library.items.isEmpty)
+    }
+
+    func testConfirmedShutdownRemovesFilesButOwnsLateCompletionsUntilTheyDrain() async throws {
+        try controller.setPrivateMode(true, savedLibrary: library)
+        let session = try XCTUnwrap(controller.privateSession)
+        let requests = try (0..<2).map { try request(prompt: "private \($0)") }
+        for request in requests {
+            session.library.start(request: request, commandPreview: "private", source: .contract)
+            XCTAssertTrue(controller.run(studio: request))
+        }
+        let ids = try requests.map { try XCTUnwrap(controller.jobs.job(requestID: $0.id)?.id) }
+        var publicCompletions = 0
+        let subscription = controller.runCompletions.sink { _ in publicCompletions += 1 }
+        defer { subscription.cancel() }
+
+        controller.terminateAllProcesses()
+        XCTAssertNil(controller.privateSession)
+        XCTAssertEqual(session.phase, .waitingForCompletions(Set(ids)))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: session.directory.path))
+        XCTAssertEqual(controller.retiredPrivateSessions.count, 1)
+        runner.starts[0].stdout("late private text\n")
+        runner.starts[0].termination(130)
+        _ = await controller.jobs.result(for: ids[0])
+        XCTAssertEqual(session.phase, .waitingForCompletions([ids[1]]))
+        XCTAssertEqual(publicCompletions, 0)
+        XCTAssertFalse(controller.logs.contains { $0.text.contains("late private text") })
+        XCTAssertTrue(controller.liveOutputText.isEmpty)
+        XCTAssertFalse(controller.isRunning)
+        runner.starts[1].termination(130)
+        _ = await controller.jobs.result(for: ids[1])
+        XCTAssertTrue(controller.retiredPrivateSessions.isEmpty)
+        XCTAssertEqual(publicCompletions, 0)
+        XCTAssertTrue(library.items.isEmpty)
+        XCTAssertNil(controller.lastRunResult)
+        XCTAssertTrue(ids.allSatisfy { controller.jobs.job($0) == nil })
+    }
+
+    func testUnconfirmedShutdownKeepsFilesUntilTheWriterActuallyCompletes() async throws {
+        try controller.setPrivateMode(true, savedLibrary: library)
+        let session = try XCTUnwrap(controller.privateSession)
+        let request = try request()
+        XCTAssertTrue(controller.run(studio: request))
+        let id = try XCTUnwrap(controller.jobs.job(requestID: request.id)?.id)
+        runner.processes[0].stopsWhenWaited = false
+        let output = session.directory.appendingPathComponent("still-owned.txt")
+        try Data("private".utf8).write(to: output)
+
+        controller.terminateAllProcesses()
+        XCTAssertEqual(session.phase, .waitingForJobs([id]))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: output.path))
+        XCTAssertEqual(controller.retiredPrivateSessions.count, 1)
+        runner.starts[0].termination(130)
+        _ = await controller.jobs.result(for: id)
+        XCTAssertEqual(session.phase, .removed)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+        XCTAssertTrue(controller.retiredPrivateSessions.isEmpty)
+    }
+
+    func testOneUnconfirmedWriterPreventsRemovalAfterOtherWritersStop() async throws {
+        try controller.setPrivateMode(true, savedLibrary: library)
+        let session = try XCTUnwrap(controller.privateSession)
+        let requests = try (0..<2).map { try request(prompt: "private \($0)") }
+        for request in requests { XCTAssertTrue(controller.run(studio: request)) }
+        let ids = try requests.map { try XCTUnwrap(controller.jobs.job(requestID: $0.id)?.id) }
+        runner.processes[1].stopsWhenWaited = false
+
+        controller.terminateAllProcesses()
+        XCTAssertEqual(session.phase, .waitingForJobs([ids[1]]))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: session.directory.path))
+        runner.starts[1].termination(130)
+        _ = await controller.jobs.result(for: ids[1])
+        XCTAssertEqual(session.phase, .waitingForCompletions([ids[0]]))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: session.directory.path))
+        runner.starts[0].termination(130)
+        _ = await controller.jobs.result(for: ids[0])
+        XCTAssertTrue(controller.retiredPrivateSessions.isEmpty)
+        XCTAssertTrue(library.items.isEmpty)
+    }
+
+    func testRemovalFailureRequiresExplicitRetryAndDoesNotEraseFilesOrHistory() async throws {
+        var attempts = 0
+        let directory = root.appendingPathComponent("failed-removal")
+        let session = try StudioPrivateSession(savedLibrary: library, controller: controller, directory: directory) { url in
+            attempts += 1
+            if attempts == 1 { throw CocoaError(.fileWriteNoPermission) }
+            try FileManager.default.removeItem(at: url)
+        }
+        let output = directory.appendingPathComponent("private.txt")
+        try Data("retained until cleanup succeeds".utf8).write(to: output)
+
+        session.retire(controller: controller)
+        guard case .removalFailed(let message) = session.phase else { return XCTFail("expected a removal failure") }
+        XCTAssertEqual(session.library.lastPersistenceError, message)
+        XCTAssertEqual(controller.status, message)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: output.path))
+        XCTAssertEqual(controller.retiredPrivateSessions.count, 1)
+        session.retire(controller: controller)
+        let unrelated = try request(prompt: "public")
+        XCTAssertTrue(controller.run(studio: unrelated))
+        let publicID = try XCTUnwrap(controller.jobs.job(requestID: unrelated.id)?.id)
+        runner.starts[0].termination(0)
+        _ = await controller.jobs.result(for: publicID)
+        XCTAssertEqual(attempts, 1, "unrelated completions and repeated retirement cannot retry removal")
+
+        session.retryRemoval(controller: controller)
+        XCTAssertEqual(attempts, 2)
+        XCTAssertEqual(session.phase, .removed)
+        XCTAssertNil(session.library.lastPersistenceError)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+        XCTAssertTrue(controller.retiredPrivateSessions.isEmpty)
+        session.retryRemoval(controller: controller)
+        XCTAssertEqual(attempts, 2)
+    }
+
+    func testClosedWorkspaceCannotPrepareOutputsOrKeepAStaleResult() throws {
+        try controller.setPrivateMode(true, savedLibrary: library)
+        let session = try XCTUnwrap(controller.privateSession)
+        let item = try completed("discarded")
+        let later = try request(prompt: "stale")
+        let recorded = session.requestIDs
+        try controller.discardPrivateWork()
+
+        XCTAssertThrowsError(try session.prepareDirectories(for: later))
+        XCTAssertThrowsError(try session.keep(item))
+        XCTAssertEqual(session.requestIDs, recorded)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: session.directory.path))
+        XCTAssertTrue(library.items.isEmpty)
+    }
+
+    func testPrivateRetirementDoesNotWaitForOrCancelAPublicWriter() async throws {
+        let publicRequest = try request(prompt: "public")
+        XCTAssertTrue(controller.run(studio: publicRequest))
+        let publicJob = try XCTUnwrap(controller.jobs.job(requestID: publicRequest.id))
+        try controller.setPrivateMode(true, savedLibrary: library)
+        let session = try XCTUnwrap(controller.privateSession)
+        let privateRequest = try request()
+        XCTAssertTrue(controller.run(studio: privateRequest))
+        let privateID = try XCTUnwrap(controller.jobs.job(requestID: privateRequest.id)?.id)
+
+        try controller.discardPrivateWork()
+        XCTAssertEqual(session.phase, .waitingForJobs([privateID]))
+        XCTAssertEqual(runner.processes[0].terminateCallCount, 0)
+        runner.starts[1].termination(130)
+        _ = await controller.jobs.result(for: privateID)
+        XCTAssertEqual(session.phase, .removed)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: session.directory.path))
+        XCTAssertTrue(publicJob.state.isRunning)
+        XCTAssertEqual(runner.processes[0].terminateCallCount, 0)
     }
 }

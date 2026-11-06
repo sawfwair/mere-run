@@ -14,6 +14,12 @@ Keep selection and panel behavior in `NavigationModel`. Schemas and pure
 presentation rules belong in StudioKit. Job progress comes from `JobStore`;
 history and artifacts come from `StudioLibraryStore`.
 
+`StudioAudioRecorder` owns either one microphone permission request or one
+recording device. Stop, Discard, and popover dismissal invalidate a pending
+request before a late permission response can create a file. A cancelled request
+cannot replace a newer recording or publish its permission error. The popover
+also cancels its start task on dismissal, including before that task begins.
+
 When changing prompt workflows, run the Studio tests and render the affected
 screens with `MERERUN_STUDIO_SNAPSHOT_DIR` and `StudioSnapshotTests`. Check
 keyboard navigation, focus, error recovery, compact layouts, and accessibility
