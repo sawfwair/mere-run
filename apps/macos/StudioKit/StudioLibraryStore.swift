@@ -301,15 +301,17 @@ package final class StudioLibraryStore: ObservableObject {
         model: String?,
         systemPrompt: String?,
         content: String,
-        imagePath: String? = nil
+        attachments: StudioTurnAttachments = StudioTurnAttachments()
     ) -> StudioLibraryItem {
         if let privateLibrary = observedController?.privateSession?.library, privateLibrary !== self {
             return privateLibrary.appendUser(conversationID: conversationID, mode: mode, model: model,
-                systemPrompt: systemPrompt, content: content, imagePath: imagePath)
+                systemPrompt: systemPrompt, content: content, attachments: attachments)
         }
+        var turn = StudioMessage(role: .user, content: content, model: model, systemPrompt: systemPrompt, preset: mode)
+        turn.attachments = attachments
         if let index = items.firstIndex(where: { $0.id == conversationID }) {
             var item = items[index]
-            item.messages = (item.messages ?? []) + [StudioMessage(role: .user, content: content, imagePath: imagePath, model: model, systemPrompt: systemPrompt, preset: mode)]
+            item.messages = (item.messages ?? []) + [turn]
             item.mode = mode
             item.model = model
             item.systemPrompt = systemPrompt
@@ -333,7 +335,7 @@ package final class StudioLibraryStore: ObservableObject {
             exitCode: nil,
             commandPreview: mode == .code ? "mere.run text code" : "mere.run text chat",
             outputText: nil,
-            messages: [StudioMessage(role: .user, content: content, imagePath: imagePath, model: model, systemPrompt: systemPrompt, preset: mode)],
+            messages: [turn],
             systemPrompt: systemPrompt,
             model: model
         )
@@ -441,6 +443,8 @@ package final class StudioLibraryStore: ObservableObject {
                 failed: message.failed,
                 cancelled: message.cancelled,
                 imagePath: message.imagePath,
+                audioPath: message.audioPath,
+                videoPath: message.videoPath,
                 model: message.model,
                 systemPrompt: message.systemPrompt,
                 tokensPerSecond: message.tokensPerSecond,

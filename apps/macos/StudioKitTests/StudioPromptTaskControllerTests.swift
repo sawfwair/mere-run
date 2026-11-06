@@ -608,6 +608,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
 
     func testSendingATurnUsesCommandOverridesAndPreventsDuplicateQueuedTurns() throws {
         activate(.chat)
+        prompt.draft.model = "vision-chat-gemma4-12b"
         prompt.draft.prompt = "Explain the image"
         prompt.draft.inputPath = "/tmp/turn.png"
         let base = try StudioCommandAdapter.makeRequest(mode: .chat, draft: prompt.draft, source: .contract)
@@ -778,6 +779,32 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         XCTAssertEqual(restored.items.first { $0.id == conversationID }, item)
     }
 
+    func testAnOmniTurnRecordsItsAudioAndVideoAndEditPutsThemBack() async throws {
+        activate(.chat)
+        prompt.draft.model = "omni-chat-nemotron3-nano-30b-a3b-bf16"
+        prompt.draft.prompt = "What is said in the clip?"
+        prompt.draft.chatAudioPath = "/tmp/voice.wav"
+        prompt.draft.chatVideoPath = "/tmp/clip.mp4"
+        let sent = try XCTUnwrap(prompt.runPrompt(inventory: []))
+        let arguments = sent.request.template.arguments(from: sent.request.draft, source: .contract)
+        XCTAssertTrue(arguments.contains("--audio") && arguments.contains("--video"))
+        let turn = try XCTUnwrap(library.items.first?.messages?.last)
+        XCTAssertEqual(turn.attachments, StudioTurnAttachments(audioPath: "/tmp/voice.wav", videoPath: "/tmp/clip.mp4"))
+        XCTAssertNil(prompt.draft.chatAudioPath, "the well empties for the next turn")
+        XCTAssertNil(prompt.draft.chatVideoPath)
+
+        let conversationID = try XCTUnwrap(sent.request.conversationID)
+        runner.starts[0].stdout("A greeting.")
+        runner.starts[0].termination(0)
+        for _ in 0..<100 where controller.runningConversationIDs.contains(conversationID) {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertTrue(prompt.editMessage(turn.id))
+        XCTAssertEqual(prompt.draft.prompt, "What is said in the clip?")
+        XCTAssertEqual(prompt.draft.chatAudioPath, "/tmp/voice.wav")
+        XCTAssertEqual(prompt.draft.chatVideoPath, "/tmp/clip.mp4")
+    }
+
     func testEditingTheFirstUserTurnKeepsItsTextAsANewUnsentConversation() throws {
         let id = thread(reply: "An answer")
         activate(.chat, selected: id)
@@ -792,6 +819,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
 
     func testRejectedSendKeepsNewConversationTextAndAttachmentWithoutCreatingHistory() throws {
         activate(.chat)
+        prompt.draft.model = "vision-chat-gemma4-12b"
         prompt.draft.prompt = "A new question"
         prompt.draft.inputPath = "/tmp/unsent-image.png"
         let original = prompt.draft

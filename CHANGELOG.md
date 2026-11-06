@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Attach audio and video to a Studio Chat turn for omni models such as Nemotron
+  3 Nano Omni, the same way you attach an image. The composer offers only the
+  kinds the selected model reads, routes dropped and pasted files by type, and
+  explains when the model can't read an attachment before the turn runs. Each
+  turn shows its files, and Retry, Edit, and Branch keep them.
+
 ## 0.69.1 - 2026-11-04
 
 - Make the Studio private-mode ghost button respond across its full button area.

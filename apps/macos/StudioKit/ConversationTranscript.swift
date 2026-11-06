@@ -285,3 +285,56 @@ package enum ConversationTranscript {
         return nil
     }
 }
+
+// MARK: - Turn attachments
+
+/// The files one Chat turn carries to the model: an image (`--image`) and, for an omni model,
+/// an audio clip (`--audio`) and a video (`--video`). The composer's well holds them until the
+/// turn is sent; the user turn records them, so retry, edit, and branch put them back.
+package struct StudioTurnAttachments: Equatable, Sendable {
+    package var imagePath: String?
+    package var audioPath: String?
+    package var videoPath: String?
+
+    package init(imagePath: String? = nil, audioPath: String? = nil, videoPath: String? = nil) {
+        self.imagePath = imagePath
+        self.audioPath = audioPath
+        self.videoPath = videoPath
+    }
+
+    /// What a Chat draft's well holds; nothing for Code, which takes no attachments.
+    package init(mode: StudioMode, draft: StudioDraft) {
+        guard mode == .chat else {
+            self.init()
+            return
+        }
+        let filled = { (path: String?) in path.flatMap { $0.isBlank ? nil : $0 } }
+        self.init(imagePath: filled(draft.inputPath), audioPath: filled(draft.chatAudioPath), videoPath: filled(draft.chatVideoPath))
+    }
+
+    /// Every path, image first.
+    package var paths: [String] {
+        [imagePath, audioPath, videoPath].compactMap { $0 }
+    }
+
+    package var isEmpty: Bool { paths.isEmpty }
+
+    /// Puts these files in a Chat draft's well, replacing what it held.
+    package func apply(to draft: inout StudioDraft) {
+        draft.inputPath = imagePath ?? ""
+        draft.chatAudioPath = audioPath
+        draft.chatVideoPath = videoPath
+    }
+}
+
+extension StudioMessage {
+    /// The files this user turn carried.
+    package var attachments: StudioTurnAttachments {
+        get { StudioTurnAttachments(imagePath: imagePath, audioPath: audioPath, videoPath: videoPath) }
+        set {
+            imagePath = newValue.imagePath
+            audioPath = newValue.audioPath
+            videoPath = newValue.videoPath
+        }
+    }
+}

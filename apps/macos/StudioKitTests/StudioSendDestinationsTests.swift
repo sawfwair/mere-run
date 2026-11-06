@@ -92,13 +92,16 @@ final class StudioSendDestinationsTests: XCTestCase {
         for expected in [
             "music.separate · Audio", "music.transcribe · Audio", "music.analyze · Audio", "audio.enhance · Audio",
             "audio.transcribe · Audio", "voice.voices · Reference audio", "sound.foley · Video or features", "voice.speak · Reference audio",
+            "chat.chat · Audio",
         ] {
             XCTAssertTrue(song.contains(expected), expected)
         }
         XCTAssertFalse(song.contains { $0.hasPrefix("vision.") || $0.hasPrefix("image.") || $0.hasPrefix("threeD.") })
 
         let clip = offered("take.mp4")
-        XCTAssertEqual(clip, ["vision.track · Video", "vision.depth · Video", "sound.foley · Video or features", "text.embeddings · Videos"])
+        XCTAssertEqual(clip, [
+            "vision.track · Video", "vision.depth · Video", "sound.foley · Video or features", "text.embeddings · Videos", "chat.chat · Video",
+        ])
     }
 
     /// The page the output is shown on is its "Use as input", never a Send to item.

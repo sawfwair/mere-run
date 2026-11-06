@@ -414,6 +414,10 @@ package struct StudioDraft: Codable, Equatable, Sendable {
     package var h3AccelerationMode: String?
     package var h3Steps: Int?
     package var h3ReferenceInputs: [String]?
+    /// The audio and video a Chat turn carries to an omni model (`--audio`, `--video`); the
+    /// image rides in `inputPath`. Optional preserves saved Studio drafts from before them.
+    package var chatAudioPath: String?
+    package var chatVideoPath: String?
 
     package mutating func reset(for mode: StudioMode) {
         let base = CommandCatalog.template(id: mode.defaultTemplateID)?.defaultDraft()
@@ -542,6 +546,8 @@ package struct StudioDraft: Codable, Equatable, Sendable {
         h3AccelerationMode = nil
         h3Steps = nil
         h3ReferenceInputs = nil
+        chatAudioPath = nil
+        chatVideoPath = nil
     }
 
     private func modeDefaultPrompt(_ mode: StudioMode) -> String {
@@ -610,6 +616,9 @@ package enum StudioCommandError: LocalizedError, Equatable {
     /// Every drawn prompt is a negative point, which only ever refines a box or a positive point.
     case negativePointsOnly
     case missingTemplate(CommandTemplateID)
+    /// A per-turn attachment the chosen model does not read: the model's name, what it can't
+    /// read ("audio"), and the kind of model that can ("an omni model").
+    case unreadAttachment(model: String, kind: String, alternative: String)
 
     package var errorDescription: String? {
         switch self {
@@ -621,6 +630,8 @@ package enum StudioCommandError: LocalizedError, Equatable {
             return "Add a box or a positive point for the negative points to refine."
         case .missingTemplate(let id):
             return "No command template found for \(id.rawValue)."
+        case .unreadAttachment(let model, let kind, let alternative):
+            return "\(model) can't read \(kind). Choose \(alternative) or remove the attachment."
         }
     }
 }
@@ -643,11 +654,15 @@ package enum StudioCommandAdapter {
         guard let template = CommandCatalog.template(id: templateID) else {
             throw StudioCommandError.missingTemplate(templateID)
         }
-        let effective = source.scope(mode: mode, draft: studioDraft).map { studioDraft.scoped(to: $0, mode: mode) }
-            ?? studioDraft
+        let scope = source.scope(mode: mode, draft: studioDraft)
+        let effective = scope.map { studioDraft.scoped(to: $0, mode: mode) } ?? studioDraft
 
         if validating {
             try validate(mode: mode, templateID: templateID, draft: effective)
+            // Scoping would drop a file the model can't read; a run says so instead.
+            if let scope, let slot = mode.unreadAttachmentSlots(for: studioDraft, scope: scope).first {
+                throw StudioCommandError.unread(slot, family: scope.family?.title)
+            }
         }
 
         return StudioRunRequest(
@@ -764,8 +779,12 @@ package enum StudioCommandAdapter {
             // Conversation turns stream so the canvas renders tokens live; the reply is
             // accumulated and think-stripped app-side.
             if conversationID != nil { draft.stream = true }
-            // Vision chat: a single attached image rides with this turn (chat only, not code).
-            if mode == .chat, !studioDraft.inputPath.isBlank { draft.imagePath = studioDraft.inputPath }
+            // Vision and omni chat: the turn's image, audio, and video ride with it (chat only).
+            if mode == .chat {
+                if !studioDraft.inputPath.isBlank { draft.imagePath = studioDraft.inputPath }
+                draft.chatAudioPath = studioDraft.chatAudioPath.flatMap { $0.isBlank ? nil : $0 }
+                draft.chatVideoPath = studioDraft.chatVideoPath.flatMap { $0.isBlank ? nil : $0 }
+            }
 
         case .speak:
             draft.prompt = prompt
@@ -1064,6 +1083,9 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
     /// The image attached to this user turn (vision chat), so edit/retry resend it. Optional so
     /// older persisted threads decode unchanged.
     package var imagePath: String?
+    /// The audio and video attached to this user turn (omni chat), optional for the same reason.
+    package var audioPath: String?
+    package var videoPath: String?
     /// The model that produced this assistant turn, recorded when the reply lands so a thread
     /// whose model changed mid-way says which turn ran on what. nil on user turns and on threads
     /// persisted before turns recorded it.
@@ -1094,6 +1116,8 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
         failed: Bool = false,
         cancelled: Bool? = nil,
         imagePath: String? = nil,
+        audioPath: String? = nil,
+        videoPath: String? = nil,
         model: String? = nil,
         systemPrompt: String? = nil,
         tokensPerSecond: Double? = nil,
@@ -1109,6 +1133,8 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
         self.failed = failed
         self.cancelled = cancelled
         self.imagePath = imagePath
+        self.audioPath = audioPath
+        self.videoPath = videoPath
         self.model = model
         self.systemPrompt = systemPrompt
         self.tokensPerSecond = tokensPerSecond

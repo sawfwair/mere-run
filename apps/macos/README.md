@@ -533,8 +533,9 @@ The **composer** under the canvas is one surface for every prompt mode
 (`StudioUI/StudioComposer.swift`, declarations in `StudioKit/StudioComposerSchema.swift`). An
 **attachment well** shows the mode's slots — Image: input and reference images;
 Video: start frame, end frame, audio; Music: source and timbre references;
-Voice: reference audio; Vision and Audio tasks: their required input; Chat: a
-per-turn image that stays behind the paperclip until attached — and every slot
+Voice: reference audio; Vision and Audio tasks: their required input; Chat:
+a per-turn image, audio clip, and video that stay behind the paperclip until
+attached — and every slot
 takes a drop, a paste (⌘V), or a click to pick, storing straight into the draft
 field the CLI flag reads. Code and Sound ▸ Generate declare no slots. A click
 offers the Library as well as the disk; see [Library items as inputs](#library-items-as-inputs).
@@ -706,6 +707,22 @@ blocks with proportional prose — and a thread records which preset its latest
 turn used (`mode`). The transcript budget derives from the model's context
 window when the inventory reports one (or an explicit context size), else stays
 at 48k characters; a banner reports any turns trimmed from the next prompt.
+
+A Chat turn can carry one image, one audio clip, and one video. The model's
+runtime family decides which of them the composer offers, from the contract's
+scope for `text chat --image`, `--audio`, and `--video`: a text-only model such
+as Gemma 4 offers none, a vision model (Gemma 4 12B vision, LFM2.5-VL, the
+Qwen3.6 vision checkpoints) offers an image, and Nemotron 3 Nano Omni offers all
+three. The paperclip opens one file panel for every kind the model reads, and a
+drop or paste lands in the slot the file's type fits. If you switch to a model
+that can't read a file you already attached, the file stays in the well, marked
+as not read, and Run says which model can't read it, for example "Gemma 4 can't
+read audio. Choose an omni model or remove the attachment." Each user turn
+records its files (`StudioMessage.imagePath`, `.audioPath`, and `.videoPath`,
+additive optionals in `library.json`) and shows them above the bubble as chips:
+a picture or video poster opens in Quick Look, and an audio chip plays in place.
+Retry, Edit, and Branch put the turn's files back in the well. Only the latest
+turn's files reach the model; earlier turns replay as text.
 
 With the thinking chip on, a reply's reasoning is kept beside the answer
 (`StudioMessage.reasoning`) and shown as a collapsed **Thinking** disclosure
