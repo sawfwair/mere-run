@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Studio's **Runs** page can sign out of a Relay executor and remove its
+  profile. Removing a profile also removes its saved credential.
 - Reorganize Studio's tasks. **Vision** ▸ **Document** runs `vision ocr` with
   every backend, including Unlimited-OCR-2 for multi-page documents, and
   **Vision** ▸ **Read** keeps Inspect and Caption; a saved Read draft that chose

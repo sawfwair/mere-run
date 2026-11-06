@@ -1535,7 +1535,9 @@ an image run, a transcription run, a training directory, a report, or a plan);
 state, what went wrong, the facts, each step with its state, and the outputs
 with Reveal, with the raw report behind a disclosure. Client-side Relay profile setup and
 device sign-in also go through the CLI; Studio streams the approval URL but
-never handles the credential itself.
+never handles the credential itself. The profile menu beside the executor picker
+signs out (`executor logout`) or removes the profile, each after a confirmation.
+Remove signs out first, because `executor remove` deletes only the profile entry.
 
 **Plugins** consumes the CLI's enriched plugin snapshot, shows installed path,
 version, and manifest verification, offers channel selection and copyable pinned

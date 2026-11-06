@@ -133,11 +133,15 @@ struct StudioRemoteRunArtifact: Decodable, Equatable, Identifiable {
 enum StudioOperationsConfirmation: Identifiable {
     case cancel(String)
     case retry(String)
+    case signOut(String)
+    case removeProfile(String)
 
     var id: String {
         switch self {
         case .cancel(let reference): "cancel:\(reference)"
         case .retry(let reference): "retry:\(reference)"
+        case .signOut(let reference): "sign-out:\(reference)"
+        case .removeProfile(let reference): "remove:\(reference)"
         }
     }
 }
@@ -257,6 +261,24 @@ struct StudioOperationsView: View {
                     },
                     secondaryButton: .cancel()
                 )
+            case .signOut(let reference):
+                Alert(
+                    title: Text("Sign out of \(reference)?"),
+                    message: Text("This removes the saved credential from this Mac. Relay jobs keep running."),
+                    primaryButton: .destructive(Text("Sign Out")) {
+                        Task { await signOutOfRelay(reference) }
+                    },
+                    secondaryButton: .cancel()
+                )
+            case .removeProfile(let reference):
+                Alert(
+                    title: Text("Remove the \(reference) profile?"),
+                    message: Text("This removes the profile and its saved credential from this Mac. Relay jobs keep running."),
+                    primaryButton: .destructive(Text("Remove Profile")) {
+                        Task { await removeRelayProfile(reference) }
+                    },
+                    secondaryButton: .cancel()
+                )
             }
         }
     }
@@ -320,6 +342,18 @@ struct StudioOperationsView: View {
                     }
                     .buttonStyle(.mereSecondary)
                     .disabled(selectedExecutor.isEmpty || busyAction != nil || relayAuthenticated)
+                    Menu {
+                        Button("Sign out") { confirmation = .signOut(selectedExecutor) }
+                            .disabled(!relayAuthenticated)
+                        Button("Remove profile…", role: .destructive) { confirmation = .removeProfile(selectedExecutor) }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .disabled(selectedExecutor.isEmpty || busyAction != nil)
+                    .help("Profile actions")
+                    .accessibilityLabel("Profile actions")
                     Stepper("Limit \(remoteLimit)", value: $remoteLimit, in: 1...500)
                         .fixedSize()
                     Link("Manage fleet in Relay", destination: URL(string: "https://relay.mere.run")!)
@@ -765,6 +799,37 @@ struct StudioOperationsView: View {
             statusMessage = "Signed in to \(selectedExecutor)"
             await refresh()
         }
+    }
+
+    private func signOutOfRelay(_ reference: String) async {
+        busyAction = "Signing out"
+        defer { busyAction = nil }
+        let result = await controller.utilityCommandResult(args: ["executor", "logout", reference, "--json"])
+        relayProgress = ""
+        await refreshRelayAuth()
+        statusMessage = result.exitCode == 0
+            ? "Signed out of \(reference)"
+            : "Couldn't sign out of \(reference). \(StudioOperationsJSON.failureMessage(result))"
+        if result.exitCode == 0 { remoteRuns = [] }
+    }
+
+    private func removeRelayProfile(_ reference: String) async {
+        busyAction = "Removing profile"
+        defer { busyAction = nil }
+        // `executor remove` deletes only the profile entry, so sign out first; otherwise the saved
+        // credential outlives the profile that named it. Not being signed in is not an error here.
+        _ = await controller.utilityCommandResult(args: ["executor", "logout", reference, "--json"])
+        let result = await controller.utilityCommandResult(args: ["executor", "remove", reference, "--json"])
+        guard result.exitCode == 0 else {
+            statusMessage = "Couldn't remove \(reference). \(StudioOperationsJSON.failureMessage(result))"
+            return
+        }
+        if selectedExecutor == reference { selectedExecutor = "" }
+        remoteRuns = []
+        selectedReference = nil
+        await loadProfiles()
+        statusMessage = "Removed \(reference)"
+        await refresh()
     }
 
     private func chooseFetchDirectoryAndRun(_ reference: String) {
