@@ -152,7 +152,7 @@ apiServe	videoOutputMode=video-only	api serve --host 1 --port 8081 --engine 1 --
 apiServe	videoQuality=draft	api serve --host 1 --port 8081 --engine 1 --model 1 --lora 1 --rate-limit-per-minute 61 --max-active-requests 2 --memory-guard 1 --context-size 32769 --memory-guard-custom-ceiling-gb 1 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --preflight --json 1
 apiServe	videoQuality=final	api serve --host 1 --port 8081 --engine 1 --model 1 --lora 1 --rate-limit-per-minute 61 --max-active-requests 2 --memory-guard 1 --context-size 32769 --memory-guard-custom-ceiling-gb 1 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --preflight --json 1
 apiServe	voiceMode=clone	api serve --host 1 --port 8081 --engine 1 --model 1 --lora 1 --rate-limit-per-minute 61 --max-active-requests 2 --memory-guard 1 --context-size 32769 --memory-guard-custom-ceiling-gb 1 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --preflight --json 1
-audioEdit	default	audio edit 'Say hello in a calm voice.' --model audio-auk-base --output ~/Music/mere.run/Audio/auk-speech-editing-<stamp>.wav --duration 4 --seed 42
+audioEdit	default	audio edit 'Say hello in a calm voice.' --model audio-auk-base --output ~/Music/mere.run/Voice/auk-speech-editing-<stamp>.wav --duration 4 --seed 42
 audioEdit	maximal	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
 audioEdit	maximal-booleans-off	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --steps 33 --guidance 2.5 --seed 1 1
 audioEdit	modelRoot=video-minimax-h3-ref2va	audio edit 1 --model 1 --audio 1 --model-path video-minimax-h3-ref2va --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
@@ -2484,7 +2484,7 @@ visionCaption	videoOutputMode=video-only	vision caption 1 1 --model 1 --output-d
 visionCaption	videoQuality=draft	vision caption 1 1 --model 1 --output-dir 1 --prompt 1 --prompt-file 1 --focus 1 --trigger-token 1 --max-tokens 97 --temperature 0.7 --top-p 1.4 1
 visionCaption	videoQuality=final	vision caption 1 1 --model 1 --output-dir 1 --prompt 1 --prompt-file 1 --focus 1 --trigger-token 1 --max-tokens 97 --temperature 0.7 --top-p 1.4 1
 visionCaption	voiceMode=clone	vision caption 1 1 --model 1 --output-dir 1 --prompt 1 --prompt-file 1 --focus 1 --trigger-token 1 --max-tokens 97 --temperature 0.7 --top-p 1.4 1
-visionDepth	default	vision depth '' --output ~/Documents/mere.run/Vision/image-depth-<stamp> --model vision-depth-marigold-v2 --dry-run
+visionDepth	default	vision depth '' --output ~/Documents/mere.run/3D/image-depth-<stamp> --model vision-depth-marigold-v2 --dry-run
 visionDepth	maximal	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
 visionDepth	maximal-booleans-off	vision depth 1 --output 1 --model 1 --max-edge 1 --checkpoint 1 1
 visionDepth	modelRoot=video-minimax-h3-ref2va	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
@@ -2506,7 +2506,7 @@ visionDepth	videoOutputMode=video-only	vision depth 1 --output 1 --model 1 --max
 visionDepth	videoQuality=draft	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
 visionDepth	videoQuality=final	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
 visionDepth	voiceMode=clone	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
-visionDepthVideo	default	vision depth-video '' --output ~/Documents/mere.run/Vision/video-depth-<stamp> --model vision-depth-vda-small --input-size 518 --max-frames 240 --dry-run
+visionDepthVideo	default	vision depth-video '' --output ~/Documents/mere.run/3D/video-depth-<stamp> --model vision-depth-vda-small --input-size 518 --max-frames 240 --dry-run
 visionDepthVideo	maximal	vision depth-video 1 --output 1 --model 1 --input-size 519 --max-frames 241 --dry-run --json 1
 visionDepthVideo	maximal-booleans-off	vision depth-video 1 --output 1 --model 1 --input-size 519 --max-frames 241 1
 visionDepthVideo	modelRoot=video-minimax-h3-ref2va	vision depth-video 1 --output 1 --model 1 --input-size 519 --max-frames 241 --dry-run --json 1
@@ -2660,7 +2660,7 @@ visionFlow	videoOutputMode=video-only	vision flow 1 1 --output 1 --json-output 1
 visionFlow	videoQuality=draft	vision flow 1 1 --output 1 --json-output 1 --accuracy 1 --json 1
 visionFlow	videoQuality=final	vision flow 1 1 --output 1 --json-output 1 --accuracy 1 --json 1
 visionFlow	voiceMode=clone	vision flow 1 1 --output 1 --json-output 1 --accuracy 1 --json 1
-visionGeometry	default	vision geometry '' --output ~/Documents/mere.run/Vision/metric-geometry-<stamp> --model vision-geometry-moge2-small --resolution-level 9 --dry-run
+visionGeometry	default	vision geometry '' --output ~/Documents/mere.run/3D/metric-geometry-<stamp> --model vision-geometry-moge2-small --resolution-level 9 --dry-run
 visionGeometry	maximal	vision geometry 1 --output 1 --model 1 --resolution-level 10 --token-count 1 --max-points 1 --dry-run --json 1
 visionGeometry	maximal-booleans-off	vision geometry 1 --output 1 --model 1 --resolution-level 10 --token-count 1 --max-points 1 1
 visionGeometry	modelRoot=video-minimax-h3-ref2va	vision geometry 1 --output 1 --model 1 --resolution-level 10 --token-count 1 --max-points 1 --dry-run --json 1
@@ -2682,7 +2682,7 @@ visionGeometry	videoOutputMode=video-only	vision geometry 1 --output 1 --model 1
 visionGeometry	videoQuality=draft	vision geometry 1 --output 1 --model 1 --resolution-level 10 --token-count 1 --max-points 1 --dry-run --json 1
 visionGeometry	videoQuality=final	vision geometry 1 --output 1 --model 1 --resolution-level 10 --token-count 1 --max-points 1 --dry-run --json 1
 visionGeometry	voiceMode=clone	vision geometry 1 --output 1 --model 1 --resolution-level 10 --token-count 1 --max-points 1 --dry-run --json 1
-visionGeometryMultiview	default	vision geometry-multiview --output ~/Documents/mere.run/Vision/multi-view-geometry-<stamp> --model vision-geometry-da3-small --process-resolution 504 --reference-view saddle-balanced --confidence-percentile 40 --dry-run
+visionGeometryMultiview	default	vision geometry-multiview --output ~/Documents/mere.run/3D/multi-view-geometry-<stamp> --model vision-geometry-da3-small --process-resolution 504 --reference-view saddle-balanced --confidence-percentile 40 --dry-run
 visionGeometryMultiview	maximal	vision geometry-multiview 1 1 --output 1 --model 1 --cameras 1 --process-resolution 505 --reference-view 1 --confidence-percentile 40.5 --max-points 1 --dry-run --json 1
 visionGeometryMultiview	maximal-booleans-off	vision geometry-multiview 1 1 --output 1 --model 1 --cameras 1 --process-resolution 505 --reference-view 1 --confidence-percentile 40.5 --max-points 1 1
 visionGeometryMultiview	modelRoot=video-minimax-h3-ref2va	vision geometry-multiview 1 1 --output 1 --model 1 --cameras 1 --process-resolution 505 --reference-view 1 --confidence-percentile 40.5 --max-points 1 --dry-run --json 1

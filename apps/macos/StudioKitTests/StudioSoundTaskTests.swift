@@ -4,27 +4,32 @@ import StudioTestSupport
 import UniformTypeIdentifiers
 import XCTest
 
-/// The Sound tasks on the shared task workspace: Video Foley and Condition generate; Encode,
-/// Decode, and Score analyze. The task draft sends what the SFX Lab page sent for the same
+/// The Sound tasks on the shared task workspace: Video Foley generates; Score analyzes; Latents
+/// analyzes with Encode, Decode, and Condition as its variants. The task draft sends what the SFX Lab page sent for the same
 /// settings, the page's drafts import once, renoise keeps the CLI's objections in front of the
 /// run, and a CLAP result reads for the gauge.
 final class StudioSoundTaskTests: XCTestCase {
-    private let soundTasks: [StudioTask] = [.soundFoley, .soundCondition, .soundEncode, .soundDecode, .soundScore]
+    private let soundTasks: [StudioTask] = [.soundFoley, .soundScore, .soundLatents]
 
-    func testTheSoundTasksRenderOnTheSharedWorkspace() {
+    func testTheSoundTasksRenderOnTheSharedWorkspace() throws {
         for task in soundTasks {
             XCTAssertTrue(task.usesTaskDraft, "\(task)")
             XCTAssertTrue(task.showsPromptChrome, "\(task)")
-            XCTAssertEqual(task.variantTemplates.count, 1, "\(task) has one template, so no variant chip")
         }
+        XCTAssertEqual(StudioDomain.sound.tasks, [.soundGenerate, .soundFoley, .soundScore, .soundLatents])
+        XCTAssertEqual(StudioTask.soundFoley.variantTemplates.map(\.id), [.sfxVideo])
+        XCTAssertEqual(StudioTask.soundScore.variantTemplates.map(\.id), [.sfxClapScore])
+        XCTAssertEqual(Set(StudioTask.soundLatents.variantTemplates.map(\.id)), [.sfxAEEncode, .sfxAEDecode, .sfxConditionText])
+        XCTAssertEqual(StudioTask.soundLatents.variantTemplates.first?.id, .sfxAEEncode, "Latents opens on Encode")
         XCTAssertEqual(StudioTask.soundFoley.archetype, .generate)
-        XCTAssertEqual(StudioTask.soundCondition.archetype, .generate)
         XCTAssertNil(StudioTask.soundFoley.analyzeArchetype)
         XCTAssertEqual(StudioTask.soundFoley.generateArchetype?.primaryOutput, .audio)
         XCTAssertEqual(StudioTask.soundScore.analyzeArchetype?.views, [.score])
-        XCTAssertEqual(StudioTask.soundEncode.analyzeArchetype?.views, [.tensor, .json])
-        XCTAssertEqual(StudioTask.soundDecode.analyzeArchetype?.inputKind, .file)
-        XCTAssertEqual(StudioTask.soundDecode.analyzeArchetype?.views, [.audio, .json])
+        let latents = try XCTUnwrap(StudioTask.soundLatents.analyzeArchetype)
+        XCTAssertEqual(latents.views(for: .sfxAEEncode), [.tensor, .json])
+        XCTAssertEqual(latents.inputKind(for: .sfxAEDecode), .file)
+        XCTAssertEqual(latents.views(for: .sfxAEDecode), [.audio, .json])
+        XCTAssertEqual(latents.inputKind(for: .sfxConditionText), .text, "Condition takes only words")
     }
 
     // MARK: Slots and prompts
@@ -49,7 +54,7 @@ final class StudioSoundTaskTests: XCTestCase {
         XCTAssertNil(StudioTaskSchema.promptField(for: try XCTUnwrap(CommandTemplateID.sfxAEEncode.capability)))
         XCTAssertNil(StudioTaskSchema.promptField(for: try XCTUnwrap(CommandTemplateID.sfxAEDecode.capability)))
         XCTAssertEqual(StudioTask.soundFoley.presentation.attaching(foley.first).attachLabel, "Choose video…")
-        XCTAssertEqual(StudioTask.soundDecode.presentation.attaching(StudioTaskSchema.primarySlot(for: .sfxAEDecode)).attachLabel, "Choose file…")
+        XCTAssertEqual(StudioTask.soundLatents.presentation.attaching(StudioTaskSchema.primarySlot(for: .sfxAEDecode)).attachLabel, "Choose file…")
     }
 
     /// Foley's inspector shows renoise once, as its editor, and neither the destination routing
@@ -276,7 +281,7 @@ final class StudioSoundTaskTests: XCTestCase {
         let encodeRow = makeRow(.sfxAEEncode)
 
         XCTAssertEqual(StudioFeedCardBuilder.cards(items: [row, encodeRow], task: .soundFoley) { _ in nil }.map(\.id), [row.id])
-        XCTAssertEqual(StudioFeedCardBuilder.cards(items: [row, encodeRow], task: .soundEncode) { _ in nil }.map(\.id), [encodeRow.id])
+        XCTAssertEqual(StudioFeedCardBuilder.cards(items: [row, encodeRow], task: .soundLatents) { _ in nil }.map(\.id), [encodeRow.id])
         XCTAssertTrue(StudioLibraryDraftRestoration.canRestore(row))
         let restored = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: row, source: .contract))
         XCTAssertEqual(restored.templateID, .sfxVideo)

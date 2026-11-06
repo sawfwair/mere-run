@@ -769,14 +769,14 @@ private struct StudioWorkspaceView: View {
              .chatChat, .chatCode, .visionRead, .visionFind, .visionSegment, .visionTrack,
              .audioTranscribe:
             promptWorkspace
-        case .imageDatasets, .musicAnalyze, .musicTranscribe, .musicSeparate,
-             .soundFoley, .soundCondition, .soundEncode, .soundDecode, .soundScore,
-             .threeDFromImage, .visionDepth, .visionPose, .visionFaces, .visionFlow,
-             .visionGeometry, .audioWhoSpoke, .audioEnhance, .audioSeparate,
+        case .imageDatasets, .videoEdit, .videoCosmos, .musicAnalyze, .musicTranscribe, .musicSeparate,
+             .soundFoley, .soundScore, .soundLatents, .voiceEdit,
+             .threeDFromImage, .visionDocument, .visionDepth, .visionPose, .visionFaces, .visionFlow,
+             .visionGeometry, .audioWhoSpoke, .audioEnhance,
              .textEmbeddings, .textAnonymize, .earthFlood, .earthFire, .earthTessera,
              .earthOlmoEarth:
-            // One workspace per task: Audio ▸ Separate and Music ▸ Separate share a template, and
-            // a reused view would keep the other task's state and never check its readiness.
+            // One workspace per task: a reused view would keep the previous task's state and
+            // never check the new one's readiness.
             StudioTaskWorkspace(task: destination.task, models: models)
                 .id(destination.task)
         case .imageTrain:
@@ -838,6 +838,8 @@ private struct StudioWorkspaceView: View {
             StudioMusicServerView(server: controller.musicServer)
         case .serverVision:
             StudioVisionServerView(server: controller.visionServer)
+        case .serverWorld:
+            StudioWorldServerView(server: controller.worldServer)
         case .runsRuns:
             StudioOperationsView()
         case .pluginsCatalog:

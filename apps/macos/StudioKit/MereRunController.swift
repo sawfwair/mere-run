@@ -373,10 +373,10 @@ package final class MereRunController: ObservableObject {
     /// The local API server's one owner. `StudioAppSession` creates it at launch so it adopts a
     /// server from the first job event on, whichever window or menu is open.
     package lazy var localServer = StudioLocalServer(controller: self)
-    /// The resident `vision serve` and `music serve` processes Studio starts from the Server domain.
+    /// The resident `vision serve`, `music serve`, and `world serve` processes Studio starts from
+    /// the Server domain.
     package lazy var visionServer = StudioServiceProcess(templateID: .visionServe, controller: self)
     package lazy var musicServer = StudioServiceProcess(templateID: .musicServe, controller: self)
-    /// `world serve`, which has no page: it starts from the Command Console or a Command view.
     package lazy var worldServer = StudioServiceProcess(templateID: .worldServe, controller: self)
 
     /// The resident servers besides the API server, in the order the menu bar lists them.

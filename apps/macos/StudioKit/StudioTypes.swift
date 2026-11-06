@@ -47,7 +47,7 @@ package enum StudioMode: String, CaseIterable, Codable, Identifiable {
         case .code: return "Draft code locally"
         case .speak: return "Text to natural speech"
         case .listen: return "Audio to text"
-        case .readImage: return "Inspect, OCR, or caption"
+        case .readImage: return "Inspect or caption an image"
         case .findObjects: return "Ground prompted objects"
         case .segment: return "Cut out prompted objects"
         case .track: return "Follow objects through video"
@@ -156,7 +156,7 @@ package enum StudioMode: String, CaseIterable, Codable, Identifiable {
         case .code: return "Describe a function, script, or refactor and run it on-device."
         case .speak: return "Enter the line, pick a voice style, and render a WAV."
         case .listen: return "Attach an audio file to create a transcript."
-        case .readImage: return "Attach an image and ask for an inspection, OCR pass, or caption."
+        case .readImage: return "Attach an image and ask about it, or caption it. To read text from pages, use Document."
         case .findObjects: return "Attach an image and name the thing to locate."
         case .segment: return "Attach an image and name the object to isolate."
         case .track: return "Attach a video and name the subject to follow."
@@ -242,17 +242,22 @@ package enum StudioMode: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+/// What Vision ▸ Read does with one picture. OCR moved to Vision ▸ Document, which reads ordered
+/// pages with every backend; a saved draft that still says `ocr` decodes as Inspect.
 package enum StudioReadImageAction: String, CaseIterable, Codable, Identifiable, Sendable {
     case inspect
-    case ocr
     case caption
+
+    package init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = Self(rawValue: raw) ?? .inspect
+    }
 
     package var id: String { rawValue }
 
     package var title: String {
         switch self {
         case .inspect: return "Inspect"
-        case .ocr: return "OCR"
         case .caption: return "Caption"
         }
     }
@@ -260,7 +265,6 @@ package enum StudioReadImageAction: String, CaseIterable, Codable, Identifiable,
     package var templateID: CommandTemplateID {
         switch self {
         case .inspect: return .visionInspect
-        case .ocr: return .visionOCR
         case .caption: return .visionCaption
         }
     }

@@ -142,13 +142,14 @@ final class MereRunControllerTests: XCTestCase {
         controller.cliPath = "/usr/bin/true"
         var draft = StudioDraft()
         draft.reset(for: .readImage)
-        draft.readImageAction = .ocr
+        draft.model = "vision-ocr-lighton"
 
         controller.checkReadiness(for: .readImage, draft: draft)
         XCTAssertEqual(runner.starts.count, 1)
         XCTAssertEqual(controller.readinessByMode[.readImage], .checking)
 
-        draft.readImageAction = .inspect
+        // Inspect's own default downloads by repository, so clearing the model needs no probe.
+        draft.model = ""
         controller.checkReadiness(for: .readImage, draft: draft)
         XCTAssertEqual(controller.readinessByMode[.readImage], .ready)
         XCTAssertEqual(runner.processes[0].terminateCallCount, 1)

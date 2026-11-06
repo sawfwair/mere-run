@@ -626,8 +626,8 @@ final class StudioTaskSchemaTests: XCTestCase {
         var encode = try XCTUnwrap(CommandCatalog.template(id: .sfxAEEncode)).defaultDraft()
         encode.inputPath = "/tmp/hit.wav"
         encode.outputPath = "/Users/example/Music/mere.run/Sound/sfx-encode-20260903-101500.npy"
-        sessions.set(encode, for: StudioTask.soundEncode.rawValue + ".SFXLab.encodeDraft")
-        let encodeDraft = try XCTUnwrap(sessions.taskDraft(for: .soundEncode))
+        sessions.set(encode, for: StudioTask.soundLatents.rawValue + ".SFXLab.encodeDraft")
+        let encodeDraft = try XCTUnwrap(sessions.taskDraft(for: .soundLatents))
         XCTAssertEqual(encodeDraft.primaryInputPath, "/tmp/hit.wav")
         XCTAssertEqual(encodeDraft.text("--output"), "")
     }

@@ -7,7 +7,7 @@ apiServe	model	text-chat-gemma4-12b-4bit
 audioEdit	audioGuidanceScale	Optional(2.0)
 audioEdit	durationSeconds	4.0
 audioEdit	model	audio-auk-base
-audioEdit	outputPath	~/Music/mere.run/Audio/auk-speech-editing-<stamp>.wav
+audioEdit	outputPath	~/Music/mere.run/Voice/auk-speech-editing-<stamp>.wav
 audioEdit	prompt	Say hello in a calm voice.
 audioEdit	seed	42
 audioEdit	steps	32
@@ -254,10 +254,10 @@ visionCaption	prompt	Write a short, concrete caption describing the image for Lo
 visionCaption	temperature	0.2
 visionDepth	dryRun	true
 visionDepth	model	vision-depth-marigold-v2
-visionDepth	outputPath	~/Documents/mere.run/Vision/image-depth-<stamp>
+visionDepth	outputPath	~/Documents/mere.run/3D/image-depth-<stamp>
 visionDepthVideo	dryRun	true
 visionDepthVideo	model	vision-depth-vda-small
-visionDepthVideo	outputPath	~/Documents/mere.run/Vision/video-depth-<stamp>
+visionDepthVideo	outputPath	~/Documents/mere.run/3D/video-depth-<stamp>
 visionEmbed	maxTokens	8192
 visionEmbed	model	vision-embed-qwen3-vl-2b
 visionEmbed	outputPath	~/Documents/mere.run/Vision/embed-text-image-<stamp>.json
@@ -273,10 +273,10 @@ visionFaceEmbed	model	vision-face-buffalo-l
 visionFlow	outputPath	~/Documents/mere.run/Vision/optical-flow-<stamp>.flo
 visionGeometry	dryRun	true
 visionGeometry	model	vision-geometry-moge2-small
-visionGeometry	outputPath	~/Documents/mere.run/Vision/metric-geometry-<stamp>
+visionGeometry	outputPath	~/Documents/mere.run/3D/metric-geometry-<stamp>
 visionGeometryMultiview	dryRun	true
 visionGeometryMultiview	model	vision-geometry-da3-small
-visionGeometryMultiview	outputPath	~/Documents/mere.run/Vision/multi-view-geometry-<stamp>
+visionGeometryMultiview	outputPath	~/Documents/mere.run/3D/multi-view-geometry-<stamp>
 visionGround	model	vision-ground-falcon-perception
 visionGround	outputPath	~/Pictures/mere.run/Vision/ground-objects-<stamp>.png
 visionGround	prompt	a person

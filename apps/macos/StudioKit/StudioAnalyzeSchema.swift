@@ -226,6 +226,11 @@ extension StudioAnalyzeArchetype {
         // Vision
         add(.visionRead, .image, [.text], [
             .open("Find objects", .visionFind),
+            .open("Read as a document", .visionDocument),
+            .save("Save text", .text)
+        ])
+        add(.visionDocument, .image, [.text], [
+            .open("Ask about the image", .visionRead),
             .save("Save text", .text)
         ])
         add(.visionFind, .image, [.boxes, .masks, .json], [
@@ -283,12 +288,8 @@ extension StudioAnalyzeArchetype {
         ])
         add(.audioEnhance, .audio, [.audio, .json], [
             .open("Transcribe", .audioTranscribe),
-            .open("Separate stems", .audioSeparate),
+            .open("Separate stems", .musicSeparate),
             .save("Save audio", .media)
-        ])
-        add(.audioSeparate, .audio, [.stems, .json], [
-            .open("Transcribe", .audioTranscribe),
-            .save("Save stems", .media)
         ])
 
         // Music
@@ -327,13 +328,13 @@ extension StudioAnalyzeArchetype {
             .open("Transcribe", .audioTranscribe),
             .save("Save JSON", .json)
         ])
-        add(.soundEncode, .audio, [.tensor, .json], [
-            .open("Decode latents", .soundDecode),
-            .save("Save latents", .media)
-        ])
-        add(.soundDecode, .file, [.audio, .json], [
+        // Sound latents: the autoencoder and text conditioning behind Generate, as one task.
+        add(.soundLatents, .audio, [.tensor, .json], [
             .open("Score against a prompt", .soundScore),
-            .save("Save audio", .media)
+            .save("Save output", .media)
+        ], variants: [
+            .sfxAEDecode: Variant(inputKind: .file, views: [.audio, .json]),
+            .sfxConditionText: Variant(inputKind: .text, views: [.tensor])
         ])
 
         // Image datasets: three variants behind one task control segment. Training on a found
@@ -364,7 +365,9 @@ package struct StudioGenerateArchetype: Equatable {
 
     package static let archetypes: [StudioTask: StudioGenerateArchetype] = [
         .soundFoley: StudioGenerateArchetype(task: .soundFoley, hasPrompt: true, primaryOutput: .audio),
-        .soundCondition: StudioGenerateArchetype(task: .soundCondition, hasPrompt: true, primaryOutput: .other),
+        .videoEdit: StudioGenerateArchetype(task: .videoEdit, hasPrompt: true, primaryOutput: .video),
+        .videoCosmos: StudioGenerateArchetype(task: .videoCosmos, hasPrompt: true, primaryOutput: .video),
+        .voiceEdit: StudioGenerateArchetype(task: .voiceEdit, hasPrompt: true, primaryOutput: .audio),
         .threeDFromImage: StudioGenerateArchetype(task: .threeDFromImage, hasPrompt: false, primaryOutput: .model3D),
     ]
 }

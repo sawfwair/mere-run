@@ -1276,9 +1276,6 @@ final class StudioTypesTests: XCTestCase {
         draft.readImageAction = .inspect
         XCTAssertEqual(try StudioCommandAdapter.makeRequest(mode: .readImage, draft: draft, source: .contract).templateID, .visionInspect)
 
-        draft.readImageAction = .ocr
-        XCTAssertEqual(try StudioCommandAdapter.makeRequest(mode: .readImage, draft: draft, source: .contract).templateID, .visionOCR)
-
         draft.readImageAction = .caption
         XCTAssertEqual(try StudioCommandAdapter.makeRequest(mode: .readImage, draft: draft, source: .contract).templateID, .visionCaption)
     }
@@ -1317,13 +1314,14 @@ final class StudioTypesTests: XCTestCase {
 
         draft.readImageAction = .caption
         XCTAssertNil(StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft, source: .contract))
+    }
 
-        // OCR has a managed default model, so it remains readiness-gated.
-        draft.readImageAction = .ocr
-        XCTAssertEqual(
-            StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft, source: .contract),
-            .managedModel("vision-ocr-lighton")
-        )
+    /// OCR moved to Vision ▸ Document; a saved Read draft that still names it opens on Inspect.
+    func testASavedReadDraftThatChoseOCRDecodesAsInspect() throws {
+        let decoded = try JSONDecoder().decode([StudioReadImageAction].self, from: Data(#"["ocr","caption"]"#.utf8))
+        XCTAssertEqual(decoded, [.inspect, .caption])
+        XCTAssertEqual(StudioReadImageAction.allCases.map(\.templateID), [.visionInspect, .visionCaption])
+        XCTAssertEqual(CommandTemplateID.visionOCR.studioTask, .visionDocument)
     }
 
     func testReadImageModelOverrideGatesOnThatManagedModel() throws {

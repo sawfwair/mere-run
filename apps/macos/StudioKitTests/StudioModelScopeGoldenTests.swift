@@ -76,13 +76,14 @@ final class StudioModelScopeGoldenTests: XCTestCase {
     }
 
     /// A composer reaches a family its draft already runs, whether or not it has a control for
-    /// the family's selectors: FastH3 (no `--h3-adapter`, which Video has no control for), OCR's
-    /// default backend in Read Image, and Parakeet in Listen.
+    /// the family's selectors: FastH3 (no `--h3-adapter`, which Video has no control for) and
+    /// Parakeet in Listen. Vision ▸ Document's contract form reaches every OCR backend.
     func testTheComposerReachesTheFamiliesItsDraftRuns() {
         let rendered = ModelScopeFixtures.render()
         let cells = [
             ("video.generate", "h3-fast", "composer.video"),
-            ("vision.ocr", "lighton", "composer.readImage.ocr"),
+            ("vision.ocr", "lighton", "task.visionOCR"),
+            ("vision.ocr", "unlimited", "task.visionOCR"),
             ("speech.transcribe", "parakeet", "composer.listen"),
         ]
         for (capability, family, surface) in cells {

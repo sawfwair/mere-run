@@ -27,19 +27,19 @@ extension StudioTask {
     /// The shell this task renders in. Exhaustive so a new task must say what it is.
     package var archetype: StudioSurfaceArchetype {
         switch self {
-        case .imageGenerate, .videoGenerate, .musicCompose, .soundGenerate, .voiceSpeak,
-             .soundFoley, .soundCondition, .threeDFromImage:
+        case .imageGenerate, .videoGenerate, .videoEdit, .videoCosmos, .musicCompose, .soundGenerate,
+             .voiceSpeak, .voiceEdit, .soundFoley, .threeDFromImage:
             return .generate
         case .chatChat, .chatCode:
             return .converse
-        case .visionRead, .visionFind, .visionSegment, .visionTrack, .visionDepth, .visionPose, .visionFaces,
-             .visionFlow, .visionGeometry, .audioTranscribe, .audioWhoSpoke, .audioEnhance, .audioSeparate,
-             .musicAnalyze, .musicTranscribe, .musicSeparate, .soundScore, .soundEncode, .soundDecode,
+        case .visionRead, .visionFind, .visionSegment, .visionTrack, .visionDocument, .visionDepth, .visionPose,
+             .visionFaces, .visionFlow, .visionGeometry, .audioTranscribe, .audioWhoSpoke, .audioEnhance,
+             .musicAnalyze, .musicTranscribe, .musicSeparate, .soundScore, .soundLatents,
              .textEmbeddings, .textAnonymize, .textDecide, .textClassify, .textExtract,
              .earthFlood, .earthFire, .earthTessera,
              .earthOlmoEarth, .imageDatasets:
             return .analyze
-        case .musicRealtime, .audioLive, .visionLive, .serverServing, .serverMusic, .serverVision:
+        case .musicRealtime, .audioLive, .visionLive, .serverServing, .serverMusic, .serverVision, .serverWorld:
             return .session
         case .imageTrain, .chatTrain, .musicTrain, .videoSubjects:
             return .project
@@ -53,10 +53,11 @@ extension StudioTask {
     /// workspace; Live, Voices, and Training use their own Session, Manage, and Project surfaces
     /// over the same draft.
     package static let taskDraftTasks: Set<StudioTask> = [
-        .soundFoley, .soundCondition, .soundEncode, .soundDecode, .soundScore,
+        .videoEdit, .videoCosmos, .voiceEdit,
+        .soundFoley, .soundScore, .soundLatents,
         .musicAnalyze, .musicTranscribe,
-        .visionDepth, .visionPose, .visionFaces, .visionFlow, .visionGeometry, .visionLive,
-        .audioWhoSpoke, .audioEnhance, .audioSeparate, .musicSeparate, .audioLive, .voiceVoices,
+        .visionDocument, .visionDepth, .visionPose, .visionFaces, .visionFlow, .visionGeometry, .visionLive,
+        .audioWhoSpoke, .audioEnhance, .musicSeparate, .audioLive, .voiceVoices,
         .textEmbeddings, .textAnonymize, .imageDatasets,
         .threeDFromImage,
         .earthFlood, .earthFire, .earthTessera, .earthOlmoEarth,
@@ -78,9 +79,7 @@ extension StudioTask {
     /// The templates this task can run, in picker order. One for most tasks; Vision ▸ Faces or
     /// 3D ▸ From image offer several as a variant chip. Templates that list or delete records
     /// (`speech profile list`) or open a viewer (`image visualize-run`) are not runs, so they are
-    /// left to the Manage and Project pages that own them; `audio edit` is instruction-first
-    /// speech generation with an optional reference, not a restoration of the attached audio, so
-    /// Audio ▸ Enhance does not offer it (the Command Console still does).
+    /// left to the Manage and Project pages that own them.
     package var variantTemplates: [CommandTemplate] {
         let templates = commandTemplates.filter { !Self.nonVariantTemplates.contains($0.id) }
         guard let primary = primaryTemplateID, let index = templates.firstIndex(where: { $0.id == primary }) else {
@@ -100,6 +99,8 @@ extension StudioTask {
         case .visionDepth: return .visionDepth
         case .visionGeometry: return .visionGeometry
         case .audioEnhance: return .audioEnhance
+        case .videoEdit: return .videoRetake
+        case .soundLatents: return .sfxAEEncode
         case .threeDFromImage: return .imageReconstruct3DTrellis2
         case .imageDatasets: return .imageDatasetDiscover
         case .voiceVoices: return .speechProfileCreate
@@ -109,7 +110,7 @@ extension StudioTask {
     }
 
     private static let nonVariantTemplates: Set<CommandTemplateID> = [
-        .speechProfileList, .speechProfileDelete, .imageVisualizeRun, .audioEdit,
+        .speechProfileList, .speechProfileDelete, .imageVisualizeRun,
     ]
 }
 
@@ -219,6 +220,24 @@ extension StudioTask {
                 emptyTitle: "Teach the image model a look.",
                 emptyMessage: "Choose a dataset and an output folder, then start training. The dashboard follows every step."
             )
+        case .videoEdit:
+            return StudioTaskPresentation(
+                title: title, systemImage: "timeline.selection",
+                emptyTitle: "Rework part of a clip",
+                emptyMessage: "Attach a clip and describe the change. Retake regenerates a timed region; Dub-It carries a performance onto a new scene.",
+                promptPlaceholder: "Describe the replacement",
+                examplePrompts: ["The speaker turns toward the window and smiles", "Rain starts falling halfway through"],
+                requiresAttachment: true,
+                attachLabel: "Choose video…"
+            )
+        case .videoCosmos:
+            return StudioTaskPresentation(
+                title: title, systemImage: "sparkles.tv",
+                emptyTitle: "Generate with Cosmos3",
+                emptyMessage: "Describe a scene to make an image or a clip, or attach an image or video to continue from it. Choose the mode in the inspector.",
+                promptPlaceholder: "Describe the scene",
+                examplePrompts: ["A rover crossing a windswept alien plain", "A robot arm stacking blocks on a workbench"]
+            )
         case .videoSubjects:
             return StudioTaskPresentation(
                 title: title, systemImage: "person.and.background.dotted",
@@ -245,7 +264,7 @@ extension StudioTask {
                 emptyMessage: "Attach a recording to transcribe it to MIDI, with the instruments it hears.",
                 requiresAttachment: true
             )
-        case .musicSeparate, .audioSeparate:
+        case .musicSeparate:
             return StudioTaskPresentation(
                 title: title, systemImage: "square.stack.3d.down.forward",
                 emptyTitle: "Pull the mix apart.",
@@ -267,26 +286,11 @@ extension StudioTask {
                 examplePrompts: ["Footsteps on wet gravel", "A door slamming in a hallway", "Rain on a tent"],
                 requiresAttachment: true
             )
-        case .soundCondition:
-            return StudioTaskPresentation(
-                title: title, systemImage: "waveform.badge.plus",
-                emptyTitle: "Encode a sound description.",
-                emptyMessage: "Describe a sound and save the conditioning tensor a later run can reuse.",
-                promptPlaceholder: "Describe the sound...",
-                examplePrompts: ["Heavy wooden door creaking open", "Distant thunder rolling over hills"]
-            )
-        case .soundEncode:
+        case .soundLatents:
             return StudioTaskPresentation(
                 title: title, systemImage: "arrow.down.right.and.arrow.up.left",
-                emptyTitle: "Compress a sound to latents.",
-                emptyMessage: "Attach audio to encode it with the sound autoencoder.",
-                requiresAttachment: true
-            )
-        case .soundDecode:
-            return StudioTaskPresentation(
-                title: title, systemImage: "arrow.up.left.and.arrow.down.right",
-                emptyTitle: "Bring latents back to sound.",
-                emptyMessage: "Attach a latents file to decode it to a WAV.",
+                emptyTitle: "Work with sound latents",
+                emptyMessage: "Encode audio to latents, decode latents to a WAV, or save a text-conditioning tensor that later runs can reuse. Choose which in the variant menu.",
                 requiresAttachment: true
             )
         case .soundScore:
@@ -297,6 +301,15 @@ extension StudioTask {
                 promptPlaceholder: "What should the sound be?",
                 examplePrompts: ["a dog barking", "rain on a tin roof"],
                 requiresAttachment: true
+            )
+        case .voiceEdit:
+            return StudioTaskPresentation(
+                title: title, systemImage: "waveform.badge.plus",
+                emptyTitle: "Edit speech with an instruction",
+                emptyMessage: "Describe the speech you want. Attach a reference recording to keep its voice.",
+                promptPlaceholder: "Describe the speech and how it sounds",
+                examplePrompts: ["Say \"Welcome back\" warmly, a little slower", "Read the line as a whisper"],
+                attachLabel: "Choose audio…"
             )
         case .voiceVoices:
             return StudioTaskPresentation(
@@ -316,6 +329,13 @@ extension StudioTask {
                 title: title, systemImage: "slider.horizontal.3",
                 emptyTitle: "Teach the text model a voice.",
                 emptyMessage: "Choose a JSONL dataset and an output folder, then start training."
+            )
+        case .visionDocument:
+            return StudioTaskPresentation(
+                title: title, systemImage: "doc.text.viewfinder",
+                emptyTitle: "Read the text in a document",
+                emptyMessage: "Attach one or more page images in order. Unlimited-OCR-2 reads them as one document; LightOnOCR, GLM-OCR, and Infinity-Parser2 read each page.",
+                requiresAttachment: true
             )
         case .visionDepth:
             return StudioTaskPresentation(
@@ -446,7 +466,7 @@ extension StudioTask {
                 emptyTitle: "Your models, on this Mac.",
                 emptyMessage: "Install, locate, check, and benchmark the models Studio runs."
             )
-        case .serverServing, .serverMusic, .serverVision:
+        case .serverServing, .serverMusic, .serverVision, .serverWorld:
             return StudioTaskPresentation(
                 title: title, systemImage: domain.systemImage,
                 emptyTitle: "Serve a model locally.",

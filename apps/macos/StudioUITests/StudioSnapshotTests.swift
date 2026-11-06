@@ -1912,7 +1912,7 @@ final class StudioSnapshotTests: XCTestCase {
         defer { pages.tearDown() }
         try pages.seedDiarizationRun()
         try pages.seedEnhanceRun()
-        try pages.seedSeparateRun(task: .audioSeparate)
+        try pages.seedSeparateRun(task: .musicSeparate)
         let voices = try pages.voiceProfileSeed()
         let wide = CGSize(width: 1_440, height: 820)
         let narrow = CGSize(width: 960, height: 760)
@@ -1938,13 +1938,13 @@ final class StudioSnapshotTests: XCTestCase {
             let suffix = appearance.rawValue
             try render(.audioWhoSpoke, name: "audio-who-spoke-\(suffix)", size: wide, appearance: appearance)
             try render(.audioEnhance, name: "audio-enhance-\(suffix)", size: wide, appearance: appearance)
-            try render(.audioSeparate, name: "audio-separate-\(suffix)", size: wide, appearance: appearance)
+            try render(.musicSeparate, name: "music-separate-\(suffix)", size: wide, appearance: appearance)
             try render(.voiceVoices, name: "voice-voices-\(suffix)", size: wide, appearance: appearance, profiles: voices)
             try render(.audioLive, name: "audio-live-idle-\(suffix)", size: wide, appearance: appearance)
         }
         try render(.audioWhoSpoke, name: "audio-who-spoke-compact-light", size: narrow, appearance: .light)
         try render(.audioEnhance, name: "audio-enhance-compact-light", size: narrow, appearance: .light)
-        try render(.audioSeparate, name: "audio-separate-compact-light", size: narrow, appearance: .light)
+        try render(.musicSeparate, name: "music-separate-compact-light", size: narrow, appearance: .light)
         try render(.voiceVoices, name: "voice-voices-new-compact-light", size: narrow, appearance: .light)
         try render(.audioLive, name: "audio-live-compact-light", size: narrow, appearance: .light)
 
@@ -2191,9 +2191,7 @@ final class StudioSnapshotTests: XCTestCase {
             try render(.soundScore, name: "task-workspace-sound-score-\(appearance.rawValue)", appearance: appearance, size: wide)
         }
         try render(.soundFoley, name: "task-workspace-sound-foley-narrow-light", appearance: .light, size: CGSize(width: 820, height: 760))
-        try render(.soundCondition, name: "task-workspace-sound-condition-light", appearance: .light, size: wide)
-        try render(.soundEncode, name: "task-workspace-sound-encode-light", appearance: .light, size: wide)
-        try render(.soundDecode, name: "task-workspace-sound-decode-light", appearance: .light, size: wide)
+        try render(.soundLatents, name: "task-workspace-sound-latents-light", appearance: .light, size: wide)
 
         let draft = try XCTUnwrap(sessions.taskDraft(for: .soundFoley))
         let inspector = StudioTaskInspector(
@@ -3925,11 +3923,11 @@ private final class SnapshotFixture {
                 $0.sfxRenoise = "0.35"
                 $0.seed = "11"
             },
-            Run(task: .soundCondition, templateID: .sfxConditionText, prompt: "Heavy wooden door creaking open", input: nil,
+            Run(task: .soundLatents, templateID: .sfxConditionText, prompt: "Heavy wooden door creaking open", input: nil,
                 output: conditioning, outputText: nil, startedAt: Self.mockupTime(hour: 13, minute: 48), elapsed: 3.2) { _ in },
-            Run(task: .soundEncode, templateID: .sfxAEEncode, prompt: "", input: hit, output: latents, outputText: nil,
+            Run(task: .soundLatents, templateID: .sfxAEEncode, prompt: "", input: hit, output: latents, outputText: nil,
                 startedAt: Self.mockupTime(hour: 13, minute: 40), elapsed: 2.1) { _ in },
-            Run(task: .soundDecode, templateID: .sfxAEDecode, prompt: "", input: latents, output: decoded, outputText: nil,
+            Run(task: .soundLatents, templateID: .sfxAEDecode, prompt: "", input: latents, output: decoded, outputText: nil,
                 startedAt: Self.mockupTime(hour: 13, minute: 42), elapsed: 1.7) { _ in },
             Run(task: .soundScore, templateID: .sfxClapScore, prompt: "A glass bottle breaking on concrete", input: bottle,
                 output: nil, outputText: """

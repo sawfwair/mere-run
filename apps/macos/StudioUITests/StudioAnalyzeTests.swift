@@ -345,7 +345,8 @@ final class StudioAnalyzeTests: XCTestCase {
         XCTAssertFalse(StudioTask.imageGenerate.isAnalyzeTask)
         XCTAssertFalse(StudioTask.chatChat.isAnalyzeTask)
         XCTAssertFalse(StudioTask.musicRealtime.isAnalyzeTask)
-        XCTAssertFalse(StudioTask.soundCondition.isAnalyzeTask, "Condition is prompt-first")
+        XCTAssertFalse(StudioTask.voiceEdit.isAnalyzeTask, "Voice ▸ Edit is prompt-first")
+        XCTAssertFalse(StudioTask.videoEdit.isAnalyzeTask, "Video ▸ Edit is prompt-first")
         XCTAssertNil(StudioTask.soundScore.generateArchetype)
     }
 
