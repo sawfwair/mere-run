@@ -619,6 +619,7 @@ struct StudioModelsView: View {
                             .strokeBorder(MereRunTheme.border.opacity(0.6), lineWidth: 1)
                     }
             }
+            .help("More model actions")
             .accessibilityLabel("More model actions")
         }
     }

@@ -188,6 +188,8 @@ struct StudioGLiNERExtractionView: View {
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
+                .help("Example, import, and export")
+                .accessibilityLabel("Example, import, and export")
             }
             Text("Find named entities, relation pairs, and structured fields using GLiNER2.5 Decide.")
                 .font(MereRunTheme.captionFont)

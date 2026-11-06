@@ -6,6 +6,19 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Studio menus and shortcuts: Show Inspector moves to ⌥⌘I so ⌘E stays Use
+  Selection for Find; Go ▸ Next Task (⇧⌘]) and Previous Task (⇧⌘[) cycle the
+  current section's tasks; ⌘↩ and ⌘. are bound once, in the Run menu, which now
+  starts Training and creates a voice on those pages. File ▸ New Chat works from
+  any task. View items read Show or Hide like the sidebar item, Window ▸ Studio
+  always brings the Studio window forward, and Help links to the mere.run
+  website.
+- Studio Settings: Menu bar and startup moves to General, which also gains
+  **Automatically check for updates**; command line and working directory move
+  to Advanced and models root to Models; Delete reports asks first.
+- Studio task segments show a tooltip, the sidebar follows the system sidebar
+  size, and icon-only buttons and menus carry accessibility labels.
+
 ## 0.69.1 - 2026-11-04
 
 - Make the Studio private-mode ghost button respond across its full button area.

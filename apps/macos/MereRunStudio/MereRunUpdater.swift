@@ -35,3 +35,43 @@ struct MereRunCheckForUpdatesView: View {
             .disabled(!viewModel.canCheckForUpdates)
     }
 }
+
+/// Sparkle's "check automatically" setting, observed so Settings and the updater's own first-run
+/// prompt agree.
+@MainActor
+final class MereRunAutomaticUpdateChecks: ObservableObject {
+    @Published private(set) var isEnabled: Bool
+    private let updater: SPUUpdater
+
+    init(updater: SPUUpdater) {
+        self.updater = updater
+        isEnabled = updater.automaticallyChecksForUpdates
+        updater.publisher(for: \.automaticallyChecksForUpdates)
+            .receive(on: RunLoop.main)
+            .assign(to: &$isEnabled)
+    }
+
+    var binding: Binding<Bool> {
+        Binding(
+            get: { self.isEnabled },
+            set: { isOn in
+                self.updater.automaticallyChecksForUpdates = isOn
+                self.isEnabled = isOn
+            }
+        )
+    }
+}
+
+/// The Settings window with General's update toggle bound to Sparkle. Settings lives in
+/// `StudioUI`, which does not link Sparkle, so the binding is handed in here.
+struct MereRunSettingsWindow: View {
+    @StateObject private var updateChecks: MereRunAutomaticUpdateChecks
+
+    init(updater: SPUUpdater) {
+        _updateChecks = StateObject(wrappedValue: MereRunAutomaticUpdateChecks(updater: updater))
+    }
+
+    var body: some View {
+        MereRunSettingsView(automaticUpdateChecks: updateChecks.binding)
+    }
+}

@@ -177,7 +177,7 @@ package struct StudioMenuBarPanel: View {
                 action: onOpenActivity
             )
             .help("Open the Studio window with the run queue showing")
-            menuRow("Server Settings…", action: onOpenServer)
+            menuRow("Open Server", action: onOpenServer)
             divider
             menuRow("Quit mere.run", shortcut: "⌘Q") { NSApp.terminate(nil) }
                 .keyboardShortcut("q")

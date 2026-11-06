@@ -141,6 +141,8 @@ struct StudioAdaptersView: View {
                         Image(systemName: "xmark.circle.fill")
                     }
                     .buttonStyle(.mereIcon(tint: MereRunTheme.textMuted))
+                    .help("Clear search")
+                    .accessibilityLabel("Clear search")
                 }
             }
             .padding(.horizontal, MereRunTheme.Spacing.sm)

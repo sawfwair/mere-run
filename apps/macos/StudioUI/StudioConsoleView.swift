@@ -470,7 +470,6 @@ private struct StudioConsoleForm: View {
                 Button(controller.isRunning ? "Queue" : "Run", action: run)
                     .buttonStyle(.merePrimary)
                     .disabled(validationMessage != nil)
-                    .keyboardShortcut(.return, modifiers: .command)
                     .help(validationMessage ?? "Run this command (⌘↩)")
             }
         }

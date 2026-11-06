@@ -228,7 +228,7 @@ struct StudioServingConsoleView: View {
                             Text(endpoint)
                                 .font(.system(size: 12, design: .monospaced))
                                 .textSelection(.enabled)
-                            copyButton(endpoint)
+                            copyButton(endpoint, help: "Copy the endpoint")
                         }
                     }
                     Spacer()
@@ -1207,7 +1207,7 @@ struct StudioServingConsoleView: View {
             .background(MereRunTheme.accentSoft, in: Capsule())
     }
 
-    private func copyButton(_ text: String) -> some View {
+    private func copyButton(_ text: String, help: String) -> some View {
         Button {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
@@ -1216,7 +1216,8 @@ struct StudioServingConsoleView: View {
             Image(systemName: "doc.on.doc")
         }
         .buttonStyle(.mereIcon)
-        .help("Copy")
+        .help(help)
+        .accessibilityLabel(help)
     }
 
     private func clientCard(

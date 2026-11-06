@@ -119,19 +119,29 @@ struct MereRunMenuBarContent: View {
         )
     }
 
-    /// Brings the Studio window forward, or opens it when it is closed. `openWindow` always adds a
-    /// window to a `WindowGroup`, so an open one is raised rather than opened again.
     private func showStudio() {
         // The panel has done its job once it has sent you to the Studio.
         dismiss()
         // Back into the Dock first, so the window opens as a regular app's window, in front.
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
-        guard isStudioOpen else {
-            openWindow(id: "studio")
+        StudioMainWindow.bringForward(isOpen: isStudioOpen, openWindow: openWindow)
+    }
+}
+
+/// The Studio window, for the two places that bring it back: the menu bar panel and Window ▸ Studio.
+enum StudioMainWindow {
+    static let id = "studio"
+
+    /// Brings the Studio window forward, or opens it when it is closed. `openWindow` always adds a
+    /// window to a `WindowGroup`, so an open one is raised rather than opened again.
+    @MainActor
+    static func bringForward(isOpen: Bool, openWindow: OpenWindowAction) {
+        guard isOpen else {
+            openWindow(id: id)
             return
         }
-        let window = NSApp.windows.first { $0.identifier?.rawValue.hasPrefix("studio") == true }
+        let window = NSApp.windows.first { $0.identifier?.rawValue.hasPrefix(id) == true }
         if window?.isMiniaturized == true { window?.deminiaturize(nil) }
         window?.makeKeyAndOrderFront(nil)
     }
@@ -188,7 +198,7 @@ struct MereRunApp: App {
     }
 
     var body: some Scene {
-        WindowGroup(id: "studio") {
+        WindowGroup(id: StudioMainWindow.id) {
             MereRunRootView()
                 .environment(\.studioScopeSource, controller.scopeSource)
                 .environmentObject(controller)
@@ -255,7 +265,7 @@ struct MereRunApp: App {
         .menuBarExtraStyle(.window)
 
         Settings {
-            MereRunSettingsView()
+            MereRunSettingsWindow(updater: updaterController.updater)
                 .environmentObject(controller)
                 .environmentObject(crashReporter)
                 .frame(width: 560)
