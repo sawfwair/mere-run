@@ -1549,8 +1549,8 @@ final class StudioLiveAcceptanceTests: XCTestCase {
             artifactURLs: files.map { output.appendingPathComponent($0) }
         )
         let summary = try XCTUnwrap(StudioMeshSummary.load(item: row), "the manifests should decode into a mesh summary: \(files)")
-        XCTAssertGreaterThan(summary.vertexCount, 0)
-        XCTAssertGreaterThan(summary.triangleCount, 0)
+        XCTAssertGreaterThan(summary.vertexCount ?? 0, 0)
+        XCTAssertGreaterThan(summary.triangleCount ?? 0, 0)
         XCTAssertNil(summary.pbrVoxelCount, "only TRELLIS.2 counts PBR voxels")
         let printed = try XCTUnwrap(StudioStructuredOutput.objectData(in: run.stdout).flatMap { try? JSONDecoder().decode(PrintedMesh.self, from: $0) },
                                     "--json should print the run payload")

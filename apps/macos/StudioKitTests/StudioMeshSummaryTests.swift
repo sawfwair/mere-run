@@ -41,6 +41,15 @@ final class StudioMeshSummaryTests: XCTestCase {
      "bounds": {"min": [-0.5, -0.5, -0.5], "max": [0.5, 0.5, 0.5]}, "artifacts": []}
     """
 
+    /// `IdolRunManifest`, as `vision image-to-3d-idol` writes `manifest.json` beside `object.ply`.
+    private static let idolManifest = """
+    {"schemaVersion": 1, "status": "completed", "backend": "mere.run-native-mlx", "repository": "speridlabs/idol",
+     "revision": "main", "referenceRevision": "main", "inputPath": "/tmp/chair.png", "inputSHA256": "ab",
+     "mode": "synthetic", "alreadyFramed": false,
+     "settings": {"steps": 50, "guidance": 3, "timeShift": 3, "gaussianCount": 262144, "seed": 42},
+     "gaussianCount": 262144, "camera": {}, "checkpoints": [], "artifacts": []}
+    """
+
     func testRunManifestsDecodeTheirMeshCounts() throws {
         let tripoSR = try XCTUnwrap(StudioMeshSummary.decode(Data(Self.tripoSRRunManifest.utf8)))
         XCTAssertEqual(tripoSR, StudioMeshSummary(vertexCount: 12_480, triangleCount: 24_956))
@@ -56,6 +65,28 @@ final class StudioMeshSummaryTests: XCTestCase {
         XCTAssertEqual(summary, StudioMeshSummary(vertexCount: 12_480, triangleCount: 24_956))
         XCTAssertNil(StudioMeshSummary.decode(Data(#"{"schemaVersion": 1, "status": "completed"}"#.utf8)), "a receipt is not a manifest")
         XCTAssertNil(StudioMeshSummary.decode(Data("not json".utf8)))
+    }
+
+    /// IDOL writes a Gaussian splat, not a mesh: its manifest counts the Gaussians, and a row
+    /// reads it from the plain `manifest.json` IDOL names it.
+    func testAnIdolManifestCountsItsGaussians() throws {
+        let summary = try XCTUnwrap(StudioMeshSummary.decode(Data(Self.idolManifest.utf8)))
+        XCTAssertEqual(summary, StudioMeshSummary(gaussianCount: 262_144))
+        XCTAssertTrue(summary.isSplat)
+        XCTAssertEqual(summary.text, "262,144 Gaussians")
+        XCTAssertFalse(try XCTUnwrap(StudioMeshSummary.decode(Data(Self.meshManifest.utf8))).isSplat)
+
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("splat-summary-\(UUID())", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let ply = folder.appendingPathComponent("object.ply")
+        let camera = folder.appendingPathComponent("camera.json")
+        let manifest = folder.appendingPathComponent("manifest.json")
+        try Data().write(to: ply)
+        try Data(#"{"fov": 0.6}"#.utf8).write(to: camera)
+        try Data(Self.idolManifest.utf8).write(to: manifest)
+        let item = Self.row(outputURL: ply, artifacts: [ply, camera, manifest])
+        XCTAssertEqual(StudioMeshSummary.load(item: item), StudioMeshSummary(gaussianCount: 262_144))
     }
 
     /// A row's summary comes from its run manifest when it has one (the only file that counts

@@ -1232,13 +1232,20 @@ context menu (`StudioUI/StudioAudioRecorder.swift`); the recording is filed
 with the task's domain.
 
 **3D** ▸ From image is a Generate task on the shared task workspace for
-TripoSR, native TRELLIS.2 PBR reconstruction, and ordered 4- and 6-view
-InstantMesh. The Engine chip picks the template; the well takes one picture
-(or InstantMesh's ordered views), the inspector shows each engine's own
-controls from the contract, and every run lands in a fresh directory under the
-3D folder. Results are feed cards with the mesh in an orbitable Quick Look
-tile and the manifest's vertex, triangle, and PBR voxel counts under it
+TripoSR, native TRELLIS.2 PBR reconstruction, ordered 4- and 6-view
+InstantMesh, and IDOL Gaussian splats. The Engine chip picks the template; the
+well takes one picture (or InstantMesh's ordered views), the inspector shows
+each engine's own controls from the contract, and every run lands in a fresh
+directory under the 3D folder. Results are feed cards with the mesh in an
+orbitable Quick Look tile and the manifest's vertex, triangle, and PBR voxel
+counts under it
 (`StudioKit/StudioMeshSummary.swift`, `StudioUI/Renderers/StudioMeshSummaryRow.swift`).
+IDOL (`vision image-to-3d-idol`) reads local checkpoint folders instead of a
+managed model, so the composer shows no model chip for it. Its `--model`,
+`--dino`, and `--vae` folders are folder rows in the inspector's Model section
+(`StudioTaskSchema.takesModelFolder`), and the card shows `object.ply` with the
+Gaussian count from `manifest.json`. Quick Look draws the PLY as points, not as
+rendered splats.
 InstantMesh's ordered views are reordered in the inspector, and its optional
 calibrated cameras are edited per view there
 (`StudioUI/StudioInstantMeshCameraEditor.swift`,

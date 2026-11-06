@@ -26,14 +26,15 @@ final class StudioThreeDTaskTests: XCTestCase {
 
     // MARK: Engine picker
 
-    func testTheEnginePickerStartsOnTrellisAndOffersTheThreeEngines() throws {
+    func testTheEnginePickerStartsOnTrellisAndOffersTheFourEngines() throws {
         XCTAssertTrue(StudioTask.taskDraftTasks.contains(.threeDFromImage))
         XCTAssertTrue(StudioTask.threeDFromImage.usesTaskDraft)
         XCTAssertEqual(StudioTask.threeDFromImage.archetype, .generate)
         XCTAssertEqual(
             StudioTask.threeDFromImage.variantTemplates.map(\.id),
-            [.imageReconstruct3DTrellis2, .imageReconstruct3D, .imageReconstruct3DMultiview]
+            [.imageReconstruct3DTrellis2, .imageReconstruct3D, .imageReconstruct3DMultiview, .visionImageTo3DIdol]
         )
+        XCTAssertEqual(StudioDomain(templateID: .visionImageTo3DIdol), .threeD)
         let engine = try XCTUnwrap(StudioTaskSchema.variantField(for: .threeDFromImage))
         XCTAssertEqual(engine.label, "Engine")
         XCTAssertEqual(engine.tier, .essential)
@@ -73,6 +74,81 @@ final class StudioThreeDTaskTests: XCTestCase {
         XCTAssertEqual(draft.text("--view"), "")
         XCTAssertEqual(draft.text("--resolution"), "256", "a shared option carries")
         XCTAssertEqual(draft.model, "")
+    }
+
+    // MARK: IDOL
+
+    /// IDOL reads three local checkpoint folders rather than a managed model: the inspector draws
+    /// each as a folder row, the composer offers no model chip, no installed model stands in for
+    /// `--model`, and the run asks the readiness check for nothing.
+    func testIdolTakesItsCheckpointsAsFoldersAndNoManagedModel() throws {
+        XCTAssertTrue(StudioTaskSchema.takesModelFolder(.visionImageTo3DIdol))
+        XCTAssertFalse(StudioTaskSchema.takesModelFolder(.imageReconstruct3DTrellis2))
+        XCTAssertNil(StudioTaskSchema.overrideID(forFlag: "--model", templateID: .visionImageTo3DIdol))
+        XCTAssertEqual(StudioTaskSchema.overrideID(forFlag: "--model", templateID: .imageReconstruct3DTrellis2), .model)
+        XCTAssertEqual(StudioTaskSchema.slots(for: .visionImageTo3DIdol).map(\.id), ["input"], "the folders are not well slots")
+
+        var draft = StudioTaskDraft(templateID: .visionImageTo3DIdol)
+        let fields = StudioTaskSchema.fields(for: .threeDFromImage, draft: draft, source: .contract)
+        for flag in ["--model", "--dino", "--vae"] {
+            let field = try XCTUnwrap(fields.first { $0.flag == flag }, flag)
+            XCTAssertEqual(field.control, .path, flag)
+            XCTAssertEqual(field.kind, .directory, flag)
+            XCTAssertEqual(field.group, .model, flag)
+        }
+        XCTAssertNil(fields.first { $0.flag == "--output" }, "routing fills the destination")
+
+        let rows = [StudioModelInventoryRow(
+            id: "image-3d-trellis2-4b", category: "image-3d", status: "installed", size: "1 GB", usageTerms: nil
+        )]
+        draft.selectInstalledDefault(from: rows, source: .contract)
+        XCTAssertEqual(draft.model, "", "no managed model stands in for the IDOL checkpoints")
+        XCTAssertNil(StudioTaskSchema.requirement(for: draft, source: .contract))
+        draft.model = "/models/idol"
+        XCTAssertNil(StudioTaskSchema.requirement(for: draft, source: .contract))
+    }
+
+    /// The task form and the catalog builder spell the same command, the folders are required
+    /// before anything is created, and switching to IDOL keeps the picture and the framing.
+    func testIdolBuildsTheCommandAndRequiresItsFolders() throws {
+        var draft = try XCTUnwrap(StudioTaskDraft(task: .threeDFromImage))
+        draft.setArgument(0, "/tmp/chair.png")
+        draft.form["--already-framed"] = .flag(true)
+        draft.model = "image-3d-trellis2-4b"
+        draft.switchTemplate(to: .visionImageTo3DIdol)
+        XCTAssertEqual(draft.argument(0), "/tmp/chair.png")
+        XCTAssertEqual(draft.form["--already-framed"].flag, true)
+        XCTAssertEqual(draft.model, "", "a TRELLIS.2 id is not an IDOL checkpoint folder")
+
+        let template = try XCTUnwrap(CommandCatalog.template(id: .visionImageTo3DIdol))
+        let run = try XCTUnwrap(StudioConsoleRun(template: template, draft: draft.form, seed: draft.seed, source: .contract))
+        XCTAssertEqual(run.validationMessage, "IDOL checkpoints (--model) is required.")
+
+        let output = root.appendingPathComponent("chair-splat").path
+        draft.model = "/models/idol"
+        draft.form["--dino"] = .text("/models/dinov3")
+        draft.form["--vae"] = .text("/models/flux2-vae")
+        draft.form["--output"] = .text(output)
+        draft.form["--mode"] = .text("real")
+        draft.form["--seed"] = .integer(7)
+        draft.form["--steps"] = .integer(30)
+        draft.form["--num-gaussians"] = .integer(131_072)
+        var page = template.defaultDraft()
+        page.inputPath = "/tmp/chair.png"
+        page.model = "/models/idol"
+        page.idolDINOPath = "/models/dinov3"
+        page.idolVAEPath = "/models/flux2-vae"
+        page.outputPath = output
+        page.idolMode = "real"
+        page.alreadyFramed = true
+        page.seed = "7"
+        page.steps = 30
+        page.idolGaussianCount = 131_072
+        let argv = draft.arguments(source: .contract)
+        XCTAssertEqual(Array(argv.prefix(3)), ["vision", "image-to-3d-idol", "/tmp/chair.png"])
+        XCTAssertEqual(Self.pairs(argv, template), Self.pairs(template.arguments(from: page, source: .contract), template))
+        let filled = try XCTUnwrap(StudioConsoleRun(template: template, draft: draft.form, seed: draft.seed, source: .contract))
+        XCTAssertNil(filled.validationMessage)
     }
 
     // MARK: Argv parity with the 3D page
@@ -207,9 +283,14 @@ final class StudioThreeDTaskTests: XCTestCase {
     func testTheDestinationIsAFreshDirectoryUnderTheThreeDFolder() throws {
         let picture = root.appendingPathComponent("chair.png")
         try Data().write(to: picture)
-        for templateID in [CommandTemplateID.imageReconstruct3DTrellis2, .imageReconstruct3D] {
+        for templateID in [CommandTemplateID.imageReconstruct3DTrellis2, .imageReconstruct3D, .visionImageTo3DIdol] {
             var draft = StudioTaskDraft(templateID: templateID)
             draft.setArgument(0, picture.path)
+            if templateID == .visionImageTo3DIdol {
+                draft.model = "/models/idol"
+                draft.form["--dino"] = .text("/models/dinov3")
+                draft.form["--vae"] = .text("/models/flux2-vae")
+            }
             let named = StudioOutputLocation.destination(for: draft, source: .contract)
             let output = URL(fileURLWithPath: named.text("--output"))
             XCTAssertEqual(output.deletingLastPathComponent().path, root.appendingPathComponent("outputs/3D").path, "\(templateID)")

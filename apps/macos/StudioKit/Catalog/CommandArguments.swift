@@ -31,6 +31,7 @@ package enum CommandArguments {
         case .imageReconstruct3D: return imageReconstruct3D(draft)
         case .imageReconstruct3DTrellis2: return imageReconstruct3DTrellis2(draft)
         case .imageReconstruct3DMultiview: return imageReconstruct3DMultiview(draft)
+        case .visionImageTo3DIdol: return visionImageTo3DIdol(draft)
         case .textChat: return textChat(draft)
         case .textCode: return textCode(draft)
         case .textEmbed: return textEmbed(draft)

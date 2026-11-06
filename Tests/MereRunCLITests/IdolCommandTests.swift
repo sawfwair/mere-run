@@ -1,3 +1,4 @@
+import MereRunContract
 import MereRunCore
 import XCTest
 @testable import MereRunCLI
@@ -24,5 +25,21 @@ final class IdolCommandTests: XCTestCase {
         for invalid in [["--steps", "0"], ["--mode", "other"], ["--num-gaussians", "32769"], ["--guidance", "nan"]] {
             XCTAssertThrowsError(try VisionImageTo3DIdol.parse(arguments + invalid))
         }
+    }
+
+    /// Shells reach the command through the shared contract. It loads local checkpoint folders,
+    /// so it declares no routing and the capability gate passes it untouched.
+    func testTheContractDescribesTheCommand() throws {
+        let commandLine = ["vision", "image-to-3d-idol"] + arguments
+        let (capability, _) = try XCTUnwrap(CLICapabilityGate.evaluate(commandLine: commandLine))
+        XCTAssertEqual(capability.id, "vision.image-to-3d-idol")
+        XCTAssertNil(capability.routing)
+        XCTAssertEqual(capability.output.flag, "--output")
+        XCTAssertEqual(
+            Set(capability.options.filter { $0.kind == .directory }.map(\.flag)),
+            ["--model", "--dino", "--vae", "--output"]
+        )
+        XCTAssertEqual(capability.options.first { $0.flag == "--mode" }?.choices, ["synthetic", "real"])
+        XCTAssertEqual(try CLICapabilityGate.check(arguments: ["mere.run"] + commandLine), [])
     }
 }

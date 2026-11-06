@@ -132,7 +132,7 @@ package enum StudioDomain: String, CaseIterable, Codable, Identifiable {
         case .imageGenerate, .imageTrainLoRA, .imageValidate, .imageDatasetDiscover, .imageRunPlan,
              .imageVisualizeRun:
             self = .image
-        case .imageReconstruct3D, .imageReconstruct3DTrellis2, .imageReconstruct3DMultiview,
+        case .imageReconstruct3D, .imageReconstruct3DTrellis2, .imageReconstruct3DMultiview, .visionImageTo3DIdol,
              .visionDepth, .visionDepthVideo, .visionGeometry, .visionGeometryMultiview:
             self = .threeD
         case .videoGenerate, .videoRetake, .videoDubIt, .videoAnimate, .videoCosmos3, .videoPrepareMasks,

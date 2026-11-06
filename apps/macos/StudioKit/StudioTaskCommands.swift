@@ -23,7 +23,7 @@ extension CommandTemplateID {
         case .sfxClapScore: return .soundScore
         case .speechSynthesize: return .voiceSpeak
         case .speechProfileList, .speechProfileCreate, .speechProfileDelete: return .voiceVoices
-        case .imageReconstruct3D, .imageReconstruct3DTrellis2, .imageReconstruct3DMultiview: return .threeDFromImage
+        case .imageReconstruct3D, .imageReconstruct3DTrellis2, .imageReconstruct3DMultiview, .visionImageTo3DIdol: return .threeDFromImage
         case .textChat: return .chatChat
         case .textCode: return .chatCode
         case .textTrainLoRA: return .chatTrain

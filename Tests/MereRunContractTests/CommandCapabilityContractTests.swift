@@ -23,6 +23,7 @@ import Testing
         "image.reconstruct-3d",
         "image.reconstruct-3d-trellis2",
         "image.reconstruct-3d-multiview",
+        "vision.image-to-3d-idol",
         "vision.embed",
         "vision.inspect",
         "vision.caption",
@@ -143,7 +144,7 @@ import Testing
         "geo.tessera",
         "geo.olmoearth"
     ])
-    #expect(document.commands.count == 136)
+    #expect(document.commands.count == 137)
 
     let data = try JSONEncoder().encode(document)
     let decoded = try JSONDecoder().decode(MereRunCapabilityDocument.self, from: data)
