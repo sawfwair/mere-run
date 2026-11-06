@@ -246,12 +246,19 @@ final class StudioLibraryStoreTests: XCTestCase {
         let conversationID = UUID()
         store.appendUser(
             conversationID: conversationID, mode: .chat, model: nil, systemPrompt: nil,
-            content: "what is this?", imagePath: "/tmp/photo.png"
+            content: "what is this?",
+            attachments: StudioTurnAttachments(imagePath: "/tmp/photo.png", audioPath: "/tmp/voice.wav", videoPath: "/tmp/clip.mp4")
         )
         let messageID = try XCTUnwrap(store.items.first?.messages?.first?.id)
+        let reloaded = StudioLibraryStore(libraryURL: url)
+        XCTAssertEqual(reloaded.items.first?.messages?.first?.videoPath, "/tmp/clip.mp4")
+        let branch = try XCTUnwrap(store.branch(conversationID: conversationID, at: messageID, inclusive: true))
+        XCTAssertEqual(branch.messages?.first?.audioPath, "/tmp/voice.wav")
         let removed = store.truncate(conversationID: conversationID, removingFrom: messageID)
         XCTAssertEqual(removed?.imagePath, "/tmp/photo.png")
-        XCTAssertEqual(store.items.first?.messages?.isEmpty, true)
+        XCTAssertEqual(removed?.audioPath, "/tmp/voice.wav")
+        XCTAssertEqual(removed?.videoPath, "/tmp/clip.mp4")
+        XCTAssertEqual(store.items.first { $0.id == conversationID }?.messages?.isEmpty, true)
     }
 
     func testAssistantTurnsRecordTheModelAndSystemPromptTheyRanWith() throws {

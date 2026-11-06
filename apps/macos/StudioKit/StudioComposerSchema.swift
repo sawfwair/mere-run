@@ -255,10 +255,20 @@ extension StudioMode {
                 StudioAttachmentSlot(id: "referenceAudio", label: "Reference audio", acceptedTypes: [.audio], storage: .path(\.refAudioPath)),
             ]
         case .chat:
+            // One turn's attachments. The model's family decides which of them it reads
+            // (`attachmentSlots(for:source:)`), so a text-only model offers none.
             return [
                 StudioAttachmentSlot(
                     id: "image", label: "Image", acceptedTypes: [.image], storage: .path(\.inputPath),
                     isTransient: true
+                ),
+                StudioAttachmentSlot(
+                    id: "chatAudio", label: "Audio", acceptedTypes: [.audio], storage: .path(\.chatAudioPathText),
+                    isTransient: true
+                ),
+                StudioAttachmentSlot(
+                    id: "chatVideo", label: "Video", acceptedTypes: [.movie, .video],
+                    storage: .path(\.chatVideoPathText), isTransient: true
                 ),
             ]
         case .readImage, .findObjects, .segment:
@@ -301,7 +311,35 @@ extension StudioMode {
 
     /// Whether the composer shows the well: any non-transient slot, or a transient one that is filled.
     package func showsAttachmentWell(for draft: StudioDraft, source: StudioScopeSource) -> Bool {
-        attachmentSlots(for: draft, source: source).contains { !$0.isTransient || $0.isFilled(in: draft) }
+        !wellSlots(for: draft, source: source).isEmpty
+    }
+
+    /// The slots the well draws: every slot the model takes that is not transient or is filled,
+    /// then each filled transient slot the model does not take (`unreadAttachmentSlots`), so a
+    /// file the run would refuse stays in view and can be removed.
+    package func wellSlots(for draft: StudioDraft, source: StudioScopeSource) -> [StudioAttachmentSlot] {
+        attachmentSlots(for: draft, source: source).filter { !$0.isTransient || $0.isFilled(in: draft) }
+            + unreadAttachmentSlots(for: draft, source: source)
+    }
+
+    /// The filled per-turn slots (Chat's image, audio, and video) whose flag the model the draft
+    /// runs does not take. A run refuses them (`StudioCommandError.unreadAttachment`) rather than
+    /// leave the file out without saying so.
+    package func unreadAttachmentSlots(for draft: StudioDraft, source: StudioScopeSource) -> [StudioAttachmentSlot] {
+        guard let scope = source.scope(mode: self, draft: draft) else { return [] }
+        return unreadAttachmentSlots(for: draft, scope: scope)
+    }
+
+    package func unreadAttachmentSlots(for draft: StudioDraft, scope: StudioOptionScope) -> [StudioAttachmentSlot] {
+        attachmentSlots.filter { slot in
+            slot.isTransient && slot.isFilled(in: draft) && attachmentFlag(for: slot).map(scope.allows) == false
+        }
+    }
+
+    /// The per-turn slots the composer's paperclip offers: Chat's slots the model reads that are
+    /// still empty. One open panel takes a file for each, routed by type as a drop is.
+    package func paperclipSlots(for draft: StudioDraft, source: StudioScopeSource) -> [StudioAttachmentSlot] {
+        attachmentSlots(for: draft, source: source).filter { $0.isTransient && !$0.isFilled(in: draft) }
     }
 
     /// The slot a file dropped on the canvas or pasted with ⌘V lands in: the first empty slot
@@ -316,6 +354,18 @@ extension StudioMode {
 }
 
 extension StudioDraft {
+    /// Chat's audio and video as the attachment slots and contract bindings read and write them:
+    /// a path, or "" for none, stored as nil so a draft without them encodes as before.
+    package var chatAudioPathText: String {
+        get { chatAudioPath ?? "" }
+        set { chatAudioPath = newValue.isBlank ? nil : newValue }
+    }
+
+    package var chatVideoPathText: String {
+        get { chatVideoPath ?? "" }
+        set { chatVideoPath = newValue.isBlank ? nil : newValue }
+    }
+
     /// Routes each dropped file to the slot it belongs in. Returns whether anything was attached.
     @discardableResult
     package mutating func attach(dropped urls: [URL], for mode: StudioMode, source: StudioScopeSource) -> Bool {
@@ -783,5 +833,18 @@ package enum StudioComposerPresets {
         formatter.maximumFractionDigits = 2
         formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter.string(from: NSNumber(value: value)) ?? String(value)
+    }
+}
+
+extension StudioCommandError {
+    /// The refusal for a filled per-turn slot the model's family (`family`, its title) does not
+    /// read: "Gemma 4 can't read audio. Choose an omni model or remove the attachment."
+    package static func unread(_ slot: StudioAttachmentSlot, family: String?) -> StudioCommandError {
+        let model = family ?? "This model"
+        if slot.acceptedTypes.contains(.image) {
+            return .unreadAttachment(model: model, kind: "images", alternative: "a vision model")
+        }
+        let kind = slot.acceptedTypes.contains(.audio) ? "audio" : "video"
+        return .unreadAttachment(model: model, kind: kind, alternative: "an omni model")
     }
 }

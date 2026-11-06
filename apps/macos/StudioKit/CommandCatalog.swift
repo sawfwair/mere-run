@@ -914,6 +914,10 @@ package struct CommandDraft: Equatable, Codable {
     package var speechKeywords: String?
     // Vision chat (vision-capable chat models) and the agentic tool loop for `text chat`.
     package var imagePath = ""
+    /// The audio and video an omni chat turn carries (`--audio`, `--video`). Optional so Library
+    /// rows and saved drafts written before omni attachments still decode.
+    package var chatAudioPath: String?
+    package var chatVideoPath: String?
     package var tools = ""
     package var toolLoop = false
     package var allowShellExec = false

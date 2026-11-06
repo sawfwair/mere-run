@@ -914,7 +914,7 @@ package enum StudioContractOverrides {
                     id: .thinking, flags: ["--thinking", "--no-thinking"],
                     companions: [.choice("thinkingMode", \.thinkingMode)]
                 ),
-                StudioContractOverride(id: .attachment, flags: ["--image"], isExternal: true),
+                StudioContractOverride(id: .attachment, flags: ["--image", "--audio", "--video"], isExternal: true),
             ]
         case .segment, .track:
             // Bound so a Command-view edit flows back into the drawing, but never a text field:
@@ -1110,6 +1110,8 @@ package enum StudioContractBindings {
     private static var chat: [String: StudioContractBinding<StudioDraft>] { model.merging([
         "--system": .text("secondaryText", \.secondaryText),
         "--image": .text("inputPath", \.inputPath),
+        "--audio": .text("chatAudioPath", \.chatAudioPathText),
+        "--video": .text("chatVideoPath", \.chatVideoPathText),
         "--temperature": .number("temperature", \.temperature),
         "--top-p": .number("topP", \.topP),
         "--min-p": .number("minP", \.minP),

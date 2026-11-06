@@ -92,6 +92,7 @@ final class StudioSendDestinationsTests: XCTestCase {
         for expected in [
             "music.separate · Audio", "music.transcribe · Audio", "music.analyze · Audio", "audio.enhance · Audio",
             "audio.transcribe · Audio", "voice.voices · Reference audio", "sound.foley · Video or features", "voice.speak · Reference audio",
+            "chat.chat · Audio",
         ] {
             XCTAssertTrue(song.contains(expected), expected)
         }
@@ -100,7 +101,7 @@ final class StudioSendDestinationsTests: XCTestCase {
         let clip = offered("take.mp4")
         XCTAssertEqual(Set(clip), [
             "vision.track · Video", "vision.depth · Video", "sound.foley · Video or features", "text.embeddings · Videos",
-            "video.cosmos · Conditioning video",
+            "video.cosmos · Conditioning video", "chat.chat · Video",
         ])
     }
 

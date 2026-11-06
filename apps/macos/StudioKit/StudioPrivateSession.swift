@@ -107,7 +107,7 @@ package final class StudioPrivateSession {
     /// declared sidecars the run actually wrote. Keep rewrites all of those paths.
     private func referencedFiles(of item: StudioLibraryItem) -> [URL] {
         var paths = item.allArtifactURLs.map(\.path) + StudioLibraryLineage.inputPaths(of: item)
-            + (item.messages ?? []).compactMap(\.imagePath)
+            + (item.messages ?? []).flatMap(\.attachments.paths)
         if let arguments = item.commandArguments, let capability = item.templateID?.capability {
             let form = StudioConsoleCommand.seed(capability: capability, arguments: arguments)
             paths += StudioTaskSessions.privateOutputFlags(for: capability).map { form.text($0) }

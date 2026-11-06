@@ -50,6 +50,11 @@ The format is based on Keep a Changelog.
   temperature for Speak; task, Parakeet provider, beam size, and keyword bias
   for Transcribe; LTX LoRAs and prompt enhancement for Video; negative prompt
   and CFG for Sound; and box overlays and multiple masks for Segment and Track.
+- Attach audio and video to a Studio Chat turn for omni models such as Nemotron
+  3 Nano Omni, the same way you attach an image. The composer offers only the
+  kinds the selected model reads, routes dropped and pasted files by type, and
+  explains when the model can't read an attachment before the turn runs. Each
+  turn shows its files, and Retry, Edit, and Branch keep them.
 
 ## 0.69.1 - 2026-11-04
 
