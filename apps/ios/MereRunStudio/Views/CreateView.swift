@@ -693,10 +693,8 @@ struct CreateView: View {
             let job = try await relay.submit(kind: selected.kind, arguments: arguments)
             errorMessage = nil
             submittedJobID = job.jobID
-        } catch let error as RelayClientError {
-            errorMessage = AppErrorText.presentable(error.message)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorText.presentable(error)
         }
     }
 }

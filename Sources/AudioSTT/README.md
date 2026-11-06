@@ -20,6 +20,14 @@ runtime-family targets.
 - `NemotronTranscribe/` owns BF16/local routed-expert INT4 loading and file or per-utterance live transcription/English
   translation over AudioNemotronTranscribeModel, with explicit installation.
 
+Live utterance coordinators share explicit input and terminal phases.
+Concurrent finishes join the same EOF flush. Cancellation can interrupt that
+flush, closes the event stream with one cancelled final event, and waits for
+processing, child-session creation, and native transcription to settle. A flush
+failure closes the event stream with the error and remains observable to later
+finish calls. A child session returned after cancellation is closed without
+receiving audio.
+
 ## Whistle ownership and lifecycle
 
 `WhistleGenerator` is an actor. `prepare` resolves assets and then installs its

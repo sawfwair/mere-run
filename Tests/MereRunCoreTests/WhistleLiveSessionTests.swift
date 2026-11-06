@@ -30,10 +30,11 @@ final class WhistleLiveSessionTests: XCTestCase {
             XCTFail("Expected bounded-queue rejection")
         } catch { XCTAssertTrue(error.localizedDescription.contains("backpressure_exceeded")) }
         let finishing = Task { try await live.finish() }
-        await live.cancel()
-        await probe.release()
-        try await finishing.value
+        let cancellation = Task { await live.cancel() }
         let events = try await reader.value
+        await probe.release()
+        await cancellation.value
+        try await finishing.value
         XCTAssertFalse(events.contains { if case .commit = $0 { return true }; return false })
         XCTAssertFalse(events.contains { if case .partial = $0 { return true }; return false })
         XCTAssertEqual(events.compactMap { event -> ASRLiveFinishReason? in if case .final(let reason) = event { return reason }; return nil }, [.cancelled])

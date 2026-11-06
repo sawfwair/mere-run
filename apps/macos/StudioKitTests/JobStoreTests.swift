@@ -102,6 +102,141 @@ final class JobStoreTests: XCTestCase {
         XCTAssertEqual(completed, [second, first])
     }
 
+    func testStopDuringStartedEventIsAppliedWhenTheProcessHandleArrives() throws {
+        let runner = RecordingProcessRunner()
+        let store = JobStore(processRunner: runner)
+        let subscription = store.events.sink { event in
+            if case .started(let job) = event { XCTAssertTrue(store.cancel(job.id)) }
+        }
+        defer { subscription.cancel() }
+
+        let id = store.submit(try makeRequest())
+
+        XCTAssertEqual(store.job(id)?.stopRequest, .terminate)
+        XCTAssertEqual(runner.processes[0].terminateCallCount, 1)
+        XCTAssertTrue(store.job(id)?.state.isRunning == true)
+        XCTAssertTrue(store.cancel(id))
+        XCTAssertEqual(runner.processes[0].terminateCallCount, 1, "repeated Stop does not signal twice")
+        XCTAssertFalse(store.interrupt(id), "termination cannot go back to interruption")
+    }
+
+    func testRepeatedGracefulStopKeepsTheFirstDeadlineAndEscalatesOnce() async throws {
+        let runner = RecordingProcessRunner()
+        let store = JobStore(processRunner: runner)
+        let id = store.submit(try makeRequest())
+
+        store.interruptThenCancel(id, after: .milliseconds(20))
+        store.interruptThenCancel(id, after: .seconds(60))
+        XCTAssertEqual(store.job(id)?.stopRequest, .interrupt)
+        XCTAssertEqual(runner.processes[0].interruptCallCount, 1)
+        for _ in 0..<100 where runner.processes[0].terminateCallCount == 0 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertEqual(store.job(id)?.stopRequest, .terminate)
+        XCTAssertEqual(runner.processes[0].terminateCallCount, 1)
+        XCTAssertNil(store.job(id)?.stopEscalationTask)
+        XCTAssertTrue(store.job(id)?.state.isRunning == true, "escalation still awaits exit")
+        runner.starts[0].termination(15)
+        _ = await store.result(for: id)
+        XCTAssertTrue(store.job(id)?.state.isTerminal == true)
+    }
+
+    func testGracefulStopDuringLaunchInterruptsOnceAndCanFinishSuccessfully() async throws {
+        let runner = RecordingProcessRunner()
+        let store = JobStore(processRunner: runner)
+        let subscription = store.events.sink { event in
+            if case .started(let job) = event {
+                store.interruptThenCancel(job.id, after: .seconds(60))
+            }
+        }
+        defer { subscription.cancel() }
+
+        let id = store.submit(try makeRequest())
+        XCTAssertEqual(store.job(id)?.stopRequest, .interrupt)
+        XCTAssertEqual(runner.processes[0].interruptCallCount, 1)
+        XCTAssertEqual(runner.processes[0].terminateCallCount, 0)
+        runner.starts[0].termination(0)
+        _ = await store.result(for: id)
+        XCTAssertNil(store.job(id)?.stopEscalationTask)
+        XCTAssertEqual(store.job(id)?.result?.exitCode, 0)
+    }
+
+    func testGracefulExitCancelsEscalationAndReleasesTheLaneOnlyAfterCompletion() async throws {
+        let runner = RecordingProcessRunner()
+        let store = JobStore(processRunner: runner)
+        let first = store.submit(try makeRequest())
+        _ = store.submit(try makeRequest())
+        let queued = store.submit(try makeRequest())
+        store.interruptThenCancel(first, after: .milliseconds(50))
+        XCTAssertEqual(store.job(queued)?.state, .queued)
+        XCTAssertEqual(runner.starts.count, 2)
+
+        runner.starts[0].stdout("flushed before graceful exit\n")
+        runner.starts[0].termination(0)
+        let completed = await store.result(for: first)
+        let result = try XCTUnwrap(completed)
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.outputText?.contains("flushed before graceful exit") == true)
+        XCTAssertFalse(store.job(first)?.cancelRequested == true)
+        XCTAssertNil(store.job(first)?.stopEscalationTask)
+        XCTAssertEqual(runner.starts.count, 3)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(runner.processes.map(\.terminateCallCount), [0, 0, 0])
+    }
+
+    func testImmediateCancellationUpgradesGracefulStopAndCancelsItsTimer() async throws {
+        let runner = RecordingProcessRunner()
+        let store = JobStore(processRunner: runner)
+        let id = store.submit(try makeRequest())
+        store.interruptThenCancel(id, after: .milliseconds(20))
+
+        XCTAssertTrue(store.cancel(id))
+        XCTAssertNil(store.job(id)?.stopEscalationTask)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(runner.processes[0].interruptCallCount, 1)
+        XCTAssertEqual(runner.processes[0].terminateCallCount, 1)
+        runner.starts[0].termination(0)
+        _ = await store.result(for: id)
+        guard case .finished(exit: 0, _) = store.job(id)?.state else {
+            return XCTFail("a successful exit stays successful even when cancellation raced it")
+        }
+    }
+
+    func testOutputIsFoldedBeforeExactlyOneCompletionAndWaitersSeeFinalState() async throws {
+        let runner = RecordingProcessRunner()
+        let store = JobStore(processRunner: runner)
+        let id = store.submit(try makeRequest())
+        var trace: [String] = []
+        let events = store.events.sink { event in
+            switch event {
+            case .output(let job, _, let text) where job.id == id: trace.append(text)
+            case .finished(let job, let result) where job.id == id:
+                XCTAssertEqual(job.result, result)
+                XCTAssertTrue(job.state.isTerminal)
+                XCTAssertNil(job.process)
+                trace.append("finished")
+            default: break
+            }
+        }
+        let completions = store.completions.sink { _ in trace.append("completion") }
+        defer { events.cancel(); completions.cancel() }
+        let waiter = Task { await store.result(for: id) }
+        await settle()
+        for index in 0..<100 { runner.starts[0].stdout("chunk-\(index)\n") }
+        runner.starts[0].stderr("last diagnostic\n")
+        runner.starts[0].termination(0)
+        runner.starts[0].termination(7)
+        runner.starts[0].stdout("late output\n")
+        let result = await waiter.value
+        await settle()
+
+        XCTAssertEqual(result?.exitCode, 0)
+        XCTAssertEqual(trace, (0..<100).map { "chunk-\($0)\n" } + ["last diagnostic\n", "finished", "completion"])
+        XCTAssertFalse(result?.outputText?.contains("late output") == true)
+    }
+
     func testUtilityLaneHasItsOwnCapacityIndependentOfInference() throws {
         let runner = RecordingProcessRunner()
         let store = JobStore(processRunner: runner)

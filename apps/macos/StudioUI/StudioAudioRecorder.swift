@@ -1,30 +1,98 @@
 import AVFoundation
 import AppKit
+import Combine
 import StudioKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+@MainActor
+protocol StudioMicrophoneRecording: AnyObject {
+    var currentTime: TimeInterval { get }
+    func stop()
+}
+
+extension AVAudioRecorder: StudioMicrophoneRecording {}
+
 /// Records the microphone to a 48 kHz mono WAV, filed in the domain's folder the way a run's
 /// output is, so a reference voice or a conversation recorded here sits beside what it produces.
 @MainActor
-final class StudioAudioRecorder: NSObject, ObservableObject {
-    @Published private(set) var isRecording = false
-    @Published private(set) var duration: Double = 0
-    @Published private(set) var lastRecordingURL: URL?
-    @Published private(set) var errorMessage: String?
+final class StudioAudioRecorder: @preconcurrency ObservableObject {
+    private enum Phase {
+        case idle
+        case requestingPermission(UUID)
+        case recording(any StudioMicrophoneRecording)
+    }
 
-    private var recorder: AVAudioRecorder?
-    private var startCancelled = false
+    private struct State {
+        var phase: Phase = .idle
+        var duration: TimeInterval = 0
+        var lastRecordingURL: URL?
+        var errorMessage: String?
+    }
 
-    func cancelPendingStart() { startCancelled = true }
+    let objectWillChange = ObservableObjectPublisher()
+    private var state = State()
+    private let requestPermission: @MainActor () async -> Bool
+    private let makeRecording: @MainActor (URL) throws -> any StudioMicrophoneRecording
+
+    var isRecording: Bool {
+        if case .recording = state.phase { return true }
+        return false
+    }
+
+    var isStarting: Bool {
+        if case .requestingPermission = state.phase { return true }
+        return false
+    }
+
+    var duration: TimeInterval { state.duration }
+    var lastRecordingURL: URL? { state.lastRecordingURL }
+    var errorMessage: String? { state.errorMessage }
+
+    convenience init() {
+        self.init(requestPermission: { await AVCaptureDevice.requestAccess(for: .audio) }, makeRecording: { url in
+            guard let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 48_000, channels: 1, interleaved: true) else {
+                throw CocoaError(.formatting)
+            }
+            let recorder = try AVAudioRecorder(url: url, format: format)
+            recorder.prepareToRecord()
+            guard recorder.record() else { throw CocoaError(.fileWriteUnknown) }
+            return recorder
+        })
+    }
+
+    init(
+        requestPermission: @escaping @MainActor () async -> Bool,
+        makeRecording: @escaping @MainActor (URL) throws -> any StudioMicrophoneRecording
+    ) {
+        self.requestPermission = requestPermission
+        self.makeRecording = makeRecording
+    }
+
+    func cancelPendingStart() {
+        guard isStarting else { return }
+        state.phase = .idle
+        objectWillChange.send()
+    }
 
     func start(domain: StudioDomain, privateDirectory: URL? = nil) async {
-        startCancelled = false
-        errorMessage = nil
-        let granted = await AVCaptureDevice.requestAccess(for: .audio)
-        guard !startCancelled else { return }
+        guard case .idle = state.phase, !Task.isCancelled else { return }
+        let ticket = UUID()
+        state = State(phase: .requestingPermission(ticket))
+        objectWillChange.send()
+        defer {
+            if isRequestingPermission(ticket) {
+                state.phase = .idle
+                objectWillChange.send()
+            }
+        }
+        guard isRequestingPermission(ticket), !Task.isCancelled else { return }
+        let granted = await requestPermission()
+        guard isRequestingPermission(ticket), !Task.isCancelled else { return }
         guard granted else {
-            errorMessage = "Microphone access was denied. Enable it in System Settings."
+            state.phase = .idle
+            state.errorMessage = "Microphone access was denied. Enable it in System Settings."
+            objectWillChange.send()
             return
         }
 
@@ -43,22 +111,18 @@ final class StudioAudioRecorder: NSObject, ObservableObject {
             } else {
                 url = Self.recordingURL(proposed)
             }
-            guard let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 48_000, channels: 1, interleaved: true) else {
-                throw CocoaError(.formatting)
-            }
-            let recorder = try AVAudioRecorder(url: url, format: format)
-            recorder.prepareToRecord()
-            guard recorder.record() else {
-                throw CocoaError(.fileWriteUnknown)
-            }
-            self.recorder = recorder
-            lastRecordingURL = url
-            duration = 0
-            isRecording = true
+            let recorder = try makeRecording(url)
+            state = State(phase: .recording(recorder), lastRecordingURL: url)
         } catch {
-            errorMessage = error.localizedDescription
-            isRecording = false
+            state.phase = .idle
+            state.errorMessage = error.localizedDescription
         }
+        objectWillChange.send()
+    }
+
+    private func isRequestingPermission(_ ticket: UUID) -> Bool {
+        guard case .requestingPermission(let current) = state.phase else { return false }
+        return current == ticket
     }
 
     /// The proposed path once its folder exists — or, when that folder cannot be made (an
@@ -79,23 +143,33 @@ final class StudioAudioRecorder: NSObject, ObservableObject {
     /// Stops and returns the finished file.
     @discardableResult
     func stop() -> URL? {
-        recorder?.stop()
-        refresh()
-        recorder = nil
-        isRecording = false
-        return lastRecordingURL
+        stopRecording()
+        let url = state.lastRecordingURL
+        objectWillChange.send()
+        return url
+    }
+
+    private func stopRecording() {
+        if case .recording(let recorder) = state.phase {
+            state.duration = recorder.currentTime
+            recorder.stop()
+        }
+        state.phase = .idle
     }
 
     /// Stops and removes the file: the recording was not wanted.
     func discard() {
-        let url = stop()
+        stopRecording()
+        let url = state.lastRecordingURL
         if let url { try? FileManager.default.removeItem(at: url) }
-        lastRecordingURL = nil
-        duration = 0
+        state = State()
+        objectWillChange.send()
     }
 
     func refresh() {
-        duration = recorder?.currentTime ?? duration
+        guard case .recording(let recorder) = state.phase else { return }
+        state.duration = recorder.currentTime
+        objectWillChange.send()
     }
 }
 
@@ -108,8 +182,15 @@ struct StudioAudioRecordingPopover: View {
     let onRecorded: (URL) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var recorder = StudioAudioRecorder()
+    @StateObject private var recorder: StudioAudioRecorder
+    @State private var startTask: Task<Void, Never>?
     private let ticker = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
+
+    init(domain: StudioDomain, recorder: StudioAudioRecorder = StudioAudioRecorder(), onRecorded: @escaping (URL) -> Void) {
+        self.domain = domain
+        self.onRecorded = onRecorded
+        _recorder = StateObject(wrappedValue: recorder)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -124,7 +205,8 @@ struct StudioAudioRecordingPopover: View {
                         }
                         dismiss()
                     } else {
-                        Task { await recorder.start(domain: domain, privateDirectory: sessions?.privateOutputDirectory) }
+                        let directory = sessions?.privateOutputDirectory
+                        startTask = Task { await recorder.start(domain: domain, privateDirectory: directory) }
                     }
                 } label: {
                     ZStack {
@@ -140,6 +222,7 @@ struct StudioAudioRecordingPopover: View {
                     .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
+                .disabled(recorder.isStarting)
                 .help(recorder.isRecording ? "Stop and use the recording" : "Start recording")
                 .accessibilityLabel(recorder.isRecording ? "Stop recording" : "Start recording")
 
@@ -148,7 +231,7 @@ struct StudioAudioRecordingPopover: View {
                         .font(.system(size: 22, weight: .medium, design: .monospaced))
                         .foregroundStyle(recorder.isRecording ? MereRunTheme.red : MereRunTheme.textPrimary)
                         .accessibilityLabel("Recorded \(StudioTimeFormat.string(recorder.duration))")
-                    Text(recorder.isRecording ? "Stop to use it." : "48 kHz mono WAV, saved with your \(domain.title) work.")
+                    Text(recordingHint)
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.textMuted)
                 }
@@ -162,6 +245,7 @@ struct StudioAudioRecordingPopover: View {
             HStack {
                 Spacer()
                 Button("Cancel") {
+                    startTask?.cancel()
                     recorder.discard()
                     dismiss()
                 }
@@ -177,11 +261,18 @@ struct StudioAudioRecordingPopover: View {
             if recorder.isRecording { recorder.refresh() }
         }
         .onDisappear {
+            startTask?.cancel()
+            startTask = nil
             recorder.cancelPendingStart()
             if recorder.isRecording { recorder.discard() }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Record audio")
+    }
+
+    private var recordingHint: String {
+        if recorder.isStarting { return "Waiting for microphone permission…" }
+        return recorder.isRecording ? "Stop to use it." : "48 kHz mono WAV, saved with your \(domain.title) work."
     }
 }
 

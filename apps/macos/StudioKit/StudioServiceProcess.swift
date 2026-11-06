@@ -44,6 +44,7 @@ package final class StudioServiceProcess: ObservableObject {
 
     private weak var controller: MereRunController?
     private var jobID: JobID?
+    private var pendingRestart: UUID?
     private var subscription: AnyCancellable?
 
     package init(templateID: CommandTemplateID, controller: MereRunController) {
@@ -80,6 +81,7 @@ package final class StudioServiceProcess: ObservableObject {
     /// Studio's server is still running.
     package func start(draft: CommandDraft, pinned: [(flag: String, value: String)] = []) {
         guard let controller, let template = CommandCatalog.template(id: templateID), !state.isRunning else { return }
+        pendingRestart = nil
         let request = controller.taskSessions.resolving(StudioRunRequest(
             mode: templateID.studioTask.mode ?? .chat,
             templateID: templateID,
@@ -107,19 +109,27 @@ package final class StudioServiceProcess: ObservableObject {
     /// Asks Studio's server to exit (SIGTERM). Returns false when Studio has none running.
     @discardableResult
     package func stop() -> Bool {
-        guard let controller, let jobID, controller.jobs.cancel(jobID) else { return false }
+        let hadRestart = pendingRestart != nil
+        pendingRestart = nil
+        guard let controller, let jobID, controller.jobs.cancel(jobID) else { return hadRestart }
         refresh()
         return true
     }
 
     /// Stops Studio's server, waits for the process to exit so its port is free, then starts
-    /// `draft`. Returns false when Studio has no server running to restart.
+    /// `draft`. Stop, a newer restart, or cancellation revokes the pending launch.
+    /// Returns false when no replacement starts.
     package func restart(draft: CommandDraft, pinned: [(flag: String, value: String)] = []) async -> Bool {
-        guard let controller, let jobID, state.isRunning else { return false }
+        guard !Task.isCancelled, let controller, let jobID, state.isRunning else { return false }
+        let intent = UUID()
+        pendingRestart = intent
         controller.jobs.cancel(jobID)
         _ = await controller.jobs.result(for: jobID)
+        guard pendingRestart == intent else { return false }
+        pendingRestart = nil
+        guard !Task.isCancelled else { return false }
         start(draft: draft, pinned: pinned)
-        return true
+        return state.isRunning
     }
 
     /// Runs `draft` once with `--preflight`, which validates the model and port and exits, and

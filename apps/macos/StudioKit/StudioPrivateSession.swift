@@ -5,17 +5,34 @@ import MereRunContract
 /// One temporary workspace. Its Library never reads or writes the saved Library files.
 @MainActor
 package final class StudioPrivateSession {
+    package enum Phase: Equatable {
+        case active
+        case waitingForJobs(Set<JobID>)
+        case removingFiles
+        case removalFailed(String)
+        /// Shutdown can confirm the native writers stopped before their main-actor callbacks
+        /// arrive. Keep owning those completions even though the files have been removed.
+        case waitingForCompletions(Set<JobID>)
+        case removed
+    }
+
     package let directory: URL
     package let library: StudioLibraryStore
     package let savedLibrary: StudioLibraryStore
-    package var requestIDs = Set<UUID>()
+    package private(set) var requestIDs = Set<UUID>()
     package private(set) var keptIDs = Set<UUID>()
+    package private(set) var phase: Phase = .active
     private var completionSubscription: AnyCancellable?
+    private let removeDirectory: (URL) throws -> Void
 
     private static let directoryPrefix = "mere-run-private-"
 
-    package init(savedLibrary: StudioLibraryStore, controller: MereRunController, directory: URL? = nil) throws {
+    package init(
+        savedLibrary: StudioLibraryStore, controller: MereRunController, directory: URL? = nil,
+        removeDirectory: @escaping (URL) throws -> Void = { try FileManager.default.removeItem(at: $0) }
+    ) throws {
         self.savedLibrary = savedLibrary
+        self.removeDirectory = removeDirectory
         // The owner's process id tells a later launch whether this workspace was abandoned.
         self.directory = directory ?? FileManager.default.temporaryDirectory
             .appendingPathComponent("\(Self.directoryPrefix)\(getpid())-\(UUID())", isDirectory: true)
@@ -28,7 +45,7 @@ package final class StudioPrivateSession {
         library.observe(controller: controller)
     }
 
-    /// A crash or force quit never reaches `removeFiles`. Workspaces of other running instances
+    /// A crash or force quit never finishes retirement. Workspaces of other running instances
     /// stay; a reused process id only postpones removal to a later launch.
     package static func removeAbandonedWorkspaces(
         in parent: URL = FileManager.default.temporaryDirectory,
@@ -43,6 +60,8 @@ package final class StudioPrivateSession {
     }
 
     package func prepareDirectories(for request: StudioRunRequest) throws {
+        try requireActive()
+        requestIDs.insert(request.id)
         let root = directory.appendingPathComponent(request.id.uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         guard let form = request.execution?.form, let capability = request.templateID.capability else { return }
@@ -57,6 +76,7 @@ package final class StudioPrivateSession {
 
     /// Copy first, then publish a durable row. A failure leaves the temporary result intact.
     package func keep(_ item: StudioLibraryItem) throws {
+        try requireActive()
         guard item.status != .running && item.status != .queued else {
             throw StudioValidationError(message: "Wait for this run to finish before keeping it.")
         }
@@ -98,36 +118,81 @@ package final class StudioPrivateSession {
 
     /// Cancel private jobs, then delete only this workspace after every writer has stopped.
     package func retire(controller: MereRunController) {
-        for job in controller.jobs.all where job.request.requestID.map(requestIDs.contains) == true && job.state.isActive {
+        guard phase == .active else { return }
+        controller.retiredPrivateSessions.append(self)
+        let jobs = activeJobs(controller: controller)
+        phase = .waitingForJobs(Set(jobs.map(\.id)))
+        // Subscribe before cancelling: queued jobs complete synchronously. Completions run
+        // after all finished-event observers, including the controller's privacy filtering.
+        completionSubscription = controller.jobs.completions.sink { [weak self, weak controller] result in
+            guard let self, let controller, let id = result.requestID, self.requestIDs.contains(id) else { return }
+            self.advanceRetirement(controller: controller)
+        }
+        // Remove queued work first so freeing a running slot cannot launch another private job.
+        for job in jobs.filter(\.state.isQueued) + jobs.filter({ !$0.state.isQueued }) {
             controller.jobs.cancel(job.id)
         }
-        completionSubscription = controller.jobs.completions.sink { [weak self, weak controller] _ in
-            Task { @MainActor in
-                guard let self, let controller else { return }
-                self.cleanIfFinished(controller: controller)
-            }
-        }
-        cleanIfFinished(controller: controller)
+        advanceRetirement(controller: controller)
     }
 
-    private func cleanIfFinished(controller: MereRunController) {
-        guard !controller.jobs.all.contains(where: {
-            $0.request.requestID.map(requestIDs.contains) == true && $0.state.isActive
-        }) else { return }
-        guard removeFiles() else {
-            controller.status = library.lastPersistenceError ?? "Couldn't remove private files."
-            return
+    /// Only the process runner can confirm native shutdown while main-actor delivery is blocked
+    /// by application termination. Unconfirmed writers continue to own their files.
+    package func confirmStoppedJobs(_ ids: Set<JobID>, controller: MereRunController) {
+        guard case .waitingForJobs(let pending) = phase else { return }
+        phase = .waitingForJobs(pending.subtracting(ids))
+        advanceRetirement(controller: controller)
+    }
+
+    package func retryRemoval(controller: MereRunController) {
+        guard case .removalFailed = phase else { return }
+        removeFiles(controller: controller)
+    }
+
+    private func activeJobs(controller: MereRunController) -> [Job] {
+        controller.jobs.all.filter { $0.request.requestID.map(requestIDs.contains) == true && $0.state.isActive }
+    }
+
+    private func advanceRetirement(controller: MereRunController) {
+        switch phase {
+        case .waitingForJobs(let pending):
+            let remaining = pending.filter { controller.jobs.job($0)?.state.isActive == true }
+            phase = .waitingForJobs(remaining)
+            if remaining.isEmpty { removeFiles(controller: controller) }
+        case .waitingForCompletions(let pending):
+            let remaining = pending.filter { controller.jobs.job($0)?.state.isActive == true }
+            phase = .waitingForCompletions(remaining)
+            if remaining.isEmpty { finishRetirement(controller: controller) }
+        case .active, .removingFiles, .removalFailed, .removed:
+            break
         }
+    }
+
+    private func finishRetirement(controller: MereRunController) {
+        phase = .removed
         controller.jobs.discardFinished(requestIDs: requestIDs)
         completionSubscription = nil
         controller.retiredPrivateSessions.removeAll { $0 === self }
     }
 
-    @discardableResult
-    package func removeFiles() -> Bool {
-        guard FileManager.default.fileExists(atPath: directory.path) else { return true }
-        do { try FileManager.default.removeItem(at: directory); return true }
-        catch { library.lastPersistenceError = "Couldn't remove private files. \(error.localizedDescription)"; return false }
+    private func removeFiles(controller: MereRunController) {
+        phase = .removingFiles
+        do {
+            if FileManager.default.fileExists(atPath: directory.path) { try removeDirectory(directory) }
+            library.lastPersistenceError = nil
+            phase = .waitingForCompletions(Set(activeJobs(controller: controller).map(\.id)))
+            advanceRetirement(controller: controller)
+        } catch {
+            let message = "Couldn't remove private files. \(error.localizedDescription)"
+            phase = .removalFailed(message)
+            library.lastPersistenceError = message
+            controller.status = message
+        }
+    }
+
+    private func requireActive() throws {
+        guard phase == .active else {
+            throw StudioValidationError(message: "This private workspace has closed.")
+        }
     }
 }
 
@@ -169,10 +234,10 @@ extension MereRunController {
         } else if let session = privateSession {
             privateSession = nil
             taskSessions.endPrivateSession()
-            retiredPrivateSessions.append(session)
             session.retire(controller: self)
         }
         clearPrivatePresentation()
+        if case .removalFailed(let message)? = retiredPrivateSessions.last?.phase { status = message }
     }
 
     package func discardPrivateWork(preserving templateID: CommandTemplateID? = nil) throws {
@@ -183,9 +248,9 @@ extension MereRunController {
         if let templateID {
             taskSessions.setTaskDraft(StudioTaskDraft(templateID: templateID), for: templateID.studioTask)
         }
-        retiredPrivateSessions.append(previous)
         previous.retire(controller: self)
         clearPrivatePresentation()
+        if case .removalFailed(let message) = previous.phase { status = message }
     }
 
 }

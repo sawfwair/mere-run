@@ -65,8 +65,14 @@ targets:
     sources:
       - MereRunStudioTests
       - MereRunStudio/App/PendingModelDownloadStore.swift
+      - MereRunStudio/App/ChatTurnStore.swift
+      - MereRunStudio/App/RemoteChatReply.swift
+      - MereRunStudio/App/RelaySnapshotStore.swift
+      - MereRunStudio/App/ModelDownloadOperation.swift
       - MereRunStudio/App/RuntimeResidencyState.swift
+      - MereRunStudio/App/RuntimeWarmup.swift
       - MereRunStudio/App/RunPollingPolicy.swift
+      - MereRunStudio/App/RunSnapshotPoller.swift
       - MereRunStudio/App/RunArtifactStore.swift
       - MereRunStudio/App/ExecutionPrivacyCopy.swift
     dependencies:

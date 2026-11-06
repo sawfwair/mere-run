@@ -14,11 +14,40 @@ struct RunDetailView: View {
     let jobID: String
 
     @EnvironmentObject private var relay: RelayStore
+    @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var poller = RunSnapshotPoller()
+    @State private var watchRevision = UUID()
+    @State private var lastWatchTarget: WatchTarget?
     @State private var job: WorkflowRemoteJob?
     @State private var events: [GraphRunEvent] = []
     @State private var fetchedFiles: [URL] = []
     @State private var busy = false
     @State private var errorMessage: String?
+
+    private struct WatchTarget: Equatable {
+        let jobID: String
+        let profile: WorkflowExecutorProfile?
+        let connectionID: UUID
+    }
+
+    private struct WatchRequest: Equatable {
+        let target: WatchTarget
+        let revision: UUID
+        let scenePhase: ScenePhase
+    }
+
+    private struct Snapshot {
+        let job: WorkflowRemoteJob
+        let events: [GraphRunEvent]
+
+        var isTerminal: Bool {
+            job.state == .finished || job.state == .failed || job.state == .cancelled
+        }
+    }
+
+    private var watchTarget: WatchTarget {
+        WatchTarget(jobID: jobID, profile: relay.profile, connectionID: relay.connectionID)
+    }
 
     var body: some View {
         List {
@@ -125,6 +154,12 @@ struct RunDetailView: View {
                     Text(errorMessage)
                         .font(.footnote)
                         .foregroundStyle(MereTheme.failure)
+                    if poller.phase == .paused {
+                        Text("Updates paused after repeated connection failures.")
+                            .font(.footnote)
+                        Button("Resume updates") { watchRevision = UUID() }
+                            .disabled(busy)
+                    }
                 }
             }
         }
@@ -146,7 +181,11 @@ struct RunDetailView: View {
                 }
             }
         }
-        .task { await watch() }
+        .task(id: WatchRequest(
+            target: watchTarget,
+            revision: watchRevision,
+            scenePhase: scenePhase
+        )) { await watch() }
     }
 
     private var isActive: Bool {
@@ -176,65 +215,100 @@ struct RunDetailView: View {
     }
 
     private func watch() async {
-        guard let client = relay.client else { return }
-        while !Task.isCancelled {
-            do {
-                job = try await client.inspect(jobID: jobID)
-                events = RelayEventText.decodedEvents(try await client.events(jobID: jobID))
-                errorMessage = nil
-            } catch let error as RelayClientError {
-                errorMessage = AppErrorText.presentable(error.message)
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-            if !isActive { return }
-            try? await Task.sleep(for: .seconds(2))
+        guard !Task.isCancelled else { return }
+        poller.stop()
+        let target = watchTarget
+        if lastWatchTarget != target {
+            job = nil
+            events = []
+            fetchedFiles = []
+            errorMessage = nil
+            lastWatchTarget = target
         }
+        guard scenePhase == .active, !busy, let client = relay.client else { return }
+        await poller.watch(
+            read: {
+                let current = try await client.inspect(jobID: jobID)
+                try Task.checkCancellation()
+                let currentEvents = RelayEventText.decodedEvents(try await client.events(jobID: jobID))
+                return Snapshot(job: current, events: currentEvents)
+            },
+            isTerminal: { $0.isTerminal },
+            receive: { snapshot in
+                guard watchTarget == target else { return }
+                job = snapshot.job
+                events = snapshot.events
+                errorMessage = nil
+            },
+            failed: { error in
+                guard watchTarget == target else { return }
+                errorMessage = AppErrorText.presentable(error)
+            }
+        )
     }
 
     private func cancel() async {
-        guard let client = relay.client else { return }
+        guard !busy, let client = relay.client else { return }
+        let target = watchTarget
         busy = true
-        defer { busy = false }
+        poller.stop()
+        defer {
+            busy = false
+            watchRevision = UUID()
+        }
         do {
-            job = try await client.cancel(jobID: jobID)
-        } catch let error as RelayClientError {
-            errorMessage = AppErrorText.presentable(error.message)
+            let current = try await client.cancel(jobID: jobID)
+            guard watchTarget == target else { return }
+            job = current
         } catch {
-            errorMessage = error.localizedDescription
+            guard watchTarget == target else { return }
+            errorMessage = AppErrorText.presentable(error)
         }
     }
 
     private func retry() async {
-        guard let client = relay.client else { return }
+        guard !busy, let client = relay.client else { return }
+        let target = watchTarget
         busy = true
-        defer { busy = false }
+        poller.stop()
+        defer {
+            busy = false
+            watchRevision = UUID()
+        }
         do {
-            job = try await client.retry(jobID: jobID)
-        } catch let error as RelayClientError {
-            errorMessage = AppErrorText.presentable(error.message)
+            let current = try await client.retry(jobID: jobID)
+            guard watchTarget == target else { return }
+            job = current
+            events = []
+            fetchedFiles = []
         } catch {
-            errorMessage = error.localizedDescription
+            guard watchTarget == target else { return }
+            errorMessage = AppErrorText.presentable(error)
         }
     }
 
     private func fetchArtifacts() async {
-        guard let client = relay.client else { return }
+        guard !busy, let client = relay.client else { return }
+        let target = watchTarget
         busy = true
-        defer { busy = false }
+        defer {
+            busy = false
+            watchRevision = UUID()
+        }
         let store = RunArtifactStore(
             runsRoot: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
                 .appendingPathComponent("runs", isDirectory: true)
         )
         do {
-            fetchedFiles = try await store.refresh(jobID: jobID) { staging in
+            let files = try await store.refresh(jobID: jobID) { staging in
                 let fetched = try await client.fetch(jobID: jobID, into: staging, allArtifacts: false)
                 return fetched.artifacts.map(\.path)
             }
-        } catch let error as RelayClientError {
-            errorMessage = AppErrorText.presentable(error.message)
+            guard watchTarget == target else { return }
+            fetchedFiles = files
         } catch {
-            errorMessage = error.localizedDescription
+            guard watchTarget == target else { return }
+            errorMessage = AppErrorText.presentable(error)
         }
     }
 }

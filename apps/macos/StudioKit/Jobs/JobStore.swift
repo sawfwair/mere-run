@@ -63,6 +63,34 @@ package final class JobStore: ObservableObject {
     private var queues: [JobLane: [JobID]] = [:]
     private var runningIDs: [JobLane: [JobID]] = [:]
     private var pendingResults: [JobID: [CheckedContinuation<JobResult, Never>]] = [:]
+    private let processEvents = ProcessEventBuffer()
+
+    private enum ProcessEvent: Sendable {
+        case output(JobID, LogStream, String)
+        case exited(JobID, Int32)
+    }
+
+    /// Callbacks may arrive on different process waiter threads. The first event in a batch
+    /// schedules one actor hop; that hop folds the entire batch in arrival order.
+    private final class ProcessEventBuffer: @unchecked Sendable {
+        private let lock = NSLock()
+        private var pending: [ProcessEvent] = []
+
+        func append(_ event: ProcessEvent) -> Bool {
+            lock.withLock {
+                let needsDelivery = pending.isEmpty
+                pending.append(event)
+                return needsDelivery
+            }
+        }
+
+        func takeAll() -> [ProcessEvent] {
+            lock.withLock {
+                defer { pending = [] }
+                return pending
+            }
+        }
+    }
 
     package init(
         processRunner: MereRunProcessRunning = FoundationMereRunProcessRunner(),
@@ -72,6 +100,17 @@ package final class JobStore: ObservableObject {
         self.processRunner = processRunner
         resolver = ArtifactResolver(fileSystem: fileSystem)
         self.outputWatchInterval = outputWatchInterval
+    }
+
+    private func deliverProcessEvents() {
+        for event in processEvents.takeAll() {
+            switch event {
+            case .output(let id, let stream, let text):
+                if let job = jobs[id] { consume(text, stream: stream, for: job) }
+            case .exited(let id, let code):
+                if let job = jobs[id] { finish(job, exitCode: code) }
+            }
+        }
     }
 
     // MARK: Reading
@@ -207,9 +246,10 @@ package final class JobStore: ObservableObject {
             complete(job, with: job.cancelBeforeStart())
             return true
         case .running:
-            guard let process = job.process else { return false }
-            job.cancelRequested = true
-            process.terminate()
+            guard job.requestStop(.terminate) else { return true }
+            job.stopEscalationTask?.cancel()
+            job.stopEscalationTask = nil
+            job.process?.terminate()
             job.note("Termination requested.", stream: .system)
             events.send(.changed(job))
             return true
@@ -221,8 +261,8 @@ package final class JobStore: ObservableObject {
     /// Sends SIGINT to a running job so a CLI that traps it can finish cleanly.
     @discardableResult
     package func interrupt(_ id: JobID) -> Bool {
-        guard let job = jobs[id], job.state.isRunning, let process = job.process else { return false }
-        process.interrupt()
+        guard let job = jobs[id], job.state.isRunning, !job.cancelRequested else { return false }
+        if job.requestStop(.interrupt) { job.process?.interrupt() }
         return true
     }
 
@@ -235,9 +275,10 @@ package final class JobStore: ObservableObject {
             cancel(id)
             return
         }
-        Task { [weak self] in
-            try? await Task.sleep(for: grace)
-            guard let self, let job = self.jobs[id], job.state.isActive else { return }
+        guard job.stopEscalationTask == nil else { return }
+        job.stopEscalationTask = Task { [weak self, weak job] in
+            do { try await Task.sleep(for: grace) } catch { return }
+            guard let self, let job, job.stopRequest == .interrupt, job.state.isRunning else { return }
             self.cancel(id)
         }
     }
@@ -277,8 +318,7 @@ package final class JobStore: ObservableObject {
             }
         }
         for job in running {
-            job.cancelRequested = true
-            job.process?.terminate()
+            cancel(job.id)
         }
     }
 
@@ -329,28 +369,27 @@ package final class JobStore: ObservableObject {
             startOutputWatch(for: job)
         }
 
+        let buffer = processEvents
+        let enqueue: @Sendable (ProcessEvent) -> Void = { [weak self] event in
+            if buffer.append(event) {
+                Task { @MainActor [weak self] in self?.deliverProcessEvents() }
+            }
+        }
+        let id = job.id
         do {
             job.process = try processRunner.start(
                 configuration: request.configuration,
-                stdout: { [weak self, weak job] text in
-                    Task { @MainActor in
-                        guard let self, let job else { return }
-                        self.consume(text, stream: .stdout, for: job)
-                    }
-                },
-                stderr: { [weak self, weak job] text in
-                    Task { @MainActor in
-                        guard let self, let job else { return }
-                        self.consume(text, stream: .stderr, for: job)
-                    }
-                },
-                termination: { [weak self, weak job] code in
-                    Task { @MainActor in
-                        guard let self, let job else { return }
-                        self.finish(job, exitCode: code)
-                    }
-                }
+                stdout: { enqueue(.output(id, .stdout, $0)) },
+                stderr: { enqueue(.output(id, .stderr, $0)) },
+                termination: { enqueue(.exited(id, $0)) }
             )
+            // A synchronous started-event observer can request Stop before start returns the
+            // process handle. Apply the recorded intent as soon as the handle exists.
+            switch job.stopRequest {
+            case .interrupt: job.process?.interrupt()
+            case .terminate: job.process?.terminate()
+            case nil: break
+            }
         } catch {
             // Through the stderr path, not `note`, so the message reaches the result's
             // `outputText` (and the library row) as well as the log.
@@ -368,6 +407,8 @@ package final class JobStore: ObservableObject {
 
     private func finish(_ job: Job, exitCode: Int32) {
         guard job.state.isRunning else { return }
+        job.stopEscalationTask?.cancel()
+        job.stopEscalationTask = nil
         job.outputWatchTask?.cancel()
         job.outputWatchTask = nil
         job.process = nil
@@ -406,10 +447,12 @@ package final class JobStore: ObservableObject {
         for id in removed { jobs[id] = nil }
     }
 
-    package func stopPrivateProcesses(requestIDs: Set<UUID>) {
+    package func stopPrivateProcesses(requestIDs: Set<UUID>) -> Set<JobID> {
+        var stopped: Set<JobID> = []
         for job in all where job.request.requestID.map(requestIDs.contains) == true && job.state.isActive {
-            job.process?.terminateAndWait()
+            if job.process?.terminateAndWait() == true { stopped.insert(job.id) }
         }
+        return stopped
     }
 
     private func startOutputWatch(for job: Job) {

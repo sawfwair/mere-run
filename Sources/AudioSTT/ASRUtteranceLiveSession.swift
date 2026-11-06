@@ -14,7 +14,6 @@ public actor ASRUtteranceLiveSession {
 
     private var pendingSamples: [Float] = []
     private var processingTask: Task<Void, Never>?
-    private var processingError: Error?
     private var preRoll: [Float] = []
     private var utteranceSamples: [Float] = []
     private var totalSampleCount = 0
@@ -27,9 +26,9 @@ public actor ASRUtteranceLiveSession {
     private var utteranceId = UUID().uuidString.lowercased()
     private var revision = 0
     private var noiseRMS: Float = 0.002
-    private var finished = false
-    private var cancelled = false
-    private var finalEmitted = false
+    private var phase: ASRLivePhase = .accepting
+    private var finalizationTask: Task<Void, Error>?
+    private var cancellationTask: Task<Void, Never>?
 
     public init(
         request: ASRStreamingRequest,
@@ -47,8 +46,8 @@ public actor ASRUtteranceLiveSession {
     }
 
     public func feed(samples: [Float]) async throws {
-        if let processingError { throw processingError }
-        guard !finished else {
+        if let error = phase.failure { throw error }
+        guard phase.isAccepting else {
             throw ASRStreamingError.invalidState("Cannot feed live ASR after finish.")
         }
         guard samples.allSatisfy(\.isFinite) else { throw ASRStreamingError.invalidInput("Audio contains non-finite samples.") }
@@ -63,30 +62,69 @@ public actor ASRUtteranceLiveSession {
     }
 
     public func finish(reason: ASRLiveFinishReason = .eof) async throws {
-        if let processingError { throw processingError }
-        guard !finished else { return }
-        finished = true
-        if let processingTask {
-            await processingTask.value
+        if let cancellationTask { return await cancellationTask.value }
+        if let finalizationTask { return try await awaitFinalization(finalizationTask) }
+        if let error = phase.failure {
+            if let processingTask { await processingTask.value }
+            throw error
         }
-        if cancelled { return }
-        if let processingError { throw processingError }
-        if !utteranceSamples.isEmpty {
-            try await commitUtterance(endSample: totalSampleCount)
-        }
-        emitFinal(reason)
-        continuation.finish()
+        guard phase.isAccepting else { return }
+        phase = .finishing
+        let task = Task { try await self.finalize(reason: reason) }
+        finalizationTask = task
+        try await awaitFinalization(task)
     }
 
-    public func cancel() {
-        guard !finalEmitted else { return }
-        cancelled = true
-        finished = true
-        processingTask?.cancel()
-        pendingSamples.removeAll(keepingCapacity: false)
-        utteranceSamples.removeAll(keepingCapacity: false)
+    private func awaitFinalization(_ task: Task<Void, Error>) async throws {
+        let result = await task.result
+        if let cancellationTask { await cancellationTask.value }
+        try result.get()
+    }
+
+    private func finalize(reason: ASRLiveFinishReason) async throws {
+        do {
+            if let processingTask { await processingTask.value }
+            if let error = phase.failure { throw error }
+            guard phase.canProcess else { return }
+            if !utteranceSamples.isEmpty { try await commitUtterance(endSample: totalSampleCount) }
+            guard phase.canProcess else { return }
+            phase = .finished
+            emitFinal(reason)
+            continuation.finish()
+        } catch {
+            guard !phase.isCancelled else { return }
+            phase = .failed(error)
+            pendingSamples.removeAll(keepingCapacity: false)
+            utteranceSamples.removeAll(keepingCapacity: false)
+            continuation.finish(throwing: error)
+            throw error
+        }
+    }
+
+    public func cancel() async {
+        if let cancellationTask { return await cancellationTask.value }
+        if phase.failure != nil {
+            if let processingTask { await processingTask.value }
+            if let finalizationTask { _ = await finalizationTask.result }
+            return
+        }
+        guard phase.canProcess else { return }
+        phase = .cancelling
+        let task = Task { await self.cancelAndDrain() }
+        cancellationTask = task
         emitFinal(.cancelled)
         continuation.finish()
+        await task.value
+    }
+
+    private func cancelAndDrain() async {
+        processingTask?.cancel()
+        finalizationTask?.cancel()
+        pendingSamples.removeAll(keepingCapacity: false)
+        utteranceSamples.removeAll(keepingCapacity: false)
+        if let processingTask { await processingTask.value }
+        if let finalizationTask { _ = await finalizationTask.result }
+        phase = .cancelled
     }
 
     private func startPendingAudioProcessing() {
@@ -99,21 +137,20 @@ public actor ASRUtteranceLiveSession {
     private func drainPendingAudio() async {
         let analysisWindowSamples = max(1, request.sampleRate / 10)
         do {
-            while !pendingSamples.isEmpty {
+            while !pendingSamples.isEmpty, phase.canProcess {
                 try Task.checkCancellation()
                 let count = min(pendingSamples.count, analysisWindowSamples)
                 let window = Array(pendingSamples.prefix(count))
                 pendingSamples.removeFirst(count)
                 try await feedAnalysisWindow(window)
             }
-        } catch is CancellationError where cancelled {
-            // Cancellation intentionally discards the active utterance.
         } catch {
-            processingError = error
-            finished = true
-            pendingSamples.removeAll(keepingCapacity: false)
-            utteranceSamples.removeAll(keepingCapacity: false)
-            continuation.finish(throwing: error)
+            if !phase.isCancelled {
+                phase = .failed(error)
+                pendingSamples.removeAll(keepingCapacity: false)
+                utteranceSamples.removeAll(keepingCapacity: false)
+                continuation.finish(throwing: error)
+            }
         }
         processingTask = nil
     }
@@ -171,7 +208,7 @@ public actor ASRUtteranceLiveSession {
         let samples = utteranceSamples
         let started = ContinuousClock.now
         let result = try await transcribe(samples, request.language)
-        guard !cancelled else { return }
+        guard phase.canProcess else { return }
         let latency = started.duration(to: .now)
         lastDecodeSampleCount = samples.count
         lastDecodedResult = result
@@ -222,7 +259,7 @@ public actor ASRUtteranceLiveSession {
         } else {
             result = try await transcribe(samples, request.language)
         }
-        guard !cancelled else { return }
+        guard phase.canProcess else { return }
         let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !text.isEmpty {
             revision += 1
@@ -251,8 +288,6 @@ public actor ASRUtteranceLiveSession {
     }
 
     private func emitFinal(_ reason: ASRLiveFinishReason) {
-        guard !finalEmitted else { return }
-        finalEmitted = true
         continuation.yield(.final(reason))
     }
 

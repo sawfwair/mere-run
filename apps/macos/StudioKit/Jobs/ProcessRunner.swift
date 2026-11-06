@@ -59,13 +59,15 @@ package enum MereRunProcessInputError: LocalizedError {
 
 package protocol MereRunRunningProcess: AnyObject {
     func terminate()
-    func terminateAndWait()
+    /// True only after the owned processes have stopped and output callbacks have drained.
+    @discardableResult func terminateAndWait() -> Bool
     func interrupt()
     func sendStandardInput(_ text: String) throws
 }
 
 extension MereRunRunningProcess {
-    package func terminateAndWait() { terminate() }
+    @discardableResult
+    package func terminateAndWait() -> Bool { terminate(); return false }
     package func interrupt() {
         terminate()
     }
@@ -76,6 +78,8 @@ extension MereRunRunningProcess {
 }
 
 package protocol MereRunProcessRunning: AnyObject {
+    /// Output callbacks precede termination, including final decoder flushes. Termination means
+    /// the child exited and its output was drained; no further output callbacks may follow it.
     func start(
         configuration: MereRunProcessConfiguration,
         stdout: @escaping @Sendable (String) -> Void,
@@ -100,6 +104,9 @@ package final class FoundationRunningProcess: MereRunRunningProcess, @unchecked 
     private let lock = NSLock()
     private let inputLock = NSLock()
     private var cancellationRequested = false
+    private enum CompletionPhase { case running, drained }
+    private let completionCondition = NSCondition()
+    private var completionPhase: CompletionPhase = .running
 
     fileprivate init(process: Process, stdinPipe: Pipe?, stdout: ProcessOutputReader, stderr: ProcessOutputReader) {
         self.process = process
@@ -115,13 +122,19 @@ package final class FoundationRunningProcess: MereRunRunningProcess, @unchecked 
         }
     }
 
-    package func terminateAndWait() {
+    @discardableResult
+    package func terminateAndWait() -> Bool {
         terminate()
         signalGroup(SIGKILL)
         let deadline = ProcessInfo.processInfo.systemUptime + 1
-        while process.isRunning, ProcessInfo.processInfo.systemUptime < deadline {
-            Thread.sleep(forTimeInterval: 0.005)
+        completionCondition.lock()
+        defer { completionCondition.unlock() }
+        while case .running = completionPhase {
+            let remaining = deadline - ProcessInfo.processInfo.systemUptime
+            guard remaining > 0 else { return false }
+            completionCondition.wait(until: Date(timeIntervalSinceNow: remaining))
         }
+        return !process.isRunning && !ownsLiveGroup
     }
 
     package func interrupt() {
@@ -161,34 +174,30 @@ package final class FoundationRunningProcess: MereRunRunningProcess, @unchecked 
             lock.withLock { try? stdinPipe?.fileHandleForWriting.close() }
             stdout.close()
             stderr.close()
+            completionCondition.lock()
+            completionPhase = .drained
+            completionCondition.broadcast()
+            completionCondition.unlock()
         }
-        var stopStarted: TimeInterval?
-        var didEscalate = false
-        var exitedAt: TimeInterval?
-        var outputError = false
-        while true {
+        var shutdown = ProcessShutdown()
+        while !shutdown.isComplete {
             let readOutput = stdout.drain()
             let readError = stderr.drain()
-            outputError = outputError || stdout.failure != nil || stderr.failure != nil
-            let now = ProcessInfo.processInfo.systemUptime
-            let running = process.isRunning
-            let cancelled = lock.withLock { cancellationRequested }
-            if stopStarted == nil, cancelled || outputError || (!running && ownsLiveGroup) {
-                signalGroup(SIGTERM)
-                stopStarted = now
+            let actions = shutdown.advance(
+                processRunning: process.isRunning,
+                ownsLiveGroup: ownsLiveGroup,
+                streamsAtEnd: stdout.atEnd && stderr.atEnd,
+                outputFailed: stdout.failure != nil || stderr.failure != nil,
+                terminationRequested: lock.withLock { cancellationRequested },
+                now: ProcessInfo.processInfo.systemUptime
+            )
+            for action in actions {
+                switch action {
+                case .terminate: signalGroup(SIGTERM)
+                case .kill: signalGroup(SIGKILL)
+                }
             }
-            if let stopStarted, !didEscalate, now - stopStarted >= 0.2 {
-                signalGroup(SIGKILL)
-                didEscalate = true
-            }
-            if !running {
-                if exitedAt == nil { exitedAt = now }
-                if stdout.atEnd && stderr.atEnd && !ownsLiveGroup { break }
-                // A deliberately detached descendant can retain a pipe without
-                // belonging to our group. Bound final drainage after parent exit.
-                if let exitedAt, now - exitedAt >= 0.4 { break }
-            }
-            if !readOutput && !readError { Thread.sleep(forTimeInterval: 0.01) }
+            if !shutdown.isComplete && !readOutput && !readError { Thread.sleep(forTimeInterval: 0.01) }
         }
         // The loop already observed process exit. A second Foundation wait can
         // strand this worker in its run loop after the child has finished.

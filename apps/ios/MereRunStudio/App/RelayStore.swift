@@ -9,6 +9,9 @@ import UIKit
 /// a profile paired on the phone is the same document the CLI would write.
 @MainActor
 public final class RelayStore: ObservableObject {
+    public typealias DirectAuthorization = @MainActor (
+        String, String, @escaping @MainActor () throws -> Void
+    ) async throws -> RelayOAuthTokenSet
     public enum PairingState: Equatable {
         case unpaired
         case discovering
@@ -18,6 +21,7 @@ public final class RelayStore: ObservableObject {
     }
 
     @Published public private(set) var profile: WorkflowExecutorProfile?
+    @Published public private(set) var connectionID = UUID()
     @Published public private(set) var pairing: PairingState = .unpaired
     @Published private(set) var authStatus: RelayAuthStatusResult?
 
@@ -26,6 +30,13 @@ public final class RelayStore: ObservableObject {
 
     private let supportBase: URL
     private let credentialStorageFactory: (String) -> any RelayCredentialStorage
+    private let directAuthorization: DirectAuthorization
+    private var pairingID: UUID?
+    private struct Connection {
+        let profile: WorkflowExecutorProfile
+        let credentials: RelayCredentialScope
+    }
+    private var connection: Connection?
     private var profilesURL: URL { supportBase.appendingPathComponent("executors.json") }
 
     /// Keychain is the credential's home on iOS; the legacy protected file
@@ -38,13 +49,15 @@ public final class RelayStore: ObservableObject {
         supportBase requestedSupportBase: URL? = nil,
         credentialStorageFactory: @escaping (String) -> any RelayCredentialStorage = { profileName in
             KeychainCredentialStorage(service: "run.mere.studio.relay", account: profileName)
-        }
+        },
+        directAuthorization: DirectAuthorization? = nil
     ) {
         let base = requestedSupportBase
             ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
                 .appendingPathComponent("MereRun", isDirectory: true)
         supportBase = base
         self.credentialStorageFactory = credentialStorageFactory
+        self.directAuthorization = directAuthorization ?? Self.authorizeDirect
         try? FileManager.default.createDirectory(
             at: base,
             withIntermediateDirectories: true,
@@ -58,7 +71,7 @@ public final class RelayStore: ObservableObject {
                 profileName: stored.name,
                 applicationSupportBase: base
             )
-            profile = WorkflowExecutorProfile(
+            let restoredProfile = WorkflowExecutorProfile(
                 name: stored.name,
                 kind: stored.kind,
                 destination: stored.destination,
@@ -75,6 +88,8 @@ public final class RelayStore: ObservableObject {
                 try? storage.save(legacy)
                 try? FileCredentialStorage(url: legacyTokenFile).clear()
             }
+            connection = Connection(profile: restoredProfile, credentials: RelayCredentialScope(storage: storage))
+            profile = restoredProfile
             pairing = .paired
             refreshAuthStatus()
         }
@@ -88,7 +103,7 @@ public final class RelayStore: ObservableObject {
     }
 
     public var client: RelayWorkflowExecutor? {
-        profile.map { RelayWorkflowExecutor(profile: $0, credentialStorage: credentialStorage(for: $0.name)) }
+        connection.map { RelayWorkflowExecutor(profile: $0.profile, credentialStorage: $0.credentials) }
     }
 
     var executionPrivacyLane: ExecutionPrivacyLane {
@@ -115,7 +130,8 @@ public final class RelayStore: ObservableObject {
     /// `mere.run relay serve` over the LAN or a tailnet, exchanging the
     /// terminal's pairing code for a long-lived bearer token in the Keychain.
     /// No broker, no cloud hop — prompts and outputs stay on your network.
-    func pairDirect(urlString: String, code: String, profileName: String = "direct") async {
+    public func pairDirect(urlString: String, code: String, profileName: String = "direct") async {
+        let attempt = beginPairing()
         var trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         if !trimmed.contains("://") {
@@ -127,19 +143,8 @@ public final class RelayStore: ObservableObject {
         }
         pairing = .discovering
         do {
-            _ = try await RelayAuthentication.discoverLocalRelay(url: trimmed)
-            let paired = try await RelayAuthentication.pairLocalRelay(
-                url: trimmed,
-                code: code,
-                deviceName: UIDevice.current.name
-            )
-            let tokenSet = RelayOAuthTokenSet(
-                accessToken: paired.token,
-                refreshToken: nil,
-                tokenType: "Bearer",
-                expiresIn: nil,
-                obtainedAtEpochSeconds: Int64(Date().timeIntervalSince1970)
-            )
+            let tokenSet = try await directAuthorization(trimmed, code, { try self.checkPairing(attempt) })
+            try checkPairing(attempt)
             let candidate = WorkflowExecutorProfile(
                 name: profileName,
                 kind: .relay,
@@ -151,25 +156,31 @@ public final class RelayStore: ObservableObject {
                 url: trimmed,
                 tokenFile: nil
             )
-            try credentialStorage(for: profileName).save(tokenSet)
-            try WorkflowExecutorProfileStore.save(
-                WorkflowExecutorProfiles(schemaVersion: 1, profiles: [candidate]),
-                to: profilesURL
-            )
-            profile = candidate
-            pairing = .paired
-            refreshAuthStatus()
+            try commitPairing(tokenSet, profile: candidate, attempt: attempt)
         } catch let error as RelayClientError {
+            guard pairingIsCurrent(attempt) else { return }
             pairing = .failed(AppErrorText.presentable(error.message))
         } catch {
+            guard pairingIsCurrent(attempt) else { return }
             pairing = .failed(error.localizedDescription)
         }
+    }
+
+    private static func authorizeDirect(
+        url: String, code: String, checkCurrent: @escaping @MainActor () throws -> Void
+    ) async throws -> RelayOAuthTokenSet {
+        _ = try await RelayAuthentication.discoverLocalRelay(url: url)
+        try checkCurrent()
+        let paired = try await RelayAuthentication.pairLocalRelay(url: url, code: code, deviceName: UIDevice.current.name)
+        return RelayOAuthTokenSet(accessToken: paired.token, refreshToken: nil, tokenType: "Bearer", expiresIn: nil,
+                                 obtainedAtEpochSeconds: Int64(Date().timeIntervalSince1970))
     }
 
     /// Browser sign-in: Authorization Code + PKCE through an in-app sheet,
     /// intercepted at the universal-link callback. Falls back to the device
     /// grant when the relay's broker does not advertise an authorize URL.
     func signIn(urlString: String, profileName: String = "phone") async {
+        let attempt = beginPairing()
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let parsed = URL(string: trimmed), parsed.scheme == "https" || isLoopback(parsed) else {
@@ -190,6 +201,7 @@ public final class RelayStore: ObservableObject {
         pairing = .discovering
         do {
             let configuration = try await RelayAuthentication.discover(profile: candidate)
+            try checkPairing(attempt)
             guard configuration.authorizationEndpoint != nil else {
                 await pair(urlString: urlString, profileName: profileName)
                 return
@@ -200,6 +212,7 @@ public final class RelayStore: ObservableObject {
                 redirectURI: Self.iosRedirectURI
             )
             let callback = try await WebSignIn.present(url: started.authorizationURL)
+            try checkPairing(attempt)
             let code = try RelayAuthorizationCodeFlow.code(fromCallback: callback, started: started)
             let tokenSet = try await RelayAuthorizationCodeFlow.exchange(
                 code: code,
@@ -208,19 +221,16 @@ public final class RelayStore: ObservableObject {
                 clientID: Self.iosClientID,
                 redirectURI: Self.iosRedirectURI
             )
-            try credentialStorage(for: profileName).save(tokenSet)
-            try WorkflowExecutorProfileStore.save(
-                WorkflowExecutorProfiles(schemaVersion: 1, profiles: [candidate]),
-                to: profilesURL
-            )
-            profile = candidate
-            pairing = .paired
-            refreshAuthStatus()
+            try checkPairing(attempt)
+            try commitPairing(tokenSet, profile: candidate, attempt: attempt)
         } catch let error as RelayClientError {
+            guard pairingIsCurrent(attempt) else { return }
             pairing = .failed(AppErrorText.presentable(error.message))
         } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
+            guard pairingIsCurrent(attempt) else { return }
             pairing = .unpaired
         } catch {
+            guard pairingIsCurrent(attempt) else { return }
             pairing = .failed(error.localizedDescription)
         }
     }
@@ -237,6 +247,7 @@ public final class RelayStore: ObservableObject {
     /// Runs discovery and the OAuth device grant against a relay base URL,
     /// then persists the profile and token set on approval.
     func pair(urlString: String, profileName: String = "phone") async {
+        let attempt = beginPairing()
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let parsed = URL(string: trimmed), parsed.scheme == "https" || isLoopback(parsed) else {
@@ -257,9 +268,11 @@ public final class RelayStore: ObservableObject {
         pairing = .discovering
         do {
             let configuration = try await RelayAuthentication.discover(profile: candidate)
+            try checkPairing(attempt)
             let authorization = try await RelayAuthentication.beginDeviceAuthorization(
                 configuration: configuration
             )
+            try checkPairing(attempt)
             pairing = .awaitingApproval(
                 verificationURL: authorization.verificationURIComplete ?? authorization.verificationURI,
                 userCode: authorization.userCode
@@ -268,17 +281,13 @@ public final class RelayStore: ObservableObject {
                 authorization,
                 configuration: configuration
             )
-            try credentialStorage(for: profileName).save(tokenSet)
-            try WorkflowExecutorProfileStore.save(
-                WorkflowExecutorProfiles(schemaVersion: 1, profiles: [candidate]),
-                to: profilesURL
-            )
-            profile = candidate
-            pairing = .paired
-            refreshAuthStatus()
+            try checkPairing(attempt)
+            try commitPairing(tokenSet, profile: candidate, attempt: attempt)
         } catch let error as RelayClientError {
+            guard pairingIsCurrent(attempt) else { return }
             pairing = .failed(error.message)
         } catch {
+            guard pairingIsCurrent(attempt) else { return }
             pairing = .failed(error.localizedDescription)
         }
     }
@@ -289,14 +298,19 @@ public final class RelayStore: ObservableObject {
 
     func refreshWorkerProbe() async {
         guard let client else { return }
-        workerProbe = try? await client.probe()
+        let requestedConnection = connectionID
+        let probe = try? await client.probe()
+        guard requestedConnection == connectionID, !Task.isCancelled else { return }
+        workerProbe = probe
     }
 
     /// Builds a single-node graph from the Create form, materializes it with
     /// the portable environment (models are always pinned explicitly on the
     /// phone), and submits it through relay. Returns the created job.
-    func submit(kind: String, arguments: [String: WorkflowValue]) async throws -> WorkflowRemoteJob {
-        guard let client else {
+    func submit(
+        kind: String, arguments: [String: WorkflowValue], using suppliedClient: RelayWorkflowExecutor? = nil
+    ) async throws -> WorkflowRemoteJob {
+        guard let client = suppliedClient ?? client else {
             throw RelayClientError("Pair with a relay before submitting.")
         }
         guard let entry = WorkflowNodeRegistry.entry(for: kind) else {
@@ -346,9 +360,8 @@ public final class RelayStore: ObservableObject {
     }
 
     public func unpair() {
-        #if canImport(ActivityKit)
-        RunActivityTracker.cancelAll()
-        #endif
+        pairingID = nil
+        retireConnection()
         if let profile {
             try? credentialStorage(for: profile.name).clear()
             if let tokenFile = profile.tokenFile {
@@ -359,6 +372,49 @@ public final class RelayStore: ObservableObject {
         profile = nil
         authStatus = nil
         pairing = .unpaired
+    }
+
+    private func retireConnection() {
+        connection?.credentials.invalidate()
+        connection = nil
+        workerProbe = nil
+        connectionID = UUID()
+        #if canImport(ActivityKit)
+        RunActivityTracker.cancelAll()
+        #endif
+    }
+
+    private func commitPairing(_ tokenSet: RelayOAuthTokenSet, profile candidate: WorkflowExecutorProfile, attempt: UUID) throws {
+        try checkPairing(attempt)
+        retireConnection()
+        // The old connection is gone from here on. Until both durable writes succeed nothing is
+        // paired, so a failed write cannot leave the old endpoint presented without a client.
+        profile = nil
+        authStatus = nil
+        try checkPairing(attempt)
+        let storage = credentialStorage(for: candidate.name)
+        // No token may survive paired with a different endpoint if either durable write fails.
+        try storage.clear()
+        try WorkflowExecutorProfileStore.save(WorkflowExecutorProfiles(schemaVersion: 1, profiles: [candidate]), to: profilesURL)
+        try storage.save(tokenSet)
+        connection = Connection(profile: candidate, credentials: RelayCredentialScope(storage: storage))
+        profile = candidate
+        pairing = .paired
+        refreshAuthStatus()
+    }
+
+    private func beginPairing() -> UUID {
+        let attempt = UUID()
+        pairingID = attempt
+        return attempt
+    }
+
+    private func pairingIsCurrent(_ attempt: UUID) -> Bool {
+        pairingID == attempt && !Task.isCancelled
+    }
+
+    private func checkPairing(_ attempt: UUID) throws {
+        guard pairingIsCurrent(attempt) else { throw CancellationError() }
     }
 
     private func isLoopback(_ url: URL) -> Bool {
@@ -402,6 +458,12 @@ enum WebSignIn {
 /// Translates client errors into the app's voice. RelayKit speaks the CLI's
 /// language ("executor login", flag names); the phone never should.
 enum AppErrorText {
+    /// Relay failures carry server text worth translating; anything else shows its own description.
+    static func presentable(_ error: any Error) -> String {
+        guard let error = error as? RelayClientError else { return error.localizedDescription }
+        return presentable(error.message)
+    }
+
     static func presentable(_ message: String) -> String {
         if message.contains("executor login") || message.contains("MERERUN_RELAY_TOKEN") {
             return "Your session expired. Sign out in Settings and pair again."

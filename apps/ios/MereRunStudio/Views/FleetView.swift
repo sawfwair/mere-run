@@ -4,8 +4,10 @@ import MereRunRelayKit
 /// The paired fleet: summary, per-node status and inventory, recent activity.
 struct FleetView: View {
     @EnvironmentObject private var relay: RelayStore
-    @State private var snapshot: RelayFleetSnapshot?
-    @State private var errorMessage: String?
+    @StateObject private var snapshots = RelaySnapshotStore<RelayFleetSnapshot>()
+
+    private var snapshot: RelayFleetSnapshot? { snapshots.value(for: relay.connectionID) }
+    private var errorMessage: String? { snapshots.errorMessage(for: relay.connectionID) }
 
     var body: some View {
         NavigationStack {
@@ -78,7 +80,7 @@ struct FleetView: View {
             .background(MereTheme.background.ignoresSafeArea())
             .navigationTitle("Fleet")
             .refreshable { await load() }
-            .task { await load() }
+            .task(id: relay.connectionID) { await load() }
         }
     }
 
@@ -99,15 +101,14 @@ struct FleetView: View {
     }
 
     private func load() async {
-        guard let client = relay.client else { return }
-        do {
-            snapshot = try await client.fleet()
-            errorMessage = nil
-        } catch let error as RelayClientError {
-            errorMessage = AppErrorText.presentable(error.message)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        guard let client = relay.client else { snapshots.reset(); return }
+        let connectionID = relay.connectionID
+        await snapshots.load(
+            connectionID: connectionID,
+            read: { try await client.fleet() },
+            isCurrentConnection: { relay.connectionID == connectionID },
+            presentError: AppErrorText.presentable
+        )
     }
 
     private func inventoryLine(_ node: RelayFleetNode) -> String {

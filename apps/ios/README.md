@@ -49,17 +49,52 @@ Browser sign-in uses Authorization Code + PKCE and returns through the
 `mere.world` universal link. Device-code authorization remains the browserless
 fallback.
 
+Each pairing attempt owns its authorization results. Unpair and subsequent
+attempts invalidate earlier responses before they can save credentials or a
+profile. Discovery and browser/device-approval continuations check that ownership
+before advancing the sign-in flow.
+Clients keep a credential scope for their connection. Re-pairing and Unpair
+invalidate that scope before changing stored credentials, including when the
+profile name and URL stay the same. Old clients cannot borrow new credentials
+or restore tokens through a delayed refresh.
+Credential replacement clears the target credential before saving the new
+profile and token. A failed write requires sign-in again and cannot leave a new
+token attached to an old endpoint.
+
+Each chat turn owns its transcript, streaming reply, and completion. Resetting
+the thread rejects old replies and errors before they reach memory or disk.
+A relay connection change stops observation of a remote reply and leaves an
+on-device reply running. Submission and reply polling use the same captured
+client. The pending bubble describes the active turn's lane even when the next
+turn's model selection changes.
+Cancelling reply observation requests cancellation of the submitted relay job
+from a separate task, including when an in-flight URLSession request reports
+the cancellation as a transport error. Retired connections cannot use replacement
+credentials for that cleanup request.
+
+Runs and Fleet accept only the latest refresh for the active relay connection.
+Connection changes hide the previous account's snapshot and errors immediately,
+reload both pages, and clear the Runs navigation path. Failed refreshes on the
+same connection retain its last snapshot; cancelled or superseded responses
+cannot replace it.
+
 ## Model downloads and runtime residency
 
 On-device model installs use a fixed iOS background URL session. The app stores
 pending install intent in `UserDefaults`, rejoins the matching system transfer
-after relaunch, moves completed files into durable staging, and only removes
-the pending record after the managed snapshot is pinned and validated. Leaving
+after relaunch, moves completed files into durable staging, and completes the
+pending install after the managed snapshot is pinned and validated. Leaving
 the app does not cancel an active payload transfer. New transfers default to
 unmetered, unconstrained Wi-Fi; Settings can opt a new download into cellular,
 expensive, and constrained networks. The selected policy is persisted with that
 pending download across relaunch. User force-quit behavior is owned by iOS and
 is not a supported continuation path.
+
+Network interruption and cancellation preserve pending install intent for
+recovery. Invalid credentials, certificates, and payloads clear it so the app
+does not automatically repeat a permanent failure. Progress updates belong to
+one attempt and cannot return a completed or failed download to a downloading
+state.
 
 The local engine unloads chat and image runtime state when the app backgrounds,
 on memory warnings, on model or inference-lane switches, before model removal,
@@ -68,6 +103,28 @@ requested unload begins, and new inference is rejected during the release
 transition. Live Activities use one bounded poller per run with exponential
 backoff and stop after persistent transport failures. Artifact refreshes are
 staged and validated before replacing an earlier verified local copy.
+
+Chat can reuse an in-progress warmup for the same model. Switching to image
+generation or releasing the runtime waits for preparation to finish, even if
+the native loader ignores cancellation. Each operation owns its completion and
+progress callbacks, so an earlier operation cannot mark a newer model ready or
+update a later chat turn.
+
+Run-detail updates retry initial and later connection failures with bounded
+backoff. After six consecutive failures, **Resume updates** starts another
+watch. Retrying a run, changing the relay profile, or returning to the foreground
+also starts a fresh watch. Responses from an earlier watch cannot replace the
+current snapshot or its error.
+
+From the repository root, run the residency, warmup, and polling tests without a
+simulator or model files:
+
+```bash
+./scripts/test-ios-state-machines.sh
+```
+
+The script compiles the app's SwiftUI-independent sources and their XCTest files in a
+temporary Swift package. The same tests run in the iOS unit test target.
 
 Local chat choices are attributed by physical-memory band. The 1.2B QAD MLX
 model is available from 4 GB and is the default below 6 GB; the standard 2.6B

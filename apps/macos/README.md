@@ -1247,7 +1247,11 @@ recording in an attachment well (chosen, dropped, or recorded with Record…),
 an optional transcript, and a language — run as `speech profile create`
 through the task runner. Any audio attachment well offers Record… in its
 context menu (`StudioUI/StudioAudioRecorder.swift`); the recording is filed
-with the task's domain. Voice ▸ Edit is a Generate task on the shared task
+with the task's domain. Start stays disabled while microphone permission is
+pending. Cancel and closing the popover prevent a pending request from starting
+later and discard an active recording; Stop keeps the file and attaches it.
+
+Voice ▸ Edit is a Generate task on the shared task
 workspace over `audio edit`: describe the speech you want, and attach a
 reference recording to keep its voice.
 
@@ -1703,7 +1707,10 @@ and recent run outcomes. It contains no configuration values, API keys, or
 tokens; command previews are already secret-masked when they are recorded.
 Settings adds opt-in local crash and hang capture over MetricKit. It is off
 until enabled, writes payloads to Application Support, never transmits them, and
-lets the user reveal or delete them in one action.
+lets the user reveal or delete them in one action. Disabling capture rejects
+pending and late callbacks. Deleting reports rejects pending deliveries while
+keeping capture enabled, so queued reports cannot restore the deleted files.
+Reports received together keep separate files even when their timestamps match.
 
 The packaged app embeds Sparkle and exposes **Check for Updates…** in the app
 menu. Release builds use the stable HTTPS appcast, automatic daily discovery,

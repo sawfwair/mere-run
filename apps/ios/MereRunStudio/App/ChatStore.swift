@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import MereRunCore
 import MereRunRelayKit
@@ -9,143 +10,85 @@ import MereRunRelayKit
 /// prompts for identical threads (a shared home in RelayKit is a follow-up).
 @MainActor
 final class ChatStore: ObservableObject {
-    struct Message: Identifiable, Codable, Equatable {
-        enum Role: String, Codable {
-            case user
-            case assistant
-        }
-
-        let id: UUID
-        let role: Role
-        var content: String
-        var failed: Bool
-        /// The model's reasoning for this reply, kept behind a disclosure.
-        var thinking: String?
-
-        init(role: Role, content: String, failed: Bool = false, thinking: String? = nil) {
-            self.id = UUID()
-            self.role = role
-            self.content = content
-            self.failed = failed
-            self.thinking = thinking
-        }
-
-        enum CodingKeys: String, CodingKey {
-            case id
-            case role
-            case content
-            case failed
-            case thinking
-        }
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            id = try container.decode(UUID.self, forKey: .id)
-            role = try container.decode(Role.self, forKey: .role)
-            content = try container.decode(String.self, forKey: .content)
-            failed = try container.decodeIfPresent(Bool.self, forKey: .failed) ?? false
-            thinking = try container.decodeIfPresent(String.self, forKey: .thinking)
-        }
-    }
+    typealias Message = ChatTurnStore.Message
 
     static let budgetChars = 48_000
 
-    @Published private(set) var messages: [Message] = []
-    @Published private(set) var awaitingReply = false
-    @Published private(set) var streamingReply: String?
+    var messages: [Message] { turns.messages }
+    var awaitingReply: Bool { turns.awaitingReply }
+    var streamingReply: String? { turns.streamingReply }
+    var errorMessage: String? { turns.errorMessage }
+    var replyIsLocal: Bool { turns.activeOrigin.map { $0 == .local } ?? runLocally }
     @Published var model = ""
     @Published var runLocally = UserDefaults.standard.bool(forKey: "chat.runLocally") {
         didSet { UserDefaults.standard.set(runLocally, forKey: "chat.runLocally") }
     }
-    @Published private(set) var errorMessage: String?
 
     private let store: RelayStore
-    private let threadURL: URL
+    private let turns: ChatTurnStore
+    private var turnUpdates: AnyCancellable?
+    private var connectionUpdates: AnyCancellable?
 
     init(relay: RelayStore) {
         store = relay
-        threadURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("MereRun", isDirectory: true)
-            .appendingPathComponent("chat-thread.json")
-        if let data = try? Data(contentsOf: threadURL),
-           let saved = try? JSONDecoder().decode([Message].self, from: data) {
-            messages = saved
-        }
+        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("MereRun", isDirectory: true).appendingPathComponent("chat-thread.json")
+        turns = ChatTurnStore(threadURL: url)
+        turnUpdates = turns.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
+        connectionUpdates = relay.$connectionID.dropFirst().sink { [weak self] _ in self?.turns.relayConnectionChanged() }
     }
 
-    func newChat() {
-        messages = []
-        errorMessage = nil
-        persist()
-    }
+    func newChat() { turns.newChat() }
 
     func send(_ text: String) async {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !awaitingReply else { return }
-        messages.append(Message(role: .user, content: trimmed))
-        persist()
-        awaitingReply = true
-        errorMessage = nil
-        defer {
-            awaitingReply = false
-            streamingReply = nil
-        }
-        do {
-            if runLocally {
-                let result = try await LocalEngine.shared.chat(
-                    messages: nativeMessages(),
-                    onDelta: { [weak self] partial in
-                        self?.streamingReply = partial
-                    }
-                )
-                messages.append(Message(
-                    role: .assistant,
-                    content: result.reply,
-                    thinking: result.thinking
-                ))
-            } else {
-                let prompt = renderTranscript()
-                var arguments: [String: WorkflowValue] = ["prompt": .string(prompt)]
-                if !model.isEmpty {
-                    arguments["model"] = .string(model)
-                }
-                let job = try await store.submit(kind: "text.generate", arguments: arguments)
-                let reply = try await awaitReply(jobID: job.jobID)
-                messages.append(Message(role: .assistant, content: reply))
+        let local = runLocally
+        let model = model
+        let client = local ? nil : store.client
+        await turns.send(text, origin: local ? .local : .remote, generate: { messages, onDelta in
+            if local {
+                let result = try await LocalEngine.shared.chat(messages: self.nativeMessages(messages), onDelta: onDelta)
+                return ChatTurnStore.Reply(text: result.reply, thinking: result.thinking)
             }
-        } catch let error as RelayClientError {
-            let text = AppErrorText.presentable(error.message)
-            errorMessage = text
-            messages.append(Message(role: .assistant, content: text, failed: true))
-        } catch {
-            errorMessage = error.localizedDescription
-            messages.append(Message(role: .assistant, content: error.localizedDescription, failed: true))
-        }
-        persist()
+            guard let client else { throw RelayClientError("Pair with a relay before chatting.") }
+            var arguments: [String: WorkflowValue] = ["prompt": .string(self.renderTranscript(messages))]
+            if !model.isEmpty { arguments["model"] = .string(model) }
+            let job = try await self.store.submit(kind: "text.generate", arguments: arguments, using: client)
+            return try await RemoteChatReply.observe(read: {
+                try Task.checkCancellation()
+                let reply = try await self.awaitReply(jobID: job.jobID, client: client, onDelta: onDelta)
+                return ChatTurnStore.Reply(text: reply)
+            }, cancelJob: {
+                // A retired connection's credentials refuse cancellation of its old job.
+                _ = try? await client.cancel(jobID: job.jobID)
+            })
+        }, presentError: AppErrorText.presentable)
     }
 
-    private func awaitReply(jobID: String) async throws -> String {
-        guard let client = store.client else {
-            throw RelayClientError("Pair with a relay before chatting.")
-        }
+    private func awaitReply(
+        jobID: String, client: RelayWorkflowExecutor, onDelta: @escaping @MainActor (String) -> Void
+    ) async throws -> String {
         while true {
+            try Task.checkCancellation()
             let job = try await client.inspect(jobID: jobID)
+            try Task.checkCancellation()
             if job.state == .running || job.state == .assigned {
                 // The worker streams node_output_delta events whose message is
                 // the accumulated text so far; render it as it grows.
                 if let raw = try? await client.events(jobID: jobID) {
+                    try Task.checkCancellation()
                     let delta = RelayEventText.decodedEvents(raw)
                         .last(where: { $0.type == "node_output_delta" })?
                         .message
                     if let delta, !delta.isEmpty {
                         let visible = GeneratedTextFilters.strippingThinking(delta, streaming: true)
-                        if !visible.isEmpty { streamingReply = visible }
+                        if !visible.isEmpty { onDelta(visible) }
                     }
                 }
             }
             switch job.state {
             case .finished:
                 let manifest = try await client.manifest(jobID: jobID)
+                try Task.checkCancellation()
                 guard let value = manifest.nodes
                     .flatMap(\.outputs)
                     .first(where: { $0.name == "text" })?
@@ -169,7 +112,7 @@ final class ChatStore: ObservableObject {
 
     /// The thread as native chat messages for the on-device engine, budgeted
     /// the same way as the rendered transcript: oldest turns drop first.
-    private func nativeMessages() -> [ChatMessage] {
+    private func nativeMessages(_ messages: [Message]) -> [ChatMessage] {
         let usable = messages.filter { !$0.failed }
         var included: [Message] = []
         var used = 0
@@ -194,7 +137,7 @@ final class ChatStore: ObservableObject {
     /// Oldest messages are dropped from what is sent (never from the thread)
     /// when the character budget is exceeded; a lone first turn renders
     /// verbatim so it is byte-identical to a single-shot run.
-    private func renderTranscript() -> String {
+    private func renderTranscript(_ messages: [Message]) -> String {
         let usable = messages.filter { !$0.failed }
         var included: [Message] = []
         var used = 0
@@ -219,8 +162,4 @@ final class ChatStore: ObservableObject {
         }.joined(separator: "\n\n")
     }
 
-
-    private func persist() {
-        try? JSONEncoder().encode(messages).write(to: threadURL, options: .atomic)
-    }
 }
