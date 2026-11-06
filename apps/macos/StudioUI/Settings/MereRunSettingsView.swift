@@ -85,9 +85,9 @@ package struct MereRunSettingsView: View {
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
         }
-        EditorSection("Where generations are saved") {
+        EditorSection("Output folder") {
             PathField(label: "output folder", path: $outputRoot, placeholder: outputRootPlaceholder, mode: .openDirectory)
-            Text("Leave this empty to file work by what it is: pictures and clips in `~/Pictures/mere.run`, audio in `~/Music/mere.run`, everything else in `~/Documents/mere.run`, each under a folder named for the domain. Set a folder to keep every domain together there instead. Runs already in the Library keep the paths they recorded.")
+            Text("If you leave this empty, Studio saves work by type: pictures and clips in `~/Pictures/mere.run`, audio in `~/Music/mere.run`, and everything else in `~/Documents/mere.run`, each in a folder named for its domain. To keep every domain in one place, choose a folder. Runs already in the Library keep the paths they recorded.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
