@@ -33,7 +33,7 @@ enum MuseGlimmerWeightKeys {
 }
 
 public actor MuseGlimmerGenerator: ChatGenerator {
-    private static let textPrefillChunkSize = 512
+    private static let prefillChunkSize = 512
 
     private let modelID: String
     private var model: MuseGlimmerModel?
@@ -479,38 +479,21 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         let assistantCache = useDFlash ? assistantModel?.makeCache() : nil
         let prefillStart = Date()
         let cache = seed?.value.cache.map { $0.fork() } ?? model.makeCache()
-        let initialLogits: MLXArray
-        if imageBatch == nil {
-            let prefilled = try chunkedTextPrefill(
-                model: model,
-                tokens: promptTokens,
-                cache: cache,
-                assistant: useDFlash ? assistantModel : nil,
-                assistantCache: assistantCache,
-                progressHandler: progressHandler,
-                offset: seed?.tokens.count ?? 0,
-                initialLogits: seed?.value.logits,
-                checkpoints: checkpoints,
-                cacheIdentity: identity
-            )
-            initialLogits = prefilled.logits
-            cacheWrites = prefilled.cacheWrites
-        } else {
-            let output = try model.forwardPrefillDetailed(
-                inputIds: MLXArray(promptTokens.map(Int32.init)).reshaped(1, promptTokens.count),
-                imageBatch: imageBatch,
-                cache: cache,
-                captureLayerIndices: Set(useDFlash ? assistantModel?.config.targetLayerIds ?? [] : [])
-            )
-            initialLogits = output.logits
-            if let assistant = useDFlash ? assistantModel : nil,
-               let assistantCache {
-                assistant.appendTargetContext(output.capturedHiddenStates, cache: assistantCache)
-                evaluateGemma4CacheStorage(assistantCache)
-            }
-            MLX.eval(output.logits)
-            evaluateGemma4CacheStorage(cache)
-        }
+        let prefilled = try chunkedPrefill(
+            model: model,
+            tokens: promptTokens,
+            imageBatch: imageBatch,
+            cache: cache,
+            assistant: useDFlash ? assistantModel : nil,
+            assistantCache: assistantCache,
+            progressHandler: progressHandler,
+            offset: seed?.tokens.count ?? 0,
+            initialLogits: seed?.value.logits,
+            checkpoints: checkpoints,
+            cacheIdentity: identity
+        )
+        let initialLogits = prefilled.logits
+        cacheWrites = prefilled.cacheWrites
         let prefillSeconds = Date().timeIntervalSince(prefillStart)
         progressHandler?(.init(stage: .encoding, event: .usage(input: promptTokens.count, output: 0,
             cacheRead: seed?.tokens.count ?? 0, cacheWrite: cacheWrites)))
@@ -697,9 +680,10 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         return try preparedInput(request).0
     }
 
-    private func chunkedTextPrefill(
+    private func chunkedPrefill(
         model: MuseGlimmerModel,
         tokens: [Int],
+        imageBatch: MuseGlimmerImageBatch?,
         cache: [Gemma4AttentionCache],
         assistant: MuseGlimmerAssistantModel?,
         assistantCache: [Gemma4AttentionCache]?,
@@ -709,20 +693,34 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         checkpoints: [Int: Int] = [:],
         cacheIdentity: String
     ) throws -> (logits: MLXArray, cacheWrites: Int) {
+        try Task.checkCancellation()
+        let embeddings = try imageBatch.map {
+            try model.inputEmbeddings(
+                for: MLXArray(tokens.map(Int32.init)).reshaped(1, tokens.count), imageBatch: $0
+            )
+        }
+        if let embeddings { MLX.eval(embeddings) }
         var cacheWrites = 0
         var offset = initialOffset
         var logits: MLXArray? = initialLogits
         while offset < tokens.count {
             try Task.checkCancellation()
             let nextCheckpoint = checkpoints.keys.filter { $0 > offset }.min() ?? tokens.count
-            let end = min(tokens.count, offset + Self.textPrefillChunkSize, nextCheckpoint)
-            let chunk = Array(tokens[offset..<end])
-            let output = try model.forwardPrefillDetailed(
-                inputIds: MLXArray(chunk.map(Int32.init)).reshaped(1, chunk.count),
-                imageBatch: nil,
-                cache: cache,
-                captureLayerIndices: Set(assistant?.config.targetLayerIds ?? [])
-            )
+            let end = min(tokens.count, offset + Self.prefillChunkSize, nextCheckpoint)
+            let output: MuseGlimmerForwardOutput
+            let capturedLayers = Set(assistant?.config.targetLayerIds ?? [])
+            if let embeddings {
+                output = model.forwardPrefillDetailed(
+                    embeddings: embeddings[0..., offset..<end, 0...],
+                    cache: cache, captureLayerIndices: capturedLayers
+                )
+            } else {
+                let chunk = Array(tokens[offset..<end])
+                output = try model.forwardPrefillDetailed(
+                    inputIds: MLXArray(chunk.map(Int32.init)).reshaped(1, chunk.count),
+                    imageBatch: nil, cache: cache, captureLayerIndices: capturedLayers
+                )
+            }
             if let assistant, let assistantCache {
                 assistant.appendTargetContext(output.capturedHiddenStates, cache: assistantCache)
                 evaluateGemma4CacheStorage(assistantCache)

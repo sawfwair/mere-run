@@ -727,8 +727,20 @@ public final class MuseGlimmerModel: Module, @unchecked Sendable {
         cache: [Gemma4AttentionCache],
         captureLayerIndices: Set<Int> = []
     ) throws -> MuseGlimmerForwardOutput {
+        forwardPrefillDetailed(
+            embeddings: try model.embeddings(inputIds: inputIds, imageBatch: imageBatch),
+            cache: cache,
+            captureLayerIndices: captureLayerIndices
+        )
+    }
+
+    func forwardPrefillDetailed(
+        embeddings: MLXArray,
+        cache: [Gemma4AttentionCache],
+        captureLayerIndices: Set<Int> = []
+    ) -> MuseGlimmerForwardOutput {
         let output = model.languageModel.forward(
-            try model.embeddings(inputIds: inputIds, imageBatch: imageBatch),
+            embeddings,
             cache: cache,
             captureLayerIndices: captureLayerIndices
         )
@@ -776,6 +788,10 @@ public final class MuseGlimmerModel: Module, @unchecked Sendable {
 
     func inputEmbeddings(for inputIds: MLXArray) -> MLXArray {
         model.languageModel.embeddings(inputIds)
+    }
+
+    func inputEmbeddings(for inputIds: MLXArray, imageBatch: MuseGlimmerImageBatch) throws -> MLXArray {
+        try model.embeddings(inputIds: inputIds, imageBatch: imageBatch)
     }
 
     func rawOutputLogits(from hidden: MLXArray) -> MLXArray {

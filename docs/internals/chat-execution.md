@@ -75,6 +75,12 @@ cancellation before and after generation. A CLI command keeps one runtime for
 its whole tool conversation and awaits unload when the conversation completes,
 fails, or is cancelled. Family generators own loading and inference.
 
+Native Glimmer prefills text and image-bearing prompts in 512-token chunks.
+Image features are embedded once in their ordered prompt positions before the
+language-model chunks run. Each chunk checks cancellation and preserves captured
+layer states for the speculative adapter. Image requests still report zero
+prefix-cache reuse.
+
 `RuntimeServingServices.startChat` acquires API request admission, resolves the
 request, and acquires model residency. `RuntimeChatSession` holds both leases.
 Response producers keep the session alive through native generation or upstream

@@ -50,11 +50,12 @@ of unrelated settings and MCP registrations.
 
 The docs site builds successfully. Focused protocol, shared execution, command,
 Glimmer parser, cache-policy, and context-edit tests pass, including the official
-SDK against both API versions. The full repository gate was attempted repeatedly;
-30 existing protected run-record test cases fail because macOS reports
-`IOConsoleLocked = Yes`. Files written with `completeUnlessOpen` cannot be
-reopened in that state. The gate is not green, and this is not a release-qualified
-change.
+SDK against both API versions. The full `./scripts/check.sh` gate passed on
+November 7, 2026, after unlocking macOS, with the official SDK environment and
+installed Ornith tokenizer fixture enabled. Earlier locked runs had 30 protected
+run-record failures: files written with `completeUnlessOpen` could not be reopened
+while `IOConsoleLocked = Yes`. Those cases passed in the unlocked run without
+changing file protection. A green gate does not establish desktop task success.
 
 ## Model and task evidence
 
@@ -65,9 +66,8 @@ change.
 | Gemma | Text, counting, streams and typed tools | Gemma Turbo text/count/stream/tool and signed replay probes passed | Client effort request rejected before generation | Not qualified | Debug probe below |
 | Other text backends | Buffered route boundary only | Flint 4-bit text probe passed; count rejected explicitly | Unsupported adapter capabilities | Not qualified | Debug probe below |
 
-The unchanged Claude Code/Cua reference loop was not found in this repository.
-Its location is needed to repeat the same harness with only the inference
-server changed. Calculator qualification requires independent observations of
+The local Cua reference configuration was later located beside the llama.cpp
+server; see the live Cua trial below. Calculator qualification requires independent observations of
 `6 × 7 = 42` and `47 × 23 = 1081`, repeated from fresh app state. Website and
 coding tasks require independent evidence. The coding fixture below passed;
 the Calculator, website, and unchanged reference-loop cases remain unqualified.
@@ -183,8 +183,7 @@ and 3.673 output tokens/second. The final request used 20,271 input tokens,
 The end snapshot had no queued or active requests and one resident model.
 These debug timings are observations, not a controlled performance comparison.
 
-This qualifies the coding fixture only. It does not qualify desktop tasks or
-the unavailable unchanged Claude Code/Cua reference harness.
+This qualifies the coding fixture only. It does not qualify desktop tasks.
 
 ## Qwen and Gemma coding outcomes
 
@@ -228,7 +227,7 @@ tokens/second. Failed-attempt output is excluded from those completed-round
 counters. Queue-wait time was not measured. The final snapshot had one resident
 model and no queued or active requests. These debug observations are not a
 controlled benchmark; the repeat overlapped repository validation startup.
-Calculator, website, and unchanged reference-harness cases remain unqualified.
+Calculator and website cases remain unqualified.
 
 Gemma's session failed before generation because Claude Code `2.1.316` requested
 `output_config.effort.high`. The Gemma adapter has no native effort control and
@@ -323,6 +322,37 @@ Vision cache reads/writes stayed zero, and zero-output image warming failed
 explicitly. The native harness includes an opt-in image-order check for supplied
 labeled fixtures. These image cases do not qualify desktop interaction.
 
+## Live Cua trial
+
+The local reference setup uses unmodified Claude Code `2.1.316` and
+[Cua Driver](https://github.com/trycua/cua) `0.38.0` over MCP. Its existing
+13-tool configuration was reused unchanged, including the tool filter and
+private-socket wrapper. The idle llama.cpp server was stopped before loading
+native Glimmer. Driver permissions remained in standard mode; no permission
+policy or existing MCP registration was changed. The client received scoped
+approval for the supplied Cua tools and executed all app actions itself.
+
+The first fresh Calculator trial was interrupted after 513.263 seconds without
+computing `6 × 7`. It launched a new process, inspected its window, and cleared
+the display. An independent accessibility read and screenshot both confirmed
+`0` afterward. This is an incomplete task, not a pass. Cancellation released the
+request lease, leaving no active or queued requests.
+
+Cold native loading took 82.980 seconds separately from the client session.
+The first image-bearing request prepared 26,551 tokens, spent 141.089 seconds in
+prefill and 88.522 seconds decoding, and generated 146 tokens. Its cache reads
+and writes were zero. A stack sample located the delay in native GPU prefill;
+no queue wait was observed. These debug timings are not a controlled comparison
+with llama.cpp.
+
+The trial exposed a runtime gap: image-bearing prompts used one full prefill,
+while text prompts used cancellable chunks. Both paths now use 512-token
+language-model chunks, with image features embedded once in their original
+positions. A tiny-model regression compares two-image chunking against whole
+prefill across sliding-window boundaries, checking logits, captured layer
+states, and cache offsets. Native repeats are required to assess its effect on
+task outcomes and performance.
+
 ## Remaining boundaries
 
 Other backends without shared exact preparation reject token counting.
@@ -331,6 +361,6 @@ citations, vision PDF rendering, and server-side compaction are unsupported.
 PDFs require extractable text; image-only PDFs fail explicitly. Native vision
 prefix caches are unavailable and report zero usage.
 
-The repository gate and task qualification remain incomplete. Unsupported
-capabilities are documented and rejected explicitly. The feature is not
+The repository gate passes; desktop task qualification remains incomplete.
+Unsupported capabilities are documented and rejected explicitly. The feature is not
 presented as end-to-end Claude Code support.

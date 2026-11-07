@@ -263,6 +263,48 @@ final class MuseGlimmerTests: MereRunCoreTestCase {
         XCTAssertEqual(logits.shape, [1, 1, 32])
     }
 
+    func testChunkedImageEmbeddingsPreserveLogitsAndCapturedLayersAcrossSlidingWindow() throws {
+        let model = MuseGlimmerModel(config: try Self.config())
+        let ids = MLXArray([Int32(1), 3, 9, 4, 5, 6, 7, 10, 11, 12, 13, 9, 14, 15, 16, 17, 18, 19, 20, 21])
+            .reshaped(1, 20)
+        let images = MuseGlimmerImageBatch(
+            pixelValues: MLXArray(Array(0..<192).map { Float($0) / 192 }, [8, 24]),
+            grids: [(1, 2, 2), (1, 2, 2)], tokenCounts: [1, 1]
+        )
+        let layers: Set<Int> = [0, 2]
+        let reference = try model.forwardPrefillDetailed(
+            inputIds: ids, imageBatch: images, cache: model.makeCache(), captureLayerIndices: layers
+        )
+        MLX.eval(reference.logits)
+        let embeddings = try model.inputEmbeddings(for: ids, imageBatch: images)
+        MLX.eval(embeddings)
+        for chunkSize in [1, 4, 7] {
+            let cache = model.makeCache()
+            var captured: [Int: [MLXArray]] = [:]
+            var finalLogits: MLXArray?
+            for offset in stride(from: 0, to: 20, by: chunkSize) {
+                let end = min(20, offset + chunkSize)
+                let output = model.forwardPrefillDetailed(
+                    embeddings: embeddings[0..., offset..<end, 0...],
+                    cache: cache, captureLayerIndices: layers
+                )
+                MLX.eval(output.logits)
+                finalLogits = output.logits
+                for layer in layers {
+                    captured[layer, default: []].append(try XCTUnwrap(output.capturedHiddenStates[layer]))
+                }
+            }
+            let difference = MLX.max(MLX.abs(try XCTUnwrap(finalLogits) - reference.logits)).item(Float.self)
+            XCTAssertLessThan(difference, 0.0001, "chunk size \(chunkSize)")
+            XCTAssertEqual(cache.map(\.offset), [20, 20, 20, 20])
+            for layer in layers {
+                let states = MLX.concatenated(try XCTUnwrap(captured[layer]), axis: 1)
+                let expected = try XCTUnwrap(reference.capturedHiddenStates[layer])
+                XCTAssertLessThan(MLX.max(MLX.abs(states - expected)).item(Float.self), 0.0001)
+            }
+        }
+    }
+
     func testManagedSpecPinsArtifactAndSourceProvenanceAndDisablesImplicitDownload() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: MuseGlimmerResources.modelId))
         XCTAssertEqual(spec.category, .visionChat)

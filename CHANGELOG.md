@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Process native Glimmer image prompts in cancellable prefill chunks, preserving
+  ordered image embeddings and captured layer states.
 - Preserve cache breakpoints during context edits and deferred-tool loading,
   including markers inside tool-error content. Preserve streamed text and
   reasoning when continuing local tool search, and report each clearing once.
