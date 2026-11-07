@@ -36,8 +36,16 @@ public struct ChatPromptPreparation: Sendable {
                     turns.append(turn)
                 }
                 let cutoff = turn - keep + 1
-                let clearedTurns = Set(request.messages.indices.filter { turns[$0] < cutoff && request.messages[$0].reasoningContent?.isEmpty == false }.map { turns[$0] }).count
-                for index in request.messages.indices where turns[index] < cutoff {
+                let clearedIndices = request.messages.indices.filter { index in
+                    turns[index] < cutoff && (request.messages[index].reasoningContent?.isEmpty == false ||
+                        request.messages[index].contentBlocks?.contains(where: { if case .reasoning = $0 { true } else { false } }) == true)
+                }
+                guard !clearedIndices.isEmpty else { continue }
+                let clearedTurns = Set(clearedIndices.map { turns[$0] }).count
+                for index in clearedIndices {
+                    let blocks = request.messages[index].contentBlocks ?? []
+                    let removed = blocks.indices.filter { if case .reasoning = blocks[$0] { true } else { false } }
+                    request.remapCacheBoundaries(messageIndex: index) { count in count - removed.filter { $0 < count }.count }
                     request.messages[index].reasoningContent = nil
                     request.messages[index].contentBlocks?.removeAll { if case .reasoning = $0 { true } else { false } }
                 }
@@ -45,10 +53,10 @@ public struct ChatPromptPreparation: Sendable {
                 applied.append(.init(reasoning: true, clearedTokens: max(0, prompt.tokens.count - edited.tokens.count), clearedToolUses: 0, clearedThinkingTurns: clearedTurns))
                 prompt = edited
             case .toolResults(let trigger, let toolTrigger, let keep, let minimum, let excluded, let clearInputs):
-                let toolCount = request.messages.filter { $0.role == .tool }.count
+                let toolCount = request.messages.filter { $0.role == .tool && $0.toolResultCleared != true }.count
                 guard toolTrigger.map({ toolCount > $0 }) ?? (prompt.tokens.count > trigger) else { continue }
                 var candidate = request
-                let results = candidate.messages.indices.filter { candidate.messages[$0].role == .tool }
+                let results = candidate.messages.indices.filter { candidate.messages[$0].role == .tool && candidate.messages[$0].toolResultCleared != true }
                 var removed = 0
                 var edited = prompt
                 for index in results.dropLast(min(keep, results.count)) {
@@ -56,6 +64,8 @@ public struct ChatPromptPreparation: Sendable {
                     guard !excluded.contains(message.name ?? ""), let id = message.toolCallID else { continue }
                     candidate.messages[index].content = "[Tool result cleared]"
                     candidate.messages[index].contentBlocks = [.text("[Tool result cleared]")]
+                    candidate.messages[index].toolResultCleared = true
+                    candidate.remapCacheBoundaries(messageIndex: index) { _ in 1 }
                     if clearInputs {
                         for useIndex in candidate.messages.indices {
                             if let calls = candidate.messages[useIndex].toolCalls {
@@ -86,5 +96,18 @@ public struct ChatPromptPreparation: Sendable {
         }
         request.preparedPrompt = prompt
         return Self(request: request, prompt: prompt, applied: applied, originalInputTokens: originalCount)
+    }
+}
+
+private extension ChatRequest {
+    mutating func remapCacheBoundaries(messageIndex: Int, blockCount: (Int) -> Int) {
+        guard let policy = prefixCachePolicy else { return }
+        let boundaries = policy.boundaries.compactMap { boundary -> ChatCacheBoundary? in
+            guard boundary.messageIndex == messageIndex else { return boundary }
+            let count = blockCount(boundary.blockCount)
+            return count > 0 ? .init(messageIndex: messageIndex, blockCount: count, ttlSeconds: boundary.ttlSeconds) : nil
+        }
+        prefixCachePolicy = .init(scope: policy.scope, boundaries: boundaries, wholePromptTTL: policy.wholePromptTTL,
+                                  toolPrefixTTL: policy.toolPrefixTTL, toolBoundaries: policy.toolBoundaries)
     }
 }

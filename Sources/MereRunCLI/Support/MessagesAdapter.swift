@@ -155,6 +155,15 @@ extension RuntimeChatRequest {
                         messages.append(message)
                     default: ordinary.append(block)
                     }
+                    if case .toolResult(let result) = wireBlock {
+                        for (index, child) in (result.content?.blocks ?? []).enumerated() {
+                            if let marker = MessagesAdapter.cacheControl(child) {
+                                cacheBoundaries.append(.init(messageIndex: messages.count - 1,
+                                    blockCount: index + 1 + (result.is_error == true ? 1 : 0),
+                                    ttlSeconds: marker.ttl == "1h" ? 3600 : 300))
+                            }
+                        }
+                    }
                     if let marker = MessagesAdapter.cacheControl(wireBlock) {
                         let isResult: Bool
                         if case .toolResult = block { isResult = true } else { isResult = false }
@@ -177,11 +186,13 @@ extension RuntimeChatRequest {
                                               topK: wire.top_k, thinking: thinking != nil && thinking?.type != "disabled"),
                 policy: .openAI, apiProfile: configuration.profile)
             let fullTTL = wire.cache_control
-            let toolTTL = wire.tools?.last?.cache_control
-            if !cacheBoundaries.isEmpty || fullTTL != nil || toolTTL != nil {
+            let toolBoundaries = (wire.tools ?? []).compactMap { tool -> ChatToolCacheBoundary? in
+                tool.cache_control.map { .init(throughTool: tool.name, ttlSeconds: $0.ttl == "1h" ? 3600 : 300) }
+            }
+            if !cacheBoundaries.isEmpty || fullTTL != nil || !toolBoundaries.isEmpty {
                 request.prefixCachePolicy = .init(scope: authenticatedScope, boundaries: cacheBoundaries,
                     wholePromptTTL: fullTTL.map { $0.ttl == "1h" ? 3600 : 300 },
-                    toolPrefixTTL: toolTTL.map { $0.ttl == "1h" ? 3600 : 300 })
+                    toolBoundaries: toolBoundaries)
             }
             request.cacheWarmOnly = !counting && wire.max_tokens == 0
             request.reserveOutputContext = !counting
@@ -226,17 +237,18 @@ enum MessagesAdapter {
             guard !tool.name.isEmpty, names.insert(tool.name).inserted else { throw MessagesFailure.invalid("tools.name", "must be non-empty and unique") }
             if tool.strict == true { throw MessagesFailure.unsupported("tools.strict") }
             if tool.defer_loading == true, tool.cache_control != nil { throw MessagesFailure.invalid("tools.cache_control", "deferred tools cannot carry cache breakpoints") }
+            if let callers = tool.allowed_callers, callers != ["direct"] { throw MessagesFailure.unsupported("tools.allowed_callers") }
+            if tool.input_examples != nil { throw MessagesFailure.unsupported("tools.input_examples") }
+            try tool.cache_control?.validate()
             if search {
                 guard tool.defer_loading != true, tool.strict != true, tool.max_uses == nil else { throw MessagesFailure.invalid("tool_search", "search must be non-deferred and use the documented options") }
+                guard tool.input_schema == nil else { throw MessagesFailure.invalid("tool_search.input_schema", "built-in search defines its own schema; omit input_schema") }
                 let query = tool.type == "tool_search_tool_regex_20251119" ? "pattern" : "query"
-                return ToolDefinition(name: tool.name, description: "Search the local tool catalog and load matching tool definitions.", parameterSchema: [
+                return ToolDefinition(name: tool.name, description: tool.description ?? "Search the local tool catalog and load matching tool definitions.", parameterSchema: [
                     "type": .string("object"), "properties": .object([query: .object(["type": .string("string")]),
                     "limit": .object(["type": .string("integer")])]), "required": .array([.string(query)])])
             }
-            if tool.allowed_callers?.contains(where: { $0 != "direct" }) == true { throw MessagesFailure.unsupported("tools.allowed_callers") }
             if tool.max_uses != nil { throw MessagesFailure.unsupported("tools.max_uses") }
-            if tool.input_examples != nil { throw MessagesFailure.unsupported("tools.input_examples") }
-            try tool.cache_control?.validate()
             guard let schema = tool.input_schema, schema["type"] == .string("object") else {
                 throw MessagesFailure.invalid("tools.input_schema", "must be an object schema")
             }

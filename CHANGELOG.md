@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Preserve cache breakpoints during context edits and deferred-tool loading,
+  including markers inside tool-error content. Preserve streamed text and
+  reasoning when continuing local tool search, and report each clearing once.
+- Add an opt-in native Messages qualification harness for prepared counts,
+  caching, deferred search, documents, and signed reasoning replay.
+
 - Add native Messages routes, adapter capability discovery, exact prompt counting,
   local tool search and context editing, and preview-first Claude Code
   connection settings. See the Messages API guide for adapter limits and the

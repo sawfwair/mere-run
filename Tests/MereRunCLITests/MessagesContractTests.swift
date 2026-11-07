@@ -6,6 +6,44 @@ import MediaIO
 @testable import MereRunCLI
 
 final class MessagesContractTests: XCTestCase {
+    func testSearchDefinitionsRejectUnsupportedOptionsAndPreserveDescriptions() throws {
+        let profile = try XCTUnwrap(ManagedModelCatalog.apiProfile(for: MuseGlimmerResources.modelId))
+        let caps = MessagesCapabilities.adapter(.textChatMuseGlimmer, profile: profile)
+        for option in [#", "allowed_callers":["code_execution_20250825"]"#, #", "allowed_callers":[]"#,
+                       #", "input_examples":[{"pattern":"read"}]"#, #", "input_schema":{"type":"object"}"#,
+                       #", "max_uses":1"#] {
+            let tool = try JSONDecoder().decode(MessagesTool.self, from: Data((#"{"name":"search","type":"tool_search_tool_regex_20251119""# + option + "}").utf8))
+            XCTAssertThrowsError(try MessagesAdapter.tools([tool], capabilities: caps))
+        }
+        let tool = try JSONDecoder().decode(MessagesTool.self, from: Data(#"{"name":"search","type":"tool_search_tool_regex_20251119","description":"Find local fixtures.","allowed_callers":["direct"]}"#.utf8))
+        XCTAssertEqual(try MessagesAdapter.tools([tool], capabilities: caps).first?.description, "Find local fixtures.")
+    }
+
+    func testNestedResultCacheMarkersUseContentOrderAndErrorPrefixOffset() throws {
+        let source = #"{"model":"local","max_tokens":16,"messages":[{"role":"user","content":"read"},{"role":"assistant","content":[{"type":"tool_use","id":"a","name":"read","input":{}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"a","is_error":true,"cache_control":{"type":"ephemeral"},"content":[{"type":"text","text":"cached failure","cache_control":{"type":"ephemeral","ttl":"1h"}},{"type":"text","text":"uncached detail"}]}]}]}"#
+        let wire = try JSONDecoder().decode(MessagesRequest.self, from: Data(source.utf8))
+        let profile = try XCTUnwrap(ManagedModelCatalog.apiProfile(for: MuseGlimmerResources.modelId))
+        let input = try RuntimeChatRequest.messages(wire, version: .original, counting: false,
+            continuity: MessagesContinuity(key: Data(repeating: 1, count: 32)))
+        let prepared = try input.prepare(.init(modelID: MuseGlimmerResources.modelId, engine: .textChatMuseGlimmer,
+            settings: .init(), profile: profile, contextSize: 32768, fallbackLoraPath: nil))
+        XCTAssertEqual(prepared.request.prefixCachePolicy?.boundaries, [
+            .init(messageIndex: 2, blockCount: 2, ttlSeconds: 3600), .init(messageIndex: 2, blockCount: 3, ttlSeconds: 300)])
+        XCTAssertEqual(prepared.request.messages.last?.contentBlocks?.first, .text("Tool error:"))
+    }
+
+    func testToolCacheMarkerBeforeDeferredDefinitionsIsRetained() throws {
+        let wire = try wire(#", "tools":[{"type":"tool_search_tool_regex_20251119","name":"catalog_search","cache_control":{"type":"ephemeral","ttl":"1h"}},{"name":"later","defer_loading":true,"input_schema":{"type":"object","properties":{}}}]"#)
+        let profile = try XCTUnwrap(ManagedModelCatalog.apiProfile(for: MuseGlimmerResources.modelId))
+        let configuration = RuntimeChatConfiguration(modelID: MuseGlimmerResources.modelId, engine: .textChatMuseGlimmer,
+            settings: .init(), profile: profile, contextSize: 32768, fallbackLoraPath: nil)
+        let input = try RuntimeChatRequest.messages(wire, version: .original, counting: false,
+            continuity: MessagesContinuity(key: Data(repeating: 1, count: 32)))
+        let prepared = try input.prepare(configuration)
+        XCTAssertNotNil(prepared.request.prefixCachePolicy)
+        XCTAssertEqual(prepared.request.prefixCachePolicy?.toolBoundaries, [.init(throughTool: "catalog_search", ttlSeconds: 3600)])
+    }
+
     func testConsecutiveToolResultMessagesFormOneUserTurn() throws {
         let source = #"{"model":"local","max_tokens":16,"messages":[{"role":"user","content":"read"},{"role":"assistant","content":[{"type":"tool_use","id":"a","name":"read","input":{}}]},{"role":"assistant","content":[{"type":"tool_use","id":"b","name":"read","input":{}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"a","content":"first"}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"b","content":"second"},{"type":"text","text":"continue"}]}]}"#
         let wire = try JSONDecoder().decode(MessagesRequest.self, from: Data(source.utf8))

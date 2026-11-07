@@ -2,6 +2,15 @@ import XCTest
 @testable import MereRunCore
 
 final class ChatPrefixCacheTests: XCTestCase {
+    func testMovingAMarkerBackDoesNotReuseABeyondBoundaryPrefix() {
+        var cache = ChatNativePrefixCache<String>()
+        XCTAssertTrue(cache.store(identity: "scope", tokens: [1, 2, 3, 4], value: "long", ttl: 300))
+        XCTAssertNil(cache.lookup(identity: "scope", tokens: [1, 2, 3, 4, 5], ttls: [2: 300]))
+        XCTAssertTrue(cache.store(identity: "scope", tokens: [1, 2], value: "short", ttl: 300))
+        XCTAssertEqual(cache.lookup(identity: "scope", tokens: [1, 2, 3, 4, 5], ttls: [2: 300])?.value, "short")
+        XCTAssertEqual(cache.lookup(identity: "scope", tokens: [1, 2, 3, 4, 5])?.value, "long")
+    }
+
     func testRealReadsRefreshTTLAndCanExtendAnExistingPrefixToOneHour() {
         let now = Date(timeIntervalSince1970: 1000)
         var cache = ChatNativePrefixCache<String>()

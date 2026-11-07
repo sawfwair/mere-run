@@ -37,6 +37,14 @@ extension MuseGlimmerGenerator {
             let count = Self.cacheBoundaryTokenCount(prepared: tokens, renderedBoundary: toolPrefix)
             if count > 0, count <= Self.maximumCachedPrefixTokens { result[count] = ttl }
         }
+        for boundary in policy.toolBoundaries {
+            guard let tools = request.tools, let index = tools.firstIndex(where: { $0.name == boundary.throughTool }) else { continue }
+            let prefix = try tokenizerAndTemplate.encodeForGeneration(messages: [], tools: Array(tools.prefix(index + 1)),
+                reasoningStrength: Self.reasoningStrength(request.reasoningEffort), currentDate: formatter.string(from: Date()),
+                maxLength: Int.max, truncate: false, addGenerationPrompt: false)
+            let count = Self.cacheBoundaryTokenCount(prepared: tokens, renderedBoundary: prefix)
+            if count > 0, count <= Self.maximumCachedPrefixTokens { result[count] = max(result[count] ?? 0, boundary.ttlSeconds) }
+        }
         for boundary in boundaries {
             guard request.messages.indices.contains(boundary.messageIndex), boundary.blockCount > 0 else { continue }
             var message = request.messages[boundary.messageIndex]

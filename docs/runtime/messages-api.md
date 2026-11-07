@@ -78,7 +78,12 @@ one admission lease, cancellation, and output budget.
 
 Context clearing applies before counting and generation. Tool results retain
 their matching IDs, exclusions, and recent results. Responses report applied
-edits and tokens cleared. Server-side compaction strategies fail explicitly;
+edits and tokens cleared. Cache markers remain attached to their content after
+edits, and internal search rounds do not report the same clearing twice.
+Markers inside tool-result content and on non-deferred tools retain their
+boundaries when later content or tool definitions change.
+Moving a marker earlier also limits reuse of existing cached entries.
+Server-side compaction strategies fail explicitly;
 client-side conversation replacement remains available.
 
 Text prefix caches retain at most two entries and 32,768 tokens in total, with
@@ -176,3 +181,41 @@ All model inference stays local. Claude Code can independently make optional
 network requests, including fast-mode checks, WebFetch safety checks, and
 telemetry. See the [Claude Code gateway compatibility guide](https://code.claude.com/docs/en/llm-gateway-protocol)
 for client behavior and optional network configuration.
+
+## Qualify advanced combinations
+
+With a capable local model already served and the official Anthropic Python SDK
+installed in your test environment, run:
+
+```sh
+python scripts/qualify-messages-native.py \
+  --base-url http://127.0.0.1:8080 \
+  --model vision-chat-muse-glimmer-30b --search regex \
+  --output /tmp/messages-native-qualification.json
+```
+
+The harness checks real prepared counts, cache warming or explicit rejection,
+deferred discovery, streaming, context edits, a synthetic two-page PDF, and
+signed reasoning replay. It compares usage with independently counted internal
+rounds. Use `--search bm25` for that search variant. It reads credentials from
+`MERERUN_API_KEY`, or the variable named by `--api-key-env`, and never includes
+their values in the report. Without a value, it uses a placeholder credential for an
+unkeyed loopback server; a keyed server rejects that credential.
+
+`--cache-only` selects warming, reuse, and moving-marker checks, using a real
+signed-thinking seed. Reports identify the selected checks; a passing report
+qualifies that selection.
+
+This opt-in check requires installed assets and makes inference requests. It
+does not start services, install models, or execute client tools. The scripted
+prior tool exchange and generated lookup request qualify API combinations;
+coding and desktop task evidence remains separate. See the
+[qualification record](../internals/messages-qualification.md) for tested SDK
+versions, native results, and remaining gaps.
+
+For ordered-image checks, supply two labeled PNG or JPEG fixtures with
+`--vision-images first.png second.png --vision-labels ALPHA BETA`. The harness
+swaps their order and checks each generated first-image label against your
+fixture labels, exact input usage, and the explicit vision-cache boundary.
+Add `--vision-only` to run those checks. The label task requests low effort
+where the adapter advertises it; it keeps adaptive thinking enabled.

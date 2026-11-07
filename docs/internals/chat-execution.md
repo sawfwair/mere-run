@@ -55,6 +55,13 @@ conversation again before decoding. Native caches match authenticated scope, loa
 template settings, media identity, and prepared token prefixes. Unsupported
 cache backends report zero Messages cache usage.
 
+Cache breakpoints follow their content when thinking blocks are removed or tool
+results are replaced. Tool breakpoints identify the last included tool, so
+discovering additional definitions does not extend an earlier marker. Prepared
+tool results record clearing state to keep internal continuation edits idempotent.
+Search continuations coalesce adjacent streamed fragments without inserting
+separators, and retain typed tool references and error state in model history.
+
 ## Execution and runtime lifetime
 
 `NativeChatRuntime` includes desktop-only GGUF and process-backed runtimes; the

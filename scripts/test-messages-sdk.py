@@ -5,6 +5,7 @@ Run through MERERUN_ANTHROPIC_SDK_PYTHON, never against a model qualification
 server: fixture prompts deliberately select deterministic test outcomes.
 """
 import sys
+import copy
 import anthropic
 
 base = sys.argv[1]
@@ -53,7 +54,7 @@ for version in ("2023-06-01", "2026-10-21"):
         client.messages.create(model="fixture", max_tokens=16, tools=[tool], extra_headers=headers, messages=[
             {"role": "user", "content": "tool"}, {"role": "assistant", "content": [b.model_dump() for b in called.content]},
             {"role": "user", "content": [{"type": "tool_result", "tool_use_id": call.id, "content": "tool failed", "is_error": True}]}])
-    catalog = [{"type": "tool_search_tool_regex_20251119", "name": "catalog_search"}, dict(tool, defer_loading=True)]
+    catalog = [{"type": "tool_search_tool_regex_20251119", "name": "tool_search_tool_regex"}, dict(tool, defer_loading=True)]
     for streaming in (False, True):
         search_args = dict(model="fixture", max_tokens=16, tools=catalog, messages=[{"role": "user", "content": "search"}], extra_headers=headers)
         if streaming:
@@ -78,4 +79,87 @@ for version in ("2023-06-01", "2026-10-21"):
         messages=[{"role": "user", "content": "mixed"}], extra_headers=headers)
     assert [block.type for block in mixed.content] == ["server_tool_use", "tool_search_tool_result", "tool_use"]
     assert mixed.content[-1].input == {"value": 42, "nested": {"ok": True}}
+
+    # Combined preparation, deferred discovery, cache accounting, signed thinking,
+    # client tool replay, and exact count/generation parity through real HTTP.
+    advanced_catalog = [dict(catalog[0], cache_control={"type": "ephemeral", "ttl": "1h"}),
+        {"name": "read", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}}}, catalog[1]]
+    history = [{"role": "user", "content": "advanced"},
+        {"role": "assistant", "content": [thinking.model_dump(),
+            {"type": "tool_use", "id": "old_read", "name": "read", "input": {"path": "old.txt"}}]},
+        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "old_read", "content": [
+            {"type": "text", "text": "old result " * 50},
+            {"type": "document", "title": "Old note", "source": {"type": "text", "media_type": "text/plain", "data": "old document " * 50}}],
+            "cache_control": {"type": "ephemeral"}}, {"type": "text", "text": "continue"}]}]
+    advanced_api = client.beta.messages
+    extra = {"cache_control": {"type": "ephemeral"}, "context_management": {"edits": [
+        {"type": "clear_thinking_20251015", "keep": {"type": "thinking_turns", "value": 1}},
+        {"type": "clear_tool_uses_20250919", "trigger": {"type": "input_tokens", "value": 0},
+         "keep": {"type": "tool_uses", "value": 0}, "exclude_tools": [catalog[0]["name"]], "clear_tool_inputs": True}]}}
+    advanced_args = dict(model="fixture", max_tokens=16, tools=advanced_catalog, messages=history,
+        thinking={"type": "adaptive"}, extra_headers=headers, extra_body=extra, betas=["context-management-2025-06-27"])
+    count = advanced_api.count_tokens(model="fixture", tools=advanced_catalog, messages=history,
+        thinking={"type": "adaptive"}, extra_headers=headers, extra_body=extra)
+    assert count.model_dump()["context_management"]["original_input_tokens"] > count.input_tokens
+    expected_types = ["thinking", "text", "server_tool_use", "tool_search_tool_result", "thinking", "text", "tool_use"]
+    for streaming in (False, True):
+        if streaming:
+            starts = []
+            with advanced_api.stream(**advanced_args) as stream:
+                for event in stream:
+                    if event.type == "message_start":
+                        starts.append(event.message)
+                combined = stream.get_final_message()
+            assert len(starts) == 1 and starts[0].usage.input_tokens + starts[0].usage.cache_read_input_tokens == count.input_tokens
+        else:
+            combined = advanced_api.create(**advanced_args)
+        assert [b.type for b in combined.content] == expected_types
+        assert combined.content[2].id == combined.content[3].tool_use_id
+        assert combined.usage.output_tokens == 5 and combined.usage.cache_read_input_tokens == 6
+        assert combined.usage.input_tokens + combined.usage.cache_read_input_tokens > count.input_tokens
+        edits = combined.model_dump()["context_management"]["applied_edits"]
+        assert len(edits) == 2 and edits[0]["cleared_thinking_turns"] == 1 and edits[1]["cleared_tool_uses"] == 1
+        assert all(b.signature.startswith("mere.v1.") for b in combined.content if b.type == "thinking")
+        replay = history + [{"role": "assistant", "content": [b.model_dump() for b in combined.content]},
+            {"role": "user", "content": [{"type": "tool_result", "tool_use_id": combined.content[-1].id,
+                "is_error": True, "content": [{"type": "text", "text": "try again"},
+                    {"type": "document", "source": {"type": "text", "data": "client tool failed"}}]}]}]
+        replayed = advanced_api.count_tokens(model="fixture", tools=advanced_catalog, messages=replay,
+            thinking={"type": "adaptive"}, extra_headers=headers, extra_body=extra)
+        assert replayed.input_tokens > 0
+        tampered = [dict(b.model_dump()) for b in combined.content]
+        tampered[0]["thinking"] += "modified"
+        try:
+            advanced_api.count_tokens(model="fixture", tools=advanced_catalog, extra_headers=headers,
+                messages=history + [{"role": "assistant", "content": tampered}, replay[-1]], extra_body=extra)
+            raise AssertionError("Modified reasoning was accepted")
+        except anthropic.BadRequestError:
+            pass
+    exhausted = advanced_api.create(**dict(advanced_args, max_tokens=2))
+    assert exhausted.stop_reason == "max_tokens" and exhausted.usage.output_tokens == 2
+    assert [b.type for b in exhausted.content] == expected_types[:4]
+    invalid_history = copy.deepcopy(history)
+    invalid_history[-1]["content"][-1]["text"] = "invalid search"
+    for streaming in (False, True):
+        invalid_args = dict(advanced_args, messages=invalid_history)
+        if streaming:
+            with advanced_api.stream(**invalid_args) as stream:
+                stream.until_done()
+                recovered = stream.get_final_message()
+        else:
+            recovered = advanced_api.create(**invalid_args)
+        search_results = [b for b in recovered.content if b.type == "tool_search_tool_result"]
+        assert len(search_results) == 2
+        assert search_results[0].content.type == "tool_search_tool_result_error"
+        assert search_results[0].content.error_code == "invalid_tool_input"
+        assert search_results[1].content.tool_references[0].tool_name == "calculate"
+        assert recovered.content[-1].type == "tool_use" and recovered.usage.output_tokens == 7
+    invalid_old_thinking = copy.deepcopy(history)
+    invalid_old_thinking[1]["content"][0]["thinking"] += "modified before clearing"
+    try:
+        advanced_api.count_tokens(model="fixture", tools=advanced_catalog, messages=invalid_old_thinking,
+            extra_headers=headers, extra_body=extra)
+        raise AssertionError("Invalid prior reasoning was ignored during clearing")
+    except anthropic.BadRequestError:
+        pass
 print("Official Anthropic SDK", anthropic.__version__, "buffered, streaming, tools, reasoning continuity and counting passed for both API versions")

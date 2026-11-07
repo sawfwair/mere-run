@@ -291,7 +291,8 @@ struct MessagesRequest: Decodable, Sendable {
     private static func cacheControls(_ blocks: [MessagesBlock]) -> [MessagesCacheControl] {
         blocks.flatMap { block in
             let own = MessagesAdapter.cacheControl(block).map { [$0] } ?? []
-            if case .toolResult(let result) = block { return own + cacheControls(result.content?.blocks ?? []) }
+            // An outer result marker covers its children and follows their markers.
+            if case .toolResult(let result) = block { return cacheControls(result.content?.blocks ?? []) + own }
             return own
         }
     }

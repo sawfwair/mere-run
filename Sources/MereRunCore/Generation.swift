@@ -186,6 +186,8 @@ public struct ChatMessage: Sendable, Hashable, Codable {
     public var contentBlocks: [ChatContentBlock]?
     public var conversationTurn: Int?
     public var toolResultIsError: Bool?
+    /// Preparation state, so internal continuation rounds do not clear a result twice.
+    public var toolResultCleared: Bool?
 
     public init(
         role: Role,
@@ -211,6 +213,7 @@ public struct ChatMessage: Sendable, Hashable, Codable {
         self.contentBlocks = contentBlocks
         self.conversationTurn = nil
         self.toolResultIsError = nil
+        self.toolResultCleared = nil
     }
 }
 

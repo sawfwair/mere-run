@@ -8,13 +8,22 @@ public struct ChatCacheBoundary: Hashable, Sendable {
         self.messageIndex = messageIndex; self.blockCount = blockCount; self.ttlSeconds = ttlSeconds
     }
 }
+public struct ChatToolCacheBoundary: Hashable, Sendable {
+    public let throughTool: String
+    public let ttlSeconds: Int
+    public init(throughTool: String, ttlSeconds: Int) { self.throughTool = throughTool; self.ttlSeconds = ttlSeconds }
+}
+
 public struct ChatPrefixCachePolicy: Hashable, Sendable {
     public let scope: String
     public let boundaries: [ChatCacheBoundary]
     public let wholePromptTTL: Int?
     public let toolPrefixTTL: Int?
-    public init(scope: String, boundaries: [ChatCacheBoundary], wholePromptTTL: Int?, toolPrefixTTL: Int? = nil) {
+    public let toolBoundaries: [ChatToolCacheBoundary]
+    public init(scope: String, boundaries: [ChatCacheBoundary], wholePromptTTL: Int?, toolPrefixTTL: Int? = nil,
+                toolBoundaries: [ChatToolCacheBoundary] = []) {
         self.scope = scope; self.boundaries = boundaries; self.wholePromptTTL = wholePromptTTL; self.toolPrefixTTL = toolPrefixTTL
+        self.toolBoundaries = toolBoundaries
     }
 }
 
@@ -39,7 +48,8 @@ struct ChatNativePrefixCache<Value> {
     }
     mutating func lookup(identity: String, tokens: [Int], ttls: [Int: Int] = [:], now: Date = Date()) -> Entry? {
         entries.removeAll { $0.expires <= now }
-        guard let index = entries.indices.filter({ entries[$0].identity == identity && tokens.starts(with: entries[$0].tokens) })
+        let boundaryLimit = ttls.keys.max() ?? Int.max
+        guard let index = entries.indices.filter({ entries[$0].identity == identity && entries[$0].tokens.count <= boundaryLimit && tokens.starts(with: entries[$0].tokens) })
             .max(by: { entries[$0].tokens.count < entries[$1].tokens.count }) else { return nil }
         sequence += 1; entries[index].lastAccess = sequence
         if let requested = ttls[entries[index].tokens.count], [300, 3600].contains(requested) {

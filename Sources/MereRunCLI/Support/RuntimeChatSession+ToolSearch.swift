@@ -50,7 +50,7 @@ extension RuntimeChatSession {
             var uses: [ChatMessageToolCall] = []
             var results: [ChatMessage] = []
             for call in searches {
-                guard let arguments = call.jsonArguments else { throw MessagesFailure.invalid("tool_search", "search input must be validated typed JSON") }
+                guard let arguments = call.jsonArguments else { throw MessagesFailure.output("tool_search", "adapter search input must be validated typed JSON") }
                 let id = "srvtoolu_" + UUID().uuidString.replacingOccurrences(of: "-", with: "")
                 let use = ChatMessageToolCall(id: id, name: call.name, arguments: arguments)
                 uses.append(use)
@@ -69,7 +69,12 @@ extension RuntimeChatSession {
                 var tools = input.tools ?? []
                 for tool in found where !tools.contains(where: { $0.name == tool.name }) { tools.append(tool) }
                 input.tools = tools
-                results.append(ChatMessage(role: .tool, content: failure?.message ?? "Discovered tools: " + found.map(\.name).joined(separator: ", "), name: call.name, toolCallID: id))
+                let blocks: [ChatContentBlock] = failure.map {
+                    [.text("Tool error:"), .text("Tool search error (\($0.code)): " + $0.message)]
+                } ?? found.map { .toolReference($0.name) }
+                var message = ChatMessage(role: .tool, blocks: blocks)
+                message.name = call.name; message.toolCallID = id; message.toolResultIsError = failure != nil
+                results.append(message)
             }
             let clientCalls = calls.filter { search.searchTools[$0.name] == nil }
             if !clientCalls.isEmpty {
@@ -79,11 +84,16 @@ extension RuntimeChatSession {
                 result.generationEvents = allEvents
                 return result
             }
-            let content = observed.events.compactMap { event -> ChatContentBlock? in
+            var content: [ChatContentBlock] = []
+            for event in observed.events {
                 switch event {
-                case .text(let text): return .text(text)
-                case .reasoning(let text): return .reasoning(text: text, continuity: nil)
-                default: return nil
+                case .text(let text):
+                    if case .text(let previous) = content.last { content[content.count - 1] = .text(previous + text) }
+                    else { content.append(.text(text)) }
+                case .reasoning(let text):
+                    if case .reasoning(let previous, _) = content.last { content[content.count - 1] = .reasoning(text: previous + text, continuity: nil) }
+                    else { content.append(.reasoning(text: text, continuity: nil)) }
+                default: break
                 }
             }
             input.messages.append(ChatMessage(role: .assistant, blocks: content + uses.map(ChatContentBlock.toolUse)))

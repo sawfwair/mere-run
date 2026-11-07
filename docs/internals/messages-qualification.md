@@ -242,6 +242,87 @@ Code version and Glimmer's effective 32,768-token context and 4,096-token output
 limits. It did not create `.claude/settings.local.json`. Automated merge tests
 cover writes, preservation, and idempotence.
 
+## Advanced combinations
+
+Combined official SDK tests cover both API versions and both response modes.
+They combine cache accounting, documents inside tool results, signed thinking,
+thinking/result clearing, deferred discovery, and client tool-error replay.
+They also cover invalid-regex recovery, shared output-budget exhaustion, and
+rejection of modified thinking even when that thinking would be cleared.
+Context-management stream accumulation uses the SDK's beta interface, which
+defines those response fields.
+
+The combination tests exposed and fixed these defects:
+
+- Removing thinking could move a cache marker past its original content boundary.
+- Search continuation could report an already-cleared result as another edit.
+- Tool markers before deferred definitions were ignored or covered later tools.
+- Markers inside result content were ignored, and nested TTL order was reversed.
+- Internal search history used plain text instead of typed references and error state.
+- Stream fragments became separate history blocks, inserting newlines between tokens.
+- Untyped adapter search output was classified as a client error instead of a server failure.
+- Moving a marker earlier could reuse a previously cached prefix beyond the requested boundary.
+- Search definitions could ignore unsupported caller/example/schema options and supplied descriptions.
+
+Actual HTTP disconnect tests cancel buffered and streaming requests during an
+internal search continuation. Both release the original lease, admit a queued
+request, and serve a subsequent request successfully.
+
+Sequential native SDK probes used one resident checkpoint at a time. The prior
+tool exchange was scripted; generated searches and lookup calls were checked
+against the actual catalog. No client tool was executed by the server.
+
+| Adapter | Search | Prepared rounds | Reported total input | Output | Generation wall time |
+| --- | --- | --- | --- | --- | --- |
+| Glimmer | Regex | 560 + 902 | 1,462 including cache reads/writes | 316 | 68.820 s |
+| Ornith 35B | BM25 | 538 + 687 | 1,225 | 140 | 5.728 s |
+| Gemma Turbo | BM25 | 221 + 436 | 657 | 213 | 10.329 s |
+
+Each case discovered `artifact_lookup`, returned its typed `key: "alpha"` call,
+streamed separate signed thinking, and accepted replay with a PDF tool-error
+result. Independently counting each internal continuation exactly reproduced
+total reported input usage. Context edits were reported once for the request.
+Model loading was measured separately: Glimmer 58.546 seconds, Ornith 19.594
+seconds, and Gemma 2.606 seconds. These are debug observations, not controlled
+performance comparisons. Queue-wait time was not measured; final snapshots had
+no active or queued requests.
+
+Glimmer also passed real native prefix checks:
+
+| Combination | First write | Subsequent read | Result |
+| --- | --- | --- | --- |
+| Tool marker before later/deferred definitions | 190 tokens | 190 tokens | Later definition changed; zero output |
+| Thinking clearing with a marker before later text | 487 tokens | 487 tokens | Later text changed; prepared input was 545 tokens after editing from 700 |
+| Marker inside a PDF tool-error result | 679 tokens | 679 tokens | Later result text changed; zero output |
+
+A moving-marker regression kept the prepared input identical at 555 tokens.
+The first request cached 553 tokens. After the marker moved earlier, the backend
+skipped that longer entry, wrote a 466-token prefix, and read only those 466
+tokens on the repeat. Every warm generated zero output tokens. The reusable
+harness's `--cache-only` selection checks this boundary and passed with real KV
+state.
+
+The PDF fixture had two pages independently extracted with macOS PDFKit.
+Unsupported Ornith and Gemma cache backends reported zero reads/writes and
+rejected zero-output warming explicitly.
+
+`scripts/qualify-messages-native.py` makes the core native combination checks
+repeatable against an already-running server. Its generated PDF was separately
+verified with PDFKit. The harness passed on Glimmer with actual warming/reuse
+and Gemma with regex search and explicit unsupported-cache handling. The Gemma
+repeat counted 215 + 381 input tokens, matching usage of 596, and generated
+144 tokens in 6.615 seconds. These direct Gemma API requests omit unsupported
+effort; its Claude Code compatibility boundary remains unchanged.
+
+Native Glimmer multi-image probes interleaved text with two independently
+verified PNG labels, then swapped their order. At low effort with adaptive
+thinking, the visible responses were `ALPHA` and `BETA`, matching the first
+image in each request. Both prepared counts were 400 tokens and matched usage;
+generation took 25.842 and 29.973 seconds for 32 and 38 output tokens.
+Vision cache reads/writes stayed zero, and zero-output image warming failed
+explicitly. The native harness includes an opt-in image-order check for supplied
+labeled fixtures. These image cases do not qualify desktop interaction.
+
 ## Remaining boundaries
 
 Other backends without shared exact preparation reject token counting.

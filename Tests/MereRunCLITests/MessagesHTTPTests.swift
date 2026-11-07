@@ -7,14 +7,51 @@ import MereRunCore
 private actor MessagesHTTPModel: RuntimeChatModelLease {
     var releases = 0
     var cancelled = 0
+    var slowContinuations = 0
     var preparedToolSets: [Set<String>] = []
+    var preparedRequests: [ChatRequest] = []
     func preparePrompt(_ request: ChatRequest) async throws -> ChatPreparedPrompt {
         preparedToolSets.append(Set((request.tools ?? []).map(\.name)))
+        preparedRequests.append(request)
+        if request.messages.first(where: { $0.role == .user })?.content == "advanced" {
+            // A deterministic fixture tokenizer; native counts are qualified separately.
+            let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+            let history = try encoder.encode(request.messages)
+            let tools = try (request.tools ?? []).map { try $0.promptSchemaJSONString() }.joined()
+            return try ChatPreparedPrompt(tokens: (history + Data(tools.utf8)).map(Int.init), contextLimit: 32768)
+        }
         if request.messages.last?.content == "full" { return try ChatPreparedPrompt(tokens: Array(repeating: 1, count: 32760), contextLimit: 32768) }
         return try ChatPreparedPrompt(tokens: [1, 2, 3, 4, 5, 6, 7], contextLimit: 32768)
     }
     func chat(_ request: ChatRequest, progressHandler: (@Sendable (ChatProgress) -> Void)?) async throws -> ChatResponse {
+        let searchName = request.toolSearch?.searchTools.keys.sorted().first ?? "catalog_search"
+        if request.messages.first(where: { $0.role == .user })?.content == "advanced" {
+            let input = try XCTUnwrap(request.preparedPrompt).tokens.count
+            let loaded = request.tools?.contains(where: { $0.name == "calculate" }) == true
+            if loaded, request.messages.last(where: { $0.role == .user })?.content == "slow_search" {
+                slowContinuations += 1
+                do { try await Task.sleep(for: .seconds(30)) }
+                catch { cancelled += 1; throw error }
+            }
+            let invalidSearch = !loaded && request.messages.last?.content == "invalid search"
+            progressHandler?(.init(stage: .encoding, event: .usage(input: input, output: 0, cacheRead: 3, cacheWrite: 0)))
+            if request.showThinking {
+                progressHandler?(.init(stage: .generating, event: .reasoning(loaded ? "Use " : "Find ")))
+                progressHandler?(.init(stage: .generating, event: .reasoning(loaded ? "the discovered tool 🧮" : "the tool 🧮")))
+            }
+            progressHandler?(.init(stage: .generating, event: .text(loaded ? "Ready" : "Search")))
+            progressHandler?(.init(stage: .generating, event: .text(loaded ? "." : "ing.")))
+            var result = ChatResponse(response: loaded ? "Ready." : "Searching.", tokensGenerated: loaded ? 3 : 2,
+                toolCalls: [loaded ? ToolCall(name: "calculate", jsonArguments: ["value": .number(42), "nested": .object(["ok": .bool(true)])]) :
+                    ToolCall(name: searchName, jsonArguments: ["pattern": .string(invalidSearch ? "(" : "calculate")])], promptTokens: input)
+            result.cacheReadTokens = 3
+            return result
+        }
         let prompt = request.messages.last?.content ?? ""
+        if prompt == "untyped_search" {
+            return ChatResponse(response: "", tokensGenerated: 2,
+                toolCalls: [ToolCall(name: searchName, arguments: ["pattern": "calculate"])], promptTokens: 7)
+        }
         if prompt == "prefill_ping" { try await Task.sleep(for: .milliseconds(200)) }
         if prompt == "error" { throw MessagesFailure.invalid("fixture", "requested test failure") }
         if prompt == "slow" {
@@ -23,7 +60,7 @@ private actor MessagesHTTPModel: RuntimeChatModelLease {
         }
         if prompt == "mixed" {
             return ChatResponse(response: "", tokensGenerated: 5, toolCalls: [
-                ToolCall(name: "catalog_search", jsonArguments: ["pattern": .string("calculate")]),
+                ToolCall(name: searchName, jsonArguments: ["pattern": .string("calculate")]),
                 ToolCall(name: "calculate", jsonArguments: ["value": .number(42), "nested": .object(["ok": .bool(true)])])], promptTokens: 7)
         }
         if request.messages.last?.role == .tool, request.messages.first(where: { $0.role == .user })?.content == "search_call" {
@@ -32,7 +69,7 @@ private actor MessagesHTTPModel: RuntimeChatModelLease {
         }
         if prompt == "search" || prompt == "search_call" {
             return ChatResponse(response: "", tokensGenerated: 2,
-                toolCalls: [ToolCall(name: "catalog_search", jsonArguments: ["pattern": .string("calculate")])], promptTokens: 7)
+                toolCalls: [ToolCall(name: searchName, jsonArguments: ["pattern": .string("calculate")])], promptTokens: 7)
         }
         if prompt == "bad_tool" {
             return ChatResponse(response: "", tokensGenerated: 5,
@@ -201,6 +238,43 @@ final class MessagesHTTPTests: XCTestCase {
             XCTAssertEqual(response.statusCode, 200)
             let prepared = await model.preparedToolSets
             XCTAssertEqual(prepared, [Set(["catalog_search"]), Set(["catalog_search", "calculate"])])
+            let requests = await model.preparedRequests
+            XCTAssertEqual(requests.last?.messages.last?.contentBlocks, [.toolReference("calculate")])
+        }
+    }
+    func testDisconnectDuringSearchContinuationReleasesLeaseAndAdmitsQueuedRequest() async throws {
+        for streaming in [false, true] {
+            try await withServer { url, services, model in
+                var request = URLRequest(url: url.appendingPathComponent("v1/messages"))
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "content-type")
+                request.setValue("test-key", forHTTPHeaderField: "x-api-key")
+                let body = #"{"model":"fixture","max_tokens":16,"messages":[{"role":"user","content":"advanced"},{"role":"assistant","content":"start"},{"role":"user","content":"slow_search"}],"tools":[{"type":"tool_search_tool_regex_20251119","name":"catalog_search"},{"name":"calculate","defer_loading":true,"input_schema":{"type":"object","properties":{}}}],"stream":"# + String(streaming) + "}"
+                request.httpBody = Data(body.utf8)
+                let firstRequest = request
+                let first = Task { try await URLSession.shared.data(for: firstRequest) }
+                for _ in 0..<100 {
+                    if await model.slowContinuations == 1 { break }
+                    try await Task.sleep(for: .milliseconds(10))
+                }
+                let started = await model.slowContinuations; XCTAssertEqual(started, 1)
+                var next = firstRequest
+                next.httpBody = Data(#"{"model":"fixture","max_tokens":16,"messages":[{"role":"user","content":"hello"}]}"#.utf8)
+                let nextRequest = next
+                let queued = Task { try await URLSession.shared.data(for: nextRequest) }
+                for _ in 0..<100 {
+                    if await services.admission.snapshot().queuedRequests == 1 { break }
+                    try await Task.sleep(for: .milliseconds(10))
+                }
+                first.cancel(); _ = await first.result
+                let (_, response) = try await queued.value
+                XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+                let snapshot = await services.admission.snapshot()
+                XCTAssertEqual(snapshot.activeRequests, 0); XCTAssertEqual(snapshot.queuedRequests, 0)
+                let cancellations = await model.cancelled; XCTAssertEqual(cancellations, 1)
+                let releases = await model.releases; XCTAssertEqual(releases, 2)
+                let (_, recovered) = try await self.post(url); XCTAssertEqual(recovered.statusCode, 200)
+            }
         }
     }
     func testGenerationReservesOutputWhileCountingDoesNotGenerate() async throws {
@@ -227,6 +301,21 @@ final class MessagesHTTPTests: XCTestCase {
             XCTAssertTrue(body.contains("event: error"))
             XCTAssertFalse(body.contains("event: message_stop"))
             XCTAssertFalse(body.contains("input_json_delta"))
+        }
+    }
+    func testUntypedSearchOutputIsAServerFailureBeforeSearchPublication() async throws {
+        try await withServer { url, services, _ in
+            let tools = #", "tools":[{"type":"tool_search_tool_regex_20251119","name":"catalog_search"}]"#
+            let (data, response) = try await self.post(url, prompt: "untyped_search", extra: tools)
+            XCTAssertEqual(response.statusCode, 500)
+            XCTAssertEqual(try JSONDecoder().decode(ChatJSONValue.self, from: data).objectValue?["error"]?.objectValue?["type"], .string("api_error"))
+            let (stream, status) = try await self.post(url, prompt: "untyped_search", extra: tools + #", "stream":true"#)
+            XCTAssertEqual(status.statusCode, 200)
+            let body = String(decoding: stream, as: UTF8.self)
+            XCTAssertTrue(body.contains("event: error")); XCTAssertTrue(body.contains("api_error"))
+            XCTAssertFalse(body.contains("server_tool_use")); XCTAssertFalse(body.contains("event: message_stop"))
+            let snapshot = await services.admission.snapshot(); XCTAssertEqual(snapshot.activeRequests, 0)
+            let (_, recovered) = try await self.post(url); XCTAssertEqual(recovered.statusCode, 200)
         }
     }
 
@@ -269,12 +358,21 @@ final class MessagesHTTPTests: XCTestCase {
         guard let python = ProcessInfo.processInfo.environment["MERERUN_ANTHROPIC_SDK_PYTHON"] else {
             throw XCTSkip("Set MERERUN_ANTHROPIC_SDK_PYTHON to a Python with the official anthropic SDK")
         }
-        try await withServer { url, _, _ in
+        try await withServer { url, _, model in
             let process = Process(); process.executableURL = URL(fileURLWithPath: python)
             process.arguments = ["scripts/test-messages-sdk.py", url.absoluteString]
             let result = try await Task.detached { try BoundedProcessRunner.run(process, timeout: 30) }.value
             XCTAssertEqual(result.status, 0, result.stderr.text + result.stdout.text)
             XCTAssertEqual(result.completion, .exited)
+            let requests = await model.preparedRequests
+            let continued = requests.filter { $0.messages.first(where: { $0.role == .user })?.content == "advanced" && $0.tools?.contains(where: { $0.name == "calculate" }) == true }
+            XCTAssertFalse(continued.isEmpty)
+            for request in continued {
+                for message in request.messages where message.toolCalls?.contains(where: { $0.name == "tool_search_tool_regex" }) == true {
+                    XCTAssertEqual(message.content, "Searching.")
+                    XCTAssertEqual(message.reasoningContent, "Find the tool 🧮")
+                }
+            }
         }
     }
 }
