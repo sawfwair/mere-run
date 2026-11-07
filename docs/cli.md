@@ -102,6 +102,19 @@ against the CLI and fails if they disagree.
   - `mere.run music separate` — Separate or restore audio with native RoFormer models.
   - `mere.run music train-adapter` — Train a native ACE-Step LoRA or LoKr adapter.
   - `mere.run music transcribe` — Transcribe a full music mix into instrument-separated MIDI with MuScriptor.
+  - `mere.run music yue2` — Plan, reuse, and inspect native YuE2 generation stages.
+    - `mere.run music yue2 plan` — Save an exact YuE2 score stage from a JSON request.
+    - `mere.run music yue2 semantic` — Generate music tokens from a saved score stage.
+    - `mere.run music yue2 synthesize` — Generate acoustic latents from saved music tokens.
+    - `mere.run music yue2 decode` — Decode saved NumPy latents with only the YuE2 VAE.
+    - `mere.run music yue2 inspect` — Verify a saved YuE2 stage without loading models.
+    - `mere.run music yue2 validate` — Validate a YuE2 JSON request without loading models.
+    - `mere.run music yue2 instrumentalize` — Move a score's vocal melody into the instrumental voice.
+    - `mere.run music yue2 transcribe` — Transcribe a recording into a YuE2-compatible score with native SheetSage2.
+    - `mere.run music yue2 cover` — Transcribe a recording and render a new YuE2 interpretation.
+    - `mere.run music yue2 export` — Copy a verified native YuE2 pipeline for offline use.
+    - `mere.run music yue2 batch` — Run independent YuE2 JSONL requests and retain per-request failures.
+    - `mere.run music yue2 serve` — Serve queued native YuE2 jobs with reusable artifacts.
 - [`mere.run sfx`](/runtime/sfx) — Generate sound effects locally.
   - `mere.run sfx ae` — Encode or decode Woosh audio autoencoder latents.
     - `mere.run sfx ae encode` — Encode audio into normalized Woosh-AE latents.

@@ -171,7 +171,7 @@ public enum MereRunCapabilityCatalog {
             geoFire,
             geoTessera,
             geoOlmoEarth
-        ]
+        ] + musicYuE2
     )
 
     public static func command(id: String) -> MereRunCommandCapability? {

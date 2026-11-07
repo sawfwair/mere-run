@@ -205,6 +205,7 @@ final class MusicAnalyzeCommandParsingTests: XCTestCase {
                 "serve",
                 "train-adapter",
                 "transcribe",
+                "yue2",
             ])
         )
     }

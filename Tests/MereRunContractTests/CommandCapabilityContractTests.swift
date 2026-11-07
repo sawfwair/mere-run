@@ -142,9 +142,21 @@ import Testing
         "geo.flood",
         "geo.fire",
         "geo.tessera",
-        "geo.olmoearth"
+        "geo.olmoearth",
+        "music.yue2.plan",
+        "music.yue2.semantic",
+        "music.yue2.synthesize",
+        "music.yue2.export",
+        "music.yue2.inspect",
+        "music.yue2.validate",
+        "music.yue2.decode",
+        "music.yue2.instrumentalize",
+        "music.yue2.batch",
+        "music.yue2.transcribe",
+        "music.yue2.cover",
+        "music.yue2.serve"
     ])
-    #expect(document.commands.count == 137)
+    #expect(document.commands.count == 149)
 
     let data = try JSONEncoder().encode(document)
     let decoded = try JSONDecoder().decode(MereRunCapabilityDocument.self, from: data)

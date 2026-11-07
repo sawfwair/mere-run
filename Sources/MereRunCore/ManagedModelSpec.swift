@@ -106,6 +106,8 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case aceStepLM
     case miniMaxMusic3
     case yue2
+    case yue2VAE
+    case sheetSage2
     case magentaRT2
     case muScriptor
     case roFormer

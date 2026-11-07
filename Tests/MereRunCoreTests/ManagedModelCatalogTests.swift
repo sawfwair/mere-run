@@ -273,6 +273,8 @@ final class ManagedModelCatalogTests: XCTestCase {
             "image-3d-trellis2-4b",
             MiniMaxMusic3Resources.modelID,
             YuE2Resources.modelID,
+            SheetSage2Resources.modelID,
+            YuE2Resources.legacyVAEModelID,
             "music-muscriptor-small",
             "music-muscriptor-medium",
             "music-muscriptor-large",

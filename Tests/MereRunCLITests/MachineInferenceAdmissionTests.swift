@@ -3,6 +3,22 @@ import XCTest
 @testable import MereRunCLI
 
 final class MachineInferenceAdmissionTests: XCTestCase {
+    func testYuE2UtilitiesDoNotReserveInferenceResources() {
+        for command in ["inspect", "validate", "instrumentalize", "export"] {
+            XCTAssertNil(CLIInferenceAdmissionClassifier.request(
+                arguments: ["mere.run", "music", "yue2", command, "--model", "music-yue2"]
+            ))
+        }
+        XCTAssertNil(CLIInferenceAdmissionClassifier.request(
+            arguments: ["mere.run", "music", "yue2", "batch", "--validate-only"]
+        ))
+        for command in ["plan", "semantic", "synthesize", "decode", "transcribe", "cover", "batch", "serve"] {
+            XCTAssertNotNil(CLIInferenceAdmissionClassifier.request(
+                arguments: ["mere.run", "music", "yue2", command]
+            ))
+        }
+    }
+
     private let gibibyte = UInt64(1_073_741_824)
 
     func testManagedEmbeddingGemmaUsesSmallAdmissionWithoutRelaxingUnknownModels() async throws {

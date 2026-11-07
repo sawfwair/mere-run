@@ -104,7 +104,11 @@ final class StudioMusicTasksTests: XCTestCase {
             let presentation = task.presentation.attaching(StudioTaskSchema.primarySlot(for: task.variantTemplates[0].id))
             XCTAssertEqual(presentation.attachLabel, "Choose audio…", "\(task)")
             XCTAssertTrue(presentation.requiresAttachment, "\(task)")
-            XCTAssertNil(StudioTaskSchema.variantField(for: task), "\(task) runs one template")
+            if task == .musicTranscribe {
+                XCTAssertEqual(StudioTaskSchema.variantField(for: task)?.option.choices, ["musicTranscribe", "musicYue2Transcribe"])
+            } else {
+                XCTAssertNil(StudioTaskSchema.variantField(for: task), "\(task) runs one template")
+            }
             XCTAssertEqual(task.analyzeArchetype?.inputKind(for: nil), .audio)
         }
         XCTAssertEqual(StudioTask.musicAnalyze.analyzeArchetype?.views, [.analysis, .json])

@@ -85,6 +85,8 @@ package enum CommandArguments {
         case .musicRealtime: return musicRealtime(draft)
         case .musicTrainAdapter: return musicTrainAdapter(draft)
         case .musicServe: return musicServe(draft)
+        case .musicYue2Plan, .musicYue2Semantic, .musicYue2Synthesize, .musicYue2Decode, .musicYue2Inspect, .musicYue2Validate, .musicYue2Instrumentalize, .musicYue2Transcribe, .musicYue2Cover, .musicYue2Export, .musicYue2Batch, .musicYue2Serve:
+            return musicYue2(id, draft: draft)
         case .adapterList: return adapterList(draft)
         case .adapterPull: return adapterPull(draft)
         case .runList: return runList(draft)

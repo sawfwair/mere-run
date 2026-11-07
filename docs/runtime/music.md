@@ -1,5 +1,9 @@
 # Music runtime
 
+The [YuE2 checkpoint qualification](./yue2-qualification) records native
+released-weight comparisons, stage reuse, six-minute generation, memory,
+listening acceptance, and the limits found on an M5 Max.
+
 Use the music runtime to write a track from a text prompt, cover a song in a
 different genre, play a model from a Musical Instrument Digital Interface
 (MIDI) controller, split a mix into vocal and instrumental WAV files, or
@@ -307,13 +311,26 @@ The default full-score mode saves `song.abc` alongside the WAV and recipe.
 Use `--score-mode melody` for melody-only planning, or `--score-mode off` for
 direct generation. To supply an edited score, use `--abc-file ./score.abc`.
 Generation creates a complete recording; it does not edit regions of an input
-waveform. Audio-to-score transcription is outside this integration.
+waveform. `--instrumental` transfers the vocal melody into the instrumental
+score voice. `--stages-output` retains reusable score, semantic, and acoustic
+stages. `music yue2` exposes stage continuation, decoder-only replay, inspection,
+offline export, JSONL batches, and a queued local API.
+
+For recording covers, install `music-sheetsage2` with license acceptance, then
+use `music yue2 transcribe` or `music yue2 cover`. SheetSage2 runs native MERT2
+and BART inference with overlapping audio windows. Released-weight comparisons,
+a known-note transcription, and a six-minute recording passed bounded checks.
+Broader recording accuracy remains unqualified. See
+`mere.run guide music generate --model music-yue2` for commands.
 
 This path is experimental. Local numerical fixtures cover the native math.
 The released checkpoints passed five bounded generation runs, including a
 36.08-second vocal track that ended naturally and a byte-identical seeded repeat.
-The vocal sample passed an owner listening review. Broader listening quality
-and long-song performance and memory remain unqualified.
+The vocal sample passed an owner listening review. The November 7 qualification
+adds a six-minute stress run, stage replay, API cancellation, and an
+owner-accepted instrumental excerpt. See the [qualification report](./yue2-qualification)
+for memory measurements and a style-only planning failure. Broader listening
+quality and smaller-device memory remain unqualified.
 For controls, duration boundaries, and seed behavior, run
 `mere.run guide music generate --model music-yue2`.
 

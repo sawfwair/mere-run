@@ -1223,7 +1223,8 @@ SOFTWARE.
 ## YuE2 native music runtime
 
 - Source: [multimodal-art-projection/YuE](https://github.com/multimodal-art-projection/YuE),
-  revision `0edaf2f4053ef4731334b8329834b107977f9637`.
+  revision `1116bea76032bee5668e5f097294d082fa0b84f0`
+  (original numerical fixtures: `0edaf2f4053ef4731334b8329834b107977f9637`).
 - Native adaptations: `Sources/MereRunCore/YuE2/`, covering the text protocol,
   transformer, sampling, acoustic flow, and VAE decoder.
 - First-party code: Apache License 2.0, copyright (c) 2026 the YuE2 authors.
@@ -1233,6 +1234,22 @@ SOFTWARE.
   were generated from that source and contain no trained weights.
 - YuE2-3B and standard VAE weights are separately downloaded under CC BY-NC 4.0.
   They are not bundled with this repository.
+
+## SheetSage2 native transcription
+
+- Architecture and inference reference: `m-a-p/SheetSage2` revision
+  `b83c3d79a6d98bcffaf8f9ed112c90aa887887bc`, and its specified MERT2 parent
+  `d8ba1c745e733b3908ce6ad16ebeb17ac7600a42`.
+- Native implementations of the published encoder, adapter, and decoder equations
+  live in `Sources/MereRunSheetSageModel/`. Core owns window orchestration and
+  native ABC export.
+- BART's reference implementation is part of Hugging Face Transformers under
+  Apache License 2.0. The Apache text appears in this file's YuE2 notice.
+- The independent random-weight CPU fixtures contain no released model weights.
+  Their source hashes and library versions are recorded in
+  `Tests/SheetSage2RuntimeTests/Fixtures/provenance.json`.
+- SheetSage2 and MERT2 weights are downloaded separately under CC BY-NC 4.0.
+  Rendering assets, browser automation, and soundfonts are not included.
 
 ### YuE2 source license
 

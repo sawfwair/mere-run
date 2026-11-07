@@ -199,6 +199,8 @@ Use `mere.run guide --model text-chat-gemma4-26b-a4b-bf16` for its text workflow
 | `image-3d` | `image-3d-triposr` |
 | `image-3d` | `image-3d-instantmesh-base` |
 | `image-3d` | `image-3d-trellis2-4b` |
+| `music` | `music-yue2-vae-legacy` |
+| `music` | `music-sheetsage2` |
 | `music` | `music-yue2` |
 | `music` | `music-acestep` |
 | `music` | `music-acestep-xl-base` |
@@ -315,7 +317,8 @@ validates all configured models before downloading any; both accept the same
 | `vision-embed-olmoearth-v12-{nano,tiny,small,base}` | OlmoEarth Artifact License; prohibited military, defense, intelligence, human-surveillance, policing, and listed extractive uses |
 | `video-minimax-h3-fl2va-mlx`, `video-minimax-h3-fl2va-bf16-mlx`, `video-minimax-h3-fl2va-8bit-mlx`, `video-minimax-h3-fasth3-vsa-datafree-mlx`, `video-minimax-h3-ref2va-mlx` | MiniMax-H3 Community License; use, distribution, and display are excluded in the United States, European Union, United Kingdom, and Republic of Korea, with downstream notice and safeguard obligations |
 | `image-3d-trellis2-4b` | the mounted DINOv3 encoder is gated under Meta's custom DINOv3 License |
-| `music-yue2` | CC BY-NC 4.0 for the YuE2-3B and YuE2 VAE weights |
+| `music-yue2`, `music-yue2-vae-legacy` | CC BY-NC 4.0 for the pinned YuE2 weights; upstream separately publishes individual creator permissions |
+| `music-sheetsage2` | CC BY-NC 4.0 for the SheetSage2 adapter and MERT2 parent |
 | `music-minimax-music3` | MiniMax-Music3 Community License; product attribution, revenue-threshold authorization, and hosted-generation safeguards |
 | `music-muscriptor-{small,medium,large}` | CC BY-NC 4.0 model weights |
 | `sfx-woosh-*` | CC BY-NC 4.0 Woosh or MMAudio Synchformer weights |
@@ -1228,13 +1231,13 @@ CC BY-NC 4.0; installation requires `--accept-model-license`.
 The native runtime loads the BF16 transformer, its frozen `qwen.tiktoken`
 vocabulary, and the FP32 VAE decoder directly. It does not execute the source
 files distributed by the model repositories. Runtime code follows YuE2 source
-revision `0edaf2f4053ef4731334b8329834b107977f9637` under Apache 2.0, with MIT
+revision `1116bea76032bee5668e5f097294d082fa0b84f0` under Apache 2.0, with MIT
 notices for Oobleck and SnakeBeta.
 
 `music generate --model music-yue2` supports full or melody-only ABC planning,
 external ABC score conditioning, and direct generation without a score. It
 exports 48 kHz stereo WAV, an optional score, and an effective recipe. The
-legacy benchmark VAE and SheetSage2 transcription are not included.
+benchmark VAE and SheetSage2 transcription are separate managed installations.
 
 Small random-weight upstream fixtures validate the native transformer,
 acoustic flow, and decoder. The released checkpoints passed five bounded native
@@ -1243,6 +1246,25 @@ seeded repeat. The 36.08-second vocal sample passed an owner listening review;
 broader listening quality and long-song qualification remain pending.
 See the [music runtime](./runtime/music.md#yue2-score-conditioned-songs)
 and `mere.run guide --model music-yue2`.
+
+### `music-sheetsage2` and `music-yue2-vae-legacy`
+
+`music-sheetsage2` installs `m-a-p/SheetSage2` revision
+`b83c3d79a6d98bcffaf8f9ed112c90aa887887bc` with its specified MERT2 parent,
+`m-a-p/MERT-v2-FullSong` revision `d8ba1c745e733b3908ce6ad16ebeb17ac7600a42`,
+under `mert2/`. Both weight components use CC BY-NC 4.0 and require explicit
+license acceptance. Native inference loads data files without executing model
+repository code. Use `music yue2 transcribe` or `music yue2 cover`.
+
+`music-yue2-vae-legacy` installs `m-a-p/YuE2-Vae-legacy` revision
+`d0585a9cdbb36e8b6930046974500ad7078317ca`. Use it with `music yue2 decode --vae`
+to compare decoders on identical saved latents. This decoder reproduces the
+upstream benchmark role; the standard VAE remains the listening default.
+
+The [upstream YuE2 model license](https://github.com/multimodal-art-projection/YuE/blob/1116bea76032bee5668e5f097294d082fa0b84f0/MODEL_LICENSE)
+adds individual creator permissions, including output monetization, and
+separate company commercial-use terms. The pinned model files retain their
+bundled licenses. SheetSage2 and MERT2 retain their own weight terms.
 
 ### `music-minimax-music3`
 

@@ -1256,6 +1256,20 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 32
             ),
             descriptor(
+                ModelResolver.ModelID.sheetSage2.rawValue,
+                "SheetSage2",
+                "Experimental native MERT2 and BART audio-to-score transcription. Released-weight comparisons and bounded transcription checks passed on an M5 Max; broader recording accuracy remains unqualified.",
+                minimum: 16,
+                recommended: 24
+            ),
+            descriptor(
+                ModelResolver.ModelID.yue2VAELegacy.rawValue,
+                "YuE2 benchmark decoder",
+                "Decoder-only companion for replaying saved YuE2 latents with the upstream benchmark VAE.",
+                minimum: 8,
+                recommended: 16
+            ),
+            descriptor(
                 ModelResolver.ModelID.miniMaxMusic3.rawValue,
                 "MiniMax Music 3",
                 "Generates complete lyric-driven 44.1 kHz stereo songs with the native staged Swift/MLX runtime.",

@@ -3,6 +3,18 @@ import XCTest
 @testable import MereRunCore
 
 final class YuE2CommandTests: XCTestCase {
+    func testInstrumentalIsEffectiveAndStageCommandsParse() throws {
+        let command = try MusicGenerate.parse(["piano", "--model", "music-yue2", "--instrumental"])
+        XCTAssertEqual(try command.resolvedYuE2Plan(explicitDurationSeconds: nil).instrumental, true)
+        let report = try CLICapabilityGate.check(arguments: ["mere.run", "music", "generate", "piano", "--model", "music-yue2", "--instrumental"])
+        XCTAssertFalse(report.contains { $0.contains("--instrumental") })
+        XCTAssertNoThrow(try YuE2Plan.parse(["--request", "request.json", "--output", "score"]))
+        XCTAssertNoThrow(try YuE2Semantic.parse(["score", "--output", "semantic"]))
+        XCTAssertNoThrow(try YuE2Synthesize.parse(["semantic", "--output", "acoustic"]))
+        XCTAssertNoThrow(try YuE2Decode.parse(["acoustic", "--vae", "vae", "--output", "song.wav"]))
+        XCTAssertEqual(try YuE2Validate.parse(["request.json", "--tokenizer", "qwen.tiktoken"]).tokenizer, "qwen.tiktoken")
+        XCTAssertThrowsError(try YuE2Plan.parse(["--request", "request.json"]))
+    }
     private func parse(_ options: [String] = []) throws -> MusicGenerate {
         try MusicGenerate.parse(["piano pop", "--model", "music-yue2", "--lyrics", "[Verse]\nhello"] + options)
     }

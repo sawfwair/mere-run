@@ -91,7 +91,7 @@ public enum QuantizedModelManifestWriter {
             case .openAIPrivacyFilter: return .privacy
             case .qwen3Coder, .northMiniCode: return .code
             case .lightOnOCR, .unlimitedOCR: return .ocr
-            case .aceStep, .miniMaxMusic3, .yue2, .magentaRT2, .muScriptor, .roFormer: return .music
+            case .aceStep, .miniMaxMusic3, .yue2, .magentaRT2, .muScriptor, .sheetSage2, .roFormer: return .music
             case .apBWE, .univerSR, .auk: return .audio
             case .woosh, .mmaudio: return .sfx
             case .ltxVideo, .wanVideo, .miniMaxH3, .cosmos3Edge: return .video
@@ -215,7 +215,7 @@ public enum QuantizedModelManifestWriter {
                     return [.visionOCR]
                 case .aceStep, .miniMaxMusic3, .yue2, .magentaRT2:
                     return [.musicGeneration]
-                case .muScriptor:
+                case .muScriptor, .sheetSage2:
                     return [.musicTranscription]
                 case .roFormer:
                     return [.musicSeparation]
@@ -326,7 +326,7 @@ public enum QuantizedModelManifestWriter {
                 break
             case .laya, .clef, .d1, .gliner25Decide, .qwen3TTS, .breezeTTS, .drama3TTS, .phononTTS, .qwen3ASR, .parakeetASR, .whistleASR, .nemotronTranscribeASR, .sortformer, .qwen3Embedding, .embeddingGemma2, .embeddingGemma2CoreML, .pplxEmbedV2, .openAIPrivacyFilter,
                  .qwen3Coder, .northMiniCode, .lightOnOCR, .unlimitedOCR, .woosh, .mmaudio, .psiChat, .deepseekV4Flash,
-                 .muScriptor, .roFormer, .apBWE, .univerSR, .auk, .inkling:
+                 .muScriptor, .sheetSage2, .roFormer, .apBWE, .univerSR, .auk, .inkling:
                 break
             case .aceStep, .magentaRT2, .ltxVideo:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 8, cfg: 1.0)

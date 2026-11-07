@@ -75,7 +75,7 @@ final class StudioTaskChipsTests: XCTestCase {
         transcribe.setArgument(0, "/tmp/song.wav")
         transcribe.form["--variant"] = .text("large")
         transcribe.form["--format"] = .text("json")
-        XCTAssertEqual(StudioTaskSchema.essentials(for: .musicTranscribe, draft: transcribe, source: .contract).map(\.flag), ["--format"])
+        XCTAssertEqual(StudioTaskSchema.essentials(for: .musicTranscribe, draft: transcribe, source: .contract).map(\.flag), ["task-variant", "--format"])
         let chips = StudioTaskChips.chips(for: try Self.row(for: transcribe), titles: .none, source: .contract)
         XCTAssertFalse(chips.contains { $0.hasPrefix("Variant ") }, "\(chips)")
         XCTAssertTrue(chips.contains { $0.hasPrefix("Format ") }, "\(chips)")
