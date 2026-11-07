@@ -139,7 +139,9 @@ package enum StudioDomain: String, CaseIterable, Codable, Identifiable {
              .videoExportLatents, .videoSession:
             self = .video
         case .musicGenerate, .musicAnalyze, .musicTranscribe, .musicSeparate, .musicRealtime,
-             .musicTrainAdapter:
+             .musicTrainAdapter, .musicYue2Plan, .musicYue2Semantic, .musicYue2Synthesize, .musicYue2Decode,
+             .musicYue2Inspect, .musicYue2Validate, .musicYue2Instrumentalize, .musicYue2Transcribe,
+             .musicYue2Cover, .musicYue2Export, .musicYue2Batch:
             self = .music
         case .sfxGenerate, .sfxVideo, .sfxAEEncode, .sfxAEDecode, .sfxClapScore, .sfxConditionText,
              .audioGenerate:
@@ -167,7 +169,7 @@ package enum StudioDomain: String, CaseIterable, Codable, Identifiable {
              .modelBenchmarkGemma4KV, .modelBenchmarkGemma4MTP, .modelBenchmarkParakeetCoreML,
              .modelBenchmarkAPIWorkload:
             self = .models
-        case .apiServe, .visionServe, .musicServe, .openWebui, .worldServe, .statusSnapshot, .agentOnboard,
+        case .apiServe, .visionServe, .musicServe, .musicYue2Serve, .openWebui, .worldServe, .statusSnapshot, .agentOnboard,
              .agentStatus, .agentInstallPi, .agentStart, .setup, .graphStudio, .nodeConsole, .custom:
             self = .server
         case .runList, .runInspect, .runWatch, .runFetch, .runCancel, .runRetry, .evaluationPackValidate,

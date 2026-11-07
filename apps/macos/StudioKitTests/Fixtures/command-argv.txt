@@ -1428,6 +1428,270 @@ musicTranscribe	videoOutputMode=video-only	music transcribe 1 --model 1 --model-
 musicTranscribe	videoQuality=draft	music transcribe 1 --model 1 --model-path 1 --variant 1 --output 1 --format 1 --instruments 1 --list-instruments --sampling --temperature 1.5 --max-tokens-per-chunk 2001 --beam-size 2 --chunk-batch-size 5 --dtype 1 --strict-eos --no-musical-context --context-output 1 --quiet 1
 musicTranscribe	videoQuality=final	music transcribe 1 --model 1 --model-path 1 --variant 1 --output 1 --format 1 --instruments 1 --list-instruments --sampling --temperature 1.5 --max-tokens-per-chunk 2001 --beam-size 2 --chunk-batch-size 5 --dtype 1 --strict-eos --no-musical-context --context-output 1 --quiet 1
 musicTranscribe	voiceMode=clone	music transcribe 1 --model 1 --model-path 1 --variant 1 --output 1 --format 1 --instruments 1 --list-instruments --sampling --temperature 1.5 --max-tokens-per-chunk 2001 --beam-size 2 --chunk-batch-size 5 --dtype 1 --strict-eos --no-musical-context --context-output 1 --quiet 1
+musicYue2Batch	default	music yue2 batch '' --model music-yue2 --output ~/Documents/mere.run/Music/run-yue2-batch-<stamp>
+musicYue2Batch	maximal	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	maximal-booleans-off	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	modelRoot=video-minimax-h3-ref2va	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	musicLMMode=disable	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	musicLMMode=use	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	musicMIDINoteOffset=-12	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	musicTask=lego	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	musicTask=repaint	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	musicTrainingKind=lokr	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	renderProfile=quality	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	responseFormat=json_object	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	responseFormat=text	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	thinkingMode=automatic	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	thinkingMode=hide	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	thinkingMode=show	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	videoOutputMode=audio-video	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	videoOutputMode=video-only	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	videoQuality=draft	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	videoQuality=final	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	voiceMode=clone	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Cover	default	music yue2 cover '' --model music-yue2 --output ~/Documents/mere.run/Music/create-yue2-cover-<stamp>
+musicYue2Cover	maximal	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	maximal-booleans-off	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	modelRoot=video-minimax-h3-ref2va	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	musicLMMode=disable	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	musicLMMode=use	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	musicMIDINoteOffset=-12	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	musicTask=lego	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	musicTask=repaint	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	musicTrainingKind=lokr	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	renderProfile=quality	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	responseFormat=json_object	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	responseFormat=text	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	thinkingMode=automatic	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	thinkingMode=hide	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	thinkingMode=show	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	videoOutputMode=audio-video	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	videoOutputMode=video-only	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	videoQuality=draft	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	videoQuality=final	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	voiceMode=clone	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Decode	default	music yue2 decode '' --output ~/Music/mere.run/Music/decode-yue2-audio-<stamp>.wav
+musicYue2Decode	maximal	music yue2 decode 1 --output 1 1
+musicYue2Decode	maximal-booleans-off	music yue2 decode 1 --output 1 1
+musicYue2Decode	modelRoot=video-minimax-h3-ref2va	music yue2 decode 1 --output 1 1
+musicYue2Decode	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 decode 1 --output 1 1
+musicYue2Decode	musicLMMode=disable	music yue2 decode 1 --output 1 1
+musicYue2Decode	musicLMMode=use	music yue2 decode 1 --output 1 1
+musicYue2Decode	musicMIDINoteOffset=-12	music yue2 decode 1 --output 1 1
+musicYue2Decode	musicTask=lego	music yue2 decode 1 --output 1 1
+musicYue2Decode	musicTask=repaint	music yue2 decode 1 --output 1 1
+musicYue2Decode	musicTrainingKind=lokr	music yue2 decode 1 --output 1 1
+musicYue2Decode	renderProfile=quality	music yue2 decode 1 --output 1 1
+musicYue2Decode	responseFormat=json_object	music yue2 decode 1 --output 1 1
+musicYue2Decode	responseFormat=text	music yue2 decode 1 --output 1 1
+musicYue2Decode	thinkingMode=automatic	music yue2 decode 1 --output 1 1
+musicYue2Decode	thinkingMode=hide	music yue2 decode 1 --output 1 1
+musicYue2Decode	thinkingMode=show	music yue2 decode 1 --output 1 1
+musicYue2Decode	videoOutputMode=audio-video	music yue2 decode 1 --output 1 1
+musicYue2Decode	videoOutputMode=video-only	music yue2 decode 1 --output 1 1
+musicYue2Decode	videoQuality=draft	music yue2 decode 1 --output 1 1
+musicYue2Decode	videoQuality=final	music yue2 decode 1 --output 1 1
+musicYue2Decode	voiceMode=clone	music yue2 decode 1 --output 1 1
+musicYue2Export	default	music yue2 export --model music-yue2 --output ~/Documents/mere.run/Music/export-yue2-pipeline-<stamp>
+musicYue2Export	maximal	music yue2 export --model 1 --output 1 1
+musicYue2Export	maximal-booleans-off	music yue2 export --model 1 --output 1 1
+musicYue2Export	modelRoot=video-minimax-h3-ref2va	music yue2 export --model 1 --output 1 1
+musicYue2Export	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 export --model 1 --output 1 1
+musicYue2Export	musicLMMode=disable	music yue2 export --model 1 --output 1 1
+musicYue2Export	musicLMMode=use	music yue2 export --model 1 --output 1 1
+musicYue2Export	musicMIDINoteOffset=-12	music yue2 export --model 1 --output 1 1
+musicYue2Export	musicTask=lego	music yue2 export --model 1 --output 1 1
+musicYue2Export	musicTask=repaint	music yue2 export --model 1 --output 1 1
+musicYue2Export	musicTrainingKind=lokr	music yue2 export --model 1 --output 1 1
+musicYue2Export	renderProfile=quality	music yue2 export --model 1 --output 1 1
+musicYue2Export	responseFormat=json_object	music yue2 export --model 1 --output 1 1
+musicYue2Export	responseFormat=text	music yue2 export --model 1 --output 1 1
+musicYue2Export	thinkingMode=automatic	music yue2 export --model 1 --output 1 1
+musicYue2Export	thinkingMode=hide	music yue2 export --model 1 --output 1 1
+musicYue2Export	thinkingMode=show	music yue2 export --model 1 --output 1 1
+musicYue2Export	videoOutputMode=audio-video	music yue2 export --model 1 --output 1 1
+musicYue2Export	videoOutputMode=video-only	music yue2 export --model 1 --output 1 1
+musicYue2Export	videoQuality=draft	music yue2 export --model 1 --output 1 1
+musicYue2Export	videoQuality=final	music yue2 export --model 1 --output 1 1
+musicYue2Export	voiceMode=clone	music yue2 export --model 1 --output 1 1
+musicYue2Inspect	default	music yue2 inspect ''
+musicYue2Inspect	maximal	music yue2 inspect 1 1
+musicYue2Inspect	maximal-booleans-off	music yue2 inspect 1 1
+musicYue2Inspect	modelRoot=video-minimax-h3-ref2va	music yue2 inspect 1 1
+musicYue2Inspect	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 inspect 1 1
+musicYue2Inspect	musicLMMode=disable	music yue2 inspect 1 1
+musicYue2Inspect	musicLMMode=use	music yue2 inspect 1 1
+musicYue2Inspect	musicMIDINoteOffset=-12	music yue2 inspect 1 1
+musicYue2Inspect	musicTask=lego	music yue2 inspect 1 1
+musicYue2Inspect	musicTask=repaint	music yue2 inspect 1 1
+musicYue2Inspect	musicTrainingKind=lokr	music yue2 inspect 1 1
+musicYue2Inspect	renderProfile=quality	music yue2 inspect 1 1
+musicYue2Inspect	responseFormat=json_object	music yue2 inspect 1 1
+musicYue2Inspect	responseFormat=text	music yue2 inspect 1 1
+musicYue2Inspect	thinkingMode=automatic	music yue2 inspect 1 1
+musicYue2Inspect	thinkingMode=hide	music yue2 inspect 1 1
+musicYue2Inspect	thinkingMode=show	music yue2 inspect 1 1
+musicYue2Inspect	videoOutputMode=audio-video	music yue2 inspect 1 1
+musicYue2Inspect	videoOutputMode=video-only	music yue2 inspect 1 1
+musicYue2Inspect	videoQuality=draft	music yue2 inspect 1 1
+musicYue2Inspect	videoQuality=final	music yue2 inspect 1 1
+musicYue2Inspect	voiceMode=clone	music yue2 inspect 1 1
+musicYue2Instrumentalize	default	music yue2 instrumentalize '' --output ~/Documents/mere.run/Music/convert-instrumental-score-<stamp>.abc
+musicYue2Instrumentalize	maximal	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	maximal-booleans-off	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	modelRoot=video-minimax-h3-ref2va	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	musicLMMode=disable	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	musicLMMode=use	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	musicMIDINoteOffset=-12	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	musicTask=lego	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	musicTask=repaint	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	musicTrainingKind=lokr	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	renderProfile=quality	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	responseFormat=json_object	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	responseFormat=text	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	thinkingMode=automatic	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	thinkingMode=hide	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	thinkingMode=show	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	videoOutputMode=audio-video	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	videoOutputMode=video-only	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	videoQuality=draft	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	videoQuality=final	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	voiceMode=clone	music yue2 instrumentalize 1 --output 1 1
+musicYue2Plan	default	music yue2 plan --model music-yue2 --output ~/Documents/mere.run/Music/plan-yue2-score-<stamp>
+musicYue2Plan	maximal	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	maximal-booleans-off	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	modelRoot=video-minimax-h3-ref2va	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	musicLMMode=disable	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	musicLMMode=use	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	musicMIDINoteOffset=-12	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	musicTask=lego	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	musicTask=repaint	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	musicTrainingKind=lokr	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	renderProfile=quality	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	responseFormat=json_object	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	responseFormat=text	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	thinkingMode=automatic	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	thinkingMode=hide	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	thinkingMode=show	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	videoOutputMode=audio-video	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	videoOutputMode=video-only	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	videoQuality=draft	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	videoQuality=final	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	voiceMode=clone	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Semantic	default	music yue2 semantic '' --model music-yue2 --output ~/Documents/mere.run/Music/generate-yue2-music-tokens-<stamp>
+musicYue2Semantic	maximal	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	maximal-booleans-off	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	modelRoot=video-minimax-h3-ref2va	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	musicLMMode=disable	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	musicLMMode=use	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	musicMIDINoteOffset=-12	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	musicTask=lego	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	musicTask=repaint	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	musicTrainingKind=lokr	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	renderProfile=quality	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	responseFormat=json_object	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	responseFormat=text	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	thinkingMode=automatic	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	thinkingMode=hide	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	thinkingMode=show	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	videoOutputMode=audio-video	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	videoOutputMode=video-only	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	videoQuality=draft	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	videoQuality=final	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	voiceMode=clone	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Serve	default	music yue2 serve --model music-yue2 --output ~/Documents/mere.run/Server/serve-yue2-jobs-<stamp>
+musicYue2Serve	maximal	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	maximal-booleans-off	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	modelRoot=video-minimax-h3-ref2va	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	musicLMMode=disable	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	musicLMMode=use	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	musicMIDINoteOffset=-12	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	musicTask=lego	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	musicTask=repaint	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	musicTrainingKind=lokr	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	renderProfile=quality	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	responseFormat=json_object	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	responseFormat=text	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	thinkingMode=automatic	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	thinkingMode=hide	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	thinkingMode=show	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	videoOutputMode=audio-video	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	videoOutputMode=video-only	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	videoQuality=draft	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	videoQuality=final	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	voiceMode=clone	music yue2 serve --model 1 --output 1 1
+musicYue2Synthesize	default	music yue2 synthesize '' --model music-yue2 --output ~/Documents/mere.run/Music/synthesize-yue2-latents-<stamp>
+musicYue2Synthesize	maximal	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	maximal-booleans-off	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	modelRoot=video-minimax-h3-ref2va	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	musicLMMode=disable	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	musicLMMode=use	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	musicMIDINoteOffset=-12	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	musicTask=lego	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	musicTask=repaint	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	musicTrainingKind=lokr	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	renderProfile=quality	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	responseFormat=json_object	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	responseFormat=text	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	thinkingMode=automatic	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	thinkingMode=hide	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	thinkingMode=show	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	videoOutputMode=audio-video	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	videoOutputMode=video-only	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	videoQuality=draft	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	videoQuality=final	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	voiceMode=clone	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Transcribe	default	music yue2 transcribe '' --model music-sheetsage2 --output ~/Documents/mere.run/Music/transcribe-music-to-score-<stamp>
+musicYue2Transcribe	maximal	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	maximal-booleans-off	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	modelRoot=video-minimax-h3-ref2va	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	musicLMMode=disable	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	musicLMMode=use	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	musicMIDINoteOffset=-12	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	musicTask=lego	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	musicTask=repaint	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	musicTrainingKind=lokr	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	renderProfile=quality	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	responseFormat=json_object	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	responseFormat=text	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	thinkingMode=automatic	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	thinkingMode=hide	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	thinkingMode=show	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	videoOutputMode=audio-video	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	videoOutputMode=video-only	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	videoQuality=draft	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	videoQuality=final	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	voiceMode=clone	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Validate	default	music yue2 validate ''
+musicYue2Validate	maximal	music yue2 validate 1 1
+musicYue2Validate	maximal-booleans-off	music yue2 validate 1 1
+musicYue2Validate	modelRoot=video-minimax-h3-ref2va	music yue2 validate 1 1
+musicYue2Validate	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 validate 1 1
+musicYue2Validate	musicLMMode=disable	music yue2 validate 1 1
+musicYue2Validate	musicLMMode=use	music yue2 validate 1 1
+musicYue2Validate	musicMIDINoteOffset=-12	music yue2 validate 1 1
+musicYue2Validate	musicTask=lego	music yue2 validate 1 1
+musicYue2Validate	musicTask=repaint	music yue2 validate 1 1
+musicYue2Validate	musicTrainingKind=lokr	music yue2 validate 1 1
+musicYue2Validate	renderProfile=quality	music yue2 validate 1 1
+musicYue2Validate	responseFormat=json_object	music yue2 validate 1 1
+musicYue2Validate	responseFormat=text	music yue2 validate 1 1
+musicYue2Validate	thinkingMode=automatic	music yue2 validate 1 1
+musicYue2Validate	thinkingMode=hide	music yue2 validate 1 1
+musicYue2Validate	thinkingMode=show	music yue2 validate 1 1
+musicYue2Validate	videoOutputMode=audio-video	music yue2 validate 1 1
+musicYue2Validate	videoOutputMode=video-only	music yue2 validate 1 1
+musicYue2Validate	videoQuality=draft	music yue2 validate 1 1
+musicYue2Validate	videoQuality=final	music yue2 validate 1 1
+musicYue2Validate	voiceMode=clone	music yue2 validate 1 1
 nodeConsole	default	
 nodeConsole	maximal	
 nodeConsole	maximal-booleans-off	

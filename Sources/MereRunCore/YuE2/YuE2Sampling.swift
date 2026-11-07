@@ -83,7 +83,7 @@ enum YuE2Sampler {
                 MLX.eval(conditional)
                 if let unconditional { MLX.eval(unconditional) }
             }
-            if step % 64 == 63 { MLX.Memory.clearCache() }
+            if step % 64 == 63 || MLX.Memory.cacheMemory > 512 * 1024 * 1024 { MLX.Memory.clearCache() }
         }
         return (history, true)
     }
@@ -95,6 +95,8 @@ enum YuE2Sampler {
             try Task.checkCancellation()
             logits = try model.logits(Array(tokens[start..<min(start + 256, tokens.count)]), cache: cache)
             MLX.eval(logits)
+            // Growing prefix caches otherwise retain unused buffers of every previous size.
+            if MLX.Memory.cacheMemory > 512 * 1024 * 1024 { MLX.Memory.clearCache() }
         }
         return logits
     }

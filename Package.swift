@@ -184,6 +184,7 @@ mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXOptimizers"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXRandom"))
 mereRunCoreDependencies.append("AudioCore")
 mereRunCoreDependencies.append("MereRunAudioModels")
+mereRunCoreDependencies.append("MereRunSheetSageModel")
 mereRunCoreDependencies.append("MereRunH3Model")
 mereRunCoreDependencies.append("MereRunLagunaModel")
 mereRunCoreDependencies.append("MereRunModelKit")
@@ -338,6 +339,7 @@ if hasMediaIOTarget {
 }
 
 var mereRunCoreTestDependencies: [Target.Dependency] = [
+  "MereRunSheetSageModel",
   "AudioDrama3Model",
   "MereRunAdmission",
   "MereRunCoreMLModel",
@@ -414,6 +416,26 @@ targets.append(
     dependencies: mereRunAudioModelsDependencies,
     path: "Sources/MereRunAudioModels",
     exclude: ["README.md", "AuK/README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "MereRunSheetSageModel",
+    dependencies: mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/MereRunSheetSageModel",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .testTarget(
+    name: "SheetSage2RuntimeTests",
+    dependencies: ["MereRunSheetSageModel", "MereRunMLXTestSupport"] + mlxDependency("MLX"),
+    path: "Tests/SheetSage2RuntimeTests",
+    resources: [.copy("Fixtures")],
     swiftSettings: commonSwiftSettings
   )
 )

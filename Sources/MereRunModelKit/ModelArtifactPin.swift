@@ -56,7 +56,12 @@ public struct ModelArtifactPin: Codable, Equatable, Sendable {
         defer { try? handle.close() }
         var hasher = SHA256()
         while true {
-            let chunk = try handle.read(upToCount: 1_048_576) ?? Data()
+            let chunk: Data
+            #if canImport(ObjectiveC)
+            chunk = try autoreleasepool { try handle.read(upToCount: 1_048_576) } ?? Data()
+            #else
+            chunk = try handle.read(upToCount: 1_048_576) ?? Data()
+            #endif
             if chunk.isEmpty { break }
             hasher.update(data: chunk)
         }

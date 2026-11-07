@@ -19,20 +19,46 @@ public struct YuE2GenerationResult: Sendable {
     public let musicTruncated: Bool
 }
 
+public enum YuE2MemoryMode: String, Codable, CaseIterable, Sendable {
+    case staged, resident
+    case lowMemory = "low-memory"
+}
+
 /// Serial native Swift/MLX execution. The transformer is released before the
 /// FP32 decoder is loaded; each request owns its seeds, caches, and artifacts.
 public actor YuE2GenerationOperation {
-    private let resources: YuE2Resources
-    private let streams = Stream.Context()
-    private var generating = false
+    let resources: YuE2Resources
+    let streams = Stream.Context()
+    var generating = false
+    var savingGeneration = false
+    let memoryMode: YuE2MemoryMode
+    var residentModel: YuE2Model?
+    var residentDecoder: YuE2Decoder?
 
-    public init(resources: YuE2Resources) { self.resources = resources }
+    public init(resources: YuE2Resources, memoryMode: YuE2MemoryMode = .staged) {
+        self.resources = resources
+        self.memoryMode = memoryMode
+    }
 
     public func generate(
-        _ plan: YuE2GenerationPlan, progress: (@Sendable (YuE2Progress) -> Void)? = nil
+        _ plan: YuE2GenerationPlan, stageOutput: URL? = nil, progress: (@Sendable (YuE2Progress) -> Void)? = nil
     ) async throws -> YuE2GenerationResult {
         try plan.validate()
-        guard !generating else { throw YuE2Error.invalidRequest("This YuE2 operation is already generating.") }
+        guard !generating, !savingGeneration else { throw YuE2Error.invalidRequest("This YuE2 operation is already generating.") }
+        if let stageOutput {
+            savingGeneration = true
+            defer { savingGeneration = false }
+            try FileManager.default.createDirectory(at: stageOutput, withIntermediateDirectories: false)
+            let score = stageOutput.appendingPathComponent("score")
+            let semantic = stageOutput.appendingPathComponent("semantic")
+            let acoustic = stageOutput.appendingPathComponent("acoustic")
+            _ = try await advanceStage(.score, plan: plan, to: score, progress: progress)
+            _ = try await advanceStage(.semantic, resuming: score, to: semantic, progress: progress)
+            let saved = try await advanceStage(.acoustic, resuming: semantic, to: acoustic, progress: progress)
+            let waveform = try await decodeStageLatents(at: acoustic.appendingPathComponent("latent.npy"), progress: progress)
+            return YuE2GenerationResult(waveform: waveform, abc: saved.abc, scoreTokens: saved.scoreTokens,
+                codecTokens: saved.codecTokens, scoreTruncated: saved.scoreTruncated, musicTruncated: saved.musicTruncated)
+        }
         generating = true
         defer { generating = false }
         return try await Stream.withDefaultStream(streams) {
@@ -52,11 +78,15 @@ public actor YuE2GenerationOperation {
             streams.synchronize()
             MLX.Memory.clearCache()
             try Task.checkCancellation()
-            let arrays = try SafetensorsStreamingLoader.loadArrays(
-                url: resources.vaeURL.appendingPathComponent("model.safetensors"),
-                where: { $0.hasPrefix("decoder.") }, dtype: .float32
-            )
-            let decoder = try YuE2Decoder(configuration: vaeConfig, arrays: arrays)
+            let decoder: YuE2Decoder
+            if let cached = residentDecoder { decoder = cached }
+            else {
+                let arrays = try SafetensorsStreamingLoader.loadArrays(
+                    url: resources.vaeURL.appendingPathComponent("model.safetensors"),
+                    where: { $0.hasPrefix("decoder.") }, dtype: .float32)
+                decoder = try YuE2Decoder(configuration: vaeConfig, arrays: arrays)
+            }
+            if memoryMode == .resident { residentDecoder = decoder }
             let waveform = try decoder.decodeTiled(generated.latents) { completed, total in
                 progress?(YuE2Progress(stage: .decoding, completed: completed, total: total))
             }
@@ -97,11 +127,9 @@ public actor YuE2GenerationOperation {
         _ plan: YuE2GenerationPlan, prepared: Prepared, tokenizer: YuE2Tokenizer,
         configuration: YuE2Configuration, progress: (@Sendable (YuE2Progress) -> Void)?
     ) throws -> LatentResult {
-        let model = try YuE2Model(configuration: configuration, arrays: SafetensorsStreamingLoader.loadArrays(
-            url: resources.rootURL.appendingPathComponent("model.safetensors")
-        ))
+        let model = try loadModel(configuration)
         progress?(YuE2Progress(stage: .loading, completed: 1, total: 1))
-        let score: [Int]
+        var score: [Int]
         let scoreTruncated: Bool
         if plan.planning != .off, prepared.score == nil {
             (score, scoreTruncated) = try YuE2Sampler.generate(
@@ -111,6 +139,11 @@ public actor YuE2GenerationOperation {
         } else {
             score = prepared.score ?? []
             scoreTruncated = false
+        }
+        if plan.instrumental == true {
+            guard !scoreTruncated else { throw YuE2Error.invalidRequest("Cannot convert a truncated instrumental score.") }
+            let converted = try YuE2Score(abc: tokenizer.decode(score)).instrumentalized(keepChords: plan.planning == .full)
+            score = try tokenizer.encode(converted.abc)
         }
         let prefix = try YuE2Protocol.prefix(plan: plan, tokenizer: tokenizer, score: score)
         // Validate acoustic capacity before spending the semantic token budget.
@@ -131,16 +164,42 @@ public actor YuE2GenerationOperation {
         for (index, range) in ranges.enumerated() {
             try Task.checkCancellation()
             let tokens = prefix + semantic.tokens[range] + [YuE2Protocol.musicEnd]
-            let acoustic = try YuE2Acoustic(model: model, tokens: tokens)
+            let acoustic = try prepareAcoustic(model, tokens: tokens)
             let chunk = try acoustic.solve(noise: noise[range], steps: plan.steps) {
                 progress?(YuE2Progress(stage: .acoustic, completed: index * plan.steps + $0, total: ranges.count * plan.steps))
             }
             chunks.append(chunk)
+            if memoryMode == .lowMemory { model.acoustic = [] }
         }
         let latents = concatenated(chunks, axis: 0)
         MLX.eval(latents)
         return LatentResult(latents: latents, abc: plan.planning == .off ? nil : try tokenizer.decode(score),
                             score: score, codec: semantic.tokens.map { $0 - YuE2Protocol.codecOffset },
                             scoreTruncated: scoreTruncated, musicTruncated: semantic.truncated)
+    }
+
+    func loadModel(_ configuration: YuE2Configuration) throws -> YuE2Model {
+        if let residentModel { return residentModel }
+        let lowMemory = memoryMode == .lowMemory
+        let model = try YuE2Model(configuration: configuration, arrays: SafetensorsStreamingLoader.loadArrays(
+            url: resources.rootURL.appendingPathComponent("model.safetensors"),
+            where: { !lowMemory || !YuE2Model.isAcousticWeight($0) }), loadAcoustic: !lowMemory)
+        if memoryMode == .resident { residentModel = model }
+        return model
+    }
+
+    func prepareAcoustic(_ model: YuE2Model, tokens: [Int]) throws -> YuE2Acoustic {
+        if memoryMode == .lowMemory, model.autoregressive.isEmpty {
+            try model.loadBranches(acoustic: false, from: resources.rootURL.appendingPathComponent("model.safetensors"))
+        }
+        let acoustic = try YuE2Acoustic(model: model, tokens: tokens)
+        if memoryMode == .lowMemory {
+            model.autoregressive = []
+            model.head = nil
+            streams.synchronize()
+            MLX.Memory.clearCache()
+            try model.loadBranches(acoustic: true, from: resources.rootURL.appendingPathComponent("model.safetensors"))
+        }
+        return acoustic
     }
 }

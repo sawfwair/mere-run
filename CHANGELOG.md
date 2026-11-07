@@ -6,6 +6,23 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Qualify bounded native YuE2 and SheetSage2 checkpoint paths on an M5 Max.
+  Fix companion-model installation validation, fresh-stage containment, and
+  offline export of managed license-directory links;
+  bound checkpoint-hashing buffers and reclaim unused long-context MLX buffers.
+  Add reproducible numerical, stage, and local API qualification tools and
+  document the measured results and planning limit.
+  Match the upstream instrumental helper's planner-only section tags.
+
+- Add native YuE2 instrumental score conversion, reusable generation stages,
+  decoder-only replay with standard or benchmark VAE weights, offline export,
+  per-request JSONL batches, and a queued local job API. Add resident and
+  phase-based memory modes and reusable acoustic attention storage.
+- Add experimental native SheetSage2/MERT2 transcription and recording covers,
+  with separate license-gated model installation and independent CPU numerical
+  fixtures. Bounded released-checkpoint transcription is qualified separately;
+  broader recording accuracy and long-song quality remain unqualified.
+
 ## 0.70.0 - 2026-11-06
 
 - Wait for Studio's running processes and output streams to stop before

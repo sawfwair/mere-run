@@ -6,7 +6,10 @@ public struct YuE2Resources: Sendable, Hashable {
     public static let revision = "29b3558dd46954a0cd9021dc76d5c91864a0f1c7"
     public static let vaeRepository = "m-a-p/YuE2-Vae"
     public static let vaeRevision = "9a94e1d0ea9f8087e98f77fa88df4a4068104d2a"
-    public static let sourceRevision = "0edaf2f4053ef4731334b8329834b107977f9637"
+    public static let sourceRevision = "1116bea76032bee5668e5f097294d082fa0b84f0"
+    public static let legacyVAEModelID = "music-yue2-vae-legacy"
+    public static let legacyVAERepository = "m-a-p/YuE2-Vae-legacy"
+    public static let legacyVAERevision = "d0585a9cdbb36e8b6930046974500ad7078317ca"
     public static let estimatedDownloadBytes: Int64 = 7_795_000_000
     public static let snapshotPatterns = [
         "LICENSE", "THIRD_PARTY_NOTICES.md", "licenses/*.txt", "config.json",

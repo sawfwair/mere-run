@@ -48,7 +48,7 @@ extension MusicGenerate {
         return try YuE2GenerationPlan(
             style: caption, lyrics: text, planning: yue2Options.planning ?? .full, abc: abc,
             seed: seed ?? 831001, guidanceScale: guidanceScale, scoreSampling: score,
-            semanticSampling: semantic, steps: steps ?? 32
+            semanticSampling: semantic, steps: steps ?? 32, instrumental: instrumental
         )
     }
 
@@ -76,6 +76,13 @@ extension MusicGenerate {
         guard Set(outputs).count == outputs.count, Set(inputs).isDisjoint(with: outputs) else {
             throw ValidationError("YuE2 output paths must be distinct and must not overwrite the lyrics or input score.")
         }
+        let stages = yue2Options.stagesOutput.map { resolveUserPath($0).resolvingSymlinksInPath() }
+        if let stages {
+            guard !FileManager.default.fileExists(atPath: stages.path),
+                  !inputs.contains(where: { $0.path.hasPrefix(stages.path + "/") }), !outputs.contains(stages) else {
+                throw ValidationError("--stages-output must name a new directory distinct from inputs and output files.")
+            }
+        }
         let rootURL: URL
         if MusicModelRuntime.namesManagedYuE2(model) {
             do { rootURL = try ModelResolver().resolve(.yue2).rootURL }
@@ -85,9 +92,9 @@ extension MusicGenerate {
             }
         } else { rootURL = resolveUserPath(model) }
         if !quiet { CLIStderr.write("Loading experimental native YuE2 from \(rootURL.path)\n") }
-        let operation = YuE2GenerationOperation(resources: YuE2Resources(rootURL: rootURL))
+        let operation = YuE2GenerationOperation(resources: YuE2Resources(rootURL: rootURL), memoryMode: yue2Options.memoryMode ?? .staged)
         let progressStream = progressJson ? JSONProgressStream() : nil
-        let result = try await operation.generate(plan) { event in
+        let result = try await operation.generate(plan, stageOutput: stages) { event in
             if let progressStream {
                 progressStream.report(stage: event.stage.rawValue, step: max(0, event.completed - 1), totalSteps: event.total)
             } else if !quiet, event.completed == 1 || event.completed == event.total || event.completed % 50 == 0 {

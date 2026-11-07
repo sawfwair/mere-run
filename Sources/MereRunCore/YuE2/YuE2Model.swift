@@ -1,3 +1,4 @@
+import Foundation
 import MLX
 import MLXFast
 import MLXNN
@@ -105,17 +106,17 @@ struct YuE2Branch {
 final class YuE2Model {
     let configuration: YuE2Configuration
     let embedding: MLXArray
-    let head: YuE2Linear
+    var head: YuE2Linear?
     let norm: YuE2Norm
-    let autoregressive: [YuE2Branch]
-    let acoustic: [YuE2Branch]
+    var autoregressive: [YuE2Branch]
+    var acoustic: [YuE2Branch]
     let latentInput: YuE2Linear
     let latentOutput: YuE2Linear
     let timeInput: YuE2Linear
     let timeOutput: YuE2Linear
     let positions: MLXArray
 
-    init(configuration: YuE2Configuration, arrays: [String: MLXArray]) throws {
+    init(configuration: YuE2Configuration, arrays: [String: MLXArray], loadAcoustic: Bool = true) throws {
         self.configuration = configuration
         var weights = YuE2Weights(arrays)
         let config = configuration
@@ -125,9 +126,9 @@ final class YuE2Model {
         autoregressive = try (0..<config.numHiddenLayers).map {
             try YuE2Branch(&weights, "model.layers.\($0)", configuration: config, acoustic: false)
         }
-        acoustic = try (0..<config.numHiddenLayers).map {
+        acoustic = try loadAcoustic ? (0..<config.numHiddenLayers).map {
             try YuE2Branch(&weights, "model.layers.\($0)", configuration: config, acoustic: true)
-        }
+        } : []
         latentInput = try YuE2Linear(&weights, "vae2llm", input: config.latentDim, output: config.hiddenSize, bias: true)
         latentOutput = try YuE2Linear(&weights, "llm2vae", input: config.hiddenSize, output: config.latentDim, bias: true)
         timeInput = try YuE2Linear(&weights, "time_embedder.mlp.0", input: 256, output: config.hiddenSize, bias: true)
@@ -139,6 +140,9 @@ final class YuE2Model {
     func makeCache() -> [KVCacheSimple] { autoregressive.map { _ in KVCacheSimple() } }
 
     func logits(_ tokens: [Int], cache: [KVCacheSimple]) throws -> MLXArray {
+        guard let head, autoregressive.count == configuration.numHiddenLayers else {
+            throw YuE2Error.invalidRequest("Autoregressive weights are not loaded.")
+        }
         var hidden = embedding[MLXArray(tokens.map(Int32.init))].expandedDimensions(axis: 0)
         for (index, layer) in autoregressive.enumerated() {
             try Task.checkCancellation()
@@ -148,5 +152,18 @@ final class YuE2Model {
             hidden = hidden + layer.mlp(layer.postNorm(hidden))
         }
         return head(norm(hidden[0..., (tokens.count - 1)..<tokens.count, 0...])).reshaped(-1)
+    }
+
+    static func isAcousticWeight(_ name: String) -> Bool { name.hasPrefix("model.layers.") && name.contains(".nar_") }
+
+    func loadBranches(acoustic: Bool, from url: URL) throws {
+        var weights = YuE2Weights(try SafetensorsStreamingLoader.loadArrays(url: url, where: {
+            $0.hasPrefix("model.layers.") && Self.isAcousticWeight($0) == acoustic
+        }))
+        let branches = try (0..<configuration.numHiddenLayers).map {
+            try YuE2Branch(&weights, "model.layers.\($0)", configuration: configuration, acoustic: acoustic)
+        }
+        try weights.finish()
+        if acoustic { self.acoustic = branches } else { autoregressive = branches }
     }
 }

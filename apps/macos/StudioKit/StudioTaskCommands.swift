@@ -11,10 +11,10 @@ extension CommandTemplateID {
         case .videoRetake, .videoDubIt: return .videoEdit
         case .videoCosmos3: return .videoCosmos
         case .videoAnimate, .videoPrepareMasks, .videoExportLatents, .videoSession: return .videoSubjects
-        case .musicGenerate: return .musicCompose
+        case .musicGenerate, .musicYue2Plan, .musicYue2Semantic, .musicYue2Synthesize, .musicYue2Decode, .musicYue2Inspect, .musicYue2Validate, .musicYue2Instrumentalize, .musicYue2Cover, .musicYue2Export, .musicYue2Batch: return .musicCompose
         case .musicRealtime: return .musicRealtime
         case .musicAnalyze: return .musicAnalyze
-        case .musicTranscribe: return .musicTranscribe
+        case .musicTranscribe, .musicYue2Transcribe: return .musicTranscribe
         case .musicSeparate: return .musicSeparate
         case .musicTrainAdapter: return .musicTrain
         case .sfxGenerate, .audioGenerate: return .soundGenerate
@@ -68,7 +68,7 @@ extension CommandTemplateID {
              .statusSnapshot, .agentOnboard, .agentStatus, .agentInstallPi,
              .agentStart, .setup, .graphStudio, .nodeConsole,
              .custom: return .serverServing
-        case .musicServe: return .serverMusic
+        case .musicServe, .musicYue2Serve: return .serverMusic
         case .visionServe: return .serverVision
         case .runList, .runInspect, .runWatch, .runFetch,
              .runCancel, .runRetry, .evaluationPackValidate, .evaluationRun,
@@ -95,7 +95,7 @@ extension CommandTemplateID {
     /// The commands that run until stopped and that Studio starts in the `.service` lane.
     package var isResidentServer: Bool {
         switch self {
-        case .apiServe, .visionServe, .musicServe, .worldServe: return true
+        case .apiServe, .visionServe, .musicServe, .musicYue2Serve, .worldServe: return true
         default: return false
         }
     }

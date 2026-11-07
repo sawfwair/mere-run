@@ -3,6 +3,35 @@ import Foundation
 extension ManagedModelCatalog {
     static let musicSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
+            id: YuE2Resources.legacyVAEModelID, category: .music, installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(repoId: YuE2Resources.legacyVAERepository, revision: YuE2Resources.legacyVAERevision,
+                patterns: ["config.json", "model.safetensors", "LICENSE", "THIRD_PARTY_NOTICES.md", "licenses/*.txt"]),
+            upstreamRepoId: YuE2Resources.legacyVAERepository, upstreamRevision: YuE2Resources.legacyVAERevision,
+            usageRestriction: ManagedModelUsageRestriction(summary: "YuE2 benchmark decoder weights use CC BY-NC 4.0.", terms: [
+                ManagedModelUsageTerm(component: "YuE2 legacy VAE weights", license: "CC BY-NC 4.0",
+                    summary: "Attribution and noncommercial use are required by the pinned weight license.",
+                    sourceRepoId: YuE2Resources.legacyVAERepository, sourceRevision: YuE2Resources.legacyVAERevision,
+                    licenseURL: "https://huggingface.co/m-a-p/YuE2-Vae-legacy/blob/\(YuE2Resources.legacyVAERevision)/LICENSE")]),
+            validationKind: .yue2VAE, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 1_100_000_000,
+            defaultCLICommands: ["music yue2 decode"]
+        ),
+        ManagedModelSpec(
+            id: SheetSage2Resources.modelID, category: .music, installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(repoId: SheetSage2Resources.repository, revision: SheetSage2Resources.revision,
+                patterns: ["config.json", "model.safetensors", "LICENSE", "THIRD_PARTY_NOTICES.md"]),
+            mountedHubFallbacks: [MountedHubFallbackConfig(destinationPath: "mert2", hubFallback: HubFallbackConfig(
+                repoId: SheetSage2Resources.parentRepository, revision: SheetSage2Resources.parentRevision,
+                patterns: ["config.json", "model.safetensors", "LICENSE", "THIRD_PARTY_NOTICES.md"]))],
+            upstreamRepoId: SheetSage2Resources.repository, upstreamRevision: SheetSage2Resources.revision,
+            usageRestriction: ManagedModelUsageRestriction(summary: "SheetSage2 and MERT2 weights use CC BY-NC 4.0.", terms: [
+                ManagedModelUsageTerm(component: "SheetSage2 and MERT2 weights", license: "CC BY-NC 4.0",
+                    summary: "Attribution and noncommercial use are required.", sourceRepoId: SheetSage2Resources.repository,
+                    sourceRevision: SheetSage2Resources.revision,
+                    licenseURL: "https://huggingface.co/m-a-p/SheetSage2/blob/\(SheetSage2Resources.revision)/LICENSE")]),
+            validationKind: .sheetSage2, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 2_759_000_000,
+            defaultCLICommands: ["music yue2 transcribe"]
+        ),
+        ManagedModelSpec(
             id: YuE2Resources.modelID,
             category: .music,
             installShape: .structuredRoot,
@@ -20,26 +49,26 @@ extension ManagedModelCatalog {
             upstreamRepoId: YuE2Resources.repository,
             upstreamRevision: YuE2Resources.revision,
             usageRestriction: ManagedModelUsageRestriction(
-                summary: "YuE2-3B and its VAE weights use CC BY-NC 4.0 and require attribution and noncommercial use.",
+                summary: "YuE2 weights use CC BY-NC 4.0 with additional individual creator permissions published upstream; company commercial use needs separate authorization.",
                 terms: [
                     ManagedModelUsageTerm(
                         component: "YuE2-3B weights", license: "CC BY-NC 4.0",
-                        summary: "Attribution and noncommercial use are required.",
+                        summary: "The base weight license requires attribution and noncommercial use; upstream separately permits individual creator output monetization.",
                         sourceRepoId: YuE2Resources.repository, sourceRevision: YuE2Resources.revision,
-                        licenseURL: "https://huggingface.co/\(YuE2Resources.repository)/blob/\(YuE2Resources.revision)/LICENSE"
+                        licenseURL: "https://github.com/multimodal-art-projection/YuE/blob/\(YuE2Resources.sourceRevision)/MODEL_LICENSE"
                     ),
                     ManagedModelUsageTerm(
                         component: "YuE2 VAE weights", license: "CC BY-NC 4.0",
-                        summary: "Attribution and noncommercial use are required.",
+                        summary: "The base weight license requires attribution and noncommercial use; upstream separately permits individual creator output monetization.",
                         sourceRepoId: YuE2Resources.vaeRepository, sourceRevision: YuE2Resources.vaeRevision,
-                        licenseURL: "https://huggingface.co/\(YuE2Resources.vaeRepository)/blob/\(YuE2Resources.vaeRevision)/LICENSE"
+                        licenseURL: "https://github.com/multimodal-art-projection/YuE/blob/\(YuE2Resources.sourceRevision)/MODEL_LICENSE"
                     ),
                 ]
             ),
             validationKind: .yue2,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: YuE2Resources.estimatedDownloadBytes,
-            defaultCLICommands: ["music generate"]
+            defaultCLICommands: ["music generate", "music yue2 decode"]
         ),
         ManagedModelSpec(
             id: "music-acestep",

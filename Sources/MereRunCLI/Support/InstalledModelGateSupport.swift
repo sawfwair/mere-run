@@ -539,6 +539,14 @@ enum InstalledModelSmokePlans {
                 try await runner.installedMagentaCheck(model: spec.id)
             }
 
+        case .sheetSage2:
+            return direct(spec, route: "music yue2 transcribe with raw event export") { runner in
+                try await runner.installedSheetSage2Check(model: spec.id)
+            }
+        case .yue2VAE:
+            return direct(spec, route: "music yue2 decode") { runner in
+                try await runner.installedYuE2DecoderCheck(model: spec.id)
+            }
         case .muScriptor:
             return direct(spec, route: "music transcribe") { runner in
                 try await runner.installedMusicTranscriptionCheck(model: spec.id)
@@ -1576,6 +1584,24 @@ extension GateRunner {
             "--score-mode", "off", "--duration", "2", "--steps", "1", "--seed", "7",
             "--no-recipe", "--output", output.path, "--quiet",
         ], timeout: 3_600)
+        return try audioObservation(output, run: run)
+    }
+
+    func installedSheetSage2Check(model: String) async throws -> GateObservation {
+        let input = workDirectory.appendingPathComponent("installed-sheetsage2-source.wav")
+        if !FileManager.default.fileExists(atPath: input.path) { try Self.writeSineWaveFixture(to: input) }
+        let output = artifactURL(model, extension: "transcription")
+        let run = try await exec(["music", "yue2", "transcribe", input.path, "--model", model,
+            "--allow-notation-failure", "--output", output.path], timeout: 3600)
+        return try jsonFileObservation(output.appendingPathComponent("transcription.json"), run: run, label: "SheetSage2 raw transcription")
+    }
+
+    func installedYuE2DecoderCheck(model: String) async throws -> GateObservation {
+        try MLXBundleSupport.ensureAvailable(quiet: true)
+        let input = artifactURL(model, extension: "npy")
+        try MLX.save(array: MLXArray.zeros([2, 64], dtype: .float32), url: input)
+        let output = artifactURL(model, extension: "wav")
+        let run = try await exec(["music", "yue2", "decode", input.path, "--vae", model, "--output", output.path], timeout: 3600)
         return try audioObservation(output, run: run)
     }
 

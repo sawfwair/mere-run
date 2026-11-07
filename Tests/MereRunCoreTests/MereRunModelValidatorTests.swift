@@ -434,6 +434,30 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertFalse(missingVAE.errors.contains { $0.contains("text_encoder") || $0.contains("tokenizer") })
     }
 
+    func testSheetSageAndDecoderCompanionUseTheirOwnLayouts() throws {
+        for (id, paths) in [
+            (ModelResolver.ModelID.sheetSage2, ["config.json", "model.safetensors", "LICENSE",
+                "mert2/config.json", "mert2/model.safetensors", "mert2/LICENSE"]),
+            (.yue2VAELegacy, ["config.json", "model.safetensors", "LICENSE"])
+        ] {
+            let root = try TestFileSystem.makeTempDir()
+            defer { try? FileManager.default.removeItem(at: root) }
+            try MereRunModelManifest.template(for: id, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+            for path in paths { try TestFileSystem.writeFile(root.appendingPathComponent(path)) }
+            for expectedID in [id.rawValue, nil] {
+                let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: expectedID)
+                XCTAssertTrue(report.isValid, report.errors.joined(separator: "\n"))
+                XCTAssertTrue(report.warnings.isEmpty, report.warnings.joined(separator: "\n"))
+            }
+            let weights = id == .sheetSage2 ? "mert2/model.safetensors" : "model.safetensors"
+            try FileManager.default.removeItem(at: root.appendingPathComponent(weights))
+            let incomplete = MereRunModelValidator.validate(modelRoot: root, expectedModelID: id.rawValue)
+            XCTAssertFalse(incomplete.isValid)
+            XCTAssertTrue(incomplete.errors.contains { $0.contains(weights) })
+            XCTAssertFalse(incomplete.errors.contains { $0.contains("text_encoder") || $0.contains("tokenizer") })
+        }
+    }
+
     func testMagentaRT2RootLayoutPassesValidation() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }

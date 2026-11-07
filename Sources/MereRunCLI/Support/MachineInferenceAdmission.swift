@@ -36,6 +36,11 @@ enum CLIInferenceAdmissionClassifier {
         let subcommand = commandTokens.dropFirst().first
         let nestedSubcommand = commandTokens.dropFirst(2).first
         let label = [topLevel, subcommand].compactMap { $0 }.joined(separator: " ")
+        if topLevel == "music", subcommand == "yue2",
+           ["inspect", "validate", "instrumentalize", "export"].contains(nestedSubcommand)
+            || (nestedSubcommand == "batch" && tokens.contains("--validate-only")) {
+            return nil
+        }
         // These preflights report resource blockers without reserving inference
         // permits. Other preflight implementations retain their existing gate.
         if tokens.contains("--preflight"), ["image generate", "text chat", "text decide", "text classify"].contains(label) {

@@ -17,6 +17,11 @@ extension MereRunCapabilityCatalog {
             .init(name: "caption", label: "Music prompt", kind: .string, required: true)
         ],
         options: [
+            .init(flag: "--yue2-memory-mode", label: "YuE2 memory mode", kind: .choice,
+                  choices: ["staged", "resident", "low-memory"], group: Group.sampling, tier: .expert)
+                .scoped(G.only(.yue2)),
+            .init(flag: "--stages-output", label: "YuE2 reusable stages", kind: .file, group: Group.output, tier: .expert)
+                .scoped(G.only(.yue2)),
             .init(flag: "--score-mode", label: "YuE2 score planning", kind: .choice,
                   choices: ["full", "melody", "off"], group: Group.prompt, tier: .expert)
                 .scoped(G.only(.yue2)),
@@ -139,7 +144,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--lyrics-file", label: "Lyrics file", kind: .file, group: Group.prompt, tier: .expert)
                 .scoped(G.except(.magentaRT2)),
             .init(flag: "--instrumental", label: "Instrumental", kind: .boolean, group: Group.prompt, tier: .standard)
-                .scoped(G.except(ignoredBy: [.yue2, .magentaRT2])),
+                .scoped(G.except(ignoredBy: [.magentaRT2])),
             .init(flag: "--lrc-file", label: "LRC file", kind: .file, group: Group.prompt, tier: .expert)
                 .scoped(G.except(.yue2, ignoredBy: [.magentaRT2])),
             .init(flag: "--lrc-output", label: "LRC output", kind: .file, group: Group.output, tier: .expert)

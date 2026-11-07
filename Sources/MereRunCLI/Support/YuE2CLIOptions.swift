@@ -3,8 +3,14 @@ import Foundation
 import MereRunCore
 
 extension YuE2PlanningMode: ExpressibleByArgument {}
+extension YuE2MemoryMode: ExpressibleByArgument {}
 
 struct YuE2CLIOptions: ParsableArguments {
+    @Option(name: .customLong("yue2-memory-mode"), help: "YuE2 weights: staged (default), resident, or low-memory phase loading.")
+    var memoryMode: YuE2MemoryMode?
+    @Option(name: .customLong("stages-output"), help: "Save reusable YuE2 score, semantic and acoustic stages in a new directory.")
+    var stagesOutput: String?
+
     @Option(name: .customLong("score-mode"), help: "YuE2 ABC planning: full (default), melody, or off.")
     var planning: YuE2PlanningMode?
 

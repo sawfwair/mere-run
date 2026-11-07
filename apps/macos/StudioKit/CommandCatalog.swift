@@ -89,6 +89,18 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
     case musicRealtime
     case musicTrainAdapter
     case musicServe
+    case musicYue2Plan
+    case musicYue2Semantic
+    case musicYue2Synthesize
+    case musicYue2Decode
+    case musicYue2Inspect
+    case musicYue2Validate
+    case musicYue2Instrumentalize
+    case musicYue2Transcribe
+    case musicYue2Cover
+    case musicYue2Export
+    case musicYue2Batch
+    case musicYue2Serve
     case videoGenerate
     case videoRetake
     case videoDubIt
@@ -225,6 +237,18 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
         case .musicRealtime: return "music.realtime"
         case .musicTrainAdapter: return "music.train-adapter"
         case .musicServe: return "music.serve"
+        case .musicYue2Plan: return "music.yue2.plan"
+        case .musicYue2Semantic: return "music.yue2.semantic"
+        case .musicYue2Synthesize: return "music.yue2.synthesize"
+        case .musicYue2Decode: return "music.yue2.decode"
+        case .musicYue2Inspect: return "music.yue2.inspect"
+        case .musicYue2Validate: return "music.yue2.validate"
+        case .musicYue2Instrumentalize: return "music.yue2.instrumentalize"
+        case .musicYue2Transcribe: return "music.yue2.transcribe"
+        case .musicYue2Cover: return "music.yue2.cover"
+        case .musicYue2Export: return "music.yue2.export"
+        case .musicYue2Batch: return "music.yue2.batch"
+        case .musicYue2Serve: return "music.yue2.serve"
         case .videoGenerate: return "video.generate"
         case .videoRetake: return "video.retake"
         case .videoDubIt: return "video.dub-it"
@@ -1283,7 +1307,19 @@ extension CommandTemplate {
              .musicSeparate,
              .musicRealtime,
              .musicTrainAdapter,
-             .musicServe:
+             .musicServe,
+             .musicYue2Plan,
+             .musicYue2Semantic,
+             .musicYue2Synthesize,
+             .musicYue2Decode,
+             .musicYue2Inspect,
+             .musicYue2Validate,
+             .musicYue2Instrumentalize,
+             .musicYue2Transcribe,
+             .musicYue2Cover,
+             .musicYue2Export,
+             .musicYue2Batch,
+             .musicYue2Serve:
             return .music
 
         case .videoGenerate,
@@ -1377,7 +1413,7 @@ package enum CommandLaunchEnvironment {
     /// there travels the same way one typed anywhere else in the app does.
     package static func secretFlags(for templateID: CommandTemplateID) -> [String: WritableKeyPath<CommandDraft, String>] {
         switch templateID {
-        case .apiServe, .musicServe, .worldServe, .visionServe, .statusSnapshot:
+        case .apiServe, .musicServe, .musicYue2Serve, .worldServe, .visionServe, .statusSnapshot:
             return ["--api-key": \.apiKey]
         case .openWebui:
             return ["--api-key": \.apiKey, "--admin-password": \.openWebUIAdminPassword]
@@ -1390,6 +1426,7 @@ package enum CommandLaunchEnvironment {
         guard templateID == .apiServe
             || templateID == .openWebui
             || templateID == .musicServe
+            || templateID == .musicYue2Serve
             || templateID == .worldServe
             || templateID == .visionServe
             || templateID == .statusSnapshot else { return [:] }
@@ -1423,6 +1460,7 @@ package enum CommandCatalog {
         + audioTemplates
         + videoTemplates
         + musicTemplates
+        + yue2Templates
         + soundFXTemplates
         + operationsTemplates
         + serverTemplates

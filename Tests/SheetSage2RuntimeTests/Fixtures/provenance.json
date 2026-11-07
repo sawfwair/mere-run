@@ -1,0 +1,11 @@
+{
+  "revision": "b83c3d79a6d98bcffaf8f9ed112c90aa887887bc",
+  "torch": "2.8.0",
+  "transformers": "4.45.2",
+  "source_sha256": {
+    "modeling_mert2.py": "b1a3174e5649c4b26b0c90d8626f0adacfbbba111a58ed3bb72ad651945a2f5c",
+    "modeling_sheetsage2.py": "f1c45346dd76329fcbeadc5c721312836509326310c034634bc12d75263688bb",
+    "generation_sheetsage2.py": "b58dbbfaebfba2a441a79b8c36183f0e4956acdd3aaf7c655c559933b4c20afd",
+    "tokenization_sheetsage2.py": "2ad9f7734e3d9f750fe575f22fd9ec03a9a4ab52497a6314e76f53ed9024fa75"
+  }
+}

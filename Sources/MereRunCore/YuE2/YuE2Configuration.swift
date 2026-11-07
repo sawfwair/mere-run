@@ -91,10 +91,11 @@ struct YuE2VAEConfiguration: Codable, Sendable {
         case decodeCoreFrames = "decode_core_frames", decodeHaloFrames = "decode_halo_frames"
     }
 
-    func validateReleased() throws {
+    func validateReleased(allowLegacy: Bool = false) throws {
         let decoder = decoderConfig
         guard modelType == "yue2_vae", sampleRate == 48000, latentDim == 64,
-              downsamplingRatio == 1920, audioChannels == 2, releaseVariant == "standard",
+              downsamplingRatio == 1920, audioChannels == 2,
+              releaseVariant == "standard" || (allowLegacy && releaseVariant == "legacy"),
               decoder.channels == 64, decoder.channelMultipliers == [1, 2, 4, 8, 16, 32],
               decoder.strides == [2, 2, 4, 4, 5, 6], decoder.latentDim == 64,
               decoder.outChannels == 2, decoder.useSnake, decoder.snakeType == "vanilla",
