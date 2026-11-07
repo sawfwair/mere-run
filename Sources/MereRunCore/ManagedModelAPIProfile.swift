@@ -316,7 +316,8 @@ public extension ManagedModelAPIProfile {
             toolCall: true,
             compatibility: ManagedModelOpenAICompatibilityProfile(
                 supportsReasoningEffort: true
-            )
+            ),
+            supportsStopSequences: true
         )
     }
 

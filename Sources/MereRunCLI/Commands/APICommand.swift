@@ -6,6 +6,7 @@ struct API: ParsableCommand {
         abstract: "Serve local models through API surfaces.",
         subcommands: [
             APIServe.self,
+            APIConnect.self,
         ]
     )
 }

@@ -235,6 +235,7 @@ extension Q35Generator {
 
         // Shared pipelined decode; mRoPE positions derive from the cache
         // offset, so the step closure computes them per forward.
+        var progressTokens: [Int] = []
         var toolCallCompletionDetector = Q35ToolParser.StreamingCompletionDetector()
         let result = try AutoregressiveDecodeEngine.decode(
             AutoregressiveDecodeRequest(
@@ -258,8 +259,9 @@ extension Q35Generator {
                 )
             },
             decodeToken: { tokenizerAndTemplate.decode(token: $0) },
+            decodeTokens: { progressTokens = $0; return tokenizerAndTemplate.decode(tokens: $0) },
             emitPiece: { _, piece in
-                progressHandler?(ChatProgress(stage: .generating, message: piece))
+                progressHandler?(ChatProgress(stage: .generating, message: piece, decodedText: tokenizerAndTemplate.decode(tokens: progressTokens)))
             },
             shouldContinue: { _, piece in
                 guard stopAtCompletedToolCall else { return true }

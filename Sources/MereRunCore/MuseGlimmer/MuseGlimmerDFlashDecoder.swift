@@ -134,6 +134,8 @@ enum MuseGlimmerDFlashDecoder {
         assistantModelPath: String?,
         decodeToken: ((Int) -> String)? = nil,
         emitPiece: ((Int, String) -> Void)? = nil,
+        decodeTokens: (([Int]) -> String)? = nil,
+        shouldContinue: (() -> Bool)? = nil,
         checkCancellation: (() throws -> Void)? = nil
     ) throws -> MuseGlimmerDFlashDecodeResult {
         let startedAt = Date()
@@ -143,6 +145,7 @@ enum MuseGlimmerDFlashDecoder {
         var repetitionHistory = historySeedTokens
         var firstTokenSeconds: Double?
         var pendingWhitespace = ""
+        var textDecoder = IncrementalTokenTextDecoder()
         var stats = MuseGlimmerDFlashStats(
             enabled: true,
             active: true,
@@ -159,7 +162,7 @@ enum MuseGlimmerDFlashDecoder {
                 firstTokenSeconds = Date().timeIntervalSince(startedAt)
             }
             guard let decodeToken, let emitPiece else { return }
-            let piece = decodeToken(token)
+            let piece = decodeTokens.map { textDecoder.append(decodedText: $0(generatedTokens)) } ?? decodeToken(token)
             if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 pendingWhitespace += piece
             } else if !piece.isEmpty {
@@ -215,6 +218,7 @@ enum MuseGlimmerDFlashDecoder {
             pendingSampledAnchor = nil
             guard !eosTokens.contains(anchor) else { break }
             emit(anchor)
+            if shouldContinue?() == false { return result() }
             guard generatedTokens.count < tokenBudget else { break }
 
             guard assistantActive, draftCount > 0 else {
@@ -382,6 +386,7 @@ enum MuseGlimmerDFlashDecoder {
                 for proposal in proposals {
                     guard !eosTokens.contains(proposal) else { return result() }
                     emit(proposal)
+                    if shouldContinue?() == false { return result() }
                     guard generatedTokens.count < tokenBudget else { return result() }
                 }
                 targetCache = candidateTargetCache
@@ -396,6 +401,7 @@ enum MuseGlimmerDFlashDecoder {
                 for proposal in proposals.prefix(accepted) {
                     guard !eosTokens.contains(proposal) else { return result() }
                     emit(proposal)
+                    if shouldContinue?() == false { return result() }
                     guard generatedTokens.count < tokenBudget else { return result() }
                 }
                 guard let replacement, !eosTokens.contains(replacement) else { break }

@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add native Messages routes, adapter capability discovery, exact prompt counting,
+  local tool search and context editing, and preview-first Claude Code
+  connection settings. See the Messages API guide for adapter limits and the
+  separate model qualification status.
+
 ## 0.69.1 - 2026-11-04
 
 - Make the Studio private-mode ghost button respond across its full button area.

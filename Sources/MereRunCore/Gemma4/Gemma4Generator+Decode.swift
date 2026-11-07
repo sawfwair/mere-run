@@ -182,7 +182,7 @@ extension Gemma4Generator {
             if let progressHandler {
                 let piece = tokenizerAndTemplate.decode(token: next)
                 if !piece.isEmpty {
-                    progressHandler(ChatProgress(stage: .generating, message: piece))
+                    progressHandler(ChatProgress(stage: .generating, message: piece, decodedText: tokenizerAndTemplate.decode(tokens: generated)))
                 }
             }
 

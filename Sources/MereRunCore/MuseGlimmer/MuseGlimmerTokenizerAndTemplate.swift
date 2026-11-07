@@ -57,13 +57,15 @@ public final class MuseGlimmerTokenizerAndTemplate: @unchecked Sendable {
         tools: [ToolDefinition]? = nil,
         reasoningStrength: String,
         currentDate: String,
-        maxLength: Int
+        maxLength: Int,
+        truncate: Bool = true,
+        addGenerationPrompt: Bool = true
     ) throws -> [Int] {
         let toolSpecs: [ToolSpec]? = tools?.isEmpty == false ? tools?.map { $0.toToolSpec() } : nil
         var encoded = try tokenizer.applyChatTemplate(
             messages: Self.renderMessages(messages),
             chatTemplate: nil,
-            addGenerationPrompt: true,
+            addGenerationPrompt: addGenerationPrompt,
             truncation: false,
             maxLength: nil,
             tools: toolSpecs,
@@ -73,7 +75,7 @@ public final class MuseGlimmerTokenizerAndTemplate: @unchecked Sendable {
             ]
         )
         let targetLength = min(maxLength, self.maxLength)
-        if encoded.count > targetLength {
+        if truncate, encoded.count > targetLength {
             encoded = Array(encoded.suffix(targetLength))
         }
         return encoded
@@ -90,7 +92,21 @@ public final class MuseGlimmerTokenizerAndTemplate: @unchecked Sendable {
     static func renderMessages(_ messages: [ChatMessage]) -> [Message] {
         messages.map { message in
             var rendered: Message = ["role": message.role.rawValue]
-            if let image = message.imageUrl, !image.isEmpty {
+            if let blocks = message.contentBlocks {
+                rendered["content"] = blocks.compactMap { block -> [String: any Sendable]? in
+                    switch block {
+                    case .text(let text): return ["type": "text", "text": text]
+                    case .image(let reference, _): return ["type": "image", "image_url": reference]
+                    case .document(let document):
+                        let text = ([document.title, document.context].compactMap { $0 } + document.pages.enumerated().map {
+                            "<page number=\"\($0.offset + 1)\">\n\($0.element)\n</page>"
+                        }).joined(separator: "\n")
+                        return ["type": "text", "text": text]
+                    case .toolReference(let name): return ["type": "text", "text": "Discovered tool: " + name]
+                    default: return nil
+                    }
+                }
+            } else if let image = message.imageUrl, !image.isEmpty {
                 rendered["content"] = [
                     ["type": "image", "image_url": image],
                     ["type": "text", "text": message.content],

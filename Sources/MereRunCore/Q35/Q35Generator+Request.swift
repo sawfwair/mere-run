@@ -33,7 +33,7 @@ extension Q35Generator {
         // disposable buffers from the previous request before forking its KV.
         clearMLXCacheUnderPressureIfNeeded()
 
-        let messages = request.messages
+        let messages = NativeChatToolPolicy.requestMessages(request)
         let jsonConstrained = request.requiresJSON
         let includeThinking = request.showThinking && !jsonConstrained
         let nativeReasoningEffort = Q35Resources.isQ38ModelId(modelId)
@@ -122,6 +122,7 @@ extension Q35Generator {
                 .write(toFile: dumpPath, atomically: true, encoding: .utf8)
         }
 
+        if let prepared = request.preparedPrompt { promptTokens = prepared.tokens }
         let eosSet = request.stopOnEOS
             ? Set(
                 loadedConfig.eosTokenIds
@@ -264,9 +265,16 @@ extension Q35Generator {
         let prefillSeconds = Date().timeIntervalSince(prefillStart)
 
         let tokenBudget = max(0, min(request.maxTokens, effectiveContext - prefillLength))
+        progressHandler?(.init(stage: .encoding, event: .usage(input: promptTokens.count, output: 0, cacheRead: 0, cacheWrite: 0)))
 
         progressHandler?(ChatProgress(stage: .generating, message: ""))
 
+        let outputObserver = NativeChatOutputObserver(initialReasoning:
+            tokenizerAndTemplate.decode(tokens: promptTokens).trimmingCharacters(in: .whitespacesAndNewlines)
+                .hasSuffix("<think>"), parseTools: request.tools?.isEmpty == false)
+        let decodeProgress: @Sendable (ChatProgress) -> Void = { progress in
+            outputObserver.observe(progress, handler: progressHandler)
+        }
         let decodeResult = try await decodeTokens(
             model: model,
             tokenizerAndTemplate: tokenizerAndTemplate,
@@ -286,7 +294,7 @@ extension Q35Generator {
             stopAtCompletedToolCall: request.tools?.isEmpty == false && !request.parallelToolCalls,
             logprobCapture: request.logprobCapture,
             logprobRegion: request.logprobRegionHint ?? .visible,
-            progressHandler: progressHandler
+            progressHandler: decodeProgress
         )
 
         let stopSequences = TextGenerationStopSequences.merged(request.stopSequences)
@@ -298,22 +306,12 @@ extension Q35Generator {
             tokenBudget: tokenBudget,
             matchedStopSequence: trimmed.matchedSequence != nil
         )
-        let parsedToolCalls = request.tools?.isEmpty == false
-            ? Q35ToolParser.parseToolCalls(decoded)
-            : []
-        let toolCalls: [ToolCall]? = request.tools.flatMap { tools -> [ToolCall]? in
-            let validated = ToolCallPolicy.validatedCalls(
-                parsedToolCalls,
-                tools: tools,
-                parallelToolCalls: request.parallelToolCalls
-            )
-            return validated.isEmpty ? nil : validated
-        }
-        let visibleText = parsedToolCalls.isEmpty
-            ? decoded
-            : Q35ToolParser.visibleText(decoded)
+        let calls = request.tools?.isEmpty == false ? try Q35ToolParser.validatedToolCalls(decoded, tools: request.tools ?? [], parallel: request.parallelToolCalls) : []
+        let events = outputObserver.finish(decoded, handler: progressHandler)
+        let visibleText = calls.isEmpty ? decoded : Q35ToolParser.visibleText(decoded)
+        let reasoning = events.compactMap { if case .reasoning(let text) = $0 { return text }; return nil }.joined()
 
-        return ChatResponse(
+        var response = ChatResponse(
             generatedText: visibleText,
             tokensGenerated: decodeResult.generatedTokens.count,
             showThinking: includeThinking,
@@ -326,11 +324,14 @@ extension Q35Generator {
                 prefillKVCache: effectiveKVCacheMode.genericCacheLabel,
                 decodeKVCache: effectiveKVCacheMode.genericCacheLabel
             ),
-            toolCalls: toolCalls,
+            toolCalls: calls.isEmpty ? nil : calls,
             promptTokens: promptTokens.count,
             finishReason: finishReason,
             logprobs: decodeResult.logprobs,
             acceleration: decodeResult.acceleration
         )
+        response.reasoningContent = reasoning.isEmpty ? nil : reasoning
+        response.generationEvents = events
+        return response
     }
 }

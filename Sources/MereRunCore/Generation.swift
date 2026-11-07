@@ -182,6 +182,10 @@ public struct ChatMessage: Sendable, Hashable, Codable {
     public var name: String?
     public var toolCallID: String?
     public var toolCalls: [ChatMessageToolCall]?
+    /// Ordered, lossless content. Absent in histories written before block support.
+    public var contentBlocks: [ChatContentBlock]?
+    public var conversationTurn: Int?
+    public var toolResultIsError: Bool?
 
     public init(
         role: Role,
@@ -192,7 +196,8 @@ public struct ChatMessage: Sendable, Hashable, Codable {
         reasoningContent: String? = nil,
         name: String? = nil,
         toolCallID: String? = nil,
-        toolCalls: [ChatMessageToolCall]? = nil
+        toolCalls: [ChatMessageToolCall]? = nil,
+        contentBlocks: [ChatContentBlock]? = nil
     ) {
         self.role = role
         self.content = content
@@ -203,6 +208,9 @@ public struct ChatMessage: Sendable, Hashable, Codable {
         self.name = name
         self.toolCallID = toolCallID
         self.toolCalls = toolCalls
+        self.contentBlocks = contentBlocks
+        self.conversationTurn = nil
+        self.toolResultIsError = nil
     }
 }
 
@@ -313,10 +321,21 @@ private struct ToolFunctionSchema: Encodable {
 public struct ToolCall: Sendable, Hashable {
     public let name: String
     public let arguments: [String: String]
+    public let jsonArguments: [String: ChatJSONValue]?
 
     public init(name: String, arguments: [String: String]) {
         self.name = name
         self.arguments = arguments
+        self.jsonArguments = nil
+    }
+
+    public init(name: String, jsonArguments: [String: ChatJSONValue]) {
+        self.name = name
+        self.jsonArguments = jsonArguments
+        self.arguments = jsonArguments.mapValues { value in
+            if case .string(let string) = value { return string }
+            return value.jsonString
+        }
     }
 }
 
@@ -344,6 +363,11 @@ public enum ToolCallPolicy {
 }
 
 public struct ChatRequest: Sendable, Hashable {
+    public var prefixCachePolicy: ChatPrefixCachePolicy?
+    public var cacheWarmOnly: Bool
+    public var reserveOutputContext: Bool
+    public var preparedPrompt: ChatPreparedPrompt?
+    public var contextEdits: [ChatContextEdit]
     public var messages: [ChatMessage]
     public var maxTokens: Int
     public var temperature: Double
@@ -364,6 +388,7 @@ public struct ChatRequest: Sendable, Hashable {
     public var showThinking: Bool
     public var lora: LoRA?
     public var requiresJSON: Bool
+    public var toolSearch: ChatToolSearch?
     public var tools: [ToolDefinition]?
     public var toolChoice: ChatToolChoice
     public var parallelToolCalls: Bool
@@ -409,6 +434,11 @@ public struct ChatRequest: Sendable, Hashable {
         logprobRegionHint: ChatLogprobRegion? = nil,
         showUnmasking: Bool = false
     ) {
+        self.prefixCachePolicy = nil
+        self.cacheWarmOnly = false
+        self.reserveOutputContext = false
+        self.preparedPrompt = nil
+        self.contextEdits = []
         self.messages = messages
         self.maxTokens = maxTokens
         self.temperature = temperature
@@ -423,6 +453,7 @@ public struct ChatRequest: Sendable, Hashable {
         self.showThinking = showThinking
         self.lora = lora
         self.requiresJSON = requiresJSON
+        self.toolSearch = nil
         self.tools = tools
         self.toolChoice = toolChoice
         self.parallelToolCalls = parallelToolCalls
@@ -539,11 +570,15 @@ public struct ChatAccelerationDiagnostics: Codable, Sendable, Hashable {
 }
 
 public struct ChatResponse: Sendable, Hashable {
+    public var cacheReadTokens: Int = 0
+    public var cacheCreationTokens: Int = 0
+    public var generationEvents: [ChatGenerationEvent]?
     public var response: String
     public var tokensGenerated: Int
     public var timing: ChatTiming?
     public var toolCalls: [ToolCall]?
     public var promptTokens: Int?
+    public var matchedStopSequence: String? = nil
     public var finishReason: ChatFinishReason?
     public var reasoningContent: String?
     public var hasIncompleteReasoning: Bool
@@ -568,6 +603,7 @@ public struct ChatResponse: Sendable, Hashable {
         acceleration: ChatAccelerationDiagnostics? = nil,
         diffusion: ChatDiffusionDiagnostics? = nil
     ) {
+        self.generationEvents = nil
         self.response = response
         self.tokensGenerated = tokensGenerated
         self.timing = timing
@@ -810,15 +846,22 @@ public struct ChatProgress: Sendable, Hashable {
     public let stage: ChatStage
     public let message: String?
     public let diffusion: ChatDiffusionProgress?
+    public let event: ChatGenerationEvent?
+    /// Cumulative native decoding, before channel and tool markup is removed.
+    public let decodedText: String?
 
     public init(
         stage: ChatStage,
         message: String? = nil,
-        diffusion: ChatDiffusionProgress? = nil
+        diffusion: ChatDiffusionProgress? = nil,
+        event: ChatGenerationEvent? = nil,
+        decodedText: String? = nil
     ) {
         self.stage = stage
         self.message = message
         self.diffusion = diffusion
+        self.event = event
+        self.decodedText = decodedText
     }
 }
 

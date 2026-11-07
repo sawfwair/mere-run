@@ -145,6 +145,19 @@ public enum NativeChatRuntime: Sendable {
         }
     }
 
+    public func preparePrompt(_ request: ChatRequest) async throws -> ChatPreparedPrompt {
+        switch self {
+        case .textChatMuseGlimmer(let generator, let modelPath):
+            return try await generator.preparePrompt(request, modelPath: modelPath)
+        case .textChatQ35(let generator, let modelPath):
+            return try await generator.preparePrompt(request, modelPath: modelPath)
+        case .textChatGemma4(let generator, let modelPath):
+            return try await generator.preparePrompt(request, modelPath: modelPath)
+        default:
+            throw ChatRequestIssue("count_tokens", "this runtime has no exact shared prompt preparation adapter")
+        }
+    }
+
     public func chat(
         _ request: ChatRequest,
         progressHandler: (@Sendable (ChatProgress) -> Void)?

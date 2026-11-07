@@ -158,12 +158,14 @@ func withVFXRequestAdmission<T: Sendable>(
 // MARK: - Server Implementation
 
 actor CodeGenServer {
-    private let apiKey: String?
-    private let fallbackLoraPath: String?
+    var messagesContinuityOverride: MessagesContinuity?
+    var messagesHeartbeatInterval: Duration = .seconds(10)
+    let apiKey: String?
+    let fallbackLoraPath: String?
     private let defaultModelID: String
-    private let contextSize: Int
-    private let requestLimiter: APIRateLimiter
-    private let services: RuntimeServingServices
+    let contextSize: Int
+    let requestLimiter: APIRateLimiter
+    let services: RuntimeServingServices
     private var requestAdmission: RuntimeRequestAdmission { services.admission }
     private var pool: RuntimeModelPool { services.models }
     private var sidecarPool: APISidecarModelPool { services.media }
@@ -202,6 +204,21 @@ actor CodeGenServer {
             memoryPressurePolicy: memoryPressurePolicy
         )
         try await services.prepare(warmupDefaultModel: warmupDefaultModel)
+    }
+
+    init(services: RuntimeServingServices, apiKey: String? = nil, contextSize: Int = 32768,
+         continuity: MessagesContinuity, messagesHeartbeatInterval: Duration = .seconds(10)) {
+        self.services = services
+        self.apiKey = apiKey
+        self.contextSize = contextSize
+        self.fallbackLoraPath = nil
+        self.defaultModelID = ""
+        self.requestLimiter = APIRateLimiter(limitPerMinute: 10000)
+        self.artifactCleanupScheduler = APIArtifactDirectoryCleanupScheduler()
+        self.imageRunRecords = nil
+        self.transcriptionRunRecords = nil
+        self.messagesContinuityOverride = continuity
+        self.messagesHeartbeatInterval = messagesHeartbeatInterval
     }
 
     func run(host: String, port: Int) async throws {
@@ -256,6 +273,34 @@ actor CodeGenServer {
                 request,
                 remoteAddress: context.remoteAddress
             )
+        }
+
+        router.get("/v1/models/:id") { [self] request, context in
+            await handleModel(request, id: context.parameters.get("id", as: String.self) ?? "")
+        }
+        router.head("/api/hello") { [self] request, _ in
+            do {
+                try APIAuthentication.validate(expected: apiKey, headers: request.headers)
+                return Response(status: .ok)
+            } catch { return Self.messagesError(error, requestID: "req_" + UUID().uuidString) }
+        }
+        router.post("/v1/messages") { [self] request, context in
+            await handleMessages(request, counting: false, channel: context.channel)
+        }
+        router.post("/v1/messages/count_tokens") { [self] request, context in
+            await handleMessages(request, counting: true, channel: context.channel)
+        }
+        for path: RouterPath in ["/v1/files", "/v1/files/**", "/v1/messages/batches", "/v1/messages/batches/**",
+                                 "/v1/organizations/**", "/v1/mcp_servers", "/v1/mcp_servers/**"] {
+            for method: HTTPRequest.Method in [.get, .post, .delete, .patch, .put] {
+                router.on(path, method: method) { [self] request, _ in
+                    let id = "req_" + UUID().uuidString
+                    do {
+                        try APIAuthentication.validate(expected: apiKey, headers: request.headers)
+                        throw MessagesFailure.unsupported("hosted service endpoint \(request.uri.path)")
+                    } catch { return Self.messagesError(error, requestID: id) }
+                }
+            }
         }
 
         // Chat completions
@@ -433,12 +478,30 @@ actor CodeGenServer {
         }
         models.data.sort { $0.id < $1.id }
 
-        let data = try JSONEncoder().encode(models)
-        return Response(
-            status: .ok,
-            headers: [.contentType: "application/json"],
-            body: .init(byteBuffer: ByteBuffer(bytes: data))
-        )
+        do {
+            let query = request.uri.queryParameters
+            let limit: Int?
+            if let raw = query["limit"] {
+                guard let parsed = Int(raw) else { throw MessagesFailure.invalid("limit", "must be an integer") }
+                limit = parsed
+            } else { limit = nil }
+            let page = try MessagesModelPage.page(models.data, limit: limit,
+                                                 after: query["after_id"].map(String.init), before: query["before_id"].map(String.init))
+            return try Self.messagesJSON(page, requestID: "req_" + UUID().uuidString)
+        } catch { return Self.messagesError(error, requestID: "req_" + UUID().uuidString) }
+    }
+
+    private func handleModel(_ request: Request, id: String) async -> Response {
+        let requestID = "req_" + UUID().uuidString
+        do {
+            try APIAuthentication.validate(expected: apiKey, headers: request.headers)
+            let response = try await pool.modelsResponse(installedModelIDs: ModelInventory.snapshot(mode: .fast).installedModelIDs,
+                                                        serverContextSize: contextSize)
+            guard let model = response.data.first(where: { $0.id == id }) else {
+                throw MessagesFailure(status: 404, type: "not_found_error", message: "Model '\(id)' is not installed or served.")
+            }
+            return try Self.messagesJSON(MessagesModelDiscovery(model), requestID: requestID)
+        } catch { return Self.messagesError(error, requestID: requestID) }
     }
 
     private func handleChatCompletions(_ incomingRequest: Request) async throws -> Response {
@@ -2407,13 +2470,9 @@ actor CodeGenServer {
 
     private func unauthorizedResponseIfNeeded(for request: Request) -> Response? {
         guard let apiKey, !apiKey.isEmpty else { return nil }
-        guard request.headers[.authorization] == "Bearer \(apiKey)" else {
-            return makeErrorResponse(
-                status: .unauthorized,
-                message: "Unauthorized.",
-                type: "authentication_error",
-                extraHeaders: [.init("WWW-Authenticate")!: "Bearer"]
-            )
+        do { try APIAuthentication.validate(expected: apiKey, headers: request.headers) }
+        catch {
+            return makeErrorResponse(status: .unauthorized, message: error.localizedDescription, type: "authentication_error")
         }
         return nil
     }

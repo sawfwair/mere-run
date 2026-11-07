@@ -10,6 +10,8 @@ struct RuntimeServingServices: Sendable {
     let models: RuntimeModelPool
     let media: APISidecarModelPool
     let admission: RuntimeRequestAdmission
+    typealias ChatPlanner = @Sendable (RuntimeChatRequest, String?, Int) async throws -> RuntimeChatPlan
+    private let chatPlanner: ChatPlanner
     private let ensureAvailable: @Sendable () throws -> Void
     private let transcriptionExecutor: any SpeechTranscriptionExecutor
 
@@ -20,7 +22,8 @@ struct RuntimeServingServices: Sendable {
         maxActiveRequests: Int,
         settingsURL: URL = RuntimeModelSettingsStore.defaultURL(),
         gemma4KVCacheQuantization: Gemma4KVCacheQuantization = Gemma4KVCacheQuantization(),
-        memoryPressurePolicy: RuntimeMemoryPressurePolicy = .default
+        memoryPressurePolicy: RuntimeMemoryPressurePolicy = .default,
+        chatPlanner: ChatPlanner? = nil
     ) {
         // Continuous batching follows the request-concurrency setting: any
         // --max-active-requests above 1 enables it for the engines that
@@ -40,6 +43,9 @@ struct RuntimeServingServices: Sendable {
             lfm2ContinuousBatchingEnabled: batching.lfm2,
             memoryPressurePolicy: memoryPressurePolicy
         )
+        self.chatPlanner = chatPlanner ?? { input, lora, context in
+            try await runtimePool.makeChatPlan(for: input, fallbackLoraPath: lora, serverContextSize: context)
+        }
         self.models = runtimePool
         self.media = APISidecarModelPool(
             settingsURL: settingsURL,
@@ -68,6 +74,9 @@ struct RuntimeServingServices: Sendable {
         ensureAvailable: @escaping @Sendable () throws -> Void,
         transcriptionExecutor: any SpeechTranscriptionExecutor
     ) {
+        self.chatPlanner = { input, lora, context in
+            try await models.makeChatPlan(for: input, fallbackLoraPath: lora, serverContextSize: context)
+        }
         self.models = models
         self.media = media
         self.admission = admission
@@ -100,17 +109,21 @@ struct RuntimeServingServices: Sendable {
     func startChat(
         _ request: OpenAIChatRequest, fallbackLoraPath: String?, contextSize: Int
     ) async throws -> RuntimeChatSession {
+        try await startChat(.openAI(request), fallbackLoraPath: fallbackLoraPath, contextSize: contextSize)
+    }
+
+    func startChat(
+        _ request: RuntimeChatRequest, fallbackLoraPath: String?, contextSize: Int
+    ) async throws -> RuntimeChatSession {
         let admitted = try await admission.acquire()
         var session: RuntimeChatSession?
         do {
             try Task.checkCancellation()
-            let plan = try await models.makeChatPlan(
-                for: request, fallbackLoraPath: fallbackLoraPath, serverContextSize: contextSize
-            )
+            let plan = try await chatPlanner(request, fallbackLoraPath, contextSize)
             let prepared = RuntimeChatSession(plan: plan, admission: admitted)
             session = prepared
             await admitted.configure(
-                modelID: plan.modelID, streaming: request.stream == true,
+                modelID: plan.modelID, streaming: request.streaming,
                 requestedMaxTokens: plan.request.maxTokens, toolCount: plan.request.tools?.count ?? 0
             )
             try Task.checkCancellation()

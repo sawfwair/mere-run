@@ -31,7 +31,18 @@ private enum VFXRequestAdmissionTestError: Error {
 final class APIServeCommandTests: XCTestCase {
     func testAPICommandExposesServeSubcommand() {
         let commandNames = Set(API.configuration.subcommands.map { $0.configuration.commandName })
-        XCTAssertEqual(commandNames, Set(["serve"]))
+        XCTAssertEqual(commandNames, Set(["serve", "connect"]))
+    }
+
+    func testManagedStartupIDResolvesTheInstalledArtifactInsteadOfARelativePath() throws {
+        let command = try APIServe.parse(["--engine", "text-chat-muse-glimmer", "--model", MuseGlimmerResources.modelId])
+        let path = try command.resolveModelPath { spec in
+            XCTAssertEqual(spec.id, MuseGlimmerResources.modelId)
+            return "/fixtures/glimmer"
+        }
+        XCTAssertEqual(path, "/fixtures/glimmer")
+        XCTAssertEqual(command.defaultRuntimeModelID(modelPath: path), MuseGlimmerResources.modelId)
+        XCTAssertThrowsError(try command.resolveModelPath(installedPath: { _ in nil }))
     }
 
     func testAPIServeParsesDefaults() throws {

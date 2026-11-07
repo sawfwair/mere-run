@@ -47,7 +47,7 @@ private struct APIRequestOperation: @unchecked Sendable {
     let run: () async throws -> Response
 }
 
-private final class APIRequestCancellation: @unchecked Sendable {
+final class APIRequestCancellation: @unchecked Sendable {
     private let lock = NSLock()
     private var disconnected = false
     private var cancel: (@Sendable () -> Void)?
@@ -77,7 +77,7 @@ private final class APIRequestCancellation: @unchecked Sendable {
 
 /// Removed when the request task settles, so a persistent connection does not
 /// accumulate closeFuture callbacks or retain completed request tasks.
-private final class APIConnectionCancellationHandler: ChannelInboundHandler, RemovableChannelHandler, @unchecked Sendable {
+final class APIConnectionCancellationHandler: ChannelInboundHandler, RemovableChannelHandler, @unchecked Sendable {
     typealias InboundIn = ByteBuffer
     private let cancellation: APIRequestCancellation
 

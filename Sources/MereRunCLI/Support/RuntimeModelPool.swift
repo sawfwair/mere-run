@@ -991,27 +991,27 @@ actor RuntimeModelPool {
         fallbackLoraPath: String?,
         serverContextSize: Int
     ) async throws -> RuntimeChatPlan {
-        let resolved = try resolveModel(openAIRequest.model)
+        try await makeChatPlan(
+            for: .openAI(openAIRequest), fallbackLoraPath: fallbackLoraPath,
+            serverContextSize: serverContextSize
+        )
+    }
+
+    func makeChatPlan(
+        for input: RuntimeChatRequest,
+        fallbackLoraPath: String?,
+        serverContextSize: Int
+    ) async throws -> RuntimeChatPlan {
+        let resolved = try resolveModel(input.model)
         await evictIdleModels(excluding: [resolved.id])
-        var effectiveRequest = openAIRequest
-        applyDefaults(from: resolved.settings, to: &effectiveRequest)
-        let contextSize = resolved.settings.maxContextTokens ?? serverContextSize
-        let capabilities = resolved.openAICompatibility
-        var chatRequest = try APIServerContract.chatRequest(
-            from: effectiveRequest,
-            fallbackLoraPath: fallbackLoraPath,
-            contextSize: contextSize,
-            capabilities: capabilities,
-            servedModelID: resolved.id,
-            apiProfile: resolved.apiProfile
-        )
-        // Scoped on what the client sent, not the model's runtime defaults.
-        let scope = try APIModelScope.chat(openAIRequest, resolved: chatRequest, modelID: resolved.id)
+        let prepared = try input.prepare(RuntimeChatConfiguration(
+            modelID: resolved.id, engine: resolved.engine, settings: resolved.settings,
+            profile: resolved.apiProfile,
+            contextSize: resolved.settings.maxContextTokens ?? serverContextSize,
+            fallbackLoraPath: fallbackLoraPath
+        ))
+        var chatRequest = prepared.request
         chatRequest.kvCacheMode = resolved.settings.kvCacheMode
-        let includeUsage = try APIServerContract.includeUsageInStreaming(
-            effectiveRequest,
-            capabilities: capabilities
-        )
         let residentLease = try await acquireResident(resolved)
         retainLease(id: resolved.id)
         let lease = RuntimeModelLease(
@@ -1025,8 +1025,8 @@ actor RuntimeModelPool {
             request: chatRequest,
             modelID: resolved.id,
             engine: resolved.engine,
-            includeUsage: includeUsage,
-            scope: scope
+            includeUsage: prepared.includeUsage,
+            scope: prepared.scope
         )
     }
 
@@ -1390,24 +1390,6 @@ actor RuntimeModelPool {
         return snapshot
     }
 
-    private func applyDefaults(
-        from settings: RuntimeModelSettings,
-        to request: inout OpenAIChatRequest
-    ) {
-        if request.max_tokens == nil, request.max_completion_tokens == nil {
-            request.max_tokens = settings.maxTokens
-        }
-        if request.temperature == nil {
-            request.temperature = settings.temperature
-        }
-        if request.top_p == nil {
-            request.top_p = settings.topP
-        }
-        if request.min_p == nil {
-            request.min_p = settings.minP
-        }
-    }
-
     private func state(for id: String) -> MutableState {
         states[id] ?? MutableState()
     }
@@ -1513,6 +1495,10 @@ final class RuntimeModelLease: RuntimeChatModelLease, @unchecked Sendable {
             await residentLease.release()
             await pool.releaseLease(modelID: modelID)
         }
+    }
+
+    func preparePrompt(_ request: ChatRequest) async throws -> ChatPreparedPrompt {
+        try await loaded.preparePrompt(request)
     }
 
     func chat(

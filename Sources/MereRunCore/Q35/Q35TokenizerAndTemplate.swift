@@ -34,17 +34,23 @@ public struct Q35TokenizerAndTemplate {
         includeThinking: Bool = true,
         reasoningEffort: String? = nil,
         maxLength: Int,
-        imageTokenCounts: [Int] = []
+        imageTokenCounts: [Int] = [],
+        truncate: Bool = true
     ) throws -> [Int] {
         let toolSpecs: [ToolSpec]? = tools?.isEmpty == false ? tools!.map { $0.toToolSpec() } : nil
-        var encoded = try tokenizer.encodeChatTemplate(
-            messages: Self.renderMessages(messages),
-            tools: toolSpecs,
-            addGenerationPrompt: addGenerationPrompt,
-            includeThinking: includeThinking,
-            reasoningEffort: reasoningEffort,
-            maxLength: tokenizer.maxLength
-        )
+        var encoded: [Int]
+        do {
+            encoded = try Q35SystemPrompt.encode(messages: messages, addGenerationPrompt: addGenerationPrompt,
+                render: { messages, generationPrompt in
+                    try tokenizer.encodeChatTemplate(messages: Self.renderMessages(messages), tools: toolSpecs,
+                        addGenerationPrompt: generationPrompt, includeThinking: includeThinking,
+                        reasoningEffort: reasoningEffort, maxLength: tokenizer.maxLength, truncate: false)
+                }, encodeText: tokenizer.encodeRawChatText)
+        } catch let issue as ChatRequestIssue {
+            throw issue
+        } catch {
+            throw Q35Error.generationFailed("Qwen prompt rendering failed: \(String(describing: error))")
+        }
         if !imageTokenCounts.isEmpty {
             guard let imageTokenId = tokenizer.imageTokenId else {
                 throw Q35TokenizerAndTemplateError.missingImageToken
@@ -57,7 +63,7 @@ public struct Q35TokenizerAndTemplate {
         }
 
         let targetLength = min(maxLength, tokenizer.maxLength)
-        if encoded.count > targetLength {
+        if truncate, encoded.count > targetLength {
             encoded = Array(encoded.suffix(targetLength))
         }
         return encoded
@@ -101,11 +107,11 @@ public struct Q35TokenizerAndTemplate {
         if message.role != .system, let imageURL = message.imageUrl, !imageURL.isEmpty {
             let content: [[String: String]] = [
                 ["type": "image", "image_url": imageURL],
-                ["type": "text", "text": message.content],
+                ["type": "text", "text": NativeChatTextContent.render(message)],
             ]
             rendered["content"] = content
         } else {
-            rendered["content"] = message.content
+            rendered["content"] = NativeChatTextContent.render(message)
         }
 
         if let reasoning = message.reasoningContent, !reasoning.isEmpty {

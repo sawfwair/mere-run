@@ -20,14 +20,18 @@ struct APIServe: AsyncParsableCommand {
 
     static let configuration = CommandConfiguration(
         commandName: "serve",
-        abstract: "Start an OpenAI-compatible API server for local chat and embedding models.",
+        abstract: "Serve local models through OpenAI and Messages APIs.",
         discussion: """
-        Runs an HTTP server that exposes an OpenAI-compatible API for the selected local runtime.
-        Compatible with any OpenAI client (VS Code extensions, Continue, Cursor, etc.).
+        Runs an HTTP server with OpenAI-compatible and native Messages APIs for local models.
+        Model discovery reports each adapter's supported Messages features.
 
         Endpoints:
           GET  /health              - Health check
           GET  /v1/models           - List available models
+          GET  /v1/models/:id       - Inspect model identity, limits and capabilities
+          HEAD /api/hello           - Lightweight connection probe
+          POST /v1/messages         - Messages generation (streaming on capable adapters)
+          POST /v1/messages/count_tokens - Count the actual prepared Messages prompt
           POST /v1/chat/completions - Chat completions (streaming supported)
           POST /v1/text/decisions   - Native Laya typed decisions
           POST /v1/text/classifications - Native GLiNER2.5 Decide label classification
@@ -169,10 +173,10 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Default cataloged adapter id or local LoRA path for all requests.")
     var lora: String?
 
-    @Option(name: [.long], help: "Bearer token required by API endpoints. Also read from MERERUN_API_KEY.")
+    @Option(name: [.long], help: "API key accepted through bearer or x-api-key headers. Also read from MERERUN_API_KEY.")
     var apiKey: String?
 
-    @Option(name: [.long], help: "Global OpenAI-compatible inference request limit per rolling minute.")
+    @Option(name: [.long], help: "Global inference request limit per rolling minute.")
     var rateLimitPerMinute: Int = 60
 
     @Option(
@@ -316,7 +320,16 @@ struct APIServe: AsyncParsableCommand {
         )
     }
 
-    func resolveModelPath() throws -> String? {
+    func resolveModelPath(
+        installedPath: (ManagedModelSpec) -> String? = { $0.managedRuntimeURL()?.path }
+    ) throws -> String? {
+        if engine == .textChatMuseGlimmer,
+           let requested = model?.trimmingCharacters(in: .whitespacesAndNewlines),
+           let spec = ManagedModelCatalog.spec(for: requested),
+           spec.defaultRuntimeServingEngine == engine.runtimeServingEngine {
+            guard let path = installedPath(spec) else { throw ValidationError("Model '\(spec.id)' is not installed; pull it explicitly before serving.") }
+            return path
+        }
         switch engine {
         case .textCode:
             return model

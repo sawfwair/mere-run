@@ -224,7 +224,9 @@ against the CLI and fails if they disagree.
   - `mere.run config list` — Show all config values (secrets masked).
   - `mere.run config path` — Print the config file path.
 - [`mere.run api`](/runtime/api-server) — Serve local models through API surfaces.
-  - `mere.run api serve` — Start an OpenAI-compatible API server for local chat and embedding models.
+  - `mere.run api serve` — Serve local models through OpenAI and Messages APIs.
+  - `mere.run api connect` — Preview or apply client connection settings.
+    - `mere.run api connect claude-code` — Connect Claude Code to a local Messages server.
 - [`mere.run open-webui`](/runtime/api-server#open-webui-companion) — Start the optional Open WebUI companion against a local mere.run API.
   - `mere.run open-webui quickstart` — Start mere.run, run the official Open WebUI Docker image, and configure the connection.
 - [`mere.run plugin`](/plugins) — Discover and install official mere.run companion plugins.

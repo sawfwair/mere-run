@@ -108,7 +108,7 @@ extension Gemma4Generator {
             if let progressHandler {
                 let piece = tokenizerAndTemplate.decode(token: next)
                 if !piece.isEmpty {
-                    progressHandler(ChatProgress(stage: .generating, message: piece))
+                    progressHandler(ChatProgress(stage: .generating, message: piece, decodedText: tokenizerAndTemplate.decode(tokens: generated)))
                 }
             }
 
@@ -216,7 +216,7 @@ extension Gemma4Generator {
                             if let progressHandler {
                                 let tokenPiece = tokenizerAndTemplate.decode(token: token)
                                 if !tokenPiece.isEmpty {
-                                    progressHandler(ChatProgress(stage: .generating, message: tokenPiece))
+                                    progressHandler(ChatProgress(stage: .generating, message: tokenPiece, decodedText: tokenizerAndTemplate.decode(tokens: generated)))
                                 }
                             }
                         }
@@ -249,7 +249,7 @@ extension Gemma4Generator {
                         if let progressHandler {
                             let tokenPiece = tokenizerAndTemplate.decode(token: token)
                             if !tokenPiece.isEmpty {
-                                progressHandler(ChatProgress(stage: .generating, message: tokenPiece))
+                                progressHandler(ChatProgress(stage: .generating, message: tokenPiece, decodedText: tokenizerAndTemplate.decode(tokens: generated)))
                             }
                         }
                     }
@@ -268,7 +268,7 @@ extension Gemma4Generator {
                     if let progressHandler {
                         let replacementPiece = tokenizerAndTemplate.decode(token: replacement)
                         if !replacementPiece.isEmpty {
-                            progressHandler(ChatProgress(stage: .generating, message: replacementPiece))
+                            progressHandler(ChatProgress(stage: .generating, message: replacementPiece, decodedText: tokenizerAndTemplate.decode(tokens: generated)))
                         }
                     }
 

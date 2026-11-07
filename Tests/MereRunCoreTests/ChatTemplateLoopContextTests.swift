@@ -3,6 +3,50 @@ import XCTest
 @testable import MereRunCore
 
 final class ChatTemplateLoopContextTests: XCTestCase {
+    func testQwenPreservesLeadingAndMidConversationSystemTurns() throws {
+        let messages = [
+            ChatMessage(role: .system, content: "First policy."),
+            ChatMessage(role: .system, content: "Second policy."),
+            ChatMessage(role: .user, content: "Inspect."),
+            ChatMessage(role: .system, content: "New instruction."),
+            ChatMessage(role: .assistant, content: "Observed."),
+            ChatMessage(role: .system, content: "Final instruction."),
+        ]
+        let tokens = try Q35SystemPrompt.encode(messages: messages, addGenerationPrompt: true,
+            render: { messages, generationPrompt in
+                XCTAssertFalse(messages.dropFirst().contains { $0.role == .system })
+                let text = messages.map { "<|im_start|>\($0.role.rawValue)\n\($0.content)<|im_end|>\n" }.joined()
+                    + (generationPrompt ? "<|im_start|>assistant\n" : "")
+                return text.utf8.map(Int.init)
+            }, encodeText: { $0.utf8.map(Int.init) })
+        XCTAssertEqual(String(decoding: tokens.map(UInt8.init), as: UTF8.self), """
+        <|im_start|>system
+        First policy.
+        Second policy.<|im_end|>
+        <|im_start|>user
+        Inspect.<|im_end|>
+        <|im_start|>system
+        New instruction.<|im_end|>
+        <|im_start|>assistant
+        Observed.<|im_end|>
+        <|im_start|>system
+        Final instruction.<|im_end|>
+        <|im_start|>assistant
+
+        """)
+    }
+
+    func testQwenRejectsTemplateWithUnstableSystemBoundary() {
+        XCTAssertThrowsError(try Q35SystemPrompt.encode(messages: [
+            ChatMessage(role: .user, content: "Inspect."),
+            ChatMessage(role: .system, content: "Policy."),
+        ], addGenerationPrompt: true, render: { _, generationPrompt in
+            generationPrompt ? [1, 2] : [3]
+        }, encodeText: { $0.utf8.map(Int.init) })) { error in
+            XCTAssertEqual((error as? ChatRequestIssue)?.field, "messages")
+        }
+    }
+
     // These neighbor checks are the tool-result grouping contract used by Ornith 1.5.
     private let templateSource = #"""
     {%- for message in messages %}
