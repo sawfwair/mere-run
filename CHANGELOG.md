@@ -6,6 +6,18 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.70.0 - 2026-11-06
+
+- Wait for Studio's running processes and output streams to stop before
+  completing shutdown or deleting a private workspace. Keep ownership of chat
+  turns, recordings, server restarts, and diagnostic writes until they finish,
+  and reject results from operations that have been canceled or replaced.
+- Preserve interrupted model downloads for retry. On iOS, prevent stale model
+  progress, runtime warmups, pairing results, and Relay snapshots from replacing
+  newer state; cancel remote chat jobs when their turns are abandoned.
+- Finish live transcription only after pending native decoding has settled.
+  Coordinate repeated finish and cancellation requests so canceled decoding
+  cannot publish a late transcript.
 - Studio's **Runs** page can sign out of a Relay executor and remove its
   profile. Removing a profile also removes its saved credential.
 - Reorganize Studio's tasks. **Vision** ▸ **Document** runs `vision ocr` with
