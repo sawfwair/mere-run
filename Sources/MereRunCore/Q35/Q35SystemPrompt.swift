@@ -3,9 +3,18 @@ import Foundation
 /// Keeps checkpoint rendering for tools, reasoning and media while inserting
 /// real ChatML system turns at their original conversation boundaries.
 enum Q35SystemPrompt {
+    static let toolParameterEncoding = """
+    Tool parameter encoding: inside each <parameter=...> element, write string values as raw text, without JSON quotes. \
+    Encode every non-string value as valid JSON matching its parameter schema. Boolean values must be lowercase true or false \
+    without quotes; null must be lowercase null. Encode numbers, arrays and objects as JSON, including lowercase booleans and \
+    null in nested values. Do not use Python True, False or None, Markdown fences, or XML type annotations.
+    """
+
     static func encode(messages: [ChatMessage], addGenerationPrompt: Bool,
+                       hasTools: Bool = false,
                        render: ([ChatMessage], Bool) throws -> [Int],
                        encodeText: (String) -> [Int]) throws -> [Int] {
+        let messages = hasTools ? messagesWithToolEncoding(messages) : messages
         var base: [ChatMessage] = []
         var insertions: [(index: Int, content: String)] = []
         var leadingSystems: [ChatMessage] = []
@@ -40,5 +49,11 @@ enum Q35SystemPrompt {
         }
         result += tokens[offset...]
         return result
+    }
+
+    static func messagesWithToolEncoding(_ messages: [ChatMessage]) -> [ChatMessage] {
+        // Keep the native wire-format reminder next to generation even with a
+        // large client preamble, without rewriting any supplied conversation turn.
+        messages + [ChatMessage(role: .system, content: toolParameterEncoding)]
     }
 }

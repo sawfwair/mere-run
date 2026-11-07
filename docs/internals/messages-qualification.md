@@ -61,7 +61,7 @@ change.
 | Adapter | Protocol fixture | Native inference | Coding session | Calculator and website | Performance |
 | --- | --- | --- | --- | --- | --- |
 | Glimmer | Covered | Native count, cache warm/reuse, stream, typed tool and tool-error replay observed | Fixture passed; independently verified | Not qualified | Debug probe below |
-| Qwen | Text, counting, streams and typed tools | Ornith 35B text/count/stream/tool and signed replay probes passed | Failed on invalid model tool arguments | Not qualified | Debug probe below |
+| Qwen | Text, counting, streams and typed tools | Ornith 35B text/count/stream/tool and signed replay probes passed | Fixture passed twice after encoding guidance; independently verified | Not qualified | Debug probe below |
 | Gemma | Text, counting, streams and typed tools | Gemma Turbo text/count/stream/tool and signed replay probes passed | Client effort request rejected before generation | Not qualified | Debug probe below |
 | Other text backends | Buffered route boundary only | Flint 4-bit text probe passed; count rejected explicitly | Unsupported adapter capabilities | Not qualified | Debug probe below |
 
@@ -202,6 +202,33 @@ the server sent an SSE error and released the lease. Independent tests still
 failed, and the source remained unchanged. Session wall times were 60.192 and
 59.299 seconds. The final runtime snapshot had no active or queued requests.
 These are failed coding tasks, despite successful native protocol probes.
+
+A diagnostic replay identified the rejected value as Python-style `False`.
+Encoding guidance at the start of the large system prompt did not fix the
+failure: another fresh session failed after 67.106 seconds. The Qwen adapter
+then placed native parameter-encoding instructions immediately before the
+generation boundary. The prepared-token path includes these instructions for
+both generation and counting. It preserves the supplied conversation and keeps
+strict output validation; `False`, quoted booleans, numeric substitutes, and
+empty values remain invalid for boolean parameters.
+
+Two fresh Claude Code sessions with this change passed all seven independent
+fixture checks described for Glimmer. They read both files, reproduced failures,
+edited the multiplication expression, exercised the missing-test error, and
+recovered with passing tests. Independent processes confirmed both tests passed
+and the test files remained unchanged. The sessions took 82.198 and 72.445
+seconds. The first recovered from one rejected boolean call; the second had no
+additional adapter-output failures. This establishes the fixture outcome, not
+a guarantee that unconstrained model output always satisfies a tool schema.
+
+Model loading was measured separately at 4.033 seconds. Across the two sessions,
+17 completed native rounds generated 2,908 tokens; telemetry reported 2.049
+seconds average prefill, 6.106 seconds average decode, and 28.013 output
+tokens/second. Failed-attempt output is excluded from those completed-round
+counters. Queue-wait time was not measured. The final snapshot had one resident
+model and no queued or active requests. These debug observations are not a
+controlled benchmark; the repeat overlapped repository validation startup.
+Calculator, website, and unchanged reference-harness cases remain unqualified.
 
 Gemma's session failed before generation because Claude Code `2.1.316` requested
 `output_config.effort.high`. The Gemma adapter has no native effort control and

@@ -3,6 +3,31 @@ import XCTest
 @testable import MereRunCore
 
 final class ChatTemplateLoopContextTests: XCTestCase {
+    func testQwenToolEncodingGuidancePreservesConversationAndAppliesOnlyWithTools() throws {
+        let messages = [ChatMessage(role: .system, content: "Original policy."),
+                        ChatMessage(role: .user, content: "Edit the file."),
+                        ChatMessage(role: .system, content: "Later policy.")]
+        let adapted = Q35SystemPrompt.messagesWithToolEncoding(messages)
+        XCTAssertEqual(adapted.dropLast().map(\.content), messages.map(\.content))
+        XCTAssertEqual(adapted.dropLast().map(\.role), messages.map(\.role))
+        XCTAssertEqual(adapted.last?.role, .system)
+        XCTAssertTrue(adapted.last?.content.contains("lowercase true or false") == true)
+        let withoutSystem = Q35SystemPrompt.messagesWithToolEncoding(Array(messages.dropFirst()))
+        XCTAssertEqual(withoutSystem.last?.role, .system)
+        XCTAssertEqual(withoutSystem.dropLast().map(\.content), messages.dropFirst().map(\.content))
+        for hasTools in [false, true] {
+            _ = try Q35SystemPrompt.encode(messages: Array(messages.prefix(2)), addGenerationPrompt: true, hasTools: hasTools,
+                render: { prepared, _ in
+                    XCTAssertFalse(prepared.contains { $0.content == Q35SystemPrompt.toolParameterEncoding })
+                    return [1]
+                }, encodeText: { text in
+                    XCTAssertTrue(hasTools)
+                    XCTAssertTrue(text.contains(Q35SystemPrompt.toolParameterEncoding))
+                    return []
+                })
+        }
+    }
+
     func testQwenPreservesLeadingAndMidConversationSystemTurns() throws {
         let messages = [
             ChatMessage(role: .system, content: "First policy."),

@@ -41,6 +41,7 @@ public struct Q35TokenizerAndTemplate {
         var encoded: [Int]
         do {
             encoded = try Q35SystemPrompt.encode(messages: messages, addGenerationPrompt: addGenerationPrompt,
+                hasTools: tools?.isEmpty == false,
                 render: { messages, generationPrompt in
                     try tokenizer.encodeChatTemplate(messages: Self.renderMessages(messages), tools: toolSpecs,
                         addGenerationPrompt: generationPrompt, includeThinking: includeThinking,

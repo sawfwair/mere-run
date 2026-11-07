@@ -67,6 +67,7 @@ final class QwenTokenizerCompatibilityTests: MereRunCoreTestCase {
             "properties": .object([
                 "action": .object(["type": .string("string"), "enum": .array([.string("navigate"), .string("screenshot")])]),
                 "values": .object(["type": .string("array"), "items": .object(["type": .string("string")])]),
+                "enabled": .object(["type": .string("boolean")]),
             ]),
             "required": .array([.string("action")]), "additionalProperties": .bool(false),
         ]
@@ -75,7 +76,7 @@ final class QwenTokenizerCompatibilityTests: MereRunCoreTestCase {
         let messages = [
             ChatMessage(role: .user, content: "Inspect the site."),
             ChatMessage(role: .assistant, content: "", reasoningContent: "Open both pages.", toolCalls: [
-                ChatMessageToolCall(id: "first", name: "browser", arguments: ["action": .string("navigate")]),
+                ChatMessageToolCall(id: "first", name: "browser", arguments: ["action": .string("navigate"), "enabled": .bool(false)]),
                 ChatMessageToolCall(id: "second", name: "browser", arguments: ["action": .string("navigate")]),
             ]),
             ChatMessage(role: .tool, content: "First page opened.", toolCallID: "first"),
@@ -87,6 +88,8 @@ final class QwenTokenizerCompatibilityTests: MereRunCoreTestCase {
         ]
         let tokens = try template.encodeForGeneration(messages: messages, tools: [tool], maxLength: 8_192)
         let prompt = template.decode(tokens: tokens)
+        XCTAssertTrue(prompt.contains(Q35SystemPrompt.toolParameterEncoding))
+        XCTAssertTrue(prompt.contains("<parameter=enabled>\nfalse\n</parameter>"))
         XCTAssertEqual(prompt.components(separatedBy: "<|im_start|>user").count - 1, 3)
         XCTAssertTrue(prompt.contains("""
         <|im_start|>user
@@ -99,7 +102,7 @@ final class QwenTokenizerCompatibilityTests: MereRunCoreTestCase {
         """))
         XCTAssertTrue(prompt.contains("<|im_start|>user\n<tool_response>\nScreenshot available."))
         XCTAssertTrue(prompt.contains("<think>\nInspect the image.\n</think>"))
-        XCTAssertTrue(prompt.hasSuffix("<|im_start|>assistant\n<think>\n"))
+        XCTAssertTrue(prompt.hasSuffix(Q35SystemPrompt.toolParameterEncoding + "<|im_end|>\n<|im_start|>assistant\n<think>\n"))
         let start = try XCTUnwrap(prompt.range(of: "<tools>\n")?.upperBound)
         let end = try XCTUnwrap(prompt.range(of: "\n</tools>", range: start..<prompt.endIndex)?.lowerBound)
         let declaration = try JSONDecoder().decode(OpenAIJSONValue.self, from: Data(prompt[start..<end].utf8))

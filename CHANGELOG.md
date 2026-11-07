@@ -10,6 +10,9 @@ The format is based on Keep a Changelog.
   local tool search and context editing, and preview-first Claude Code
   connection settings. See the Messages API guide for adapter limits and the
   separate model qualification status.
+- Guide Qwen's native tool-parameter encoding immediately before generation,
+  preserving strict validation. Ornith passes two independently verified coding
+  fixtures; desktop qualification remains incomplete.
 
 ## 0.69.1 - 2026-11-04
 

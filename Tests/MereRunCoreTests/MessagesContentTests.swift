@@ -3,6 +3,20 @@ import XCTest
 @testable import MereRunCore
 
 final class MessagesContentTests: XCTestCase {
+    func testQwenBooleanParametersRequireJSONWithoutCoercion() throws {
+        let tool = ToolDefinition(name: "edit", description: "", parameterSchema: ["type": .string("object"),
+            "properties": .object(["replace_all": .object(["type": .string("boolean")])]),
+            "required": .array([.string("replace_all")])])
+        for (raw, expected) in [("true", true), ("false", false)] {
+            let envelope = "<tool_call><function=edit><parameter=replace_all>\n\(raw)\n</parameter></function></tool_call>"
+            XCTAssertEqual(try Q35ToolParser.validatedToolCalls(envelope, tools: [tool], parallel: false).first?.jsonArguments?["replace_all"], .bool(expected))
+        }
+        for raw in ["False", "True", "0", "\"false\"", "None", ""] {
+            let envelope = "<tool_call><function=edit><parameter=replace_all>\n\(raw)\n</parameter></function></tool_call>"
+            XCTAssertThrowsError(try Q35ToolParser.validatedToolCalls(envelope, tools: [tool], parallel: false))
+        }
+    }
+
     func testURIFormatValidatesClientToolURLs() throws {
         let schema: [String: ChatJSONValue] = ["type": .string("string"), "format": .string("uri")]
         try ChatToolValidation.validateSchema(schema)
