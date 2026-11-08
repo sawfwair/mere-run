@@ -63,8 +63,14 @@ extension MuseGlimmerGenerator {
             let prefix = try tokenizerAndTemplate.encodeForGeneration(messages: prefixMessages, tools: request.tools,
                 reasoningStrength: Self.reasoningStrength(request.reasoningEffort), currentDate: formatter.string(from: Date()),
                 maxLength: Int.max, truncate: false, addGenerationPrompt: false)
-            guard !prefix.contains(tokenizerAndTemplate.imageStartTokenId),
-                  !prefix.contains(tokenizerAndTemplate.imageTokenId) else { continue }
+            if prefix.contains(tokenizerAndTemplate.imageStartTokenId) || prefix.contains(tokenizerAndTemplate.imageTokenId) {
+                // A marker covering an image also covers the earlier text. Retain
+                // that causal prefix without claiming to cache any image state.
+                if firstImage > 0, firstImage <= Self.maximumCachedPrefixTokens {
+                    result[firstImage] = max(result[firstImage] ?? 0, boundary.ttlSeconds)
+                }
+                continue
+            }
             let count = Self.cacheBoundaryTokenCount(prepared: tokens, renderedBoundary: prefix)
             if count > 0, count <= maximumPrefix {
                 result[count] = max(result[count] ?? 0, boundary.ttlSeconds)

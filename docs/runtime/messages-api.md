@@ -92,7 +92,9 @@ resident model, template revision, adapter settings, and actual prepared tokens.
 Changed tokens invalidate reuse at that boundary. Model unloading releases cache
 storage through the residency policy. Glimmer can reuse marked text before the
 first image, even when subsequent screenshots change. Image-derived KV is never
-retained; markers after the first image report zero cache reads and writes.
+retained. A marker spanning an image retains only the preceding text, with
+actual partial cache reads and writes reported in usage. Zero-output warming
+of such a prompt warms only that text prefix.
 Cache warming requires `max_tokens: 0` and a supported cache breakpoint.
 
 Documents accept inline text and base64 text or PDF data. PDFKit extracts PDF

@@ -106,14 +106,22 @@ def qualify(args, report):
             report["cases"][-1].update(expected_first=args.vision_labels[first], observed_text=text)
             words = re.findall(r"[A-Z]+", text.upper())
             assert args.vision_labels[first].upper() in words and args.vision_labels[second].upper() not in words
-            assert result.usage.input_tokens == count.input_tokens
-            assert result.usage.cache_read_input_tokens == result.usage.cache_creation_input_tokens == 0
-            try:
-                api.create(**options, max_tokens=0)
-                raise AssertionError("Unsupported image cache warming was accepted")
-            except anthropic.BadRequestError as error:
-                assert "image cache warming is unsupported" in str(error)
-                report["cases"].append({"name": "unsupported_vision_warming", "status": 400})
+            usage = result.usage
+            assert usage.input_tokens + usage.cache_read_input_tokens + usage.cache_creation_input_tokens == count.input_tokens
+            if caps["prompt_cache"]:
+                assert 0 < usage.cache_read_input_tokens + usage.cache_creation_input_tokens < count.input_tokens
+                warm = measured("vision_covering_marker_warm", lambda: api.create(**options, max_tokens=0))
+                usage = warm.usage
+                assert usage.output_tokens == 0 and usage.input_tokens > 0
+                assert usage.cache_read_input_tokens + usage.cache_creation_input_tokens > 0
+                assert usage.input_tokens + usage.cache_read_input_tokens + usage.cache_creation_input_tokens == count.input_tokens
+            else:
+                assert usage.cache_read_input_tokens == usage.cache_creation_input_tokens == 0
+                try:
+                    api.create(**options, max_tokens=0)
+                    raise AssertionError("Unsupported image cache warming was accepted")
+                except anthropic.BadRequestError:
+                    report["cases"].append({"name": "unsupported_vision_warming", "status": 400})
 
         if caps["prompt_cache"]:
             prefix = {"type": "text", "text": "Read the labeled images carefully. " * 64,

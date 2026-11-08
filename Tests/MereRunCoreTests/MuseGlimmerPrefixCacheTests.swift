@@ -4,7 +4,7 @@ import XCTest
 
 @MainActor
 final class MuseGlimmerPrefixCacheTests: XCTestCase {
-    func testOnlyMarkedTextBeforeTheFirstImageCanBeCached() async throws {
+    func testCoveringMarkersCacheOnlyTextBeforeTheFirstImage() async throws {
         guard let path = ProcessInfo.processInfo.environment["MERERUN_GLIMMER_TOKENIZER_ROOT"] else {
             throw XCTSkip("Set MERERUN_GLIMMER_TOKENIZER_ROOT to run the native tokenizer cache-boundary fixture")
         }
@@ -46,7 +46,21 @@ final class MuseGlimmerPrefixCacheTests: XCTestCase {
             .init(messageIndex: 1, blockCount: 3, ttlSeconds: 300),
         ], wholePromptTTL: 300)
         let afterImage = try await generator.prefixCheckpoints(request, tokens: tokens)
-        XCTAssertTrue(afterImage.isEmpty, "A marker after image content cannot cache image KV state")
+        XCTAssertEqual(afterImage, [firstImage: 300], "A covering marker retains only the preceding text state")
+        request.prefixCachePolicy = .init(scope: "private", boundaries: [
+            .init(messageIndex: 1, blockCount: 3, ttlSeconds: 3600),
+        ], wholePromptTTL: 300)
+        let longerTTL = try await generator.prefixCheckpoints(request, tokens: tokens)
+        XCTAssertEqual(longerTTL, [firstImage: 3600])
+        request.prefixCachePolicy = .init(scope: "private", boundaries: [
+            .init(messageIndex: 0, blockCount: 1, ttlSeconds: 300),
+        ], wholePromptTTL: nil)
+        let movedEarlier = try await generator.prefixCheckpoints(request, tokens: tokens)
+        XCTAssertFalse(movedEarlier.isEmpty)
+        XCTAssertTrue(movedEarlier.keys.allSatisfy { $0 < firstImage })
+        request.prefixCachePolicy = .init(scope: "private", boundaries: [], wholePromptTTL: nil)
+        let unmarked = try await generator.prefixCheckpoints(request, tokens: tokens)
+        XCTAssertTrue(unmarked.isEmpty)
         request.prefixCachePolicy = .init(scope: "another-user", boundaries: [], wholePromptTTL: nil)
         let changedScope = await generator.prefixIdentity(request)
         XCTAssertNotEqual(identity, changedScope)

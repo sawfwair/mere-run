@@ -80,8 +80,8 @@ decode after two rounds below 40% acceptance.
 
 Reusable text-prefix checkpoints select target-only decoding. Image requests can
 reuse marked text before the first image, including tool and system prefixes.
-No image-derived KV is retained. Markers after the first image cannot create
-checkpoints and leave the assistant available, with zero cache usage.
+No image-derived KV is retained. A marker spanning an image retains only text
+before the first image. Cache accounting reports that partial native reuse.
 
 A paired 16-window, 8,192-token WikiText-2 candidate check measured 9.535
 perplexity for selective Q4 and 9.554 for compact Q4. The selective-minus-compact

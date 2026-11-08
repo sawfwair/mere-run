@@ -470,7 +470,7 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         let tokenBudget = request.cacheWarmOnly ? 0 : max(0, min(request.maxTokens, effectiveContext - promptTokens.count))
         let identity = prefixIdentity(request)
         let checkpoints = try prefixCheckpoints(request, tokens: promptTokens)
-        if request.cacheWarmOnly, checkpoints.isEmpty { throw ChatRequestIssue("cache_control", "no marked text prefix before the first image fits the native cache limit of \(Self.maximumCachedPrefixTokens) retained tokens; image cache warming is unsupported without an eligible text breakpoint") }
+        if request.cacheWarmOnly, checkpoints.isEmpty { throw ChatRequestIssue("cache_control", "no reusable text prefix fits the native cache limit of \(Self.maximumCachedPrefixTokens) retained tokens; place cache_control earlier in the text. Image KV caching is unsupported") }
         let seed = request.prefixCachePolicy != nil && !checkpoints.isEmpty
             ? prefixCache.lookup(identity: identity, tokens: promptTokens, ttls: checkpoints) : nil
         var cacheWrites = 0
