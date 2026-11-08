@@ -155,3 +155,46 @@ and peak active MLX allocation. `scripts/reference-parity/compare_glimmer_quanti
 compares identical held-out windows and reports a paired bootstrap interval.
 The float32 mathematical GPU fixtures use `MLX_ENABLE_TF32=0`; normal BF16 and
 quantized performance measurements retain the default accelerated settings.
+
+## Experimental verification controls
+
+These controls are opt-in while the optimized execution paths are qualified.
+The checkpoint files and quantization recipe stay unchanged.
+
+| Environment variable | Experimental selection |
+| --- | --- |
+| `MERERUN_MUSE_GLIMMER_DFLASH_DEFERRED=1` | Carry verified token IDs between rounds and defer confirmed-context evaluation |
+| `MERERUN_MUSE_GLIMMER_DFLASH_COST_FALLBACK=1` | Check measured cost before falling back for low draft acceptance |
+| `MERERUN_MUSE_GLIMMER_FUSED_NORM=1` | Use prepared FP32 RMS normalization for target text layers |
+| `MERERUN_MUSE_GLIMMER_Q8_VERIFY=head4` | Share packed Q8 reads for eligible vocabulary-head blocks |
+
+The selected November 8 experiment enables deferred scheduling, cost-checked
+fallback, and `head4`, while retaining original normalization. Leave
+`MERERUN_MUSE_GLIMMER_FUSED_NORM` unset: that combination introduced two additional
+JSON-shape instruction misses in the frozen content fixtures, despite a small
+likelihood difference. See the [qualification report](../../../docs/internals/messages-qualification.md#q8-verification-follow-up-on-november-8).
+
+For output budgets of at least 256 tokens, the cost policy excludes the first two
+draft rounds from its decision, then measures eight completed rounds. If draft
+acceptance is below the configured minimum, it calibrates serial cost with three
+forward probes on forked state at the current context length. Reusing disposable
+state excludes cold setup from the fastest serial sample. It falls back only when
+acceptance remains low and useful speculative throughput is below 95% of that
+baseline. A draft that matches well requires no calibration. All probes and draft
+warmup rounds remain included in reported decode time.
+Smaller output budgets retain the acceptance policy. An explicit zero minimum
+acceptance disables fallback and calibration for controlled width experiments.
+The probes emit no tokens and do not change the caller's prompt cache.
+
+The vocabulary-head kernel preserves native serial Q8 accumulation and reads
+the original packed buffers. Ordinary MLP and attention projections retain native
+execution. Component controls `shared1`, `shared2`, and `shared4` apply the kernel
+more broadly for diagnostics; they are separate from the narrowed `head4` route.
+The head route requires the quantized-prefill adapter, selected automatically on
+supported M5 hardware. `MERERUN_MUSE_GLIMMER_QUANTIZED_PREFILL=native` bypasses it.
+Unsupported dtypes, layouts, and packed-byte index ranges retain native matmul.
+
+The checkpoint harness records admission wait and checkpoint preparation
+separately from prefill and decode. Its optional synchronized phase observer
+separates drafting, verification submission and wait, acceptance, and cache
+updates. Profiled rows are excluded from throughput comparisons.

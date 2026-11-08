@@ -934,3 +934,130 @@ warmup. The first real request then reports 0.00003 seconds of load time, starts
 generating in 0.34 seconds, and completes in 2.09 seconds. Native graph preparation
 is reported in the warmup load stage, rather than hidden inside a user's first
 request. This startup change does not alter model weights or generation policy.
+
+
+## Q8 verification follow-up on November 8
+
+The follow-up keeps the qualified symmetric-Q8 checkpoint and BF16 DFlash2
+companion fixed. A separate synchronized profile attributes 82–84% of measured
+greedy decode time to target verification, 14–16% to drafting, and about 2% to
+cache updates. These are phase wall-time diagnostics, including synchronization;
+they do not isolate individual GPU kernels.
+
+Deferred scheduling preserves every token and the draft statistics in six
+paired, 256-token checkpoint comparisons. GPU correctness tests then compare
+84 shared-Q8 kernel configurations directly with native serial Q8 output, with
+zero differences. The fixtures include BF16 activations beyond FP16 range.
+An earlier throughput sweep overlapped another task's GPU tests and is excluded
+from performance evidence, although its token-parity results remain recorded.
+
+Component measurements reject blanket replacement of the native Q8 kernels.
+The large vocabulary head benefits from shared reads; ordinary MLP and attention
+projections generally retain better native timings. Representative synchronized
+operator medians from the first isolated component run are:
+
+| Projection (output × input) | Input rows | Native | Shared kernel, four outputs per SIMD group |
+| --- | ---: | ---: | ---: |
+| Vocabulary head, 202,048 × 6,656 | 4 | 3.909 ms | 3.468 ms |
+| Vocabulary head, 202,048 × 6,656 | 8 | 8.635 ms | 6.690 ms |
+| MLP gate/up, 19,968 × 6,656 | 8 | 0.386 ms | 0.406 ms |
+| Attention query, 4,096 × 6,656 | 8 | 0.109 ms | 0.120 ms |
+
+Each component median uses eight samples, each evaluating four operations;
+execution order rotates. The shared kernels retain the original packed weights
+and FP32 serial accumulation. These component timings include submission and
+evaluation overhead. They do not establish generation throughput or a physical
+DRAM-traffic reduction.
+
+Full-model kernel experiments use one frozen binary for the reference,
+head-only, and head-plus-normalization paths. Their first 256-token repetition
+per prompt and width is warmup. Synchronized profiles are excluded from throughput
+comparisons. Native timings exclude text decoding and HTTP handling.
+
+The selected production comparison retains the original normalization. It enables
+deferred scheduling, the vocabulary-head kernel, and a cost check before falling
+back for low acceptance, with three proposals per round. Reference, candidate, and reference
+servers use the same Release binary and unchanged Q8 checkpoint in that order.
+For each prompt and configuration, the first attempt is warmup and the first two
+later requests that pass resource checks are retained. Exclusions depend on observed
+compilation, other compute, memory pressure, or thermal state, with no timing-based
+selection. Every attempt is recorded. Earlier contaminated batches are excluded.
+
+| Prepared prompt tokens | Reference median decode tokens/s | Selected median decode tokens/s | Ratio | Median HTTP wall time |
+| ---: | ---: | ---: | ---: | ---: |
+| 86 | 40.52 | 41.41 | 1.02× | 6.81 → 6.68 s |
+| 7,173 | 15.90 | 31.98 | 2.01× | 26.92 → 17.81 s |
+
+The reference has four measured samples per prompt; the candidate has two. Each
+request generates 256 tokens. GPU clocks are not fixed. Decode time includes all
+generated tokens, calibration, text decoding, and content-event submission. HTTP
+wall time, prefill, load, and first-token timing remain separate in the
+[machine-readable summary](../benchmarks/glimmer-q8-verification-2026-11-08-summary.json).
+The client samples an idle queue before and after requests; queue wait is not
+separately instrumented. Native checkpoint runs record admission wait and
+checkpoint preparation separately. Prefill is not an established improvement
+from this pass. Most of the long-context gain comes from retaining useful
+speculation after poor opening rounds, rather than from the head kernel alone.
+
+For budgets of at least 256 tokens, the cost policy excludes two draft warmup
+rounds, then measures eight rounds. Low acceptance triggers three serial probes
+on disposable state at the current context length. Fallback requires both low
+acceptance and useful speculative throughput below 95% of that serial baseline.
+A draft that matches well needs no probes. All probe work remains in measured
+decode time. A correctness-only real-checkpoint run forces the calibration branch
+with a minimum acceptance of one: it performs three probes, keeps useful drafting,
+and generates the full 256-token budget. Its Debug timing is not performance
+evidence.
+
+The shared Q8 kernel's BF16 outputs match native serial Q8 outputs exactly in all
+84 GPU cases, including activations beyond FP16 range. Unsupported layouts and projections
+exceeding its signed byte-index range use native matmul. Eager, deferred, and
+synchronized profiling paths match for both DFlash versions at four budgets and
+two temperatures. Sampled fixtures control both MLX sampling and Swift acceptance
+draws. All 39 focused GPU tests and strict lint pass.
+
+FP32 normalization fusion remains disabled. Its reused 32,768-position text
+diagnostic looked close: perplexity was 5.9935, versus 5.9926 for retained Q8 and
+5.9902 for BF16. The paired increase over retained Q8 was 0.016%, with a bootstrap
+interval spanning a decrease and an increase. That result did not establish
+instruction-following quality. The fused combination passed 17/20 frozen content
+fixtures, introducing two additional requested-JSON-shape misses: `sort` returned
+the wrong key, and `stable-duplicate` omitted the requested wrapper object.
+Restoring original normalization recovered both cases. The report retains this
+rejected experiment, including its passing exploratory coding fixture, separately
+from selected-candidate evidence. Q4 remains unselected.
+
+The fresh reference and selected candidate both pass 19/20 content fixtures, with
+the same failure: `escape`. The original newline wording is ambiguous; the
+independent explicit-newline fixture is retained separately. Prompts and graders
+stay unchanged. These small
+content and likelihood suites were reused during development and selection;
+they do not establish a general answer-error rate.
+
+The selected configuration passes 20 advanced cases across both API versions and
+regex/BM25 discovery, plus 11 vision cases. They cover signed thinking continuity,
+context edits, cache accounting,
+documents, tool-error replay, and media order. The restored cancellation fixtures
+verify queued and active disconnect cleanup, cancellation during chunked prefill,
+and a successful subsequent request. Initial cancellation-script failures were
+missing-fixture setup errors before HTTP requests; those failures are preserved
+in the private evidence and are not counted as passing server checks.
+
+Both fresh coding sessions pass. Their repaired source and tool traces are
+reviewed independently, with ten
+public tests, three hidden checks, unchanged requirements and tests, and recovery
+from the intentional missing-test error. Session wall time and native generation
+timing are reported separately; resource observations identify any concurrent
+compilation or GPU work.
+
+The final `./scripts/check.sh` attempt exits 1 with 30 failing tests involving
+protected run records while the Mac is locked. These are the same failures as the
+earlier locked-device run; there are
+no new Glimmer failures. File protection remains enabled. The official SDK mock
+HTTP contracts and the separately completed CLI/help/hygiene checks pass. The
+full gate requires an unlocked rerun.
+
+Calculator and website trials are not repeated for this candidate because the
+Mac remains locked. Earlier Q8 app results qualify the reference configuration;
+they do not qualify changed verification arithmetic or fallback policy. All
+optimization controls remain opt-in, with reference defaults unchanged.

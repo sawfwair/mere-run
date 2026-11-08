@@ -20,6 +20,16 @@ Checkpoint loading, quantized modules, and shared tensor kernels.
 Its bias sum promotes every BF16 input to FP32 before addition, matching MLX's
 `load_vector`; adding in BF16 first can lose a cancellation residual.
 
+`SmallBatchAffineQ8` shares packed affine-Q8 reads across two through eight
+verification rows, with one, two, or four output rows per SIMD group. Its GPU
+fixtures compare directly with native serial Q8 arithmetic, including BF16
+activations beyond FP16 range. Callers select eligible projection shapes; a
+component win does not establish a full-model speedup.
+
+`FusedRMSNorm` prepares FP32 learned scales outside the parameter tree, including
+an optional centered offset. It normalizes and multiplies in FP32 before casting
+back to the input dtype. It retains no model-sized weight reconstruction.
+
 This library depends on MLX and ModelKit. It does not resolve or download models.
 Keep path selection and model-specific compatibility mappings in the caller.
 Both quantized loading entry points use one array-application implementation.

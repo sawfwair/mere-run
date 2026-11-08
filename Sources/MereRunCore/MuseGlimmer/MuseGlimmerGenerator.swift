@@ -205,6 +205,12 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         try Task.checkCancellation()
         let densePrefillModules = try loadedModel.installQuantizedPrefill()
         prefillAdapterIdentity = densePrefillModules > 0 ? "affine-dense-prefill-v1" : "native-prefill"
+        let fusedNormalization = ProcessInfo.processInfo.environment["MERERUN_MUSE_GLIMMER_FUSED_NORM"] == "1"
+        loadedModel.configureFusedNormalization(fusedNormalization)
+        if fusedNormalization { prefillAdapterIdentity += "/fp32-rms-v1" }
+        if let verification = ProcessInfo.processInfo.environment["MERERUN_MUSE_GLIMMER_Q8_VERIFY"], verification != "native" {
+            prefillAdapterIdentity += "/q8-\(verification)-v1"
+        }
         model = loadedModel
         tokenizerAndTemplate = tokenizer
         loadedConfig = config
@@ -257,7 +263,8 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         assistant: MuseGlimmerAssistantModel?,
         assistantModelPath: String? = nil,
         speculativeTokens requestedSpeculativeTokens: Int? = nil,
-        checkCancellation: (() throws -> Void)? = nil
+        checkCancellation: (() throws -> Void)? = nil,
+        scheduling: MuseGlimmerDFlashScheduling = .selected
     ) throws -> MuseGlimmerDFlashStats? {
         try checkCancellation?()
         let token = MLXArray([Int32(0)]).reshaped(1, 1)
@@ -305,7 +312,8 @@ public actor MuseGlimmerGenerator: ChatGenerator {
             historySeedTokens: [0],
             speculativeTokens: speculativeTokens,
             assistantModelPath: assistantModelPath,
-            checkCancellation: checkCancellation
+            checkCancellation: checkCancellation,
+            scheduling: scheduling
         )
         return result.stats
     }

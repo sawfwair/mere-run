@@ -1,10 +1,12 @@
 import Foundation
+import MereRunTensor
 import MLX
 import MLXFast
 import MLXNN
 
 @inline(__always)
-private func museGlimmerRMSNormNoScale(_ x: MLXArray, eps: Float) -> MLXArray {
+private func museGlimmerRMSNormNoScale(_ x: MLXArray, eps: Float, fused: FusedRMSNorm? = nil) -> MLXArray {
+    if let fused { return fused(x) }
     let dtype = x.dtype
     let promoted = x.asType(.float32)
     let variance = (promoted * promoted).mean(axis: -1, keepDims: true)
@@ -14,6 +16,13 @@ private func museGlimmerRMSNormNoScale(_ x: MLXArray, eps: Float) -> MLXArray {
 final class MuseGlimmerCenteredRMSNorm: Module {
     @ParameterInfo(key: "weight") var weight: MLXArray
     private let eps: Float
+    private var fused: FusedRMSNorm?
+    private var useFused = false
+
+    func configureFusedNormalization(_ enabled: Bool) {
+        if enabled, fused == nil { fused = FusedRMSNorm(weight: weight, eps: eps, centered: true) }
+        useFused = enabled
+    }
 
     init(dimensions: Int, eps: Float) {
         self._weight.wrappedValue = MLXArray.zeros([dimensions])
@@ -22,6 +31,7 @@ final class MuseGlimmerCenteredRMSNorm: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
+        if useFused { return fused!(x) }
         let dtype = x.dtype
         let promoted = x.asType(.float32)
         let variance = (promoted * promoted).mean(axis: -1, keepDims: true)
@@ -33,6 +43,13 @@ final class MuseGlimmerCenteredRMSNorm: Module {
 final class MuseGlimmerRMSNorm: Module {
     @ParameterInfo(key: "weight") var weight: MLXArray
     private let eps: Float
+    private var fused: FusedRMSNorm?
+    private var useFused = false
+
+    func configureFusedNormalization(_ enabled: Bool) {
+        if enabled, fused == nil { fused = FusedRMSNorm(weight: weight, eps: eps) }
+        useFused = enabled
+    }
 
     init(dimensions: Int, eps: Float) {
         self._weight.wrappedValue = MLXArray.ones([dimensions])
@@ -41,6 +58,7 @@ final class MuseGlimmerRMSNorm: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
+        if useFused { return fused!(x) }
         let dtype = x.dtype
         let promoted = x.asType(.float32)
         let variance = (promoted * promoted).mean(axis: -1, keepDims: true)
@@ -80,6 +98,15 @@ final class MuseGlimmerTextAttention: Module {
     private let rmsNormEps: Float
     private let attentionScale: Float
     private let rope: RoPE?
+    private var fusedNorm: FusedRMSNorm?
+    private var useFusedNorm = false
+
+    func configureFusedNormalization(_ enabled: Bool) {
+        if enabled, fusedNorm == nil {
+            fusedNorm = FusedRMSNorm(weight: MLXArray.ones([headDimension], dtype: .float32), eps: rmsNormEps)
+        }
+        useFusedNorm = enabled
+    }
 
     init(config: MuseGlimmerTextConfig, layerIndex: Int) {
         headCount = config.numAttentionHeads
@@ -129,8 +156,8 @@ final class MuseGlimmerTextAttention: Module {
         var keys = kProj(x).reshaped(batch, sequence, keyValueHeadCount, headDimension).transposed(0, 2, 1, 3)
         var values = vProj(x).reshaped(batch, sequence, keyValueHeadCount, headDimension).transposed(0, 2, 1, 3)
 
-        queries = museGlimmerRMSNormNoScale(queries, eps: rmsNormEps) * qkScaleFactor
-        keys = museGlimmerRMSNormNoScale(keys, eps: rmsNormEps)
+        queries = museGlimmerRMSNormNoScale(queries, eps: rmsNormEps, fused: useFusedNorm ? fusedNorm : nil) * qkScaleFactor
+        keys = museGlimmerRMSNormNoScale(keys, eps: rmsNormEps, fused: useFusedNorm ? fusedNorm : nil)
         if let rope {
             queries = rope(queries, offset: offset)
             keys = rope(keys, offset: offset)
@@ -703,6 +730,14 @@ public final class MuseGlimmerModel: Module, @unchecked Sendable {
     @ModuleInfo(key: "lm_head") var lmHead: Linear
 
     public let config: MuseGlimmerConfig
+
+    func configureFusedNormalization(_ enabled: Bool) {
+        for (_, module) in namedModules() {
+            (module as? MuseGlimmerCenteredRMSNorm)?.configureFusedNormalization(enabled)
+            (module as? MuseGlimmerRMSNorm)?.configureFusedNormalization(enabled)
+            (module as? MuseGlimmerTextAttention)?.configureFusedNormalization(enabled)
+        }
+    }
 
     public init(config: MuseGlimmerConfig) {
         self.config = config

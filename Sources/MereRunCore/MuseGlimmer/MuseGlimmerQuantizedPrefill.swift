@@ -1,4 +1,5 @@
 import Foundation
+import MereRunTensor
 import MLX
 import MLXNN
 
@@ -9,16 +10,29 @@ import MLXNN
 final class MuseGlimmerPrefillLinear: QuantizedLinear {
     private let minimumRows: Int
     private let packedForward: (MLXArray) -> MLXArray
+    private let verificationRows: Int?
+    private let verificationMinimumOutputs: Int
 
-    init(_ source: QuantizedLinear, minimumRows: Int = 128) {
+    init(_ source: QuantizedLinear, minimumRows: Int = 128, verificationRows: Int? = nil, verificationMinimumOutputs: Int = 0) {
         self.minimumRows = minimumRows
+        self.verificationRows = verificationRows
+        self.verificationMinimumOutputs = verificationMinimumOutputs
         self.packedForward = { source($0) }
         super.init(weight: source.weight, bias: source.bias, scales: source.scales, biases: source.biases,
                    groupSize: source.groupSize, bits: source.bits, mode: source.mode, globalScale: source.globalScale)
     }
 
     override func callAsFunction(_ x: MLXArray) -> MLXArray {
-        guard x.shape.dropLast().reduce(1, *) >= minimumRows else { return packedForward(x) }
+        guard x.shape.dropLast().reduce(1, *) >= minimumRows else {
+            #if os(macOS)
+            if let verificationRows, weight.dim(0) >= verificationMinimumOutputs, let biases,
+               let output = SmallBatchAffineQ8.matmul(x, weight: weight, scales: scales, biases: biases,
+                    groupSize: groupSize, bits: bits, mode: mode, rowsPerSIMD: verificationRows) {
+                return bias.map { output + $0 } ?? output
+            }
+            #endif
+            return packedForward(x)
+        }
         let dense = dequantized(weight, scales: scales, biases: biases, groupSize: groupSize,
                                 bits: bits, mode: mode, dtype: x.dtype)
         let output = matmul(x, dense.T)
@@ -30,6 +44,17 @@ extension MuseGlimmerModel {
     @discardableResult
     func installQuantizedPrefill(environment: [String: String] = ProcessInfo.processInfo.environment) throws -> Int {
         let raw = environment["MERERUN_MUSE_GLIMMER_QUANTIZED_PREFILL"] ?? "auto"
+        let verificationRows: Int?
+        var verificationMinimumOutputs = 0
+        switch environment["MERERUN_MUSE_GLIMMER_Q8_VERIFY"] ?? "native" {
+        case "native": verificationRows = nil
+        case "shared1": verificationRows = 1
+        case "shared2": verificationRows = 2
+        case "shared4": verificationRows = 4
+        case "head4": verificationRows = 4; verificationMinimumOutputs = 65_536
+        default:
+            throw MuseGlimmerError.unsupportedConfiguration("MERERUN_MUSE_GLIMMER_Q8_VERIFY must be native, shared1, shared2, shared4, or head4.")
+        }
         guard ["auto", "native", "dense"].contains(raw) else {
             throw MuseGlimmerError.unsupportedConfiguration("MERERUN_MUSE_GLIMMER_QUANTIZED_PREFILL must be auto, native, or dense.")
         }
@@ -53,7 +78,8 @@ extension MuseGlimmerModel {
                   linear.mode == .affine, [4, 8].contains(linear.bits) else { continue }
             let parts = path.split(separator: ".").map(String.init)
             let parent = parents[parts.dropLast().joined(separator: ".")]!
-            parent.update(modules: ModuleChildren.unflattened([(parts.last!, MuseGlimmerPrefillLinear(linear))]))
+            parent.update(modules: ModuleChildren.unflattened([(parts.last!, MuseGlimmerPrefillLinear(linear,
+                verificationRows: verificationRows, verificationMinimumOutputs: verificationMinimumOutputs))]))
             count += 1
         }
         return count

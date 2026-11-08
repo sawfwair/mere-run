@@ -1,5 +1,6 @@
 import MLX
 import MLXNN
+import MereRunTensor
 import MediaIO
 @testable import MereRunCore
 import XCTest
@@ -736,6 +737,117 @@ final class MuseGlimmerTests: MereRunCoreTestCase {
 
         XCTAssertEqual(result.generatedTokens.count, 8)
         XCTAssertGreaterThan(result.stats.targetVerificationForwards, 0)
+    }
+
+    func testFusedNormalizationRetainsCheckpointParametersAndFP32Range() throws {
+        for dimension in [128, 4096, 6656] {
+            let x = (MLX.sin(MLXArray(0..<(4 * dimension)).asType(.float32) * 0.017) * 200_000)
+                .asType(.bfloat16).reshaped(1, 4, dimension)
+            let weight = (MLX.cos(MLXArray(0..<dimension).asType(.float32) * 0.013) * 0.25).asType(.bfloat16)
+            for centered in [false, true] {
+                let fused = FusedRMSNorm(weight: weight, eps: 1e-6, centered: centered)
+                let promoted = x.asType(.float32)
+                let scale = centered ? 1 + weight.asType(.float32) : weight.asType(.float32)
+                let reference = (promoted * MLX.rsqrt((promoted * promoted).mean(axis: -1, keepDims: true) + 1e-6) * scale)
+                    .asType(.bfloat16)
+                let actual = fused(x)
+                MLX.eval(actual, reference)
+                XCTAssertEqual(actual.dtype, .bfloat16)
+                XCTAssertTrue(MLX.all(MLX.isFinite(actual)).item(Bool.self))
+                XCTAssertLessThanOrEqual(MLX.max(MLX.abs(actual.asType(.float32) - reference.asType(.float32))).item(Float.self), 0.015625)
+            }
+        }
+        let target = MuseGlimmerModel(config: try Self.config())
+        let before = target.parameters().flattened().map(\.0)
+        target.configureFusedNormalization(true)
+        XCTAssertEqual(target.parameters().flattened().map(\.0), before)
+        target.configureFusedNormalization(false)
+        XCTAssertEqual(target.parameters().flattened().map(\.0), before)
+    }
+
+    func testCostCalibrationUsesForkedStateAndRespectsOutputBudget() throws {
+        MLXRandom.seed(7_103)
+        let target = MuseGlimmerModel(config: try Self.config())
+        let assistant = MuseGlimmerAssistantModel(config: try Self.assistantConfig())
+        let prompt = [1, 4, 7]
+        let cache = target.makeCache()
+        let initial = try target.forwardPrefillDetailed(
+            inputIds: MLXArray(prompt.map(Int32.init)).reshaped(1, prompt.count), imageBatch: nil,
+            cache: cache, captureLayerIndices: [0, 2]
+        )
+        let draftCache = assistant.makeCache()
+        assistant.appendTargetContext(initial.capturedHiddenStates, cache: draftCache)
+        let result = try MuseGlimmerDFlashDecoder.decode(
+            initialLogits: initial.logits, target: target, targetCache: cache,
+            assistant: assistant, assistantCache: draftCache.map { $0.fork() },
+            generationConfig: GenerationConfig(maxTokens: 256, temperature: 0, topK: 0, topP: 1, minP: 0, repetitionPenalty: 1),
+            eosTokens: [], tokenBudget: 256, historySeedTokens: prompt, speculativeTokens: 3,
+            assistantModelPath: nil, scheduling: .deferred, minimumAcceptanceRate: 1, fallback: .throughput
+        )
+        XCTAssertEqual(result.generatedTokens.count, 256)
+        XCTAssertEqual(result.stats.serialCalibrationForwards, 3)
+        XCTAssertGreaterThan(try XCTUnwrap(result.stats.calibrationSeconds), 0)
+        XCTAssertGreaterThan(try XCTUnwrap(result.stats.serialCalibrationSeconds), 0)
+        XCTAssertGreaterThan(try XCTUnwrap(result.stats.speculativeSeconds), 0)
+        XCTAssertEqual(cache.map(\.offset), Array(repeating: prompt.count, count: cache.count))
+        XCTAssertEqual(draftCache.map(\.offset), Array(repeating: prompt.count, count: draftCache.count))
+    }
+
+    func testDeferredDFlashMatchesEagerAtBudgetBoundariesAndWithProfiling() throws {
+        for dflash2 in [false, true] {
+            MLXRandom.seed(7_103)
+            let target = MuseGlimmerModel(config: try Self.config())
+            let assistant = MuseGlimmerAssistantModel(config: try dflash2 ? Self.dflash2Config() : Self.assistantConfig())
+            let prompt = [1, 4, 7]
+            let cache = target.makeCache()
+            let initial = try target.forwardPrefillDetailed(
+                inputIds: MLXArray(prompt.map(Int32.init)).reshaped(1, prompt.count), imageBatch: nil,
+                cache: cache, captureLayerIndices: [0, 2]
+            )
+            let draftCache = assistant.makeCache()
+            assistant.appendTargetContext(initial.capturedHiddenStates, cache: draftCache)
+            evaluateGemma4CacheStorage(cache + draftCache)
+            let configurations = [1, 2, 7, 32].flatMap { budget in
+                [Float(0), Float(0.8)].map { (budget, $0) }
+            }
+            for (budget, temperature) in configurations {
+                let sampling = GenerationConfig(maxTokens: budget, temperature: temperature, topK: 0, topP: 1,
+                                                minP: 0, repetitionPenalty: 1)
+                func run(_ scheduling: MuseGlimmerDFlashScheduling,
+                         observer: ((MuseGlimmerDFlashEvent) -> Void)? = nil) throws -> MuseGlimmerDFlashDecodeResult {
+                    MLXRandom.seed(17_103)
+                    var drawIndex = 0
+                    let draws: [Float] = [0.125, 0.875, 0.375, 0.625]
+                    return try MuseGlimmerDFlashDecoder.decode(
+                        initialLogits: initial.logits, target: target, targetCache: cache.map { $0.fork() },
+                        assistant: assistant, assistantCache: draftCache.map { $0.fork() }, generationConfig: sampling,
+                        eosTokens: [], tokenBudget: budget, historySeedTokens: prompt, speculativeTokens: 3,
+                        assistantModelPath: nil, scheduling: scheduling, minimumAcceptanceRate: 0, observer: observer,
+                        acceptanceDraw: {
+                            defer { drawIndex += 1 }
+                            return draws[drawIndex % draws.count]
+                        }
+                    )
+                }
+                let reference = try run(.eager)
+                let deferred = try run(.deferred)
+                XCTAssertEqual(deferred.generatedTokens, reference.generatedTokens)
+                XCTAssertEqual(deferred.stats.acceptedTokens, reference.stats.acceptedTokens)
+                XCTAssertEqual(deferred.stats.targetVerificationForwards, reference.stats.targetVerificationForwards)
+                var verified = 0
+                let profiled = try run(.deferred) { event in
+                    switch event {
+                    case .drafted(let arrays), .committed(let arrays), .fallback(let arrays): MLX.eval(arrays)
+                    case .verified: verified += 1
+                    default: break
+                    }
+                }
+                XCTAssertEqual(profiled.generatedTokens, reference.generatedTokens)
+                XCTAssertEqual(verified, profiled.stats.targetVerificationForwards)
+                XCTAssertEqual(cache.map(\.offset), Array(repeating: prompt.count, count: cache.count))
+                XCTAssertEqual(draftCache.map(\.offset), Array(repeating: prompt.count, count: draftCache.count))
+            }
+        }
     }
 
     func testWarmUpMaterializesSerialAndProductionDFlashPaths() throws {
