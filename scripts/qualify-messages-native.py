@@ -115,6 +115,35 @@ def qualify(args, report):
                 assert "image cache warming is unsupported" in str(error)
                 report["cases"].append({"name": "unsupported_vision_warming", "status": 400})
 
+        if caps["prompt_cache"]:
+            prefix = {"type": "text", "text": "Read the labeled images carefully. " * 64,
+                      "cache_control": {"type": "ephemeral"}}
+            for first, second in ((0, 1), (1, 0)):
+                options = dict(model=args.model, system=[prefix], thinking={"type": "adaptive"},
+                    extra_headers=headers, messages=[{"role": "user", "content": [
+                        images[first], images[second],
+                        {"type": "text", "text": "Return only the word printed in the FIRST image."}]}])
+                if "low" in caps["effort"]:
+                    options["output_config"] = {"effort": "low"}
+                count = measured("vision_text_prefix_count", lambda: api.count_tokens(**options))
+                if first == 0:
+                    warm = measured("vision_text_prefix_warm", lambda: api.create(**options, max_tokens=0))
+                    assert warm.usage.cache_read_input_tokens + warm.usage.cache_creation_input_tokens > 0
+
+                def generate_cached_image():
+                    with api.stream(**options, max_tokens=min(args.max_tokens, 256)) as stream:
+                        stream.until_done()
+                        return stream.get_final_message()
+
+                result = measured("vision_text_prefix_reuse", generate_cached_image)
+                usage = result.usage
+                assert usage.cache_read_input_tokens > 0
+                assert usage.input_tokens + usage.cache_read_input_tokens + usage.cache_creation_input_tokens == count.input_tokens
+                text = "".join(block.text for block in result.content if block.type == "text").strip()
+                report["cases"][-1].update(expected_first=args.vision_labels[first], observed_text=text)
+                words = re.findall(r"[A-Z]+", text.upper())
+                assert args.vision_labels[first].upper() in words and args.vision_labels[second].upper() not in words
+
     if args.vision_only:
         vision()
         report["passed"] = True

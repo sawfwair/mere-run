@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Reuse Glimmer text-prefix caches before the first image, including across
+  screenshot changes. Reject cache breakpoints containing image state.
+
 - Match Glimmer's image projection and decoder to the checkpoint's floating
   dtype, retaining float32 position calculations. Keep speculative decoding
   available when cache markers cannot produce a reusable prefix.

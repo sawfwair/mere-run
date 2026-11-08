@@ -8,10 +8,10 @@ struct MuseGlimmerCachedPrefix {
 
 extension MuseGlimmerGenerator {
     func prefixIdentity(_ request: ChatRequest) -> String {
+        // Cached state ends before the first image; later images cannot affect causal text KV.
         let media = request.messages.flatMap { message in
             (message.contentBlocks ?? []).compactMap { block -> String? in
                 if case .document(let document) = block { return document.identity }
-                if case .image(_, let identity) = block { return identity }
                 return nil
             }
         }.joined(separator: "\u{0}")
@@ -21,8 +21,11 @@ extension MuseGlimmerGenerator {
 
     func prefixCheckpoints(_ request: ChatRequest, tokens: [Int]) throws -> [Int: Int] {
         guard let policy = request.prefixCachePolicy, let tokenizerAndTemplate else { return [:] }
-        // Vision prefill has no reusable native cache backend yet.
-        guard request.messages.allSatisfy({ $0.imageUrl == nil }) else { return [:] }
+        // Never retain image-derived KV. A marked text prefix before the first
+        // image remains reusable when later screenshots change.
+        let firstImage = [tokenizerAndTemplate.imageStartTokenId, tokenizerAndTemplate.imageTokenId]
+            .compactMap { tokens.firstIndex(of: $0) }.min() ?? tokens.count
+        let maximumPrefix = min(Self.maximumCachedPrefixTokens, firstImage)
         var boundaries = policy.boundaries
         if let ttl = policy.wholePromptTTL, let last = request.messages.indices.last {
             boundaries.append(.init(messageIndex: last, blockCount: request.messages[last].contentBlocks?.count ?? 1, ttlSeconds: ttl))
@@ -35,7 +38,7 @@ extension MuseGlimmerGenerator {
                 reasoningStrength: Self.reasoningStrength(request.reasoningEffort), currentDate: formatter.string(from: Date()),
                 maxLength: Int.max, truncate: false, addGenerationPrompt: false)
             let count = Self.cacheBoundaryTokenCount(prepared: tokens, renderedBoundary: toolPrefix)
-            if count > 0, count <= Self.maximumCachedPrefixTokens { result[count] = ttl }
+            if count > 0, count <= maximumPrefix { result[count] = ttl }
         }
         for boundary in policy.toolBoundaries {
             guard let tools = request.tools, let index = tools.firstIndex(where: { $0.name == boundary.throughTool }) else { continue }
@@ -43,7 +46,7 @@ extension MuseGlimmerGenerator {
                 reasoningStrength: Self.reasoningStrength(request.reasoningEffort), currentDate: formatter.string(from: Date()),
                 maxLength: Int.max, truncate: false, addGenerationPrompt: false)
             let count = Self.cacheBoundaryTokenCount(prepared: tokens, renderedBoundary: prefix)
-            if count > 0, count <= Self.maximumCachedPrefixTokens { result[count] = max(result[count] ?? 0, boundary.ttlSeconds) }
+            if count > 0, count <= maximumPrefix { result[count] = max(result[count] ?? 0, boundary.ttlSeconds) }
         }
         for boundary in boundaries {
             guard request.messages.indices.contains(boundary.messageIndex), boundary.blockCount > 0 else { continue }
@@ -60,8 +63,10 @@ extension MuseGlimmerGenerator {
             let prefix = try tokenizerAndTemplate.encodeForGeneration(messages: prefixMessages, tools: request.tools,
                 reasoningStrength: Self.reasoningStrength(request.reasoningEffort), currentDate: formatter.string(from: Date()),
                 maxLength: Int.max, truncate: false, addGenerationPrompt: false)
+            guard !prefix.contains(tokenizerAndTemplate.imageStartTokenId),
+                  !prefix.contains(tokenizerAndTemplate.imageTokenId) else { continue }
             let count = Self.cacheBoundaryTokenCount(prepared: tokens, renderedBoundary: prefix)
-            if count > 0, count <= Self.maximumCachedPrefixTokens {
+            if count > 0, count <= maximumPrefix {
                 result[count] = max(result[count] ?? 0, boundary.ttlSeconds)
             }
         }

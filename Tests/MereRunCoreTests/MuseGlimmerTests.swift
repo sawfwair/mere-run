@@ -62,6 +62,28 @@ final class MuseGlimmerTests: MereRunCoreTestCase {
         }
     }
 
+    func testTextPrefixCacheCanBeReusedAcrossFutureImageChanges() throws {
+        let model = MuseGlimmerModel(config: try Self.config())
+        model.update(parameters: model.parameters().mapValues { $0.asType(.bfloat16) })
+        let ids = MLXArray([Int32(1), 3, 4, 5, 9, 6]).reshaped(1, 6)
+        let text = model.inputEmbeddings(for: ids)
+        let prefix = model.makeCache()
+        MLX.eval(model.forwardPrefillDetailed(embeddings: text[0..., 0..<4, 0...], cache: prefix).logits)
+        for scale: Float in [1, -2] {
+            let image = MuseGlimmerImageBatch(
+                pixelValues: MLXArray(Array(0..<96).map { scale * Float($0) / 96 }, [4, 24]),
+                grids: [(1, 2, 2)], tokenCounts: [1]
+            )
+            let fused = try model.inputEmbeddings(for: ids, imageBatch: image)
+            let fresh = model.makeCache()
+            MLX.eval(model.forwardPrefillDetailed(embeddings: fused[0..., 0..<4, 0...], cache: fresh).logits)
+            let reused = prefix.map { $0.fork() }
+            let expected = model.forwardPrefillDetailed(embeddings: fused[0..., 4..<6, 0...], cache: fresh).logits
+            let actual = model.forwardPrefillDetailed(embeddings: fused[0..., 4..<6, 0...], cache: reused).logits
+            XCTAssertEqual(MLX.max(MLX.abs(actual - expected)).item(Float.self), 0)
+        }
+    }
+
     func testConfigDecodesLayerContractsAndQuantization() throws {
         let config = try Self.config()
         XCTAssertEqual(config.modelType, "muse_glimmer")

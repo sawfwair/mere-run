@@ -90,7 +90,9 @@ Text prefix caches retain at most two entries and 32,768 tokens in total, with
 five-minute or one-hour expiry, refreshed on actual reuse. Cache identity includes authentication scope,
 resident model, template revision, adapter settings, and actual prepared tokens.
 Changed tokens invalidate reuse at that boundary. Model unloading releases cache
-storage through the residency policy. Vision cache reads and writes are zero.
+storage through the residency policy. Glimmer can reuse marked text before the
+first image, even when subsequent screenshots change. Image-derived KV is never
+retained; markers after the first image report zero cache reads and writes.
 Cache warming requires `max_tokens: 0` and a supported cache breakpoint.
 
 Documents accept inline text and base64 text or PDF data. PDFKit extracts PDF
@@ -230,6 +232,7 @@ versions, native results, and remaining gaps.
 For ordered-image checks, supply two labeled PNG or JPEG fixtures with
 `--vision-images first.png second.png --vision-labels ALPHA BETA`. The harness
 swaps their order and checks each generated first-image label against your
-fixture labels, exact input usage, and the explicit vision-cache boundary.
+fixture labels, exact input usage, the explicit image-cache boundary, and text
+prefix reuse across changed images when the adapter supports caching.
 Add `--vision-only` to run those checks. The label task requests low effort
 where the adapter advertises it; it keeps adaptive thinking enabled.
