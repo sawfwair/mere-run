@@ -99,6 +99,8 @@ enum ClaudeCodeConnection {
               let context = model.max_input_tokens, let output = model.max_tokens, context > 0, output > 0 else {
             throw MessagesFailure.invalid("model", "Claude Code requires Messages streaming, tools and effective limits; choose a capable local adapter")
         }
+        let existing = try FileManager.default.fileExists(atPath: settings.path)
+            ? JSONDecoder().decode([String: ChatJSONValue].self, from: Data(contentsOf: settings)) : [:]
         var env: [String: ChatJSONValue] = [
             "ANTHROPIC_BASE_URL": .string(origin.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))),
             "ANTHROPIC_MODEL": .string(model.id),
@@ -110,12 +112,12 @@ enum ClaudeCodeConnection {
         ]
         // Never include credential values, including pre-existing environment secrets.
         env["ANTHROPIC_SMALL_FAST_MODEL"] = .string(model.id)
+        if let effort = try connectionEffort(model: model, capabilities: caps, existing: existing) {
+            env["CLAUDE_CODE_EFFORT_LEVEL"] = effort
+        }
         let patch: [String: ChatJSONValue] = ["model": .string(model.id), "env": .object(env),
                                             "apiKeyHelper": .string("printenv " + credentialVariable)]
-        if FileManager.default.fileExists(atPath: settings.path) {
-            let existing = try JSONDecoder().decode([String: ChatJSONValue].self, from: Data(contentsOf: settings))
-            _ = try merged(existing, patch: patch)
-        }
+        _ = try merged(existing, patch: patch)
         var qualification = ["End-to-end model qualification is pending; configuration is not evidence of a working agent loop."]
         if !credentialPresent {
             qualification.append("\(credentialVariable) is unset or empty; export it before launching Claude Code. Only the environment-backed helper is stored.")
@@ -129,12 +131,34 @@ enum ClaudeCodeConnection {
         if !caps.thinking.isEmpty, caps.thinking_display?.contains("updates") != true {
             qualification.append("Thinking progress-update display is unsupported; omit thinking.display or use the client's fallback to native reasoning.")
         }
-        if !caps.effort.contains("high") {
+        if caps.effort.isEmpty {
+            qualification.append("This adapter has no effort control. Configured CLAUDE_CODE_EFFORT_LEVEL=auto omits the effort field while preserving adaptive thinking. Effort caps in other settings can force a level; remove an incompatible cap or select an adapter supporting it.")
+        } else if !caps.effort.contains("high") {
             qualification.append("Claude Code \(candidateVersion) sends output_config.effort.high by default, which this adapter rejects. Select a local adapter advertising high effort or a client configuration that omits the unsupported field.")
         }
         if !caps.token_counting { qualification.append("Exact token counting is unavailable on this adapter.") }
         return .init(settingsPath: settings.path, model: model.id, baseURL: origin.absoluteString, claudeCodeVersion: version,
                      contextTokens: context, outputTokens: output, capabilities: caps, patch: patch, qualification: qualification)
+    }
+    static func connectionEffort(model: ClaudeCodeServerModel, capabilities: MessagesCapabilities,
+                                 existing: [String: ChatJSONValue]) throws -> ChatJSONValue? {
+        if capabilities.effort.isEmpty {
+            let modelCap = existing["modelSettings"]?.objectValue?[model.id]?.objectValue?["maxEffortLevel"]
+            if let cap = modelCap ?? existing["maxEffortLevel"], cap != .string("max") {
+                throw MessagesFailure.invalid("maxEffortLevel", "this cap forces Claude Code to send an effort level that the adapter cannot honor, even with auto; remove the incompatible cap or select an adapter supporting effort")
+            }
+            return .string("auto")
+        }
+        guard let value = existing["env"]?.objectValue?["CLAUDE_CODE_EFFORT_LEVEL"] else { return nil }
+        if [.string("auto"), .string("unset")].contains(value), let previousModel = existing["model"],
+           previousModel != .string(model.id) {
+            return .null
+        }
+        guard [.string("auto"), .string("unset")].contains(value)
+                || capabilities.effort.map(ChatJSONValue.string).contains(value) else {
+            throw MessagesFailure.invalid("CLAUDE_CODE_EFFORT_LEVEL", "existing override is unsupported by the selected adapter; choose an advertised effort level or auto")
+        }
+        return value
     }
     static func merged(_ existing: [String: ChatJSONValue], patch: [String: ChatJSONValue]) throws -> [String: ChatJSONValue] {
         var result = existing
@@ -151,7 +175,9 @@ enum ClaudeCodeConnection {
         for key in ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"] where env[key] != nil {
             throw MessagesFailure.invalid("env.\(key)", "existing credential overrides the helper; move it to the named environment variable before applying")
         }
-        for (key, value) in patch["env"]?.objectValue ?? [:] { env[key] = value }
+        for (key, value) in patch["env"]?.objectValue ?? [:] {
+            if value == .null { env.removeValue(forKey: key) } else { env[key] = value }
+        }
         for (key, value) in patch where key != "env" { result[key] = value }
         result["env"] = .object(env)
         return result

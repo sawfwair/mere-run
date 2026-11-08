@@ -4,14 +4,47 @@ import MereRunCore
 @testable import MereRunCLI
 
 final class ClaudeCodeConnectionTests: XCTestCase {
-    func testUnsupportedClientEffortHasSpecificRemediation() throws {
+    func testNoEffortAdapterConfiguresClientOmissionWithoutAdvertisingControl() throws {
         let profile = try XCTUnwrap(ManagedModelCatalog.apiProfile(for: "text-chat-gemma4-turbo"))
         let capabilities = MessagesCapabilities.adapter(.textChatGemma4, profile: profile)
         let model = ClaudeCodeServerModel(id: "local-gemma", display_name: nil, max_input_tokens: 65536,
             max_tokens: 4096, local_capabilities: capabilities)
         let plan = try ClaudeCodeConnection.plan(origin: URL(string: "http://127.0.0.1:8080")!, model: model, version: "2.1.316",
             settings: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), credentialVariable: "KEY")
-        XCTAssertTrue(plan.qualification.contains { $0.contains("output_config.effort.high") && $0.contains("Select a local adapter") })
+        XCTAssertEqual(plan.patch["env"]?.objectValue?["CLAUDE_CODE_EFFORT_LEVEL"], .string("auto"))
+        XCTAssertTrue(plan.capabilities.effort.isEmpty)
+        XCTAssertTrue(plan.qualification.contains { $0.contains("omits the effort field") && $0.contains("preserving adaptive thinking") })
+    }
+
+    func testEffortOmissionPreservesCapsAndRestoresCapableModelSelection() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let settings = directory.appendingPathComponent("settings.json")
+        let profile = try XCTUnwrap(ManagedModelCatalog.apiProfile(for: "text-chat-gemma4-turbo"))
+        let gemma = ClaudeCodeServerModel(id: "local-gemma", display_name: nil, max_input_tokens: 65536,
+            max_tokens: 4096, local_capabilities: .adapter(.textChatGemma4, profile: profile))
+        let origin = URL(string: "http://localhost:8080")!
+        try JSONEncoder().encode(["maxEffortLevel": ChatJSONValue.string("low")]).write(to: settings)
+        XCTAssertThrowsError(try ClaudeCodeConnection.plan(origin: origin, model: gemma, version: "2.1.316", settings: settings, credentialVariable: "KEY"))
+        try FileManager.default.removeItem(at: settings)
+        let plan = try ClaudeCodeConnection.plan(origin: origin, model: gemma, version: "2.1.316", settings: settings, credentialVariable: "KEY")
+        try ClaudeCodeConnection.apply(plan, settings: settings)
+        let first = try Data(contentsOf: settings)
+        try ClaudeCodeConnection.apply(plan, settings: settings)
+        XCTAssertEqual(try Data(contentsOf: settings), first)
+        let capable = try ClaudeCodeConnection.plan(origin: origin, model: model(), version: "2.1.316", settings: settings, credentialVariable: "KEY")
+        XCTAssertEqual(capable.patch["env"]?.objectValue?["CLAUDE_CODE_EFFORT_LEVEL"], .null)
+        try ClaudeCodeConnection.apply(capable, settings: settings)
+        let existing = try JSONDecoder().decode([String: ChatJSONValue].self, from: Data(contentsOf: settings))
+        XCTAssertNil(existing["env"]?.objectValue?["CLAUDE_CODE_EFFORT_LEVEL"])
+        var preferred = existing
+        var env = try XCTUnwrap(preferred["env"]?.objectValue)
+        env["CLAUDE_CODE_EFFORT_LEVEL"] = .string("low")
+        preferred["env"] = .object(env)
+        try JSONEncoder().encode(preferred).write(to: settings)
+        let preserve = try ClaudeCodeConnection.plan(origin: origin, model: model(), version: "2.1.316", settings: settings, credentialVariable: "KEY")
+        XCTAssertEqual(preserve.patch["env"]?.objectValue?["CLAUDE_CODE_EFFORT_LEVEL"], .string("low"))
     }
 
     func testAdditiveCapabilitiesAllowInspectingAnAlreadyRunningServer() throws {

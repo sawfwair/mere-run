@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Match Glimmer's image projection and decoder to the checkpoint's floating
+  dtype, retaining float32 position calculations. Keep speculative decoding
+  available when cache markers cannot produce a reusable prefix.
+- Configure Claude Code to omit effort for adapters without effort control,
+  preserving adaptive thinking and explicit API capability errors.
 - Process native Glimmer image prompts in cancellable prefill chunks, preserving
   ordered image embeddings and captured layer states.
 - Preserve cache breakpoints during context edits and deferred-tool loading,

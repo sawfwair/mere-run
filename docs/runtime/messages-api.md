@@ -103,9 +103,19 @@ hosting, Files, Batches, account services, and billing are outside this API.
 Thinking progress updates (`display: "updates"`) are unsupported. Claude Code
 2.1.316 retries without that display option; native thinking remains available.
 The connection preview reports this boundary. The same client requests
-`output_config.effort.high` by default. Adapters without high-effort support,
-including Gemma, reject that request; select a compatible local model or a
-client configuration that omits the unsupported field.
+`output_config.effort.high` by default. For adapters without effort control,
+including Gemma, the connection command configures
+`CLAUDE_CODE_EFFORT_LEVEL=auto` in the selected settings scope. Claude Code omits
+the effort field and retains adaptive thinking. This uses the client's
+[documented effort omission](https://code.claude.com/docs/en/model-config#send-no-effort-level).
+Explicit effort requests to those adapters still fail before generation.
+Effort caps in other client settings can force a level even with `auto`; remove
+an incompatible cap or choose an adapter supporting effort.
+
+Switching from this omission setting to an effort-capable model removes the
+old model's `auto` override, restoring client effort selection. A `null` in the
+connection preview's environment patch means that key will be removed. Existing
+supported effort preferences are preserved.
 
 Initial Messages usage includes confirmed input and cache accounting. During
 prefill, out-of-band ping events can arrive before `message_start`. Text and
@@ -146,8 +156,8 @@ never writes or prints its value. Existing `ANTHROPIC_API_KEY` or
 override the helper. Active Bedrock, Vertex, or Foundry provider selectors also
 fail with instructions to remove the conflicting selector.
 
-The qualification candidate is Claude Code **2.1.316**. It is not marked as
-end-to-end supported until the task cases in the qualification record pass.
+The qualification candidate is Claude Code **2.1.316**. Qualification applies to
+the models, modes, and task cases in the qualification record.
 Other installed versions are reported as unqualified. The connection command
 does not install models, start services, alter permissions, impersonate Claude
 model identities, or disable advanced features to hide adapter gaps.
@@ -156,6 +166,10 @@ For manual configuration, merge the following into
 `.claude/settings.local.json`. Replace the example limits with the effective
 values from `GET /v1/models/:id`; this example uses Glimmer's served limits.
 Keep existing permission and MCP settings.
+
+For an adapter with no effort control, add
+`"CLAUDE_CODE_EFFORT_LEVEL": "auto"` to that project's `env` object. The generated
+connection settings include it automatically for those adapters.
 
 ```json
 {

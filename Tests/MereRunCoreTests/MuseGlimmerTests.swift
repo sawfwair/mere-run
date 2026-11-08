@@ -5,6 +5,63 @@ import MediaIO
 import XCTest
 
 final class MuseGlimmerTests: MereRunCoreTestCase {
+    func testQuantizedPatchProjectionUsesScaleDTypeAndFloat32PositionInterpolation() throws {
+        let config = try JSONDecoder().decode(MuseGlimmerConfig.self, from: Data(
+            Self.configJSON.replacingOccurrences(of: #""patch_size":2"#, with: #""patch_size":4"#).utf8
+        ))
+        let embedder = MuseGlimmerVisionPatchEmbedder(config: config.visionConfig)
+        embedder.update(parameters: embedder.parameters().mapValues { $0.asType(.bfloat16) })
+        quantize(model: embedder, groupSize: 32, bits: 4, filter: { path, _ in path == "patch_embedding" })
+        XCTAssertEqual(embedder.patchEmbedding.weight.dtype, .uint32)
+        let patches = MLXArray(Array(0..<576).map { Float($0) / 576 }, [6, 96])
+        let geometry = MuseGlimmerVisionPatchEmbedder.bilinearPositionGeometry(grids: [(1, 2, 3)], side: 4)
+        var expectedPosition = MLXArray.zeros([6, 8])
+        for corner in 0..<4 {
+            expectedPosition = expectedPosition
+                + embedder.positionEmbeddingTable(MLXArray(geometry.indices[corner])).asType(.float32)
+                * MLXArray(geometry.weights[corner], [6, 1])
+        }
+        let expected = embedder.patchEmbedding(patches.asType(.bfloat16)) + expectedPosition.asType(.bfloat16)
+        let result = embedder(patches, grids: [(1, 2, 3)])
+        XCTAssertEqual(result.dtype, .bfloat16)
+        XCTAssertEqual(MLX.max(MLX.abs(result - expected)).item(Float.self), 0)
+    }
+
+    func testVisionRotaryEvaluatesAnglesBeforeBF16Rounding() throws {
+        let tower = MuseGlimmerVisionTower(config: try Self.config().visionConfig)
+        let rotary = tower.makeRotary(positionPairs: [(257, 511)], dtype: .bfloat16)
+        let angles: [Float] = [257, 511, 257, 511]
+        let expectedCosine = MLXArray(angles.map { cos($0) }).asType(.bfloat16)
+        let expectedSine = MLXArray(angles.map { sin($0) }).asType(.bfloat16)
+        XCTAssertEqual(MLX.max(MLX.abs(rotary.cosine.reshaped(4) - expectedCosine)).item(Float.self), 0)
+        XCTAssertEqual(MLX.max(MLX.abs(rotary.sine.reshaped(4) - expectedSine)).item(Float.self), 0)
+    }
+
+    func testFloat32ImageInputPreservesBF16LanguageEmbeddingsAndCache() throws {
+        let model = MuseGlimmerModel(config: try Self.config())
+        model.update(parameters: model.parameters().mapValues { $0.asType(.bfloat16) })
+        let images = MuseGlimmerImageBatch(
+            pixelValues: MLXArray(Array(0..<192).map { Float($0) / 192 }, [8, 24]),
+            grids: [(1, 2, 2), (1, 2, 2)], tokenCounts: [1, 1]
+        )
+        let ids = MLXArray([Int32(1), 9, 3, 4, 9, 5]).reshaped(1, 6)
+        let text = model.inputEmbeddings(for: ids)
+        let fused = try model.inputEmbeddings(for: ids, imageBatch: images)
+        XCTAssertEqual(text.dtype, .bfloat16)
+        XCTAssertEqual(fused.dtype, text.dtype)
+        for index in [0, 2, 3, 5] {
+            XCTAssertEqual(MLX.max(MLX.abs(fused[0, index] - text[0, index])).item(Float.self), 0)
+        }
+        let cache = model.makeCache()
+        let output = model.forwardPrefillDetailed(embeddings: fused, cache: cache)
+        MLX.eval(output.logits)
+        for layer in cache {
+            let state = try XCTUnwrap(layer.currentState())
+            XCTAssertEqual(state.0.dtype, .bfloat16)
+            XCTAssertEqual(state.1.dtype, .bfloat16)
+        }
+    }
+
     func testConfigDecodesLayerContractsAndQuantization() throws {
         let config = try Self.config()
         XCTAssertEqual(config.modelType, "muse_glimmer")

@@ -475,7 +475,7 @@ public actor MuseGlimmerGenerator: ChatGenerator {
             ? prefixCache.lookup(identity: identity, tokens: promptTokens, ttls: checkpoints) : nil
         var cacheWrites = 0
         let minimumDFlashOutput = MuseGlimmerDFlashPolicy.minimumOutputTokens()
-        let useDFlash = assistantModel != nil && tokenBudget >= minimumDFlashOutput && request.prefixCachePolicy == nil
+        let useDFlash = assistantModel != nil && tokenBudget >= minimumDFlashOutput && checkpoints.isEmpty
         let assistantCache = useDFlash ? assistantModel?.makeCache() : nil
         let prefillStart = Date()
         let cache = seed?.value.cache.map { $0.fork() } ?? model.makeCache()
@@ -562,7 +562,7 @@ public actor MuseGlimmerGenerator: ChatGenerator {
                     speculativeTokens: assistantModel.map {
                         MuseGlimmerDFlashPolicy.speculativeTokens(maximum: $0.config.blockSize - 1)
                     } ?? 0,
-                    reason: request.prefixCachePolicy != nil ? "prefix cache uses target-only decoding" : "output budget is below \(minimumDFlashOutput) tokens"
+                    reason: !checkpoints.isEmpty ? "prefix cache uses target-only decoding" : "output budget is below \(minimumDFlashOutput) tokens"
                 )
             }
             decoded = try decode(

@@ -15,6 +15,11 @@ torchvision path. Vision position geometry stays in float32. Exact byte and bit
 pattern fixtures cover both contracts so a visually plausible preprocessing
 change cannot silently alter model input.
 
+The patch projection uses its floating weight or quantization-scale dtype.
+Bilinear position accumulation and rotary trigonometry stay in float32 before
+their results are cast to the activation dtype. This keeps BF16 image features,
+language embeddings, and KV state from being promoted to float32.
+
 - `MuseGlimmerConfig.swift`: typed upstream configuration, including per-layer
   NoPE/rotary selection and optional MLX quantization metadata.
 - `MuseGlimmerModel.swift`: dense local/global decoder, gated attention,
@@ -72,6 +77,10 @@ the pair equally. This is not a new DFlash2 regression, but real-checkpoint
 bit-exact equivalence to one-token execution is not claimed. Either assistant is
 used only for output budgets of at least 32 tokens and returns to target-only
 decode after two rounds below 40% acceptance.
+
+Reusable text-prefix checkpoints select target-only decoding. Image requests
+cannot create those checkpoints, so their cache markers leave the assistant
+available; cache usage remains zero for images.
 
 A paired 16-window, 8,192-token WikiText-2 candidate check measured 9.535
 perplexity for selective Q4 and 9.554 for compact Q4. The selective-minus-compact

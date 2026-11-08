@@ -313,13 +313,15 @@ final class MuseGlimmerVisionPatchEmbedder: Module {
         let geometry = Self.bilinearPositionGeometry(grids: grids, side: side)
         let indices = geometry.indices
         let weights = geometry.weights
-        var position = MLXArray.zeros([patches.dim(0), hiddenSize], dtype: patches.dtype)
+        let dtype = (patchEmbedding as? QuantizedLinear)?.scales.dtype ?? patchEmbedding.weight.dtype
+        let projected = patchEmbedding(patches.asType(dtype))
+        var position = MLXArray.zeros([patches.dim(0), hiddenSize], dtype: .float32)
         for corner in 0..<4 {
             let indexArray = MLXArray(indices[corner])
-            let weightArray = MLXArray(weights[corner], [weights[corner].count, 1]).asType(patches.dtype)
-            position = position + positionEmbeddingTable(indexArray) * weightArray
+            let weightArray = MLXArray(weights[corner], [weights[corner].count, 1])
+            position = position + positionEmbeddingTable(indexArray).asType(.float32) * weightArray
         }
-        return patchEmbedding(patches) + position
+        return projected + position.asType(projected.dtype)
     }
 
     static func bilinearPositionGeometry(
@@ -552,7 +554,7 @@ final class MuseGlimmerVisionTower: Module {
         return (order, reverseOrder, positions, fullSegments, windowSegments)
     }
 
-    private func makeRotary(
+    func makeRotary(
         positionPairs: [(Int, Int)],
         dtype: DType
     ) -> (cosine: MLXArray, sine: MLXArray) {
@@ -573,8 +575,8 @@ final class MuseGlimmerVisionTower: Module {
             values.append(contentsOf: widthFrequencies)
             values.append(contentsOf: heightFrequencies)
         }
-        let angles = MLXArray(values, [1, positionPairs.count, 1, headDimension]).asType(dtype)
-        return (MLX.cos(angles), MLX.sin(angles))
+        let angles = MLXArray(values, [1, positionPairs.count, 1, headDimension])
+        return (MLX.cos(angles).asType(dtype), MLX.sin(angles).asType(dtype))
     }
 
     private func pixelShuffle(
