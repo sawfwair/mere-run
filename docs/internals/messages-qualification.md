@@ -62,15 +62,16 @@ changing file protection. A green gate does not establish desktop task success.
 | Adapter | Protocol fixture | Native inference | Coding session | Calculator and website | Performance |
 | --- | --- | --- | --- | --- | --- |
 | Glimmer | Covered | Native count, cache warm/reuse, stream, typed tool and tool-error replay observed | Fixture passed; independently verified | Not qualified | Debug probe below |
-| Qwen | Text, counting, streams and typed tools | Ornith 35B text/count/stream/tool and signed replay probes passed | Fixture passed twice after encoding guidance; independently verified | Not qualified | Debug probe below |
+| Qwen | Text, counting, streams and typed tools | Ornith 35B text/count/stream/tool and signed replay probes passed | Fixture passed twice after encoding guidance; independently verified | AX-only Calculator and MDN search passed twice | Debug probe below |
 | Gemma | Text, counting, streams and typed tools | Gemma Turbo text/count/stream/tool and signed replay probes passed | Client effort request rejected before generation | Not qualified | Debug probe below |
 | Other text backends | Buffered route boundary only | Flint 4-bit text probe passed; count rejected explicitly | Unsupported adapter capabilities | Not qualified | Debug probe below |
 
 The local Cua reference configuration was later located beside the llama.cpp
-server; see the live Cua trial below. Calculator qualification requires independent observations of
+server; see the live Cua trials below. Calculator qualification requires
+independent observations of
 `6 × 7 = 42` and `47 × 23 = 1081`, repeated from fresh app state. Website and
 coding tasks require independent evidence. The coding fixture below passed;
-the Calculator, website, and unchanged reference-loop cases remain unqualified.
+the live Cua evidence below records Calculator and website outcomes separately.
 
 ## Native Glimmer probe
 
@@ -227,7 +228,8 @@ tokens/second. Failed-attempt output is excluded from those completed-round
 counters. Queue-wait time was not measured. The final snapshot had one resident
 model and no queued or active requests. These debug observations are not a
 controlled benchmark; the repeat overlapped repository validation startup.
-Calculator and website cases remain unqualified.
+These coding fixtures do not qualify Calculator or website tasks; see the later
+live Cua evidence.
 
 Gemma's session failed before generation because Claude Code `2.1.316` requested
 `output_config.effort.high`. The Gemma adapter has no native effort control and
@@ -322,7 +324,7 @@ Vision cache reads/writes stayed zero, and zero-output image warming failed
 explicitly. The native harness includes an opt-in image-order check for supplied
 labeled fixtures. These image cases do not qualify desktop interaction.
 
-## Live Cua trial
+## Live Cua trials
 
 The local reference setup uses unmodified Claude Code `2.1.316` and
 [Cua Driver](https://github.com/trycua/cua) `0.38.0` over MCP. Its existing
@@ -350,8 +352,81 @@ while text prompts used cancellable chunks. Both paths now use 512-token
 language-model chunks, with image features embedded once in their original
 positions. A tiny-model regression compares two-image chunking against whole
 prefill across sliding-window boundaries, checking logits, captured layer
-states, and cache offsets. Native repeats are required to assess its effect on
-task outcomes and performance.
+states, and cache offsets. The full repository gate passed again with this
+change, including the official SDK tests.
+
+A real 25,580-token image request cancelled during chunked prefill released its
+lease in 2.039 seconds, with no active or queued work remaining. A subsequent
+request using the same image and input returned `READY`: its reported input
+usage exactly matched the independent count, with zero cache reads or writes.
+Generation took 126.004 seconds, including 97.010 seconds prefill and 22.793
+seconds decode for 31 output tokens. The long input differs from the live Cua
+prompt, so these timings do not establish a controlled before/after speedup.
+Native app repeats are required to assess task outcomes.
+
+The fresh Calculator repeat on the chunked build reached the first digit, then
+timed out at 900.093 seconds. Independent accessibility and screenshot evidence
+confirmed a display of `6`, not `42`. Its first screenshot round used 26,713
+input tokens, 134.698 seconds prefill, and 86.935 seconds decode for 136 output
+tokens. No queue wait was observed. This remains an incomplete task, and no
+Calculator success is claimed for Glimmer. The server released the cancelled
+request and ended with no active or queued work.
+
+The repeatable short-image harness passed again on the chunked build: swapped
+images produced `ALPHA` and `BETA`, with independently counted input usage of
+400 tokens for each request and zero cache usage. The two generations took
+32.065 and 29.807 seconds. Zero-output vision warming still returned an explicit
+400 response. Short image ordering does not qualify a desktop task.
+
+### Ornith accessibility cases
+
+Ornith's current adapter declares no ordered-image input and accepts high effort.
+Its Cua cases use the existing reference filter's documented `--text-only`
+option: the model receives accessibility text, while an independent verifier
+captures screenshots. The 13-tool MCP catalog and Cua implementation remain the
+same. These results qualify accessibility-driven interaction, not native vision.
+Claude Code and Cua execute all UI actions; the inference server executes none.
+
+| Task | First fresh run | Second fresh run | Independent outcome |
+| --- | --- | --- | --- |
+| Calculator `6 × 7` | 152.819 s | 150.952 s | Both expression and display confirmed `6 × 7 = 42` |
+| Calculator `47 × 23` | 155.757 s | 137.525 s | Both expression and display confirmed `47 × 23 = 1,081` |
+| Visible MDN search for `Promise.all` | 104.992 s | 202.933 s | Both search-result clicks, final URLs/titles, and rejection explanations confirmed |
+
+Every Calculator run launched a new process and cleared its state before entering
+the expression. Independent accessibility reads and screenshots verified all
+four results. Each Claude Code session finished normally. Both website runs used
+separate temporary Chrome profiles, with the installed executable and version
+checked before navigation. Chrome `157.0.8103.38` retained its normal sandbox.
+The trusted launcher prepared each browser; Claude Code performed the visible
+MDN search, opened its result, and read the reference page through Cua. It had
+approval for the UI tools, with browser launching reserved to the trusted
+fixture setup. Trials had a 900-second timeout. Initial runs allowed 20 client
+turns; the final two allowed 40. No successful run exhausted its turn limit.
+
+Website verification matched the clicked accessibility token to an observed
+`Promise.all()` search result, then independently checked the final window's
+address, title, page text, and screenshot. The isolated profile's browser history
+also contained the MDN home page and the final reference URL in each run. Model-declared
+success alone was not used. These session wall times include client and tool
+work; they are not isolated inference benchmarks.
+
+The six sessions recovered from six rejected model-generated calls: three
+undeclared `run_steps` calls, two invalid boolean encodings, and one call missing
+a required field. None was published as an executable tool call. Each error
+terminated its stream with an API error; Claude Code continued and completed
+the task. Every new session also recovered from the client's unsupported
+`thinking.display.updates` option through its normal fallback. These task passes
+do not guarantee schema-valid output from an unconstrained model.
+
+Ornith loaded in 19.557 seconds before the sessions began. Across the six cases,
+native telemetry recorded 80 completed inference rounds and 17,184 output tokens,
+with 2.158 seconds average prefill, 6.983 seconds average decode, and 30.758 output
+tokens/second. The six failed-output rounds are counted separately; their output
+is excluded from completed-round performance counters. Queue-wait timing was not
+collected; sampled snapshots showed no queue. The final snapshot had one resident
+model and no active or queued requests. These are debug observations, not a
+controlled backend comparison.
 
 ## Remaining boundaries
 
@@ -361,6 +436,7 @@ citations, vision PDF rendering, and server-side compaction are unsupported.
 PDFs require extractable text; image-only PDFs fail explicitly. Native vision
 prefix caches are unavailable and report zero usage.
 
-The repository gate passes; desktop task qualification remains incomplete.
+The repository gate passes. Glimmer desktop and Gemma Claude Code qualification
+remain incomplete; Ornith's Cua results are limited to the cases and mode above.
 Unsupported capabilities are documented and rejected explicitly. The feature is not
-presented as end-to-end Claude Code support.
+qualified for unlisted models, modes, or desktop tasks.
