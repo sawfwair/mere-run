@@ -51,9 +51,9 @@ of unrelated settings and MCP registrations.
 The docs site builds successfully. Focused protocol, shared execution, command,
 Glimmer parser, cache-policy, and context-edit tests pass, including the official
 SDK against both API versions. The full `./scripts/check.sh` gate passed on
-November 7, 2026, after unlocking macOS, with the official SDK environment and
-installed Ornith and Glimmer tokenizer fixtures enabled. Earlier locked runs had 30 protected
-run-record failures: files written with `completeUnlessOpen` could not be reopened
+November 7 and 8, 2026, with macOS unlocked, the official SDK environment, and
+installed Ornith and Glimmer tokenizer fixtures enabled. Earlier locked runs
+had 30 protected run-record failures: files written with `completeUnlessOpen` could not be reopened
 while `IOConsoleLocked = Yes`. Those cases passed in the unlocked run without
 changing file protection. A green gate does not establish desktop task success.
 
@@ -61,7 +61,7 @@ changing file protection. A green gate does not establish desktop task success.
 
 | Adapter | Protocol fixture | Native inference | Coding session | Calculator and website | Performance |
 | --- | --- | --- | --- | --- | --- |
-| Glimmer | Covered | Native count, cache warm/reuse, stream, typed tool and tool-error replay observed | Earlier fixture passed; independently verified | Calculator and MDN search passed twice after corrections | Optimized probe and app rounds below |
+| Glimmer | Covered | Native count, cache warm/reuse, stream, typed tool and tool-error replay observed | Earlier fixture and two larger coding trials passed; independently verified | Integer Calculator and both MDN search tasks passed twice; extended decimal repeat timed out | Optimized probe and app rounds below |
 | Qwen | Text, counting, streams and typed tools | Ornith 35B text/count/stream/tool and signed replay probes passed | Fixture passed twice after encoding guidance; independently verified | AX-only Calculator and MDN search passed twice | Debug probe below |
 | Gemma | Text, counting, streams and typed tools | Gemma Turbo text/count/stream/tool and signed replay probes passed | Fixture passed twice after effort omission; independently verified | AX first cases passed; fresh repeat failed | Observations below |
 | Other text backends | Buffered route boundary only | Flint 4-bit text probe passed; count rejected explicitly | Unsupported adapter capabilities | Not qualified | Debug probe below |
@@ -608,6 +608,152 @@ from completed-round throughput. Native averages were 3.637 seconds prefill,
 results. Task outcomes are listed separately above. Queue latency was not
 instrumented; sampled queue depths were zero.
 
+## November 8 extended Glimmer qualification
+
+The optimized binary from `be96b32d` was reused without runtime changes. These
+trials used Claude Code 2.1.316 and Anthropic SDK 2.6.0. Desktop trials retained
+the Cua 0.38.0 reference loop and unchanged 13-tool catalog. Claude Code tasks
+used 65,536 context tokens and 4,096 output tokens, with adaptive thinking and
+low effort. Each client task retained the 900-second timeout and 40-turn limit.
+Requests ran sequentially with one resident model. Native loading took 80.638
+seconds before the trials.
+
+Two fresh coding projects expanded the earlier multiplication fixture into a
+JSON Lines reader and a module that builds category summaries. Requirements
+covered malformed line recovery, original line numbers, nested Unicode metadata,
+validation order, keeping the first valid event for each ID, nonnegative integer
+values excluding booleans, and deterministic sorting. Both clients read the
+requirements, both source files, and the original tests, reproduced the
+failures, and edited both modules. The available coding tools were Read, Edit,
+and Bash. Each client exercised the error from a missing test module exactly
+once and recovered by running the correct suite successfully.
+
+| Fresh coding trial | Client wall time | Independent original tests | Independent holdout tests |
+| --- | --- | --- | --- |
+| First | 362.031 s | 10 passed | 3 passed |
+| Second | 416.521 s | 10 passed | 3 passed |
+
+The test and requirements hashes were unchanged in both projects. The holdouts
+included a 500-record generator with duplicates and nested metadata, whitespace
+strings and case-sensitive categories, and validation precedence. Source review
+confirmed ordinary implementations of the requirements. Both sessions completed
+nine native inference rounds, with 3,008 and 3,603 output tokens respectively,
+and zero generation failures. Native average prefill was 2.377 and 2.307
+seconds; average decode was 36.315 and 42.653 seconds, or 9.203 and 9.386 output
+tokens per second. Client wall time includes tool and client work. Queue latency
+was not instrumented; sampled queue depths were zero.
+
+The current binary also passed the combined native harness under both API
+versions. This harness used adaptive thinking and the adapter's default effort:
+
+| API version | Local search | Harness checks | Harness wall time | Initial prepared tokens | Search request output budget / actual output |
+| --- | --- | --- | --- | --- | --- |
+| `2023-06-01` | Regex | 10 passed | 40.471 s | 555 | 512 / 251 |
+| `2026-10-21` | BM25 | 10 passed | 42.471 s | 565 | 512 / 274 |
+
+Each combination applied both context-edit strategies, warmed a native prefix
+without output, reused that prefix, moved a cache marker earlier, streamed a
+server-side catalog search, and returned a validated deferred client-tool call.
+The initial cache writes and subsequent reads were 553 and 563 tokens. Moving
+the marker earlier retained only 466 and 474 tokens. Actual generation usage
+included the internal continuation prompts and matched independent preparation
+counts. Signed thinking and a nested PDF tool-error result were accepted on
+replay counting. These PDF checks exercised preparation and counting.
+
+A separate real HTTP test disconnected a queued request while an image request
+was generating. The queue cleared while the active lease remained held. Closing
+the active stream then cleared all active and queued work in an observed 0.263
+seconds. Neither cancelled request incremented completed-generation counters. A
+fresh image stream returned `READY` in 1.975 seconds with 468 prepared input
+tokens and 27 output tokens; usage matched the independent count. These cleanup
+timings are observations from one cancellation sequence.
+
+The extended decimal task used observed Calculator buttons to evaluate `(125.5 −
+47.25) × 8`, reading the subtraction result before multiplying it.
+
+| Fresh decimal trial | Outcome | Client wall time | Independent observation |
+| --- | --- | --- | --- |
+| First | Pass | 602.764 s | `78.25 × 8 = 626` |
+| Second | Timeout | 900.071 s | Unfinished `125.5 − 47.25`; equals had not been pressed |
+
+The first trial used 16 button actions and three window state reads. The trace
+confirmed `78.25` after subtraction; independent accessibility and screenshot
+checks confirmed the final expression and result. Calculator used spoken
+accessibility labels for decimal values, while the captured image showed the
+numeric expression. The raw observations were retained.
+
+The fresh repeat used 12 button actions and 13 window state reads before the
+unchanged timeout. Independent capture confirmed the unfinished calculation.
+Neither trial had Cua tool errors or malformed tool calls. The repeat reused a
+25,163-token text prefix, but uncached history reached 14,427 tokens in the last
+completed round. This build retains marked text before the first image;
+subsequent history containing images still requires prefill. Additional
+full-window observations increased that work.
+
+The first trial completed 23 native rounds and 3,136 output tokens. The repeat
+completed 27 rounds and 3,456 output tokens before cancellation. Native average
+prefill was 7.932 and 15.143 seconds; average decode was 14.960 and 14.077
+seconds, or 9.114 and 9.093 output tokens per second. These counters cover
+completed rounds. They describe different action sequences, rather than a
+controlled comparison. Admission returned to zero active and queued work after
+the timeout. The owned apps and Cua sessions were closed. The extended decimal
+workflow remains unqualified because its fresh repeat failed.
+
+Two direct document trials then read validation codes from a two-page text PDF
+and repeated the request with the source pages reversed. Both returned the
+correct codes in source page order. Each prompt contained 138 prepared tokens. A
+cache marker with a `1h` TTL warmed 136 tokens with zero output; generation then
+read all 136 tokens from that entry. Changing the document produced a fresh
+write with zero cache reads during warming, and the answer changed to the new
+page order. Generation took 13.703 and 14.417 seconds, with 129 and 136 output
+tokens each with a 256-token output limit. Usage matched independent counts and
+both streams carried request IDs. The TTL checks covered acceptance and
+immediate reuse. These requests used an ordinary JSON text instruction without
+citations or constrained-output enforcement.
+
+The first linked-browser attempt was interrupted after 306.224 seconds because
+of a launcher setup error. The trusted launcher had claimed the same public Cua
+session name requested by the agent, so Cua refused two otherwise valid calls
+from the agent's different transport. This attempt is excluded from model
+outcomes. The corrected setup gives the trusted launcher a separate name and
+ends that session before Claude Code starts. The agent owns and ends its own
+session. The Claude Code loop and 13-tool catalog remain unchanged.
+
+The fresh browser task searches MDN visibly for `URLSearchParams`, opens the
+interface reference from the search results, and follows its `getAll()` link to
+the method reference. Each trial uses an isolated Chrome profile. The installed
+Chrome executable and version are checked before navigation, with the normal
+sandbox enabled.
+
+Both corrected fresh browser trials passed. Independent checks verified the
+visible MDN search button and query, the interface search-result action, the
+method-link action, the final URL and title, the return-value explanation, and
+the captured page. After each owned Chrome process exited, its isolated history
+confirmed visits to the homepage, interface reference, and method reference.
+Both clients ended their own Cua sessions, and the trusted verifier closed only
+the corresponding private Chrome instance.
+
+| Fresh linked browser trial | Outcome | Client wall time | Cua tool errors | Native rounds / output tokens |
+| --- | --- | --- | --- | --- |
+| First | Pass | 684.436 s | 2 keyboard-focus refusals; recovered | 17 / 2,644 |
+| Second | Pass | 609.913 s | 0 | 14 / 2,286 |
+
+Cua reported that no key was dispatched for either refused Enter attempt in the
+first trial. The client refreshed the search state and used the observed result
+link. The second trial used the live results directly. Neither trial typed a
+reference URL as a substitute for search and link navigation. Native average
+prefill was 20.315 and 22.492 seconds; average decode was 16.876 and 17.999
+seconds, or 9.216 and 9.072 output tokens per second. Both used Chrome
+157.0.8103.38 with the normal sandbox and separate temporary profiles.
+
+Across the six valid expanded tasks, five passed and one timed out. Native
+telemetry recorded 99 completed inference rounds, 18,133 output tokens, and zero
+generation failures. Average native prefill was 13.068 seconds and average
+decode was 19.937 seconds, with 9.187 output tokens per second. These counters
+exclude the API probes and invalid launcher diagnostic and cover completed
+rounds only. Model loading and client wall times are reported separately above;
+queue latency was not instrumented.
+
 ## Remaining boundaries
 
 Other backends without shared exact preparation reject token counting.
@@ -616,7 +762,9 @@ citations, vision PDF rendering, and server-side compaction are unsupported.
 PDFs require extractable text; image-only PDFs fail explicitly. Image-derived
 prefix caches are unavailable; Glimmer can retain marked text before an image.
 
-The repository gate passes. Glimmer's six listed app cases and Ornith's AX cases
-passed. Gemma's coding fixtures passed, but its AX reliability remains unqualified.
+The repository gate passes. Glimmer's earlier six app cases, both linked-browser
+trials, and Ornith's AX cases passed. The extended Glimmer decimal workflow
+remains unqualified after a repeat timeout. Gemma's coding fixtures passed, but
+its AX reliability remains unqualified.
 Unsupported capabilities are documented and rejected explicitly. The feature is not
 qualified for unlisted models, modes, or desktop tasks.
