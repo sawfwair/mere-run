@@ -120,7 +120,9 @@ def qualify(args, report):
                 try:
                     api.create(**options, max_tokens=0)
                     raise AssertionError("Unsupported image cache warming was accepted")
-                except anthropic.BadRequestError:
+                except anthropic.BadRequestError as error:
+                    detail = str(error).lower()
+                    assert "cache" in detail and ("unsupported" in detail or "does not support" in detail)
                     report["cases"].append({"name": "unsupported_vision_warming", "status": 400})
 
         if caps["prompt_cache"]:

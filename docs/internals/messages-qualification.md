@@ -52,7 +52,7 @@ The docs site builds successfully. Focused protocol, shared execution, command,
 Glimmer parser, cache-policy, and context-edit tests pass, including the official
 SDK against both API versions. The full `./scripts/check.sh` gate passed on
 November 7, 2026, after unlocking macOS, with the official SDK environment and
-installed Ornith tokenizer fixture enabled. Earlier locked runs had 30 protected
+installed Ornith and Glimmer tokenizer fixtures enabled. Earlier locked runs had 30 protected
 run-record failures: files written with `completeUnlessOpen` could not be reopened
 while `IOConsoleLocked = Yes`. Those cases passed in the unlocked run without
 changing file protection. A green gate does not establish desktop task success.
@@ -61,9 +61,9 @@ changing file protection. A green gate does not establish desktop task success.
 
 | Adapter | Protocol fixture | Native inference | Coding session | Calculator and website | Performance |
 | --- | --- | --- | --- | --- | --- |
-| Glimmer | Covered | Native count, cache warm/reuse, stream, typed tool and tool-error replay observed | Fixture passed; independently verified | Not qualified | Debug probe below |
+| Glimmer | Covered | Native count, cache warm/reuse, stream, typed tool and tool-error replay observed | Earlier fixture passed; independently verified | Calculator and MDN search passed twice after corrections | Optimized probe and app rounds below |
 | Qwen | Text, counting, streams and typed tools | Ornith 35B text/count/stream/tool and signed replay probes passed | Fixture passed twice after encoding guidance; independently verified | AX-only Calculator and MDN search passed twice | Debug probe below |
-| Gemma | Text, counting, streams and typed tools | Gemma Turbo text/count/stream/tool and signed replay probes passed | Client effort request rejected before generation | Not qualified | Debug probe below |
+| Gemma | Text, counting, streams and typed tools | Gemma Turbo text/count/stream/tool and signed replay probes passed | Fixture passed twice after effort omission; independently verified | AX first cases passed; fresh repeat failed | Observations below |
 | Other text backends | Buffered route boundary only | Flint 4-bit text probe passed; count rejected explicitly | Unsupported adapter capabilities | Not qualified | Debug probe below |
 
 The local Cua reference configuration was later located beside the llama.cpp
@@ -368,9 +368,9 @@ The fresh Calculator repeat on the chunked build reached the first digit, then
 timed out at 900.093 seconds. Independent accessibility and screenshot evidence
 confirmed a display of `6`, not `42`. Its first screenshot round used 26,713
 input tokens, 134.698 seconds prefill, and 86.935 seconds decode for 136 output
-tokens. No queue wait was observed. This remains an incomplete task, and no
-Calculator success is claimed for Glimmer. The server released the cancelled
-request and ended with no active or queued work.
+tokens. No queue wait was observed. That trial did not qualify Glimmer for
+Calculator. The server released the cancelled request and ended with no active
+or queued work.
 
 The repeatable short-image harness passed again on the chunked build: swapped
 images produced `ALPHA` and `BETA`, with independently counted input usage of
@@ -428,15 +428,195 @@ collected; sampled snapshots showed no queue. The final snapshot had one residen
 model and no active or queued requests. These are debug observations, not a
 controlled backend comparison.
 
+## Glimmer precision and client effort corrections
+
+A BF16 tiny-model regression reproduced float32 promotion from image patches
+through fused language embeddings into the attention cache. The patch projection
+now uses its floating weight or quantization-scale dtype. Position interpolation
+and rotary trigonometry run in float32 before conversion to the activation dtype.
+Tests cover ordinary and quantized projections, large rotary positions, and
+BF16 language/cache storage. Image/text ordering tests remain enabled.
+
+Two optimized builds were compared using the same 25,580-token prepared prompt,
+screenshot bytes, adaptive thinking, low effort, zero temperature, and 128-token
+output limit. The baseline used the pre-correction Glimmer implementation from
+`1d75734f`; the corrected build used `ef9627d0`. Both retained the same current
+CLI. Runs were sequential with one resident model, independently counted input,
+and no cache reads or writes. Each returned the visible word `READY`. Native
+startup was measured separately: 81.754 seconds baseline and 80.736 corrected.
+
+| Measurement | Baseline run 1 / 2 | Corrected run 1 / 2 |
+| --- | --- | --- |
+| Request wall time | 121.040 / 119.742 s | 42.071 / 44.348 s |
+| Native prefill | 94.042 / 100.551 s | 36.655 / 40.388 s |
+| Native decode | 20.549 / 18.999 s | 3.997 / 3.751 s |
+| Output tokens | 32 / 32 | 33 / 33 |
+
+Average request wall time improved by 2.79 times in this bounded probe. Output
+lengths differed, and this experiment combines dtype correction with restored
+assistant eligibility when cache markers produce no reusable checkpoint. It
+does not isolate either change or establish desktop task success. Sampled
+admission snapshots had no queued work; queue latency was not instrumented.
+
+Glimmer also supports explicit text cache breakpoints before the first image.
+No image-derived KV is retained. A tiny BF16 model test compares fresh and forked
+text-prefix caches with two different future images and obtains identical
+logits. The tokenizer fixture checks that retained boundaries precede image
+expansion and that authentication scopes remain separate. At `948cbe3c`, only
+markers before an image created native checkpoints. Image identities beyond the retained boundary do not affect
+the earlier causal text state. These additions retain the existing bounded
+cache, expiry, eviction, and changed-prefix rules.
+
+The corrected native build warmed 3,037 text-prefix tokens in a 3,212-token
+image prompt with zero output. Subsequent requests reused all 3,037 tokens while
+changing the future image from `ALPHA` to `BETA`; the observed answers changed
+accordingly. Both usage totals matched independent counts. Requests took 4.060
+and 4.043 seconds, and warming after the image returned an explicit 400. The
+checked-in native vision harness also passed both two-image orderings and
+before-image text-prefix warming/reuse across changed images, using 406 cached
+tokens in each 750-token prompt. Native loading took 69.050 seconds separately.
+
+The first fresh Calculator trial on `948cbe3c` completed in 660.881 seconds
+under the unchanged 900-second limit. Independent accessibility and screenshot
+observations confirmed `6 × 7 = 42`; Claude Code exited successfully. The session
+completed 12 inference rounds and 1,711 output tokens with no generation failures.
+Native averages were 35.114 seconds prefill and 16.905 seconds decode, or 8.434
+output tokens/second. Those counters exclude setup probes. Sequential requests
+and sampled zero queue depth do not measure queue latency. This is one Calculator
+pass, not the required repeated Calculator and website qualification.
+
+The trace exposed a remaining cost: image-spanning client markers retained only
+the separately marked 12,485-token tool prefix. Around 14,000–17,000 later tokens
+still required prefill on each screenshot round. The subsequent cache correction
+retains the causal text before the first image when a marker covers that image,
+while leaving every image-derived KV state uncached. The tokenizer regression
+covers that partial boundary, TTL selection, unmarked input, and moving a marker
+earlier. The native vision harness passed on `be96b32d`, including both image
+orderings, covering markers, and explicit text markers. A covering-marker warm
+read 3,037 existing text tokens, wrote three additional text tokens, and left
+172 tokens uncached in the independently counted 3,212-token prompt. No image
+KV was retained. Native loading took 81.623 seconds separately.
+
+The corrected build then passed four fresh Calculator trials using the same
+Claude Code/Cua loop and 900-second timeout:
+
+| Calculator expression | First fresh run | Second fresh run | Independent result |
+| --- | --- | --- | --- |
+| `6 × 7` | 301.905 s | 287.547 s | `42` in both runs |
+| `47 × 23` | 318.511 s | 359.599 s | `1,081` in both runs |
+
+Every run launched a new process, inspected an initial display of `0`, cleared
+it, and pressed the observed digit, multiply, and equals controls. Independent
+accessibility reads and captured images verified each expression and result.
+The trusted verifier closed only that trial's Calculator process afterward.
+All four clients exited successfully. There were 50 completed inference rounds,
+6,880 output tokens, and no generation failures. Native averages were 7.333
+seconds prefill and 15.345 seconds decode, with 8.967 output tokens/second.
+These are task observations, not a controlled end-to-end comparison. Queue
+latency was not instrumented; sampled queue depths were zero.
+
+Both fresh website trials also passed, in 555.736 and 444.731 seconds. Each used
+a separate Chrome profile and the unchanged 13-tool reference catalog. The
+installed Chrome executable reported `157.0.8103.38`, matching the
+[November 3 desktop stable release](https://chromereleases.googleblog.com/2026/11/stable-channel-update-for-desktop.html).
+Its normal sandbox remained enabled. Claude Code selected MDN's visible search
+control, entered `Promise.all`, and pressed an observed reference-page search
+result. Independent window reads confirmed the final URL, title, and rejection
+explanation. Captured images and the isolated profiles' histories corroborated
+the page and navigation. The trusted verifier ended each owned session and
+closed only that trial's Chrome instance.
+
+The first website run recovered from two Cua keyboard-focus errors; Cua reported
+that no key had been dispatched. Claude Code refreshed the search results and
+used an accessibility link press. The second run used the search-result link
+directly. These were client-tool failures, separate from inference or protocol
+errors. Across all six app cases, native telemetry recorded 77 completed rounds,
+11,241 output tokens, zero generation failures, 10.568 seconds average prefill,
+16.185 seconds average decode, and 9.020 output tokens/second. Setup probes are
+excluded. The session wall times include client and UI work and exclude model
+loading and the trusted browser launch.
+
+Gemma still advertises no effort control and rejects direct requests for effort.
+The connection command now configures the documented
+[`CLAUDE_CODE_EFFORT_LEVEL=auto`](https://code.claude.com/docs/en/model-config#send-no-effort-level)
+setting for that capability. A wire fixture with unchanged Claude Code 2.1.316
+observed the default `high` effort, then confirmed effort omission with adaptive
+thinking preserved. Omission also held with an explicit CLI effort and an
+inherited effort environment value. These are client protocol checks, separate
+from native model task qualification. Connection tests cover conflicting caps,
+repeat application, and switching back to an effort-capable model.
+
+Native Gemma Turbo retained its empty effort capability list. Four explicit
+high-effort requests, covering generation and counting under both API versions,
+returned capability errors with HTTP 400 and request IDs. Generation counters
+were unchanged. Native loading took 1.144 seconds separately.
+
+With the generated project-local `auto` setting, two unchanged Claude Code coding
+sessions completed in 39.983 and 25.121 seconds. Each inspected the fixture,
+reproduced failing tests, read and edited the implementation, exercised
+`python3 -m unittest missing_test` once, and recovered to passing tests. An
+independent run passed both tests afterward, and the original test-file hash
+was unchanged. These sessions used Gemma's effective 32,768-token context and
+4,096-token output limit, with adaptive thinking preserved. Cache reads and
+writes were zero.
+
+Gemma's first AX-only Calculator cases passed: `6 × 7` in 111.699 seconds and
+`47 × 23` in 119.413 seconds. Fresh-process action traces, accessibility reads,
+and independent captures confirmed both results. Each recovered from two Cua
+semantic errors involving conflicting target fields or stale window IDs.
+
+The fresh `6 × 7` repeat failed after 443.267 seconds. An independent screenshot
+and accessibility read showed an unfinished `6 × 77`; Claude Code exited with
+an error after repeated tool-output validation failures. The server rejected
+calls missing a required property before publishing them for execution. Native
+telemetry recorded 11 failed generation rounds for this case. No active or
+queued inference remained, and a fresh subsequent session was admitted normally.
+A fresh subsequent `47 × 23` repeat finished its client session after 434.292
+seconds, but independent observations showed `47 × 233 = 10,951`. It was not
+counted as a task pass. The client performed three compaction requests and
+continued afterward, exercising client-side conversation replacement. Native
+telemetry recorded three rejected model-output rounds in that case. These
+failures are separate from the resolved effort-field mismatch. Gemma's AX
+reliability remains unqualified.
+
+Gemma's first AX-only website trial passed in 254.437 seconds. Independent
+observations confirmed the visible MDN search-result action, final URL/title,
+page explanation, screenshot, and isolated browser history. The fresh repeat
+failed after 499.304 seconds at the client's 40-turn limit. The independent
+window read and screenshot showed MDN's home/search dialog with the duplicated
+query `Promise.allPromise.all` and an incomplete address-bar entry, rather than
+the reference page. Both trials used standard window-scoped Cua permissions.
+
+| Gemma AX task | First fresh run | Second fresh run |
+| --- | --- | --- |
+| Calculator `6 × 7` | Pass, 111.699 s | Fail, 443.267 s; unfinished `6 × 77` |
+| Calculator `47 × 23` | Pass, 119.413 s | Fail, 434.292 s; `47 × 233 = 10,951` |
+| Visible MDN search | Pass, 254.437 s | Fail, 499.304 s; turn limit reached |
+
+The effort-field correction is qualified by the native boundary probes and
+coding fixtures. These mixed AX outcomes do not qualify Gemma for reliable Cua
+operation. Use the recorded Glimmer image mode or Ornith AX mode for the
+qualified app cases. Gemma's malformed calls were rejected before execution;
+valid calls with stale IDs, conflicting targeting fields, or focus failures
+were rejected by Cua and returned as client tool errors. The inference server
+executed no desktop actions.
+
+Across the six Gemma AX trials, native telemetry recorded 153 completed inference
+rounds and 76,746 output tokens. The 16 rejected model-output rounds are excluded
+from completed-round throughput. Native averages were 3.637 seconds prefill,
+6.598 seconds decode, and 76.020 output tokens/second. Clients received 41 tool-error
+results. Task outcomes are listed separately above. Queue latency was not
+instrumented; sampled queue depths were zero.
+
 ## Remaining boundaries
 
 Other backends without shared exact preparation reject token counting.
 Strict tools, exact reasoning budgets, constrained JSON-schema output, generated
 citations, vision PDF rendering, and server-side compaction are unsupported.
-PDFs require extractable text; image-only PDFs fail explicitly. Native vision
-prefix caches are unavailable and report zero usage.
+PDFs require extractable text; image-only PDFs fail explicitly. Image-derived
+prefix caches are unavailable; Glimmer can retain marked text before an image.
 
-The repository gate passes. Glimmer desktop and Gemma Claude Code qualification
-remain incomplete; Ornith's Cua results are limited to the cases and mode above.
+The repository gate passes. Glimmer's six listed app cases and Ornith's AX cases
+passed. Gemma's coding fixtures passed, but its AX reliability remains unqualified.
 Unsupported capabilities are documented and rejected explicitly. The feature is not
 qualified for unlisted models, modes, or desktop tasks.
