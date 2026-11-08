@@ -12,6 +12,13 @@ connection preview or a model's own success statement does not qualify a model.
 - Official Anthropic Python SDK: `2.6.0`, installed in a temporary test environment.
 - Glimmer, Qwen, and Gemma checkpoints are present in the local inventory.
 
+A November 8 tensor-header audit established that the installed Glimmer target
+used for the native and Cua trials in this record is the upstream **BF16**
+checkpoint. All 1,436 target tensors are BF16; its config has no quantization
+field and its installation manifest records `bf16`. The catalog's default Q4
+display name does not identify that installed artifact. These task outcomes do
+not qualify Q8 or Q4 conversions. Quantized candidates require separate evidence.
+
 ## Protocol evidence
 
 `MessagesHTTPTests` starts actual loopback HTTP routes with a deterministic
@@ -768,3 +775,162 @@ remains unqualified after a repeat timeout. Gemma's coding fixtures passed, but
 its AX reliability remains unqualified.
 Unsupported capabilities are documented and rejected explicitly. The feature is not
 qualified for unlisted models, modes, or desktop tasks.
+
+## Native Q8 and Q4 comparison on November 8
+
+This comparison uses the 128 GB M5 Max on AC power, macOS 27.2 (26B123), Swift
+6.4.2, and pinned mlx-swift revision
+`1e077ba968b291e0237d1ab522b271d433fa1713`. Models run one at a time. The API
+and desktop trials use the production Release CLI; raw probes use optimized
+Release test code with the repository's required test-only compilation hooks.
+
+The conversion comparison preserves the pinned upstream BF16 checkpoint and
+creates separate selective affine/group-64 artifacts. The vision tower and token
+embedding remain BF16. Q8 uses an exact-zero symmetric encoding with codes fitted
+to the stored BF16 scale; Q4 retains the standard converter recipe. Both use the
+installed BF16 DFlash2 companion. The conversion receipts include source and
+output hashes. These artifacts do not replace the installed BF16 target.
+
+The text diagnostic scores 16 uniformly spaced WikiText-2 test windows, each with
+2,048 next-token predictions. Every candidate uses the same actual tokenizer,
+token IDs, 128-token scoring blocks, and float32 log-softmax loss calculation.
+The token-suite SHA-256 is
+`4a7166944d17bfcd382c5fa77d8dd16c60c20b9b6b390cced54be8c55c7821d0`.
+The predeclared gate requires both the paired perplexity ratio and its upper 95%
+window-bootstrap bound to stay within 5% of BF16.
+
+| Target | Tensor payload | Perplexity | Change from BF16 | 95% paired ratio interval | Text gate |
+| --- | --- | --- | --- | --- | --- |
+| BF16 | 59.55 GB | 5.9902 | Reference | Reference | Reference |
+| Symmetric Q8 | 34.64 GB | 5.9926 | +0.04% | 0.99977–1.00108 | Pass |
+| Standard Q4 | 21.35 GB | 6.2016 | +3.53% | 1.02949–1.04170 | Pass |
+
+Q4 cleared the original numerical threshold, but its measurable quality loss is
+not accepted for this setup. Further Q4 speed and task qualification was stopped;
+Q4 is not selected. A perplexity increase is not an answer-error percentage.
+Q8 is the candidate retained for task qualification.
+
+Standard affine Q8 was rejected: perplexity increased 29.3%. Native quantized
+prefill reproduced that regression, excluding the new dense-prefill adapter as
+its cause. An FP16 Q8 experiment overflowed the feed-forward product at layer 46
+and was also rejected. Neither failed candidate is selected for serving. The
+converter retains BF16 activation range and selects symmetric Q8 by default
+when passed `--bits 8`; the Q4 default is unchanged.
+
+On the M5 Max, the accepted Q8 candidate's repeated 256-token coding-prompt sweep
+measured 17.08–17.10 tokens/s serially and 39.19–40.20 tokens/s with three drafts.
+Widths two, five, and seven were slower. Every tested width produced the same
+256 greedy tokens in both repetitions. The width-three runs were thermally
+nominal; some other rows were fair. This single-prompt agreement does not establish
+bit-exact speculative equivalence for all inputs. These calibration sweeps disabled
+the low-acceptance fallback to compare widths; they are separate from the
+production-policy comparison below.
+
+For a 7,173-token prompt, Q8 prefill measured 590.2–694.6 tokens/s serially and
+576.4–577.6 tokens/s when also preparing DFlash context. Subsequent speculative
+decode measured 29.0–29.6 tokens/s. Those four rows were thermally nominal; peak
+active MLX allocation was 39.29 GB. These raw runtime probes exclude model load,
+HTTP, admission, image preparation, and app interaction. They do not establish
+end-to-end session speed or desktop success.
+
+The matched production-policy comparison keeps the 40% acceptance threshold and
+its two-round evaluation enabled. Each row has two 256-token greedy runs, a
+2,048-token prefill chunk, and the same BF16 companion. No compiler work runs
+during these measurements.
+
+| Target | Prompt tokens | Serial decode (tokens/s) | Three-draft decode (tokens/s) |
+| --- | --- | --- | --- |
+| BF16 | 86 | 9.71–9.72 | 27.47–27.58 |
+| Symmetric Q8 | 86 | 16.94–16.98 | 40.20–41.76 |
+| BF16 | 7,173 | 9.15–9.47 | 9.08–9.12 |
+| Symmetric Q8 | 7,173 | 16.47–16.57 | 15.63–15.82 |
+
+On the longer prompt, both precisions accept only one of the first six proposals
+and switch to serial decoding. The calibration sweep's 29 tokens/s therefore
+does not describe this production-policy workload. The short-prompt runs remain
+speculative and thermally nominal. Some longer rows reach the fair thermal state;
+these sequential runs do not constitute an interleaved thermal comparison.
+
+For the longer prompt, BF16 prefill measures 667.2–685.4 tokens/s serially and
+587.5–755.4 when preparing DFlash context. Q8 measures 595.3–630.0 and
+618.1–625.8 respectively. Quantization does not improve every prefill measurement.
+Peak active MLX allocation is 67.40 GB for BF16 and 39.29 GB for Q8 on these text
+probes. These allocations exclude a vision workload's additional activations.
+
+All BF16 serial/speculative greedy sequences match in this comparison, as do
+Q8's short-prompt sequences. Q8's longer-prompt sequences differ at token 53 in
+both repetitions. Exact greedy equivalence is therefore not established for
+Q8; the independent likelihood and task checks remain separate evidence.
+
+Custom artifact paths use distinct served model IDs. Qualification requests must
+use the exact selected ID and verify its `installPath` in runtime status. Using the
+installed canonical Glimmer ID can select BF16 instead of a separate conversion.
+Both discovery routes now obtain custom-model Messages capabilities from the
+same runtime resolution used for generation; HTTP fixtures cover this behavior.
+
+The likelihood sample is a bounded English-text diagnostic. Recipe development
+included inspecting that diagnostic; its confidence interval is not a claim of
+unchanged general capability. Coding, image, tool, and desktop outcomes require
+separate matched evidence.
+
+### Q8 protocol and task checks
+
+The fixed 20-case official-SDK suite passes 19 cases for both Q8 and the matched
+BF16 baseline. All 20 have exact prepared token-count parity for each precision.
+The same failed wording case returns `first\nthen second` instead
+of `first\nsecond`; it remains recorded as a failure. A separate explicit
+12-character newline fixture passes for both precisions. Its result does not
+replace the original
+case. These checks cover arithmetic, Unicode, nested JSON types, aggregation,
+instruction/data separation, a tool schema containing nested references, and
+both API versions.
+
+Both 10-case advanced suites pass: version `2023-06-01` with regex search and
+version `2026-10-21` with BM25. The native image suite passes 11 checks, including
+image order, changed-image identity, actual prefix reuse, and zero-output
+warming. A repeat of the image suite captures an actual HTTP request ID on all
+11 responses, including accumulated SDK streams.
+
+The two-page PDF checks preserve page order, reject stale document identity
+after reversal, and report real immediate reuse with the accepted one-hour TTL.
+Active and queued disconnect recovery pass. A separate 18,786-token request is
+disconnected after telemetry reports its first 2,048-token prefill chunk and
+before any generated token. Its lease releases in 3.21 seconds; the next request
+returns `READY` in 2.41 seconds.
+
+Both fresh coding sessions pass the unchanged public tests, three independent
+hidden tests, and manual source review. Each reads the required files, repairs
+both modules, and recovers from the deliberate missing-test error. The first
+session takes 209.97 seconds across 10 native rounds and measures 18.51 decode
+tokens/s. The repeat takes 362.44 seconds, generates more tokens, and overlaps CPU
+repository validation; its timing is not an uncontended speed comparison.
+
+All eight Q8 end-to-end trials pass independent verification:
+
+| Task | First fresh run | Second fresh run | Independent evidence |
+| --- | --- | --- | --- |
+| Coding fixture | 209.97 s | 362.44 s | Public and hidden tests, source review, tool-error recovery |
+| Calculator `6 × 7` | 189.61 s | 190.56 s | Initial zero, expression, display `42`, screenshot, process identity |
+| Calculator `47 × 23` | 204.63 s | 198.85 s | Initial zero, expression, display `1,081`, screenshot, process identity |
+| MDN interface-to-method search | 351.90 s | 365.66 s | Visible search, interface and method clicks, URL, page text, screenshot, browser history |
+
+Each desktop run starts with a fresh app process or Chrome profile. The website
+runs search for `URLSearchParams`, open its interface page, and follow the
+`getAll()` link. Both identify the returned array and empty-array behavior. One
+focus error per website run is recovered without changing permissions or the
+reference loop. The trusted verifier closes only owned test instances afterward.
+
+Native decode across these eight sessions measures 14.92–18.51 tokens/s. The
+short greedy probe's roughly 40 tokens/s is not representative of every Claude
+Code or Cua round. Session times include inference, client work, tools, and app
+interaction. Queue wait is not separately instrumented; clients are sequential
+and sampled queue depth is zero. The earlier BF16 app runs predate the paired
+prefix-cache changes, so their speed difference cannot be attributed solely to
+quantization.
+
+Startup warmup is now performed before readiness for custom and managed Glimmer
+IDs. The Q8 native probe measures 9.10 seconds of loading and 41.76 seconds of
+warmup. The first real request then reports 0.00003 seconds of load time, starts
+generating in 0.34 seconds, and completes in 2.09 seconds. Native graph preparation
+is reported in the warmup load stage, rather than hidden inside a user's first
+request. This startup change does not alter model weights or generation policy.

@@ -33,7 +33,9 @@ enum MuseGlimmerWeightKeys {
 }
 
 public actor MuseGlimmerGenerator: ChatGenerator {
-    private static let prefillChunkSize = 512
+    static var prefillChunkSize: Int {
+        min(2048, max(128, ProcessInfo.processInfo.environment["MERERUN_MUSE_GLIMMER_PREFILL_CHUNK"].flatMap(Int.init) ?? 2048))
+    }
 
     private let modelID: String
     private var model: MuseGlimmerModel?
@@ -41,11 +43,13 @@ public actor MuseGlimmerGenerator: ChatGenerator {
     private var loadedConfig: MuseGlimmerConfig?
     var loadedModelPath: String?
     private var assistantModel: MuseGlimmerAssistantModel?
-    private var loadedAssistantPath: String?
+    var loadedAssistantPath: String?
+    var prefillAdapterIdentity = "native-prefill"
     private var warmupSignature: String?
     private var lastDFlashStats = MuseGlimmerDFlashStats()
-    public static let maximumCachedPrefixTokens = 32768
+    public static let maximumCachedPrefixTokens = 65536
     var prefixCache = ChatNativePrefixCache<MuseGlimmerCachedPrefix>(maximumTokens: MuseGlimmerGenerator.maximumCachedPrefixTokens)
+    var imageFeatureCache = ChatNativePrefixCache<MLXArray>(maximumEntries: 8, maximumTokens: 8192)
 
     public init(modelID: String = MuseGlimmerResources.modelId) {
         self.modelID = modelID
@@ -89,12 +93,14 @@ public actor MuseGlimmerGenerator: ChatGenerator {
 
     public func unload() {
         prefixCache.removeAll()
+        imageFeatureCache.removeAll()
         model = nil
         tokenizerAndTemplate = nil
         loadedConfig = nil
         loadedModelPath = nil
         assistantModel = nil
         loadedAssistantPath = nil
+        prefillAdapterIdentity = "native-prefill"
         warmupSignature = nil
         lastDFlashStats = MuseGlimmerDFlashStats()
         Memory.clearCache()
@@ -197,10 +203,13 @@ public actor MuseGlimmerGenerator: ChatGenerator {
             )
         }
         try Task.checkCancellation()
+        let densePrefillModules = try loadedModel.installQuantizedPrefill()
+        prefillAdapterIdentity = densePrefillModules > 0 ? "affine-dense-prefill-v1" : "native-prefill"
         model = loadedModel
         tokenizerAndTemplate = tokenizer
         loadedConfig = config
         prefixCache.removeAll()
+        imageFeatureCache.removeAll()
         loadedModelPath = root.path
         try loadAssistantIfAvailable(targetConfig: config, progressHandler: progressHandler)
         if warmup { try warmLoadedModelsIfNeeded(progressHandler: progressHandler) }
@@ -470,13 +479,17 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         let tokenBudget = request.cacheWarmOnly ? 0 : max(0, min(request.maxTokens, effectiveContext - promptTokens.count))
         let identity = prefixIdentity(request)
         let checkpoints = try prefixCheckpoints(request, tokens: promptTokens)
-        if request.cacheWarmOnly, checkpoints.isEmpty { throw ChatRequestIssue("cache_control", "no reusable text prefix fits the native cache limit of \(Self.maximumCachedPrefixTokens) retained tokens; place cache_control earlier in the text. Image KV caching is unsupported") }
+        if request.cacheWarmOnly, checkpoints.isEmpty { throw ChatRequestIssue("cache_control", "no reusable prefix fits the native cache limit of \(Self.maximumCachedPrefixTokens) retained tokens; place cache_control earlier in the prompt") }
+        let images = try cachedImageIdentities(tokens: promptTokens, imageBatch: imageBatch)
         let seed = request.prefixCachePolicy != nil && !checkpoints.isEmpty
-            ? prefixCache.lookup(identity: identity, tokens: promptTokens, ttls: checkpoints) : nil
+            ? prefixCache.lookup(identity: identity, tokens: promptTokens, ttls: checkpoints, isCompatible: { value, count in
+                value.images == images.filter { $0.offset < count }
+            }) : nil
         var cacheWrites = 0
         let minimumDFlashOutput = MuseGlimmerDFlashPolicy.minimumOutputTokens()
-        let useDFlash = assistantModel != nil && tokenBudget >= minimumDFlashOutput && checkpoints.isEmpty
-        let assistantCache = useDFlash ? assistantModel?.makeCache() : nil
+        let useDFlash = assistantModel != nil && tokenBudget >= minimumDFlashOutput
+        let prefillAssistant = useDFlash || !checkpoints.isEmpty ? assistantModel : nil
+        let assistantCache = seed?.value.assistantCache?.map { $0.fork() } ?? prefillAssistant?.makeCache()
         let prefillStart = Date()
         let cache = seed?.value.cache.map { $0.fork() } ?? model.makeCache()
         let prefilled = try chunkedPrefill(
@@ -484,13 +497,15 @@ public actor MuseGlimmerGenerator: ChatGenerator {
             tokens: promptTokens,
             imageBatch: imageBatch,
             cache: cache,
-            assistant: useDFlash ? assistantModel : nil,
+            assistant: prefillAssistant,
             assistantCache: assistantCache,
             progressHandler: progressHandler,
             offset: seed?.tokens.count ?? 0,
             initialLogits: seed?.value.logits,
             checkpoints: checkpoints,
-            cacheIdentity: identity
+            cacheIdentity: identity,
+            images: images,
+            retainImageFeatures: request.prefixCachePolicy != nil
         )
         let initialLogits = prefilled.logits
         cacheWrites = prefilled.cacheWrites
@@ -562,7 +577,7 @@ public actor MuseGlimmerGenerator: ChatGenerator {
                     speculativeTokens: assistantModel.map {
                         MuseGlimmerDFlashPolicy.speculativeTokens(maximum: $0.config.blockSize - 1)
                     } ?? 0,
-                    reason: !checkpoints.isEmpty ? "prefix cache uses target-only decoding" : "output budget is below \(minimumDFlashOutput) tokens"
+                    reason: "output budget is below \(minimumDFlashOutput) tokens"
                 )
             }
             decoded = try decode(
@@ -680,7 +695,7 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         return try preparedInput(request).0
     }
 
-    private func chunkedPrefill(
+    func chunkedPrefill(
         model: MuseGlimmerModel,
         tokens: [Int],
         imageBatch: MuseGlimmerImageBatch?,
@@ -691,13 +706,15 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         offset initialOffset: Int = 0,
         initialLogits: MLXArray? = nil,
         checkpoints: [Int: Int] = [:],
-        cacheIdentity: String
+        cacheIdentity: String,
+        images: [MuseGlimmerCachedImage] = [],
+        retainImageFeatures: Bool = false
     ) throws -> (logits: MLXArray, cacheWrites: Int) {
         try Task.checkCancellation()
+        if initialOffset == tokens.count, let initialLogits { return (initialLogits, 0) }
         let embeddings = try imageBatch.map {
-            try model.inputEmbeddings(
-                for: MLXArray(tokens.map(Int32.init)).reshaped(1, tokens.count), imageBatch: $0
-            )
+            try imageInputEmbeddings(model: model, tokens: tokens, batch: $0, identity: cacheIdentity,
+                                     retain: retainImageFeatures, offset: initialOffset)
         }
         if let embeddings { MLX.eval(embeddings) }
         var cacheWrites = 0
@@ -711,7 +728,7 @@ public actor MuseGlimmerGenerator: ChatGenerator {
             let capturedLayers = Set(assistant?.config.targetLayerIds ?? [])
             if let embeddings {
                 output = model.forwardPrefillDetailed(
-                    embeddings: embeddings[0..., offset..<end, 0...],
+                    embeddings: embeddings[0..., (offset - initialOffset)..<(end - initialOffset), 0...],
                     cache: cache, captureLayerIndices: capturedLayers
                 )
             } else {
@@ -730,7 +747,8 @@ public actor MuseGlimmerGenerator: ChatGenerator {
             logits = output.logits
             offset = end
             if let ttl = checkpoints[end] {
-                let value = MuseGlimmerCachedPrefix(cache: cache.map { $0.fork() }, logits: output.logits)
+                let value = MuseGlimmerCachedPrefix(cache: cache.map { $0.fork() }, logits: output.logits,
+                    assistantCache: assistantCache?.map { $0.fork() }, images: images.filter { $0.offset < end })
                 if prefixCache.store(identity: cacheIdentity, tokens: Array(tokens.prefix(end)), value: value, ttl: ttl) {
                     cacheWrites = max(cacheWrites, end - initialOffset)
                 }

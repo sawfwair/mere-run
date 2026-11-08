@@ -2,7 +2,7 @@
 
 Native Swift/MLX text-and-image inference for Meta Muse Glimmer 30B.
 
-The audited converter defaults to a selective Q4 layout that leaves the token
+The audited converter supports Q4 and Q8 and defaults to a selective Q4 layout that leaves the token
 embedding and complete vision tower in BF16. A smaller `compact` scope is
 available for explicit low-memory experiments. The loader discovers quantized
 modules from the checkpoint's `.scales` arrays and accepts both upstream and
@@ -78,10 +78,55 @@ bit-exact equivalence to one-token execution is not claimed. Either assistant is
 used only for output budgets of at least 32 tokens and returns to target-only
 decode after two rounds below 40% acceptance.
 
-Reusable text-prefix checkpoints select target-only decoding. Image requests can
-reuse marked text before the first image, including tool and system prefixes.
-No image-derived KV is retained. A marker spanning an image retains only text
-before the first image. Cache accounting reports that partial native reuse.
+Marked prefix checkpoints retain target KV and projected DFlash context together.
+Restoration forks both states, so speculative decoding remains available after a
+cache hit. Image KV is reusable when the actual resized pixels at that boundary
+match. A later screenshot does not invalidate an earlier causal prefix. The
+native prefix cache retains at most two entries and 65,536 tokens in total.
+
+A separate scoped feature cache retains at most eight images and 8,192 image
+feature tokens. It hashes the actual resized pixels, excludes images already
+covered by restored KV, and clears with model unloading or replacement. Feature
+reuse does not inflate the protocol's cache-read token count.
+
+`MERERUN_MUSE_GLIMMER_PREFILL_CHUNK` selects a prefill chunk size from 128 to
+2,048 tokens, clamped to that range; the default is 2,048. Cancellation is
+checked between chunks. Use matched prompt and image workloads when tuning it.
+The offline converter accepts `--bits 8` for selective Q8 with the same pinned
+BF16 source verification, atomic output, and artifact receipt as Q4.
+Q8 uses a symmetric affine encoding with an exact zero and codes fitted to the
+stored BF16 scale. Standard affine BF16 scale rounding can shift zero; the
+standard Q8 candidate failed its BF16 likelihood comparison. The symmetric
+encoding retains the native packed format and BF16 activation range. It requires
+no custom decode kernel. `--affine-method standard` reproduces the rejected Q8
+recipe; `--affine-method auto` selects symmetric Q8 and preserves standard Q4.
+
+To create a separate Q8 artifact without replacing the BF16 checkpoint, run:
+
+```sh
+uv run --script scripts/model-conversion/convert_muse_glimmer_mlx.py \
+  --source /path/to/upstream-bf16 \
+  --output /path/to/separate-glimmer-q8 \
+  --bits 8
+```
+
+For a custom root, use its served directory-based ID in Messages requests and
+`api connect claude-code --model`. Model discovery reports the resolved adapter's
+capabilities and effective limits for that ID.
+
+The November 8 M5 Max comparison scored 32,768 identical next-token positions.
+BF16 perplexity was 5.9902, symmetric Q8 was 5.9926, and standard Q4 was 6.2016.
+The paired Q8 increase was 0.04%; Q4 increased 3.53%. Both passed the predeclared
+5% limit, including the upper 95% window-bootstrap bound. These are bounded text
+diagnostics; see [Messages qualification](../../../docs/internals/messages-qualification.md)
+for task evidence and limitations.
+Q8 is selected for the 128 GB M5 Max comparison. The measurable Q4 regression
+is not accepted for this setup, and further Q4 task qualification was stopped.
+The existing Q4 conversion default remains unchanged for compatibility.
+
+`api serve --warmup` includes managed and custom Glimmer roots. Startup timing
+separates loading from warmup, and the server becomes ready after native target
+and DFlash warmup. `--no-warmup` postpones that work to the first generation.
 
 A paired 16-window, 8,192-token WikiText-2 candidate check measured 9.535
 perplexity for selective Q4 and 9.554 for compact Q4. The selective-minus-compact
@@ -92,3 +137,21 @@ not a substitute for a full release-quality evaluation.
 The official BF16 assistant is preferred even beside a Q4 target. An optional
 Q4 assistant measured slower at the same acceptance rate on this workload, so
 its converter is retained for reproducibility rather than selected first.
+
+On Metal generation 17 (M5), the pinned backend disables quantized NAX kernels
+for correctness. Large affine-Q4/Q8 prefill matrices instead reconstruct a
+transient dense weight and use dense BF16 NAX. Inputs below 128 rows, including
+serial decode and DFlash verification, retain packed quantized execution.
+`MERERUN_MUSE_GLIMMER_QUANTIZED_PREFILL` accepts `auto` (the default), `native`,
+or `dense`. Automatic selection requires generation 17 and macOS 26.2 or later.
+This preserves the backend safety guard and retains no second model copy.
+Dense reconstruction and native quantized matmul can round differently; evaluate
+quality with the selected execution path.
+
+The opt-in checkpoint harness is
+`MuseGlimmerCheckpointQualificationTests`. It records actual token sequences,
+per-token NLL, predicted token IDs, prefill and decode times, thermal state,
+and peak active MLX allocation. `scripts/reference-parity/compare_glimmer_quantization.py`
+compares identical held-out windows and reports a paired bootstrap interval.
+The float32 mathematical GPU fixtures use `MLX_ENABLE_TF32=0`; normal BF16 and
+quantized performance measurements retain the default accelerated settings.

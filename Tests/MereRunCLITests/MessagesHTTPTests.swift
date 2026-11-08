@@ -97,11 +97,12 @@ private actor MessagesHTTPModel: RuntimeChatModelLease {
 }
 
 final class MessagesHTTPTests: XCTestCase {
-    private func withServer(_ operation: (URL, RuntimeServingServices, MessagesHTTPModel) async throws -> Void) async throws {
+    private func withServer(modelID: String = MuseGlimmerResources.modelId,
+                            _ operation: (URL, RuntimeServingServices, MessagesHTTPModel) async throws -> Void) async throws {
         let model = MessagesHTTPModel()
-        let modelID = MuseGlimmerResources.modelId
-        let profile = try XCTUnwrap(ManagedModelCatalog.apiProfile(for: modelID))
-        let services = RuntimeServingServices(defaultModelID: modelID, modelPath: nil, engine: .textChatMuseGlimmer,
+        let profile = ManagedModelCatalog.apiProfile(for: modelID) ?? .runtimeFallback(for: .textChatMuseGlimmer)
+        let path = modelID == MuseGlimmerResources.modelId ? nil : "/fixtures/\(modelID)"
+        let services = RuntimeServingServices(defaultModelID: modelID, modelPath: path, engine: .textChatMuseGlimmer,
             maxActiveRequests: 1, chatPlanner: { input, _, context in
                 let prepared = try input.prepare(RuntimeChatConfiguration(modelID: modelID, engine: .textChatMuseGlimmer,
                     settings: .init(), profile: profile, contextSize: context, fallbackLoraPath: nil))
@@ -121,6 +122,28 @@ final class MessagesHTTPTests: XCTestCase {
             try await operation(URL(string: "http://127.0.0.1:\(port)")!, services, model)
             task.cancel(); _ = await task.result
         } catch { task.cancel(); _ = await task.result; throw error }
+    }
+    func testCustomArtifactDiscoveryPublishesResolvedAdapterCapabilities() async throws {
+        let id = "glimmer-q8-local"
+        try await withServer(modelID: id) { url, _, _ in
+            for route in ["v1/models/\(id)", "v1/models"] {
+                var request = URLRequest(url: url.appendingPathComponent(route))
+                request.setValue("test-key", forHTTPHeaderField: "x-api-key")
+                let (data, response) = try await URLSession.shared.data(for: request)
+                XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+                let decoded = try JSONDecoder().decode(ChatJSONValue.self, from: data)
+                let model = route == "v1/models" ? decoded.objectValue?["data"]?.arrayValue?.first {
+                    $0.objectValue?["id"] == .string(id)
+                } : decoded
+                let fields = try XCTUnwrap(model?.objectValue)
+                XCTAssertEqual(fields["id"], .string(id))
+                XCTAssertEqual(fields["display_name"], .string(id))
+                XCTAssertEqual(fields["max_input_tokens"], .number(32768))
+                XCTAssertEqual(fields["local_capabilities"]?.objectValue?["messages"], .bool(true))
+                XCTAssertEqual(fields["local_capabilities"]?.objectValue?["prompt_cache_max_tokens"], .number(65536))
+                XCTAssertEqual(fields["local_capabilities"]?.objectValue?["ordered_images"], .bool(true))
+            }
+        }
     }
     private func post(_ url: URL, prompt: String = "hello", extra: String = "", credential: String? = "test-key",
                       version: String? = nil, route: String = "v1/messages?beta=true") async throws -> (Data, HTTPURLResponse) {

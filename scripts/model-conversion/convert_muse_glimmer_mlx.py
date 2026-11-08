@@ -6,7 +6,7 @@
 # ]
 # ///
 
-"""Convert the exact Muse Glimmer 30B BF16 release to native MLX Q4."""
+"""Convert the exact Muse Glimmer 30B BF16 release to native MLX Q4 or Q8."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ SOURCE_REPOSITORY = "meta-models/Muse-Glimmer-30B"
 SOURCE_REVISION = "f84ecc3a0ea984a4c04542a84269e3d065350a6e"
 MODEL_ID = "vision-chat-muse-glimmer-30b"
 GROUP_SIZE = 64
-BITS = 4
+DEFAULT_BITS = 4
 MODE = "affine"
 EXPECTED_SOURCE_TENSORS = 1_436
 EXPECTED_QUANTIZED_TENSORS = {
@@ -185,6 +185,28 @@ def array_bytes(value: mx.array) -> int:
     return int(value.nbytes)
 
 
+def quantize_affine(value: mx.array, bits: int, method: str = "auto") -> tuple[mx.array, mx.array, mx.array]:
+    method = resolved_affine_method(bits, method)
+    if method == "standard":
+        return mx.quantize(value, group_size=GROUP_SIZE, bits=bits, mode=MODE)
+    if method != "symmetric" or bits not in (4, 8):
+        raise ValueError("Symmetric affine conversion supports Q4 and Q8")
+    # Fit codes to the stored scale, and place zero at an exactly representable
+    # power-of-two offset. Standard affine BF16 scale rounding can move zero.
+    midpoint = 1 << (bits - 1)
+    groups = value.astype(mx.float32).reshape(value.shape[0], -1, GROUP_SIZE)
+    scales = mx.maximum(mx.max(mx.abs(groups), axis=-1) / (midpoint - 1), 1e-7).astype(value.dtype)
+    biases = (-scales * midpoint).astype(value.dtype)
+    codes = mx.clip(mx.round(groups / scales.astype(mx.float32)[..., None]) + midpoint, 0, (1 << bits) - 1)
+    codes = codes.astype(mx.uint32).reshape(value.shape[0], -1, 32 // bits)
+    packed = mx.sum(codes << mx.arange(0, 32, bits, dtype=mx.uint32), axis=-1).astype(mx.uint32)
+    return packed, scales, biases
+
+
+def resolved_affine_method(bits: int, method: str) -> str:
+    return ("symmetric" if bits == 8 else "standard") if method == "auto" else method
+
+
 class ShardWriter:
     def __init__(self, root: Path, target_bytes: int) -> None:
         self.root = root
@@ -225,19 +247,19 @@ class ShardWriter:
         return weight_map, outputs
 
 
-def converted_config(source: Path) -> dict[str, Any]:
+def converted_config(source: Path, bits: int = DEFAULT_BITS) -> dict[str, Any]:
     config = json.loads((source / "config.json").read_text())
     if config.get("model_type") != "muse_glimmer":
         raise ValueError("Pinned config is not a muse_glimmer model")
     config["quantization"] = {
         "group_size": GROUP_SIZE,
-        "bits": BITS,
+        "bits": bits,
         "mode": MODE,
     }
     return config
 
 
-def write_manifest(output: Path) -> None:
+def write_manifest(output: Path, bits: int = DEFAULT_BITS) -> None:
     manifest = {
         "schemaVersion": 3,
         "id": MODEL_ID,
@@ -245,9 +267,9 @@ def write_manifest(output: Path) -> None:
         "family": "muse",
         "tier": "latest",
         "variant": "standard",
-        "precision": "int4",
+        "precision": f"int{bits}",
         "quantization": {
-            "bits": BITS,
+            "bits": bits,
             "groupSize": GROUP_SIZE,
             "scheme": "mlx-affine",
         },
@@ -271,7 +293,8 @@ def write_manifest(output: Path) -> None:
     )
 
 
-def convert(source: Path, output: Path, shard_bytes: int, quantization_scope: str) -> None:
+def convert(source: Path, output: Path, shard_bytes: int, quantization_scope: str, bits: int = DEFAULT_BITS, affine_method: str = "auto") -> None:
+    affine_method = resolved_affine_method(bits, affine_method)
     for filename, pin in PINNED_FILES.items():
         verify_file(source / filename, pin)
     source_index = load_source_index(source)
@@ -291,18 +314,13 @@ def convert(source: Path, output: Path, shard_bytes: int, quantization_scope: st
             value = arrays[key]
             source_count += 1
             if should_quantize(key, value, quantization_scope):
-                packed, scales, biases = mx.quantize(
-                    value,
-                    group_size=GROUP_SIZE,
-                    bits=BITS,
-                    mode=MODE,
-                )
+                packed, scales, biases = quantize_affine(value, bits, affine_method)
                 writer.append(key, packed)
                 writer.append(key.removesuffix(".weight") + ".scales", scales)
                 writer.append(key.removesuffix(".weight") + ".biases", biases)
                 quantized_count += 1
             else:
-                dense = value.astype(mx.bfloat16) if mx.issubdtype(value.dtype, mx.floating) else value
+                dense = value
                 writer.append(key, dense)
         del arrays
 
@@ -327,12 +345,12 @@ def convert(source: Path, output: Path, shard_bytes: int, quantization_scope: st
         json.dumps(index, indent=2, sort_keys=True) + "\n"
     )
     (output / "config.json").write_text(
-        json.dumps(converted_config(source), indent=2, sort_keys=True) + "\n"
+        json.dumps(converted_config(source, bits), indent=2, sort_keys=True) + "\n"
     )
     for filename in METADATA_FILES:
         shutil.copyfile(source / filename, output / filename)
         verify_file(output / filename, PINNED_FILES[filename])
-    write_manifest(output)
+    write_manifest(output, bits)
 
     artifacts = [
         {
@@ -344,7 +362,7 @@ def convert(source: Path, output: Path, shard_bytes: int, quantization_scope: st
     ]
     receipt = {
         "converter": "scripts/model-conversion/convert_muse_glimmer_mlx.py",
-        "converter_version": 1,
+        "converter_version": 4,
         "source": {
             "repository": SOURCE_REPOSITORY,
             "revision": SOURCE_REVISION,
@@ -352,12 +370,13 @@ def convert(source: Path, output: Path, shard_bytes: int, quantization_scope: st
             "tensor_count": source_count,
         },
         "quantization": {
-            "bits": BITS,
+            "bits": bits,
             "group_size": GROUP_SIZE,
             "mode": MODE,
             "scope": quantization_scope,
             "quantized_tensor_count": quantized_count,
             "dense_dtype": "bfloat16",
+            "affine_method": affine_method,
         },
         "tools": {"python": "3.14.4", "mlx": "0.32.0"},
         "artifacts": artifacts,
@@ -371,11 +390,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "Verify and convert Meta's pinned Muse Glimmer 30B BF16 release "
-            "to native MLX affine Q4/group-64 with selective or compact scope."
+            "to native MLX affine Q4 or Q8/group-64 with selective or compact scope."
         )
     )
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--affine-method", choices=["auto", "standard", "symmetric"], default="auto",
+                        help="auto preserves the standard Q4 recipe and uses zero-preserving symmetric Q8")
+    parser.add_argument("--bits", type=int, choices=[4, 8], default=DEFAULT_BITS)
     parser.add_argument("--shard-bytes", type=int, default=DEFAULT_SHARD_BYTES)
     parser.add_argument(
         "--quantization-scope",
@@ -403,7 +425,7 @@ def main() -> None:
         tempfile.mkdtemp(prefix=f".{output.name}.converting-", dir=output.parent)
     )
     try:
-        convert(source, temporary, args.shard_bytes, args.quantization_scope)
+        convert(source, temporary, args.shard_bytes, args.quantization_scope, args.bits, args.affine_method)
         os.replace(temporary, output)
     except BaseException:
         shutil.rmtree(temporary, ignore_errors=True)

@@ -4,28 +4,32 @@ import MLX
 struct MuseGlimmerCachedPrefix {
     let cache: [Gemma4AttentionCache]
     let logits: MLXArray
+    var assistantCache: [Gemma4AttentionCache]?
+    var images: [MuseGlimmerCachedImage] = []
+}
+
+struct MuseGlimmerCachedImage: Equatable {
+    let offset: Int
+    let identity: String
 }
 
 extension MuseGlimmerGenerator {
     func prefixIdentity(_ request: ChatRequest) -> String {
-        // Cached state ends before the first image; later images cannot affect causal text KV.
+        // Image identities are checked at each retained boundary, so later screenshots
+        // do not invalidate an earlier causal prefix.
         let media = request.messages.flatMap { message in
             (message.contentBlocks ?? []).compactMap { block -> String? in
                 if case .document(let document) = block { return document.identity }
                 return nil
             }
         }.joined(separator: "\u{0}")
-        return [request.prefixCachePolicy?.scope ?? "", loadedModelPath ?? "", "atem-v1", String(request.showThinking),
+        return [request.prefixCachePolicy?.scope ?? "", loadedModelPath ?? "", loadedAssistantPath ?? "target-only", prefillAdapterIdentity, "atem-v2", String(request.showThinking),
          String(request.reasoningEffort ?? -1), String(request.maxContextTokens ?? 0), request.kvCacheMode?.rawValue ?? "default", media].joined(separator: "\u{0}")
     }
 
     func prefixCheckpoints(_ request: ChatRequest, tokens: [Int]) throws -> [Int: Int] {
         guard let policy = request.prefixCachePolicy, let tokenizerAndTemplate else { return [:] }
-        // Never retain image-derived KV. A marked text prefix before the first
-        // image remains reusable when later screenshots change.
-        let firstImage = [tokenizerAndTemplate.imageStartTokenId, tokenizerAndTemplate.imageTokenId]
-            .compactMap { tokens.firstIndex(of: $0) }.min() ?? tokens.count
-        let maximumPrefix = min(Self.maximumCachedPrefixTokens, firstImage)
+        let maximumPrefix = min(Self.maximumCachedPrefixTokens, tokens.count)
         var boundaries = policy.boundaries
         if let ttl = policy.wholePromptTTL, let last = request.messages.indices.last {
             boundaries.append(.init(messageIndex: last, blockCount: request.messages[last].contentBlocks?.count ?? 1, ttlSeconds: ttl))
@@ -63,20 +67,32 @@ extension MuseGlimmerGenerator {
             let prefix = try tokenizerAndTemplate.encodeForGeneration(messages: prefixMessages, tools: request.tools,
                 reasoningStrength: Self.reasoningStrength(request.reasoningEffort), currentDate: formatter.string(from: Date()),
                 maxLength: Int.max, truncate: false, addGenerationPrompt: false)
-            if prefix.contains(tokenizerAndTemplate.imageStartTokenId) || prefix.contains(tokenizerAndTemplate.imageTokenId) {
-                // A marker covering an image also covers the earlier text. Retain
-                // that causal prefix without claiming to cache any image state.
-                if firstImage > 0, firstImage <= Self.maximumCachedPrefixTokens {
-                    result[firstImage] = max(result[firstImage] ?? 0, boundary.ttlSeconds)
-                }
-                continue
-            }
-            let count = Self.cacheBoundaryTokenCount(prepared: tokens, renderedBoundary: prefix)
+            // Rendered image placeholders are expanded before comparing with the
+            // real prompt. Their pixels are authenticated separately on lookup.
+            let expanded = try MuseGlimmerImageProcessor.expandedPromptTokens(prefix,
+                tokenCounts: imageTokenCounts(in: prefix, prepared: tokens),
+                imageTokenId: tokenizerAndTemplate.imageTokenId, imageStartTokenId: tokenizerAndTemplate.imageStartTokenId,
+                imageEndTokenId: tokenizerAndTemplate.imageEndTokenId)
+            let count = min(maximumPrefix, Self.cacheBoundaryTokenCount(prepared: tokens, renderedBoundary: expanded))
             if count > 0, count <= maximumPrefix {
                 result[count] = max(result[count] ?? 0, boundary.ttlSeconds)
             }
         }
         return result
+    }
+
+    private func imageTokenCounts(in prefix: [Int], prepared: [Int]) -> [Int] {
+        guard let tokenizerAndTemplate else { return [] }
+        let imageToken = tokenizerAndTemplate.imageTokenId
+        var counts: [Int] = []
+        var previousWasImage = false
+        for token in prepared {
+            if token == imageToken {
+                if previousWasImage { counts[counts.count - 1] += 1 } else { counts.append(1) }
+            }
+            previousWasImage = token == imageToken
+        }
+        return Array(counts.prefix(prefix.filter { $0 == imageToken }.count))
     }
 
     static func cacheBoundaryTokenCount(prepared: [Int], renderedBoundary: [Int]) -> Int {

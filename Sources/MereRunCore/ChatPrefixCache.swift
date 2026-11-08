@@ -46,10 +46,12 @@ struct ChatNativePrefixCache<Value> {
     init(maximumEntries: Int = 2, maximumTokens: Int = 8192) {
         self.maximumEntries = maximumEntries; self.maximumTokens = maximumTokens
     }
-    mutating func lookup(identity: String, tokens: [Int], ttls: [Int: Int] = [:], now: Date = Date()) -> Entry? {
+    mutating func lookup(identity: String, tokens: [Int], ttls: [Int: Int] = [:], now: Date = Date(),
+                         isCompatible: (Value, Int) -> Bool = { _, _ in true }) -> Entry? {
         entries.removeAll { $0.expires <= now }
         let boundaryLimit = ttls.keys.max() ?? Int.max
-        guard let index = entries.indices.filter({ entries[$0].identity == identity && entries[$0].tokens.count <= boundaryLimit && tokens.starts(with: entries[$0].tokens) })
+        guard let index = entries.indices.filter({ entries[$0].identity == identity && entries[$0].tokens.count <= boundaryLimit
+            && tokens.starts(with: entries[$0].tokens) && isCompatible(entries[$0].value, entries[$0].tokens.count) })
             .max(by: { entries[$0].tokens.count < entries[$1].tokens.count }) else { return nil }
         sequence += 1; entries[index].lastAccess = sequence
         if let requested = ttls[entries[index].tokens.count], [300, 3600].contains(requested) {

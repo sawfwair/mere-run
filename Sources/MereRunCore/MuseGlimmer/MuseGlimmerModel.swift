@@ -656,15 +656,12 @@ final class MuseGlimmerBackbone: Module {
 
     func embeddings(
         inputIds: MLXArray,
-        imageBatch: MuseGlimmerImageBatch?
+        imageBatch: MuseGlimmerImageBatch?,
+        imageFeatures: MLXArray? = nil
     ) throws -> MLXArray {
         var hidden = languageModel.embeddings(inputIds)
         guard let imageBatch else { return hidden }
-        var features = visionTower(imageBatch.pixelValues, grids: imageBatch.grids)
-        features = museGlimmerRMSNormNoScale(
-            visionProjection(visionAdapter(features)),
-            eps: config.textConfig.rmsNormEps
-        )
+        let features = imageFeatures ?? encodeImages(imageBatch)
         let ids = inputIds.asType(.int32)
         MLX.eval(ids)
         let rawIds = ids.asArray(Int32.self)
@@ -691,6 +688,13 @@ final class MuseGlimmerBackbone: Module {
         }
         hidden = parts.count == 1 ? parts[0] : MLX.concatenated(parts, axis: 1)
         return hidden
+    }
+
+    func encodeImages(_ imageBatch: MuseGlimmerImageBatch) -> MLXArray {
+        museGlimmerRMSNormNoScale(
+            visionProjection(visionAdapter(visionTower(imageBatch.pixelValues, grids: imageBatch.grids))),
+            eps: config.textConfig.rmsNormEps
+        )
     }
 }
 
@@ -794,6 +798,10 @@ public final class MuseGlimmerModel: Module, @unchecked Sendable {
 
     func inputEmbeddings(for inputIds: MLXArray, imageBatch: MuseGlimmerImageBatch) throws -> MLXArray {
         try model.embeddings(inputIds: inputIds, imageBatch: imageBatch)
+    }
+
+    func inputEmbeddings(for inputIds: MLXArray, imageBatch: MuseGlimmerImageBatch, imageFeatures: MLXArray) throws -> MLXArray {
+        try model.embeddings(inputIds: inputIds, imageBatch: imageBatch, imageFeatures: imageFeatures)
     }
 
     func rawOutputLogits(from hidden: MLXArray) -> MLXArray {

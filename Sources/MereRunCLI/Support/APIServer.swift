@@ -458,6 +458,7 @@ actor CodeGenServer {
             installedModelIDs: installedModelIDs,
             serverContextSize: contextSize
         )
+        let messagesCapabilities = try await pool.messagesCapabilities(for: models.data.map(\.id))
         if !includeLoopbackArtifactModels {
             models.data.removeAll { APIVFXArtifactRoutePolicy.modelIDs.contains($0.id) }
         }
@@ -486,7 +487,8 @@ actor CodeGenServer {
                 limit = parsed
             } else { limit = nil }
             let page = try MessagesModelPage.page(models.data, limit: limit,
-                                                 after: query["after_id"].map(String.init), before: query["before_id"].map(String.init))
+                                                 after: query["after_id"].map(String.init), before: query["before_id"].map(String.init),
+                                                 capabilities: messagesCapabilities)
             return try Self.messagesJSON(page, requestID: "req_" + UUID().uuidString)
         } catch { return Self.messagesError(error, requestID: "req_" + UUID().uuidString) }
     }
@@ -500,7 +502,8 @@ actor CodeGenServer {
             guard let model = response.data.first(where: { $0.id == id }) else {
                 throw MessagesFailure(status: 404, type: "not_found_error", message: "Model '\(id)' is not installed or served.")
             }
-            return try Self.messagesJSON(MessagesModelDiscovery(model), requestID: requestID)
+            let capabilities = try await pool.messagesCapabilities(for: [id])
+            return try Self.messagesJSON(MessagesModelDiscovery(model, capabilities: capabilities[id]), requestID: requestID)
         } catch { return Self.messagesError(error, requestID: requestID) }
     }
 

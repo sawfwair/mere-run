@@ -150,6 +150,15 @@ final class MessagesContractTests: XCTestCase {
         }
     }
 
+    func testGlimmerDisplayNameDoesNotClaimTheCatalogDefaultQuantization() throws {
+        let profile = try XCTUnwrap(ManagedModelCatalog.apiProfile(for: MuseGlimmerResources.modelId))
+        let model = APIServerContract.chatModel(id: MuseGlimmerResources.modelId,
+            name: "Muse-Glimmer-30B-MLX-4bit", profile: profile, contextWindow: 65536, maximumOutputTokens: 4096)
+        let json = try JSONDecoder().decode(ChatJSONValue.self, from: JSONEncoder().encode(MessagesModelDiscovery(model)))
+        XCTAssertEqual(json.objectValue?["display_name"], .string("Muse Glimmer 30B"))
+        XCTAssertEqual(json.objectValue?["name"], .string("Muse-Glimmer-30B-MLX-4bit"), "Preserve existing OpenAI discovery fields")
+    }
+
     func testDiscoveryPaginationPreservesOpenAIFields() throws {
         let models = APIServerContract.modelsResponse(modelIds: ["b", "a", "c"]).data
         let page = try MessagesModelPage.page(models, limit: 1, after: "a", before: nil)

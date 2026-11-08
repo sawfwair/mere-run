@@ -68,12 +68,20 @@ def qualify(args, report):
         start = time.monotonic()
         response = operation()
         row = {"name": name, "seconds": time.monotonic() - start, "request_id": getattr(response, "_request_id", None)}
+        assert row["request_id"], "Response is missing a request ID"
         if hasattr(response, "usage"):
             row.update(usage=response.usage.model_dump(), stop_reason=response.stop_reason, blocks=[b.type for b in response.content])
         else:
             row.update(input_tokens=response.input_tokens, context_management=response.model_dump().get("context_management"))
         report["cases"].append(row)
         print(json.dumps(row), flush=True)
+        return response
+
+    def stream_message(stream):
+        response = stream.get_final_message()
+        # SDK stream accumulation does not copy the HTTP request ID onto the
+        # final message, unlike buffered responses. Preserve the actual header.
+        response._request_id = stream.response.headers.get("request-id") or stream.response.headers.get("x-request-id")
         return response
 
     def vision():
@@ -99,7 +107,7 @@ def qualify(args, report):
             def generate_image():
                 with api.stream(**options, max_tokens=min(args.max_tokens, 256)) as stream:
                     stream.until_done()
-                    return stream.get_final_message()
+                    return stream_message(stream)
 
             result = measured("vision_order_stream", generate_image)
             text = "".join(block.text for block in result.content if block.type == "text").strip()
@@ -143,7 +151,7 @@ def qualify(args, report):
                 def generate_cached_image():
                     with api.stream(**options, max_tokens=min(args.max_tokens, 256)) as stream:
                         stream.until_done()
-                        return stream.get_final_message()
+                        return stream_message(stream)
 
                 result = measured("vision_text_prefix_reuse", generate_cached_image)
                 usage = result.usage
@@ -218,7 +226,7 @@ def qualify(args, report):
             for event in stream:
                 if event.type == "message_start":
                     starts.append(event.message)
-            return stream.get_final_message()
+            return stream_message(stream)
 
     result = measured("deferred_search_stream", generate)
     assert len(starts) == 1

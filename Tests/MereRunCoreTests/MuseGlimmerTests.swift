@@ -5,6 +5,35 @@ import MediaIO
 import XCTest
 
 final class MuseGlimmerTests: MereRunCoreTestCase {
+    func testPairedPrefixRestorePreservesSpeculativeOutputAndSnapshotIsolation() async throws {
+        try await MuseGlimmerGenerator().checkPairedPrefix(config: Self.config(), assistantConfig: Self.dflash2Config())
+    }
+
+    func testCachedImageFeaturesMatchMultipleImagesAndRespectScopeAndIdentity() async throws {
+        try await MuseGlimmerGenerator().checkImageFeatures(config: Self.config())
+    }
+    func testDensePrefillRetainsPackedDecodeAndCheckpointParameters() {
+        for bits in [4, 8] {
+            let weight = MLX.sin(MLXArray(0..<8192).asType(.float32) * 0.037).reshaped(128, 64).asType(.bfloat16)
+            let quantized = QuantizedLinear(weight: weight, bias: nil, groupSize: 64, bits: bits)
+            let packed = PortableQuantizedLinear(weight: quantized.weight, bias: nil, scales: quantized.scales, biases: quantized.biases, groupSize: 64, bits: bits)
+            let adapted = MuseGlimmerPrefillLinear(packed)
+            XCTAssertEqual(Set(adapted.parameters().flattened().map(\.0)), Set(packed.parameters().flattened().map(\.0)))
+            XCTAssertEqual(adapted.weight.dtype, .uint32)
+            for rows in [1, 4, 16] {
+                let input = MLXArray.ones([1, rows, 64], dtype: .bfloat16)
+                XCTAssertEqual(MLX.max(MLX.abs(adapted(input) - packed(input))).item(Float.self), 0)
+            }
+            let input = MLX.cos(MLXArray(0..<8192).asType(.float32) * 0.019).reshaped(1, 128, 64).asType(.bfloat16)
+            let actual = adapted(input)
+            let expected = packed(input)
+            XCTAssertEqual(actual.dtype, .bfloat16)
+            let relative = MLX.sqrt(MLX.mean(MLX.square(actual.asType(.float32) - expected.asType(.float32)))
+                / MLX.mean(MLX.square(expected.asType(.float32)))).item(Float.self)
+            XCTAssertLessThan(relative, 0.01)
+        }
+    }
+
     func testQuantizedPatchProjectionUsesScaleDTypeAndFloat32PositionInterpolation() throws {
         let config = try JSONDecoder().decode(MuseGlimmerConfig.self, from: Data(
             Self.configJSON.replacingOccurrences(of: #""patch_size":2"#, with: #""patch_size":4"#).utf8
@@ -886,4 +915,78 @@ final class MuseGlimmerTests: MereRunCoreTestCase {
       }
     }
     """#
+}
+
+private extension MuseGlimmerGenerator {
+    func checkPairedPrefix(config: MuseGlimmerConfig, assistantConfig: MuseGlimmerAssistantConfig) throws {
+        let target = MuseGlimmerModel(config: config)
+        let assistant = MuseGlimmerAssistantModel(config: assistantConfig)
+        let tokens = [1, 4, 7, 2, 5, 8, 3]
+        let targetCache = target.makeCache()
+        let draftCache = assistant.makeCache()
+        let fresh = try chunkedPrefill(model: target, tokens: tokens, imageBatch: nil, cache: targetCache,
+            assistant: assistant, assistantCache: draftCache, progressHandler: nil, checkpoints: [4: 300], cacheIdentity: "fixture")
+        let saved = try XCTUnwrap(prefixCache.lookup(identity: "fixture", tokens: tokens)?.value)
+        let savedAssistant = try XCTUnwrap(saved.assistantCache)
+        XCTAssertTrue(saved.cache.allSatisfy { $0.offset == 4 })
+        XCTAssertTrue(savedAssistant.allSatisfy { $0.offset == 4 })
+        let restoredTarget = saved.cache.map { $0.fork() }
+        let restoredAssistant = savedAssistant.map { $0.fork() }
+        let restored = try chunkedPrefill(model: target, tokens: tokens, imageBatch: nil, cache: restoredTarget,
+            assistant: assistant, assistantCache: restoredAssistant, progressHandler: nil, offset: 4,
+            initialLogits: saved.logits, cacheIdentity: "fixture")
+        XCTAssertEqual(MLX.max(MLX.abs(fresh.logits - restored.logits)).item(Float.self), 0)
+        let sampling = GenerationConfig(maxTokens: 12, temperature: 0, topK: 0, topP: 1, minP: 0, repetitionPenalty: 1)
+        func decode(_ logits: MLXArray, _ cache: [Gemma4AttentionCache], _ draft: [Gemma4AttentionCache]) throws -> MuseGlimmerDFlashDecodeResult {
+            try MuseGlimmerDFlashDecoder.decode(initialLogits: logits, target: target, targetCache: cache,
+                assistant: assistant, assistantCache: draft, generationConfig: sampling, eosTokens: [], tokenBudget: 12,
+                historySeedTokens: tokens, speculativeTokens: 3, assistantModelPath: nil)
+        }
+        let expected = try decode(fresh.logits, targetCache, draftCache)
+        let actual = try decode(restored.logits, restoredTarget, restoredAssistant)
+        XCTAssertEqual(actual.generatedTokens, expected.generatedTokens)
+        XCTAssertGreaterThan(actual.stats.rounds, 0)
+        XCTAssertTrue(saved.cache.allSatisfy { $0.offset == 4 })
+        XCTAssertTrue(savedAssistant.allSatisfy { $0.offset == 4 })
+    }
+
+    func checkImageFeatures(config: MuseGlimmerConfig) throws {
+        let target = MuseGlimmerModel(config: config)
+        target.update(parameters: target.parameters().mapValues { $0.asType(.bfloat16) })
+        let pixels = Array(0..<192).map { Float($0) / 192 }
+        let batch = MuseGlimmerImageBatch(pixelValues: MLXArray(pixels, [8, 24]),
+            grids: [(1, 2, 2), (1, 2, 2)], tokenCounts: [1, 1], identities: ["first", "second"])
+        let tokens = [1, 9, 3, 9, 4]
+        let expected = try target.inputEmbeddings(for: MLXArray(tokens.map(Int32.init)).reshaped(1, tokens.count), imageBatch: batch)
+        let actual = try imageInputEmbeddings(model: target, tokens: tokens, batch: batch, identity: "scope-one", retain: true)
+        XCTAssertEqual(MLX.max(MLX.abs(actual - expected)).item(Float.self), 0)
+        XCTAssertEqual(imageFeatureCache.entries.count, 2)
+        let repeated = try imageInputEmbeddings(model: target, tokens: tokens, batch: batch, identity: "scope-one", retain: true)
+        XCTAssertEqual(MLX.max(MLX.abs(actual - repeated)).item(Float.self), 0)
+        XCTAssertEqual(imageFeatureCache.entries.count, 2)
+        _ = try imageInputEmbeddings(model: target, tokens: tokens, batch: batch, identity: "scope-two", retain: true)
+        XCTAssertEqual(imageFeatureCache.entries.count, 4)
+        var changed = batch
+        changed.identities[1] = "changed-second"
+        _ = try imageInputEmbeddings(model: target, tokens: tokens, batch: changed, identity: "scope-one", retain: true)
+        XCTAssertEqual(imageFeatureCache.entries.count, 5)
+        imageFeatureCache.removeAll()
+        let suffix = try imageInputEmbeddings(model: target, tokens: tokens, batch: batch, identity: "scope-one", retain: true, offset: 3)
+        XCTAssertEqual(MLX.max(MLX.abs(suffix - expected[0..., 3..., 0...])).item(Float.self), 0)
+        XCTAssertEqual(imageFeatureCache.entries.count, 1, "Images already covered by KV do not run through the vision tower")
+        let larger = MuseGlimmerImageBatch(pixelValues: MLXArray(Array(0..<768).map { Float($0) / 768 }, [32, 24]),
+            grids: [(1, 4, 4), (1, 4, 4)], tokenCounts: [4, 4], identities: ["larger-first", "larger-second"])
+        let expanded = [1, 9, 9, 9, 9, 3, 9, 9, 9, 9, 4]
+        let complete = try target.inputEmbeddings(for: MLXArray(expanded.map(Int32.init)).reshaped(1, expanded.count), imageBatch: larger)
+        for offset in [3, 7] {
+            imageFeatureCache.removeAll()
+            let partial = try imageInputEmbeddings(model: target, tokens: expanded, batch: larger,
+                identity: "scope-one", retain: true, offset: offset)
+            XCTAssertEqual(MLX.max(MLX.abs(partial - complete[0..., offset..., 0...])).item(Float.self), 0,
+                "A checkpoint inside an expanded image must restore the remaining feature rows exactly")
+        }
+        unload()
+        XCTAssertTrue(imageFeatureCache.entries.isEmpty)
+        XCTAssertTrue(prefixCache.entries.isEmpty)
+    }
 }

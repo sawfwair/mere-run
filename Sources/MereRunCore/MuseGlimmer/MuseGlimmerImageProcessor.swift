@@ -1,11 +1,17 @@
 import Foundation
 import MediaIO
 import MLX
+#if canImport(CryptoKit)
+import CryptoKit
+#else
+import Crypto
+#endif
 
 struct MuseGlimmerImageBatch {
     let pixelValues: MLXArray
     let grids: [(temporal: Int, height: Int, width: Int)]
     let tokenCounts: [Int]
+    var identities: [String] = []
 }
 
 enum MuseGlimmerImageProcessor {
@@ -21,6 +27,7 @@ enum MuseGlimmerImageProcessor {
         var flattened: [Float] = []
         var grids: [(Int, Int, Int)] = []
         var tokenCounts: [Int] = []
+        var identities: [String] = []
 
         for reference in imageReferences {
             let image = try decodeImage(reference)
@@ -36,6 +43,9 @@ enum MuseGlimmerImageProcessor {
             // retain their existing interpolation contract.
             let resized = try resizedLanczos(image, width: target.width, height: target.height)
             let chw = MediaImageIO.rgbCHWFloat(resized, normalizedToMinusOneToOne: true)
+            let digest = chw.withUnsafeBytes { SHA256.hash(data: Data($0)) }
+                .map { String(format: "%02x", $0) }.joined()
+            identities.append("\(resized.width)x\(resized.height):\(digest)")
             let gridHeight = resized.height / config.patchSize
             let gridWidth = resized.width / config.patchSize
             appendStaticImagePatches(
@@ -53,7 +63,8 @@ enum MuseGlimmerImageProcessor {
         return MuseGlimmerImageBatch(
             pixelValues: MLXArray(flattened, [flattened.count / patchDimension, patchDimension]),
             grids: grids,
-            tokenCounts: tokenCounts
+            tokenCounts: tokenCounts,
+            identities: identities
         )
     }
 

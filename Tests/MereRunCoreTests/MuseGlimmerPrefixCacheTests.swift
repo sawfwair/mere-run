@@ -4,7 +4,7 @@ import XCTest
 
 @MainActor
 final class MuseGlimmerPrefixCacheTests: XCTestCase {
-    func testCoveringMarkersCacheOnlyTextBeforeTheFirstImage() async throws {
+    func testCoveringMarkersIncludeImageStateWithExpandedBoundaries() async throws {
         guard let path = ProcessInfo.processInfo.environment["MERERUN_GLIMMER_TOKENIZER_ROOT"] else {
             throw XCTSkip("Set MERERUN_GLIMMER_TOKENIZER_ROOT to run the native tokenizer cache-boundary fixture")
         }
@@ -35,7 +35,7 @@ final class MuseGlimmerPrefixCacheTests: XCTestCase {
         let firstImage = try XCTUnwrap(tokens.firstIndex(of: tokenizer.imageStartTokenId))
         let checkpoints = try await generator.prefixCheckpoints(request, tokens: tokens)
         XCTAssertFalse(checkpoints.isEmpty)
-        XCTAssertTrue(checkpoints.keys.allSatisfy { $0 <= firstImage })
+        XCTAssertTrue(checkpoints.keys.contains { $0 > firstImage })
         let identity = await generator.prefixIdentity(request)
         request.messages[1] = ChatMessage(role: .user, blocks: [
             .text("Inspect this image."), .image(reference: "changed", identity: "two"), .text("Answer."),
@@ -46,12 +46,15 @@ final class MuseGlimmerPrefixCacheTests: XCTestCase {
             .init(messageIndex: 1, blockCount: 3, ttlSeconds: 300),
         ], wholePromptTTL: 300)
         let afterImage = try await generator.prefixCheckpoints(request, tokens: tokens)
-        XCTAssertEqual(afterImage, [firstImage: 300], "A covering marker retains only the preceding text state")
+        XCTAssertEqual(afterImage.count, 1)
+        XCTAssertTrue(afterImage.keys.allSatisfy { $0 > firstImage })
+        XCTAssertEqual(Array(afterImage.values), [300])
         request.prefixCachePolicy = .init(scope: "private", boundaries: [
             .init(messageIndex: 1, blockCount: 3, ttlSeconds: 3600),
         ], wholePromptTTL: 300)
         let longerTTL = try await generator.prefixCheckpoints(request, tokens: tokens)
-        XCTAssertEqual(longerTTL, [firstImage: 3600])
+        XCTAssertEqual(Set(longerTTL.keys), Set(afterImage.keys))
+        XCTAssertEqual(Array(longerTTL.values), [3600])
         request.prefixCachePolicy = .init(scope: "private", boundaries: [
             .init(messageIndex: 0, blockCount: 1, ttlSeconds: 300),
         ], wholePromptTTL: nil)

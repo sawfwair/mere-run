@@ -2,6 +2,19 @@ import XCTest
 @testable import MereRunCore
 
 final class ChatPrefixCacheTests: XCTestCase {
+    func testChangedImageRejectsItsKVButRetainsAnEarlierCompatiblePrefix() {
+        var cache = ChatNativePrefixCache<[String]>()
+        cache.store(identity: "scope", tokens: [1, 2], value: [], ttl: 300)
+        cache.store(identity: "scope", tokens: [1, 2, 9, 9, 3], value: ["old-pixels"], ttl: 300)
+        let tokens = [1, 2, 9, 9, 3, 4]
+        XCTAssertEqual(cache.lookup(identity: "scope", tokens: tokens, isCompatible: { images, count in
+            images == (count > 2 ? ["old-pixels"] : [])
+        })?.tokens.count, 5)
+        XCTAssertEqual(cache.lookup(identity: "scope", tokens: tokens, isCompatible: { images, count in
+            images == (count > 2 ? ["new-pixels"] : [])
+        })?.tokens.count, 2)
+        XCTAssertNil(cache.lookup(identity: "other-scope", tokens: tokens))
+    }
     func testMovingAMarkerBackDoesNotReuseABeyondBoundaryPrefix() {
         var cache = ChatNativePrefixCache<String>()
         XCTAssertTrue(cache.store(identity: "scope", tokens: [1, 2, 3, 4], value: "long", ttl: 300))
@@ -35,9 +48,9 @@ final class ChatPrefixCacheTests: XCTestCase {
     }
     func testNativeCacheCanRetainALargeClientToolPrefix() {
         var cache = ChatNativePrefixCache<String>(maximumTokens: MuseGlimmerGenerator.maximumCachedPrefixTokens)
-        let tokens = Array(0..<19000)
+        let tokens = Array(0..<(MuseGlimmerGenerator.maximumCachedPrefixTokens / 2 + 1))
         XCTAssertTrue(cache.store(identity: "client", tokens: tokens, value: "native", ttl: 300))
-        XCTAssertEqual(cache.lookup(identity: "client", tokens: tokens + [42])?.tokens.count, 19000)
+        XCTAssertEqual(cache.lookup(identity: "client", tokens: tokens + [42])?.tokens.count, tokens.count)
         XCTAssertTrue(cache.store(identity: "client", tokens: tokens + [42], value: "updated", ttl: 300))
         XCTAssertEqual(cache.entries.count, 1, "The aggregate token limit bounds retained GPU state")
         XCTAssertFalse(cache.store(identity: "client", tokens: Array(0...MuseGlimmerGenerator.maximumCachedPrefixTokens), value: "too large", ttl: 300))

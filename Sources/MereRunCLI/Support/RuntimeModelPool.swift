@@ -700,6 +700,7 @@ actor RuntimeModelPool {
             if warmup, Self.shouldWarmDefaultModel(modelID: resolved.id, engine: resolved.engine) {
                 let isQwen4Exp = Self.isQwen4ExpWarmupModel(resolved.id)
                 let isDiffusionGemma = resolved.engine == .textChatDiffusionGemma
+                let isGlimmer = resolved.engine == .textChatMuseGlimmer
                 let warmupStart = currentDate()
                 let response = try await loaded.chat(
                     ChatRequest(
@@ -724,9 +725,9 @@ actor RuntimeModelPool {
                     warmupPrefillSeconds: timing?.prefillSeconds,
                     warmupDecodeSeconds: timing?.decodeSeconds,
                     warmupTimeToFirstTokenSeconds: timing.map(Self.timeToFirstToken),
-                    graphCompilationAccounting: isQwen4Exp || isDiffusionGemma
-                        ? "included_in_warmup_prefill_and_decode"
-                        : "included_in_warmup_prefill",
+                    graphCompilationAccounting: isGlimmer ? "included_in_warmup_load" : (
+                        isQwen4Exp || isDiffusionGemma ? "included_in_warmup_prefill_and_decode" : "included_in_warmup_prefill"
+                    ),
                     completedAt: currentDate()
                 )
             }
@@ -740,6 +741,7 @@ actor RuntimeModelPool {
         modelID: String,
         engine: RuntimeServingEngine
     ) -> Bool {
+        if engine == .textChatMuseGlimmer { return true }
         if engine == .textChatDiffusionGemma,
            modelID == DiffusionGemmaResources.modelID {
             return true
@@ -764,6 +766,13 @@ actor RuntimeModelPool {
             + timing.prefillSeconds
             + (timing.cacheConversionSeconds ?? 0)
             + (timing.firstTokenSeconds ?? 0)
+    }
+
+    func messagesCapabilities(for modelIDs: [String]) throws -> [String: MessagesCapabilities] {
+        try Dictionary(uniqueKeysWithValues: modelIDs.map { id in
+            let resolved = try resolveModel(id, requireInstalled: false)
+            return (id, MessagesCapabilities.adapter(resolved.engine, profile: resolved.apiProfile))
+        })
     }
 
     func modelsResponse(
