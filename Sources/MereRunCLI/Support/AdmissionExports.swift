@@ -10,7 +10,12 @@ extension RuntimeRequestProgress {
         case .encoding: stage = .encoding
         case .generating: stage = .generating
         }
-        self.init(stage: stage, message: progress.message)
+        let message: String?
+        switch progress.event {
+        case .text(let text), .reasoning(let text): message = text
+        default: message = progress.decodedText == nil ? progress.message : nil
+        }
+        self.init(stage: stage, message: message)
     }
 }
 

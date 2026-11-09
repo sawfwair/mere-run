@@ -6,6 +6,12 @@ import XCTest
 final class RuntimeModelPoolTests: XCTestCase {
     private let gib = UInt64(1024 * 1024 * 1024)
 
+    func testGlimmerStartupWarmupIncludesCustomArtifactIDs() {
+        XCTAssertTrue(RuntimeModelPool.shouldWarmDefaultModel(modelID: MuseGlimmerResources.modelId, engine: .textChatMuseGlimmer))
+        XCTAssertTrue(RuntimeModelPool.shouldWarmDefaultModel(modelID: "glimmer-q8-local", engine: .textChatMuseGlimmer))
+        XCTAssertFalse(RuntimeModelPool.shouldWarmDefaultModel(modelID: "glimmer-q8-local", engine: .textChatGemma4))
+    }
+
     func testDefaultWarmupCoversDiffusionGemmaGemmaTurboAndQwen4Exp() {
         XCTAssertTrue(RuntimeModelPool.shouldWarmDefaultModel(
             modelID: DiffusionGemmaResources.modelID,

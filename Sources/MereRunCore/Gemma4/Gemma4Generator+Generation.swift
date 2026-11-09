@@ -26,7 +26,7 @@ extension Gemma4Generator {
             loadedConfig.textConfig.maxPositionEmbeddings
         )
         let prefillStart = Date()
-        let messages = request.messages
+        let messages = NativeChatToolPolicy.requestMessages(request)
         let imageReferences = messages.compactMap { message -> String? in
             guard let imageURL = message.imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !imageURL.isEmpty else {
@@ -76,6 +76,7 @@ extension Gemma4Generator {
         if promptTokens.count > effectiveContext {
             promptTokens = Array(promptTokens.suffix(effectiveContext))
         }
+        if let prepared = request.preparedPrompt { promptTokens = prepared.tokens }
         let effectiveKVCacheMode = request.kvCacheMode ?? .default
         let kvCacheQuantization = try effectiveKVCacheMode.gemma4Quantization(
             fallback: fallbackKVCacheQuantization,
@@ -198,8 +199,15 @@ extension Gemma4Generator {
         )
         lastMTPStats = mtpTemplate
 
+        progressHandler?(.init(stage: .encoding, event: .usage(input: promptTokens.count, output: 0, cacheRead: 0, cacheWrite: 0)))
         progressHandler?(ChatProgress(stage: .generating, message: ""))
 
+        let outputObserver = NativeChatOutputObserver(initialReasoning:
+            tokenizerAndTemplate.decode(tokens: promptTokens).trimmingCharacters(in: .whitespacesAndNewlines)
+                .hasSuffix("<|channel>thought"), parseTools: hasTools)
+        let decodeProgress: @Sendable (ChatProgress) -> Void = { progress in
+            outputObserver.observe(progress, handler: progressHandler)
+        }
         let decodeResult = try await decodeTokens(
             model: model,
             tokenizerAndTemplate: tokenizerAndTemplate,
@@ -216,25 +224,17 @@ extension Gemma4Generator {
             mtpStatsTemplate: mtpTemplate,
             jsonConstrained: request.requiresJSON,
             noRepeatNgramSize: request.noRepeatNgramSize,
-            progressHandler: progressHandler
+            progressHandler: decodeProgress
         )
         lastMTPStats = decodeResult.mtpStats ?? mtpTemplate
         let generated = decodeResult.generatedTokens
         let decodedRaw = tokenizerAndTemplate.decode(tokens: generated)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let decoded = Self.cleanedResponse(
-            decodedRaw,
-            showThinking: request.showThinking
-        )
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let reasoningSplit = ChatReasoningMarkup.splitThinkBlocks(in: decodedRaw)
+        let calls = hasTools ? try Gemma4ToolParser.validatedToolCalls(decodedRaw, tools: request.tools ?? [], parallel: request.parallelToolCalls) : []
+        let events = outputObserver.finish(decodedRaw, handler: progressHandler)
+        let decoded = Self.cleanedResponse(decodedRaw, showThinking: request.showThinking).trimmingCharacters(in: .whitespacesAndNewlines)
+        let reasoning = events.compactMap { if case .reasoning(let text) = $0 { return text }; return nil }.joined()
 
-        let toolCalls: [ToolCall]? = hasTools ? {
-            let parsed = Gemma4ToolParser.parseToolCalls(decoded)
-            return parsed.isEmpty ? nil : parsed
-        }() : nil
-
-        return ChatResponse(
+        var response = ChatResponse(
             response: decoded,
             tokensGenerated: generated.count,
             timing: ChatTiming(
@@ -253,11 +253,12 @@ extension Gemma4Generator {
                     ? Double(generated.count) / decodeResult.decodeSeconds
                     : nil
             ),
-            toolCalls: toolCalls,
+            toolCalls: calls.isEmpty ? nil : calls,
             promptTokens: promptTokens.count,
             finishReason: generated.count >= tokenBudget ? .length : .stop,
-            reasoningContent: reasoningSplit.reasoningContent,
-            hasIncompleteReasoning: reasoningSplit.hasIncompleteReasoning
+            reasoningContent: reasoning.isEmpty ? nil : reasoning
         )
+        response.generationEvents = events
+        return response
     }
 }

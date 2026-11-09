@@ -84,7 +84,8 @@ public final class Gemma4TokenizerAndTemplate: @unchecked Sendable {
         tools: [ToolDefinition]? = nil,
         addGenerationPrompt: Bool = true,
         includeThinking: Bool,
-        maxLength: Int
+        maxLength: Int,
+        truncate: Bool = true
     ) throws -> [Int] {
         let renderedMessages = Self.renderMessages(messages)
 
@@ -101,7 +102,7 @@ public final class Gemma4TokenizerAndTemplate: @unchecked Sendable {
         )
 
         let targetLength = min(maxLength, self.maxLength)
-        if encoded.count > targetLength {
+        if truncate, encoded.count > targetLength {
             encoded = Array(encoded.suffix(targetLength))
         }
         return encoded
@@ -156,7 +157,7 @@ public final class Gemma4TokenizerAndTemplate: @unchecked Sendable {
                     return renderedCall
                 }
                 rendered["tool_calls"] = renderedToolCalls
-                let content = stripToolCalls(from: message.content)
+                let content = stripToolCalls(from: NativeChatTextContent.render(message))
                 if !content.isEmpty {
                     rendered["content"] = content
                 }
@@ -200,11 +201,11 @@ public final class Gemma4TokenizerAndTemplate: @unchecked Sendable {
     private static func renderContent(for message: ChatMessage) -> any Sendable {
         if let imageURL = message.imageUrl, !imageURL.isEmpty {
             return [
-                ["type": "text", "text": message.content],
+                ["type": "text", "text": NativeChatTextContent.render(message)],
                 ["type": "image", "image_url": imageURL],
             ] as [[String: String]]
         }
-        return message.content
+        return NativeChatTextContent.render(message)
     }
 
     private static func stripToolCalls(from text: String) -> String {

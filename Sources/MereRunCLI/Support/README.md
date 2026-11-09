@@ -10,7 +10,14 @@ Shared helpers and runtime adapters for the public command surface.
   normalization. Modality files retain their aliases, defaults, and diagnostics.
 - `APIMultipartFormData.swift`: ordered multipart parsing and shared field checks.
   Each route declares its allowed fields, diagnostics, and text-decoding policy.
-- `APIServer.swift`: HTTP routing, authentication, transport, and streaming ownership.
+- `APIServer.swift` and `APIServer+Messages.swift`: HTTP routing, authentication,
+  transport, and streaming ownership. Messages wire fields stay in
+  `MessagesWire.swift`; `MessagesAdapter.swift` owns capability checks and
+  canonical content conversion. `MessagesStreaming.swift` owns block SSE.
+- `RuntimeChatRequest.swift`: protocol-neutral preparation shared by both API
+  formats, before a resident model lease is acquired.
+- `ClaudeCodeConnection.swift`: readiness inspection and atomic settings merging;
+  credential values never enter the configuration preview.
 - `APIModelScope.swift`: the model scope check for API requests. Each scoped
   route reads its fields as the CLI flags they stand for and resolves them with
   `CLICapabilityGate`'s resolver: a refusal is the route's 400, a warning an

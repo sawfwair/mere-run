@@ -150,7 +150,8 @@ export default defineConfig({
           { text: 'Video runtime', link: '/runtime/video' },
           { text: 'Persistent worlds', link: '/runtime/world' },
           { text: 'Model management', link: '/runtime/model-management' },
-          { text: 'Local API server', link: '/runtime/api-server' }
+          { text: 'Local API server', link: '/runtime/api-server' },
+          { text: 'Messages and Claude Code', link: '/runtime/messages-api' }
         ]
       },
       {

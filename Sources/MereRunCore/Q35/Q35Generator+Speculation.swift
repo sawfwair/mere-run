@@ -109,7 +109,7 @@ extension Q35Generator {
                 let delta = String(stableText[deltaStart...])
                 streamedJSONText = stableText
                 if !delta.isEmpty {
-                    progressHandler(ChatProgress(stage: .generating, message: delta))
+                    progressHandler(ChatProgress(stage: .generating, message: delta, decodedText: tokenizerAndTemplate.decode(tokens: generated)))
                 }
                 return
             }
@@ -127,7 +127,7 @@ extension Q35Generator {
                 visiblePiece = pendingProgressWhitespace + piece
                 pendingProgressWhitespace = ""
             }
-            progressHandler(ChatProgress(stage: .generating, message: visiblePiece))
+            progressHandler(ChatProgress(stage: .generating, message: visiblePiece, decodedText: tokenizerAndTemplate.decode(tokens: generated)))
         }
 
         while generated.count < tokenBudget {
@@ -448,7 +448,7 @@ extension Q35Generator {
             mtpProfile?.recordSerial(since: serialStart)
             if usePipelinedFallback {
                 if !pendingProgressWhitespace.isEmpty {
-                    progressHandler?(ChatProgress(stage: .generating, message: pendingProgressWhitespace))
+                    progressHandler?(ChatProgress(stage: .generating, message: pendingProgressWhitespace, decodedText: tokenizerAndTemplate.decode(tokens: generated)))
                 }
                 let tail = try await decodeTokensPipelined(
                     model: model, tokenizerAndTemplate: tokenizerAndTemplate,

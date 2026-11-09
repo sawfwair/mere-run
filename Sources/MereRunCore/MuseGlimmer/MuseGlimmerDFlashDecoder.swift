@@ -1,4 +1,5 @@
 import Foundation
+import Dispatch
 import MLX
 
 public enum MuseGlimmerDFlashPolicy {
@@ -60,6 +61,10 @@ public struct MuseGlimmerDFlashStats: Codable, Equatable, Sendable {
     public var targetFallbackForwards: Int
     public var adaptiveFallbacks: Int
     public var reason: String?
+    public var serialCalibrationSeconds: Double?
+    public var speculativeSeconds: Double?
+    public var serialCalibrationForwards: Int?
+    public var calibrationSeconds: Double?
 
     public var acceptanceRate: Double {
         guard draftedTokens > 0 else { return 0 }
@@ -106,6 +111,27 @@ struct MuseGlimmerDFlashDecodeResult {
     let stats: MuseGlimmerDFlashStats
 }
 
+enum MuseGlimmerDFlashScheduling: String, Decodable {
+    case eager
+    case deferred
+
+    static var selected: Self {
+        ProcessInfo.processInfo.environment["MERERUN_MUSE_GLIMMER_DFLASH_DEFERRED"] == "1" ? .deferred : .eager
+    }
+}
+
+/// Diagnostic observers may synchronize at these boundaries. Ordinary serving
+/// has no observer; profiling timings must remain separate from throughput.
+enum MuseGlimmerDFlashEvent {
+    case beginRound
+    case drafted([MLXArray])
+    case verificationSubmitted
+    case verified
+    case accepted(Int)
+    case committed([MLXArray])
+    case fallback([MLXArray])
+}
+
 private struct MuseGlimmerPreparedGreedyRound {
     let anchor: Int
     let proposals: [Int]
@@ -134,7 +160,15 @@ enum MuseGlimmerDFlashDecoder {
         assistantModelPath: String?,
         decodeToken: ((Int) -> String)? = nil,
         emitPiece: ((Int, String) -> Void)? = nil,
-        checkCancellation: (() throws -> Void)? = nil
+        decodeTokens: (([Int]) -> String)? = nil,
+        shouldContinue: (() -> Bool)? = nil,
+        checkCancellation: (() throws -> Void)? = nil,
+        scheduling: MuseGlimmerDFlashScheduling = .selected,
+        minimumAcceptanceRate: Double = MuseGlimmerDFlashPolicy.minimumAcceptanceRate(),
+        acceptanceEvaluationRounds: Int = MuseGlimmerDFlashPolicy.defaultAcceptanceEvaluationRounds,
+        fallback: MuseGlimmerDFlashFallback = .selected,
+        observer: ((MuseGlimmerDFlashEvent) -> Void)? = nil,
+        acceptanceDraw: () -> Float = { Float.random(in: 0..<1) }
     ) throws -> MuseGlimmerDFlashDecodeResult {
         let startedAt = Date()
         var targetCache = initialTargetCache
@@ -143,6 +177,7 @@ enum MuseGlimmerDFlashDecoder {
         var repetitionHistory = historySeedTokens
         var firstTokenSeconds: Double?
         var pendingWhitespace = ""
+        var textDecoder = IncrementalTokenTextDecoder()
         var stats = MuseGlimmerDFlashStats(
             enabled: true,
             active: true,
@@ -159,7 +194,7 @@ enum MuseGlimmerDFlashDecoder {
                 firstTokenSeconds = Date().timeIntervalSince(startedAt)
             }
             guard let decodeToken, let emitPiece else { return }
-            let piece = decodeToken(token)
+            let piece = decodeTokens.map { textDecoder.append(decodedText: $0(generatedTokens)) } ?? decodeToken(token)
             if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 pendingWhitespace += piece
             } else if !piece.isEmpty {
@@ -179,9 +214,13 @@ enum MuseGlimmerDFlashDecoder {
 
         guard tokenBudget > 0 else { return result() }
         let captureLayers = Set(assistant.config.targetLayerIds)
+        var cost: MuseGlimmerDFlashCost? = fallback == .throughput
+            && minimumAcceptanceRate > 0 && tokenBudget >= 256 ? .init() : nil
 
         while generatedTokens.count < tokenBudget {
             try checkCancellation?()
+            let roundStart = DispatchTime.now().uptimeNanoseconds
+            observer?(.beginRound)
             let remainingAfterAnchor = tokenBudget - generatedTokens.count - 1
             let draftCount = min(
                 speculativeTokens,
@@ -200,7 +239,10 @@ enum MuseGlimmerDFlashDecoder {
                     assistant: assistant,
                     assistantCache: assistantCache,
                     draftCount: draftCount,
-                    captureLayers: captureLayers
+                    captureLayers: captureLayers,
+                    knownAnchor: scheduling == .deferred ? pendingSampledAnchor : nil,
+                    scheduling: scheduling,
+                    observer: observer
                 )
             } else {
                 prepared = nil
@@ -215,6 +257,7 @@ enum MuseGlimmerDFlashDecoder {
             pendingSampledAnchor = nil
             guard !eosTokens.contains(anchor) else { break }
             emit(anchor)
+            if shouldContinue?() == false { return result() }
             guard generatedTokens.count < tokenBudget else { break }
 
             guard assistantActive, draftCount > 0 else {
@@ -225,6 +268,7 @@ enum MuseGlimmerDFlashDecoder {
                 MLX.eval(logits)
                 evaluateGemma4CacheStorage(targetCache)
                 stats.targetFallbackForwards += 1
+                observer?(.fallback([logits]))
                 continue
             }
 
@@ -300,6 +344,7 @@ enum MuseGlimmerDFlashDecoder {
                     }
                     proposals = sampled
                 }
+                observer?(.drafted([]))
                 candidateTargetCache = targetCache.map { $0.fork() }
                 candidate = target.forward(
                     MLXArray(([anchor] + proposals).map(Int32.init))
@@ -307,11 +352,13 @@ enum MuseGlimmerDFlashDecoder {
                     cache: candidateTargetCache,
                     captureLayerIndices: captureLayers
                 )
+                observer?(.verificationSubmitted)
                 MLX.eval(
                     [candidate.logits]
                         + Array(candidate.capturedHiddenStates.values)
                 )
-                evaluateGemma4CacheStorage(candidateTargetCache)
+                if scheduling == .eager { evaluateGemma4CacheStorage(candidateTargetCache) }
+                observer?(.verified)
             }
 
             stats.rounds += 1
@@ -356,7 +403,7 @@ enum MuseGlimmerDFlashDecoder {
                         1,
                         targetProbabilities[proposal].item(Float.self) / draftProbability
                     )
-                    guard Float.random(in: 0..<1) <= acceptanceProbability else {
+                    guard acceptanceDraw() <= acceptanceProbability else {
                         if let candidateTokenIds = draftDistribution.candidateTokenIds {
                             replacement = sampleToken(probabilities: sparseRejectionDistribution(
                                 target: targetProbabilities,
@@ -376,26 +423,32 @@ enum MuseGlimmerDFlashDecoder {
                 verificationHistory.append(proposal)
             }
             stats.acceptedTokens += accepted
+            observer?(.accepted(accepted))
 
             if accepted == proposals.count {
                 stats.fullAcceptanceRounds += 1
                 for proposal in proposals {
                     guard !eosTokens.contains(proposal) else { return result() }
                     emit(proposal)
+                    if shouldContinue?() == false { return result() }
                     guard generatedTokens.count < tokenBudget else { return result() }
                 }
                 targetCache = candidateTargetCache
                 logits = candidate.logits[0..., (candidate.logits.dim(1) - 1)..., 0...]
+                if scheduling == .deferred, let prepared {
+                    pendingSampledAnchor = prepared.targetTokens.last
+                }
                 assistant.appendTargetContext(
                     candidate.capturedHiddenStates,
                     cache: assistantCache
                 )
-                evaluateGemma4CacheStorage(assistantCache)
+                if scheduling == .eager { evaluateGemma4CacheStorage(assistantCache) }
             } else {
                 stats.rejectedTokens += 1
                 for proposal in proposals.prefix(accepted) {
                     guard !eosTokens.contains(proposal) else { return result() }
                     emit(proposal)
+                    if shouldContinue?() == false { return result() }
                     guard generatedTokens.count < tokenBudget else { return result() }
                 }
                 guard let replacement, !eosTokens.contains(replacement) else { break }
@@ -405,7 +458,7 @@ enum MuseGlimmerDFlashDecoder {
                     candidate: candidateTargetCache,
                     tokenCount: committedCount
                 )
-                evaluateGemma4CacheStorage(targetCache)
+                if scheduling == .eager { evaluateGemma4CacheStorage(targetCache) }
                 let committedStates = Dictionary(
                     uniqueKeysWithValues: assistant.config.targetLayerIds.map { layerId in
                         return (
@@ -419,27 +472,65 @@ enum MuseGlimmerDFlashDecoder {
                     }
                 )
                 assistant.appendTargetContext(committedStates, cache: assistantCache)
-                evaluateGemma4CacheStorage(assistantCache)
+                if scheduling == .eager { evaluateGemma4CacheStorage(assistantCache) }
                 logits = candidate.logits[0..., accepted..<(accepted + 1), 0...]
-                if generationConfig.temperature != 0 {
+                if generationConfig.temperature != 0 || scheduling == .deferred {
                     pendingSampledAnchor = replacement
                 }
             }
+            observer?(.committed((targetCache + assistantCache).flatMap { $0.storageArraysForEvaluation() }))
 
-            let minimumAcceptanceRate = MuseGlimmerDFlashPolicy.minimumAcceptanceRate()
-            if stats.rounds >= MuseGlimmerDFlashPolicy.defaultAcceptanceEvaluationRounds,
-               stats.acceptanceRate < minimumAcceptanceRate {
+            if cost != nil {
+                let roundSeconds = Double(DispatchTime.now().uptimeNanoseconds - roundStart) / 1_000_000_000
+                cost!.observe(accepted: accepted, seconds: roundSeconds)
+                stats.speculativeSeconds = (stats.speculativeSeconds ?? 0) + roundSeconds
+                if cost!.needsCalibration(acceptanceRate: stats.acceptanceRate,
+                                          minimumAcceptanceRate: minimumAcceptanceRate) {
+                    let calibration = try calibrateSerial(target: target, cache: targetCache,
+                        logits: logits, checkCancellation: checkCancellation)
+                    cost!.calibrate(serialSeconds: calibration.forwardSeconds)
+                    stats.serialCalibrationSeconds = calibration.forwardSeconds
+                    stats.serialCalibrationForwards = 3
+                    stats.calibrationSeconds = calibration.totalSeconds
+                }
+            }
+
+            let acceptanceFallback = cost == nil && stats.rounds >= acceptanceEvaluationRounds
+                && stats.acceptanceRate < minimumAcceptanceRate
+            let costFallback = stats.acceptanceRate < minimumAcceptanceRate && cost?.shouldFallback == true
+            if acceptanceFallback || costFallback {
                 assistantActive = false
                 stats.active = false
                 stats.adaptiveFallbacks = 1
-                stats.reason = String(
+                stats.reason = cost == nil ? String(
                     format: "draft acceptance fell below %.0f%%",
                     minimumAcceptanceRate * 100
-                )
+                ) : "measured speculative throughput fell below serial calibration"
             }
         }
 
         return result()
+    }
+
+    private static func calibrateSerial(
+        target: MuseGlimmerModel, cache: [Gemma4AttentionCache], logits: MLXArray,
+        checkCancellation: (() throws -> Void)?
+    ) throws -> (forwardSeconds: Double, totalSeconds: Double) {
+        try checkCancellation?()
+        let anchor = MLX.argMax(logits[0, -1, 0...]).asType(.int32).reshaped(1, 1)
+        let probeCache = cache.map { $0.fork() }
+        let start = DispatchTime.now().uptimeNanoseconds
+        var seconds = Double.infinity
+        // Give the serial path a warmed, disposable cache at the current
+        // context length. No output, caller state, or sampling RNG is consumed.
+        for _ in 0..<3 {
+            try checkCancellation?()
+            let probeStart = DispatchTime.now().uptimeNanoseconds
+            MLX.eval(target(anchor, cache: probeCache))
+            evaluateGemma4CacheStorage(probeCache)
+            seconds = min(seconds, Double(DispatchTime.now().uptimeNanoseconds - probeStart) / 1_000_000_000)
+        }
+        return (seconds, Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000_000)
     }
 
     private static func prepareGreedyRound(
@@ -449,9 +540,13 @@ enum MuseGlimmerDFlashDecoder {
         assistant: MuseGlimmerAssistantModel,
         assistantCache: [Gemma4AttentionCache],
         draftCount: Int,
-        captureLayers: Set<Int>
+        captureLayers: Set<Int>,
+        knownAnchor: Int?,
+        scheduling: MuseGlimmerDFlashScheduling,
+        observer: ((MuseGlimmerDFlashEvent) -> Void)?
     ) -> MuseGlimmerPreparedGreedyRound {
-        let anchor = MLX.argMax(logits[0, -1, 0...], axis: -1)
+        let anchor = (knownAnchor.map { MLXArray(Int32($0)) }
+            ?? MLX.argMax(logits[0, -1, 0...], axis: -1))
             .asType(.int32)
             .reshaped(1, 1)
         let draft = assistant.draft(
@@ -465,25 +560,33 @@ enum MuseGlimmerDFlashDecoder {
             anchorTokens: anchor,
             temperature: 0
         )?.tokens ?? MLX.argMax(draft.logits, axis: -1).asType(.int32)
+        observer?(.drafted([proposalTokens]))
         let candidateTargetCache = targetCache.map { $0.fork() }
         let candidate = target.forward(
             concatenated([anchor, proposalTokens], axis: 1),
             cache: candidateTargetCache,
             captureLayerIndices: captureLayers
         )
+        observer?(.verificationSubmitted)
         let targetTokens = MLX.argMax(
-            candidate.logits[0, 0..<draftCount, 0...],
+            candidate.logits[0, 0..<(draftCount + (scheduling == .deferred ? 1 : 0)), 0...],
             axis: -1
         ).asType(.int32)
-        MLX.eval(
-            [anchor, proposalTokens, targetTokens, candidate.logits]
-                + Array(candidate.capturedHiddenStates.values)
-        )
-        evaluateGemma4CacheStorage(candidateTargetCache)
+        let values: [Int]
+        if scheduling == .deferred {
+            values = concatenated([anchor.reshaped(-1), proposalTokens.reshaped(-1), targetTokens.reshaped(-1)])
+                .asArray(Int32.self).map(Int.init)
+        } else {
+            MLX.eval([anchor, proposalTokens, targetTokens, candidate.logits] + Array(candidate.capturedHiddenStates.values))
+            evaluateGemma4CacheStorage(candidateTargetCache)
+            values = [Int(anchor.item(Int32.self))] + proposalTokens.asArray(Int32.self).map(Int.init)
+                + targetTokens.asArray(Int32.self).map(Int.init)
+        }
+        observer?(.verified)
         return MuseGlimmerPreparedGreedyRound(
-            anchor: Int(anchor.item(Int32.self)),
-            proposals: proposalTokens.asArray(Int32.self).map(Int.init),
-            targetTokens: targetTokens.asArray(Int32.self).map(Int.init),
+            anchor: values[0],
+            proposals: Array(values[1..<(draftCount + 1)]),
+            targetTokens: Array(values.dropFirst(draftCount + 1)),
             candidateTargetCache: candidateTargetCache,
             candidate: candidate
         )

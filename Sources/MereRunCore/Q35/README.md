@@ -7,6 +7,10 @@ activations live in [`MereRunQwenModel`](../../MereRunQwenModel/README.md).
 
 - `Q35TokenizerAndTemplate.swift`: checkpoint-native chat templates, image-token
   expansion, and tokenization.
+- `Q35SystemPrompt.swift`: ordered system turns and tool-parameter encoding
+  instructions immediately before generation. Non-string XML parameter values
+  must be JSON; validation rejects malformed values before returning executable
+  calls.
 - `Q35Generator.swift`: actor state, request entry points, stream leases,
   unloading, and statistics.
 - `Q35Generator+Loading.swift`, `+TextWeights`, `+MTPWeights`, and `+WeightMapping`:

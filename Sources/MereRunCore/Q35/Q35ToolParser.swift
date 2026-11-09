@@ -101,6 +101,30 @@ public enum Q35ToolParser {
         parsedEnvelopes(in: text).compactMap(\.toolCall)
     }
 
+    static func validatedToolCalls(_ text: String, tools: [ToolDefinition], parallel: Bool) throws -> [ToolCall] {
+        var cursor = text.startIndex
+        var calls: [ToolCall] = []
+        while let opening = text.range(of: openingTag, range: cursor..<text.endIndex) {
+            if !calls.isEmpty, !text[cursor..<opening.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                throw ChatRequestIssue("tool_use", "unexpected content between tool calls")
+            }
+            guard let envelope = parseEnvelope(in: text, openingRange: opening, preserveWhitespace: true), let call = envelope.toolCall else {
+                throw ChatRequestIssue("tool_use", "model generated an incomplete or malformed Qwen tool call")
+            }
+            guard let tool = tools.first(where: { $0.name == call.name }) else {
+                throw ChatRequestIssue("tool_use.name", "model generated an undeclared tool '\(call.name)'")
+            }
+            let arguments = try ChatToolValidation.typedArguments(call.arguments, tool: tool)
+            calls.append(ToolCall(name: call.name, jsonArguments: arguments))
+            cursor = envelope.endIndex
+        }
+        if !calls.isEmpty, !text[cursor...].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw ChatRequestIssue("tool_use", "unexpected or incomplete content after a tool call")
+        }
+        guard parallel || calls.count <= 1 else { throw ChatRequestIssue("tool_use", "model generated parallel calls when disabled") }
+        return calls
+    }
+
     /// Removes structurally valid tool-call envelopes while preserving any
     /// allowed prose that precedes them. Malformed marker-shaped text remains
     /// visible and is never promoted into a typed call.
@@ -166,7 +190,8 @@ public enum Q35ToolParser {
     /// value is therefore preserved instead of truncating the call.
     private static func parseEnvelope(
         in text: String,
-        openingRange: Range<String.Index>
+        openingRange: Range<String.Index>,
+        preserveWhitespace: Bool = false
     ) -> ParsedEnvelope? {
         var cursor = skipWhitespace(in: text, from: openingRange.upperBound)
         guard text[cursor...].hasPrefix(functionOpeningTag) else { return nil }
@@ -211,12 +236,21 @@ public enum Q35ToolParser {
                 return nil
             }
 
-            if !key.isEmpty {
-                arguments[key] = text[valueStart..<valueClose.lowerBound]
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-            }
+            if !key.isEmpty, arguments[key] == nil {
+                let raw = String(text[valueStart..<valueClose.lowerBound])
+                arguments[key] = preserveWhitespace ? parameterValue(raw) : raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            } else { return nil }
             cursor = valueClose.upperBound
         }
+    }
+
+    private static func parameterValue(_ raw: String) -> String {
+        var value = raw
+        if value.hasPrefix("\r\n") { value.removeFirst("\r\n".count) }
+        else if value.hasPrefix("\n") { value.removeFirst() }
+        if value.hasSuffix("\r\n") { value.removeLast("\r\n".count) }
+        else if value.hasSuffix("\n") { value.removeLast() }
+        return value
     }
 
     private static func elementOpeningTagEnd(

@@ -1,10 +1,12 @@
 import Foundation
+import MereRunTensor
 import MLX
 import MLXFast
 import MLXNN
 
 @inline(__always)
-private func museGlimmerRMSNormNoScale(_ x: MLXArray, eps: Float) -> MLXArray {
+private func museGlimmerRMSNormNoScale(_ x: MLXArray, eps: Float, fused: FusedRMSNorm? = nil) -> MLXArray {
+    if let fused { return fused(x) }
     let dtype = x.dtype
     let promoted = x.asType(.float32)
     let variance = (promoted * promoted).mean(axis: -1, keepDims: true)
@@ -14,6 +16,13 @@ private func museGlimmerRMSNormNoScale(_ x: MLXArray, eps: Float) -> MLXArray {
 final class MuseGlimmerCenteredRMSNorm: Module {
     @ParameterInfo(key: "weight") var weight: MLXArray
     private let eps: Float
+    private var fused: FusedRMSNorm?
+    private var useFused = false
+
+    func configureFusedNormalization(_ enabled: Bool) {
+        if enabled, fused == nil { fused = FusedRMSNorm(weight: weight, eps: eps, centered: true) }
+        useFused = enabled
+    }
 
     init(dimensions: Int, eps: Float) {
         self._weight.wrappedValue = MLXArray.zeros([dimensions])
@@ -22,6 +31,7 @@ final class MuseGlimmerCenteredRMSNorm: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
+        if useFused { return fused!(x) }
         let dtype = x.dtype
         let promoted = x.asType(.float32)
         let variance = (promoted * promoted).mean(axis: -1, keepDims: true)
@@ -33,6 +43,13 @@ final class MuseGlimmerCenteredRMSNorm: Module {
 final class MuseGlimmerRMSNorm: Module {
     @ParameterInfo(key: "weight") var weight: MLXArray
     private let eps: Float
+    private var fused: FusedRMSNorm?
+    private var useFused = false
+
+    func configureFusedNormalization(_ enabled: Bool) {
+        if enabled, fused == nil { fused = FusedRMSNorm(weight: weight, eps: eps) }
+        useFused = enabled
+    }
 
     init(dimensions: Int, eps: Float) {
         self._weight.wrappedValue = MLXArray.ones([dimensions])
@@ -41,6 +58,7 @@ final class MuseGlimmerRMSNorm: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
+        if useFused { return fused!(x) }
         let dtype = x.dtype
         let promoted = x.asType(.float32)
         let variance = (promoted * promoted).mean(axis: -1, keepDims: true)
@@ -49,6 +67,7 @@ final class MuseGlimmerRMSNorm: Module {
 }
 
 final class MuseGlimmerTextMLP: Module {
+    var useTiledQ8 = false
     @ModuleInfo(key: "gate_proj") var gateProj: Linear
     @ModuleInfo(key: "up_proj") var upProj: Linear
     @ModuleInfo(key: "down_proj") var downProj: Linear
@@ -61,7 +80,15 @@ final class MuseGlimmerTextMLP: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        downProj(MLXNN.silu(gateProj(x)) * upProj(x))
+        #if os(macOS)
+        if useTiledQ8, let gate = gateProj as? MuseGlimmerTiledQ8Linear,
+           let up = upProj as? MuseGlimmerTiledQ8Linear, gate.hasCurrentTiles, up.hasCurrentTiles,
+           let gateTiles = gate.tiled, let upTiles = up.tiled,
+           let fused = M5TiledAffineQ8.swiglu(x, gate: gateTiles, up: upTiles) {
+            return downProj(fused)
+        }
+        #endif
+        return downProj(MLXNN.silu(gateProj(x)) * upProj(x))
     }
 }
 
@@ -80,6 +107,15 @@ final class MuseGlimmerTextAttention: Module {
     private let rmsNormEps: Float
     private let attentionScale: Float
     private let rope: RoPE?
+    private var fusedNorm: FusedRMSNorm?
+    private var useFusedNorm = false
+
+    func configureFusedNormalization(_ enabled: Bool) {
+        if enabled, fusedNorm == nil {
+            fusedNorm = FusedRMSNorm(weight: MLXArray.ones([headDimension], dtype: .float32), eps: rmsNormEps)
+        }
+        useFusedNorm = enabled
+    }
 
     init(config: MuseGlimmerTextConfig, layerIndex: Int) {
         headCount = config.numAttentionHeads
@@ -129,8 +165,8 @@ final class MuseGlimmerTextAttention: Module {
         var keys = kProj(x).reshaped(batch, sequence, keyValueHeadCount, headDimension).transposed(0, 2, 1, 3)
         var values = vProj(x).reshaped(batch, sequence, keyValueHeadCount, headDimension).transposed(0, 2, 1, 3)
 
-        queries = museGlimmerRMSNormNoScale(queries, eps: rmsNormEps) * qkScaleFactor
-        keys = museGlimmerRMSNormNoScale(keys, eps: rmsNormEps)
+        queries = museGlimmerRMSNormNoScale(queries, eps: rmsNormEps, fused: useFusedNorm ? fusedNorm : nil) * qkScaleFactor
+        keys = museGlimmerRMSNormNoScale(keys, eps: rmsNormEps, fused: useFusedNorm ? fusedNorm : nil)
         if let rope {
             queries = rope(queries, offset: offset)
             keys = rope(keys, offset: offset)
@@ -313,13 +349,15 @@ final class MuseGlimmerVisionPatchEmbedder: Module {
         let geometry = Self.bilinearPositionGeometry(grids: grids, side: side)
         let indices = geometry.indices
         let weights = geometry.weights
-        var position = MLXArray.zeros([patches.dim(0), hiddenSize], dtype: patches.dtype)
+        let dtype = (patchEmbedding as? QuantizedLinear)?.scales.dtype ?? patchEmbedding.weight.dtype
+        let projected = patchEmbedding(patches.asType(dtype))
+        var position = MLXArray.zeros([patches.dim(0), hiddenSize], dtype: .float32)
         for corner in 0..<4 {
             let indexArray = MLXArray(indices[corner])
-            let weightArray = MLXArray(weights[corner], [weights[corner].count, 1]).asType(patches.dtype)
-            position = position + positionEmbeddingTable(indexArray) * weightArray
+            let weightArray = MLXArray(weights[corner], [weights[corner].count, 1])
+            position = position + positionEmbeddingTable(indexArray).asType(.float32) * weightArray
         }
-        return patchEmbedding(patches) + position
+        return projected + position.asType(projected.dtype)
     }
 
     static func bilinearPositionGeometry(
@@ -552,7 +590,7 @@ final class MuseGlimmerVisionTower: Module {
         return (order, reverseOrder, positions, fullSegments, windowSegments)
     }
 
-    private func makeRotary(
+    func makeRotary(
         positionPairs: [(Int, Int)],
         dtype: DType
     ) -> (cosine: MLXArray, sine: MLXArray) {
@@ -573,8 +611,8 @@ final class MuseGlimmerVisionTower: Module {
             values.append(contentsOf: widthFrequencies)
             values.append(contentsOf: heightFrequencies)
         }
-        let angles = MLXArray(values, [1, positionPairs.count, 1, headDimension]).asType(dtype)
-        return (MLX.cos(angles), MLX.sin(angles))
+        let angles = MLXArray(values, [1, positionPairs.count, 1, headDimension])
+        return (MLX.cos(angles).asType(dtype), MLX.sin(angles).asType(dtype))
     }
 
     private func pixelShuffle(
@@ -654,15 +692,12 @@ final class MuseGlimmerBackbone: Module {
 
     func embeddings(
         inputIds: MLXArray,
-        imageBatch: MuseGlimmerImageBatch?
+        imageBatch: MuseGlimmerImageBatch?,
+        imageFeatures: MLXArray? = nil
     ) throws -> MLXArray {
         var hidden = languageModel.embeddings(inputIds)
         guard let imageBatch else { return hidden }
-        var features = visionTower(imageBatch.pixelValues, grids: imageBatch.grids)
-        features = museGlimmerRMSNormNoScale(
-            visionProjection(visionAdapter(features)),
-            eps: config.textConfig.rmsNormEps
-        )
+        let features = imageFeatures ?? encodeImages(imageBatch)
         let ids = inputIds.asType(.int32)
         MLX.eval(ids)
         let rawIds = ids.asArray(Int32.self)
@@ -690,6 +725,13 @@ final class MuseGlimmerBackbone: Module {
         hidden = parts.count == 1 ? parts[0] : MLX.concatenated(parts, axis: 1)
         return hidden
     }
+
+    func encodeImages(_ imageBatch: MuseGlimmerImageBatch) -> MLXArray {
+        museGlimmerRMSNormNoScale(
+            visionProjection(visionAdapter(visionTower(imageBatch.pixelValues, grids: imageBatch.grids))),
+            eps: config.textConfig.rmsNormEps
+        )
+    }
 }
 
 public final class MuseGlimmerModel: Module, @unchecked Sendable {
@@ -697,6 +739,14 @@ public final class MuseGlimmerModel: Module, @unchecked Sendable {
     @ModuleInfo(key: "lm_head") var lmHead: Linear
 
     public let config: MuseGlimmerConfig
+
+    func configureFusedNormalization(_ enabled: Bool) {
+        for (_, module) in namedModules() {
+            (module as? MuseGlimmerCenteredRMSNorm)?.configureFusedNormalization(enabled)
+            (module as? MuseGlimmerRMSNorm)?.configureFusedNormalization(enabled)
+            (module as? MuseGlimmerTextAttention)?.configureFusedNormalization(enabled)
+        }
+    }
 
     public init(config: MuseGlimmerConfig) {
         self.config = config
@@ -727,8 +777,20 @@ public final class MuseGlimmerModel: Module, @unchecked Sendable {
         cache: [Gemma4AttentionCache],
         captureLayerIndices: Set<Int> = []
     ) throws -> MuseGlimmerForwardOutput {
+        forwardPrefillDetailed(
+            embeddings: try model.embeddings(inputIds: inputIds, imageBatch: imageBatch),
+            cache: cache,
+            captureLayerIndices: captureLayerIndices
+        )
+    }
+
+    func forwardPrefillDetailed(
+        embeddings: MLXArray,
+        cache: [Gemma4AttentionCache],
+        captureLayerIndices: Set<Int> = []
+    ) -> MuseGlimmerForwardOutput {
         let output = model.languageModel.forward(
-            try model.embeddings(inputIds: inputIds, imageBatch: imageBatch),
+            embeddings,
             cache: cache,
             captureLayerIndices: captureLayerIndices
         )
@@ -776,6 +838,14 @@ public final class MuseGlimmerModel: Module, @unchecked Sendable {
 
     func inputEmbeddings(for inputIds: MLXArray) -> MLXArray {
         model.languageModel.embeddings(inputIds)
+    }
+
+    func inputEmbeddings(for inputIds: MLXArray, imageBatch: MuseGlimmerImageBatch) throws -> MLXArray {
+        try model.embeddings(inputIds: inputIds, imageBatch: imageBatch)
+    }
+
+    func inputEmbeddings(for inputIds: MLXArray, imageBatch: MuseGlimmerImageBatch, imageFeatures: MLXArray) throws -> MLXArray {
+        try model.embeddings(inputIds: inputIds, imageBatch: imageBatch, imageFeatures: imageFeatures)
     }
 
     func rawOutputLogits(from hidden: MLXArray) -> MLXArray {

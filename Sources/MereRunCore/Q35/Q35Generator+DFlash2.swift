@@ -118,7 +118,8 @@ extension Q35Generator {
         model: Q35Model, draft: Q35DFlash2Model, draftCache: [Q35DFlash2Cache],
         initialLogits: MLXArray, layerCaches: [Q35LayerCache?], eosSet: Set<Int>, tokenBudget: Int,
         generationConfig: GenerationConfig, promptTokens: [Int],
-        decodeToken: (Int) -> String, progressHandler: (@Sendable (ChatProgress) -> Void)?
+        decodeToken: (Int) -> String, decodeTokens: ([Int]) -> String,
+        progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) throws -> Q35BatchedDecodeResult {
         let started = Date()
         var firstTokenSeconds: Double?
@@ -158,7 +159,9 @@ extension Q35Generator {
             if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 pendingWhitespace += piece
             } else if !piece.isEmpty {
-                progressHandler?(ChatProgress(stage: .generating, message: pendingWhitespace + piece))
+                progressHandler?(ChatProgress(
+                    stage: .generating, message: pendingWhitespace + piece, decodedText: decodeTokens(generated)
+                ))
                 pendingWhitespace = ""
             }
         }

@@ -6,6 +6,32 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Retain bounded Glimmer text and image prefix KV with draft context, keyed by
+  prepared tokens and covered image identity. Reuse earlier text across later
+  screenshot changes, and cache image features separately without inflating
+  protocol cache accounting.
+
+- Match Glimmer's image projection and decoder to the checkpoint's floating
+  dtype, retaining float32 position calculations. Keep speculative decoding
+  available when cache markers cannot produce a reusable prefix.
+- Configure Claude Code to omit effort for adapters without effort control,
+  preserving adaptive thinking and explicit API capability errors.
+- Process native Glimmer image prompts in cancellable prefill chunks, preserving
+  ordered image embeddings and captured layer states.
+- Preserve cache breakpoints during context edits and deferred-tool loading,
+  including markers inside tool-error content. Preserve streamed text and
+  reasoning when continuing local tool search, and report each clearing once.
+- Add an opt-in native Messages qualification harness for prepared counts,
+  caching, deferred search, documents, and signed reasoning replay.
+
+- Add native Messages routes, adapter capability discovery, exact prompt counting,
+  local tool search and context editing, and preview-first Claude Code
+  connection settings. See the Messages API guide for adapter limits and the
+  separate model qualification status.
+- Guide Qwen's native tool-parameter encoding immediately before generation,
+  preserving strict validation. Ornith passes repeated coding and accessibility
+  tasks; qualification applies only to the recorded cases.
+
 - Use DFlash 2 speculative decoding and tiled M5 kernels by default for eligible
   Qwen3.8-27B Q4 text requests on M5 Macs with at least 64 GiB of memory and the
   installed draft. Preserve the requested sampling settings. The managed model

@@ -1,0 +1,2156 @@
+{
+  "schema_version": 1,
+  "status": "Experimental opt-in; selected candidate retains original normalization. Unlocked full gate and desktop requalification remain required.",
+  "source_base_commit": "bf898a40b6d01cae85eaf9d2756e3755eb1263e1",
+  "hardware": "Apple M5 Max, 40 GPU cores, 128 GB unified memory",
+  "precision": {
+    "target": "Selective affine Q8/group64; exact-zero symmetric encoding",
+    "dense_weights": "BF16",
+    "assistant": "BF16 DFlash2",
+    "activations": "BF16",
+    "kv": "BF16",
+    "normalization": "FP32 accumulation and scale multiplication, cast back to activation dtype"
+  },
+  "checkpoint_receipt_sha256": "c8545755dce55ab11e63739ff23fd3acfd08b2132edc059cef14edc0a3da7b55",
+  "native_measurement_provenance": {
+    "source_digest": "3f6144ba3364102371da138d5929b27d2f8b8f32814b414b5e8b5a22bd9ce216",
+    "binary_sha256": "2e63df8808478cdf62d8be77ac0a456c3e693e9d27095891c0853f2b7796ea4e",
+    "harness_sha256": "7daf752c6c0c2a94ab3bdcd31b60852649006686c9f8d906534685b1b507d4b3",
+    "created_unix": 1794170608.8556108
+  },
+  "rate_definition": "Generated tokens divided by full native decode duration; includes first token and any calibration, excludes preparation, admission, prefill and tool execution.",
+  "warmup": "Native comparisons retain and exclude the first 256-token repetition per prompt/width. Final HTTP comparisons retain and exclude the first attempt per prompt/configuration.",
+  "native_variants": {
+    "q8-reference-v2": {
+      "groups": [
+        {
+          "prompt": "python-lru",
+          "prompt_tokens": 86,
+          "draft_tokens": 3,
+          "samples": [
+            {
+              "repetition": 1,
+              "output_tokens": 256,
+              "decode_tps": 39.95328598325916,
+              "prefill_tps": 175.89683479938353,
+              "thermal_state": 0,
+              "generated_token_sha256": "916028ac7a80633803a3dff21be76ba5870d428378056af4d40b11fdffd6155d",
+              "stats": {
+                "acceptedTokens": 180,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 225,
+                "enabled": true,
+                "fullAcceptanceRounds": 52,
+                "rejectedTokens": 23,
+                "rounds": 75,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 75
+              }
+            },
+            {
+              "repetition": 2,
+              "output_tokens": 256,
+              "decode_tps": 37.82821729588316,
+              "prefill_tps": 165.21369151069632,
+              "thermal_state": 0,
+              "generated_token_sha256": "916028ac7a80633803a3dff21be76ba5870d428378056af4d40b11fdffd6155d",
+              "stats": {
+                "acceptedTokens": 180,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 225,
+                "enabled": true,
+                "fullAcceptanceRounds": 52,
+                "rejectedTokens": 23,
+                "rounds": 75,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 75
+              }
+            }
+          ]
+        },
+        {
+          "prompt": "python-lru",
+          "prompt_tokens": 86,
+          "draft_tokens": 7,
+          "samples": [
+            {
+              "repetition": 1,
+              "output_tokens": 256,
+              "decode_tps": 37.79711904380851,
+              "prefill_tps": 154.50284485836318,
+              "thermal_state": 0,
+              "generated_token_sha256": "916028ac7a80633803a3dff21be76ba5870d428378056af4d40b11fdffd6155d",
+              "stats": {
+                "acceptedTokens": 205,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 356,
+                "enabled": true,
+                "fullAcceptanceRounds": 18,
+                "rejectedTokens": 33,
+                "rounds": 51,
+                "speculativeTokens": 7,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 51
+              }
+            },
+            {
+              "repetition": 2,
+              "output_tokens": 256,
+              "decode_tps": 36.93339692633373,
+              "prefill_tps": 152.42092684275923,
+              "thermal_state": 0,
+              "generated_token_sha256": "916028ac7a80633803a3dff21be76ba5870d428378056af4d40b11fdffd6155d",
+              "stats": {
+                "acceptedTokens": 205,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 356,
+                "enabled": true,
+                "fullAcceptanceRounds": 18,
+                "rejectedTokens": 33,
+                "rounds": 51,
+                "speculativeTokens": 7,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 51
+              }
+            }
+          ]
+        },
+        {
+          "prompt": "context-8k",
+          "prompt_tokens": 7173,
+          "draft_tokens": 3,
+          "samples": [
+            {
+              "repetition": 1,
+              "output_tokens": 256,
+              "decode_tps": 30.257911923007168,
+              "prefill_tps": 589.4405597174509,
+              "thermal_state": 0,
+              "generated_token_sha256": "52c97c350f4da64326217116b7902ddeff7654c09ccc550883ebafe19c6167b8",
+              "stats": {
+                "acceptedTokens": 180,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 225,
+                "enabled": true,
+                "fullAcceptanceRounds": 56,
+                "rejectedTokens": 19,
+                "rounds": 75,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 75
+              }
+            },
+            {
+              "repetition": 2,
+              "output_tokens": 256,
+              "decode_tps": 31.506726638325215,
+              "prefill_tps": 621.5264936146314,
+              "thermal_state": 0,
+              "generated_token_sha256": "52c97c350f4da64326217116b7902ddeff7654c09ccc550883ebafe19c6167b8",
+              "stats": {
+                "acceptedTokens": 180,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 225,
+                "enabled": true,
+                "fullAcceptanceRounds": 56,
+                "rejectedTokens": 19,
+                "rounds": 75,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 75
+              }
+            }
+          ]
+        },
+        {
+          "prompt": "context-8k",
+          "prompt_tokens": 7173,
+          "draft_tokens": 7,
+          "samples": [
+            {
+              "repetition": 1,
+              "output_tokens": 256,
+              "decode_tps": 31.60109941172358,
+              "prefill_tps": 595.6128930487781,
+              "thermal_state": 0,
+              "generated_token_sha256": "52172a25caa4949268b33289578b137c88f1fdab142e8b3bb53d296a6a6af739",
+              "stats": {
+                "acceptedTokens": 203,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 365,
+                "enabled": true,
+                "fullAcceptanceRounds": 16,
+                "rejectedTokens": 37,
+                "rounds": 53,
+                "speculativeTokens": 7,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 53
+              }
+            },
+            {
+              "repetition": 2,
+              "output_tokens": 256,
+              "decode_tps": 30.83934963244026,
+              "prefill_tps": 610.767594151429,
+              "thermal_state": 1,
+              "generated_token_sha256": "52172a25caa4949268b33289578b137c88f1fdab142e8b3bb53d296a6a6af739",
+              "stats": {
+                "acceptedTokens": 203,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 365,
+                "enabled": true,
+                "fullAcceptanceRounds": 16,
+                "rejectedTokens": 37,
+                "rounds": 53,
+                "speculativeTokens": 7,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 53
+              }
+            }
+          ]
+        }
+      ],
+      "peak_active_mlx_bytes": 39288157988,
+      "configuration": {
+        "normalization": false,
+        "kernel": "native",
+        "scheduling": "eager",
+        "fallback": "acceptance"
+      },
+      "prototype_one_probe_policy": false
+    },
+    "q8-head-v2": {
+      "groups": [
+        {
+          "prompt": "python-lru",
+          "prompt_tokens": 86,
+          "draft_tokens": 3,
+          "samples": [
+            {
+              "repetition": 1,
+              "output_tokens": 256,
+              "decode_tps": 38.66873816239175,
+              "prefill_tps": 150.3712042447926,
+              "thermal_state": 1,
+              "generated_token_sha256": "916028ac7a80633803a3dff21be76ba5870d428378056af4d40b11fdffd6155d",
+              "stats": {
+                "acceptedTokens": 180,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 225,
+                "enabled": true,
+                "fullAcceptanceRounds": 52,
+                "rejectedTokens": 23,
+                "rounds": 75,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 75
+              }
+            },
+            {
+              "repetition": 2,
+              "output_tokens": 256,
+              "decode_tps": 39.32628583833091,
+              "prefill_tps": 166.51820049990985,
+              "thermal_state": 1,
+              "generated_token_sha256": "916028ac7a80633803a3dff21be76ba5870d428378056af4d40b11fdffd6155d",
+              "stats": {
+                "acceptedTokens": 180,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 225,
+                "enabled": true,
+                "fullAcceptanceRounds": 52,
+                "rejectedTokens": 23,
+                "rounds": 75,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 75
+              }
+            }
+          ]
+        },
+        {
+          "prompt": "python-lru",
+          "prompt_tokens": 86,
+          "draft_tokens": 7,
+          "samples": [
+            {
+              "repetition": 1,
+              "output_tokens": 256,
+              "decode_tps": 36.954739177229634,
+              "prefill_tps": 151.07781545193174,
+              "thermal_state": 1,
+              "generated_token_sha256": "916028ac7a80633803a3dff21be76ba5870d428378056af4d40b11fdffd6155d",
+              "stats": {
+                "acceptedTokens": 205,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 356,
+                "enabled": true,
+                "fullAcceptanceRounds": 18,
+                "rejectedTokens": 33,
+                "rounds": 51,
+                "speculativeTokens": 7,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 51
+              }
+            },
+            {
+              "repetition": 2,
+              "output_tokens": 256,
+              "decode_tps": 37.7806744687271,
+              "prefill_tps": 147.10536191509726,
+              "thermal_state": 1,
+              "generated_token_sha256": "916028ac7a80633803a3dff21be76ba5870d428378056af4d40b11fdffd6155d",
+              "stats": {
+                "acceptedTokens": 205,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 356,
+                "enabled": true,
+                "fullAcceptanceRounds": 18,
+                "rejectedTokens": 33,
+                "rounds": 51,
+                "speculativeTokens": 7,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 51
+              }
+            }
+          ]
+        },
+        {
+          "prompt": "context-8k",
+          "prompt_tokens": 7173,
+          "draft_tokens": 3,
+          "samples": [
+            {
+              "repetition": 1,
+              "output_tokens": 256,
+              "decode_tps": 32.22170550733383,
+              "prefill_tps": 615.2632060477173,
+              "thermal_state": 1,
+              "generated_token_sha256": "52c97c350f4da64326217116b7902ddeff7654c09ccc550883ebafe19c6167b8",
+              "stats": {
+                "acceptedTokens": 180,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 225,
+                "enabled": true,
+                "fullAcceptanceRounds": 56,
+                "rejectedTokens": 19,
+                "rounds": 75,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 75
+              }
+            },
+            {
+              "repetition": 2,
+              "output_tokens": 256,
+              "decode_tps": 32.20393531637004,
+              "prefill_tps": 616.3890913317346,
+              "thermal_state": 1,
+              "generated_token_sha256": "52c97c350f4da64326217116b7902ddeff7654c09ccc550883ebafe19c6167b8",
+              "stats": {
+                "acceptedTokens": 180,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 225,
+                "enabled": true,
+                "fullAcceptanceRounds": 56,
+                "rejectedTokens": 19,
+                "rounds": 75,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 75
+              }
+            }
+          ]
+        },
+        {
+          "prompt": "context-8k",
+          "prompt_tokens": 7173,
+          "draft_tokens": 7,
+          "samples": [
+            {
+              "repetition": 1,
+              "output_tokens": 256,
+              "decode_tps": 31.924733704440065,
+              "prefill_tps": 614.8347176548288,
+              "thermal_state": 1,
+              "generated_token_sha256": "52172a25caa4949268b33289578b137c88f1fdab142e8b3bb53d296a6a6af739",
+              "stats": {
+                "acceptedTokens": 203,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 365,
+                "enabled": true,
+                "fullAcceptanceRounds": 16,
+                "rejectedTokens": 37,
+                "rounds": 53,
+                "speculativeTokens": 7,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 53
+              }
+            },
+            {
+              "repetition": 2,
+              "output_tokens": 256,
+              "decode_tps": 31.987189178413924,
+              "prefill_tps": 603.2513027455277,
+              "thermal_state": 1,
+              "generated_token_sha256": "52172a25caa4949268b33289578b137c88f1fdab142e8b3bb53d296a6a6af739",
+              "stats": {
+                "acceptedTokens": 203,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 365,
+                "enabled": true,
+                "fullAcceptanceRounds": 16,
+                "rejectedTokens": 37,
+                "rounds": 53,
+                "speculativeTokens": 7,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 53
+              }
+            }
+          ]
+        }
+      ],
+      "peak_active_mlx_bytes": 39288065828,
+      "configuration": {
+        "normalization": false,
+        "kernel": "head4",
+        "scheduling": "deferred",
+        "fallback": "acceptance"
+      },
+      "prototype_one_probe_policy": false
+    },
+    "q8-head-norm-v2": {
+      "groups": [
+        {
+          "prompt": "python-lru",
+          "prompt_tokens": 86,
+          "draft_tokens": 3,
+          "samples": [
+            {
+              "repetition": 1,
+              "output_tokens": 256,
+              "decode_tps": 42.62619978034686,
+              "prefill_tps": 173.26693814419372,
+              "thermal_state": 1,
+              "generated_token_sha256": "56eda293cb544b6814bfb7bd554620feee23b62a8de3bdb12cc41a9b1dd7d835",
+              "stats": {
+                "acceptedTokens": 181,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 224,
+                "enabled": true,
+                "fullAcceptanceRounds": 55,
+                "rejectedTokens": 20,
+                "rounds": 75,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 75
+              }
+            },
+            {
+              "repetition": 2,
+              "output_tokens": 256,
+              "decode_tps": 42.31198647314406,
+              "prefill_tps": 181.41850190353304,
+              "thermal_state": 1,
+              "generated_token_sha256": "56eda293cb544b6814bfb7bd554620feee23b62a8de3bdb12cc41a9b1dd7d835",
+              "stats": {
+                "acceptedTokens": 181,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 224,
+                "enabled": true,
+                "fullAcceptanceRounds": 55,
+                "rejectedTokens": 20,
+                "rounds": 75,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 75
+              }
+            }
+          ]
+        },
+        {
+          "prompt": "python-lru",
+          "prompt_tokens": 86,
+          "draft_tokens": 7,
+          "samples": [
+            {
+              "repetition": 1,
+              "output_tokens": 256,
+              "decode_tps": 38.853323543125875,
+              "prefill_tps": 135.43350512667294,
+              "thermal_state": 1,
+              "generated_token_sha256": "56eda293cb544b6814bfb7bd554620feee23b62a8de3bdb12cc41a9b1dd7d835",
+              "stats": {
+                "acceptedTokens": 203,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 368,
+                "enabled": true,
+                "fullAcceptanceRounds": 18,
+                "rejectedTokens": 35,
+                "rounds": 53,
+                "speculativeTokens": 7,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 53
+              }
+            },
+            {
+              "repetition": 2,
+              "output_tokens": 256,
+              "decode_tps": 38.66494166599689,
+              "prefill_tps": 157.7093154091047,
+              "thermal_state": 1,
+              "generated_token_sha256": "56eda293cb544b6814bfb7bd554620feee23b62a8de3bdb12cc41a9b1dd7d835",
+              "stats": {
+                "acceptedTokens": 203,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 368,
+                "enabled": true,
+                "fullAcceptanceRounds": 18,
+                "rejectedTokens": 35,
+                "rounds": 53,
+                "speculativeTokens": 7,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 53
+              }
+            }
+          ]
+        },
+        {
+          "prompt": "context-8k",
+          "prompt_tokens": 7173,
+          "draft_tokens": 3,
+          "samples": [
+            {
+              "repetition": 1,
+              "output_tokens": 256,
+              "decode_tps": 33.85153048624267,
+              "prefill_tps": 652.2440058201232,
+              "thermal_state": 1,
+              "generated_token_sha256": "52c97c350f4da64326217116b7902ddeff7654c09ccc550883ebafe19c6167b8",
+              "stats": {
+                "acceptedTokens": 180,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 225,
+                "enabled": true,
+                "fullAcceptanceRounds": 55,
+                "rejectedTokens": 20,
+                "rounds": 75,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 75
+              }
+            },
+            {
+              "repetition": 2,
+              "output_tokens": 256,
+              "decode_tps": 33.86587849325451,
+              "prefill_tps": 652.168809160477,
+              "thermal_state": 1,
+              "generated_token_sha256": "52c97c350f4da64326217116b7902ddeff7654c09ccc550883ebafe19c6167b8",
+              "stats": {
+                "acceptedTokens": 180,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 225,
+                "enabled": true,
+                "fullAcceptanceRounds": 55,
+                "rejectedTokens": 20,
+                "rounds": 75,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 75
+              }
+            }
+          ]
+        },
+        {
+          "prompt": "context-8k",
+          "prompt_tokens": 7173,
+          "draft_tokens": 7,
+          "samples": [
+            {
+              "repetition": 1,
+              "output_tokens": 256,
+              "decode_tps": 34.273236557531284,
+              "prefill_tps": 660.1835598975015,
+              "thermal_state": 1,
+              "generated_token_sha256": "52c97c350f4da64326217116b7902ddeff7654c09ccc550883ebafe19c6167b8",
+              "stats": {
+                "acceptedTokens": 204,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 357,
+                "enabled": true,
+                "fullAcceptanceRounds": 18,
+                "rejectedTokens": 33,
+                "rounds": 51,
+                "speculativeTokens": 7,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 51
+              }
+            },
+            {
+              "repetition": 2,
+              "output_tokens": 256,
+              "decode_tps": 34.67395541633267,
+              "prefill_tps": 657.3989273441563,
+              "thermal_state": 1,
+              "generated_token_sha256": "52c97c350f4da64326217116b7902ddeff7654c09ccc550883ebafe19c6167b8",
+              "stats": {
+                "acceptedTokens": 204,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 357,
+                "enabled": true,
+                "fullAcceptanceRounds": 18,
+                "rejectedTokens": 33,
+                "rounds": 51,
+                "speculativeTokens": 7,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 51
+              }
+            }
+          ]
+        }
+      ],
+      "peak_active_mlx_bytes": 39163413124,
+      "configuration": {
+        "normalization": true,
+        "kernel": "head4",
+        "scheduling": "deferred",
+        "fallback": "acceptance"
+      },
+      "prototype_one_probe_policy": false
+    },
+    "q8-production-reference-v2": {
+      "groups": [
+        {
+          "prompt": "python-lru",
+          "prompt_tokens": 86,
+          "draft_tokens": 3,
+          "samples": [
+            {
+              "repetition": 1,
+              "output_tokens": 256,
+              "decode_tps": 41.37730874616802,
+              "prefill_tps": 194.82759646922045,
+              "thermal_state": 0,
+              "generated_token_sha256": "916028ac7a80633803a3dff21be76ba5870d428378056af4d40b11fdffd6155d",
+              "stats": {
+                "acceptedTokens": 180,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 225,
+                "enabled": true,
+                "fullAcceptanceRounds": 52,
+                "rejectedTokens": 23,
+                "rounds": 75,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 75
+              }
+            },
+            {
+              "repetition": 2,
+              "output_tokens": 256,
+              "decode_tps": 40.59112790835283,
+              "prefill_tps": 174.17263997156917,
+              "thermal_state": 0,
+              "generated_token_sha256": "916028ac7a80633803a3dff21be76ba5870d428378056af4d40b11fdffd6155d",
+              "stats": {
+                "acceptedTokens": 180,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 225,
+                "enabled": true,
+                "fullAcceptanceRounds": 52,
+                "rejectedTokens": 23,
+                "rounds": 75,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 75
+              }
+            }
+          ]
+        },
+        {
+          "prompt": "context-8k",
+          "prompt_tokens": 7173,
+          "draft_tokens": 3,
+          "samples": [
+            {
+              "repetition": 1,
+              "output_tokens": 256,
+              "decode_tps": 15.527998358379806,
+              "prefill_tps": 674.2894401764096,
+              "thermal_state": 0,
+              "generated_token_sha256": "52c97c350f4da64326217116b7902ddeff7654c09ccc550883ebafe19c6167b8",
+              "stats": {
+                "acceptedTokens": 1,
+                "active": false,
+                "adaptiveFallbacks": 1,
+                "draftedTokens": 6,
+                "enabled": true,
+                "fullAcceptanceRounds": 0,
+                "reason": "draft acceptance fell below 40%",
+                "rejectedTokens": 2,
+                "rounds": 2,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 252,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 2
+              }
+            },
+            {
+              "repetition": 2,
+              "output_tokens": 256,
+              "decode_tps": 15.560745482697493,
+              "prefill_tps": 596.6065573443781,
+              "thermal_state": 0,
+              "generated_token_sha256": "52c97c350f4da64326217116b7902ddeff7654c09ccc550883ebafe19c6167b8",
+              "stats": {
+                "acceptedTokens": 1,
+                "active": false,
+                "adaptiveFallbacks": 1,
+                "draftedTokens": 6,
+                "enabled": true,
+                "fullAcceptanceRounds": 0,
+                "reason": "draft acceptance fell below 40%",
+                "rejectedTokens": 2,
+                "rounds": 2,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 252,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 2
+              }
+            }
+          ]
+        }
+      ],
+      "peak_active_mlx_bytes": 39288047396,
+      "configuration": {
+        "normalization": false,
+        "kernel": "native",
+        "scheduling": "eager",
+        "fallback": "acceptance"
+      },
+      "prototype_one_probe_policy": false
+    },
+    "q8-production-candidate-v2": {
+      "groups": [
+        {
+          "prompt": "python-lru",
+          "prompt_tokens": 86,
+          "draft_tokens": 3,
+          "samples": [
+            {
+              "repetition": 1,
+              "output_tokens": 256,
+              "decode_tps": 43.640765504076626,
+              "prefill_tps": 189.85718688195843,
+              "thermal_state": 0,
+              "generated_token_sha256": "56eda293cb544b6814bfb7bd554620feee23b62a8de3bdb12cc41a9b1dd7d835",
+              "stats": {
+                "acceptedTokens": 181,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 224,
+                "enabled": true,
+                "fullAcceptanceRounds": 55,
+                "rejectedTokens": 20,
+                "rounds": 75,
+                "serialCalibrationSeconds": 0.05819499492645264,
+                "speculativeSeconds": 5.729719519615173,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 75
+              }
+            },
+            {
+              "repetition": 2,
+              "output_tokens": 256,
+              "decode_tps": 42.51008804237841,
+              "prefill_tps": 160.72543369471404,
+              "thermal_state": 0,
+              "generated_token_sha256": "56eda293cb544b6814bfb7bd554620feee23b62a8de3bdb12cc41a9b1dd7d835",
+              "stats": {
+                "acceptedTokens": 181,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 224,
+                "enabled": true,
+                "fullAcceptanceRounds": 55,
+                "rejectedTokens": 20,
+                "rounds": 75,
+                "serialCalibrationSeconds": 0.05883991718292236,
+                "speculativeSeconds": 5.88301944732666,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 75
+              }
+            }
+          ]
+        },
+        {
+          "prompt": "context-8k",
+          "prompt_tokens": 7173,
+          "draft_tokens": 3,
+          "samples": [
+            {
+              "repetition": 1,
+              "output_tokens": 256,
+              "decode_tps": 32.642952031261345,
+              "prefill_tps": 648.3627002923379,
+              "thermal_state": 0,
+              "generated_token_sha256": "52c97c350f4da64326217116b7902ddeff7654c09ccc550883ebafe19c6167b8",
+              "stats": {
+                "acceptedTokens": 180,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 225,
+                "enabled": true,
+                "fullAcceptanceRounds": 55,
+                "rejectedTokens": 20,
+                "rounds": 75,
+                "serialCalibrationSeconds": 0.15961802005767822,
+                "speculativeSeconds": 7.682526588439941,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 75
+              }
+            },
+            {
+              "repetition": 2,
+              "output_tokens": 256,
+              "decode_tps": 33.007682940615766,
+              "prefill_tps": 641.8859693665695,
+              "thermal_state": 0,
+              "generated_token_sha256": "52c97c350f4da64326217116b7902ddeff7654c09ccc550883ebafe19c6167b8",
+              "stats": {
+                "acceptedTokens": 180,
+                "active": true,
+                "adaptiveFallbacks": 0,
+                "draftedTokens": 225,
+                "enabled": true,
+                "fullAcceptanceRounds": 55,
+                "rejectedTokens": 20,
+                "rounds": 75,
+                "serialCalibrationSeconds": 0.13996100425720215,
+                "speculativeSeconds": 7.615447044372559,
+                "speculativeTokens": 3,
+                "targetFallbackForwards": 0,
+                "targetRecoveryForwards": 0,
+                "targetVerificationForwards": 75
+              }
+            }
+          ]
+        }
+      ],
+      "peak_active_mlx_bytes": 39163272836,
+      "configuration": {
+        "normalization": true,
+        "kernel": "head4",
+        "scheduling": "deferred",
+        "fallback": "throughput"
+      },
+      "prototype_one_probe_policy": true
+    }
+  },
+  "likelihood": {
+    "q8-fused-quality-vs-bf16": {
+      "schema_version": 1,
+      "reference_bits": null,
+      "candidate_bits": 8,
+      "suite_sha256": "4a7166944d17bfcd382c5fa77d8dd16c60c20b9b6b390cced54be8c55c7821d0",
+      "windows": 16,
+      "scored_tokens": 32768,
+      "reference_perplexity": 5.990208773130782,
+      "candidate_perplexity": 5.99353404642739,
+      "perplexity_ratio": 1.0005551180973062,
+      "ratio_95_percent_window_bootstrap": [
+        1.0000994432522685,
+        1.0010500536094789
+      ],
+      "top1_agreement": 0.98968505859375,
+      "maximum_perplexity_ratio": 1.05,
+      "passes_likelihood_diagnostic": true,
+      "limitation": "Bounded text regression diagnostic; coding, vision, and general quality require separate evidence."
+    },
+    "q8-fused-quality-vs-retained-q8": {
+      "schema_version": 1,
+      "reference_bits": 8,
+      "candidate_bits": 8,
+      "suite_sha256": "4a7166944d17bfcd382c5fa77d8dd16c60c20b9b6b390cced54be8c55c7821d0",
+      "windows": 16,
+      "scored_tokens": 32768,
+      "reference_perplexity": 5.992583447964546,
+      "candidate_perplexity": 5.99353404642739,
+      "perplexity_ratio": 1.000158629157374,
+      "ratio_95_percent_window_bootstrap": [
+        0.9996105388473164,
+        1.0006532823067638
+      ],
+      "top1_agreement": 0.9927978515625,
+      "maximum_perplexity_ratio": 1.05,
+      "passes_likelihood_diagnostic": true,
+      "limitation": "Bounded text regression diagnostic; coding, vision, and general quality require separate evidence."
+    }
+  },
+  "parity": {
+    "gpu_kernel_exact_serial_cases": 84,
+    "deferred_checkpoint_pairs": 6
+  },
+  "limitations": [
+    "Two deterministic greedy prompts are not a general task benchmark.",
+    "Sequential variants; GPU frequency is not fixed and thermal states are retained.",
+    "Fused normalization can change greedy continuations; no universal bit-equivalence claim.",
+    "Fixed English-text likelihood diagnostic reused during development; not an independent general-quality estimate.",
+    "Earlier scheduling sweep excluded for overlapping external GPU tests.",
+    "Content and likelihood fixtures were reused during development and selection.",
+    "Selected normalization-free configuration does not claim the fused-normalization likelihood result as a new quality improvement.",
+    "Sequential reference/candidate/reference; GPU clocks are not fixed and only two measured samples per prompt/configuration."
+  ],
+  "selected_configuration": {
+    "sdk_label": "q8-quality-head",
+    "environment": {
+      "MERERUN_MUSE_GLIMMER_DFLASH_DEFERRED": "1",
+      "MERERUN_MUSE_GLIMMER_DFLASH_COST_FALLBACK": "1",
+      "MERERUN_MUSE_GLIMMER_FUSED_NORM": "0",
+      "MERERUN_MUSE_GLIMMER_Q8_VERIFY": "head4"
+    },
+    "status": "Experimental; original normalization retained after content-quality regression in fused normalization combination."
+  },
+  "production_provenance": {
+    "source_digest": "9e1e8b574c1723146afce452af1ca37a305f367116ea7bfe917cb13b251e81ad",
+    "binary_sha256": "8f09d23b2497f162322d4a316f0bd54314f429473b861a998a3e85d2163a552b",
+    "compiler_configuration": "Production Release without DEBUG test hooks",
+    "created_unix": 1794175401.496656,
+    "harness_sha256": "796044dff2e881a9cf5a9d2a089516e6a06fa69e9a70b2b2cc7b33ca0c3d151d",
+    "rule": "First attempt per prompt is warmup. Collect first two later resource-qualified requests; exclude only monitored compilation, other compute, pressure or thermal violations. No timing-based exclusion. Three seconds of quiet resources precede each attempt.",
+    "changes_since_initial_policy": "Lazy cost calibration only for sustained low acceptance; signed-index guard with native fallback. Q8 shader math unchanged."
+  },
+  "selected_http": {
+    "groups": [
+      {
+        "prompt": "python-lru",
+        "variants": {
+          "reference": {
+            "samples": 4,
+            "decode_tps": [
+              41.67363945543908,
+              38.838003797852174,
+              40.472420836472836,
+              40.55958963015133
+            ],
+            "median_decode_tps": 40.516005233312086,
+            "median_prefill_tps": 187.85327620420424,
+            "median_http_wall_seconds": 6.805557666462846,
+            "median_first_token_seconds": 0.5701250433921814
+          },
+          "candidate": {
+            "samples": 2,
+            "decode_tps": [
+              42.383425311823004,
+              40.42669088534111
+            ],
+            "median_decode_tps": 41.40505809858206,
+            "median_prefill_tps": 187.14606767854553,
+            "median_http_wall_seconds": 6.675175020995084,
+            "median_first_token_seconds": 0.5721485614776611
+          }
+        },
+        "prompt_tokens": 86,
+        "median_decode_ratio": 1.021943250825207
+      },
+      {
+        "prompt": "context-8k",
+        "variants": {
+          "reference": {
+            "samples": 4,
+            "decode_tps": [
+              15.891888454181686,
+              15.847850736860932,
+              15.93730460789984,
+              15.917015586734827
+            ],
+            "median_decode_tps": 15.904452020458256,
+            "median_prefill_tps": 668.5216423190587,
+            "median_http_wall_seconds": 26.92287547898013,
+            "median_first_token_seconds": 10.933372557163239
+          },
+          "candidate": {
+            "samples": 2,
+            "decode_tps": [
+              31.96971662467548,
+              31.9902988289078
+            ],
+            "median_decode_tps": 31.98000772679164,
+            "median_prefill_tps": 737.1109523935261,
+            "median_http_wall_seconds": 17.806319062539842,
+            "median_first_token_seconds": 9.929948568344116
+          }
+        },
+        "prompt_tokens": 7173,
+        "median_decode_ratio": 2.0107582257882908
+      }
+    ],
+    "attempts": 18,
+    "resource_excluded_attempts": 0,
+    "rule": "First attempt per prompt/configuration is warmup; retain first two later resource-qualified requests. No timing-based exclusions. Reference/candidate/reference use one Release binary.",
+    "raw_samples_sha256": "46846d670cfcb67e33e5230dd3c7ef68ac83474915b5635837879874d49f3ced"
+  },
+  "quality": {
+    "reference": {
+      "label": "q8-quality-reference",
+      "passed": 19,
+      "attempted": 20,
+      "failures": [
+        "escape"
+      ],
+      "plan_sha256": "2e347b4bc479a7af528bcdc0eba59084902d9bac3f23a9bccae55b6695c719a6"
+    },
+    "selected": {
+      "label": "q8-quality-head",
+      "passed": 19,
+      "attempted": 20,
+      "failures": [
+        "escape"
+      ],
+      "plan_sha256": "2e347b4bc479a7af528bcdc0eba59084902d9bac3f23a9bccae55b6695c719a6"
+    },
+    "ablations": [
+      {
+        "label": "q8-quality-reference",
+        "passed": 19,
+        "attempted": 20,
+        "failures": [
+          "escape"
+        ],
+        "plan_sha256": "2e347b4bc479a7af528bcdc0eba59084902d9bac3f23a9bccae55b6695c719a6"
+      },
+      {
+        "label": "q8-quality-head",
+        "passed": 19,
+        "attempted": 20,
+        "failures": [
+          "escape"
+        ],
+        "plan_sha256": "2e347b4bc479a7af528bcdc0eba59084902d9bac3f23a9bccae55b6695c719a6"
+      },
+      {
+        "label": "q8-quality-schedule",
+        "passed": 19,
+        "attempted": 20,
+        "failures": [
+          "escape"
+        ],
+        "plan_sha256": "2e347b4bc479a7af528bcdc0eba59084902d9bac3f23a9bccae55b6695c719a6"
+      }
+    ],
+    "rejected_fused_normalization": {
+      "label": "q8-fast",
+      "passed": 17,
+      "attempted": 20,
+      "failures": [
+        "sort",
+        "escape",
+        "stable-duplicate"
+      ],
+      "plan_sha256": "2e347b4bc479a7af528bcdc0eba59084902d9bac3f23a9bccae55b6695c719a6"
+    },
+    "rejection_reason": "Two additional requested JSON-shape instruction misses: sort and stable-duplicate. Do not infer general accuracy percentages from this small reused fixture set."
+  },
+  "qualification": {
+    "focused_gpu_tests": {
+      "passed": 39,
+      "failed": 0,
+      "q8_exact_serial_cases": 84,
+      "sampled_scheduling_runs": 48
+    },
+    "real_checkpoint_low_acceptance": {
+      "passed": true,
+      "output_tokens": 256,
+      "serial_calibration_forwards": 3,
+      "adaptive_fallbacks": 0,
+      "minimum_acceptance": 1,
+      "performance_qualified": false,
+      "purpose": "Exercise real-checkpoint lazy calibration under forced low-acceptance threshold; no throughput claim.",
+      "normalization": "Fused normalization in a correctness-only core-calibration run; not the selected configuration and not timing evidence."
+    },
+    "official_sdk_mock_http_contract": "passed",
+    "advanced": [
+      {
+        "version": "2023-06-01",
+        "search": "regex",
+        "exit": 0,
+        "passed": true,
+        "wall_seconds": 20.187147167045623,
+        "case_count": 10
+      },
+      {
+        "version": "2026-10-21",
+        "search": "bm25",
+        "exit": 0,
+        "passed": true,
+        "wall_seconds": 22.869478833978064,
+        "case_count": 10
+      }
+    ],
+    "vision": {
+      "passed": true,
+      "cases": 11
+    },
+    "followups": [
+      {
+        "name": "vision",
+        "exit": 0,
+        "seconds": 11.456739958957769
+      },
+      {
+        "name": "documents",
+        "exit": 0,
+        "seconds": 8.305282667046413
+      },
+      {
+        "name": "disconnect",
+        "exit": 0,
+        "seconds": 3.973442208021879
+      },
+      {
+        "name": "prefill-cancel",
+        "exit": 0,
+        "seconds": 9.366604125010781
+      },
+      {
+        "name": "escape-explicit",
+        "exit": 0,
+        "seconds": 4.67372299998533
+      }
+    ],
+    "coding": [
+      {
+        "passed": true,
+        "session_wall_seconds": 209.55201774998568,
+        "tests_unchanged": true,
+        "requirements_unchanged": true,
+        "intentional_tool_error_once": true,
+        "successful_test_tool_after_error": true,
+        "required_files_read": true,
+        "both_source_edits_observed": true,
+        "independent_holdout_exit": 0,
+        "independent_source_reviewed": true,
+        "name": "selected-coding-r1",
+        "performance": {
+          "model": "q8-symmetric-bf16-g64",
+          "completed_rounds": 11,
+          "generated_tokens": 4262,
+          "failed_generation_rounds": 0,
+          "queue_wait": "Not separately instrumented; sequential client and sampled queue depth zero",
+          "average_load_seconds": 4.643743688409979e-05,
+          "average_prefill_seconds": 2.3405668302015825,
+          "average_decode_seconds": 15.276841672984036,
+          "decode_tokens_per_second": 25.36221515862995
+        },
+        "resource_observations": {
+          "compilation_observed": false,
+          "other_gpu_compute_observed": false,
+          "timings_are_isolated": true
+        }
+      },
+      {
+        "passed": true,
+        "session_wall_seconds": 173.59988374996465,
+        "tests_unchanged": true,
+        "requirements_unchanged": true,
+        "intentional_tool_error_once": true,
+        "successful_test_tool_after_error": true,
+        "required_files_read": true,
+        "both_source_edits_observed": true,
+        "independent_holdout_exit": 0,
+        "independent_source_reviewed": true,
+        "name": "selected-coding-r2",
+        "performance": {
+          "model": "q8-symmetric-bf16-g64",
+          "completed_rounds": 10,
+          "generated_tokens": 3499,
+          "failed_generation_rounds": 0,
+          "queue_wait": "Not separately instrumented; sequential client and sampled queue depth zero",
+          "average_load_seconds": 4.7039985656738284e-05,
+          "average_prefill_seconds": 2.464929592609405,
+          "average_decode_seconds": 13.575017809867859,
+          "decode_tokens_per_second": 25.775288467441502
+        },
+        "resource_observations": {
+          "compilation_observed": false,
+          "other_gpu_compute_observed": false,
+          "timings_are_isolated": true
+        }
+      }
+    ],
+    "full_gate": {
+      "exit_code": 1,
+      "failed_test_count": 30,
+      "failed_tests": [
+        "-[MereRunExecutionTests.RunStorageTests testRecordCodecPreservesWireFormattingAndPrivatePermissions]",
+        "-[MereRunExecutionTests.RunStorageTests testReplacementKeepsOldReaderAndPublishesCompletePrivateArtifact]",
+        "-[MereRunCoreTests.ImageGenerationOperationTests testRecordedMaskSurvivesOriginalInputCleanupAndRetry]",
+        "-[MereRunCoreTests.ImageRunRecordTests testActiveAndAbandonedRunsUseLeaseInsteadOfAge]",
+        "-[MereRunCoreTests.ImageRunRecordTests testCancelledExecutorErrorRetainsCancelledRunState]",
+        "-[MereRunCoreTests.ImageRunRecordTests testExistingDirectoryAndUnsupportedOrCorruptRecordsArePreserved]",
+        "-[MereRunCoreTests.ImageRunRecordTests testFailureAndCancellationPersistDifferentTerminalStates]",
+        "-[MereRunCoreTests.ImageRunRecordTests testInspectionNeverLocksTerminalRecordsAndReadsReadOnlyDirectoriesAsWritten]",
+        "-[MereRunCoreTests.ImageRunRecordTests testLeaseIsReleasedWhenOwningProcessIsKilled]",
+        "-[MereRunCoreTests.ImageRunRecordTests testOutputFailureCannotCreateSuccessfulRecord]",
+        "-[MereRunCoreTests.ImageRunRecordTests testRecordsRequestedAndEffectiveSettingsBeforeInferenceAndKeepsArtifact]",
+        "-[MereRunCoreTests.ImageRunRecordTests testRetryRejectsChangedInputAndModelWithoutCreatingDirectory]",
+        "-[MereRunCoreTests.ImageRunRecordTests testRetrySnapshotsUploadsAndPreservesParentAndResolvedPolicy]",
+        "-[MereRunCLITests.ImageGenerationAdapterTests testRecordedAPIRequestsRetainEffectiveSettingsForEveryBackend]",
+        "-[MereRunCLITests.ImageRunCommandTests testListingAndInspectingReadOnlyArchivesCreatesNoLockFiles]",
+        "-[MereRunCLITests.ImageRunCommandTests testListInspectAndRetryActionRecognizeRecordWithoutChangingLegacyEncoding]",
+        "-[MereRunCLITests.ImageRunCommandTests testModelResolutionFailureIsRecordedWithoutLoadingRuntime]",
+        "-[MereRunCLITests.ReceiptCommandRunTests testRecordedTranscriptionPreservesStdoutAndReceiptContract]",
+        "-[MereRunCLITests.TranscriptionRunCommandTests testCLIAndAPIRecordingKeepEquivalentSettingsAndRetainTemporaryUpload]",
+        "-[MereRunCLITests.TranscriptionRunCommandTests testInspectionListingAndRetryShareRecordedOperationIdentity]",
+        "-[MereRunCLITests.TranscriptionRunCommandTests testInspectionReportsUnreadableRecordsAndMissingOutputs]",
+        "-[MereRunCLITests.TranscriptionRunCommandTests testResolutionAndRuntimeAdmissionFailuresPersistFailureRecords]",
+        "-[AudioCoreTests.SpeechTranscriptionRunTests testActiveAbandonedFutureAndCorruptRecordsAreHandledWithoutDataLoss]",
+        "-[AudioCoreTests.SpeechTranscriptionRunTests testBothBackendsRetainAudioResolvedSettingsAndStructuredAlignment]",
+        "-[AudioCoreTests.SpeechTranscriptionRunTests testCancellationAfterExecutorReturnsRetainsPreparedInputWithoutSuccess]",
+        "-[AudioCoreTests.SpeechTranscriptionRunTests testCancellationBeforePreparationDoesNotInvokeTheExecutor]",
+        "-[AudioCoreTests.SpeechTranscriptionRunTests testFailureCancellationAndOutputFailureNeverRecordSuccess]",
+        "-[AudioCoreTests.SpeechTranscriptionRunTests testInspectionNeverLocksTerminalRecordsAndReadsReadOnlyDirectoriesAsWritten]",
+        "-[AudioCoreTests.SpeechTranscriptionRunTests testRetryRejectsChangedInputAndChangedOrNewMetadataBeforeCreatingDirectory]",
+        "-[AudioCoreTests.SpeechTranscriptionRunTests testRetryUsesRetainedAudioProviderAndSettingsInNewDirectory]"
+      ],
+      "limitation": "Protected run-record access while device locked; no Glimmer failures. File protection unchanged.",
+      "release_binary_unchanged": true
+    },
+    "strict_swiftlint": "passed",
+    "cli_help_and_hygiene": "passed",
+    "desktop": {
+      "repeated": false,
+      "limitation": "Mac locked. Prior Q8 app outcomes qualify the reference, not changed inference math or policy."
+    }
+  },
+  "rejected_experiment": {
+    "configuration": {
+      "status": "Experimental opt-in; benchmark and SDK/coding qualification candidate. Desktop repeat and unlocked full gate still required.",
+      "environment": {
+        "MERERUN_MUSE_GLIMMER_DFLASH_DEFERRED": "1",
+        "MERERUN_MUSE_GLIMMER_DFLASH_COST_FALLBACK": "1",
+        "MERERUN_MUSE_GLIMMER_FUSED_NORM": "1",
+        "MERERUN_MUSE_GLIMMER_Q8_VERIFY": "head4"
+      },
+      "source_provenance": "delivery-production-provenance.json",
+      "performance_provenance": "final-http-provenance.json"
+    },
+    "content_fixtures": {
+      "label": "q8-fast",
+      "passed": 17,
+      "attempted": 20,
+      "failures": [
+        "sort",
+        "escape",
+        "stable-duplicate"
+      ],
+      "plan_sha256": "2e347b4bc479a7af528bcdc0eba59084902d9bac3f23a9bccae55b6695c719a6"
+    },
+    "coding_fixture_passed": true,
+    "http_samples": [
+      {
+        "label": "http-final-ref-a-python-lru-a00",
+        "prompt": "python-lru",
+        "repetition": 0,
+        "warmup": true,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 86,
+        "output_tokens": 256,
+        "request_id": "req_66905EE6ED374B4885A1F59EA0245A1F",
+        "http_wall_seconds": 6.758297082968056,
+        "timing": {
+          "promptTokens": 86,
+          "generatedTokens": 256,
+          "timeToFirstTokenSeconds": 0.5463989973068237,
+          "decodeSeconds": 6.29871392250061,
+          "loadSeconds": 4.100799560546875e-05,
+          "prefillSeconds": 0.4312160015106201,
+          "decodeKVCache": "native-bf16",
+          "prefillKVCache": "native-bf16"
+        },
+        "decode_tps": 40.64321751230879,
+        "visible_text_sha256": "33a29972caff105724e19aae12a6ea7605efcacabcc8db8acc9d271a964a7120",
+        "thinking_sha256": "3070cf6f1abce2f32d59fcf00f905a784d52649d1a77a76f4750d44ef204372d",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 86,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-ref-a",
+        "resource_qualified": true,
+        "selected": false
+      },
+      {
+        "label": "http-final-ref-a-python-lru-a01",
+        "prompt": "python-lru",
+        "repetition": 1,
+        "warmup": false,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 86,
+        "output_tokens": 256,
+        "request_id": "req_E6632E292721401596507EDCCB576DD1",
+        "http_wall_seconds": 6.677428417024203,
+        "timing": {
+          "promptTokens": 86,
+          "generatedTokens": 256,
+          "timeToFirstTokenSeconds": 0.612747073173523,
+          "decodeSeconds": 6.147475957870483,
+          "loadSeconds": 3.898143768310547e-05,
+          "prefillSeconds": 0.5016560554504395,
+          "decodeKVCache": "native-bf16",
+          "prefillKVCache": "native-bf16"
+        },
+        "decode_tps": 41.64310714745433,
+        "visible_text_sha256": "33a29972caff105724e19aae12a6ea7605efcacabcc8db8acc9d271a964a7120",
+        "thinking_sha256": "3070cf6f1abce2f32d59fcf00f905a784d52649d1a77a76f4750d44ef204372d",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 86,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-ref-a",
+        "resource_qualified": true,
+        "selected": true
+      },
+      {
+        "label": "http-final-ref-a-python-lru-a02",
+        "prompt": "python-lru",
+        "repetition": 2,
+        "warmup": false,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 86,
+        "output_tokens": 256,
+        "request_id": "req_C1744C12A3FD4CD3AE2C769E38F21EC9",
+        "http_wall_seconds": 6.715955749968998,
+        "timing": {
+          "promptTokens": 86,
+          "generatedTokens": 256,
+          "timeToFirstTokenSeconds": 0.6071760654449463,
+          "decodeSeconds": 6.19311797618866,
+          "loadSeconds": 3.409385681152344e-05,
+          "prefillSeconds": 0.49445998668670654,
+          "decodeKVCache": "native-bf16",
+          "prefillKVCache": "native-bf16"
+        },
+        "decode_tps": 41.33620592797852,
+        "visible_text_sha256": "33a29972caff105724e19aae12a6ea7605efcacabcc8db8acc9d271a964a7120",
+        "thinking_sha256": "3070cf6f1abce2f32d59fcf00f905a784d52649d1a77a76f4750d44ef204372d",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 86,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-ref-a",
+        "resource_qualified": true,
+        "selected": true
+      },
+      {
+        "label": "http-final-ref-a-context-8k-a00",
+        "prompt": "context-8k",
+        "repetition": 0,
+        "warmup": true,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 7173,
+        "output_tokens": 256,
+        "request_id": "req_0E41BF64D55A4CE29BC6AE61C5F9C8C0",
+        "http_wall_seconds": 27.04254250007216,
+        "timing": {
+          "promptTokens": 7173,
+          "generatedTokens": 256,
+          "timeToFirstTokenSeconds": 10.63451600074768,
+          "decodeSeconds": 16.58721697330475,
+          "loadSeconds": 4.100799560546875e-05,
+          "prefillSeconds": 10.386193990707397,
+          "decodeKVCache": "native-bf16",
+          "prefillKVCache": "native-bf16"
+        },
+        "decode_tps": 15.4335715516354,
+        "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+        "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 7173,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-ref-a",
+        "resource_qualified": true,
+        "selected": false
+      },
+      {
+        "label": "http-final-ref-a-context-8k-a01",
+        "prompt": "context-8k",
+        "repetition": 1,
+        "warmup": false,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 7173,
+        "output_tokens": 256,
+        "request_id": "req_1236C720C62F4B7492FD82D0F28CACD6",
+        "http_wall_seconds": 27.676357832970098,
+        "timing": {
+          "promptTokens": 7173,
+          "generatedTokens": 256,
+          "timeToFirstTokenSeconds": 10.908970832824707,
+          "decodeSeconds": 16.90817701816559,
+          "loadSeconds": 4.589557647705078e-05,
+          "prefillSeconds": 10.694340944290161,
+          "decodeKVCache": "native-bf16",
+          "prefillKVCache": "native-bf16"
+        },
+        "decode_tps": 15.140603255156487,
+        "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+        "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 7173,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-ref-a",
+        "resource_qualified": true,
+        "selected": true
+      },
+      {
+        "label": "http-final-ref-a-context-8k-a02",
+        "prompt": "context-8k",
+        "repetition": 2,
+        "warmup": false,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 7173,
+        "output_tokens": 256,
+        "request_id": "req_D8DF8A3A8D274D1484A41186BFF3AFFB",
+        "http_wall_seconds": 26.941525292000733,
+        "timing": {
+          "promptTokens": 7173,
+          "generatedTokens": 256,
+          "timeToFirstTokenSeconds": 10.720618844032288,
+          "decodeSeconds": 16.368615984916687,
+          "loadSeconds": 4.398822784423828e-05,
+          "prefillSeconds": 10.504605889320374,
+          "decodeKVCache": "native-bf16",
+          "prefillKVCache": "native-bf16"
+        },
+        "decode_tps": 15.639685128901446,
+        "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+        "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 7173,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-ref-a",
+        "resource_qualified": true,
+        "selected": true
+      },
+      {
+        "label": "http-final-fast-python-lru-a00",
+        "prompt": "python-lru",
+        "repetition": 0,
+        "warmup": true,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 86,
+        "output_tokens": 256,
+        "request_id": "req_F2A840A563A84185A5D670C680EB376C",
+        "http_wall_seconds": 6.234072833089158,
+        "timing": {
+          "prefillSeconds": 0.4923640489578247,
+          "decodeKVCache": "native-bf16",
+          "timeToFirstTokenSeconds": 0.6009271144866943,
+          "prefillKVCache": "native-bf16",
+          "generatedTokens": 256,
+          "loadSeconds": 4.506111145019531e-05,
+          "decodeSeconds": 5.71340799331665,
+          "promptTokens": 86
+        },
+        "decode_tps": 44.80688238954055,
+        "visible_text_sha256": "b57f21d1bba43008df29ca69028b03e750bdb46125c2c1fd2b825051fd2403c8",
+        "thinking_sha256": "91c33559f318d954ee5cffe025a1ef83b723e72a84ce68513957085d93289c90",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 86,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-fast",
+        "resource_qualified": true,
+        "selected": false
+      },
+      {
+        "label": "http-final-fast-python-lru-a01",
+        "prompt": "python-lru",
+        "repetition": 1,
+        "warmup": false,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 86,
+        "output_tokens": 256,
+        "request_id": "req_72B7E3D81FDA40C0BFB0C81F8F0AADF9",
+        "http_wall_seconds": 6.232791207963601,
+        "timing": {
+          "prefillSeconds": 0.4403378963470459,
+          "decodeKVCache": "native-bf16",
+          "timeToFirstTokenSeconds": 0.5488458871841431,
+          "prefillKVCache": "native-bf16",
+          "generatedTokens": 256,
+          "loadSeconds": 4.1961669921875e-05,
+          "decodeSeconds": 5.763877987861633,
+          "promptTokens": 86
+        },
+        "decode_tps": 44.41454183088538,
+        "visible_text_sha256": "b57f21d1bba43008df29ca69028b03e750bdb46125c2c1fd2b825051fd2403c8",
+        "thinking_sha256": "91c33559f318d954ee5cffe025a1ef83b723e72a84ce68513957085d93289c90",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 86,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-fast",
+        "resource_qualified": true,
+        "selected": true
+      },
+      {
+        "label": "http-final-fast-python-lru-a02",
+        "prompt": "python-lru",
+        "repetition": 2,
+        "warmup": false,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 86,
+        "output_tokens": 256,
+        "request_id": "req_5F96263604C442DD93A87EF0E71BE44C",
+        "http_wall_seconds": 6.315141582977958,
+        "timing": {
+          "prefillSeconds": 0.4354979991912842,
+          "decodeKVCache": "native-bf16",
+          "timeToFirstTokenSeconds": 0.5474109649658203,
+          "prefillKVCache": "native-bf16",
+          "generatedTokens": 256,
+          "loadSeconds": 4.291534423828125e-05,
+          "decodeSeconds": 5.851135015487671,
+          "promptTokens": 86
+        },
+        "decode_tps": 43.75219497112619,
+        "visible_text_sha256": "b57f21d1bba43008df29ca69028b03e750bdb46125c2c1fd2b825051fd2403c8",
+        "thinking_sha256": "91c33559f318d954ee5cffe025a1ef83b723e72a84ce68513957085d93289c90",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 86,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-fast",
+        "resource_qualified": true,
+        "selected": true
+      },
+      {
+        "label": "http-final-fast-context-8k-a00",
+        "prompt": "context-8k",
+        "repetition": 0,
+        "warmup": true,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 7173,
+        "output_tokens": 256,
+        "request_id": "req_47FF584CB6464DE58E4963DD13DB6474",
+        "http_wall_seconds": 19.477689334074967,
+        "timing": {
+          "prefillSeconds": 10.95062792301178,
+          "decodeKVCache": "native-bf16",
+          "timeToFirstTokenSeconds": 11.163108944892883,
+          "prefillKVCache": "native-bf16",
+          "generatedTokens": 256,
+          "loadSeconds": 4.506111145019531e-05,
+          "decodeSeconds": 8.457852959632874,
+          "promptTokens": 7173
+        },
+        "decode_tps": 30.267728845821892,
+        "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+        "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 7173,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-fast",
+        "resource_qualified": true,
+        "selected": false
+      },
+      {
+        "label": "http-final-fast-context-8k-a01",
+        "prompt": "context-8k",
+        "repetition": 1,
+        "warmup": false,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 7173,
+        "output_tokens": 256,
+        "request_id": "req_11E6E06091114254B7AAE969F074167C",
+        "http_wall_seconds": 19.847039666958153,
+        "timing": {
+          "prefillSeconds": 11.141146063804626,
+          "decodeKVCache": "native-bf16",
+          "timeToFirstTokenSeconds": 11.342306971549988,
+          "prefillKVCache": "native-bf16",
+          "generatedTokens": 256,
+          "loadSeconds": 4.398822784423828e-05,
+          "decodeSeconds": 8.63735294342041,
+          "promptTokens": 7173
+        },
+        "decode_tps": 29.638710109097783,
+        "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+        "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 7173,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-fast",
+        "resource_qualified": true,
+        "selected": true
+      },
+      {
+        "label": "http-final-fast-context-8k-a02",
+        "prompt": "context-8k",
+        "repetition": 2,
+        "warmup": false,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 7173,
+        "output_tokens": 256,
+        "request_id": "req_759F97295D9D438C804D46E154EF3C51",
+        "http_wall_seconds": 20.32506950001698,
+        "timing": {
+          "prefillSeconds": 11.419237971305847,
+          "decodeKVCache": "native-bf16",
+          "timeToFirstTokenSeconds": 11.630530953407288,
+          "prefillKVCache": "native-bf16",
+          "generatedTokens": 256,
+          "loadSeconds": 4.601478576660156e-05,
+          "decodeSeconds": 8.83516001701355,
+          "promptTokens": 7173
+        },
+        "decode_tps": 28.975140179354987,
+        "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+        "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 7173,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-fast",
+        "resource_qualified": true,
+        "selected": true
+      },
+      {
+        "label": "http-final-ref-b-python-lru-a00",
+        "prompt": "python-lru",
+        "repetition": 0,
+        "warmup": true,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 86,
+        "output_tokens": 256,
+        "request_id": "req_588F68AD4A754D61A5DFA0105E4EC1D4",
+        "http_wall_seconds": 7.161475541885011,
+        "timing": {
+          "loadSeconds": 4.303455352783203e-05,
+          "decodeKVCache": "native-bf16",
+          "timeToFirstTokenSeconds": 0.5815510749816895,
+          "generatedTokens": 256,
+          "decodeSeconds": 6.6662609577178955,
+          "prefillSeconds": 0.46641600131988525,
+          "promptTokens": 86,
+          "prefillKVCache": "native-bf16"
+        },
+        "decode_tps": 38.402337025767764,
+        "visible_text_sha256": "33a29972caff105724e19aae12a6ea7605efcacabcc8db8acc9d271a964a7120",
+        "thinking_sha256": "3070cf6f1abce2f32d59fcf00f905a784d52649d1a77a76f4750d44ef204372d",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 86,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-ref-b",
+        "resource_qualified": true,
+        "selected": false
+      },
+      {
+        "label": "http-final-ref-b-python-lru-a01",
+        "prompt": "python-lru",
+        "repetition": 1,
+        "warmup": false,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 86,
+        "output_tokens": 256,
+        "request_id": "req_ACCFAB107046461CBC091AB1D8BA17E9",
+        "http_wall_seconds": 7.039560833014548,
+        "timing": {
+          "loadSeconds": 4.398822784423828e-05,
+          "decodeKVCache": "native-bf16",
+          "generatedTokens": 256,
+          "timeToFirstTokenSeconds": 0.5487580299377441,
+          "decodeSeconds": 6.577996015548706,
+          "prefillSeconds": 0.43313097953796387,
+          "promptTokens": 86,
+          "prefillKVCache": "native-bf16"
+        },
+        "decode_tps": 38.9176277083296,
+        "visible_text_sha256": "33a29972caff105724e19aae12a6ea7605efcacabcc8db8acc9d271a964a7120",
+        "thinking_sha256": "3070cf6f1abce2f32d59fcf00f905a784d52649d1a77a76f4750d44ef204372d",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 86,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-ref-b",
+        "resource_qualified": true,
+        "selected": true
+      },
+      {
+        "label": "http-final-ref-b-python-lru-a02",
+        "prompt": "python-lru",
+        "repetition": 2,
+        "warmup": false,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 86,
+        "output_tokens": 256,
+        "request_id": "req_FF02BDB57AE64EA79DA523E8991F66BD",
+        "http_wall_seconds": 7.039253917057067,
+        "timing": {
+          "loadSeconds": 4.398822784423828e-05,
+          "decodeKVCache": "native-bf16",
+          "timeToFirstTokenSeconds": 0.6079390048980713,
+          "generatedTokens": 256,
+          "decodeSeconds": 6.517812013626099,
+          "prefillSeconds": 0.49300098419189453,
+          "promptTokens": 86,
+          "prefillKVCache": "native-bf16"
+        },
+        "decode_tps": 39.27698428012467,
+        "visible_text_sha256": "33a29972caff105724e19aae12a6ea7605efcacabcc8db8acc9d271a964a7120",
+        "thinking_sha256": "3070cf6f1abce2f32d59fcf00f905a784d52649d1a77a76f4750d44ef204372d",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 86,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-ref-b",
+        "resource_qualified": true,
+        "selected": true
+      },
+      {
+        "label": "http-final-ref-b-context-8k-a00",
+        "prompt": "context-8k",
+        "repetition": 0,
+        "warmup": true,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 7173,
+        "output_tokens": 256,
+        "request_id": "req_9E5810DFD7504ED0B0BCA61AEE54BADF",
+        "http_wall_seconds": 27.942668791976757,
+        "timing": {
+          "loadSeconds": 4.398822784423828e-05,
+          "decodeKVCache": "native-bf16",
+          "timeToFirstTokenSeconds": 11.477429986000061,
+          "generatedTokens": 256,
+          "decodeSeconds": 16.59658193588257,
+          "prefillSeconds": 11.277559995651245,
+          "promptTokens": 7173,
+          "prefillKVCache": "native-bf16"
+        },
+        "decode_tps": 15.424862841578019,
+        "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+        "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 7173,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-ref-b",
+        "resource_qualified": true,
+        "selected": false
+      },
+      {
+        "label": "http-final-ref-b-context-8k-a01",
+        "prompt": "context-8k",
+        "repetition": 1,
+        "warmup": false,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 7173,
+        "output_tokens": 256,
+        "request_id": "req_4045D34AE52E4210ACA3B52F8AB8F38F",
+        "http_wall_seconds": 28.032400916097686,
+        "timing": {
+          "loadSeconds": 4.398822784423828e-05,
+          "decodeKVCache": "native-bf16",
+          "timeToFirstTokenSeconds": 11.59031593799591,
+          "generatedTokens": 256,
+          "decodeSeconds": 16.57668101787567,
+          "prefillSeconds": 11.387120008468628,
+          "promptTokens": 7173,
+          "prefillKVCache": "native-bf16"
+        },
+        "decode_tps": 15.443380959308996,
+        "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+        "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 7173,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-ref-b",
+        "resource_qualified": true,
+        "selected": true
+      },
+      {
+        "label": "http-final-ref-b-context-8k-a02",
+        "prompt": "context-8k",
+        "repetition": 2,
+        "warmup": false,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 7173,
+        "output_tokens": 256,
+        "request_id": "req_DDF5078162DA47ECBC4C176E7B916953",
+        "http_wall_seconds": 28.908161667059176,
+        "timing": {
+          "loadSeconds": 4.601478576660156e-05,
+          "decodeKVCache": "native-bf16",
+          "timeToFirstTokenSeconds": 12.294590950012207,
+          "generatedTokens": 256,
+          "decodeSeconds": 16.850656032562256,
+          "prefillSeconds": 11.985728979110718,
+          "promptTokens": 7173,
+          "prefillKVCache": "native-bf16"
+        },
+        "decode_tps": 15.19228684659546,
+        "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+        "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 7173,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-ref-b",
+        "resource_qualified": false,
+        "selected": false
+      },
+      {
+        "label": "http-final-ref-b-context-8k-a03",
+        "prompt": "context-8k",
+        "repetition": 3,
+        "warmup": false,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 7173,
+        "output_tokens": 256,
+        "request_id": "req_D15ED58876FA418EBDB1C490153E7668",
+        "http_wall_seconds": 29.38101349992212,
+        "timing": {
+          "loadSeconds": 4.8995018005371094e-05,
+          "decodeKVCache": "native-bf16",
+          "timeToFirstTokenSeconds": 12.949918985366821,
+          "generatedTokens": 256,
+          "decodeSeconds": 16.593551993370056,
+          "prefillSeconds": 12.716380000114441,
+          "promptTokens": 7173,
+          "prefillKVCache": "native-bf16"
+        },
+        "decode_tps": 15.427679384274365,
+        "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+        "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 7173,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-ref-b",
+        "resource_qualified": false,
+        "selected": false
+      },
+      {
+        "label": "http-final-ref-b-context-8k-a04",
+        "prompt": "context-8k",
+        "repetition": 4,
+        "warmup": false,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 7173,
+        "output_tokens": 256,
+        "request_id": "req_CEC2E8F0E7554472BEA1490858F02797",
+        "http_wall_seconds": 27.26266370806843,
+        "timing": {
+          "loadSeconds": 4.792213439941406e-05,
+          "decodeKVCache": "native-bf16",
+          "timeToFirstTokenSeconds": 11.147961854934692,
+          "generatedTokens": 256,
+          "decodeSeconds": 16.265273928642273,
+          "prefillSeconds": 10.928550004959106,
+          "promptTokens": 7173,
+          "prefillKVCache": "native-bf16"
+        },
+        "decode_tps": 15.739052482184007,
+        "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+        "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 7173,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-ref-b",
+        "resource_qualified": false,
+        "selected": false
+      },
+      {
+        "label": "http-final-ref-b-context-8k-a05",
+        "prompt": "context-8k",
+        "repetition": 5,
+        "warmup": false,
+        "model": "q8-symmetric-bf16-g64",
+        "prompt_tokens": 7173,
+        "output_tokens": 256,
+        "request_id": "req_B6CD8FD89C074907AA6B292FBD5D5FB8",
+        "http_wall_seconds": 27.023185499943793,
+        "timing": {
+          "loadSeconds": 4.398822784423828e-05,
+          "decodeKVCache": "native-bf16",
+          "timeToFirstTokenSeconds": 10.95530092716217,
+          "generatedTokens": 256,
+          "decodeSeconds": 16.222580909729004,
+          "prefillSeconds": 10.733305931091309,
+          "promptTokens": 7173,
+          "prefillKVCache": "native-bf16"
+        },
+        "decode_tps": 15.780472997762748,
+        "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+        "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+        "usage": {
+          "cache_creation": null,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "inference_geo": null,
+          "input_tokens": 7173,
+          "output_tokens": 256,
+          "output_tokens_details": null,
+          "server_tool_use": null,
+          "service_tier": null,
+          "speed": null
+        },
+        "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+        "server_configuration": "http-final-ref-b",
+        "resource_qualified": true,
+        "selected": true
+      }
+    ],
+    "cancellation_fixture_setup_issue": "Initial cancellation scripts lacked two copied fixture files and failed before reaching the server. Exact files restored; selected-candidate followups rerun."
+  },
+  "likelihood_interpretation": "Fused-normalization likelihood diagnostics describe the rejected experiment. The selected configuration retains original normalization and the same symmetric-Q8 artifact."
+}

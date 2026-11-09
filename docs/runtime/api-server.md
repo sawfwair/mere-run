@@ -1,5 +1,8 @@
 # Local API server
 
+For native Messages endpoints and Claude Code setup, see the
+[local Messages API](./messages-api.md).
+
 Use the local API server to expose supported `mere.run` models through an
 OpenAI-compatible endpoint. Point an existing client, your editor, or Open
 WebUI at the loopback endpoint to keep model weights and prompts on the serving

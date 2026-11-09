@@ -212,6 +212,7 @@ private let positionalNameAliases: [String: String] = [
 /// contract, and the app's inverse coverage test is keyed to the contract too,
 /// so an uncataloged command is invisible to both.
 let contractExemptCommandIDs: [String: String] = [
+    "api.connect.claude-code": "Local client settings are CLI-only configuration, not an inference workflow.",
     "catalog.show": "Emits the contract itself; shells compile against MereRunContract instead.",
     "relay.serve": "Relay console owns the control plane. See apps/macos/README.md.",
     "executor.add.ssh": "Relay console owns executor profiles.",

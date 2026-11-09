@@ -2,7 +2,9 @@ import Foundation
 
 // MARK: - Request Types
 
-public enum OpenAIJSONValue: Codable, Hashable, Sendable {
+public typealias OpenAIJSONValue = ChatJSONValue
+
+public enum ChatJSONValue: Codable, Hashable, Sendable {
     case string(String)
     case number(Double)
     case bool(Bool)

@@ -22,6 +22,24 @@ Checkpoint loading, quantized modules, and shared tensor kernels.
 Its bias sum promotes every BF16 input to FP32 before addition, matching MLX's
 `load_vector`; adding in BF16 first can lose a cancellation residual.
 
+`SmallBatchAffineQ8` shares packed affine-Q8 reads across two through eight
+verification rows, with one, two, or four output rows per SIMD group. Its GPU
+fixtures compare directly with native serial Q8 arithmetic, including BF16
+activations beyond FP16 range. Callers select eligible projection shapes; a
+component win does not establish a full-model speedup.
+
+`M5AffineQ8Head` is an experimental M5 matrix projection for affine Q8/group-64
+buffers with BF16 activations and metadata. It reads original packed weights,
+stages BF16 tiles, and accumulates in FP32 without a retained dense copy.
+One through eight input rows use the same padded matrix geometry. Split counts
+of 1, 2, 4, and 8 divide the input dimension; multiple splits reduce FP32 partials
+before the BF16 output cast. This arithmetic differs from native serial QMV.
+Callers must qualify both quality and generation throughput before selecting it.
+
+`FusedRMSNorm` prepares FP32 learned scales outside the parameter tree, including
+an optional centered offset. It normalizes and multiplies in FP32 before casting
+back to the input dtype. It retains no model-sized weight reconstruction.
+
 The internal eight-row experiment can share each weight read across all eight
 inputs with one, two, or four output rows per SIMD group. The default uses
 two groups of four inputs. Set `MERERUN_Q38_EXACT_Q4_HEAD_OUTPUT_ROWS=4` to try
@@ -82,3 +100,10 @@ implementation used by Laguna and other Core model families.
 
 `FusedAttentionPolicy` provides the shared `MERERUN_FUSED_SDPA` diagnostic
 switch for native encoders and Core orchestration.
+
+`M5TiledAffineQ8` keeps losslessly reordered affine-Q8 codes and metadata alongside
+original parameters. Its matrix kernel stages 32 channels in BF16 and uses FP32
+accumulation, with optional FP32 partial reduction. An interleaved gate/up kernel
+preserves separate BF16 projection and activation boundaries. Packing costs
+resident memory and startup time; callers own its lifetime, parameter identity,
+model selection, and generation-level qualification.

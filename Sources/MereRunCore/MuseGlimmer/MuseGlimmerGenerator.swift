@@ -33,17 +33,23 @@ enum MuseGlimmerWeightKeys {
 }
 
 public actor MuseGlimmerGenerator: ChatGenerator {
-    private static let textPrefillChunkSize = 512
+    static var prefillChunkSize: Int {
+        min(2048, max(128, ProcessInfo.processInfo.environment["MERERUN_MUSE_GLIMMER_PREFILL_CHUNK"].flatMap(Int.init) ?? 2048))
+    }
 
     private let modelID: String
     private var model: MuseGlimmerModel?
-    private var tokenizerAndTemplate: MuseGlimmerTokenizerAndTemplate?
+    var tokenizerAndTemplate: MuseGlimmerTokenizerAndTemplate?
     private var loadedConfig: MuseGlimmerConfig?
-    private var loadedModelPath: String?
+    var loadedModelPath: String?
     private var assistantModel: MuseGlimmerAssistantModel?
-    private var loadedAssistantPath: String?
+    var loadedAssistantPath: String?
+    var prefillAdapterIdentity = "native-prefill"
     private var warmupSignature: String?
     private var lastDFlashStats = MuseGlimmerDFlashStats()
+    public static let maximumCachedPrefixTokens = 65536
+    var prefixCache = ChatNativePrefixCache<MuseGlimmerCachedPrefix>(maximumTokens: MuseGlimmerGenerator.maximumCachedPrefixTokens)
+    var imageFeatureCache = ChatNativePrefixCache<MLXArray>(maximumEntries: 8, maximumTokens: 8192)
 
     public init(modelID: String = MuseGlimmerResources.modelId) {
         self.modelID = modelID
@@ -81,17 +87,20 @@ public actor MuseGlimmerGenerator: ChatGenerator {
     ) async throws {
         try await Stream.withNewDefaultStream {
             let root = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
-            try await ensureLoaded(rootURL: root, progressHandler: progressHandler)
+            try await ensureLoaded(rootURL: root, progressHandler: progressHandler, warmup: false)
         }
     }
 
     public func unload() {
+        prefixCache.removeAll()
+        imageFeatureCache.removeAll()
         model = nil
         tokenizerAndTemplate = nil
         loadedConfig = nil
         loadedModelPath = nil
         assistantModel = nil
         loadedAssistantPath = nil
+        prefillAdapterIdentity = "native-prefill"
         warmupSignature = nil
         lastDFlashStats = MuseGlimmerDFlashStats()
         Memory.clearCache()
@@ -103,7 +112,8 @@ public actor MuseGlimmerGenerator: ChatGenerator {
 
     private func ensureLoaded(
         rootURL: URL,
-        progressHandler: (@Sendable (ChatProgress) -> Void)?
+        progressHandler: (@Sendable (ChatProgress) -> Void)?,
+        warmup: Bool = true
     ) async throws {
         let root = rootURL.standardizedFileURL
         if loadedModelPath == root.path, model != nil, tokenizerAndTemplate != nil {
@@ -113,7 +123,7 @@ public actor MuseGlimmerGenerator: ChatGenerator {
                     progressHandler: progressHandler
                 )
             }
-            try warmLoadedModelsIfNeeded(progressHandler: progressHandler)
+            if warmup { try warmLoadedModelsIfNeeded(progressHandler: progressHandler) }
             return
         }
         let resources = MuseGlimmerResources(rootURL: root)
@@ -193,12 +203,26 @@ public actor MuseGlimmerGenerator: ChatGenerator {
             )
         }
         try Task.checkCancellation()
+        let densePrefillModules = try loadedModel.installQuantizedPrefill()
+        prefillAdapterIdentity = densePrefillModules > 0 ? "affine-dense-prefill-v1" : "native-prefill"
+        let fusedNormalization = ProcessInfo.processInfo.environment["MERERUN_MUSE_GLIMMER_FUSED_NORM"] == "1"
+        loadedModel.configureFusedNormalization(fusedNormalization)
+        if fusedNormalization { prefillAdapterIdentity += "/fp32-rms-v1" }
+        if let verification = ProcessInfo.processInfo.environment["MERERUN_MUSE_GLIMMER_Q8_VERIFY"], verification != "native" {
+            prefillAdapterIdentity += "/q8-\(verification)-v1"
+            if verification.hasPrefix("tiled-") {
+                let splits = try MuseGlimmerModel.tiledQ8HeadSplits(environment: ProcessInfo.processInfo.environment)
+                prefillAdapterIdentity += "/head-splits-\(splits)"
+            }
+        }
         model = loadedModel
         tokenizerAndTemplate = tokenizer
         loadedConfig = config
+        prefixCache.removeAll()
+        imageFeatureCache.removeAll()
         loadedModelPath = root.path
         try loadAssistantIfAvailable(targetConfig: config, progressHandler: progressHandler)
-        try warmLoadedModelsIfNeeded(progressHandler: progressHandler)
+        if warmup { try warmLoadedModelsIfNeeded(progressHandler: progressHandler) }
     }
 
     private func warmLoadedModelsIfNeeded(
@@ -243,9 +267,11 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         assistant: MuseGlimmerAssistantModel?,
         assistantModelPath: String? = nil,
         speculativeTokens requestedSpeculativeTokens: Int? = nil,
-        checkCancellation: (() throws -> Void)? = nil
+        checkCancellation: (() throws -> Void)? = nil,
+        scheduling: MuseGlimmerDFlashScheduling = .selected
     ) throws -> MuseGlimmerDFlashStats? {
         try checkCancellation?()
+        try model.materializeTiledWarmup(checkCancellation: checkCancellation)
         let token = MLXArray([Int32(0)]).reshaped(1, 1)
         let captureLayers = Set(assistant?.config.targetLayerIds ?? [])
         let targetCache = model.makeCache()
@@ -272,7 +298,7 @@ public actor MuseGlimmerGenerator: ChatGenerator {
             ?? MuseGlimmerDFlashPolicy.speculativeTokens(maximum: assistant.config.blockSize - 1)
         let generation = GenerationConfig(
             maxTokens: 8,
-            temperature: 0,
+            temperature: Float(MuseGlimmerResources.recommendedTemperature),
             topK: MuseGlimmerResources.recommendedTopK,
             topP: 0.95,
             minP: 0,
@@ -291,7 +317,8 @@ public actor MuseGlimmerGenerator: ChatGenerator {
             historySeedTokens: [0],
             speculativeTokens: speculativeTokens,
             assistantModelPath: assistantModelPath,
-            checkCancellation: checkCancellation
+            checkCancellation: checkCancellation,
+            scheduling: scheduling
         )
         return result.stats
     }
@@ -444,7 +471,7 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         _ request: ChatRequest,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) throws -> ChatResponse {
-        guard let model, let tokenizerAndTemplate, let loadedConfig else {
+        guard let model, let tokenizerAndTemplate, loadedConfig != nil else {
             throw MuseGlimmerError.modelNotLoaded
         }
         guard request.lora == nil else {
@@ -458,84 +485,51 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         guard request.kvCacheMode == nil || request.kvCacheMode == .default else {
             throw MuseGlimmerError.generationFailed("Muse Glimmer currently supports the native BF16 KV cache mode.")
         }
-        let requestedContext = request.maxContextTokens ?? MuseGlimmerResources.defaultContextLength
-        guard requestedContext > 0 else {
-            throw MuseGlimmerError.generationFailed("maxContextTokens must be greater than zero.")
-        }
-        let effectiveContext = min(
-            requestedContext,
-            loadedConfig.textConfig.maxPositionEmbeddings,
-            tokenizerAndTemplate.maxLength
-        )
-        let imageReferences = request.messages.compactMap { message -> String? in
-            guard let reference = message.imageUrl, !reference.isEmpty else { return nil }
-            return reference
-        }
-        let imageBatch = try imageReferences.isEmpty ? nil : MuseGlimmerImageProcessor.makeBatch(
-            imageReferences: imageReferences,
-            config: loadedConfig.visionConfig
-        )
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = .current
-        formatter.dateFormat = "yyyy-MM-dd"
-        var promptTokens = try tokenizerAndTemplate.encodeForGeneration(
-            messages: request.messages,
-            tools: request.tools,
-            reasoningStrength: Self.reasoningStrength(request.reasoningEffort),
-            currentDate: formatter.string(from: Date()),
-            maxLength: effectiveContext
-        )
-        if let imageBatch {
-            promptTokens = try MuseGlimmerImageProcessor.expandedPromptTokens(
-                promptTokens,
-                tokenCounts: imageBatch.tokenCounts,
-                imageTokenId: tokenizerAndTemplate.imageTokenId,
-                imageStartTokenId: tokenizerAndTemplate.imageStartTokenId,
-                imageEndTokenId: tokenizerAndTemplate.imageEndTokenId
-            )
-        }
-        if promptTokens.count > effectiveContext {
-            promptTokens = Array(promptTokens.suffix(effectiveContext))
-        }
-        guard !promptTokens.isEmpty else {
-            throw MuseGlimmerError.generationFailed("Muse Glimmer prompt tokenization produced no tokens.")
-        }
-
-        let tokenBudget = max(0, min(request.maxTokens, effectiveContext - promptTokens.count))
+        let (prepared, imageBatch) = try preparedInput(request)
+        let promptTokens = prepared.tokens
+        let effectiveContext = prepared.contextLimit
+        guard promptTokens.count <= effectiveContext else { throw ChatRequestIssue("messages", "prompt is too long for the configured context") }
+        let tokenBudget = request.cacheWarmOnly ? 0 : max(0, min(request.maxTokens, effectiveContext - promptTokens.count))
+        let identity = prefixIdentity(request)
+        let checkpoints = try prefixCheckpoints(request, tokens: promptTokens)
+        if request.cacheWarmOnly, checkpoints.isEmpty { throw ChatRequestIssue("cache_control", "no reusable prefix fits the native cache limit of \(Self.maximumCachedPrefixTokens) retained tokens; place cache_control earlier in the prompt") }
+        let images = try cachedImageIdentities(tokens: promptTokens, imageBatch: imageBatch)
+        let seed = request.prefixCachePolicy != nil && !checkpoints.isEmpty
+            ? prefixCache.lookup(identity: identity, tokens: promptTokens, ttls: checkpoints, isCompatible: { value, count in
+                value.images == images.filter { $0.offset < count }
+            }) : nil
+        var cacheWrites = 0
         let minimumDFlashOutput = MuseGlimmerDFlashPolicy.minimumOutputTokens()
         let useDFlash = assistantModel != nil && tokenBudget >= minimumDFlashOutput
-        let assistantCache = useDFlash ? assistantModel?.makeCache() : nil
+        let prefillAssistant = useDFlash || !checkpoints.isEmpty ? assistantModel : nil
+        let assistantCache = seed?.value.assistantCache?.map { $0.fork() } ?? prefillAssistant?.makeCache()
         let prefillStart = Date()
-        let cache = model.makeCache()
-        let initialLogits: MLXArray
-        if imageBatch == nil {
-            initialLogits = try chunkedTextPrefill(
-                model: model,
-                tokens: promptTokens,
-                cache: cache,
-                assistant: useDFlash ? assistantModel : nil,
-                assistantCache: assistantCache,
-                progressHandler: progressHandler
-            )
-        } else {
-            let output = try model.forwardPrefillDetailed(
-                inputIds: MLXArray(promptTokens.map(Int32.init)).reshaped(1, promptTokens.count),
-                imageBatch: imageBatch,
-                cache: cache,
-                captureLayerIndices: Set(useDFlash ? assistantModel?.config.targetLayerIds ?? [] : [])
-            )
-            initialLogits = output.logits
-            if let assistant = useDFlash ? assistantModel : nil,
-               let assistantCache {
-                assistant.appendTargetContext(output.capturedHiddenStates, cache: assistantCache)
-                evaluateGemma4CacheStorage(assistantCache)
-            }
-            MLX.eval(output.logits)
-            evaluateGemma4CacheStorage(cache)
-        }
+        let cache = seed?.value.cache.map { $0.fork() } ?? model.makeCache()
+        let prefilled = try chunkedPrefill(
+            model: model,
+            tokens: promptTokens,
+            imageBatch: imageBatch,
+            cache: cache,
+            assistant: prefillAssistant,
+            assistantCache: assistantCache,
+            progressHandler: progressHandler,
+            offset: seed?.tokens.count ?? 0,
+            initialLogits: seed?.value.logits,
+            checkpoints: checkpoints,
+            cacheIdentity: identity,
+            images: images,
+            retainImageFeatures: request.prefixCachePolicy != nil
+        )
+        let initialLogits = prefilled.logits
+        cacheWrites = prefilled.cacheWrites
         let prefillSeconds = Date().timeIntervalSince(prefillStart)
+        progressHandler?(.init(stage: .encoding, event: .usage(input: promptTokens.count, output: 0,
+            cacheRead: seed?.tokens.count ?? 0, cacheWrite: cacheWrites)))
+        if request.cacheWarmOnly {
+            var response = ChatResponse(response: "", tokensGenerated: 0, promptTokens: promptTokens.count, finishReason: .stop)
+            response.cacheReadTokens = seed?.tokens.count ?? 0; response.cacheCreationTokens = cacheWrites
+            return response
+        }
         let sampling = GenerationConfig(
             maxTokens: tokenBudget,
             temperature: Float(request.temperature),
@@ -547,6 +541,14 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         )
         progressHandler?(ChatProgress(stage: .generating, message: ""))
         let decoded: MuseGlimmerDecodeResult
+        var contentStream = MuseGlimmerContentStream(stops: request.stopSequences)
+        var contentEvents: [ChatGenerationEvent] = []
+        let emit: (String) -> Void = { piece in
+            for event in contentStream.append(piece) {
+                contentEvents.append(event)
+                progressHandler?(ChatProgress(stage: .generating, event: event))
+            }
+        }
         if let assistant = useDFlash ? assistantModel : nil,
            let assistantCache {
             progressHandler?(ChatProgress(
@@ -567,6 +569,10 @@ public actor MuseGlimmerGenerator: ChatGenerator {
                     maximum: assistant.config.blockSize - 1
                 ),
                 assistantModelPath: loadedAssistantPath,
+                decodeToken: { tokenizerAndTemplate.decode(token: $0) },
+                emitPiece: { _, piece in emit(piece) },
+                decodeTokens: { tokenizerAndTemplate.decode(tokens: $0) },
+                shouldContinue: { !contentStream.didStop },
                 checkCancellation: { try Task.checkCancellation() }
             )
             lastDFlashStats = dflash.stats
@@ -594,12 +600,22 @@ public actor MuseGlimmerGenerator: ChatGenerator {
                 cache: cache,
                 sampling: sampling,
                 tokenBudget: tokenBudget,
-                promptTokens: promptTokens
+                promptTokens: promptTokens,
+                emitPiece: emit,
+                shouldContinue: { !contentStream.didStop }
             )
         }
+        for event in contentStream.append("", final: true) {
+            contentEvents.append(event)
+            progressHandler?(ChatProgress(stage: .generating, event: event))
+        }
         var rawText = tokenizerAndTemplate.decode(tokens: decoded.tokens)
+        let matchedStop = TextGenerationStopSequences.firstMatch(in: rawText, sequences: request.stopSequences)?.sequence
         rawText = Self.truncate(rawText, at: request.stopSequences)
         let parsed = MuseGlimmerOutputParser.parse(rawText)
+        let validatedCalls = try MuseGlimmerToolParser.validatedToolCalls(
+            rawText, tools: request.tools ?? [], parallel: request.parallelToolCalls
+        )
         let response: String
         if request.showThinking, let reasoning = parsed.reasoning, !reasoning.isEmpty {
             response = "<think>\n\(reasoning)\n</think>\n\(parsed.visible)"
@@ -612,7 +628,7 @@ public actor MuseGlimmerGenerator: ChatGenerator {
             // answer. Buffer decoding so streaming never leaks that hidden channel.
             progressHandler?(ChatProgress(stage: .generating, message: trimmedResponse))
         }
-        return ChatResponse(
+        var final = ChatResponse(
             response: trimmedResponse,
             tokensGenerated: decoded.tokens.count,
             timing: ChatTiming(
@@ -624,34 +640,117 @@ public actor MuseGlimmerGenerator: ChatGenerator {
                 prefillKVCache: "native-bf16",
                 decodeKVCache: "native-bf16"
             ),
-            toolCalls: parsed.toolCalls.isEmpty ? nil : parsed.toolCalls,
+            toolCalls: validatedCalls.isEmpty ? nil : validatedCalls,
             promptTokens: promptTokens.count,
-            finishReason: decoded.tokens.count >= tokenBudget ? .length : .stop,
+            finishReason: matchedStop != nil ? .stopSequence : decoded.tokens.count >= tokenBudget ? .length : .stop,
             reasoningContent: parsed.reasoning,
             reasoningBlockCount: parsed.reasoning == nil ? 0 : 1
         )
+        final.generationEvents = contentEvents
+        final.matchedStopSequence = matchedStop
+        final.cacheReadTokens = seed?.tokens.count ?? 0; final.cacheCreationTokens = cacheWrites
+        return final
     }
 
-    private func chunkedTextPrefill(
+    private func preparedInput(_ request: ChatRequest) throws -> (ChatPreparedPrompt, MuseGlimmerImageBatch?) {
+        guard let tokenizerAndTemplate, let loadedConfig else { throw MuseGlimmerError.modelNotLoaded }
+        let requestedContext = request.maxContextTokens ?? MuseGlimmerResources.defaultContextLength
+        guard requestedContext > 0 else {
+            throw MuseGlimmerError.generationFailed("maxContextTokens must be greater than zero.")
+        }
+        let effectiveContext = min(
+            requestedContext,
+            loadedConfig.textConfig.maxPositionEmbeddings,
+            tokenizerAndTemplate.maxLength
+        )
+        let imageReferences = request.messages.flatMap { message -> [String] in
+            if let blocks = message.contentBlocks {
+                return blocks.compactMap { if case .image(let reference, _) = $0 { return reference }; return nil }
+            }
+            return message.imageUrl.map { [$0] } ?? []
+        }
+        let imageBatch = try imageReferences.isEmpty ? nil : MuseGlimmerImageProcessor.makeBatch(
+            imageReferences: imageReferences,
+            config: loadedConfig.visionConfig
+        )
+        if let prepared = request.preparedPrompt { return (prepared, imageBatch) }
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        var promptTokens = try tokenizerAndTemplate.encodeForGeneration(
+            messages: MuseGlimmerTokenizerAndTemplate.requestMessages(request),
+            tools: request.tools,
+            reasoningStrength: Self.reasoningStrength(request.reasoningEffort),
+            currentDate: formatter.string(from: Date()),
+            maxLength: effectiveContext,
+            truncate: false
+        )
+        if let imageBatch {
+            promptTokens = try MuseGlimmerImageProcessor.expandedPromptTokens(
+                promptTokens,
+                tokenCounts: imageBatch.tokenCounts,
+                imageTokenId: tokenizerAndTemplate.imageTokenId,
+                imageStartTokenId: tokenizerAndTemplate.imageStartTokenId,
+                imageEndTokenId: tokenizerAndTemplate.imageEndTokenId
+            )
+        }
+        guard !promptTokens.isEmpty else {
+            throw MuseGlimmerError.generationFailed("Muse Glimmer prompt tokenization produced no tokens.")
+        }
+
+        return (try ChatPreparedPrompt(tokens: promptTokens, contextLimit: effectiveContext), imageBatch)
+    }
+
+    public func preparePrompt(_ request: ChatRequest, modelPath: String? = nil) async throws -> ChatPreparedPrompt {
+        try await prepare(modelPath: modelPath)
+        return try preparedInput(request).0
+    }
+
+    func chunkedPrefill(
         model: MuseGlimmerModel,
         tokens: [Int],
+        imageBatch: MuseGlimmerImageBatch?,
         cache: [Gemma4AttentionCache],
         assistant: MuseGlimmerAssistantModel?,
         assistantCache: [Gemma4AttentionCache]?,
-        progressHandler: (@Sendable (ChatProgress) -> Void)?
-    ) throws -> MLXArray {
-        var offset = 0
-        var logits: MLXArray?
+        progressHandler: (@Sendable (ChatProgress) -> Void)?,
+        offset initialOffset: Int = 0,
+        initialLogits: MLXArray? = nil,
+        checkpoints: [Int: Int] = [:],
+        cacheIdentity: String,
+        images: [MuseGlimmerCachedImage] = [],
+        retainImageFeatures: Bool = false
+    ) throws -> (logits: MLXArray, cacheWrites: Int) {
+        try Task.checkCancellation()
+        if initialOffset == tokens.count, let initialLogits { return (initialLogits, 0) }
+        let embeddings = try imageBatch.map {
+            try imageInputEmbeddings(model: model, tokens: tokens, batch: $0, identity: cacheIdentity,
+                                     retain: retainImageFeatures, offset: initialOffset)
+        }
+        if let embeddings { MLX.eval(embeddings) }
+        var cacheWrites = 0
+        var offset = initialOffset
+        var logits: MLXArray? = initialLogits
         while offset < tokens.count {
             try Task.checkCancellation()
-            let end = min(tokens.count, offset + Self.textPrefillChunkSize)
-            let chunk = Array(tokens[offset..<end])
-            let output = try model.forwardPrefillDetailed(
-                inputIds: MLXArray(chunk.map(Int32.init)).reshaped(1, chunk.count),
-                imageBatch: nil,
-                cache: cache,
-                captureLayerIndices: Set(assistant?.config.targetLayerIds ?? [])
-            )
+            let nextCheckpoint = checkpoints.keys.filter { $0 > offset }.min() ?? tokens.count
+            let end = min(tokens.count, offset + Self.prefillChunkSize, nextCheckpoint)
+            let output: MuseGlimmerForwardOutput
+            let capturedLayers = Set(assistant?.config.targetLayerIds ?? [])
+            if let embeddings {
+                output = model.forwardPrefillDetailed(
+                    embeddings: embeddings[0..., (offset - initialOffset)..<(end - initialOffset), 0...],
+                    cache: cache, captureLayerIndices: capturedLayers
+                )
+            } else {
+                let chunk = Array(tokens[offset..<end])
+                output = try model.forwardPrefillDetailed(
+                    inputIds: MLXArray(chunk.map(Int32.init)).reshaped(1, chunk.count),
+                    imageBatch: nil, cache: cache, captureLayerIndices: capturedLayers
+                )
+            }
             if let assistant, let assistantCache {
                 assistant.appendTargetContext(output.capturedHiddenStates, cache: assistantCache)
                 evaluateGemma4CacheStorage(assistantCache)
@@ -660,12 +759,19 @@ public actor MuseGlimmerGenerator: ChatGenerator {
             evaluateGemma4CacheStorage(cache)
             logits = output.logits
             offset = end
+            if let ttl = checkpoints[end] {
+                let value = MuseGlimmerCachedPrefix(cache: cache.map { $0.fork() }, logits: output.logits,
+                    assistantCache: assistantCache?.map { $0.fork() }, images: images.filter { $0.offset < end })
+                if prefixCache.store(identity: cacheIdentity, tokens: Array(tokens.prefix(end)), value: value, ttl: ttl) {
+                    cacheWrites = max(cacheWrites, end - initialOffset)
+                }
+            }
             progressHandler?(ChatProgress(stage: .encoding, message: "Prefilled \(offset)/\(tokens.count) tokens"))
         }
         guard let logits else {
             throw MuseGlimmerError.generationFailed("Muse Glimmer prefill produced no logits.")
         }
-        return logits
+        return (logits, cacheWrites)
     }
 
     private func decode(
@@ -675,7 +781,9 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         cache: [Gemma4AttentionCache],
         sampling: GenerationConfig,
         tokenBudget: Int,
-        promptTokens: [Int]
+        promptTokens: [Int],
+        emitPiece: @escaping (String) -> Void,
+        shouldContinue: @escaping () -> Bool
     ) throws -> MuseGlimmerDecodeResult {
         let result = try AutoregressiveDecodeEngine.decode(
             AutoregressiveDecodeRequest(
@@ -687,7 +795,9 @@ public actor MuseGlimmerGenerator: ChatGenerator {
             ),
             stepForward: { token in model(token, cache: cache) },
             decodeToken: { tokenizer.decode(token: $0) },
-            emitPiece: nil,
+            decodeTokens: { tokenizer.decode(tokens: $0) },
+            emitPiece: { _, piece in emitPiece(piece) },
+            shouldContinue: { _, _ in shouldContinue() },
             checkCancellation: { try Task.checkCancellation() }
         )
         return MuseGlimmerDecodeResult(
@@ -733,7 +843,7 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         }
     }
 
-    private static func reasoningStrength(_ effort: Double?) -> String {
+    static func reasoningStrength(_ effort: Double?) -> String {
         guard let effort else { return "high" }
         switch effort {
         case ..<0.34: return "low"
