@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.71.0 - 2026-11-09
+
 - Retain bounded Glimmer text and image prefix KV with draft context, keyed by
   prepared tokens and covered image identity. Reuse earlier text across later
   screenshot changes, and cache image features separately without inflating
