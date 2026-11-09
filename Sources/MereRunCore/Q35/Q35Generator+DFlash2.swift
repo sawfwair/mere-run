@@ -114,7 +114,7 @@ extension Q35Generator {
         return Q35PrefillOutput(logits: last.logits, hidden: last.hidden, mtpHistoryHidden: nil, mtpSession: nil)
     }
 
-    func decodeDFlash2(
+    static func decodeDFlash2(
         model: Q35Model, draft: Q35DFlash2Model, draftCache: [Q35DFlash2Cache],
         initialLogits: MLXArray, layerCaches: [Q35LayerCache?], eosSet: Set<Int>, tokenBudget: Int,
         generationConfig: GenerationConfig, promptTokens: [Int],

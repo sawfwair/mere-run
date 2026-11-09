@@ -292,7 +292,7 @@ extension Q35Generator {
         let decodeResult: Q35BatchedDecodeResult
         if let draft = requestDFlash2, let dflash2Cache {
             decodeResult = try QuantizedVerificationContext.$suppressM5.withValue(false) {
-                try decodeDFlash2(
+                try Q35Generator.decodeDFlash2(
                     model: model, draft: draft, draftCache: dflash2Cache,
                     initialLogits: prefillOutput.logits, layerCaches: layerCaches,
                     eosSet: eosSet, tokenBudget: tokenBudget,
