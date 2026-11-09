@@ -5,8 +5,9 @@ Claude Code owns the agent loop and executes its tools. The server runs local
 inference and local tool-catalog searches; it does not execute client shell,
 MCP, browser, or desktop tools.
 
-This integration has protocol-fixture coverage. Model task qualification is
-separate; see [qualification evidence](../internals/messages-qualification.md).
+Protocol contracts and model task outcomes have separate qualification. The
+[qualification record](../internals/messages-qualification.md) includes the
+passing unlocked gate and repeated native Glimmer Q8 coding and desktop cases.
 
 ## Endpoints
 
@@ -47,7 +48,7 @@ Capability metadata describes implemented adapter behavior, not task success.
 | Exact thinking-token budgets | Explicit unsupported error | Explicit unsupported error | Explicit unsupported error |
 | Local tool search and deferred references | Regex and BM25 | Regex and BM25 | Explicit unsupported error |
 | Tool-result and thinking clearing | Implemented | Implemented | Explicit unsupported error |
-| Native prefix reuse | Bounded text prefixes | Zero Messages cache accounting | Zero Messages cache accounting |
+| Native prefix reuse | Bounded marked text and image prefixes | Zero Messages cache accounting | Zero Messages cache accounting |
 | Text documents and text PDFs | Implemented | Implemented | Implemented |
 | Strict tools, constrained JSON schema, generated citations | Explicit unsupported error | Explicit unsupported error | Explicit unsupported error |
 
@@ -86,16 +87,20 @@ Moving a marker earlier also limits reuse of existing cached entries.
 Server-side compaction strategies fail explicitly;
 client-side conversation replacement remains available.
 
-Text prefix caches retain at most two entries and 32,768 tokens in total, with
-five-minute or one-hour expiry, refreshed on actual reuse. Cache identity includes authentication scope,
-resident model, template revision, adapter settings, and actual prepared tokens.
-Changed tokens invalidate reuse at that boundary. Model unloading releases cache
-storage through the residency policy. Glimmer can reuse marked text before the
-first image, even when subsequent screenshots change. Image-derived KV is never
-retained. A marker spanning an image retains only the preceding text, with
-actual partial cache reads and writes reported in usage. Zero-output warming
-of such a prompt warms only that text prefix.
-Cache warming requires `max_tokens: 0` and a supported cache breakpoint.
+Glimmer's native prefix cache retains at most two entries and 65,536 tokens in
+total, with five-minute or one-hour expiry refreshed on actual reuse. Identity
+includes authentication scope, resident model, template revision, adapter
+settings, prepared tokens, and the resized pixels of covered images. Target KV
+and projected draft context are retained together, so speculative decoding
+remains available after a hit. Changed tokens or covered images invalidate
+reuse; later screenshots can change without invalidating an earlier causal
+prefix. Model unloading releases the cache through the residency policy.
+
+A separate scoped cache retains at most eight images and 8,192 image-feature
+tokens with five-minute expiry. Feature reuse does not count as a protocol
+cache read. Prefix usage reports actual retained KV reads and writes, including
+covered image expansion. Cache warming requires `max_tokens: 0` and a supported
+cache breakpoint; counting and generation apply the same prepared boundaries.
 
 Documents accept inline text and base64 text or PDF data. PDFKit extracts PDF
 text on macOS, preserving page boundaries. The local limits are 20 MiB and 100
@@ -234,7 +239,10 @@ versions, native results, and remaining gaps.
 For ordered-image checks, supply two labeled PNG or JPEG fixtures with
 `--vision-images first.png second.png --vision-labels ALPHA BETA`. The harness
 swaps their order and checks each generated first-image label against your
-fixture labels, exact input usage, the explicit image-cache boundary, and text
+fixture labels, exact input usage, covered-image cache identity, and text
 prefix reuse across changed images when the adapter supports caching.
-Add `--vision-only` to run those checks. The label task requests low effort
-where the adapter advertises it; it keeps adaptive thinking enabled.
+Add `--vision-only` to run those checks. By default, the label task requests low
+effort where the adapter advertises it and keeps adaptive thinking enabled.
+Use `--effort high --max-tokens 2048` to apply the declared high effort and full
+output budget to both counting and generation. Unsupported effort fails before
+generation with the supported levels or instructions to omit the option.

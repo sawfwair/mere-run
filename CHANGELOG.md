@@ -6,8 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
-- Reuse Glimmer text-prefix caches before the first image, including across
-  screenshot changes. Markers spanning images retain only the preceding text.
+- Retain bounded Glimmer text and image prefix KV with draft context, keyed by
+  prepared tokens and covered image identity. Reuse earlier text across later
+  screenshot changes, and cache image features separately without inflating
+  protocol cache accounting.
 
 - Match Glimmer's image projection and decoder to the checkpoint's floating
   dtype, retaining float32 position calculations. Keep speculative decoding
@@ -27,8 +29,8 @@ The format is based on Keep a Changelog.
   connection settings. See the Messages API guide for adapter limits and the
   separate model qualification status.
 - Guide Qwen's native tool-parameter encoding immediately before generation,
-  preserving strict validation. Ornith passes two independently verified coding
-  fixtures; desktop qualification remains incomplete.
+  preserving strict validation. Ornith passes repeated coding and accessibility
+  tasks; qualification applies only to the recorded cases.
 
 - Qualify bounded native YuE2 and SheetSage2 checkpoint paths on an M5 Max.
   Fix companion-model installation validation, fresh-stage containment, and
