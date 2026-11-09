@@ -538,6 +538,194 @@ migrate an MTP request that is already running.
 The `Q35` name is an internal compatibility prefix for the Qwen-family runtime;
 the public managed model IDs retain their Qwen release names.
 
+### `MERERUN_Q35_PACKED_GREEDY_VERIFICATION`
+
+Set to `1`, `true`, or `on` to batch draft and target token IDs into one
+readback and reuse the next verified token choice. Unset by default because
+[matched measurements](benchmarks/qwen38-dflash2-and-greedy-readback-2026-11-08.md)
+didn't establish a consistent throughput gain. Other values retain per-token
+greedy MTP verification readbacks.
+This switch preserves target weights, verification arithmetic, draft depth,
+and the sampled path. The generation collector accepts
+`--packed-greedy-verification 0` or `1` and records the override in each receipt.
+
+### `MERERUN_Q38_EXACT_Q4_HEAD_OUTPUT_ROWS`
+
+Experimental exact Q4 layout for eight-row Qwen 27B verification. The default
+`0` uses two groups of four inputs. Set `4` to share weights across all eight
+inputs with four output rows per SIMD group; `2` and `1` select smaller output
+tiles. This affects only the BF16 affine-Q4/group-64 vocabulary-head geometry
+with 5,120 input and 248,320 output dimensions. Other shapes keep their existing
+dispatch. Disabling exact Q4 with `MERERUN_Q38_EXACT_WIDE_Q4=0` also disables
+this experiment.
+
+The layout preserves serial arithmetic in synthetic GPU tests. Full-model
+output and throughput qualification remain pending; the default is unchanged.
+See the [component results](benchmarks/qwen38-exact-q4-verification-2026-11-08.md).
+
+### `MERERUN_Q38_M5_VERIFICATION`
+
+The Metal 4 matrix backend is automatic for eligible DFlash 2 text requests on
+`vision-chat-q38-27b-4bit` when the draft is installed, the Mac has at least 64 GiB
+of memory, and macOS 26 or later exposes an Apple10 GPU. Other request types use
+reference projections. Set to `0` to retain DFlash 2 with reference kernels, or
+`1`, `true`, `yes`, or `on` to force the matrix backend for experiments.
+Unsupported devices, dtypes, layouts, and shapes retain existing dispatch.
+
+Selected BF16 affine-Q4/group-64 target projections stage FP16 weight tiles from
+the existing packed buffers and accumulate in FP32. Serial and verification
+calls use the same eight-row geometry and split policy. This defines a different
+arithmetic reference from the existing QMV kernels; greedy continuations can
+change. Independent draft layers retain their existing backend. The target
+output head is also used to score draft proposals and follows the target policy.
+Keep `MERERUN_Q38_EXACT_WIDE_Q4` enabled for fallback projections.
+
+See the [M5 component results and token checks](benchmarks/qwen38-m5-verification-2026-11-08.md)
+and [sampled throughput measurements](benchmarks/qwen38-sampled-dflash2-2026-11-08.md).
+The default accepts the measured non-thinking prose slowdown in exchange for
+the code and thinking-mode gains. Sampling parameters are unchanged.
+
+### `MERERUN_Q38_M5_PROJECTIONS`
+
+With the M5 backend enabled, `all` (the default) selects its
+supported target projection shapes. Set to `head` to select only the target
+vocabulary head, including its use in scoring draft proposals. Target body
+projections and independent draft layers then retain the reference backend.
+Other values select no M5 projections. This switch has no effect when
+`MERERUN_Q38_M5_VERIFICATION` is disabled.
+
+### `MERERUN_Q38_M5_FUSED_FFN`
+
+The M5 backend combines compatible gate/up projections and SwiGLU
+in one dispatch by default, reading the original weight buffers. Set to `0`,
+`false`, or `off` to compare separate matrix projections and the existing compiled
+activation. This switch has no effect when the M5 backend is disabled.
+
+### `MERERUN_Q38_M5_TILED_WEIGHTS`
+
+Tile-major Q4 codes and metadata with 32-channel matrix stages are enabled by
+default when the M5 backend is selected. Set to `0`, `false`, `no`, or `off` to
+compare the earlier row-major layout. It retains additional packed buffers alongside the original parameters,
+which remain available to prefill and fallback dispatch. Eligible projections
+prepare their buffers once per source array identity. Fused feed-forward layers
+interleave gate and up at each K step. Serial and verification calls use the
+same tiled arithmetic. The `17408 → 5120` and `6144 → 5120` projections use two
+K partitions; other supported shapes use one. Results can differ from the
+original M5 experiment and from the earlier unpartitioned tiled revision.
+GPU numerical tests and two real-checkpoint parity prompts passed. Full-model
+greedy DFlash 2 tests show a qualified throughput gain with the partitioned
+schedule; see the [benchmark results](benchmarks/qwen38-m5-verification-2026-11-08.md).
+Packed buffers increase active allocations. These gains apply to the
+DFlash 2 route; its serial calls use the same padded matrix tile and
+have not been tuned for standalone throughput. The repository gate passed;
+broader quality evaluation remains pending.
+
+### `MERERUN_Q35_DFLASH2`
+
+Qwen3.8 27B Q4 automatically uses the installed `dflash2/` companion for eligible
+text requests on Apple10 GPU Macs with macOS 26 or later and at least 64 GiB of
+memory. Thinking and non-thinking requests both use it; there is no prose
+classifier or adaptive routing gate. Set `MERERUN_Q35_DFLASH2=0` to disable the
+draft and restore the existing runtime policy, including MTP where eligible.
+
+The managed Q4 pull includes the pinned draft, adding about 3.85 GB to the
+download. Refresh an older install with:
+
+```bash
+mere.run model pull vision-chat-q38-27b-4bit --force
+```
+
+### `MERERUN_Q35_DFLASH2_PATH`
+
+Override the local DFlash 2 checkpoint directory for
+`vision-chat-q38-27b-4bit`. The directory must contain
+`config.json` and the published BF16 `model.safetensors`. The loader checks the
+draft geometry against the target and converts draft linear projections to
+affine 4-bit/group-64 in memory. Norms, convolution bases, and selector codebooks
+retain BF16. Source files are unchanged.
+
+To prepare the pinned [Inco Qwen3.8 27B draft](https://huggingface.co/incoai/Qwen3.8-27B-DFlash2),
+download it explicitly:
+
+```bash
+hf download incoai/Qwen3.8-27B-DFlash2 \
+  --revision 015e795645c74b1a0eeef3b570031fb62e769bc5 \
+  --include config.json model.safetensors \
+  --local-dir /path/to/qwen38-dflash2
+
+MERERUN_Q35_DFLASH2_PATH=/path/to/qwen38-dflash2 \
+  swift run -c release mere.run text chat \
+  --model vision-chat-q38-27b-4bit \
+  --prompt "Write a Python LRU cache with get and put methods."
+```
+
+This selection replaces MTP loading. DFlash 2 supports sampled text requests,
+including top-k, top-p, min-p, repetition, presence and frequency penalties, and
+banned tokens. Greedy requests remain eligible without penalties or banned
+tokens. Both paths require more than one output token and exclude images,
+tools, JSON constraints, log-probability capture, and continuous batching. Other
+requests use target-only decoding. Eligible requests compute fresh prompt
+state; prefix cache reuse is excluded. Acceleration diagnostics report
+`dflash2`, drafted tokens, accepted tokens, and verification rounds.
+
+Sampled verification accepts proposals with probability `min(1, p / q)`. After
+rejection it samples the positive residual of the target distribution minus the
+draft distribution, including vocabulary entries outside the draft shortlist.
+Penalties use the prompt and confirmed generated prefix at each position.
+The request seed controls the random stream; sampled speculation consumes
+different draws from serial decoding, so equal seeds do not imply equal output.
+These changes have local distribution and cache tests. Qualified code timings
+for both recommended presets are in the
+[sampled throughput report](benchmarks/qwen38-sampled-dflash2-2026-11-08.md).
+Code and prose measurements are complete for both presets. Non-thinking prose
+regresses against target-only decoding, and broader real-checkpoint quality
+evaluation is pending. The earlier greedy TPS results do not measure either
+recommended Qwen sampling preset.
+
+The benchmark accepts the complete sampling policy and records it in each JSON
+scenario. With the DFlash directory set above, compare target-only and DFlash
+at the non-thinking preset with:
+
+```bash
+mere.run model benchmark q36-mtp --model vision-chat-q38-27b-4bit \
+  --model-root /path/to/installed-qwen38-q4 --variants baseline,forced \
+  --prompt "Write a Python LRU cache with get and put methods." \
+  --temperature 0.7 --top-p 0.8 --top-k 20 --min-p 0 \
+  --presence-penalty 1.5 --frequency-penalty 0 --repetition-penalty 1 \
+  --seed 42 --decode-tokens 512 --stop-on-eos --repetitions 3 --json
+```
+
+For the thinking preset, add `--thinking` and use temperature 1.0, top-p 0.95,
+and presence penalty 0. The baseline excludes DFlash even when its checkpoint
+directory is set in the environment. Compare actual acceleration routes and
+several prompts and seeds before drawing performance or quality conclusions.
+
+Set `MERERUN_Q35_MTP_PROFILE=1` to record synchronized DFlash 2 phase timings in
+`speculationProfile`. Draft and target verification each receive a separate
+synchronization boundary; the repair phase includes confirmed-context updates.
+Profiling changes scheduling, so exclude these runs from throughput comparisons.
+The `model benchmark q36-mtp` command accepts `--thinking` and a continuous
+`--reasoning-effort` from zero to one; `0.5` selects Qwen3.8's medium level. Its
+JSON scenarios record both controls for matched runtime comparisons.
+Add `--stop-on-eos` to treat `--decode-tokens` as an upper bound instead of
+forcing continuation after the model's natural stop.
+
+The implementation proposes up to seven tokens per round and stores only the
+draft's 2,048-token context window. The
+[M5 Max measurements](benchmarks/qwen38-dflash2-and-greedy-readback-2026-11-08.md)
+preserved greedy output hashes on code and prose, with a code throughput gain
+and a prose regression against MTP. Synthetic tests alone don't establish
+checkpoint parity or throughput. To qualify another checkpoint or machine,
+run the installed parity check with explicit target and draft paths:
+
+```bash
+MERERUN_TEST_MLX_DEVICE=gpu \
+MERERUN_TEST_Q35_DFLASH2=1 \
+MERERUN_TEST_Q35_DFLASH2_TARGET_ROOT=/path/to/installed-qwen38-q4 \
+MERERUN_TEST_Q35_DFLASH2_DRAFT_ROOT=/path/to/qwen38-dflash2 \
+  swift test --filter Q35DFlash2PolicyTests/testInstalledGreedyParityAndRepeat
+```
+
 ### `MERERUN_Q35_MTP_MIN_PROMPT_TOKENS`
 
 Minimum effective prompt length before Qwen-family MTP is considered. Hybrid

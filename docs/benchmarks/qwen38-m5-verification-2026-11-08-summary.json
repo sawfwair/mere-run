@@ -1,0 +1,4076 @@
+{
+  "component": {
+    "admission": "No competing compute GPU submissions or compilation; resident servers allowed only with stable GPU counters; desktop GPU utilization <=50% for 30 seconds.",
+    "exclusionReasons": [],
+    "monitorVersion": 4,
+    "projections": [
+      {
+        "inputSize": 5120,
+        "milliseconds": {
+          "0": [
+            0.224614625,
+            0.224885375,
+            0.2310365,
+            0.221323,
+            0.223453125,
+            0.223421875,
+            0.2227865,
+            0.222073,
+            0.222099
+          ],
+          "1": [
+            0.199010375,
+            0.197953125,
+            0.2011615,
+            0.199145875,
+            0.21159375,
+            0.200765625,
+            0.202973875,
+            0.197348875,
+            0.198875
+          ],
+          "2": [
+            0.193140625,
+            0.191823,
+            0.188489625,
+            0.189724,
+            0.186828125,
+            0.192198,
+            0.1883125,
+            0.18709375,
+            0.1850625
+          ],
+          "4": [
+            0.1914375,
+            0.19233325,
+            0.19272925,
+            0.195276125,
+            0.192635375,
+            0.19611975,
+            0.189760375,
+            0.19230725,
+            0.190807375
+          ],
+          "8": [
+            0.20269275,
+            0.199140625,
+            0.208427,
+            0.20121875,
+            0.202921875,
+            0.20175525,
+            0.199854125,
+            0.200125,
+            0.200484375
+          ]
+        },
+        "outputSize": 17408,
+        "statistics": {
+          "0": {
+            "max": 0.2310365,
+            "median": 0.223421875,
+            "min": 0.221323
+          },
+          "1": {
+            "max": 0.21159375,
+            "median": 0.199145875,
+            "min": 0.197348875
+          },
+          "2": {
+            "max": 0.193140625,
+            "median": 0.188489625,
+            "min": 0.1850625
+          },
+          "4": {
+            "max": 0.19611975,
+            "median": 0.19233325,
+            "min": 0.189760375
+          },
+          "8": {
+            "max": 0.208427,
+            "median": 0.20121875,
+            "min": 0.199140625
+          }
+        }
+      },
+      {
+        "inputSize": 17408,
+        "milliseconds": {
+          "0": [
+            0.913072875,
+            0.7451145,
+            0.633932375,
+            0.63309375,
+            0.766474,
+            0.499276125,
+            0.404421875,
+            0.36853125,
+            0.315901
+          ],
+          "1": [
+            0.536880125,
+            0.5038125,
+            0.562099,
+            0.7044375,
+            0.6806875,
+            0.4221875,
+            0.322885375,
+            0.315296875,
+            0.27378125
+          ],
+          "2": [
+            0.645333375,
+            0.62196875,
+            0.705776,
+            0.6069375,
+            0.534859375,
+            0.47034375,
+            0.29410425,
+            0.287041625,
+            0.250328125
+          ],
+          "4": [
+            0.574875,
+            0.4689895,
+            0.463671875,
+            0.456640625,
+            0.456849,
+            0.452677,
+            0.364463625,
+            0.24889575,
+            0.24371875
+          ],
+          "8": [
+            0.516916625,
+            0.64340625,
+            0.6179375,
+            0.489328125,
+            0.521671875,
+            0.381302125,
+            0.35284375,
+            0.289875,
+            0.245583375
+          ]
+        },
+        "outputSize": 5120,
+        "statistics": {
+          "0": {
+            "max": 0.913072875,
+            "median": 0.63309375,
+            "min": 0.315901
+          },
+          "1": {
+            "max": 0.7044375,
+            "median": 0.5038125,
+            "min": 0.27378125
+          },
+          "2": {
+            "max": 0.705776,
+            "median": 0.534859375,
+            "min": 0.250328125
+          },
+          "4": {
+            "max": 0.574875,
+            "median": 0.456640625,
+            "min": 0.24371875
+          },
+          "8": {
+            "max": 0.64340625,
+            "median": 0.489328125,
+            "min": 0.245583375
+          }
+        }
+      },
+      {
+        "inputSize": 5120,
+        "milliseconds": {
+          "0": [
+            0.215135375,
+            0.212244875,
+            0.217322875,
+            0.213052,
+            0.216359375,
+            0.21346875,
+            0.212239625,
+            0.211974,
+            0.2124635
+          ],
+          "1": [
+            0.20596875,
+            0.20590625,
+            0.203864625,
+            0.206489625,
+            0.210098875,
+            0.206078125,
+            0.204619875,
+            0.20535425,
+            0.20363025
+          ],
+          "2": [
+            0.183885375,
+            0.1811615,
+            0.1773645,
+            0.181625,
+            0.18075,
+            0.181599,
+            0.177015625,
+            0.17915625,
+            0.177979125
+          ],
+          "4": [
+            0.18384375,
+            0.182286375,
+            0.1834375,
+            0.1868385,
+            0.182666625,
+            0.1865,
+            0.184901,
+            0.184197875,
+            0.183791625
+          ],
+          "8": [
+            0.191734375,
+            0.192901,
+            0.19354175,
+            0.19221875,
+            0.191364625,
+            0.193234375,
+            0.192854125,
+            0.203114625,
+            0.19147925
+          ]
+        },
+        "outputSize": 16384,
+        "statistics": {
+          "0": {
+            "max": 0.217322875,
+            "median": 0.213052,
+            "min": 0.211974
+          },
+          "1": {
+            "max": 0.210098875,
+            "median": 0.20590625,
+            "min": 0.20363025
+          },
+          "2": {
+            "max": 0.183885375,
+            "median": 0.18075,
+            "min": 0.177015625
+          },
+          "4": {
+            "max": 0.1868385,
+            "median": 0.18384375,
+            "min": 0.182286375
+          },
+          "8": {
+            "max": 0.203114625,
+            "median": 0.192854125,
+            "min": 0.191364625
+          }
+        }
+      },
+      {
+        "inputSize": 5120,
+        "milliseconds": {
+          "0": [
+            0.31340625,
+            0.265213625,
+            0.265692625,
+            0.23085425,
+            0.21890625,
+            0.20724475,
+            0.197489625,
+            0.196453125,
+            0.19238025
+          ],
+          "1": [
+            0.23825,
+            0.203510375,
+            0.202307375,
+            0.186348875,
+            0.1923385,
+            0.177197875,
+            0.17279175,
+            0.166823,
+            0.169223875
+          ],
+          "2": [
+            0.23910425,
+            0.208796875,
+            0.210349,
+            0.187552,
+            0.192474,
+            0.182302125,
+            0.168911375,
+            0.16728125,
+            0.16384375
+          ],
+          "4": [
+            0.245984375,
+            0.25084375,
+            0.203317625,
+            0.191046875,
+            0.1862135,
+            0.18116675,
+            0.17694275,
+            0.16755725,
+            0.164421875
+          ],
+          "8": [
+            0.259015625,
+            0.22739575,
+            0.229713625,
+            0.20078125,
+            0.193791625,
+            0.18405725,
+            0.18128125,
+            0.180520875,
+            0.17833325
+          ]
+        },
+        "outputSize": 14336,
+        "statistics": {
+          "0": {
+            "max": 0.31340625,
+            "median": 0.21890625,
+            "min": 0.19238025
+          },
+          "1": {
+            "max": 0.23825,
+            "median": 0.186348875,
+            "min": 0.166823
+          },
+          "2": {
+            "max": 0.23910425,
+            "median": 0.187552,
+            "min": 0.16384375
+          },
+          "4": {
+            "max": 0.25084375,
+            "median": 0.1862135,
+            "min": 0.164421875
+          },
+          "8": {
+            "max": 0.259015625,
+            "median": 0.193791625,
+            "min": 0.17833325
+          }
+        }
+      },
+      {
+        "inputSize": 6144,
+        "milliseconds": {
+          "0": [
+            0.106166625,
+            0.1060625,
+            0.105802,
+            0.1057135,
+            0.10718225,
+            0.1039375,
+            0.103739625,
+            0.105026,
+            0.10675525
+          ],
+          "1": [
+            0.11025,
+            0.109145875,
+            0.109760375,
+            0.1072605,
+            0.107609375,
+            0.108432375,
+            0.108546875,
+            0.104666625,
+            0.108421875
+          ],
+          "2": [
+            0.116609375,
+            0.111677125,
+            0.109427125,
+            0.1044115,
+            0.110125,
+            0.108109375,
+            0.110099,
+            0.107265625,
+            0.11125
+          ],
+          "4": [
+            0.110463625,
+            0.113473875,
+            0.11115625,
+            0.108291625,
+            0.106328125,
+            0.110244875,
+            0.10753125,
+            0.107421875,
+            0.109401125
+          ],
+          "8": [
+            0.11168225,
+            0.111510375,
+            0.114135375,
+            0.10958325,
+            0.108052125,
+            0.1074375,
+            0.10881775,
+            0.107567625,
+            0.112349
+          ]
+        },
+        "outputSize": 5120,
+        "statistics": {
+          "0": {
+            "max": 0.10718225,
+            "median": 0.105802,
+            "min": 0.103739625
+          },
+          "1": {
+            "max": 0.11025,
+            "median": 0.108432375,
+            "min": 0.104666625
+          },
+          "2": {
+            "max": 0.116609375,
+            "median": 0.110099,
+            "min": 0.1044115
+          },
+          "4": {
+            "max": 0.113473875,
+            "median": 0.109401125,
+            "min": 0.106328125
+          },
+          "8": {
+            "max": 0.114135375,
+            "median": 0.10958325,
+            "min": 0.1074375
+          }
+        }
+      },
+      {
+        "inputSize": 5120,
+        "milliseconds": {
+          "0": [
+            6.562744875,
+            5.864724,
+            6.69195825,
+            6.787359375,
+            6.732552125,
+            6.180453125,
+            6.254125,
+            6.16959375,
+            6.7849375
+          ],
+          "1": [
+            2.122395875,
+            2.155828125,
+            2.110224,
+            2.102599,
+            2.113703125,
+            2.143291625,
+            2.08179175,
+            2.06696875,
+            2.05556775
+          ],
+          "2": [
+            2.231135375,
+            2.2054895,
+            2.109927,
+            2.063135375,
+            2.066416625,
+            2.09252075,
+            2.0646145,
+            2.091796875,
+            2.079020875
+          ],
+          "4": [
+            2.2764115,
+            2.12724475,
+            2.084927,
+            2.060791625,
+            2.081890625,
+            2.07409375,
+            2.07853125,
+            2.06915625,
+            2.054572875
+          ],
+          "8": [
+            2.31896875,
+            2.205015625,
+            2.15965625,
+            2.125822875,
+            2.1321875,
+            2.159536375,
+            2.165052,
+            2.14658325,
+            2.130942625
+          ]
+        },
+        "outputSize": 248320,
+        "statistics": {
+          "0": {
+            "max": 6.787359375,
+            "median": 6.562744875,
+            "min": 5.864724
+          },
+          "1": {
+            "max": 2.155828125,
+            "median": 2.110224,
+            "min": 2.05556775
+          },
+          "2": {
+            "max": 2.231135375,
+            "median": 2.091796875,
+            "min": 2.063135375
+          },
+          "4": {
+            "max": 2.2764115,
+            "median": 2.07853125,
+            "min": 2.054572875
+          },
+          "8": {
+            "max": 2.31896875,
+            "median": 2.159536375,
+            "min": 2.125822875
+          }
+        }
+      }
+    ],
+    "qualified": true,
+    "swiglu": {
+      "inputSize": 5120,
+      "milliseconds": {
+        "fused": [
+          0.3934115,
+          0.38895825,
+          0.38993225,
+          0.39516675,
+          0.397671875,
+          0.390265625,
+          0.397963625,
+          0.392390625,
+          0.38763025
+        ],
+        "matrix": [
+          0.47631775,
+          0.475552125,
+          0.464770875,
+          0.480125,
+          0.474552125,
+          0.47109375,
+          0.474328125,
+          0.4798855,
+          0.47263025
+        ],
+        "reference": [
+          0.435807375,
+          0.436359375,
+          0.43550525,
+          0.439125,
+          0.438609375,
+          0.435359375,
+          0.4390365,
+          0.4378125,
+          0.43521875
+        ]
+      },
+      "outputSize": 17408,
+      "statistics": {
+        "fused": {
+          "max": 0.397963625,
+          "median": 0.392390625,
+          "min": 0.38763025
+        },
+        "matrix": {
+          "max": 0.480125,
+          "median": 0.474552125,
+          "min": 0.464770875
+        },
+        "reference": {
+          "max": 0.439125,
+          "median": 0.436359375,
+          "min": 0.43521875
+        }
+      }
+    },
+    "testBinarySHA256": "9b7807febe7968718e49582a33e0fb9752037cf4458870637d0fd7982d4d6358",
+    "testExitCode": 0,
+    "timing": "Synchronized wall time including submission and launch; width 8; 1 second warm-up per geometry; two discarded and nine recorded batches of eight independent calls; rotated mode order."
+  },
+  "defaultEnabled": false,
+  "generation": {
+    "allProjectionFollowups": "Cancelled after the main comparison in favor of a narrower head-only control.",
+    "allProjectionResults": [
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 69.40565098487772,
+          "median": 65.75412357276488,
+          "min": 64.42243439338819
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "b4f54fa677ad25ec4ed15c3f0de6d9b8b5a04e47b4abf252c8ab313397fe9cb3",
+          "m5FusedFFN": "1",
+          "m5Verification": "1",
+          "matchesSerialOutput": true,
+          "mode": "fused",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "fused",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 7.376920938491821,
+            "decodeTokensPerSecond": 69.40565098487772,
+            "firstTokenSeconds": 0.0003108978271484375,
+            "generatedTokens": 512,
+            "outputSHA256": "27373935952d179eb000c4fb8a3dd14c3b20852115c70213637902a2cbfdd765",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16109060096,
+            "residentMemoryBeforeBytes": 19279527936
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 7.78658390045166,
+            "decodeTokensPerSecond": 65.75412357276488,
+            "firstTokenSeconds": 0.0003669261932373047,
+            "generatedTokens": 512,
+            "outputSHA256": "27373935952d179eb000c4fb8a3dd14c3b20852115c70213637902a2cbfdd765",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16109207552,
+            "residentMemoryBeforeBytes": 16109109248
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 7.947541952133179,
+            "decodeTokensPerSecond": 64.42243439338819,
+            "firstTokenSeconds": 0.0004190206527709961,
+            "generatedTokens": 512,
+            "outputSHA256": "27373935952d179eb000c4fb8a3dd14c3b20852115c70213637902a2cbfdd765",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16109355008,
+            "residentMemoryBeforeBytes": 16109207552
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 12.679469915239888,
+          "median": 12.679469915239888,
+          "min": 12.679469915239888
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "b4f54fa677ad25ec4ed15c3f0de6d9b8b5a04e47b4abf252c8ab313397fe9cb3",
+          "m5FusedFFN": "1",
+          "m5Verification": "1",
+          "mode": "oracle",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": null,
+        "mode": "oracle",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "route": "final-target-pipelined"
+            },
+            "decodeSeconds": 40.380236983299255,
+            "decodeTokensPerSecond": 12.679469915239888,
+            "firstTokenSeconds": 0.08866798877716064,
+            "generatedTokens": 512,
+            "outputSHA256": "27373935952d179eb000c4fb8a3dd14c3b20852115c70213637902a2cbfdd765",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 15404957696,
+            "residentMemoryBeforeBytes": 15404892160
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 89.67686176115673,
+          "median": 80.38927226472248,
+          "min": 74.33739513414687
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "b4f54fa677ad25ec4ed15c3f0de6d9b8b5a04e47b4abf252c8ab313397fe9cb3",
+          "m5FusedFFN": "1",
+          "m5Verification": "0",
+          "matchesSerialOutput": true,
+          "mode": "reference",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "reference",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 5.709388017654419,
+            "decodeTokensPerSecond": 89.67686176115673,
+            "firstTokenSeconds": 0.00027298927307128906,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16105996288,
+            "residentMemoryBeforeBytes": 19277496320
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 6.369009017944336,
+            "decodeTokensPerSecond": 80.38927226472248,
+            "firstTokenSeconds": 0.0002809762954711914,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16106242048,
+            "residentMemoryBeforeBytes": 16106045440
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 6.887516021728516,
+            "decodeTokensPerSecond": 74.33739513414687,
+            "firstTokenSeconds": 0.0003390312194824219,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16106455040,
+            "residentMemoryBeforeBytes": 16106242048
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 23.24533471645301,
+          "median": 22.88215490741197,
+          "min": 22.701101157141284
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "b4f54fa677ad25ec4ed15c3f0de6d9b8b5a04e47b4abf252c8ab313397fe9cb3",
+          "m5FusedFFN": "1",
+          "m5Verification": "1",
+          "matchesSerialOutput": true,
+          "mode": "fused",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "fused",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.18520900321543407,
+              "acceptedDraftTokens": 288,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1555,
+              "rounds": 224,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 22.025925040245056,
+            "decodeTokensPerSecond": 23.24533471645301,
+            "firstTokenSeconds": 0.00028002262115478516,
+            "generatedTokens": 512,
+            "outputSHA256": "130b74f870667639a37057d2cb4eecf5242deb5fd4f0a31b9aea03d176dd0b5b",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16109731840,
+            "residentMemoryBeforeBytes": 16109256704
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.18520900321543407,
+              "acceptedDraftTokens": 288,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1555,
+              "rounds": 224,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 22.37551498413086,
+            "decodeTokensPerSecond": 22.88215490741197,
+            "firstTokenSeconds": 0.0002969503402709961,
+            "generatedTokens": 512,
+            "outputSHA256": "130b74f870667639a37057d2cb4eecf5242deb5fd4f0a31b9aea03d176dd0b5b",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16109977600,
+            "residentMemoryBeforeBytes": 16109780992
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.18520900321543407,
+              "acceptedDraftTokens": 288,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1555,
+              "rounds": 224,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 22.553972005844116,
+            "decodeTokensPerSecond": 22.701101157141284,
+            "firstTokenSeconds": 0.00028395652770996094,
+            "generatedTokens": 512,
+            "outputSHA256": "130b74f870667639a37057d2cb4eecf5242deb5fd4f0a31b9aea03d176dd0b5b",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16110059520,
+            "residentMemoryBeforeBytes": 16109993984
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "prose"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 13.178685237894248,
+          "median": 13.178685237894248,
+          "min": 13.178685237894248
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "b4f54fa677ad25ec4ed15c3f0de6d9b8b5a04e47b4abf252c8ab313397fe9cb3",
+          "m5FusedFFN": "1",
+          "m5Verification": "1",
+          "mode": "oracle",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": null,
+        "mode": "oracle",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "route": "final-target-pipelined"
+            },
+            "decodeSeconds": 38.85061299800873,
+            "decodeTokensPerSecond": 13.178685237894248,
+            "firstTokenSeconds": 0.08633005619049072,
+            "generatedTokens": 512,
+            "outputSHA256": "130b74f870667639a37057d2cb4eecf5242deb5fd4f0a31b9aea03d176dd0b5b",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 15404761088,
+            "residentMemoryBeforeBytes": 15404630016
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "prose"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 26.779022716347207,
+          "median": 26.07513595190686,
+          "min": 26.034479090083725
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "b4f54fa677ad25ec4ed15c3f0de6d9b8b5a04e47b4abf252c8ab313397fe9cb3",
+          "m5FusedFFN": "1",
+          "m5Verification": "0",
+          "matchesSerialOutput": true,
+          "mode": "reference",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "reference",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.19250985545335086,
+              "acceptedDraftTokens": 293,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1522,
+              "rounds": 218,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 19.11944305896759,
+            "decodeTokensPerSecond": 26.779022716347207,
+            "firstTokenSeconds": 0.0003490447998046875,
+            "generatedTokens": 512,
+            "outputSHA256": "8fbfb04be8f926cf5abb4eaa2bf9a8e7dce5bb9c38727d8405215bd82d4d6ee8",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16108568576,
+            "residentMemoryBeforeBytes": 19279904768
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.19250985545335086,
+              "acceptedDraftTokens": 293,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1522,
+              "rounds": 218,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 19.66622793674469,
+            "decodeTokensPerSecond": 26.034479090083725,
+            "firstTokenSeconds": 0.00029397010803222656,
+            "generatedTokens": 512,
+            "outputSHA256": "8fbfb04be8f926cf5abb4eaa2bf9a8e7dce5bb9c38727d8405215bd82d4d6ee8",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16108863488,
+            "residentMemoryBeforeBytes": 16108617728
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.19250985545335086,
+              "acceptedDraftTokens": 293,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1522,
+              "rounds": 218,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 19.63556396961212,
+            "decodeTokensPerSecond": 26.07513595190686,
+            "firstTokenSeconds": 0.0003190040588378906,
+            "generatedTokens": 512,
+            "outputSHA256": "8fbfb04be8f926cf5abb4eaa2bf9a8e7dce5bb9c38727d8405215bd82d4d6ee8",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16108978176,
+            "residentMemoryBeforeBytes": 16108863488
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "prose"
+      }
+    ],
+    "headOnlyProtocol": {
+      "binarySHA256": "0a289813a6f6950c32e13891a8fa7d2ee62aa99adb2bfa5bf17ad1d93b68b74d",
+      "contextSize": 8192,
+      "model": "vision-chat-q38-27b-4bit",
+      "repetitions": {
+        "head": 3,
+        "matrix": 3,
+        "oracle": 1,
+        "reference": 3
+      },
+      "scope": "Only target vocabulary head, including draft scoring; target body and independent draft layers remain reference.",
+      "stopOnEOS": false,
+      "temperature": 0,
+      "thinking": false,
+      "tokens": 512,
+      "topP": 1,
+      "warmupTokens": 256,
+      "warmups": 1
+    },
+    "headOnlyResults": [
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 92.20062028842119,
+          "median": 84.24344827633553,
+          "min": 79.5930308960446
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "0a289813a6f6950c32e13891a8fa7d2ee62aa99adb2bfa5bf17ad1d93b68b74d",
+          "m5FusedFFN": "1",
+          "m5ProjectionScope": "head",
+          "m5Verification": "1",
+          "matchesSerialOutput": true,
+          "mode": "head",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "head",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 5.553107976913452,
+            "decodeTokensPerSecond": 92.20062028842119,
+            "firstTokenSeconds": 0.0002709627151489258,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16102195200,
+            "residentMemoryBeforeBytes": 19273007104
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 6.077623963356018,
+            "decodeTokensPerSecond": 84.24344827633553,
+            "firstTokenSeconds": 0.0003019571304321289,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16102342656,
+            "residentMemoryBeforeBytes": 16102244352
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 6.4327239990234375,
+            "decodeTokensPerSecond": 79.5930308960446,
+            "firstTokenSeconds": 0.0003110170364379883,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16102424576,
+            "residentMemoryBeforeBytes": 16102342656
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 32.26549868127762,
+          "median": 32.26549868127762,
+          "min": 32.26549868127762
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "0a289813a6f6950c32e13891a8fa7d2ee62aa99adb2bfa5bf17ad1d93b68b74d",
+          "m5FusedFFN": "1",
+          "m5ProjectionScope": "head",
+          "m5Verification": "1",
+          "mode": "oracle",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": null,
+        "mode": "oracle",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "route": "final-target-pipelined"
+            },
+            "decodeSeconds": 15.868342995643616,
+            "decodeTokensPerSecond": 32.26549868127762,
+            "firstTokenSeconds": 0.033206939697265625,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 15409528832,
+            "residentMemoryBeforeBytes": 15409381376
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 93.75098326867267,
+          "median": 84.40965230053233,
+          "min": 80.20982407321138
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "0a289813a6f6950c32e13891a8fa7d2ee62aa99adb2bfa5bf17ad1d93b68b74d",
+          "m5FusedFFN": "1",
+          "m5ProjectionScope": "head",
+          "m5Verification": "0",
+          "matchesSerialOutput": true,
+          "mode": "reference",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "reference",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 5.461276054382324,
+            "decodeTokensPerSecond": 93.75098326867267,
+            "firstTokenSeconds": 0.00030100345611572266,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16090218496,
+            "residentMemoryBeforeBytes": 19261636608
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 6.065657019615173,
+            "decodeTokensPerSecond": 84.40965230053233,
+            "firstTokenSeconds": 0.0003050565719604492,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16090382336,
+            "residentMemoryBeforeBytes": 16090267648
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 6.383257985115051,
+            "decodeTokensPerSecond": 80.20982407321138,
+            "firstTokenSeconds": 0.0002859830856323242,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16090480640,
+            "residentMemoryBeforeBytes": 16090382336
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 23.5179078020796,
+          "median": 22.50032678633799,
+          "min": 21.34669631787609
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "0a289813a6f6950c32e13891a8fa7d2ee62aa99adb2bfa5bf17ad1d93b68b74d",
+          "m5FusedFFN": "1",
+          "m5ProjectionScope": "head",
+          "m5Verification": "1",
+          "matchesSerialOutput": true,
+          "mode": "head",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "head",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.19250985545335086,
+              "acceptedDraftTokens": 293,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1522,
+              "rounds": 218,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 21.770644068717957,
+            "decodeTokensPerSecond": 23.5179078020796,
+            "firstTokenSeconds": 0.0003859996795654297,
+            "generatedTokens": 512,
+            "outputSHA256": "8fbfb04be8f926cf5abb4eaa2bf9a8e7dce5bb9c38727d8405215bd82d4d6ee8",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16093265920,
+            "residentMemoryBeforeBytes": 19264585728
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.19250985545335086,
+              "acceptedDraftTokens": 293,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1522,
+              "rounds": 218,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 22.7552250623703,
+            "decodeTokensPerSecond": 22.50032678633799,
+            "firstTokenSeconds": 0.00041604042053222656,
+            "generatedTokens": 512,
+            "outputSHA256": "8fbfb04be8f926cf5abb4eaa2bf9a8e7dce5bb9c38727d8405215bd82d4d6ee8",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16093675520,
+            "residentMemoryBeforeBytes": 16093315072
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.19250985545335086,
+              "acceptedDraftTokens": 293,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1522,
+              "rounds": 218,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 23.984976053237915,
+            "decodeTokensPerSecond": 21.34669631787609,
+            "firstTokenSeconds": 0.00041306018829345703,
+            "generatedTokens": 512,
+            "outputSHA256": "8fbfb04be8f926cf5abb4eaa2bf9a8e7dce5bb9c38727d8405215bd82d4d6ee8",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16093708288,
+            "residentMemoryBeforeBytes": 16093675520
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "prose"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 32.089175803752376,
+          "median": 32.089175803752376,
+          "min": 32.089175803752376
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "0a289813a6f6950c32e13891a8fa7d2ee62aa99adb2bfa5bf17ad1d93b68b74d",
+          "m5FusedFFN": "1",
+          "m5ProjectionScope": "head",
+          "m5Verification": "1",
+          "mode": "oracle",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": null,
+        "mode": "oracle",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "route": "final-target-pipelined"
+            },
+            "decodeSeconds": 15.955536007881165,
+            "decodeTokensPerSecond": 32.089175803752376,
+            "firstTokenSeconds": 0.03278791904449463,
+            "generatedTokens": 512,
+            "outputSHA256": "8fbfb04be8f926cf5abb4eaa2bf9a8e7dce5bb9c38727d8405215bd82d4d6ee8",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 15399387136,
+            "residentMemoryBeforeBytes": 15399305216
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "prose"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 20.91999348401779,
+          "median": 20.836381314852428,
+          "min": 20.699412976082233
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "0a289813a6f6950c32e13891a8fa7d2ee62aa99adb2bfa5bf17ad1d93b68b74d",
+          "m5FusedFFN": "1",
+          "m5ProjectionScope": "head",
+          "m5Verification": "0",
+          "matchesSerialOutput": true,
+          "mode": "reference",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "reference",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.19250985545335086,
+              "acceptedDraftTokens": 293,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1522,
+              "rounds": 218,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 24.47419500350952,
+            "decodeTokensPerSecond": 20.91999348401779,
+            "firstTokenSeconds": 0.0003490447998046875,
+            "generatedTokens": 512,
+            "outputSHA256": "8fbfb04be8f926cf5abb4eaa2bf9a8e7dce5bb9c38727d8405215bd82d4d6ee8",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16104849408,
+            "residentMemoryBeforeBytes": 19276218368
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.19250985545335086,
+              "acceptedDraftTokens": 293,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1522,
+              "rounds": 218,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 24.572404980659485,
+            "decodeTokensPerSecond": 20.836381314852428,
+            "firstTokenSeconds": 0.0003529787063598633,
+            "generatedTokens": 512,
+            "outputSHA256": "8fbfb04be8f926cf5abb4eaa2bf9a8e7dce5bb9c38727d8405215bd82d4d6ee8",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16105193472,
+            "residentMemoryBeforeBytes": 16104898560
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.19250985545335086,
+              "acceptedDraftTokens": 293,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1522,
+              "rounds": 218,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 24.73500096797943,
+            "decodeTokensPerSecond": 20.699412976082233,
+            "firstTokenSeconds": 0.00035393238067626953,
+            "generatedTokens": 512,
+            "outputSHA256": "8fbfb04be8f926cf5abb4eaa2bf9a8e7dce5bb9c38727d8405215bd82d4d6ee8",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16105259008,
+            "residentMemoryBeforeBytes": 16105193472
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "prose"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 77.17760962517818,
+          "median": 71.5682664505562,
+          "min": 71.47812205179476
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "0a289813a6f6950c32e13891a8fa7d2ee62aa99adb2bfa5bf17ad1d93b68b74d",
+          "m5FusedFFN": "1",
+          "m5ProjectionScope": "head",
+          "m5Verification": "1",
+          "mode": "head",
+          "outputLimit": 1024,
+          "stage": "matched",
+          "stopOnEOS": true
+        },
+        "matchesSerialOutput": null,
+        "mode": "head",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.7998056365403304,
+              "acceptedDraftTokens": 823,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1029,
+              "rounds": 147,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 12.568412065505981,
+            "decodeTokensPerSecond": 77.17760962517818,
+            "firstTokenSeconds": 0.00030100345611572266,
+            "generatedTokens": 970,
+            "outputSHA256": "50f9aa5b805277dbe8aa0c8f9c0242891afb348822869e217803bab29a4be85f",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16105848832,
+            "residentMemoryBeforeBytes": 19275415552
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.7998056365403304,
+              "acceptedDraftTokens": 823,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1029,
+              "rounds": 147,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 13.57058596611023,
+            "decodeTokensPerSecond": 71.47812205179476,
+            "firstTokenSeconds": 0.0003560781478881836,
+            "generatedTokens": 970,
+            "outputSHA256": "50f9aa5b805277dbe8aa0c8f9c0242891afb348822869e217803bab29a4be85f",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16105979904,
+            "residentMemoryBeforeBytes": 16105897984
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.7998056365403304,
+              "acceptedDraftTokens": 823,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1029,
+              "rounds": 147,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 13.553493022918701,
+            "decodeTokensPerSecond": 71.5682664505562,
+            "firstTokenSeconds": 0.00036895275115966797,
+            "generatedTokens": 970,
+            "outputSHA256": "50f9aa5b805277dbe8aa0c8f9c0242891afb348822869e217803bab29a4be85f",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16106258432,
+            "residentMemoryBeforeBytes": 16105979904
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "matched",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 78.94876733793359,
+          "median": 71.22064724256887,
+          "min": 69.45280776338497
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "0a289813a6f6950c32e13891a8fa7d2ee62aa99adb2bfa5bf17ad1d93b68b74d",
+          "m5FusedFFN": "1",
+          "m5ProjectionScope": "head",
+          "m5Verification": "0",
+          "mode": "reference",
+          "outputLimit": 1024,
+          "stage": "matched",
+          "stopOnEOS": true
+        },
+        "matchesSerialOutput": null,
+        "mode": "reference",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.7998056365403304,
+              "acceptedDraftTokens": 823,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1029,
+              "rounds": 147,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 12.286448955535889,
+            "decodeTokensPerSecond": 78.94876733793359,
+            "firstTokenSeconds": 0.0002789497375488281,
+            "generatedTokens": 970,
+            "outputSHA256": "50f9aa5b805277dbe8aa0c8f9c0242891afb348822869e217803bab29a4be85f",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16101605376,
+            "residentMemoryBeforeBytes": 19272040448
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.7998056365403304,
+              "acceptedDraftTokens": 823,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1029,
+              "rounds": 147,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 13.619645953178406,
+            "decodeTokensPerSecond": 71.22064724256887,
+            "firstTokenSeconds": 0.00032889842987060547,
+            "generatedTokens": 970,
+            "outputSHA256": "50f9aa5b805277dbe8aa0c8f9c0242891afb348822869e217803bab29a4be85f",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16101769216,
+            "residentMemoryBeforeBytes": 16101654528
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.7998056365403304,
+              "acceptedDraftTokens": 823,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1029,
+              "rounds": 147,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 13.966318011283875,
+            "decodeTokensPerSecond": 69.45280776338497,
+            "firstTokenSeconds": 0.00030303001403808594,
+            "generatedTokens": 970,
+            "outputSHA256": "50f9aa5b805277dbe8aa0c8f9c0242891afb348822869e217803bab29a4be85f",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16101818368,
+            "residentMemoryBeforeBytes": 16101769216
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "matched",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 24.925051650646346,
+          "median": 24.708457662755027,
+          "min": 24.399750986276224
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "0a289813a6f6950c32e13891a8fa7d2ee62aa99adb2bfa5bf17ad1d93b68b74d",
+          "m5FusedFFN": "1",
+          "m5ProjectionScope": "head",
+          "m5Verification": "1",
+          "mode": "head",
+          "outputLimit": 1024,
+          "stage": "matched",
+          "stopOnEOS": true
+        },
+        "matchesSerialOutput": null,
+        "mode": "head",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.1886376172090458,
+              "acceptedDraftTokens": 342,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1813,
+              "rounds": 259,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 24.112287044525146,
+            "decodeTokensPerSecond": 24.925051650646346,
+            "firstTokenSeconds": 0.0003770589828491211,
+            "generatedTokens": 601,
+            "outputSHA256": "514d968ac7c830cf3a71c49a70e070e729407d178c2ca4bee043cc3248b1773f",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16097968128,
+            "residentMemoryBeforeBytes": 19269271552
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.1886376172090458,
+              "acceptedDraftTokens": 342,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1813,
+              "rounds": 259,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 24.631398916244507,
+            "decodeTokensPerSecond": 24.399750986276224,
+            "firstTokenSeconds": 0.00035500526428222656,
+            "generatedTokens": 601,
+            "outputSHA256": "514d968ac7c830cf3a71c49a70e070e729407d178c2ca4bee043cc3248b1773f",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16098279424,
+            "residentMemoryBeforeBytes": 16098017280
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.1886376172090458,
+              "acceptedDraftTokens": 342,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1813,
+              "rounds": 259,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 24.323655009269714,
+            "decodeTokensPerSecond": 24.708457662755027,
+            "firstTokenSeconds": 0.00036394596099853516,
+            "generatedTokens": 601,
+            "outputSHA256": "514d968ac7c830cf3a71c49a70e070e729407d178c2ca4bee043cc3248b1773f",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16098344960,
+            "residentMemoryBeforeBytes": 16098279424
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "matched",
+        "workload": "prose"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 25.051222576400637,
+          "median": 24.53474201895949,
+          "min": 24.35143447919284
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "0a289813a6f6950c32e13891a8fa7d2ee62aa99adb2bfa5bf17ad1d93b68b74d",
+          "m5FusedFFN": "1",
+          "m5ProjectionScope": "head",
+          "m5Verification": "0",
+          "mode": "reference",
+          "outputLimit": 1024,
+          "stage": "matched",
+          "stopOnEOS": true
+        },
+        "matchesSerialOutput": null,
+        "mode": "reference",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.1886376172090458,
+              "acceptedDraftTokens": 342,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1813,
+              "rounds": 259,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 23.99084508419037,
+            "decodeTokensPerSecond": 25.051222576400637,
+            "firstTokenSeconds": 0.0002900362014770508,
+            "generatedTokens": 601,
+            "outputSHA256": "514d968ac7c830cf3a71c49a70e070e729407d178c2ca4bee043cc3248b1773f",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16102260736,
+            "residentMemoryBeforeBytes": 19273547776
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.1886376172090458,
+              "acceptedDraftTokens": 342,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1813,
+              "rounds": 259,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 24.49587607383728,
+            "decodeTokensPerSecond": 24.53474201895949,
+            "firstTokenSeconds": 0.0003440380096435547,
+            "generatedTokens": 601,
+            "outputSHA256": "514d968ac7c830cf3a71c49a70e070e729407d178c2ca4bee043cc3248b1773f",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16102604800,
+            "residentMemoryBeforeBytes": 16102326272
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.1886376172090458,
+              "acceptedDraftTokens": 342,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1813,
+              "rounds": 259,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 24.68027091026306,
+            "decodeTokensPerSecond": 24.35143447919284,
+            "firstTokenSeconds": 0.0003529787063598633,
+            "generatedTokens": 601,
+            "outputSHA256": "514d968ac7c830cf3a71c49a70e070e729407d178c2ca4bee043cc3248b1773f",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16102588416,
+            "residentMemoryBeforeBytes": 16102621184
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "matched",
+        "workload": "prose"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 66.35696596090385,
+          "median": 65.05042659622164,
+          "min": 64.69287619216549
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "0a289813a6f6950c32e13891a8fa7d2ee62aa99adb2bfa5bf17ad1d93b68b74d",
+          "m5FusedFFN": "1",
+          "m5ProjectionScope": "head",
+          "m5Verification": "1",
+          "matchesSerialOutput": true,
+          "mode": "head",
+          "outputLimit": 512,
+          "stage": "reverse",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "head",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 7.914318084716797,
+            "decodeTokensPerSecond": 64.69287619216549,
+            "firstTokenSeconds": 0.0003420114517211914,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16103620608,
+            "residentMemoryBeforeBytes": 19274399744
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 7.870816946029663,
+            "decodeTokensPerSecond": 65.05042659622164,
+            "firstTokenSeconds": 0.0003390312194824219,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16103702528,
+            "residentMemoryBeforeBytes": 16103669760
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 7.715844035148621,
+            "decodeTokensPerSecond": 66.35696596090385,
+            "firstTokenSeconds": 0.0003160238265991211,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16103784448,
+            "residentMemoryBeforeBytes": 16103702528
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "reverse",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 75.78020320188352,
+          "median": 75.15702199328194,
+          "min": 71.40365791006768
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "0a289813a6f6950c32e13891a8fa7d2ee62aa99adb2bfa5bf17ad1d93b68b74d",
+          "m5FusedFFN": "1",
+          "m5ProjectionScope": "head",
+          "m5Verification": "0",
+          "matchesSerialOutput": true,
+          "mode": "reference",
+          "outputLimit": 512,
+          "stage": "reverse",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "reference",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 7.170500993728638,
+            "decodeTokensPerSecond": 71.40365791006768,
+            "firstTokenSeconds": 0.00032401084899902344,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16099803136,
+            "residentMemoryBeforeBytes": 19271237632
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 6.756381988525391,
+            "decodeTokensPerSecond": 75.78020320188352,
+            "firstTokenSeconds": 0.0003390312194824219,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16099901440,
+            "residentMemoryBeforeBytes": 16099852288
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 6.812404036521912,
+            "decodeTokensPerSecond": 75.15702199328194,
+            "firstTokenSeconds": 0.0003229379653930664,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16100016128,
+            "residentMemoryBeforeBytes": 16099901440
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "reverse",
+        "workload": "code"
+      }
+    ],
+    "headOnlySourceSHA256": {
+      "Sources/MereRunCore/Q35/Q35Generator+Loading.swift": "53ea9c07da23aa2ed24a292a2cd7cb8c6dc66efd1e44782a1d970790a77d51e5",
+      "Sources/MereRunQwenModel/Q35MoE.swift": "7adad0f44c12f153f510559588b7f7f4d9430842ad42d5b742f3ea6c8fdea7ae",
+      "Sources/MereRunTensor/FusedQuantizedProjection.swift": "b79a0904ddaccc18120799a2d4c43cef2b6a17505aface28b9d51c86732a89c8",
+      "Sources/MereRunTensor/M5AffineQ4Verification+SwiGLU.swift": "9faae13070bfd8ff143adbed2d74929488577876d6eb0b7c73df5c0c5a9b2fdc",
+      "Sources/MereRunTensor/M5AffineQ4Verification.swift": "42d41e9c9c5a99866be3f4c508f4269255e5f51ec63d7306021a95af0d93a22b",
+      "Sources/MereRunTensor/PortableQuantizedMatmul.swift": "6cd895638d6897bd028779fa5339c5f043af428289c16e3aaa84fd56c57360b9",
+      "Sources/MereRunTensor/QuantizedVerificationBackend.swift": "5091e1d6045aff8b54cc26667e6a484e44333dd8f47aa79a5a3966c3110091bb"
+    },
+    "headWorkflow": {
+      "stage": "measurements-complete-gate-superseded-by-tiled-revision",
+      "updatedUTC": "2026-11-08T23:34:23.990294+00:00"
+    },
+    "protocol": {
+      "binarySHA256": "b4f54fa677ad25ec4ed15c3f0de6d9b8b5a04e47b4abf252c8ab313397fe9cb3",
+      "contextSize": 8192,
+      "model": "vision-chat-q38-27b-4bit",
+      "repetitions": {
+        "fused": 3,
+        "matrix": 3,
+        "oracle": 1,
+        "reference": 3
+      },
+      "scope": "Target projections plus shared target LM head used by draft; independent draft layers remain reference.",
+      "stopOnEOS": false,
+      "temperature": 0,
+      "thinking": false,
+      "tokens": 512,
+      "topP": 1,
+      "warmupTokens": 256,
+      "warmups": 1
+    },
+    "status": "measurements-collected",
+    "synchronizedPhaseProfiles": [
+      {
+        "binarySHA256": "0a289813a6f6950c32e13891a8fa7d2ee62aa99adb2bfa5bf17ad1d93b68b74d",
+        "exclusionReasons": [],
+        "generatedTokens": 512,
+        "matchesSerialOutput": true,
+        "mode": "all",
+        "normalThroughput": false,
+        "phaseSeconds": {
+          "acceptanceSeconds": 0.002721711,
+          "draftGraphSeconds": 0.048322124,
+          "draftWaitSeconds": 0.633887877,
+          "repairSeconds": 0.156388044,
+          "verificationGraphSeconds": 0.241572785,
+          "verificationWaitSeconds": 6.456780995
+        },
+        "profiling": true,
+        "qualified": true,
+        "rounds": 75
+      },
+      {
+        "binarySHA256": "0a289813a6f6950c32e13891a8fa7d2ee62aa99adb2bfa5bf17ad1d93b68b74d",
+        "exclusionReasons": [],
+        "generatedTokens": 512,
+        "matchesSerialOutput": true,
+        "mode": "head",
+        "normalThroughput": false,
+        "phaseSeconds": {
+          "acceptanceSeconds": 0.002815334,
+          "draftGraphSeconds": 0.052700494,
+          "draftWaitSeconds": 0.700308833,
+          "repairSeconds": 0.166689832,
+          "verificationGraphSeconds": 0.221507916,
+          "verificationWaitSeconds": 5.273461629
+        },
+        "profiling": true,
+        "qualified": true,
+        "rounds": 75
+      },
+      {
+        "binarySHA256": "0a289813a6f6950c32e13891a8fa7d2ee62aa99adb2bfa5bf17ad1d93b68b74d",
+        "exclusionReasons": [],
+        "generatedTokens": 512,
+        "matchesSerialOutput": true,
+        "mode": "reference",
+        "normalThroughput": false,
+        "phaseSeconds": {
+          "acceptanceSeconds": 0.002416665,
+          "draftGraphSeconds": 0.042879331,
+          "draftWaitSeconds": 0.729817708,
+          "repairSeconds": 0.153316667,
+          "verificationGraphSeconds": 0.185646582,
+          "verificationWaitSeconds": 5.634428
+        },
+        "profiling": true,
+        "qualified": true,
+        "rounds": 75
+      }
+    ]
+  },
+  "hardware": {
+    "architecture": "applegpu_g17s",
+    "chip": "Apple M5 Max",
+    "gpuCores": 40,
+    "memoryGiB": 128
+  },
+  "headOnlyInstalledTokenParity": {
+    "actualTokenIDsCompared": true,
+    "correctnessOnly": true,
+    "prompts": 2,
+    "targetBodyAndDraftBackendScopeAsserted": true,
+    "testExitCode": 0,
+    "tokensPerPrompt": 128
+  },
+  "installedHeadDispatch": {
+    "actualMatrixDifference": 0,
+    "prompts": 2,
+    "referenceMatrixDifference": 0.0625,
+    "stage": "complete",
+    "testBinarySHA256": "d2a07096097afbd4956ccae9af9999cbad534b9958e3c4d5971996aa679fa8ce",
+    "testSourceSHA256": "1cb89465dc9942c216d5d6fc3a7d5b136aa4882f4fecb68a72b2b027a07b7183"
+  },
+  "installedTokenParity": {
+    "actualTokenIDsCompared": true,
+    "correctnessOnly": true,
+    "draftBackendScopeAsserted": true,
+    "prompts": 2,
+    "repeatedGeneration": true,
+    "targetOnlyOracle": true,
+    "testExitCode": 0,
+    "timingQualified": false,
+    "tokensPerPrompt": 128
+  },
+  "partitionRevision": {
+    "comparisons": [
+      {
+        "gainPercent": 27.346845880949687,
+        "partitionedTPS": 102.78641361472056,
+        "qualified": true,
+        "referenceTPS": 80.71374905571712,
+        "sameRenderedOutput": true,
+        "stage": "main",
+        "workload": "code"
+      },
+      {
+        "gainPercent": 22.831841344352853,
+        "partitionedTPS": 30.752656895844275,
+        "qualified": true,
+        "referenceTPS": 25.036388414654436,
+        "sameRenderedOutput": false,
+        "stage": "main",
+        "workload": "prose"
+      },
+      {
+        "gainPercent": 37.25068357499666,
+        "partitionedTPS": 107.30942652656255,
+        "qualified": true,
+        "referenceTPS": 78.1849851173429,
+        "sameRenderedOutput": true,
+        "stage": "reverse",
+        "workload": "code"
+      },
+      {
+        "gainPercent": 32.8642413960407,
+        "partitionedTPS": 93.83876109812637,
+        "qualified": true,
+        "referenceTPS": 70.62755193732866,
+        "sameRenderedOutput": false,
+        "stage": "matched",
+        "workload": "code"
+      },
+      {
+        "gainPercent": 37.09891261152543,
+        "partitionedTPS": 34.031284081725545,
+        "qualified": true,
+        "referenceTPS": 24.822431800137164,
+        "sameRenderedOutput": false,
+        "stage": "matched",
+        "workload": "prose"
+      }
+    ],
+    "defaultEnabled": false,
+    "description": "Tile-major projections with two K partitions for 17408/6144 to 5120; one elsewhere. Interleaved gate/up retains one partition.",
+    "m5-partition-installed": {
+      "correctnessOnly": true,
+      "exclusionReasons": [],
+      "resourceQualified": true,
+      "testBinarySHA256": "ef9cff0ea3843b9fd27c5e2164bffc67d0d5211d0013546b63b4638e2c82c947",
+      "testExitCode": 0
+    },
+    "m5-partition-numerical": {
+      "correctnessOnly": true,
+      "exclusionReasons": [],
+      "resourceQualified": true,
+      "testBinarySHA256": "ef9cff0ea3843b9fd27c5e2164bffc67d0d5211d0013546b63b4638e2c82c947",
+      "testExitCode": 0
+    },
+    "protocol": {
+      "binarySHA256": "767036cca2bd44bc4b56c972e2fbe42466b2cc9b916eea1508e31d880edbec2b",
+      "contextSize": 8192,
+      "model": "vision-chat-q38-27b-4bit",
+      "repetitions": {
+        "matrix": 3,
+        "oracle": 1,
+        "reference": 3,
+        "tiled": 3
+      },
+      "scope": "Tile-major target with two K partitions for 17408/6144 to 5120 projections, one elsewhere; interleaved FFN and independent reference draft.",
+      "stopOnEOS": false,
+      "temperature": 0,
+      "thinking": false,
+      "tokens": 512,
+      "topP": 1,
+      "warmupTokens": 256,
+      "warmups": 1
+    },
+    "results": [
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 22.40594615665636,
+          "median": 22.40594615665636,
+          "min": 22.40594615665636
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "767036cca2bd44bc4b56c972e2fbe42466b2cc9b916eea1508e31d880edbec2b",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "1",
+          "mode": "oracle",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": null,
+        "mode": "oracle",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "route": "final-target-pipelined"
+            },
+            "decodeSeconds": 22.85107696056366,
+            "decodeTokensPerSecond": 22.40594615665636,
+            "firstTokenSeconds": 0.04594695568084717,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 15407480832,
+            "residentMemoryBeforeBytes": 15407398912
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 88.24199619995636,
+          "median": 80.71374905571712,
+          "min": 76.188639114197
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "767036cca2bd44bc4b56c972e2fbe42466b2cc9b916eea1508e31d880edbec2b",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "0",
+          "matchesSerialOutput": true,
+          "mode": "reference",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "reference",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 5.802225947380066,
+            "decodeTokensPerSecond": 88.24199619995636,
+            "firstTokenSeconds": 0.00028502941131591797,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16092790784,
+            "residentMemoryBeforeBytes": 19264307200
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 6.34340500831604,
+            "decodeTokensPerSecond": 80.71374905571712,
+            "firstTokenSeconds": 0.0003370046615600586,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16092971008,
+            "residentMemoryBeforeBytes": 16092839936
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 6.720162034034729,
+            "decodeTokensPerSecond": 76.188639114197,
+            "firstTokenSeconds": 0.0002880096435546875,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16093069312,
+            "residentMemoryBeforeBytes": 16092971008
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 116.7212016369356,
+          "median": 102.78641361472056,
+          "min": 101.35930341297191
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "767036cca2bd44bc4b56c972e2fbe42466b2cc9b916eea1508e31d880edbec2b",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "1",
+          "matchesSerialOutput": true,
+          "mode": "tiled",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "tiled",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 4.386520981788635,
+            "decodeTokensPerSecond": 116.7212016369356,
+            "firstTokenSeconds": 0.0003129243850708008,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16094658560,
+            "residentMemoryBeforeBytes": 19265159168
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 5.051337003707886,
+            "decodeTokensPerSecond": 101.35930341297191,
+            "firstTokenSeconds": 0.0003650188446044922,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16095019008,
+            "residentMemoryBeforeBytes": 16094707712
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 4.981203079223633,
+            "decodeTokensPerSecond": 102.78641361472056,
+            "firstTokenSeconds": 0.0002859830856323242,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16095215616,
+            "residentMemoryBeforeBytes": 16095019008
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": true,
+        "decodeTPS": {
+          "max": 20.44896088325862,
+          "median": 20.44896088325862,
+          "min": 20.44896088325862
+        },
+        "exclusionReasons": [
+          "Another compute GPU client submitted work"
+        ],
+        "experiment": {
+          "binarySHA256": "767036cca2bd44bc4b56c972e2fbe42466b2cc9b916eea1508e31d880edbec2b",
+          "correctnessOnly": true,
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "1",
+          "mode": "oracle",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": null,
+        "mode": "oracle",
+        "qualified": false,
+        "requests": [
+          {
+            "acceleration": {
+              "route": "final-target-pipelined"
+            },
+            "decodeSeconds": 25.037947058677673,
+            "decodeTokensPerSecond": 20.44896088325862,
+            "firstTokenSeconds": 0.0490720272064209,
+            "generatedTokens": 512,
+            "outputSHA256": "cb1ed230f29e1a42adf04e0223dfd46e76c52ebffe586c2f7077dcf524d0eafe",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 15420817408,
+            "residentMemoryBeforeBytes": 15420686336
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0,
+            1
+          ]
+        },
+        "stage": "main",
+        "workload": "prose"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 25.211827312213952,
+          "median": 25.036388414654436,
+          "min": 24.36387215841414
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "767036cca2bd44bc4b56c972e2fbe42466b2cc9b916eea1508e31d880edbec2b",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "0",
+          "matchesSerialOutput": true,
+          "mode": "reference",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "reference",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.19250985545335086,
+              "acceptedDraftTokens": 293,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1522,
+              "rounds": 218,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 20.307929039001465,
+            "decodeTokensPerSecond": 25.211827312213952,
+            "firstTokenSeconds": 0.0003190040588378906,
+            "generatedTokens": 512,
+            "outputSHA256": "8fbfb04be8f926cf5abb4eaa2bf9a8e7dce5bb9c38727d8405215bd82d4d6ee8",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16089038848,
+            "residentMemoryBeforeBytes": 19260391424
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.19250985545335086,
+              "acceptedDraftTokens": 293,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1522,
+              "rounds": 218,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 20.450233936309814,
+            "decodeTokensPerSecond": 25.036388414654436,
+            "firstTokenSeconds": 0.00030303001403808594,
+            "generatedTokens": 512,
+            "outputSHA256": "8fbfb04be8f926cf5abb4eaa2bf9a8e7dce5bb9c38727d8405215bd82d4d6ee8",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16089399296,
+            "residentMemoryBeforeBytes": 16089088000
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.19250985545335086,
+              "acceptedDraftTokens": 293,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1522,
+              "rounds": 218,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 21.014721989631653,
+            "decodeTokensPerSecond": 24.36387215841414,
+            "firstTokenSeconds": 0.00033104419708251953,
+            "generatedTokens": 512,
+            "outputSHA256": "8fbfb04be8f926cf5abb4eaa2bf9a8e7dce5bb9c38727d8405215bd82d4d6ee8",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16089563136,
+            "residentMemoryBeforeBytes": 16089415680
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0,
+            1
+          ]
+        },
+        "stage": "main",
+        "workload": "prose"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 31.796547688903082,
+          "median": 30.752656895844275,
+          "min": 30.559182337918912
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "767036cca2bd44bc4b56c972e2fbe42466b2cc9b916eea1508e31d880edbec2b",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "1",
+          "matchesSerialOutput": true,
+          "mode": "tiled",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "tiled",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.19892833221701273,
+              "acceptedDraftTokens": 297,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1493,
+              "rounds": 214,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 16.1023770570755,
+            "decodeTokensPerSecond": 31.796547688903082,
+            "firstTokenSeconds": 0.0003590583801269531,
+            "generatedTokens": 512,
+            "outputSHA256": "cb1ed230f29e1a42adf04e0223dfd46e76c52ebffe586c2f7077dcf524d0eafe",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16113647616,
+            "residentMemoryBeforeBytes": 19285114880
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.19892833221701273,
+              "acceptedDraftTokens": 297,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1493,
+              "rounds": 214,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 16.754374980926514,
+            "decodeTokensPerSecond": 30.559182337918912,
+            "firstTokenSeconds": 0.00040400028228759766,
+            "generatedTokens": 512,
+            "outputSHA256": "cb1ed230f29e1a42adf04e0223dfd46e76c52ebffe586c2f7077dcf524d0eafe",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16114008064,
+            "residentMemoryBeforeBytes": 16113696768
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.19892833221701273,
+              "acceptedDraftTokens": 297,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1493,
+              "rounds": 214,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 16.6489679813385,
+            "decodeTokensPerSecond": 30.752656895844275,
+            "firstTokenSeconds": 0.0003930330276489258,
+            "generatedTokens": 512,
+            "outputSHA256": "cb1ed230f29e1a42adf04e0223dfd46e76c52ebffe586c2f7077dcf524d0eafe",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16113991680,
+            "residentMemoryBeforeBytes": 16114008064
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "prose"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 79.98916772669106,
+          "median": 70.62755193732866,
+          "min": 69.53779836382029
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "767036cca2bd44bc4b56c972e2fbe42466b2cc9b916eea1508e31d880edbec2b",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "0",
+          "mode": "reference",
+          "outputLimit": 1024,
+          "stage": "matched",
+          "stopOnEOS": true
+        },
+        "matchesSerialOutput": null,
+        "mode": "reference",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.7998056365403304,
+              "acceptedDraftTokens": 823,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1029,
+              "rounds": 147,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 12.126641988754272,
+            "decodeTokensPerSecond": 79.98916772669106,
+            "firstTokenSeconds": 0.0002650022506713867,
+            "generatedTokens": 970,
+            "outputSHA256": "50f9aa5b805277dbe8aa0c8f9c0242891afb348822869e217803bab29a4be85f",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16108404736,
+            "residentMemoryBeforeBytes": 19278594048
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.7998056365403304,
+              "acceptedDraftTokens": 823,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1029,
+              "rounds": 147,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 13.94924807548523,
+            "decodeTokensPerSecond": 69.53779836382029,
+            "firstTokenSeconds": 0.0003540515899658203,
+            "generatedTokens": 970,
+            "outputSHA256": "50f9aa5b805277dbe8aa0c8f9c0242891afb348822869e217803bab29a4be85f",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16108584960,
+            "residentMemoryBeforeBytes": 16108453888
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.7998056365403304,
+              "acceptedDraftTokens": 823,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1029,
+              "rounds": 147,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 13.734017014503479,
+            "decodeTokensPerSecond": 70.62755193732866,
+            "firstTokenSeconds": 0.0002980232238769531,
+            "generatedTokens": 970,
+            "outputSHA256": "50f9aa5b805277dbe8aa0c8f9c0242891afb348822869e217803bab29a4be85f",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16108650496,
+            "residentMemoryBeforeBytes": 16108584960
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "matched",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 104.18941876112038,
+          "median": 93.83876109812637,
+          "min": 91.16432215360474
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "767036cca2bd44bc4b56c972e2fbe42466b2cc9b916eea1508e31d880edbec2b",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "1",
+          "mode": "tiled",
+          "outputLimit": 1024,
+          "stage": "matched",
+          "stopOnEOS": true
+        },
+        "matchesSerialOutput": null,
+        "mode": "tiled",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.7825295723384895,
+              "acceptedDraftTokens": 860,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1099,
+              "rounds": 157,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 9.761067986488342,
+            "decodeTokensPerSecond": 104.18941876112038,
+            "firstTokenSeconds": 0.0003229379653930664,
+            "generatedTokens": 1017,
+            "outputSHA256": "be6078edf353331e189929dc7db14e0e0f22254f5fecd1bed11f55574b7d6adf",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16098263040,
+            "residentMemoryBeforeBytes": 19267747840
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.7825295723384895,
+              "acceptedDraftTokens": 860,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1099,
+              "rounds": 157,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 10.837738990783691,
+            "decodeTokensPerSecond": 93.83876109812637,
+            "firstTokenSeconds": 0.0005509853363037109,
+            "generatedTokens": 1017,
+            "outputSHA256": "be6078edf353331e189929dc7db14e0e0f22254f5fecd1bed11f55574b7d6adf",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16098672640,
+            "residentMemoryBeforeBytes": 16098312192
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.7825295723384895,
+              "acceptedDraftTokens": 860,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1099,
+              "rounds": 157,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 11.155679941177368,
+            "decodeTokensPerSecond": 91.16432215360474,
+            "firstTokenSeconds": 0.00044095516204833984,
+            "generatedTokens": 1017,
+            "outputSHA256": "be6078edf353331e189929dc7db14e0e0f22254f5fecd1bed11f55574b7d6adf",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16098639872,
+            "residentMemoryBeforeBytes": 16098672640
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "matched",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 24.88493920300843,
+          "median": 24.822431800137164,
+          "min": 23.99970641788861
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "767036cca2bd44bc4b56c972e2fbe42466b2cc9b916eea1508e31d880edbec2b",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "0",
+          "mode": "reference",
+          "outputLimit": 1024,
+          "stage": "matched",
+          "stopOnEOS": true
+        },
+        "matchesSerialOutput": null,
+        "mode": "reference",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.1886376172090458,
+              "acceptedDraftTokens": 342,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1813,
+              "rounds": 259,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 24.151154041290283,
+            "decodeTokensPerSecond": 24.88493920300843,
+            "firstTokenSeconds": 0.00027501583099365234,
+            "generatedTokens": 601,
+            "outputSHA256": "514d968ac7c830cf3a71c49a70e070e729407d178c2ca4bee043cc3248b1773f",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16110616576,
+            "residentMemoryBeforeBytes": 16110026752
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.1886376172090458,
+              "acceptedDraftTokens": 342,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1813,
+              "rounds": 259,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 24.211971044540405,
+            "decodeTokensPerSecond": 24.822431800137164,
+            "firstTokenSeconds": 0.0003590583801269531,
+            "generatedTokens": 601,
+            "outputSHA256": "514d968ac7c830cf3a71c49a70e070e729407d178c2ca4bee043cc3248b1773f",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16110632960,
+            "residentMemoryBeforeBytes": 16110665728
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.1886376172090458,
+              "acceptedDraftTokens": 342,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1813,
+              "rounds": 259,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 25.041972994804382,
+            "decodeTokensPerSecond": 23.99970641788861,
+            "firstTokenSeconds": 0.00032198429107666016,
+            "generatedTokens": 601,
+            "outputSHA256": "514d968ac7c830cf3a71c49a70e070e729407d178c2ca4bee043cc3248b1773f",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16110665728,
+            "residentMemoryBeforeBytes": 16110649344
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0,
+            1
+          ]
+        },
+        "stage": "matched",
+        "workload": "prose"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 35.825315777875865,
+          "median": 34.031284081725545,
+          "min": 33.857721259106654
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "767036cca2bd44bc4b56c972e2fbe42466b2cc9b916eea1508e31d880edbec2b",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "1",
+          "mode": "tiled",
+          "outputLimit": 1024,
+          "stage": "matched",
+          "stopOnEOS": true
+        },
+        "matchesSerialOutput": null,
+        "mode": "tiled",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.20209059233449478,
+              "acceptedDraftTokens": 348,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1722,
+              "rounds": 246,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 16.580453991889954,
+            "decodeTokensPerSecond": 35.825315777875865,
+            "firstTokenSeconds": 0.0005699396133422852,
+            "generatedTokens": 594,
+            "outputSHA256": "c517e54713730f54de6102771930cdee856c87ca301af865f56ccf1d21335023",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16111583232,
+            "residentMemoryBeforeBytes": 19283034112
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.20209059233449478,
+              "acceptedDraftTokens": 348,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1722,
+              "rounds": 246,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 17.454527974128723,
+            "decodeTokensPerSecond": 34.031284081725545,
+            "firstTokenSeconds": 0.00028002262115478516,
+            "generatedTokens": 594,
+            "outputSHA256": "c517e54713730f54de6102771930cdee856c87ca301af865f56ccf1d21335023",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16112173056,
+            "residentMemoryBeforeBytes": 16111632384
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.20209059233449478,
+              "acceptedDraftTokens": 348,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1722,
+              "rounds": 246,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 17.54400408267975,
+            "decodeTokensPerSecond": 33.857721259106654,
+            "firstTokenSeconds": 0.00045800209045410156,
+            "generatedTokens": 594,
+            "outputSHA256": "c517e54713730f54de6102771930cdee856c87ca301af865f56ccf1d21335023",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16112205824,
+            "residentMemoryBeforeBytes": 16112173056
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0,
+            1
+          ]
+        },
+        "stage": "matched",
+        "workload": "prose"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 86.26775582194786,
+          "median": 78.1849851173429,
+          "min": 78.11596491502482
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "767036cca2bd44bc4b56c972e2fbe42466b2cc9b916eea1508e31d880edbec2b",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "0",
+          "matchesSerialOutput": true,
+          "mode": "reference",
+          "outputLimit": 512,
+          "stage": "reverse",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "reference",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 5.935010075569153,
+            "decodeTokensPerSecond": 86.26775582194786,
+            "firstTokenSeconds": 0.00032508373260498047,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16089956352,
+            "residentMemoryBeforeBytes": 19261407232
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 6.548571944236755,
+            "decodeTokensPerSecond": 78.1849851173429,
+            "firstTokenSeconds": 0.00027191638946533203,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16090333184,
+            "residentMemoryBeforeBytes": 16090005504
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 6.554358005523682,
+            "decodeTokensPerSecond": 78.11596491502482,
+            "firstTokenSeconds": 0.0003249645233154297,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16090398720,
+            "residentMemoryBeforeBytes": 16090349568
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "reverse",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 111.40269605914955,
+          "median": 107.30942652656255,
+          "min": 98.00701270045924
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "767036cca2bd44bc4b56c972e2fbe42466b2cc9b916eea1508e31d880edbec2b",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "1",
+          "matchesSerialOutput": true,
+          "mode": "tiled",
+          "outputLimit": 512,
+          "stage": "reverse",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "tiled",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 4.595939040184021,
+            "decodeTokensPerSecond": 111.40269605914955,
+            "firstTokenSeconds": 0.0003039836883544922,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16098656256,
+            "residentMemoryBeforeBytes": 19268714496
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 4.771249055862427,
+            "decodeTokensPerSecond": 107.30942652656255,
+            "firstTokenSeconds": 0.0005720853805541992,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16099213312,
+            "residentMemoryBeforeBytes": 16098705408
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 5.224115967750549,
+            "decodeTokensPerSecond": 98.00701270045924,
+            "firstTokenSeconds": 0.0005619525909423828,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16099229696,
+            "residentMemoryBeforeBytes": 16099213312
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "reverse",
+        "workload": "code"
+      }
+    ],
+    "sourceSHA256": {
+      "Sources/MereRunCore/Q35/Q35Generator+Loading.swift": "53ea9c07da23aa2ed24a292a2cd7cb8c6dc66efd1e44782a1d970790a77d51e5",
+      "Sources/MereRunQwenModel/Q35MoE.swift": "7adad0f44c12f153f510559588b7f7f4d9430842ad42d5b742f3ea6c8fdea7ae",
+      "Sources/MereRunTensor/FusedQuantizedProjection.swift": "b79a0904ddaccc18120799a2d4c43cef2b6a17505aface28b9d51c86732a89c8",
+      "Sources/MereRunTensor/M5AffineQ4Verification+SwiGLU.swift": "9faae13070bfd8ff143adbed2d74929488577876d6eb0b7c73df5c0c5a9b2fdc",
+      "Sources/MereRunTensor/M5AffineQ4Verification.swift": "42d41e9c9c5a99866be3f4c508f4269255e5f51ec63d7306021a95af0d93a22b",
+      "Sources/MereRunTensor/M5TiledAffineQ4+SwiGLU.swift": "44f67fff00acd076da4b0030fc615ce5ff8e2ae2375c694b0d78c002ca6cfe6b",
+      "Sources/MereRunTensor/M5TiledAffineQ4.swift": "7f4d0784c3a86df917282a50e05689ca6c39afb91adda73324d629a5e7a160e4",
+      "Sources/MereRunTensor/PortableQuantizedMatmul.swift": "ad6b218e4d74937b2e60171b2da050184de1bfbb870ab2d63aff7f561bdd5edb",
+      "Sources/MereRunTensor/QuantizedVerificationBackend.swift": "e4106b291ad654c68cbfd0a25bc6fb9269f1fcf2cbd1f62afb16aaeae8fd2f66"
+    },
+    "stage": "complete",
+    "timingConditionsQualified": true,
+    "updatedUTC": "2026-11-09T01:07:27.707924+00:00"
+  },
+  "releaseBinarySHA256": "b4f54fa677ad25ec4ed15c3f0de6d9b8b5a04e47b4abf252c8ab313397fe9cb3",
+  "scope": "Target projections plus shared target LM head used by draft; independent draft layers remain reference.",
+  "sourceSHA256": {
+    "Sources/MereRunCore/Q35/Q35Generator+Loading.swift": "206be7319702106d3d36e2b5b669dfa4ead54a9b22af0ae2b291b5dffe6a8341",
+    "Sources/MereRunQwenModel/Q35MoE.swift": "7adad0f44c12f153f510559588b7f7f4d9430842ad42d5b742f3ea6c8fdea7ae",
+    "Sources/MereRunTensor/FusedQuantizedProjection.swift": "b79a0904ddaccc18120799a2d4c43cef2b6a17505aface28b9d51c86732a89c8",
+    "Sources/MereRunTensor/M5AffineQ4Verification+SwiGLU.swift": "9faae13070bfd8ff143adbed2d74929488577876d6eb0b7c73df5c0c5a9b2fdc",
+    "Sources/MereRunTensor/M5AffineQ4Verification.swift": "42d41e9c9c5a99866be3f4c508f4269255e5f51ec63d7306021a95af0d93a22b",
+    "Sources/MereRunTensor/PortableQuantizedMatmul.swift": "6cd895638d6897bd028779fa5339c5f043af428289c16e3aaa84fd56c57360b9",
+    "Sources/MereRunTensor/QuantizedVerificationBackend.swift": "5091e1d6045aff8b54cc26667e6a484e44333dd8f47aa79a5a3966c3110091bb",
+    "Tests/MereRunCoreTests/Q35DFlash2PolicyTests.swift": "365b239e6c99c8397979741038c12c25083ba5ac3515a3d8707dda1707c5b01c",
+    "Tests/QwenRuntimeTests/M5AffineQ4VerificationTests.swift": "2bb29f0e62c0cd2156fc61d6b542a2eb6e3e85a36954a83455dbe98260d3e069"
+  },
+  "status": "partitioned-dflash2-speedup-and-repository-gate-qualified",
+  "tiledRevision": {
+    "defaultEnabled": false,
+    "description": "Tile-major Q4 codes and metadata, 32-channel stages, interleaved gate/up, retained original parameters.",
+    "m5-tiled-installed": {
+      "correctnessOnly": true,
+      "exclusionReasons": [],
+      "resourceQualified": true,
+      "testBinarySHA256": "02f65ca8a0de6b96aac6723f506420632139199a59c6378d70af5ce08430211f",
+      "testExitCode": 0
+    },
+    "m5-tiled-numerical": {
+      "correctnessOnly": true,
+      "exclusionReasons": [],
+      "resourceQualified": true,
+      "testBinarySHA256": "02f65ca8a0de6b96aac6723f506420632139199a59c6378d70af5ce08430211f",
+      "testExitCode": 0
+    },
+    "protocol": {
+      "binarySHA256": "c9acc3fd8d456128c6bbd699bfcfed671a6be5ce408c6db3562bf4968c0f31e1",
+      "contextSize": 8192,
+      "model": "vision-chat-q38-27b-4bit",
+      "repetitions": {
+        "matrix": 3,
+        "oracle": 1,
+        "reference": 3,
+        "tiled": 3
+      },
+      "scope": "Tile-major target projections and interleaved FFN, plus shared target head used by draft; independent draft layers remain reference.",
+      "stopOnEOS": false,
+      "temperature": 0,
+      "thinking": false,
+      "tokens": 512,
+      "topP": 1,
+      "warmupTokens": 256,
+      "warmups": 1
+    },
+    "results": [
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 16.798063380917245,
+          "median": 16.798063380917245,
+          "min": 16.798063380917245
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "c9acc3fd8d456128c6bbd699bfcfed671a6be5ce408c6db3562bf4968c0f31e1",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "1",
+          "mode": "oracle",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": null,
+        "mode": "oracle",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "route": "final-target-pipelined"
+            },
+            "decodeSeconds": 30.47970402240753,
+            "decodeTokensPerSecond": 16.798063380917245,
+            "firstTokenSeconds": 0.06719005107879639,
+            "generatedTokens": 512,
+            "outputSHA256": "27373935952d179eb000c4fb8a3dd14c3b20852115c70213637902a2cbfdd765",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 15405842432,
+            "residentMemoryBeforeBytes": 15405596672
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 83.30114650791371,
+          "median": 77.34766438890017,
+          "min": 75.07263216231138
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "c9acc3fd8d456128c6bbd699bfcfed671a6be5ce408c6db3562bf4968c0f31e1",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "0",
+          "matchesSerialOutput": true,
+          "mode": "reference",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "reference",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 6.146373987197876,
+            "decodeTokensPerSecond": 83.30114650791371,
+            "firstTokenSeconds": 0.00030100345611572266,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16107634688,
+            "residentMemoryBeforeBytes": 19279020032
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 6.619462966918945,
+            "decodeTokensPerSecond": 77.34766438890017,
+            "firstTokenSeconds": 0.0003370046615600586,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16107814912,
+            "residentMemoryBeforeBytes": 16107683840
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 6.820061922073364,
+            "decodeTokensPerSecond": 75.07263216231138,
+            "firstTokenSeconds": 0.0003418922424316406,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16107929600,
+            "residentMemoryBeforeBytes": 16107814912
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 61.8471696561277,
+          "median": 60.82270530718893,
+          "min": 60.656248494174214
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "c9acc3fd8d456128c6bbd699bfcfed671a6be5ce408c6db3562bf4968c0f31e1",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "1",
+          "matchesSerialOutput": true,
+          "mode": "tiled",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "tiled",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 8.278470993041992,
+            "decodeTokensPerSecond": 61.8471696561277,
+            "firstTokenSeconds": 0.00037300586700439453,
+            "generatedTokens": 512,
+            "outputSHA256": "27373935952d179eb000c4fb8a3dd14c3b20852115c70213637902a2cbfdd765",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16108290048,
+            "residentMemoryBeforeBytes": 19278577664
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 8.441009998321533,
+            "decodeTokensPerSecond": 60.656248494174214,
+            "firstTokenSeconds": 0.000574946403503418,
+            "generatedTokens": 512,
+            "outputSHA256": "27373935952d179eb000c4fb8a3dd14c3b20852115c70213637902a2cbfdd765",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16108470272,
+            "residentMemoryBeforeBytes": 16108339200
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 8.417909026145935,
+            "decodeTokensPerSecond": 60.82270530718893,
+            "firstTokenSeconds": 0.0005720853805541992,
+            "generatedTokens": 512,
+            "outputSHA256": "27373935952d179eb000c4fb8a3dd14c3b20852115c70213637902a2cbfdd765",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16108552192,
+            "residentMemoryBeforeBytes": 16108470272
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 11.936761186848823,
+          "median": 11.936761186848823,
+          "min": 11.936761186848823
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "c9acc3fd8d456128c6bbd699bfcfed671a6be5ce408c6db3562bf4968c0f31e1",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "1",
+          "mode": "oracle",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": null,
+        "mode": "oracle",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "route": "final-target-pipelined"
+            },
+            "decodeSeconds": 42.892706990242004,
+            "decodeTokensPerSecond": 11.936761186848823,
+            "firstTokenSeconds": 0.1002269983291626,
+            "generatedTokens": 512,
+            "outputSHA256": "130b74f870667639a37057d2cb4eecf5242deb5fd4f0a31b9aea03d176dd0b5b",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 15405711360,
+            "residentMemoryBeforeBytes": 15405514752
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "prose"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 17.98604998878533,
+          "median": 16.810032927132657,
+          "min": 15.92142279484456
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "c9acc3fd8d456128c6bbd699bfcfed671a6be5ce408c6db3562bf4968c0f31e1",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "0",
+          "matchesSerialOutput": true,
+          "mode": "reference",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "reference",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.19250985545335086,
+              "acceptedDraftTokens": 293,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1522,
+              "rounds": 218,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 30.458001017570496,
+            "decodeTokensPerSecond": 16.810032927132657,
+            "firstTokenSeconds": 0.0003390312194824219,
+            "generatedTokens": 512,
+            "outputSHA256": "8fbfb04be8f926cf5abb4eaa2bf9a8e7dce5bb9c38727d8405215bd82d4d6ee8",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16091299840,
+            "residentMemoryBeforeBytes": 19262717952
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.19250985545335086,
+              "acceptedDraftTokens": 293,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1522,
+              "rounds": 218,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 32.15793001651764,
+            "decodeTokensPerSecond": 15.92142279484456,
+            "firstTokenSeconds": 0.000431060791015625,
+            "generatedTokens": 512,
+            "outputSHA256": "8fbfb04be8f926cf5abb4eaa2bf9a8e7dce5bb9c38727d8405215bd82d4d6ee8",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16091643904,
+            "residentMemoryBeforeBytes": 16091348992
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.19250985545335086,
+              "acceptedDraftTokens": 293,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1522,
+              "rounds": 218,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 28.466506004333496,
+            "decodeTokensPerSecond": 17.98604998878533,
+            "firstTokenSeconds": 0.0004140138626098633,
+            "generatedTokens": 512,
+            "outputSHA256": "8fbfb04be8f926cf5abb4eaa2bf9a8e7dce5bb9c38727d8405215bd82d4d6ee8",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16091676672,
+            "residentMemoryBeforeBytes": 16091643904
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "prose"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 20.533354752566243,
+          "median": 20.273342512530768,
+          "min": 19.867156936016823
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "c9acc3fd8d456128c6bbd699bfcfed671a6be5ce408c6db3562bf4968c0f31e1",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "1",
+          "matchesSerialOutput": true,
+          "mode": "tiled",
+          "outputLimit": 512,
+          "stage": "main",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "tiled",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.18520900321543407,
+              "acceptedDraftTokens": 288,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1555,
+              "rounds": 224,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 24.935038924217224,
+            "decodeTokensPerSecond": 20.533354752566243,
+            "firstTokenSeconds": 0.00034499168395996094,
+            "generatedTokens": 512,
+            "outputSHA256": "130b74f870667639a37057d2cb4eecf5242deb5fd4f0a31b9aea03d176dd0b5b",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16091856896,
+            "residentMemoryBeforeBytes": 16091267072
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.18520900321543407,
+              "acceptedDraftTokens": 288,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1555,
+              "rounds": 224,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 25.254838943481445,
+            "decodeTokensPerSecond": 20.273342512530768,
+            "firstTokenSeconds": 0.0003559589385986328,
+            "generatedTokens": 512,
+            "outputSHA256": "130b74f870667639a37057d2cb4eecf5242deb5fd4f0a31b9aea03d176dd0b5b",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16092053504,
+            "residentMemoryBeforeBytes": 16091906048
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.18520900321543407,
+              "acceptedDraftTokens": 288,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 1555,
+              "rounds": 224,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 25.77117609977722,
+            "decodeTokensPerSecond": 19.867156936016823,
+            "firstTokenSeconds": 0.0003800392150878906,
+            "generatedTokens": 512,
+            "outputSHA256": "130b74f870667639a37057d2cb4eecf5242deb5fd4f0a31b9aea03d176dd0b5b",
+            "promptTokens": 60,
+            "residentMemoryAfterBytes": 16092053504,
+            "residentMemoryBeforeBytes": 16092053504
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "main",
+        "workload": "prose"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 85.70054636260267,
+          "median": 85.46761651130711,
+          "min": 80.9745407506678
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "c9acc3fd8d456128c6bbd699bfcfed671a6be5ce408c6db3562bf4968c0f31e1",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "0",
+          "matchesSerialOutput": true,
+          "mode": "reference",
+          "outputLimit": 512,
+          "stage": "reverse",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "reference",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 5.97429096698761,
+            "decodeTokensPerSecond": 85.70054636260267,
+            "firstTokenSeconds": 0.0002919435501098633,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16107225088,
+            "residentMemoryBeforeBytes": 19278626816
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 5.990573048591614,
+            "decodeTokensPerSecond": 85.46761651130711,
+            "firstTokenSeconds": 0.0003000497817993164,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16107339776,
+            "residentMemoryBeforeBytes": 16107274240
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 6.322975039482117,
+            "decodeTokensPerSecond": 80.9745407506678,
+            "firstTokenSeconds": 0.00027000904083251953,
+            "generatedTokens": 512,
+            "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16107454464,
+            "residentMemoryBeforeBytes": 16107339776
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "reverse",
+        "workload": "code"
+      },
+      {
+        "correctnessOnly": false,
+        "decodeTPS": {
+          "max": 75.63326606353183,
+          "median": 73.88039338934192,
+          "min": 72.8048652531024
+        },
+        "exclusionReasons": [],
+        "experiment": {
+          "binarySHA256": "c9acc3fd8d456128c6bbd699bfcfed671a6be5ce408c6db3562bf4968c0f31e1",
+          "m5FusedFFN": "1",
+          "m5TiledWeights": "1",
+          "m5Verification": "1",
+          "matchesSerialOutput": true,
+          "mode": "tiled",
+          "outputLimit": 512,
+          "stage": "reverse",
+          "stopOnEOS": false
+        },
+        "matchesSerialOutput": true,
+        "mode": "tiled",
+        "qualified": true,
+        "requests": [
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 7.032497048377991,
+            "decodeTokensPerSecond": 72.8048652531024,
+            "firstTokenSeconds": 0.0003370046615600586,
+            "generatedTokens": 512,
+            "outputSHA256": "27373935952d179eb000c4fb8a3dd14c3b20852115c70213637902a2cbfdd765",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16094101504,
+            "residentMemoryBeforeBytes": 19264520192
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 6.93012011051178,
+            "decodeTokensPerSecond": 73.88039338934192,
+            "firstTokenSeconds": 0.00028908252716064453,
+            "generatedTokens": 512,
+            "outputSHA256": "27373935952d179eb000c4fb8a3dd14c3b20852115c70213637902a2cbfdd765",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16094298112,
+            "residentMemoryBeforeBytes": 16094150656
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.8420038535645472,
+              "acceptedDraftTokens": 437,
+              "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+              "draftedTokens": 519,
+              "rounds": 75,
+              "route": "dflash2-experimental"
+            },
+            "decodeSeconds": 6.769508004188538,
+            "decodeTokensPerSecond": 75.63326606353183,
+            "firstTokenSeconds": 0.0003249645233154297,
+            "generatedTokens": 512,
+            "outputSHA256": "27373935952d179eb000c4fb8a3dd14c3b20852115c70213637902a2cbfdd765",
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 16094445568,
+            "residentMemoryBeforeBytes": 16094298112
+          }
+        ],
+        "resources": {
+          "admission": "30 seconds with stable compute GPU counters, no compilation, normal memory pressure; idle resident servers allowed; desktop GPU utilization <=50%.",
+          "lowPowerModes": [
+            false
+          ],
+          "maxMemoryPressure": 1,
+          "monitorVersion": 4,
+          "thermalStates": [
+            0
+          ]
+        },
+        "stage": "reverse",
+        "workload": "code"
+      }
+    ],
+    "sourceSHA256": {
+      "Sources/MereRunCore/Q35/Q35Generator+Loading.swift": "53ea9c07da23aa2ed24a292a2cd7cb8c6dc66efd1e44782a1d970790a77d51e5",
+      "Sources/MereRunQwenModel/Q35MoE.swift": "7adad0f44c12f153f510559588b7f7f4d9430842ad42d5b742f3ea6c8fdea7ae",
+      "Sources/MereRunTensor/FusedQuantizedProjection.swift": "b79a0904ddaccc18120799a2d4c43cef2b6a17505aface28b9d51c86732a89c8",
+      "Sources/MereRunTensor/M5AffineQ4Verification+SwiGLU.swift": "9faae13070bfd8ff143adbed2d74929488577876d6eb0b7c73df5c0c5a9b2fdc",
+      "Sources/MereRunTensor/M5AffineQ4Verification.swift": "42d41e9c9c5a99866be3f4c508f4269255e5f51ec63d7306021a95af0d93a22b",
+      "Sources/MereRunTensor/M5TiledAffineQ4+SwiGLU.swift": "44f67fff00acd076da4b0030fc615ce5ff8e2ae2375c694b0d78c002ca6cfe6b",
+      "Sources/MereRunTensor/M5TiledAffineQ4.swift": "345af97e8f7e34462e8bc9ed759db7553ce4eec26cdf51e3c80965874443f853",
+      "Sources/MereRunTensor/PortableQuantizedMatmul.swift": "ad6b218e4d74937b2e60171b2da050184de1bfbb870ab2d63aff7f561bdd5edb",
+      "Sources/MereRunTensor/QuantizedVerificationBackend.swift": "5091e1d6045aff8b54cc26667e6a484e44333dd8f47aa79a5a3966c3110091bb"
+    },
+    "stage": "main-running-followups-superseded-by-partition-control",
+    "updatedUTC": "2026-11-08T23:52:19.319474+00:00"
+  },
+  "validation": {
+    "cliHelpAndHygiene": "passed separately",
+    "gpuNumericalTests": "passed",
+    "installedModelTokenTests": "passed",
+    "partitionedReleaseBuild": "passed",
+    "releaseBuild": "passed",
+    "repositoryGate": "passed on direct rerun; protected-file tests passed despite console lock flag"
+  }
+}

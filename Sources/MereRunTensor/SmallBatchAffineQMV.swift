@@ -11,6 +11,28 @@ import MLXFast
 /// order while sharing the weight reads, which keeps speculative verification
 /// on the same greedy trajectory as one-token decoding.
 enum SmallBatchAffineQMV {
+    enum EightRowGrouping: Int {
+        case split = 0
+        case shared = 4
+        case sharedTwo = 2
+        case sharedOne = 1
+
+        var rowsPerSIMDGroup: Int {
+            switch self {
+            case .split, .shared: 4
+            case .sharedTwo: 2
+            case .sharedOne: 1
+            }
+        }
+    }
+
+    /// Opt-in until real-checkpoint throughput and output qualification pass.
+    /// Only the Qwen 27B vocabulary-head geometry showed a component benefit.
+    private static let headEightRowGrouping: EightRowGrouping = {
+        let value = ProcessInfo.processInfo.environment["MERERUN_Q38_EXACT_Q4_HEAD_OUTPUT_ROWS"]
+        return value.flatMap(Int.init).flatMap(EightRowGrouping.init(rawValue:)) ?? .split
+    }()
+
     /// Wide Flash-Next verification only needs serial QMV arithmetic on these
     /// checkpoint geometries to preserve the greedy trajectory. The omitted
     /// 4x10240 injection and 2560x640 shared-down tails stay on MLX's wide
@@ -34,7 +56,7 @@ enum SmallBatchAffineQMV {
     }()
 
     private static let header = """
-        template <int NA>
+        template <int NA, int NR = 4>
         inline void mere_affine4_qmv_wide(
             const device uint32_t* w,
             const device bfloat16_t* scales,
@@ -48,7 +70,7 @@ enum SmallBatchAffineQMV {
             uint simd_lid
         ) {
             typedef vec<float, NA> VF;
-            constexpr int rows_per_simd = 4;
+            constexpr int rows_per_simd = NR;
             constexpr int values_per_thread = 16;
             constexpr int block_size = values_per_thread * 32;
             constexpr int bytes_per_lane = 8;
@@ -124,7 +146,7 @@ enum SmallBatchAffineQMV {
             }
         }
 
-        template <int M, int IPG>
+        template <int M, int IPG, int NR = 4>
         inline void mere_affine4_qmv_m(
             const device uint32_t* w,
             const device bfloat16_t* scales,
@@ -144,11 +166,11 @@ enum SmallBatchAffineQMV {
                 return;
             }
             if (tail == 0 || M - first_m >= IPG) {
-                mere_affine4_qmv_wide<IPG>(
+                mere_affine4_qmv_wide<IPG, NR>(
                     w, scales, biases, x, y, in_vec_size, out_vec_size,
                     first_m, out_row, simd_lid);
             } else {
-                mere_affine4_qmv_wide<(tail >= 2 ? tail : 2)>(
+                mere_affine4_qmv_wide<(tail >= 2 ? tail : 2), NR>(
                     w, scales, biases, x, y, in_vec_size, out_vec_size,
                     first_m, out_row, simd_lid);
             }
@@ -225,6 +247,23 @@ enum SmallBatchAffineQMV {
         ensureRowContiguous: true
     )
 
+    private static let sharedEightRowKernel = MLXFast.metalKernel(
+        name: "mere_affine4_g64_eight_row_qmv_v1",
+        inputNames: ["w", "scales", "biases", "x"],
+        outputNames: ["y"],
+        source: """
+            mere_affine4_qmv_m<8, 8, R>(
+                w, scales, biases, x, y,
+                x_shape[x_ndim - 1], w_shape[0],
+                int(threadgroup_position_in_grid.x),
+                int(threadgroup_position_in_grid.y) * (2 * R) +
+                    int(simdgroup_index_in_threadgroup) * R,
+                thread_index_in_simdgroup);
+            """,
+        header: header,
+        ensureRowContiguous: true
+    )
+
     static func matmul(
         _ x: MLXArray,
         weight: MLXArray,
@@ -232,7 +271,8 @@ enum SmallBatchAffineQMV {
         biases: MLXArray,
         groupSize: Int,
         bits: Int,
-        mode: QuantizationMode
+        mode: QuantizationMode,
+        eightRowGrouping requestedGrouping: EightRowGrouping? = nil
     ) -> MLXArray? {
         guard exactWideEnabled,
               Device.defaultDevice().deviceType == .gpu,
@@ -250,6 +290,8 @@ enum SmallBatchAffineQMV {
         let outputSize = weight.dim(0)
         let width = x.size / inputSize
         let shape = "\(outputSize)x\(inputSize)"
+        let eightRowGrouping = requestedGrouping
+            ?? (inputSize == 5_120 && outputSize == 248_320 ? headEightRowGrouping : .split)
         let selected = exactWideShapes?.contains(shape)
             ?? (width <= 9 || q38WideExactShapes.contains(shape))
         guard selected,
@@ -294,7 +336,7 @@ enum SmallBatchAffineQMV {
         case 5: inputsPerGroup = 5
         case 6: inputsPerGroup = 3
         case 7: inputsPerGroup = 4
-        case 8: inputsPerGroup = 4
+        case 8: inputsPerGroup = eightRowGrouping == .split ? 4 : 8
         case 9: inputsPerGroup = 3
         case 10: inputsPerGroup = 5
         case 11, 12, 14, 16, 18, 19, 22, 23, 24, 26, 27, 28, 31, 32:
@@ -307,9 +349,13 @@ enum SmallBatchAffineQMV {
         var outputShape = x.shape
         outputShape[outputShape.count - 1] = outputSize
         let activeGroups = (width + inputsPerGroup - 1) / inputsPerGroup
-        return kernel(
+        let sharedEightRows = width == 8 && eightRowGrouping != .split
+        let selectedKernel = sharedEightRows ? sharedEightRowKernel : kernel
+        let rowsPerSIMDGroup = sharedEightRows ? eightRowGrouping.rowsPerSIMDGroup : 4
+        return selectedKernel(
             [weight, scales, biases, x],
-            grid: (activeGroups * 32, (outputSize / 8) * 2, 1),
+            template: sharedEightRows ? [("R", rowsPerSIMDGroup)] : [],
+            grid: (activeGroups * 32, outputSize / rowsPerSIMDGroup, 1),
             threadGroup: (32, 2, 1),
             outputShapes: [outputShape],
             outputDTypes: [.bfloat16]

@@ -34,6 +34,7 @@ public actor Q35Generator: ChatGenerator {
     var tokenizerAndTemplate: Q35TokenizerAndTemplate?
     var visionTower: Q35VisionTower?
     var mtpModel: (any Q35MTPDraftModel)?
+    var dflash2Model: Q35DFlash2Model?
     var loadedModelPath: String?
     var loadedConfig: Q35Config?
     var loadedGenerationEOSTokenIds: [Int] = []
@@ -42,6 +43,7 @@ public actor Q35Generator: ChatGenerator {
 
     #if DEBUG
     var checkpointTransformForTesting: (@Sendable (Q35Model) throws -> Void)?
+    var lastGeneratedTokenIDsForTesting: [Int] = []
 
     /// Installed-checkpoint experiments run before fusion releases source weights.
     /// This hook is absent from production builds and never changes source files.
@@ -54,6 +56,8 @@ public actor Q35Generator: ChatGenerator {
     let modelId: String
     let prefixKVCacheEnabled: Bool
     let continuousBatchingEnabled: Bool
+    let dflash2ModelPath: String?
+    let dflash2Enabled: Bool
     let visionMinPixels: Int
     let visionMaxPixels: Int
 
@@ -79,6 +83,8 @@ public actor Q35Generator: ChatGenerator {
         modelId: String = Q35Resources.defaultModelId,
         prefixKVCacheEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_PREFIX_KV_CACHE"] == "1",
         continuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_CONTINUOUS_BATCHING"] == "1",
+        dflash2ModelPath: String? = ProcessInfo.processInfo.environment["MERERUN_Q35_DFLASH2_PATH"],
+        dflash2Enabled: Bool = true,
         visionMinPixels: Int? = nil,
         visionMaxPixels: Int? = nil
     ) {
@@ -86,6 +92,8 @@ public actor Q35Generator: ChatGenerator {
         self.modelId = modelId
         self.prefixKVCacheEnabled = prefixKVCacheEnabled
         self.continuousBatchingEnabled = continuousBatchingEnabled
+        self.dflash2ModelPath = dflash2ModelPath
+        self.dflash2Enabled = dflash2Enabled
         self.visionMinPixels = visionMinPixels ?? visionPixelBounds.minimum
         self.visionMaxPixels = visionMaxPixels ?? visionPixelBounds.maximum
     }
@@ -187,6 +195,7 @@ public actor Q35Generator: ChatGenerator {
         tokenizerAndTemplate = nil
         visionTower = nil
         mtpModel = nil
+        dflash2Model = nil
         loadedModelPath = nil
         loadedConfig = nil
         loadedGenerationEOSTokenIds = []

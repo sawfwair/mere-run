@@ -22,10 +22,28 @@ activations live in [`MereRunQwenModel`](../../MereRunQwenModel/README.md).
   target verification, repair, pipelining, and row scheduling.
 - `Q35MTPProfile.swift`: optional synchronized speculation diagnostics.
 - `Q35RuntimeTuning.swift`: scheduling defaults for qualified managed Q4 targets.
+- `Q35Generator+DFlash2.swift`: local experimental DFlash 2 loading, request
+  admission, bounded prompt capture, sampling policy, and streaming.
 
 Read [Qwen runtime boundaries](../../../docs/internals/qwen-runtime-boundaries.md)
 for ownership and validation. Keep checkpoint and template compatibility here;
 model layers do not depend on CLI or managed-model concerns.
+
+The Qwen3.8 27B Q4 managed pull includes a pinned `dflash2/` component. It is
+automatic for eligible text on Apple10 GPU Macs with macOS 26 or later and at
+least 64 GiB of memory. `MERERUN_Q35_DFLASH2=0` disables it;
+`MERERUN_Q35_DFLASH2_PATH` overrides the component directory. It replaces the MTP head for that generator and uses
+the draft for sampled text, including penalties and bans, or unpenalized greedy
+text. Images, tools, JSON constraints, log-probability capture, and continuous
+batching exclude speculation. Other requests use the target
+decoder. Eligible requests prefill their own target and draft context; prefix
+cache reuse is excluded until snapshots include the draft state. See
+[the configuration instructions](../../../docs/configuration.md#mererun-q35-dflash2).
+Eligible text uses the tiled M5 projections and fused FFN by default. Other
+request types suppress M5 through a task-local scope, preserving the reference
+path without mutating projections shared by concurrent requests. There is no
+prose classifier or profitability gate; the measured non-thinking prose cost
+is an accepted default tradeoff.
 
 Official Hugging Face Qwen 3.5/3.8 checkpoints store zero-centered RMSNorm
 offsets, while converted MLX checkpoints store direct scales. The loader detects
@@ -84,6 +102,12 @@ the unused vocabulary tail. Qwen 27B and Ornith 1.5 stream confirmed prompt
 transitions into the MTP cache in aligned 256-token blocks. Prefix checkpoints
 fork the target caches, draft history, pending transitions, and last hidden
 state together. Only semantic boundaries and the final prompt retain snapshots.
+With `MERERUN_Q35_PACKED_GREEDY_VERIFICATION=1`, unpenalized greedy MTP reduces every verification row on the GPU and reads
+draft and target token IDs together. The final verified token choice seeds the
+next round, including after accepted-prefix rollback, without another host
+argmax read. Token bans use the same broadcast mask as ordinary greedy sampling.
+History-dependent penalties retain per-token verification. This readback path
+is opt-in because matched measurements didn't establish a consistent speedup.
 Speculative rows execute on a disposable fork. The exact target projection still verifies
 every emitted token. Per-request acceptance estimates adapt the draft depth and
 can fall back to target-only rounds when proposals stop paying for their repair

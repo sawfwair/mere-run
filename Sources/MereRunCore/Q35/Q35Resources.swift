@@ -129,6 +129,11 @@ public struct Q35Resources: Sendable, Hashable {
     public static let q38TwentySevenB4BitUpstreamRepoId = "EigenLabs/Qwen3.8-27B-4bit"
     public static let q38TwentySevenB4BitUpstreamRevision = "eda45ab47f465d08d6558f0353a2346e2eb9d5b3"
     public static let q38TwentySevenB4BitEstimatedDownloadBytes: Int64 = 15_520_000_000
+    public static let q38DFlash2ComponentPath = "dflash2"
+    public static let q38DFlash2UpstreamRepoId = "incoai/Qwen3.8-27B-DFlash2"
+    public static let q38DFlash2UpstreamRevision = "015e795645c74b1a0eeef3b570031fb62e769bc5"
+    public static let q38DFlash2EstimatedDownloadBytes: Int64 = 3_848_817_896
+    public static let q38DFlash2SnapshotPatterns = ["config.json", "model.safetensors", "README.md"]
     public static let q38FlashNextMixedUpstreamRepoId = "Sawfwair/Qwen3.8-Flash-Next-MLX-Mixed-2bit"
     public static let q38FlashNextMixedUpstreamRevision = "0bdf3edf02df271e9898f17a7882e5e6a8feb58a"
     public static let q38FlashNextMixedEstimatedDownloadBytes: Int64 = 73_095_335_934

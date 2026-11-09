@@ -18,6 +18,7 @@ extension Q35Generator {
         layerCaches: [Q35LayerCache?],
         eosSet: Set<Int>,
         generationConfig: GenerationConfig,
+        packedGreedyVerification: Bool = Q35Sampling.packedGreedyVerificationEnabled(),
         tokenBudget: Int,
         prefillTokenCount: Int,
         mropeRopeDelta: Int?,
@@ -47,6 +48,11 @@ extension Q35Generator {
         }
 
         var logits = initialLogits
+        var pendingGreedyToken: Int?
+        let greedyVerificationBanMask = tokenBanMask(
+            vocabularySize: initialLogits.dim(-1), dtype: initialLogits.dtype,
+            tokens: generationConfig.bannedTokens
+        )
         var layerCaches = layerCaches
         let retainHidden = mtpModel != nil
         var previousHidden = retainHidden ? initialHidden.map(lastTokenHidden) : nil
@@ -130,11 +136,10 @@ extension Q35Generator {
                 clearMLXCacheUnderPressureIfNeeded()
             }
             let samplingStart = mtpProfile?.clock()
-            var next = sampleToken(
-                logits: logits[0, -1, 0...],
-                config: generationConfig,
-                previousTokens: repetitionHistory
+            var next = pendingGreedyToken ?? sampleToken(
+                logits: logits[0, -1, 0...], config: generationConfig, previousTokens: repetitionHistory
             )
+            pendingGreedyToken = nil
 
             mtpProfile?.recordSampling(since: samplingStart)
             if jsonConstrained {
@@ -201,17 +206,38 @@ extension Q35Generator {
                             targetVerify: true
                         )
                         let candidateMTPHidden = candidate.mtpHidden ?? candidate.hidden
+                        let draftTokens: [Int]
+                        let greedyVerificationTokens: [Int]?
+                        let verificationReadback: MLXArray?
+                        if packedGreedyVerification, !generationConfig.hasActivePenalties {
+                            let targetIDs = Q35Sampling.greedyVerificationTokenIDs(
+                                logits: candidate.logits, config: generationConfig, banMask: greedyVerificationBanMask
+                            )
+                            verificationReadback = MLX.concatenated(
+                                [draftBlock.tokenIDs.reshaped(-1), targetIDs.reshaped(-1)]
+                            )
+                        } else {
+                            verificationReadback = nil
+                        }
                         mtpProfile?.verificationSubmitted()
-                        MLX.eval(candidate.logits, candidateMTPHidden, draftBlock.tokenIDs)
+                        if let verificationReadback {
+                            MLX.eval(verificationReadback, candidateMTPHidden)
+                            let tokens = verificationReadback.asArray(Int32.self).map(Int.init)
+                            draftTokens = Array(tokens.prefix(draftBlock.count))
+                            greedyVerificationTokens = Array(tokens.dropFirst(draftBlock.count))
+                        } else {
+                            MLX.eval(candidate.logits, candidateMTPHidden, draftBlock.tokenIDs)
+                            draftTokens = draftBlock.tokens
+                            greedyVerificationTokens = nil
+                        }
                         mtpProfile?.verificationCompleted()
                         mtpVerificationPasses += 1
-                        let draftTokens = draftBlock.tokens
 
                         var accepted = 0
                         var verificationHistory = repetitionHistory
                         var replacement: Int?
                         for (index, draftToken) in draftTokens.enumerated() {
-                            let targetToken = sampleToken(
+                            let targetToken = greedyVerificationTokens?[index] ?? sampleToken(
                                 logits: candidate.logits[0, index, 0...],
                                 config: generationConfig,
                                 previousTokens: verificationHistory
@@ -246,6 +272,7 @@ extension Q35Generator {
                             commitVerificationCaches(candidateCaches)
                             layerCaches = candidateCaches
                             logits = lastTokenLogits(candidate.logits)
+                            pendingGreedyToken = greedyVerificationTokens?.last
                             previousHidden = lastTokenHidden(candidateMTPHidden)
                             if hitEOS || generated.count >= tokenBudget {
                                 break
@@ -286,6 +313,7 @@ extension Q35Generator {
                             )
                             layerCaches = candidateCaches
                             logits = restored.logits
+                            pendingGreedyToken = greedyVerificationTokens?[committedTokenCount - 1]
                             previousHidden = restored.hidden
                             continue
                         }

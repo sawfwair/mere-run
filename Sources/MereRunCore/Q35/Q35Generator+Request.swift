@@ -2,6 +2,7 @@ import Foundation
 import MediaIO
 import MLX
 import MLXNN
+import MereRunTensor
 #if canImport(Darwin)
 import Darwin
 #endif
@@ -12,10 +13,16 @@ extension Q35Generator {
         progressHandler: (@Sendable (ChatProgress) -> Void)?,
         maxContextLength: Int
     ) async throws -> ChatResponse {
-        try await Q35Sampling.withRequestState(seed: request.seed) {
-            try await generateWithRequestState(
-                request, progressHandler: progressHandler, maxContextLength: maxContextLength
-            )
+        // Automatic M5 dispatch belongs to the supported DFlash route. Other
+        // request types retain reference projections; an explicit override
+        // still permits backend experiments on target-only decoding.
+        let automaticM5 = ProcessInfo.processInfo.environment["MERERUN_Q38_M5_VERIFICATION"] == nil
+        return try await QuantizedVerificationContext.$suppressM5.withValue(automaticM5) {
+            try await Q35Sampling.withRequestState(seed: request.seed) {
+                try await generateWithRequestState(
+                    request, progressHandler: progressHandler, maxContextLength: maxContextLength
+                )
+            }
         }
     }
 
@@ -131,7 +138,17 @@ extension Q35Generator {
             )
             : Set<Int>()
         let generationConfig = Q35Sampling.generationConfig(for: request, promptTokenCount: promptTokens.count)
-        let mtpSpeculationEligible = !request.logprobCapture.isEnabled
+        let requestDFlash2 = Self.dflash2Eligible(
+            generationConfig: generationConfig,
+            tokenBudget: min(request.maxTokens, effectiveContext - promptTokens.count),
+            hasImages: !imageURLs.isEmpty, hasTools: request.tools?.isEmpty == false,
+            jsonConstrained: jsonConstrained, logprobCapture: request.logprobCapture,
+            continuousBatchingEnabled: continuousBatchingEnabled
+        ) ? dflash2Model : nil
+        let dflash2Cache = requestDFlash2.map { draft in
+            draft.makeCache(offset: max(0, promptTokens.count - draft.config.slidingWindow))
+        }
+        let mtpSpeculationEligible = requestDFlash2 == nil && !request.logprobCapture.isEnabled
             && !generationConfig.hasActivePenalties
             && !jsonConstrained
             && request.tools?.isEmpty != false
@@ -171,7 +188,12 @@ extension Q35Generator {
         var prefillLength = promptTokens.count
         var mropeRopeDelta: Int?
 
-        if imageURLs.isEmpty {
+        if let draft = requestDFlash2, let dflash2Cache {
+            prefillOutput = try await prefillDFlash2(
+                model: model, draft: draft, draftCache: dflash2Cache,
+                promptTokens: promptTokens, cache: layerCaches, progressHandler: progressHandler
+            )
+        } else if imageURLs.isEmpty {
             let prefixSeed = retainMTPPromptHistory && !streamMTPHistory ? nil : prefixKVCacheSeed(
                 modelPath: loadedModelPath ?? "",
                 promptTokens: promptTokens,
@@ -275,29 +297,46 @@ extension Q35Generator {
         let decodeProgress: @Sendable (ChatProgress) -> Void = { progress in
             outputObserver.observe(progress, handler: progressHandler)
         }
-        let decodeResult = try await decodeTokens(
-            model: model,
-            tokenizerAndTemplate: tokenizerAndTemplate,
-            initialLogits: prefillOutput.logits,
-            initialHidden: prefillOutput.hidden,
-            prefillMTPHidden: prefillOutput.mtpHistoryHidden,
-            prefillMTPSession: prefillOutput.mtpSession,
-            layerCaches: layerCaches,
-            eosSet: eosSet,
-            generationConfig: generationConfig,
-            tokenBudget: tokenBudget,
-            prefillTokenCount: prefillLength,
-            mropeRopeDelta: mropeRopeDelta,
-            promptTokens: promptTokens,
-            maxContextTokens: effectiveContext,
-            jsonConstrained: jsonConstrained,
-            stopAtCompletedToolCall: request.tools?.isEmpty == false && !request.parallelToolCalls,
-            logprobCapture: request.logprobCapture,
-            logprobRegion: request.logprobRegionHint ?? .visible,
-            progressHandler: decodeProgress
-        )
+        let decodeResult: Q35BatchedDecodeResult
+        if let draft = requestDFlash2, let dflash2Cache {
+            decodeResult = try QuantizedVerificationContext.$suppressM5.withValue(false) {
+                try Q35Generator.decodeDFlash2(
+                    model: model, draft: draft, draftCache: dflash2Cache,
+                    initialLogits: prefillOutput.logits, layerCaches: layerCaches,
+                    eosSet: eosSet, tokenBudget: tokenBudget,
+                    generationConfig: generationConfig, promptTokens: promptTokens,
+                    decodeToken: { tokenizerAndTemplate.decode(token: $0) },
+                    decodeTokens: { tokenizerAndTemplate.decode(tokens: $0) }, progressHandler: decodeProgress
+                )
+            }
+        } else {
+            decodeResult = try await decodeTokens(
+                model: model,
+                tokenizerAndTemplate: tokenizerAndTemplate,
+                initialLogits: prefillOutput.logits,
+                initialHidden: prefillOutput.hidden,
+                prefillMTPHidden: prefillOutput.mtpHistoryHidden,
+                prefillMTPSession: prefillOutput.mtpSession,
+                layerCaches: layerCaches,
+                eosSet: eosSet,
+                generationConfig: generationConfig,
+                tokenBudget: tokenBudget,
+                prefillTokenCount: prefillLength,
+                mropeRopeDelta: mropeRopeDelta,
+                promptTokens: promptTokens,
+                maxContextTokens: effectiveContext,
+                jsonConstrained: jsonConstrained,
+                stopAtCompletedToolCall: request.tools?.isEmpty == false && !request.parallelToolCalls,
+                logprobCapture: request.logprobCapture,
+                logprobRegion: request.logprobRegionHint ?? .visible,
+                progressHandler: decodeProgress
+            )
+        }
 
         let stopSequences = TextGenerationStopSequences.merged(request.stopSequences)
+        #if DEBUG
+        lastGeneratedTokenIDsForTesting = decodeResult.generatedTokens
+        #endif
         let decodedRaw = tokenizerAndTemplate.decode(tokens: decodeResult.generatedTokens)
         let trimmed = TextGenerationStopSequences.trimming(decodedRaw, sequences: stopSequences)
         let decoded = trimmed.text

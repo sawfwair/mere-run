@@ -1025,7 +1025,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.installShape, .directoryRoot)
         XCTAssertEqual(spec.hubFallback?.repoId, Q35Resources.q38TwentySevenB4BitUpstreamRepoId)
         XCTAssertEqual(spec.hubFallback?.revision, Q35Resources.q38TwentySevenB4BitUpstreamRevision)
-        XCTAssertEqual(spec.mountedHubFallbacks.count, 3)
+        XCTAssertEqual(spec.mountedHubFallbacks.count, 4)
         XCTAssertEqual(spec.mountedHubFallbacks.first?.destinationPath, Q35Resources.q38MTPComponentPath)
         XCTAssertEqual(
             spec.mountedHubFallbacks.first?.hubFallback.repoId,
@@ -1077,7 +1077,13 @@ final class ManagedModelCatalogTests: XCTestCase {
         )
         XCTAssertEqual(spec.validationKind, .q35)
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatQ36)
-        XCTAssertEqual(spec.estimatedDownloadBytes, 19_487_000_000)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 23_335_817_896)
+        let draft = try XCTUnwrap(spec.mountedHubFallbacks.first {
+            $0.destinationPath == Q35Resources.q38DFlash2ComponentPath
+        })
+        XCTAssertEqual(draft.hubFallback.repoId, "incoai/Qwen3.8-27B-DFlash2")
+        XCTAssertEqual(draft.hubFallback.revision, "015e795645c74b1a0eeef3b570031fb62e769bc5")
+        XCTAssertEqual(draft.hubFallback.patterns, Q35Resources.q38DFlash2SnapshotPatterns)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertTrue(spec.defaultCLICommands.contains("model benchmark code"))
         XCTAssertEqual(spec.apiProfile?.thinkingLevels, [.low, .medium, .xhigh])

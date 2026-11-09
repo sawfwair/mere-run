@@ -157,6 +157,55 @@ public enum MLXCUDAQuant {
 }
 
 public final class PortableQuantizedLinear: QuantizedLinear {
+    package var verificationBackend: QuantizedVerificationBackend = .reference
+    package var effectiveVerificationBackend: QuantizedVerificationBackend {
+        QuantizedVerificationContext.suppressM5 ? .reference : verificationBackend
+    }
+    package static let m5TiledWeightsEnabled: Bool = {
+        let value = ProcessInfo.processInfo.environment["MERERUN_Q38_M5_TILED_WEIGHTS"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return value == nil || value == "1" || value == "true" || value == "yes" || value == "on"
+    }()
+    #if os(macOS)
+    private var cachedM5TiledWeights: M5TiledAffineQ4.Weights?
+
+    private func preparedM5TiledWeights() -> M5TiledAffineQ4.Weights? {
+        guard let biases else { return nil }
+        if let cachedM5TiledWeights, cachedM5TiledWeights.matches(weight: weight, scales: scales, biases: biases) {
+            return cachedM5TiledWeights
+        }
+        let prepared = M5TiledAffineQ4.Weights(weight: weight, scales: scales, biases: biases)
+        cachedM5TiledWeights = prepared
+        return prepared
+    }
+    #endif
+    private static let m5FusedFFNEnabled: Bool = {
+        let value = ProcessInfo.processInfo.environment["MERERUN_Q38_M5_FUSED_FFN"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return value != "0" && value != "false" && value != "off"
+    }()
+
+    package static func fusedVerificationSwiGLU(_ x: MLXArray, gate: Linear, up: Linear) -> MLXArray? {
+        #if os(macOS)
+        guard let gate = gate as? PortableQuantizedLinear, let up = up as? PortableQuantizedLinear,
+              gate.effectiveVerificationBackend == .m5Matrix, up.effectiveVerificationBackend == .m5Matrix,
+              m5FusedFFNEnabled, gate.bias == nil, up.bias == nil,
+              gate.bits == 4, up.bits == 4, gate.groupSize == 64, up.groupSize == 64,
+              gate.mode == .affine, up.mode == .affine,
+              x.dim(-1) == 5_120, gate.weight.dim(0) == 17_408,
+              let gateBiases = gate.biases, let upBiases = up.biases else { return nil }
+        if m5TiledWeightsEnabled, x.dtype == .bfloat16, (1...8).contains(x.size / x.dim(-1)),
+           let packedGate = gate.preparedM5TiledWeights(), let packedUp = up.preparedM5TiledWeights() {
+            return M5TiledAffineQ4.swiglu(x, gate: packedGate, up: packedUp)
+        }
+        return M5AffineQ4Verification.swiglu(
+            x, gateWeight: gate.weight, gateScales: gate.scales, gateBiases: gateBiases,
+            upWeight: up.weight, upScales: up.scales, upBiases: upBiases
+        )
+        #else
+        return nil
+        #endif
+    }
     private var cachedDequantizedWeight: MLXArray?
     private var cachedDequantizedWeightDType: DType?
     /// Retain the dequantized CUDA fallback weight between calls. Large dense
@@ -170,6 +219,17 @@ public final class PortableQuantizedLinear: QuantizedLinear {
 
     public override func callAsFunction(_ x: MLXArray) -> MLXArray {
         #if os(macOS)
+        if effectiveVerificationBackend == .m5Matrix, bias == nil,
+           bits == 4, groupSize == 64, mode == .affine, let biases,
+           let splits = effectiveVerificationBackend.matrixSplits(inputSize: x.dim(-1), outputSize: weight.dim(0)) {
+            if Self.m5TiledWeightsEnabled, x.dtype == .bfloat16, (1...8).contains(x.size / x.dim(-1)),
+               let prepared = preparedM5TiledWeights(), let output = M5TiledAffineQ4.matmul(x, weights: prepared) {
+                return output
+            }
+            if let output = M5AffineQ4Verification.matmul(
+                x, weight: weight, scales: scales, biases: biases, splits: splits
+            ) { return output }
+        }
         if bias == nil,
            let biases,
            let output = SmallBatchAffineQMV.matmul(

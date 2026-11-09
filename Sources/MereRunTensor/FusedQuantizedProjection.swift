@@ -6,7 +6,9 @@ import MLXNN
 ///
 /// Quantized weights pack each output row independently (both affine and nvfp4),
 /// so row-wise concatenation of `weight`/`scales`/`biases` is exact — the fused
-/// matmul produces bit-identical results to the separate matmuls.
+/// reference matmul produces bit-identical results to separate matmuls. An
+/// alternate backend qualifies the fused geometry under its own arithmetic
+/// contract; source identity and backend policy both invalidate this cache.
 ///
 /// The fusion lives outside the module tree: LoRA injection, weight export, and
 /// re-quantization keep operating on the original modules. `matches(_:)` compares
@@ -16,6 +18,7 @@ package final class FusedQuantizedProjection {
     private let projection: PortableQuantizedLinear
     private let splitIndices: [Int]
     private let sourceIDs: [ObjectIdentifier]
+    private let sourceBackend: QuantizedVerificationBackend
 
     private init(
         weight: MLXArray,
@@ -25,7 +28,8 @@ package final class FusedQuantizedProjection {
         bits: Int,
         mode: QuantizationMode,
         splitIndices: [Int],
-        sourceIDs: [ObjectIdentifier]
+        sourceIDs: [ObjectIdentifier],
+        backend: QuantizedVerificationBackend
     ) {
         self.projection = PortableQuantizedLinear(
             weight: weight,
@@ -38,6 +42,8 @@ package final class FusedQuantizedProjection {
         )
         self.splitIndices = splitIndices
         self.sourceIDs = sourceIDs
+        self.sourceBackend = backend
+        self.projection.verificationBackend = backend
     }
 
     /// Only these exact classes carry plain `quantizedMM` semantics on Metal.
@@ -65,6 +71,8 @@ package final class FusedQuantizedProjection {
             quantized.append(projection)
         }
         guard quantized.count >= 2, let first = quantized.first else { return nil }
+        let backend = verificationBackend(first)
+        guard quantized.allSatisfy({ verificationBackend($0) == backend }) else { return nil }
 
         let packedWidth = first.weight.dim(-1)
         let scaleWidth = first.scales.dim(-1)
@@ -110,7 +118,8 @@ package final class FusedQuantizedProjection {
             bits: first.bits,
             mode: first.mode,
             splitIndices: splitIndices,
-            sourceIDs: quantized.map(ObjectIdentifier.init)
+            sourceIDs: quantized.map(ObjectIdentifier.init),
+            backend: backend
         )
     }
 
@@ -118,9 +127,14 @@ package final class FusedQuantizedProjection {
     package func matches(_ projections: [Linear?]) -> Bool {
         guard projections.count == sourceIDs.count else { return false }
         for (module, id) in zip(projections, sourceIDs) {
-            guard let module, ObjectIdentifier(module) == id else { return false }
+            guard let module, ObjectIdentifier(module) == id,
+                  Self.verificationBackend(module) == sourceBackend else { return false }
         }
         return true
+    }
+
+    private static func verificationBackend(_ module: Linear) -> QuantizedVerificationBackend {
+        (module as? PortableQuantizedLinear)?.verificationBackend ?? .reference
     }
 
     /// One fused quantized matmul, split back into per-projection outputs.
