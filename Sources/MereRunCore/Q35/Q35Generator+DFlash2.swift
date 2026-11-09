@@ -87,18 +87,23 @@ extension Q35Generator {
                 modelId: modelId, activeRequestCount: activeChatRequestCount
             ))
             let tokens = MLXArray(promptTokens[processed..<end].map(Int32.init)).reshaped(1, end - processed)
-            let output = model.forwardPrefill(
-                tokens, cache: cache, captureLayerIndices: end > retainedStart ? capture : []
-            )
-            if end > retainedStart {
-                let start = max(0, retainedStart - processed)
-                draft.appendTargetContext(
-                    output.capturedHiddenStates.mapValues { $0[0..., start..., 0...] }, cache: draftCache
+            // Scope the synchronous GPU work without transferring actor-owned
+            // draft state through an async task-local closure on Swift 6.1.
+            let output = QuantizedVerificationContext.$suppressM5.withValue(false) {
+                let output = model.forwardPrefill(
+                    tokens, cache: cache, captureLayerIndices: end > retainedStart ? capture : []
                 )
+                if end > retainedStart {
+                    let start = max(0, retainedStart - processed)
+                    draft.appendTargetContext(
+                        output.capturedHiddenStates.mapValues { $0[0..., start..., 0...] }, cache: draftCache
+                    )
+                }
+                // Materialize the whole chunk in one submission. Individual draft
+                // layers only build the graph; they do not synchronize separately.
+                MLX.eval([output.logits] + draftCache.flatMap(\.state))
+                return output
             }
-            // Materialize the whole chunk in one submission. Individual draft
-            // layers only build the graph; they do not synchronize separately.
-            MLX.eval([output.logits] + draftCache.flatMap(\.state))
             last = output
             processed = end
             progressHandler?(ChatProgress(stage: .encoding, message: "Prefilling \(end)/\(promptTokens.count) tokens"))
@@ -114,7 +119,7 @@ extension Q35Generator {
         initialLogits: MLXArray, layerCaches: [Q35LayerCache?], eosSet: Set<Int>, tokenBudget: Int,
         generationConfig: GenerationConfig, promptTokens: [Int],
         decodeToken: (Int) -> String, progressHandler: (@Sendable (ChatProgress) -> Void)?
-    ) async throws -> Q35BatchedDecodeResult {
+    ) throws -> Q35BatchedDecodeResult {
         let started = Date()
         var firstTokenSeconds: Double?
         var generated: [Int] = []

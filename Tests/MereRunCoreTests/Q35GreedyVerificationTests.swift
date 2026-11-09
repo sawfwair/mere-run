@@ -19,7 +19,7 @@ final class Q35GreedyVerificationTests: MereRunCoreTestCase {
             modelId: Q35Resources.q38TwentySevenB4BitModelId, prefixKVCacheEnabled: false,
             continuousBatchingEnabled: false, dflash2ModelPath: nil
         )
-        try await generator.withRequestStream {
+        try await generator.withRequestStream { @Sendable in
             try await Self.qualify(generator, root: root)
         }
     }

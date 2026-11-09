@@ -188,12 +188,10 @@ extension Q35Generator {
         var mropeRopeDelta: Int?
 
         if let draft = requestDFlash2, let dflash2Cache {
-            prefillOutput = try await QuantizedVerificationContext.$suppressM5.withValue(false) {
-                try await prefillDFlash2(
-                    model: model, draft: draft, draftCache: dflash2Cache,
-                    promptTokens: promptTokens, cache: layerCaches, progressHandler: progressHandler
-                )
-            }
+            prefillOutput = try await prefillDFlash2(
+                model: model, draft: draft, draftCache: dflash2Cache,
+                promptTokens: promptTokens, cache: layerCaches, progressHandler: progressHandler
+            )
         } else if imageURLs.isEmpty {
             let prefixSeed = retainMTPPromptHistory && !streamMTPHistory ? nil : prefixKVCacheSeed(
                 modelPath: loadedModelPath ?? "",
@@ -293,8 +291,8 @@ extension Q35Generator {
 
         let decodeResult: Q35BatchedDecodeResult
         if let draft = requestDFlash2, let dflash2Cache {
-            decodeResult = try await QuantizedVerificationContext.$suppressM5.withValue(false) {
-                try await decodeDFlash2(
+            decodeResult = try QuantizedVerificationContext.$suppressM5.withValue(false) {
+                try decodeDFlash2(
                     model: model, draft: draft, draftCache: dflash2Cache,
                     initialLogits: prefillOutput.logits, layerCaches: layerCaches,
                     eosSet: eosSet, tokenBudget: tokenBudget,
