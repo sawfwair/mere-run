@@ -107,7 +107,7 @@ package final class StudioPrivateSession {
     /// declared sidecars the run actually wrote. Keep rewrites all of those paths.
     private func referencedFiles(of item: StudioLibraryItem) -> [URL] {
         var paths = item.allArtifactURLs.map(\.path) + StudioLibraryLineage.inputPaths(of: item)
-            + (item.messages ?? []).compactMap(\.imagePath)
+            + (item.messages ?? []).flatMap(\.attachments.paths)
         if let arguments = item.commandArguments, let capability = item.templateID?.capability {
             let form = StudioConsoleCommand.seed(capability: capability, arguments: arguments)
             paths += StudioTaskSessions.privateOutputFlags(for: capability).map { form.text($0) }
@@ -182,7 +182,7 @@ package final class StudioPrivateSession {
             phase = .waitingForCompletions(Set(activeJobs(controller: controller).map(\.id)))
             advanceRetirement(controller: controller)
         } catch {
-            let message = "Could not remove private files: \(error.localizedDescription)"
+            let message = "Couldn't remove private files. \(error.localizedDescription)"
             phase = .removalFailed(message)
             library.lastPersistenceError = message
             controller.status = message

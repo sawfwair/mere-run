@@ -2044,6 +2044,20 @@ extension MereRunModelManifest {
                 defaults: Defaults(steps: 32, cfg: 1), supports: [.musicGeneration], components: nil,
                 upstreamRepoId: "\(YuE2Resources.repository)@\(YuE2Resources.revision)", createdAt: createdAt
             )
+        case .sheetSage2:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .sheetSage2, family: .music,
+                tier: .latest, variant: .standard, precision: .fp32,
+                defaults: nil, supports: [.musicTranscription], components: nil,
+                upstreamRepoId: "\(SheetSage2Resources.repository)@\(SheetSage2Resources.revision)", createdAt: createdAt
+            )
+        case .yue2VAELegacy:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .yue2, family: .music,
+                tier: .latest, variant: .standard, precision: .fp32,
+                defaults: nil, supports: [], components: nil,
+                upstreamRepoId: "\(YuE2Resources.legacyVAERepository)@\(YuE2Resources.legacyVAERevision)", createdAt: createdAt
+            )
         case .miniMaxMusic3:
             return MereRunModelManifest(
                 id: modelID.rawValue,

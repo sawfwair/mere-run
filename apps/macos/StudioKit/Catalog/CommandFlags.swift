@@ -455,6 +455,37 @@ extension CommandFlags {
     }
 }
 
+// MARK: - vision image-to-3d-idol
+
+extension CommandFlags {
+    /// `mere.run vision image-to-3d-idol` — IDOL Gaussian splats
+    package enum VisionImageTo3DIdol: CommandFlagNamespace {
+        package static let command = ["vision", "image-to-3d-idol"]
+        package static let defaultValues = [
+            "--mode": "synthetic",
+            "--seed": "42",
+            "--steps": "50",
+            "--guidance": "3.0",
+            "--time-shift": "3.0",
+            "--num-gaussians": "262144"
+        ]
+
+        package static let model = "--model"
+        package static let dino = "--dino"
+        package static let vae = "--vae"
+        package static let output = "--output"
+        package static let mode = "--mode"
+        package static let alreadyFramed = "--already-framed"
+        package static let seed = "--seed"
+        package static let steps = "--steps"
+        package static let guidance = "--guidance"
+        package static let timeShift = "--time-shift"
+        package static let numGaussians = "--num-gaussians"
+        package static let dryRun = "--dry-run"
+        package static let json = "--json"
+    }
+}
+
 // MARK: - vision embed
 
 extension CommandFlags {
@@ -986,6 +1017,8 @@ extension CommandFlags {
             "--prefill-duration": "1.64"
         ]
 
+        package static let yue2MemoryMode = "--yue2-memory-mode"
+        package static let stagesOutput = "--stages-output"
         package static let scoreMode = "--score-mode"
         package static let abcFile = "--abc-file"
         package static let abcOutput = "--abc-output"
@@ -3056,5 +3089,206 @@ extension CommandFlags {
         package static let includeTokens = "--include-tokens"
         package static let preflight = "--preflight"
         package static let json = "--json"
+    }
+}
+
+// MARK: - music yue2 plan
+
+extension CommandFlags {
+    /// `mere.run music yue2 plan` — YuE2 plan
+    package enum MusicYue2Plan: CommandFlagNamespace {
+        package static let command = ["music", "yue2", "plan"]
+        package static let defaultValues = [
+            "--model": "music-yue2",
+            "--memory-mode": "staged"
+        ]
+
+        package static let model = "--model"
+        package static let output = "--output"
+        package static let memoryMode = "--memory-mode"
+        package static let request = "--request"
+    }
+}
+
+// MARK: - music yue2 semantic
+
+extension CommandFlags {
+    /// `mere.run music yue2 semantic` — YuE2 semantic
+    package enum MusicYue2Semantic: CommandFlagNamespace {
+        package static let command = ["music", "yue2", "semantic"]
+        package static let defaultValues = [
+            "--model": "music-yue2",
+            "--memory-mode": "staged"
+        ]
+
+        package static let model = "--model"
+        package static let output = "--output"
+        package static let memoryMode = "--memory-mode"
+    }
+}
+
+// MARK: - music yue2 synthesize
+
+extension CommandFlags {
+    /// `mere.run music yue2 synthesize` — YuE2 synthesize
+    package enum MusicYue2Synthesize: CommandFlagNamespace {
+        package static let command = ["music", "yue2", "synthesize"]
+        package static let defaultValues = [
+            "--model": "music-yue2",
+            "--memory-mode": "staged"
+        ]
+
+        package static let model = "--model"
+        package static let output = "--output"
+        package static let memoryMode = "--memory-mode"
+    }
+}
+
+// MARK: - music yue2 export
+
+extension CommandFlags {
+    /// `mere.run music yue2 export` — YuE2 export
+    package enum MusicYue2Export: CommandFlagNamespace {
+        package static let command = ["music", "yue2", "export"]
+        package static let defaultValues = [
+            "--model": "music-yue2",
+            "--memory-mode": "staged"
+        ]
+
+        package static let model = "--model"
+        package static let output = "--output"
+        package static let memoryMode = "--memory-mode"
+    }
+}
+
+// MARK: - music yue2 inspect
+
+extension CommandFlags {
+    /// `mere.run music yue2 inspect` — YuE2 inspect
+    package enum MusicYue2Inspect: CommandFlagNamespace {
+        package static let command = ["music", "yue2", "inspect"]
+    }
+}
+
+// MARK: - music yue2 validate
+
+extension CommandFlags {
+    /// `mere.run music yue2 validate` — YuE2 validate
+    package enum MusicYue2Validate: CommandFlagNamespace {
+        package static let command = ["music", "yue2", "validate"]
+
+        package static let tokenizer = "--tokenizer"
+    }
+}
+
+// MARK: - music yue2 decode
+
+extension CommandFlags {
+    /// `mere.run music yue2 decode` — YuE2 decode
+    package enum MusicYue2Decode: CommandFlagNamespace {
+        package static let command = ["music", "yue2", "decode"]
+
+        package static let vae = "--vae"
+        package static let output = "--output"
+        package static let coreFrames = "--core-frames"
+        package static let full = "--full"
+    }
+}
+
+// MARK: - music yue2 instrumentalize
+
+extension CommandFlags {
+    /// `mere.run music yue2 instrumentalize` — YuE2 instrumentalize
+    package enum MusicYue2Instrumentalize: CommandFlagNamespace {
+        package static let command = ["music", "yue2", "instrumentalize"]
+        package static let defaultValues = [
+            "--overlap": "vocal"
+        ]
+
+        package static let output = "--output"
+        package static let overlap = "--overlap"
+        package static let dropChords = "--drop-chords"
+    }
+}
+
+// MARK: - music yue2 batch
+
+extension CommandFlags {
+    /// `mere.run music yue2 batch` — YuE2 batch
+    package enum MusicYue2Batch: CommandFlagNamespace {
+        package static let command = ["music", "yue2", "batch"]
+        package static let defaultValues = [
+            "--model": "music-yue2",
+            "--memory-mode": "staged"
+        ]
+
+        package static let model = "--model"
+        package static let output = "--output"
+        package static let memoryMode = "--memory-mode"
+        package static let validateOnly = "--validate-only"
+    }
+}
+
+// MARK: - music yue2 transcribe
+
+extension CommandFlags {
+    /// `mere.run music yue2 transcribe` — YuE2 transcribe
+    package enum MusicYue2Transcribe: CommandFlagNamespace {
+        package static let command = ["music", "yue2", "transcribe"]
+        package static let defaultValues = [
+            "--model": "music-sheetsage2",
+            "--overlap": "200.0",
+            "--lookahead": "100.0"
+        ]
+
+        package static let model = "--model"
+        package static let output = "--output"
+        package static let melodyOnly = "--melody-only"
+        package static let allowNotationFailure = "--allow-notation-failure"
+        package static let overlap = "--overlap"
+        package static let lookahead = "--lookahead"
+    }
+}
+
+// MARK: - music yue2 cover
+
+extension CommandFlags {
+    /// `mere.run music yue2 cover` — YuE2 cover
+    package enum MusicYue2Cover: CommandFlagNamespace {
+        package static let command = ["music", "yue2", "cover"]
+        package static let defaultValues = [
+            "--model": "music-yue2",
+            "--transcriber-model": "music-sheetsage2"
+        ]
+
+        package static let model = "--model"
+        package static let transcriberModel = "--transcriber-model"
+        package static let request = "--request"
+        package static let output = "--output"
+        package static let fullScore = "--full-score"
+    }
+}
+
+// MARK: - music yue2 serve
+
+extension CommandFlags {
+    /// `mere.run music yue2 serve` — YuE2 serve
+    package enum MusicYue2Serve: CommandFlagNamespace {
+        package static let command = ["music", "yue2", "serve"]
+        package static let defaultValues = [
+            "--model": "music-yue2",
+            "--host": "127.0.0.1",
+            "--port": "8082",
+            "--max-pending": "16",
+            "--memory-mode": "resident"
+        ]
+
+        package static let model = "--model"
+        package static let host = "--host"
+        package static let port = "--port"
+        package static let output = "--output"
+        package static let apiKey = "--api-key"
+        package static let maxPending = "--max-pending"
+        package static let memoryMode = "--memory-mode"
     }
 }

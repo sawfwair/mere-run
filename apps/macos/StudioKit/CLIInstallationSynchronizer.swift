@@ -167,7 +167,7 @@ package enum CLIInstallationSynchronizer {
                     resolvedPath: customURL.path,
                     installedVersion: try? CLIBootstrapInstaller.validatedVersion(executableURL: customURL),
                     bundledVersion: bundled.version,
-                    detail: "Studio will not replace the explicitly configured CLI path.",
+                    detail: "Studio doesn't replace a CLI path you set in Settings.",
                     lastSynchronizationError: nil,
                     allowsManualAction: false
                 ),
@@ -221,7 +221,7 @@ package enum CLIInstallationSynchronizer {
                     installedVersion: try? CLIBootstrapInstaller.validatedVersion(executableURL: destinationURL),
                     bundledVersion: bundled.version,
                     detail: "The receipt names a destination outside Studio's supported command locations.",
-                    lastSynchronizationError: "Studio won't replace this custom CLI destination.",
+                    lastSynchronizationError: "Studio doesn't replace a CLI at a custom destination.",
                     allowsManualAction: false
                 ),
                 destinationURL: destinationURL,
@@ -242,9 +242,9 @@ package enum CLIInstallationSynchronizer {
                     installedVersion: installedVersion,
                     bundledVersion: bundled.version,
                     detail: isValid
-                        ? "The command resolves directly into this Studio app bundle; no copy is required."
+                        ? "The command resolves directly into this Studio app bundle, so no copy is needed."
                         : "The command points into this Studio app bundle but does not pass `--version`.",
-                    lastSynchronizationError: isValid ? nil : "The bundled CLI symlink could not be validated.",
+                    lastSynchronizationError: isValid ? nil : "Couldn't validate the bundled CLI symlink.",
                     allowsManualAction: false
                 ),
                 destinationURL: destinationURL,
@@ -271,7 +271,7 @@ package enum CLIInstallationSynchronizer {
                     resolvedPath: destinationURL.path,
                     installedVersion: try? CLIBootstrapInstaller.validatedVersion(executableURL: destinationURL),
                     bundledVersion: bundled.version,
-                    detail: "Studio cannot prove ownership because the installation receipt is invalid. Explicit repair is required.",
+                    detail: "The installation receipt isn't valid, so Studio can't confirm that it installed this CLI. To fix it, choose Repair CLI.",
                     lastSynchronizationError: receiptError,
                     allowsManualAction: context.bundledPayloadURL != nil
                 ),
@@ -305,9 +305,9 @@ package enum CLIInstallationSynchronizer {
             )
         } ?? false
         let detail = if matchesBundledBinary && installedVersion != nil {
-            "The CLI matches this Studio build but has no ownership receipt. Update once to adopt the managed layout."
+            "The CLI matches this Studio build but has no installation receipt. To let Studio manage it, update it."
         } else {
-            "This unmarked CLI will not be changed automatically. Update explicitly to migrate it into Studio management."
+            "Studio didn't install this CLI, so it doesn't change it automatically. To let Studio manage it, update it."
         }
         return CLIInstallationInspection(
             status: CLIInstallationStatus(
@@ -354,7 +354,7 @@ package enum CLIInstallationSynchronizer {
                     installedVersion: installedVersion,
                     bundledVersion: bundled.version,
                     detail: "The installed destination or payload no longer matches Studio's ownership receipt.",
-                    lastSynchronizationError: "Automatic replacement was blocked because the installed CLI changed after Studio installed it.",
+                    lastSynchronizationError: "Studio didn't replace the CLI automatically because it changed after Studio installed it.",
                     allowsManualAction: context.bundledPayloadURL != nil
                 ),
                 destinationURL: destinationURL,
@@ -404,7 +404,7 @@ package enum CLIInstallationSynchronizer {
                     resolvedPath: destinationURL.path,
                     installedVersion: installedVersion,
                     bundledVersion: bundled.version,
-                    detail: "A newer bundled CLI is available, but Studio cannot write the command destination.",
+                    detail: "A newer bundled CLI is available, but Studio can't write to the command destination.",
                     lastSynchronizationError: "Make \(destinationURL.deletingLastPathComponent().path) writable, then choose Repair CLI.",
                     allowsManualAction: true
                 ),
@@ -420,7 +420,7 @@ package enum CLIInstallationSynchronizer {
                 resolvedPath: destinationURL.path,
                 installedVersion: installedVersion,
                 bundledVersion: bundled.version,
-                detail: "Studio will synchronize its managed CLI payload with this app build.",
+                detail: "Studio updates the CLI it manages to match this app build.",
                 lastSynchronizationError: nil,
                 allowsManualAction: true
             ),

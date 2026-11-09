@@ -376,10 +376,10 @@ package final class MereRunController: ObservableObject {
     /// The local API server's one owner. `StudioAppSession` creates it at launch so it adopts a
     /// server from the first job event on, whichever window or menu is open.
     package lazy var localServer = StudioLocalServer(controller: self)
-    /// The resident `vision serve` and `music serve` processes Studio starts from the Server domain.
+    /// The resident `vision serve`, `music serve`, and `world serve` processes Studio starts from
+    /// the Server domain.
     package lazy var visionServer = StudioServiceProcess(templateID: .visionServe, controller: self)
     package lazy var musicServer = StudioServiceProcess(templateID: .musicServe, controller: self)
-    /// `world serve`, which has no page: it starts from the Command Console or a Command view.
     package lazy var worldServer = StudioServiceProcess(templateID: .worldServe, controller: self)
 
     /// The resident servers besides the API server, in the order the menu bar lists them.
@@ -520,7 +520,7 @@ package final class MereRunController: ObservableObject {
         } catch {
             return StoredRuntimeAPIKey(
                 value: legacy ?? "",
-                notice: runtimeAPIKeyStorageNotice(for: error, action: "read from", recovery: retryAtNextLaunch)
+                notice: runtimeAPIKeyStorageNotice(for: error, action: "read the runtime API key from", recovery: retryAtNextLaunch)
             )
         }
         guard let legacy else { return StoredRuntimeAPIKey(value: "", notice: nil) }
@@ -533,18 +533,18 @@ package final class MereRunController: ObservableObject {
         } catch {
             return StoredRuntimeAPIKey(
                 value: legacy,
-                notice: runtimeAPIKeyStorageNotice(for: error, action: "moved to", recovery: retryAtNextLaunch)
+                notice: runtimeAPIKeyStorageNotice(for: error, action: "move the runtime API key to", recovery: retryAtNextLaunch)
             )
         }
         defaults.removeObject(forKey: Keys.legacyRuntimeAPIKey)
         return StoredRuntimeAPIKey(value: legacy, notice: nil)
     }
 
-    private static let retryAtNextLaunch = "the app will try again at the next launch"
+    private static let retryAtNextLaunch = "The app tries again at the next launch"
 
     private static func runtimeAPIKeyStorageNotice(for error: Error, action: String, recovery: String) -> String {
-        "The runtime API key could not be \(action) the Keychain: \(error.localizedDescription) "
-            + "It applies for this session; \(recovery)."
+        "Couldn't \(action) the Keychain. \(error.localizedDescription) "
+            + "The key works for this session. \(recovery)."
     }
 
     /// Writes the key to the Keychain, or removes the item when the field is cleared. On failure
@@ -558,7 +558,7 @@ package final class MereRunController: ObservableObject {
             }
         } catch {
             runtimeAPIKeyStorageNotice = Self.runtimeAPIKeyStorageNotice(
-                for: error, action: "saved to", recovery: "enter it again once the Keychain is available"
+                for: error, action: "save the runtime API key to", recovery: "Enter it again after the Keychain is available"
             )
             return
         }
@@ -1148,7 +1148,7 @@ package final class MereRunController: ObservableObject {
         let request = taskSessions.privatizing(request, source: scopeSource)
         do { try privateSession?.prepareDirectories(for: request) }
         catch {
-            status = "Could not prepare private outputs: \(error.localizedDescription)"
+            status = "Couldn't prepare private outputs. \(error.localizedDescription)"
             return false
         }
         if let shortCircuit = ensureCameraAccess(
@@ -1428,7 +1428,7 @@ package final class MereRunController: ObservableObject {
             let request = taskSessions.privatizing(base, source: scopeSource)
             // A service reports through its id, so a failure here surfaces as the job's own.
             do { try session.prepareDirectories(for: request) }
-            catch { status = "Could not prepare private outputs: \(error.localizedDescription)" }
+            catch { status = "Couldn't prepare private outputs. \(error.localizedDescription)" }
             execution = request.execution
             draft = request.draft
             arguments = execution?.arguments
@@ -1476,7 +1476,7 @@ package final class MereRunController: ObservableObject {
                 execution: arguments.map { StudioExecution(templateID: template.id, arguments: $0) })
             let request = taskSessions.privatizing(base, source: scopeSource)
             do { try session.prepareDirectories(for: request) }
-            catch { status = "Could not prepare private outputs: \(error.localizedDescription)"; return false }
+            catch { status = "Couldn't prepare private outputs. \(error.localizedDescription)"; return false }
             draft = request.draft
             arguments = request.execution?.arguments
             requestID = request.id
@@ -1564,7 +1564,7 @@ package final class MereRunController: ObservableObject {
         if let session = privateSession {
             let directory = session.directory.appendingPathComponent(UUID().uuidString, isDirectory: true)
             do { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
-            catch { status = "Could not prepare private video: \(error.localizedDescription)"; return false }
+            catch { status = "Couldn't prepare private video. \(error.localizedDescription)"; return false }
             output = directory.appendingPathComponent("render.mp4").path
         }
         let request = StudioVideoSessionRequest(
@@ -1795,8 +1795,8 @@ package final class MereRunController: ObservableObject {
     private func reportCameraDenied() {
         status = "Camera access denied"
         append(
-            "Camera access is required for live tracking. Enable it in "
-                + "System Settings → Privacy & Security → Camera.",
+            "Live tracking needs camera access. Turn it on in "
+                + "System Settings ▸ Privacy & Security ▸ Camera.",
             stream: .stderr
         )
     }

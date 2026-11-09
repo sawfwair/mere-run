@@ -3,6 +3,14 @@ import XCTest
 import MereRunModelKit
 
 final class ModelMetadataTests: XCTestCase {
+    func testArtifactPinHashIncludesCompleteChunksAndFinalPartialChunk() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: file) }
+        try Data(repeating: 0, count: 1_048_593).write(to: file)
+        XCTAssertEqual(try ModelArtifactPin.fileSHA256(file),
+            "f2c67c81372d31a24e3fe5ac0c10685e97d8d6b671ace65d75fd243d3741f59e")
+    }
+
     func testManifestPersistsRevisionAndAcknowledgementWithoutCore() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

@@ -87,6 +87,8 @@ extension CommandArguments {
         args.option(F.prompt, draft.prompt)
         if !draft.secondaryText.isBlank { args.option(F.system, draft.secondaryText) }
         if !draft.imagePath.isBlank { args.option(F.image, draft.imagePath) }
+        if let audio = draft.chatAudioPath, !audio.isBlank { args.option(F.audio, audio) }
+        if let video = draft.chatVideoPath, !video.isBlank { args.option(F.video, video) }
         args.option(F.maxTokens, String(draft.maxTokens))
         args.option(F.temperature, format(draft.temperature))
         args.option(F.topP, format(draft.topP))
@@ -137,6 +139,7 @@ extension CommandArguments {
         args.option(F.topP, format(draft.topP))
         if draft.minP > 0 || draft.samplingOverrides?.contains(F.minP) == true { args.option(F.minP, format(draft.minP)) }
         if !draft.model.isBlank { args.option(F.model, draft.model) }
+        if draft.thinkingMode == .show { args.flag(F.thinking) }
         if draft.stream { args.flag(F.stream) }
         if draft.force { args.flag(F.stats) }
         if draft.quiet { args.flag(F.quiet) }

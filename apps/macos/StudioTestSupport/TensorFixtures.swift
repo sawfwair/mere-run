@@ -23,6 +23,25 @@ public enum TensorFixtures {
             return Tensor(name: name, dtype: "F32", shape: shape, data: bytes)
         }
 
+        /// A float32 tensor holding `values` in row-major order.
+        public static func float32(_ name: String, shape: [Int], values: [Float]) -> Tensor {
+            precondition(values.count == shape.reduce(1, *), "\(name) needs \(shape.reduce(1, *)) values")
+            return raw(name, dtype: "F32", shape: shape, littleEndian: values.map(\.bitPattern))
+        }
+
+        /// A tensor of any dtype from its elements' bit patterns, written little-endian at the
+        /// width of `Element` (`UInt16` for F16 and BF16, `UInt8` for U8).
+        public static func raw<Element: FixedWidthInteger>(
+            _ name: String, dtype: String, shape: [Int], littleEndian elements: [Element]
+        ) -> Tensor {
+            var bytes = Data(capacity: elements.count * MemoryLayout<Element>.size)
+            for element in elements {
+                var little = element.littleEndian
+                bytes.append(withUnsafeBytes(of: &little) { Data($0) })
+            }
+            return Tensor(name: name, dtype: dtype, shape: shape, data: bytes)
+        }
+
         /// An int32 tensor holding `values` in row-major order.
         public static func int32(_ name: String, shape: [Int], values: [Int32]) -> Tensor {
             precondition(values.count == shape.reduce(1, *), "\(name) needs \(shape.reduce(1, *)) values")

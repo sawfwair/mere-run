@@ -103,12 +103,22 @@ final class StudioAudioVoiceTests: XCTestCase {
         XCTAssertEqual(StudioTaskSchema.essentials(for: .audioEnhance, draft: draft, source: .contract).map(\.flag), ["--dtype"])
     }
 
-    func testAudioEditIsNotAnEnhanceVariant() {
+    func testAudioEditIsVoiceEditNotAnEnhanceVariant() {
         XCTAssertEqual(StudioTask.audioEnhance.variantTemplates.map(\.id), [.audioEnhance])
         XCTAssertNil(StudioTaskSchema.variantField(for: .audioEnhance))
+        XCTAssertEqual(StudioTask.voiceEdit.variantTemplates.map(\.id), [.audioEdit])
+        XCTAssertEqual(CommandTemplateID.audioEdit.studioDomain, .voice)
+        XCTAssertEqual(StudioTask.voiceEdit.archetype, .generate)
+        XCTAssertEqual(StudioTask.voiceEdit.generateArchetype?.primaryOutput, .audio)
     }
 
-    func testSeparateTaskDraftBuildsTheAudioToolsPagesArgvUnderBothTasks() throws {
+    /// Separating stems has one home, Music ▸ Separate; Audio ▸ Enhance hands off to it.
+    func testSeparateLivesOnlyInMusic() {
+        XCTAssertFalse(StudioDomain.audio.tasks.contains { $0.title == "Separate" })
+        XCTAssertTrue(StudioTask.audioEnhance.analyzeArchetype?.siblingTasks.contains(.musicSeparate) == true)
+    }
+
+    func testSeparateTaskDraftBuildsTheAudioToolsPagesArgv() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .musicSeparate))
         var legacy = template.defaultDraft()
         legacy.inputPath = "/tmp/late-set.wav"
@@ -116,7 +126,7 @@ final class StudioAudioVoiceTests: XCTestCase {
         legacy.model = "music-separate-bs-roformer-4stem"
         legacy.audioOverlap = 4
         legacy.audioDType = "float32"
-        for task in [StudioTask.audioSeparate, .musicSeparate] {
+        for task in [StudioTask.musicSeparate] {
             var draft = try XCTUnwrap(StudioTaskDraft(task: task))
             XCTAssertEqual(draft.templateID, .musicSeparate)
             draft.setArgument(0, "/tmp/late-set.wav")
@@ -129,7 +139,7 @@ final class StudioAudioVoiceTests: XCTestCase {
         }
     }
 
-    func testSeparateRowsShowOnTheAudioAndTheMusicPage() throws {
+    func testSeparateRowsShowOnTheMusicPage() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .musicSeparate))
         var draft = template.defaultDraft()
         draft.inputPath = "/tmp/late-set.wav"
@@ -139,7 +149,7 @@ final class StudioAudioVoiceTests: XCTestCase {
             status: .completed, exitCode: 0, commandPreview: "mere.run music separate late-set.wav",
             outputText: nil, templateID: .musicSeparate, commandDraft: draft
         )
-        for task in [StudioTask.audioSeparate, .musicSeparate] {
+        for task in [StudioTask.musicSeparate] {
             XCTAssertEqual(StudioFeedCardBuilder.cards(items: [row], task: task) { _ in nil }.map(\.id), [row.id], "\(task)")
         }
         XCTAssertTrue(StudioFeedCardBuilder.cards(items: [row], task: .audioEnhance) { _ in nil }.isEmpty)
@@ -151,8 +161,8 @@ final class StudioAudioVoiceTests: XCTestCase {
         parked.inputPath = "/tmp/late-set.wav"
         parked.model = "music-separate-mel-roformer-denoise"
         let sessions = StudioTaskSessions()
-        sessions.set(parked, for: StudioTask.audioSeparate.rawValue + ".AudioTools.separationDraft")
-        let imported = try XCTUnwrap(sessions.taskDraft(for: .audioSeparate))
+        sessions.set(parked, for: StudioTask.musicSeparate.rawValue + ".AudioTools.separationDraft")
+        let imported = try XCTUnwrap(sessions.taskDraft(for: .musicSeparate))
         XCTAssertEqual(imported.primaryInputPath, "/tmp/late-set.wav")
         XCTAssertEqual(imported.model, "music-separate-mel-roformer-denoise")
     }

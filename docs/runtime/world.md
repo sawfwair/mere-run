@@ -437,11 +437,14 @@ structural evidence, never a quality claim.
 
 ## macOS Studio
 
-The macOS Studio app has no designed surface for this server. Run it from the
-**Command Console**, which builds typed backend, model, state-directory,
-warmup, host, port, and authentication controls from the capability contract.
-Studio passes API keys through `MERERUN_API_KEY` so they don't appear in the
-child process argument list.
+In the macOS Studio app, open **Server ▸ World** to run this server. Choose
+DreamX World or Cosmos3 Edge, the world model and an optional base model, an
+optional state folder that keeps the world between restarts, and an API key.
+Turn on **Load models before the first request** to warm the models at start.
+The page starts, stops, and restarts the server, shows its live log, and copies
+the endpoint. The **Command Console** also runs `world serve` with every option
+in the capability contract. Studio passes API keys through `MERERUN_API_KEY`
+so they don't appear in the child process argument list.
 
 ## Runtime entrypoints
 

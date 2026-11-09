@@ -11,15 +11,15 @@ package enum CLIBootstrapInstallError: LocalizedError {
     package var errorDescription: String? {
         switch self {
         case .missingBinary(let path):
-            return "Bundled CLI binary not found at \(path)."
+            return "Couldn't find the bundled CLI at \(path)."
         case .invalidPayload(let message):
-            return "Bundled CLI payload is invalid: \(message)"
+            return "The bundled CLI payload isn't valid. \(message)"
         case .unwritableDestination(let path):
             return "The CLI destination is not writable: \(path). Choose a writable bin directory or update its permissions."
         case .validationFailed(let message):
-            return "The staged CLI did not pass validation: \(message)"
+            return "The staged CLI didn't pass validation. \(message)"
         case .atomicActivationFailed(let message):
-            return "The CLI could not be activated atomically: \(message)"
+            return "Couldn't activate the CLI. \(message)"
         }
     }
 }

@@ -144,6 +144,7 @@ export default defineConfig({
           { text: 'Geospatial runtime', link: '/runtime/geo' },
           { text: 'Audio enhancement', link: '/runtime/audio' },
           { text: 'Music runtime', link: '/runtime/music' },
+          { text: 'YuE2 qualification', link: '/runtime/yue2-qualification' },
           { text: 'ACE-Step validation', link: '/runtime/acestep-validation' },
           { text: 'SFX runtime', link: '/runtime/sfx' },
           { text: 'Video runtime', link: '/runtime/video' },

@@ -143,7 +143,7 @@ struct StudioVisionServerView: View {
                         .frame(width: 90)
                         .mereField(cornerRadius: MereRunTheme.Radius.sm)
                 }
-                TextField("Model id or path (optional)", text: $draft.model)
+                TextField("Model ID or path (optional)", text: $draft.model)
                     .mereField(cornerRadius: MereRunTheme.Radius.sm)
                 SecureField("API key (optional)", text: $draft.apiKey)
                     .mereField(cornerRadius: MereRunTheme.Radius.sm)

@@ -5,8 +5,8 @@ import Foundation
 extension CommandCatalog {
     package static let modelsTemplates: [CommandTemplate] = [
         CommandTemplate(id: .modelList, category: .models, title: "List models", subtitle: "Installed and missing managed models", systemImage: "list.bullet.rectangle"),
-        CommandTemplate(id: .modelCapabilities, category: .models, title: "Capabilities", subtitle: "Hardware support and recommended pulls", systemImage: "memorychip"),
-        CommandTemplate(id: .modelPull, category: .models, title: "Pull model", subtitle: "Download a managed model", systemImage: "arrow.down.circle", defaultModel: "image-zimage-nano"),
+        CommandTemplate(id: .modelCapabilities, category: .models, title: "Capabilities", subtitle: "Hardware support and recommended downloads", systemImage: "memorychip"),
+        CommandTemplate(id: .modelPull, category: .models, title: "Download model", subtitle: "Download a managed model", systemImage: "arrow.down.circle", defaultModel: "image-zimage-nano"),
         CommandTemplate(id: .modelInfo, category: .models, title: "Model info", subtitle: "Manifest and validation report", systemImage: "info.circle", defaultModel: "image-zimage-nano"),
         CommandTemplate(id: .modelRemove, category: .models, title: "Remove model", subtitle: "Delete a local model install", systemImage: "trash", defaultModel: "image-zimage-nano"),
         CommandTemplate(id: .modelRepairManifests, category: .models, title: "Repair manifests", subtitle: "Write missing known model manifests", systemImage: "wrench.and.screwdriver"),
@@ -65,7 +65,7 @@ extension CommandCatalog {
             id: .modelLocationBind,
             category: .models,
             title: "Bind model directory",
-            subtitle: "Point a canonical model id at a read-only directory",
+            subtitle: "Point a canonical model ID at a read-only directory",
             systemImage: "link.badge.plus",
             inputKind: .directory
         ),
@@ -523,19 +523,19 @@ extension CommandCatalog {
             }
         case .modelPull:
             if !draft.all && draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return "Choose a model id, or enable All."
+                return "Choose a model ID, or turn on All."
             }
         case .modelRemove:
             if draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return "Model id is required."
+                return "Model ID is required."
             }
         case .modelInfo:
             if draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return "Model id or local model path is required."
+                return "Model ID or local model path is required."
             }
         case .modelOptimize:
             if draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return "MiniMax-H3 model id or local model path is required."
+                return "MiniMax-H3 model ID or local model path is required."
             }
         default:
             break

@@ -447,7 +447,8 @@ package enum StudioServiceActivityDiff {
             result.append(.init(
                 level: .error,
                 title: "Request failure recorded",
-                detail: "\(current.totalFailures - previous.totalFailures) new failure(s)"
+                detail: current.totalFailures - previous.totalFailures == 1
+                    ? "1 new failure" : "\(current.totalFailures - previous.totalFailures) new failures"
             ))
         }
         return result

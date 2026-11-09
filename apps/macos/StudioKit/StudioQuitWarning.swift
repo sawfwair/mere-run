@@ -15,7 +15,7 @@ package enum StudioQuitWarning {
         }
         if queuedJobs > 0 {
             let queued = count(queuedJobs, "queued job")
-            sentences.append(sentences.isEmpty ? "Quitting drops \(queued)." : "\(queued.prefix(1).uppercased())\(queued.dropFirst()) will not start.")
+            sentences.append(sentences.isEmpty ? "Quitting drops \(queued)." : "\(queued.prefix(1).uppercased())\(queued.dropFirst()) don't start.")
         }
         return sentences.isEmpty ? nil : sentences.joined(separator: " ")
     }

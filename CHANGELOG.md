@@ -30,6 +30,95 @@ The format is based on Keep a Changelog.
   preserving strict validation. Ornith passes two independently verified coding
   fixtures; desktop qualification remains incomplete.
 
+- Qualify bounded native YuE2 and SheetSage2 checkpoint paths on an M5 Max.
+  Fix companion-model installation validation, fresh-stage containment, and
+  offline export of managed license-directory links;
+  bound checkpoint-hashing buffers and reclaim unused long-context MLX buffers.
+  Add reproducible numerical, stage, and local API qualification tools and
+  document the measured results and planning limit.
+  Match the upstream instrumental helper's planner-only section tags.
+
+- Add native YuE2 instrumental score conversion, reusable generation stages,
+  decoder-only replay with standard or benchmark VAE weights, offline export,
+  per-request JSONL batches, and a queued local job API. Add resident and
+  phase-based memory modes and reusable acoustic attention storage.
+- Add experimental native SheetSage2/MERT2 transcription and recording covers,
+  with separate license-gated model installation and independent CPU numerical
+  fixtures. Bounded released-checkpoint transcription is qualified separately;
+  broader recording accuracy and long-song quality remain unqualified.
+
+## 0.70.0 - 2026-11-06
+
+- Wait for Studio's running processes and output streams to stop before
+  completing shutdown or deleting a private workspace. Keep ownership of chat
+  turns, recordings, server restarts, and diagnostic writes until they finish,
+  and reject results from operations that have been canceled or replaced.
+- Preserve interrupted model downloads for retry. On iOS, prevent stale model
+  progress, runtime warmups, pairing results, and Relay snapshots from replacing
+  newer state; cancel remote chat jobs when their turns are abandoned.
+- Finish live transcription only after pending native decoding has settled.
+  Coordinate repeated finish and cancellation requests so canceled decoding
+  cannot publish a late transcript.
+- Studio's **Runs** page can sign out of a Relay executor and remove its
+  profile. Removing a profile also removes its saved credential.
+- Reorganize Studio's tasks. **Vision** ▸ **Document** runs `vision ocr` with
+  every backend, including Unlimited-OCR-2 for multi-page documents, and
+  **Vision** ▸ **Read** keeps Inspect and Caption; a saved Read draft that chose
+  OCR opens on Inspect. New tasks cover commands that only the Command Console
+  reached: **Video** ▸ **Edit** (Retake and Dub-It), **Video** ▸ **Cosmos**
+  (Cosmos3), **Voice** ▸ **Edit** (`audio edit`), and **Server** ▸ **World**
+  (`world serve`). **Sound** ▸ **Latents** replaces Condition, Encode, and
+  Decode with one task that has three variants. Depth and Geometry move from
+  Vision to **3D**. Audio ▸ Separate is removed; use **Music** ▸ **Separate**.
+  Renamed tasks: Who Spoke is Speakers, Embeddings is Embed, Decisions is
+  Decide, Subjects is Animate, and the Server tasks are API, Music, and Vision.
+- Studio's UI text follows the Google developer documentation style guide:
+  sentence case inside the window, with title case kept for the menu bar,
+  alert buttons, and window titles; **Download** instead of Pull for getting a
+  model; errors that start with "Couldn't" and give the reason as a second
+  sentence; present tense; US spelling ("Canceled"); and no ampersands.
+  Empty-state titles drop idioms and closing periods, so the task tooltips
+  built from them read as plain descriptions.
+- Studio menus and shortcuts: Show Inspector moves to ⌥⌘I so ⌘E stays Use
+  Selection for Find; Go ▸ Next Task (⇧⌘]) and Previous Task (⇧⌘[) cycle the
+  current section's tasks; ⌘↩ and ⌘. are bound once, in the Run menu, which now
+  starts Training and creates a voice on those pages. File ▸ New Chat works from
+  any task. View items read Show or Hide like the sidebar item, Window ▸ Studio
+  always brings the Studio window forward, and Help links to the mere.run
+  website.
+- Studio Settings: Menu bar and startup moves to General, which also gains
+  **Automatically check for updates**; the CLI path and working directory move
+  to Advanced and models root to Models; Delete reports asks first.
+- Studio task segments show a tooltip, the sidebar follows the system sidebar
+  size, and icon-only buttons and menus carry accessibility labels.
+- Add `vision image-to-3d-idol` to the capability catalog as
+  `vision.image-to-3d-idol`, so `mere.run catalog --json` lists it and shells
+  can build its command line. Studio offers it as the **IDOL Gaussian splats**
+  engine in **3D** ▸ **From image**. Pick the IDOL, DINOv3, and FLUX.2 VAE
+  checkpoint folders in the inspector; the composer shows no model chip because
+  IDOL has no managed model. The result card shows `object.ply` and the
+  Gaussian count from `manifest.json`.
+- Studio draws Gaussian splats. An IDOL result card shows `object.ply` in a
+  Metal splat viewer instead of a Quick Look tile, which drew the PLY as
+  uncolored points. The viewer starts from the input camera; drag to orbit,
+  pinch to zoom, and double-click to reset. Studio detects a splat by its PLY
+  header, so meshes and point clouds still open in Quick Look.
+- Show more of each Studio prompt task's options in the inspector: BPM, key,
+  time signature, vocal language, and guidance for Music; language and
+  temperature for Speak; task, Parakeet provider, beam size, and keyword bias
+  for Transcribe; LTX LoRAs and prompt enhancement for Video; negative prompt
+  and CFG for Sound; and box overlays and multiple masks for Segment and Track.
+- Attach audio and video to a Studio Chat turn for omni models such as Nemotron
+  3 Nano Omni, the same way you attach an image. The composer offers only the
+  kinds the selected model reads, routes dropped and pasted files by type, and
+  explains when the model can't read an attachment before the turn runs. Each
+  turn shows its files, and Retry, Edit, and Branch keep them.
+- Draw Studio Earth results as maps. Flood and Fire show the class mask over
+  the input bundle's natural color, with an opacity slider, each class's share
+  of the tile, and a tile stepper. TESSERA and OlmoEarth show their embeddings
+  as false color from the first three principal components. **Map** is now the
+  first result view for the four Earth tasks; **Tensor** and **JSON** remain.
+
 ## 0.69.1 - 2026-11-04
 
 - Make the Studio private-mode ghost button respond across its full button area.

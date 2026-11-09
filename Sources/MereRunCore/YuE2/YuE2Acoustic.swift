@@ -4,12 +4,17 @@ import MLXNN
 
 /// Caches the causal branch once per original context chunk. Acoustic queries see
 /// all prefix keys and all acoustic keys, including the two zero-content boundaries.
-struct YuE2Acoustic {
+final class YuE2Acoustic {
     let model: YuE2Model
     let prefixLength: Int
     let cache: [(MLXArray, MLXArray)]
+    private var workKeys: MLXArray?
+    private var workValues: MLXArray?
 
     init(model: YuE2Model, tokens: [Int]) throws {
+        guard model.autoregressive.count == model.configuration.numHiddenLayers else {
+            throw YuE2Error.invalidRequest("Acoustic prefill requires autoregressive branches.")
+        }
         self.model = model
         prefixLength = tokens.count
         var hidden = model.embedding[MLXArray(tokens.map(Int32.init))].expandedDimensions(axis: 0)
@@ -26,6 +31,9 @@ struct YuE2Acoustic {
     }
 
     func velocity(_ state: MLXArray, rawTime: Double) throws -> MLXArray {
+        guard model.acoustic.count == model.configuration.numHiddenLayers else {
+            throw YuE2Error.invalidRequest("Acoustic synthesis requires all acoustic branches.")
+        }
         let count = state.dim(0) + 2
         guard state.ndim == 2, state.dim(1) == model.configuration.latentDim,
               prefixLength + count <= model.configuration.maxPositionEmbeddings,
@@ -42,11 +50,21 @@ struct YuE2Acoustic {
         let timeFeatures = concatenated([cos(angles), sin(angles)]).asType(state.dtype)
         let timeEmbedding = model.timeOutput(silu(model.timeInput(timeFeatures)))
         var hidden = model.latentInput(padded) + timeEmbedding + model.positions[..<count]
+        let shape = [1, model.configuration.numKeyValueHeads, prefixLength + count, model.configuration.headDim]
+        if workKeys?.shape != shape {
+            workKeys = MLXArray.zeros(shape, dtype: state.dtype)
+            workValues = MLXArray.zeros(shape, dtype: state.dtype)
+        }
+        guard let keys = workKeys, let values = workValues else {
+            throw YuE2Error.invalidRequest("Missing acoustic attention workspace.")
+        }
         for (index, layer) in model.acoustic.enumerated() {
             try Task.checkCancellation()
             let (query, key, value) = layer.attention.project(layer.norm(hidden), offset: prefixLength)
-            let keys = concatenated([cache[index].0, key], axis: 2)
-            let values = concatenated([cache[index].1, value], axis: 2)
+            keys[0..., 0..., ..<prefixLength, 0...] = cache[index].0
+            values[0..., 0..., ..<prefixLength, 0...] = cache[index].1
+            keys[0..., 0..., prefixLength..., 0...] = key
+            values[0..., 0..., prefixLength..., 0...] = value
             hidden = hidden + layer.attention.attend(query, keys, values, causal: false)
             hidden = hidden + layer.mlp(layer.postNorm(hidden))
             MLX.eval(hidden)

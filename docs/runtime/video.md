@@ -936,7 +936,12 @@ offset and modality guidance, duration or frame-count targeting, negative
 prompts, Wan controls, preflight, and timing receipts. Attaching source audio
 selects final quality plus synchronized audio-video output automatically.
 
-**Video ▸ Subjects** is the SCAIL subject flow, laid out as a three-stage board
+**Video ▸ Edit** runs Retake, which regenerates a timed region of a clip from a
+prompt, and Dub-It, which carries a performance onto a new scene. **Video ▸
+Cosmos** runs Cosmos3: describe a scene to make an image or a clip, or attach an
+image or a video to continue from it, and choose the mode in the inspector.
+
+**Video ▸ Animate** is the SCAIL subject flow, laid out as a three-stage board
 (Plan → Track → Animate). It authors one to six reference subjects with text,
 box, and point selectors; previews palette-safe SAM 3.1 masks; tracks the
 complete driving clip; accepts immutable keyframe corrections or painted binary
@@ -946,9 +951,9 @@ adapter, seed, segmentation and overlap, tail, audio, output, and preflight
 controls map directly to the public CLI contract. Every mask and animation run
 stays live and restartable in the Library.
 
-Cosmos3 generation and action modes, raw mask-plan execution, LTX latent export,
-and resident LTX sessions have no designed surface; they run from the **Command
-Console**, which builds their form from the same capability contract.
+Raw mask-plan execution, LTX latent export, and resident LTX sessions have no
+designed surface. They run from the **Command Console**, which builds their
+form from the same capability contract.
 
 ## Runtime entrypoints
 

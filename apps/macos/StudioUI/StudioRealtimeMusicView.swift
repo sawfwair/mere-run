@@ -611,7 +611,7 @@ struct StudioRealtimeMusicView: View {
             Text("MIDI input")
                 .font(MereRunTheme.sectionFont)
             if isPending {
-                Text("The input binds when a session starts; this applies to the next one.")
+                Text("The input binds when a session starts, so this setting applies to the next one.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
             }
@@ -704,7 +704,7 @@ struct StudioRealtimeMusicView: View {
         do {
             requestID = try StudioTaskRunner(controller: controller, library: library)
                 .run(request: request, task: .musicRealtime, validating: false, onLaunchRefused: {
-                    banner = Banner(severity: .error, text: "The session could not be started. Check the CLI path in Settings.")
+                    banner = Banner(severity: .error, text: "Couldn't start the session. Check the CLI path in Settings.")
                 }).id
         } catch {
             banner = Banner(severity: .error, text: error.localizedDescription)

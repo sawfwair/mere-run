@@ -41,7 +41,7 @@ struct StudioSubjectSelectorEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if unavailable {
-                Text("This picture could not be opened, so there is nothing to draw on.")
+                Text("Couldn't open this picture, so there's nothing to draw on.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)

@@ -581,7 +581,9 @@
     "title": "YuE2",
     "category": "Music and audio",
     "models": [
-      "music-yue2"
+      "music-yue2",
+      "music-yue2-vae-legacy",
+      "music-sheetsage2"
     ],
     "resourceName": "handbook-yue2.md"
   },

@@ -326,6 +326,11 @@ public extension ManagedModelSpec {
             return MiniMaxMusic3Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .yue2:
             return YuE2Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .yue2VAE:
+            return ["config.json", "model.safetensors", "LICENSE"].map { rootURL.appendingPathComponent($0) }
+                .filter { !fileManager.fileExists(atPath: $0.path) }
+        case .sheetSage2:
+            return SheetSage2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .magentaRT2:
             return Self.missingMagentaRT2Paths(modelID: id, in: rootURL, fileManager: fileManager)
         case .muScriptor:

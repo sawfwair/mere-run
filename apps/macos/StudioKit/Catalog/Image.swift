@@ -87,6 +87,16 @@ extension CommandCatalog {
             systemImage: "square.3.layers.3d",
             outputKind: .directory,
             defaultModel: "image-3d-instantmesh-base"
+        ),
+        // No default model: IDOL reads local checkpoint folders, not a managed model.
+        CommandTemplate(
+            id: .visionImageTo3DIdol,
+            category: .image,
+            title: "IDOL Gaussian splats",
+            subtitle: "Generate an object splat from local IDOL checkpoints",
+            systemImage: "circle.hexagongrid",
+            inputKind: .image,
+            outputKind: .directory
         )
     ]
 }
@@ -342,6 +352,27 @@ extension CommandArguments {
         if !draft.camerasPath.isBlank { args.option(F.cameras, draft.camerasPath) }
         args.option(F.resolution, String(draft.reconstructionResolution))
         if draft.noVertexColors { args.flag(F.noVertexColors) }
+        if draft.dryRun { args.flag(F.dryRun) }
+        if draft.json { args.flag(F.json) }
+        return args.arguments
+    }
+
+    package static func visionImageTo3DIdol(_ draft: CommandDraft) -> [String] {
+        typealias F = CommandFlags.VisionImageTo3DIdol
+        var args = ArgumentBuilder(F.self)
+        args.value(draft.inputPath)
+        if !draft.model.isBlank { args.option(F.model, draft.model) }
+        if let dino = draft.idolDINOPath, !dino.isBlank { args.option(F.dino, dino) }
+        if let vae = draft.idolVAEPath, !vae.isBlank { args.option(F.vae, vae) }
+        if !draft.outputPath.isBlank { args.option(F.output, draft.outputPath) }
+        if let mode = draft.idolMode, !mode.isBlank { args.optionUnlessDefault(F.mode, mode) }
+        if draft.alreadyFramed { args.flag(F.alreadyFramed) }
+        if !draft.seed.isBlank { args.option(F.seed, draft.seed) }
+        args.optionUnlessDefault(F.steps, String(draft.steps))
+        // A nil sampling control leaves the CLI's own default in place.
+        if let guidance = draft.idolGuidance { args.option(F.guidance, format(guidance)) }
+        if let timeShift = draft.idolTimeShift { args.option(F.timeShift, format(timeShift)) }
+        if let gaussians = draft.idolGaussianCount { args.optionUnlessDefault(F.numGaussians, String(gaussians)) }
         if draft.dryRun { args.flag(F.dryRun) }
         if draft.json { args.flag(F.json) }
         return args.arguments

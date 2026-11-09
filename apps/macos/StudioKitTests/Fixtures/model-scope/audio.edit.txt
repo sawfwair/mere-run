@@ -3,6 +3,12 @@
 auk-base	console.audioEdit	emitted	--audio --duration --guidance --model --model-path --output --quiet --seed --steps --thinker-path
 auk-base	console.audioEdit	shown	--audio --duration --guidance --model --model-path --output --quiet --seed --steps --thinker-path
 auk-base	console.audioEdit	validated	--audio --duration --guidance --model --model-path --output --quiet --seed --steps --thinker-path
+auk-base	task.audioEdit	emitted	--audio --duration --guidance --model --model-path --output --quiet --seed --steps --thinker-path
+auk-base	task.audioEdit	shown	--audio --duration --guidance --model --model-path --quiet --seed --steps --thinker-path
+auk-base	task.audioEdit	validated	--audio --duration --guidance --model --model-path --output --quiet --seed --steps --thinker-path
 auk-flash	console.audioEdit	emitted	--audio --duration --guidance --model --model-path --output --quiet --seed --steps --thinker-path
 auk-flash	console.audioEdit	shown	--audio --duration --guidance --model --model-path --output --quiet --seed --steps --thinker-path
 auk-flash	console.audioEdit	validated	--audio --duration --guidance --model --model-path --output --quiet --seed --steps --thinker-path
+auk-flash	task.audioEdit	emitted	--audio --duration --guidance --model --model-path --output --quiet --seed --steps --thinker-path
+auk-flash	task.audioEdit	shown	--audio --duration --guidance --model --model-path --quiet --seed --steps --thinker-path
+auk-flash	task.audioEdit	validated	--audio --duration --guidance --model --model-path --output --quiet --seed --steps --thinker-path

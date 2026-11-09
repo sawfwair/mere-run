@@ -2,6 +2,52 @@
 import XCTest
 
 final class ConversationTranscriptTests: XCTestCase {
+    func testAnOlderUserTurnDecodesWithoutAudioOrVideo() throws {
+        let json = """
+        {"id":"6F1B6A51-2A47-4D5B-9C1E-0B3D2C1A9E10","role":"user","content":"what is this?",
+         "createdAt":0,"failed":false,"imagePath":"/tmp/photo.png"}
+        """
+        let message = try JSONDecoder().decode(StudioMessage.self, from: Data(json.utf8))
+        XCTAssertEqual(message.content, "what is this?")
+        XCTAssertEqual(message.attachments, StudioTurnAttachments(imagePath: "/tmp/photo.png"))
+        XCTAssertNil(message.audioPath)
+        XCTAssertNil(message.videoPath)
+    }
+
+    func testTurnAttachmentsRoundTripThroughAChatDraft() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+        draft.inputPath = "/tmp/photo.png"
+        draft.chatAudioPath = "/tmp/voice.wav"
+        draft.chatVideoPath = "/tmp/clip.mp4"
+        let attachments = StudioTurnAttachments(mode: .chat, draft: draft)
+        XCTAssertEqual(attachments.paths, ["/tmp/photo.png", "/tmp/voice.wav", "/tmp/clip.mp4"])
+        XCTAssertTrue(StudioTurnAttachments(mode: .code, draft: draft).isEmpty)
+
+        var message = StudioMessage(role: .user, content: "and this?")
+        message.attachments = attachments
+        let decoded = try JSONDecoder().decode(StudioMessage.self, from: JSONEncoder().encode(message))
+        XCTAssertEqual(decoded.attachments, attachments)
+
+        var restored = StudioDraft()
+        restored.reset(for: .chat)
+        decoded.attachments.apply(to: &restored)
+        XCTAssertEqual(restored.inputPath, "/tmp/photo.png")
+        XCTAssertEqual(restored.chatAudioPath, "/tmp/voice.wav")
+        XCTAssertEqual(restored.chatVideoPath, "/tmp/clip.mp4")
+        StudioTurnAttachments().apply(to: &restored)
+        XCTAssertEqual(restored, { var fresh = StudioDraft(); fresh.reset(for: .chat); return fresh }())
+    }
+
+    func testAnOlderChatDraftDecodesWithoutAudioOrVideo() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+        let encoded = try JSONEncoder().encode(draft)
+        let json = String(decoding: encoded, as: UTF8.self)
+        XCTAssertFalse(json.contains("chatAudioPath") || json.contains("chatVideoPath"), "a draft without them encodes as an older one")
+        XCTAssertEqual(try JSONDecoder().decode(StudioDraft.self, from: encoded), draft)
+    }
+
     func testFirstTurnRendersUserMessageVerbatim() {
         let only = StudioMessage(role: .user, content: "what is swift?")
         let rendered = ConversationTranscript.render(messages: [only])

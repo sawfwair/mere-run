@@ -92,13 +92,17 @@ final class StudioSendDestinationsTests: XCTestCase {
         for expected in [
             "music.separate · Audio", "music.transcribe · Audio", "music.analyze · Audio", "audio.enhance · Audio",
             "audio.transcribe · Audio", "voice.voices · Reference audio", "sound.foley · Video or features", "voice.speak · Reference audio",
+            "chat.chat · Audio",
         ] {
             XCTAssertTrue(song.contains(expected), expected)
         }
         XCTAssertFalse(song.contains { $0.hasPrefix("vision.") || $0.hasPrefix("image.") || $0.hasPrefix("threeD.") })
 
         let clip = offered("take.mp4")
-        XCTAssertEqual(clip, ["vision.track · Video", "vision.depth · Video", "sound.foley · Video or features", "text.embeddings · Videos"])
+        XCTAssertEqual(Set(clip), [
+            "vision.track · Video", "vision.depth · Video", "sound.foley · Video or features", "text.embeddings · Videos",
+            "video.cosmos · Conditioning video", "chat.chat · Video",
+        ])
     }
 
     /// The page the output is shown on is its "Use as input", never a Send to item.
@@ -117,7 +121,7 @@ final class StudioSendDestinationsTests: XCTestCase {
         XCTAssertEqual(sections.map(\.domain), StudioDomain.allCases.filter { domain in sections.contains { $0.domain == domain } })
         XCTAssertEqual(sections.first?.title, "Video")
         let video = sections.first { $0.domain == .video }?.items.map(\.title)
-        XCTAssertEqual(video, ["Generate · Start frame", "Generate · End frame"])
+        XCTAssertEqual(video, ["Generate · Start frame", "Generate · End frame", "Cosmos"])
         let vision = sections.first { $0.domain == .vision }?.items.map(\.title) ?? []
         XCTAssertTrue(vision.contains("Read"))
         XCTAssertTrue(vision.contains("Flow · From"))

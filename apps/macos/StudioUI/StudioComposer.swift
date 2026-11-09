@@ -76,19 +76,25 @@ struct StudioComposer: View {
     // MARK: - Attachment well
 
     private var visibleSlots: [StudioAttachmentSlot] {
-        mode.attachmentSlots(for: draft, source: scopeSource).filter { !$0.isTransient || $0.isFilled(in: draft) }
+        mode.wellSlots(for: draft, source: scopeSource)
+    }
+
+    /// The filled slots the model doesn't read, captioned so; Run refuses them.
+    private var unreadSlotIDs: Set<String> {
+        Set(mode.unreadAttachmentSlots(for: draft, source: scopeSource).map(\.id))
     }
 
     private var attachmentWell: some View {
-        HStack(alignment: .center, spacing: 8) {
+        let unread = unreadSlotIDs
+        return HStack(alignment: .center, spacing: 8) {
             ForEach(visibleSlots) { slot in
                 StudioAttachmentSlotView(slot: slot, draft: $draft, onPick: { pickFiles(for: slot) })
             }
             VStack(alignment: .leading, spacing: 1) {
                 ForEach(visibleSlots) { slot in
-                    Text(slot.caption(in: draft))
+                    Text(unread.contains(slot.id) ? "\(slot.caption(in: draft)) · not read by this model" : slot.caption(in: draft))
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(MereRunTheme.textMuted)
+                        .foregroundStyle(unread.contains(slot.id) ? MereRunTheme.red : MereRunTheme.textMuted)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -534,25 +540,50 @@ struct StudioComposer: View {
         promptFocus.wrappedValue = true
     }
 
-    /// Only a collapsed well (Chat's per-turn image) needs the paperclip; declared slots pick
-    /// from the well itself.
+    /// Chat's empty per-turn slots the model reads; declared slots pick from the well itself.
+    private var paperclipSlots: [StudioAttachmentSlot] {
+        mode.paperclipSlots(for: draft, source: scopeSource)
+    }
+
     private var showsPaperclip: Bool {
-        !mode.attachmentSlots(for: draft, source: scopeSource).isEmpty
-            && !mode.showsAttachmentWell(for: draft, source: scopeSource)
+        !paperclipSlots.isEmpty
+    }
+
+    /// One open panel for every empty per-turn slot; each chosen file lands in the slot its type
+    /// fits, as a drop does.
+    private func pickTurnAttachments() {
+        let slots = paperclipSlots
+        let types = slots.flatMap(\.acceptedTypes)
+        let urls = StudioAttachmentPicker.chooseFromDisk(
+            for: StudioAttachmentRequirement(label: Self.attachmentNoun(slots), acceptedTypes: types, allowsMultiple: slots.count > 1)
+        )
+        guard !urls.isEmpty else { return }
+        draft.attach(dropped: urls, slots: slots)
+    }
+
+    /// "an image", "an image, audio, or video": what the paperclip attaches.
+    private static func attachmentNoun(_ slots: [StudioAttachmentSlot]) -> String {
+        let nouns = slots.map { slot in
+            slot.acceptedTypes.contains(.image) ? "an image" : slot.label.lowercased()
+        }
+        switch nouns.count {
+        case 0, 1: return nouns.first ?? "a file"
+        case 2: return "\(nouns[0]) or \(nouns[1])"
+        default: return nouns.dropLast().joined(separator: ", ") + ", or \(nouns[nouns.count - 1])"
+        }
     }
 
     private var paperclipButton: some View {
-        Button {
-            if let slot = mode.attachmentSlots(for: draft, source: scopeSource).first { pickFiles(for: slot) }
-        } label: {
+        let noun = Self.attachmentNoun(paperclipSlots)
+        return Button(action: pickTurnAttachments) {
             Image(systemName: "paperclip")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(MereRunTheme.textMuted)
                 .frame(width: 28, height: 28)
         }
         .buttonStyle(.mereIcon)
-        .help("Attach an image to this turn")
-        .accessibilityLabel("Attach image")
+        .help("Attach \(noun) to this turn")
+        .accessibilityLabel(paperclipSlots.count > 1 ? "Attach file" : "Attach \(noun.split(separator: " ").last ?? "file")")
     }
 
     private var stopButton: some View {
@@ -566,7 +597,7 @@ struct StudioComposer: View {
             .frame(width: Metrics.sendDiameter, height: Metrics.sendDiameter)
         }
         .buttonStyle(.plain)
-        .help(queuedCount == 0 ? "Stop (⌘.) · ⌘↩ queues another run" : "Stop (⌘.) · \(queuedCount) queued")
+        .help(queuedCount == 0 ? "Stop (⌘.). Press ⌘↩ to queue another run." : "Stop (⌘.). \(queuedCount) queued.")
         .accessibilityLabel("Stop current run")
     }
 
@@ -595,7 +626,6 @@ struct StudioComposer: View {
         .help(sendHelp)
         .accessibilityLabel("Run")
         .accessibilityHint(accessibilityRunHint)
-        .keyboardShortcut(.return, modifiers: .command)
     }
 
     private var sendEnabled: Bool {
@@ -740,7 +770,7 @@ struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
             StudioAttachmentPaste.paste(into: &draft, slots: [slot], allowsText: false)
         }
         .contextMenu {
-            Button("Choose from Disk…", action: onPick)
+            Button("Choose from disk…", action: onPick)
             if hasLibraryChoices {
                 Button("Choose from Library…") { isPickingFromLibrary = true }
             }

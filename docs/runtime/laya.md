@@ -70,7 +70,7 @@ The loopback API accepts the same request at `POST /v1/text/decisions`, with an
 added `model` field that names an installed managed Laya model. Clef and D1 are
 available only through the CLI.
 
-In macOS Studio, open **Text > Decisions**, choose the model, enter the text, and
+In macOS Studio, open **Text > Decide**, choose the model, enter the text, and
 add choice, score, or yes-or-no questions. **Load the example** fills in the
 preceding request. **Check fit** runs preflight, and **Decide** shows each answer
 with its probabilities. Studio writes `request.json` and `decisions.json` into

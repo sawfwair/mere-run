@@ -138,7 +138,10 @@ struct StudioTaskComposer: View {
             ForEach(essentials) { field in
                 chip(for: field)
             }
-            modelChip
+            // A command that reads its checkpoints from folders picks them in the inspector.
+            if !StudioTaskSchema.takesModelFolder(draft.templateID) {
+                modelChip
+            }
             Spacer(minLength: 8)
             if !promptHistory.isEmpty {
                 StudioRecentPromptsMenu(prompts: promptHistory) { prompt in
@@ -256,7 +259,7 @@ struct StudioTaskComposer: View {
             .frame(width: Metrics.sendDiameter, height: Metrics.sendDiameter)
         }
         .buttonStyle(.plain)
-        .help(queuedCount == 0 ? "Stop (⌘.) · ⌘↩ queues another run" : "Stop (⌘.) · \(queuedCount) queued")
+        .help(queuedCount == 0 ? "Stop (⌘.). Press ⌘↩ to queue another run." : "Stop (⌘.). \(queuedCount) queued.")
         .accessibilityLabel("Stop current run")
     }
 
@@ -285,7 +288,6 @@ struct StudioTaskComposer: View {
         .help(readiness.blocksRun ? readiness.message(titles: titles) : "Run (⌘↩)")
         .accessibilityLabel("Run")
         .accessibilityHint(readiness.blocksRun ? readiness.message(titles: titles) : "")
-        .keyboardShortcut(.return, modifiers: .command)
     }
 
     private var sendEnabled: Bool {

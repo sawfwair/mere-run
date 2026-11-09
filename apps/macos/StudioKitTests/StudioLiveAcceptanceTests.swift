@@ -700,18 +700,17 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         conclude(flow, "output=\(output) rate=\(Int(enhanced.fileFormat.sampleRate)) frames=\(enhanced.length)")
     }
 
-    // MARK: - Audio ▸ Separate
+    // MARK: - Music ▸ Separate
 
     func test32SeparateWritesStemsAndAManifestFromTheTaskDraft() throws {
         try requireModels(["music-separate-bs-roformer-viperx-1297"])
         let flow = "32-separate"
         let music = try Self.toneMusic(in: fixtures())
 
-        // Audio ▸ Separate runs Music ▸ Separate's command; the output folder follows the command's
-        // domain, named after the input.
-        var draft = try XCTUnwrap(StudioTaskDraft(task: .audioSeparate))
+        // The output folder follows the command's domain, named after the input.
+        var draft = try XCTUnwrap(StudioTaskDraft(task: .musicSeparate))
         draft.setArgument(0, music.path)
-        let (request, argv) = try taskRequest(draft, task: .audioSeparate)
+        let (request, argv) = try taskRequest(draft, task: .musicSeparate)
         XCTAssertEqual(Array(argv.prefix(3)), ["music", "separate", music.path])
         XCTAssertEqual(argv.firstIndex(of: "--dtype").map { argv[$0 + 1] }, "float16")
         let outputDirectory = try XCTUnwrap(argv.firstIndex(of: "--output-dir").map { argv[$0 + 1] })
@@ -1186,8 +1185,9 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         conclude(flow, "score=\(output.score) model=\(output.model ?? "-")")
     }
 
-    /// Sound ▸ Encode writes the Woosh latents the Analyze board reads as a tensor header, and
-    /// Sound ▸ Decode takes that file back to audio, each through its task draft and the runner.
+    /// Sound ▸ Latents' Encode variant writes the Woosh latents the Analyze board reads as a tensor
+    /// header, and its Decode variant takes that file back to audio, each through the task draft
+    /// and the runner.
     func test26SoundLatentsRoundTripThroughEncodeAndDecode() throws {
         try requireModels(["sfx-woosh-dflow"])
         let flow = "26-sfx-latents"
@@ -1195,7 +1195,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
 
         var encode = StudioTaskDraft(templateID: .sfxAEEncode)
         encode.setArgument(0, tone.path)
-        let (encodeRequest, encodeArgv) = try taskRequest(encode, task: .soundEncode)
+        let (encodeRequest, encodeArgv) = try taskRequest(encode, task: .soundLatents)
         XCTAssertEqual(Array(encodeArgv.prefix(3)), ["sfx", "ae", "encode"])
         XCTAssertTrue(encodeRequest.draft.outputPath.hasPrefix(live.appendingPathComponent("Sound").path), encodeRequest.draft.outputPath)
         XCTAssertTrue(encodeRequest.draft.outputPath.hasSuffix(".npy"))
@@ -1209,7 +1209,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
 
         var decode = StudioTaskDraft(templateID: .sfxAEDecode)
         decode.setArgument(0, latents.path)
-        let (decodeRequest, decodeArgv) = try taskRequest(decode, task: .soundDecode)
+        let (decodeRequest, decodeArgv) = try taskRequest(decode, task: .soundLatents)
         XCTAssertEqual(Array(decodeArgv.prefix(3)), ["sfx", "ae", "decode"])
         XCTAssertTrue(decodeRequest.draft.outputPath.hasSuffix(".wav"))
         let decodeRun = try runCLI(flow, decodeArgv, timeout: 900)
@@ -1549,8 +1549,8 @@ final class StudioLiveAcceptanceTests: XCTestCase {
             artifactURLs: files.map { output.appendingPathComponent($0) }
         )
         let summary = try XCTUnwrap(StudioMeshSummary.load(item: row), "the manifests should decode into a mesh summary: \(files)")
-        XCTAssertGreaterThan(summary.vertexCount, 0)
-        XCTAssertGreaterThan(summary.triangleCount, 0)
+        XCTAssertGreaterThan(summary.vertexCount ?? 0, 0)
+        XCTAssertGreaterThan(summary.triangleCount ?? 0, 0)
         XCTAssertNil(summary.pbrVoxelCount, "only TRELLIS.2 counts PBR voxels")
         let printed = try XCTUnwrap(StudioStructuredOutput.objectData(in: run.stdout).flatMap { try? JSONDecoder().decode(PrintedMesh.self, from: $0) },
                                     "--json should print the run payload")

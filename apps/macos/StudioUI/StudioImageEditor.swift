@@ -59,7 +59,7 @@ struct StudioImageEditor: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Image edit")
                     .font(.system(size: 17, weight: .semibold))
-                Text("Paint what may change. Unpainted pixels are restored exactly.")
+                Text("Paint what can change. Unpainted pixels are restored exactly.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
             }
@@ -98,7 +98,7 @@ struct StudioImageEditor: View {
             .padding(MereRunTheme.Spacing.lg)
         } else {
             ContentUnavailableView(
-                "Could not open image",
+                "Couldn't open the image",
                 systemImage: "photo.badge.exclamationmark",
                 description: Text(inputURL.path)
             )

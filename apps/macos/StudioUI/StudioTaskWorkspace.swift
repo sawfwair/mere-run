@@ -477,7 +477,7 @@ struct StudioTaskWorkspace: View {
     private func delete(_ id: UUID) {
         let failures = library.delete(ids: [id], trashingFiles: false)
         sessions?.forgetLibraryItems([id])
-        if let first = failures.first { error = "Could not move \(first.lastPathComponent) to the Trash." }
+        if let first = failures.first { error = "Couldn't move \(first.lastPathComponent) to the Trash." }
         if navigation.selectedLibraryID == id { navigation.selectedLibraryID = nil }
     }
 
@@ -521,7 +521,7 @@ struct StudioTaskWorkspace: View {
         do {
             try StudioFileExport.copy(url, to: destination)
         } catch {
-            self.error = "Could not save \(url.lastPathComponent): \(error.localizedDescription)"
+            self.error = "Couldn't save \(url.lastPathComponent). \(error.localizedDescription)"
         }
     }
 
@@ -564,7 +564,7 @@ struct StudioTaskWorkspace: View {
             do {
                 try text.write(to: destination, atomically: true, encoding: .utf8)
             } catch {
-                self.error = "Could not save \(destination.lastPathComponent): \(error.localizedDescription)"
+                self.error = "Couldn't save \(destination.lastPathComponent). \(error.localizedDescription)"
             }
         }
     }

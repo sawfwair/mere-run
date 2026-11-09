@@ -43,7 +43,7 @@ final class NavigationModelTests: XCTestCase {
     func testTaskControlStyleFollowsTaskCount() {
         XCTAssertEqual(StudioTaskControlStyle.style(for: .runs), .none)
         XCTAssertEqual(StudioTaskControlStyle.style(for: .plugins), .none)
-        XCTAssertEqual(StudioTaskControlStyle.style(for: .threeD), .none)
+        XCTAssertEqual(StudioTaskControlStyle.style(for: .threeD), .segmented)
         XCTAssertEqual(StudioTaskControlStyle.style(for: .image), .segmented)
         XCTAssertEqual(StudioTaskControlStyle.style(for: .earth), .segmented)
         XCTAssertEqual(StudioTaskControlStyle.style(for: .music), .segmented)
@@ -51,7 +51,7 @@ final class NavigationModelTests: XCTestCase {
         XCTAssertEqual(StudioTaskControlStyle.style(for: .vision), .segmentedWithOverflow(visible: 5))
         // The overflow keeps every task reachable and the visible ones in domain order.
         let visible = Array(StudioDomain.vision.tasks.prefix(5))
-        XCTAssertEqual(visible, [.visionRead, .visionFind, .visionSegment, .visionTrack, .visionDepth])
+        XCTAssertEqual(visible, [.visionRead, .visionFind, .visionSegment, .visionTrack, .visionDocument])
         XCTAssertLessThan(5, StudioDomain.vision.tasks.count)
     }
 
@@ -79,7 +79,7 @@ final class NavigationModelTests: XCTestCase {
     func testRetiredCloneDestinationFallsBackToTheDefault() {
         XCTAssertNil(StudioTask(rawValue: "voice.clone"))
         XCTAssertNil(StudioDestination(rawValue: "voice/voice.clone"))
-        XCTAssertEqual(StudioDomain.voice.tasks, [.voiceSpeak, .voiceVoices])
+        XCTAssertEqual(StudioDomain.voice.tasks, [.voiceSpeak, .voiceEdit, .voiceVoices])
         let navigation = NavigationModel()
         let mode = navigation.restore(destination: StudioDestination(rawValue: "voice/voice.clone") ?? .default, lastPromptMode: .speak)
         XCTAssertEqual(navigation.destination, .default)
@@ -111,7 +111,8 @@ final class NavigationModelTests: XCTestCase {
     func testVisionVariantsRoundTripThroughTheirTasks() {
         let visionTasks: [StudioTask] = [.visionFaces, .visionPose, .visionFlow, .visionDepth, .visionGeometry, .visionLive]
         for task in visionTasks {
-            XCTAssertEqual(task.domain, .vision)
+            // Depth and Geometry recover 3D structure, so they sit beside From image.
+            XCTAssertEqual(task.domain, [.visionDepth, .visionGeometry].contains(task) ? .threeD : .vision)
             XCTAssertFalse(task.variantTemplates.isEmpty, "\(task) has no template")
             for template in task.variantTemplates {
                 XCTAssertEqual(template.id.studioTask, task, "\(template.id) belongs to another task")

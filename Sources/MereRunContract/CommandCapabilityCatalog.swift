@@ -51,6 +51,7 @@ public enum MereRunCapabilityCatalog {
             imageReconstruct3D,
             imageReconstruct3DTrellis2,
             imageReconstruct3DMultiview,
+            visionImageTo3DIdol,
             visionEmbed,
             visionInspect,
             visionCaption,
@@ -170,7 +171,7 @@ public enum MereRunCapabilityCatalog {
             geoFire,
             geoTessera,
             geoOlmoEarth
-        ]
+        ] + musicYuE2
     )
 
     public static func command(id: String) -> MereRunCommandCapability? {

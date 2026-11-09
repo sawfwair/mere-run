@@ -16,7 +16,7 @@ struct StudioTaskCommandView: View {
     /// prompt workspace's, whose hidden values never reach the form. nil reads it from the form
     /// itself, against the template's fresh form.
     var notSent: (() -> StudioScopeNotice?)?
-    /// The form as the run launches it (`StudioTaskRunner.launchPreview`), so "Will run" and the
+    /// The form as the run launches it (`StudioTaskRunner.launchPreview`), so "Command to run" and the
     /// validation read the launch-time defaults and the named destination a task applies without
     /// writing them into the fields; identity for a command that has none.
     var launching: (StudioConsoleDraft) -> StudioConsoleDraft = { $0 }
@@ -34,7 +34,7 @@ struct StudioTaskCommandView: View {
                 Spacer()
                 Button(action: onClose) { Image(systemName: "xmark").frame(width: 28, height: 28) }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Close Command")
+                    .accessibilityLabel("Close Command view")
             }
             .padding(16)
             Divider()
@@ -60,7 +60,7 @@ struct StudioTaskCommandView: View {
             Divider()
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    MereEyebrow("Will run")
+                    MereEyebrow("Command to run")
                     Spacer()
                     Button("Copy", systemImage: "doc.on.doc") {
                         NSPasteboard.general.clearContents()

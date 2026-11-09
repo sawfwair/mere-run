@@ -74,7 +74,7 @@ final class StudioCommandRowsTests: XCTestCase {
         let groups = StudioCommandRows.groups(template: template, draft: draft, source: .contract)
         XCTAssertEqual(
             groups.map(\.group.title),
-            ["Prompt", "Inputs", "Output", "Model & adapters", "Sampling", "Run"]
+            ["Prompt", "Inputs", "Output", "Model and adapters", "Sampling", "Run"]
         )
 
         func row(_ flag: String) -> StudioCommandRow? {

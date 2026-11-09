@@ -431,8 +431,8 @@ struct StudioSCAILView: View {
             }
             Text(
                 mode == "animation"
-                    ? "Keeps the reference background; the driving clip supplies motion."
-                    : "Keeps the driving scene; references replace the masked subjects."
+                    ? "Keeps the reference background. The driving clip supplies the motion."
+                    : "Keeps the driving scene. The references replace the masked subjects."
             )
             .font(.system(size: 11, weight: .medium))
             .foregroundStyle(MereRunTheme.textMuted)
@@ -496,7 +496,7 @@ struct StudioSCAILView: View {
                 wide: wide
             )
             statsRow
-            moreRow("More · corrections & preview frame", isExpanded: $showsTrackMore) {
+            moreRow("More · corrections and preview frame", isExpanded: $showsTrackMore) {
                 trackControls
             }
         }
@@ -614,7 +614,7 @@ struct StudioSCAILView: View {
             if let text = animateItem?.outputText, !text.isBlank, resultVideoURL == nil {
                 runOutputPanel(text)
             }
-            moreRow("More · continuity, model & output", isExpanded: $showsAnimateMore) {
+            moreRow("More · continuity, model, and output", isExpanded: $showsAnimateMore) {
                 animateControls
             }
         }
@@ -828,9 +828,9 @@ struct StudioSCAILView: View {
                 Circle()
                     .fill(StudioSubjectsPalette.color(named: subject.wrappedValue.color).opacity(0.75))
                     .frame(width: 10, height: 10)
-                TextField("Subject id", text: subject.name)
+                TextField("Subject ID", text: subject.name)
                     .mereField()
-                    .accessibilityLabel("Subject id")
+                    .accessibilityLabel("Subject ID")
                 if subjects.count > 1 {
                     Button(role: .destructive) {
                         editingSubjectID = nil
@@ -1215,7 +1215,7 @@ struct StudioSCAILView: View {
         }
         for subject in subjects {
             if subject.name.isBlank || subject.referenceImage.isBlank {
-                return "Every subject needs an id and reference image."
+                return "Every subject needs an ID and a reference image."
             }
             if !hasSelector(
                 text: subject.referencePrompt,
@@ -1230,11 +1230,11 @@ struct StudioSCAILView: View {
             }
             let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
             if subject.name.unicodeScalars.contains(where: { !allowed.contains($0) }) {
-                return "Subject ids may contain only letters, numbers, hyphens, and underscores."
+                return "Subject IDs can contain only letters, numbers, hyphens, and underscores."
             }
         }
         if Set(subjects.map(\.name)).count != subjects.count {
-            return "Subject ids must be unique."
+            return "Subject IDs must be unique."
         }
         if corrections.contains(where: { correction in
             !subjects.contains(where: { $0.name == correction.subjectID })
@@ -1325,7 +1325,7 @@ struct StudioSCAILView: View {
             planSavedAt = Date()
             return url
         } catch {
-            notice = Notice(severity: .error, text: "Could not write mask plan: \(error.localizedDescription)")
+            notice = Notice(severity: .error, text: "Couldn't write the mask plan. \(error.localizedDescription)")
             return nil
         }
     }
@@ -1399,7 +1399,7 @@ struct StudioSCAILView: View {
         } catch {
             notice = Notice(
                 severity: .error,
-                text: "Mask run completed, but manifest could not be read: \(error.localizedDescription)"
+                text: "The mask run finished, but its manifest couldn't be read. \(error.localizedDescription)"
             )
         }
     }

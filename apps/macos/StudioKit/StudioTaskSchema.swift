@@ -208,11 +208,12 @@ package enum StudioTaskSchema {
     }
 
     /// The composite editors a template's options render as, keyed by flag. `--model` is the
-    /// filtered picker everywhere; the task inspector renders the other composite editors
-    /// through its override builder.
+    /// filtered picker everywhere it names a managed model; a `--model` the contract declares as
+    /// a directory (IDOL's local checkpoints) is a folder row like any other path. The task
+    /// inspector renders the other composite editors through its override builder.
     package static func overrideID(forFlag flag: String, templateID: CommandTemplateID) -> StudioContractOverrideID? {
         switch flag {
-        case "--model": return .model
+        case "--model": return takesModelFolder(templateID) ? nil : .model
         case "--cameras": return .cameras
         // `--view` stays a well slot (an ordered list the filmstrip draws); `.orderedViews` is
         // the reordering editor the 3D inspector draws beside it.
@@ -228,6 +229,13 @@ package enum StudioTaskSchema {
         case "--patch-size", "--input-resolution" where templateID == .geoOlmoEarth: return .earthSampling
         default: return nil
         }
+    }
+
+    /// Whether the template's `--model` names a checkpoint folder on disk rather than a managed
+    /// model (`vision image-to-3d-idol`): the form draws a folder picker for it, the composer
+    /// draws no model chip, and no installed model stands in for it.
+    package static func takesModelFolder(_ templateID: CommandTemplateID) -> Bool {
+        templateID.capability?.options.first { $0.flag == "--model" }?.kind == .directory
     }
 
     private static func overrideFlags(for templateID: CommandTemplateID) -> Set<String> {

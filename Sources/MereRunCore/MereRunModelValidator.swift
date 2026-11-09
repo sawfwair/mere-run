@@ -168,6 +168,8 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .aceStepLM
             || spec?.validationKind == .miniMaxMusic3
             || spec?.validationKind == .yue2
+            || spec?.validationKind == .yue2VAE
+            || spec?.validationKind == .sheetSage2
             || spec?.validationKind == .roFormer
             || spec?.validationKind == .auk
             || spec?.validationKind == .aukThinker
@@ -510,10 +512,11 @@ public enum MereRunModelValidator {
             case .music where engine != .aceStep
                 && engine != .miniMaxMusic3
                 && engine != .yue2
+                && engine != .sheetSage2
                 && engine != .roFormer
                 && engine != .magentaRT2
                 && engine != .muScriptor:
-                warnings.append("Manifest engine mismatch: family=music expects ace-step, minimax-music3, yue2, bs-roformer, magenta-rt2, or muscriptor.")
+                warnings.append("Manifest engine mismatch: family=music expects ace-step, minimax-music3, yue2, sheetsage2, bs-roformer, magenta-rt2, or muscriptor.")
             case .audio where engine != .apBWE && engine != .univerSR && engine != .auk:
                 warnings.append("Manifest engine mismatch: family=audio expects ap-bwe, universr, or auk.")
             case .sfx where engine != .woosh && engine != .mmaudio:
@@ -598,7 +601,7 @@ public enum MereRunModelValidator {
                 return true
             }
             switch manifest.engine {
-            case .qwen3Coder?, .northMiniCode?, .inkling?, .deepseekV4Flash?, .aceStep?, .miniMaxMusic3?, .yue2?, .magentaRT2?, .muScriptor?, .roFormer?, .auk?, .apBWE?, .univerSR?, .woosh?, .mmaudio?, .ltxVideo?,
+            case .qwen3Coder?, .northMiniCode?, .inkling?, .deepseekV4Flash?, .aceStep?, .miniMaxMusic3?, .yue2?, .sheetSage2?, .magentaRT2?, .muScriptor?, .roFormer?, .auk?, .apBWE?, .univerSR?, .woosh?, .mmaudio?, .ltxVideo?,
                  .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .marigoldV2?, .tripoSR?, .instantMesh?, .trellis2?,
                  .insightFace?, .sortformer?, .whistleASR?, .nemotronTranscribeASR?, .terramindFlood?, .terramindFire?, .tessera?, .olmoEarth?:
                 return true

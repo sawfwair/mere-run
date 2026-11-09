@@ -94,7 +94,7 @@ struct StudioGeometryCameraEditor: View {
             enabled = true
             message = nil
         } catch {
-            message = "That file is not a camera document: \(error.localizedDescription)"
+            message = "That file isn't a camera document. \(error.localizedDescription)"
         }
     }
 
@@ -105,7 +105,7 @@ struct StudioGeometryCameraEditor: View {
         do {
             try document.json().write(to: url, options: .atomic)
         } catch {
-            message = "Studio could not save the camera file: \(error.localizedDescription)"
+            message = "Couldn't save the camera file. \(error.localizedDescription)"
         }
     }
 }
@@ -156,7 +156,7 @@ struct StudioGeometryCameraOverride: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if paths.count < 2 {
-                Text("Add at least two ordered views to the well; the model solves the cameras between them.")
+                Text("Add at least two ordered views to the well. The model solves the cameras between them.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -211,7 +211,7 @@ struct StudioGeometryCameraOverride: View {
             savedPath = url.path
             if camerasPath != url.path { draft.form[Self.flag] = .text(url.path) }
         } catch {
-            message = "Studio could not write the camera file: \(error.localizedDescription)"
+            message = "Couldn't write the camera file. \(error.localizedDescription)"
         }
     }
 
@@ -227,7 +227,7 @@ struct StudioGeometryCameraOverride: View {
             enabled = true
             message = nil
         } catch {
-            message = "The camera file at \(url.lastPathComponent) could not be read into the editor: \(error.localizedDescription)"
+            message = "Couldn't open \(url.lastPathComponent) in the editor. \(error.localizedDescription)"
         }
     }
 }

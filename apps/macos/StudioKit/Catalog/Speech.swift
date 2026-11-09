@@ -122,6 +122,9 @@ extension CommandArguments {
         // Only Qwen3-ASR reads a token budget; Parakeet warns about one it would ignore.
         args.optionUnlessDefault(F.maxTokens, String(draft.maxTokens))
         if !draft.language.isBlank, draft.language != "auto" { args.option(F.language, draft.language) }
+        if let provider = draft.speechProvider, !provider.isBlank { args.optionUnlessDefault(F.provider, provider) }
+        if let beamSize = draft.speechBeamSize { args.optionUnlessDefault(F.beamSize, String(beamSize)) }
+        args.repeated(F.keyword, pathList(draft.speechKeywords ?? ""))
         if draft.stream {
             args.flag(F.stream)
             args.option(F.streamChunkMs, String(draft.speechStreamChunkMS))

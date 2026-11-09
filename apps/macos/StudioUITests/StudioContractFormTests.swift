@@ -77,11 +77,11 @@ final class StudioContractFormTests: XCTestCase {
         draft.reset(for: .createImage)
         XCTAssertEqual(
             StudioContractSchema.sections(for: .createImage, draft: draft, source: .contract).map(\.title),
-            ["Prompt", "Inputs", "Output", "Model & adapters", "Sampling"]
+            ["Prompt", "Inputs", "Output", "Model and adapters", "Sampling"]
         )
         XCTAssertEqual(
             StudioContractGroup.allCases.map(\.title),
-            ["Prompt", "Inputs", "Output", "Model & adapters", "Sampling", "Run", "Options"]
+            ["Prompt", "Inputs", "Output", "Model and adapters", "Sampling", "Run", "Options"]
         )
 
         // Every group's fields keep the contract's own declaration order.

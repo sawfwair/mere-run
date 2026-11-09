@@ -172,12 +172,12 @@ package struct StudioMenuBarPanel: View {
             divider
             menuRow("Open Studio", action: onOpenStudio)
             menuRow(
-                "Show Activity",
+                "Show activity",
                 trailing: StudioRunQueue.badgeLabel(activeRuns: StudioRunQueue.activeRunCount(in: jobs)),
                 action: onOpenActivity
             )
             .help("Open the Studio window with the run queue showing")
-            menuRow("Server Settings…", action: onOpenServer)
+            menuRow("Open Server", action: onOpenServer)
             divider
             menuRow("Quit mere.run", shortcut: "⌘Q") { NSApp.terminate(nil) }
                 .keyboardShortcut("q")
@@ -623,13 +623,13 @@ package enum StudioMenuBarCopy {
         return String(format: "%.1f of %.0f GB", usedGB, Double(total) / gigabyte)
     }
 
-    /// "Thermal: Serious" while the Mac is throttling or about to; nothing while it is nominal.
+    /// "Thermal: serious" while the Mac is throttling or about to; nothing while it is nominal.
     package static func thermal(_ state: ProcessInfo.ThermalState) -> String? {
         switch state {
         case .nominal: return nil
-        case .fair: return "Thermal: Fair"
-        case .serious: return "Thermal: Serious"
-        case .critical: return "Thermal: Critical"
+        case .fair: return "Thermal: fair"
+        case .serious: return "Thermal: serious"
+        case .critical: return "Thermal: critical"
         @unknown default: return nil
         }
     }

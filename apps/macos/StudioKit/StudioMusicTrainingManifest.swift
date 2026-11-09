@@ -225,7 +225,7 @@ package enum StudioMusicManifestImportError: LocalizedError, Equatable {
     package var errorDescription: String? {
         switch self {
         case .invalidLine(let line):
-            return "Line \(line) is not a clip record; each line needs \"audio\" and \"caption\"."
+            return "Line \(line) isn't a clip record. Each line needs \"audio\" and \"caption\"."
         case .empty:
             return "This manifest has no clips."
         }

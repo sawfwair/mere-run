@@ -155,6 +155,7 @@ family.
 | `MereRunH3Model` | H3 transformer and VAE computation | [H3 and Laguna runtime boundaries](./internals/h3-laguna-runtime-boundaries.md) |
 | `MereRunLagunaModel` | Laguna target and draft computation | [H3 and Laguna runtime boundaries](./internals/h3-laguna-runtime-boundaries.md) |
 | `MereRunAudioModels` | BigVGAN vocoder layers shared by H3 and MMAudio | [H3 and Laguna runtime boundaries](./internals/h3-laguna-runtime-boundaries.md) |
+| `MereRunSheetSageModel` | MERT2 frontend and encoder, SheetSage2 adapters, BART decoder, and event grammar | [Music runtime](./runtime/music.md) |
 | `MereRunImageModels` | FLUX.2, FLUX 3, and ZImage transformer layers and the shared VAE | [Image runtime boundaries](./internals/image-runtime-boundaries.md) |
 | `MereRunKolibriModel` | Kolibri attention, sigmoid expert routing, stacked projections, and decoder arithmetic | [Native Kolibri-1](./runtime/kolibri.md) |
 | `MereRunFlintModel` | Recursive Flint attention, sigmoid routing, and expert projections | [Run Recursive Flint](./runtime/flint.md) |

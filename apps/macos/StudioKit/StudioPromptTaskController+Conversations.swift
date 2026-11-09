@@ -33,18 +33,19 @@ extension StudioPromptTaskController {
         let system = draft.secondaryText.trimmingCharacters(in: .whitespacesAndNewlines)
         let systemPrompt = system.isEmpty ? nil : system
         let model = draft.model.isBlank ? nil : draft.model
-        let turnImage = mode == .chat && !draft.inputPath.isBlank ? draft.inputPath : nil
-        let messages = (activeConversationItem?.messages ?? [])
-            + [StudioMessage(role: .user, content: content, imagePath: turnImage)]
+        let attachments = StudioTurnAttachments(mode: mode, draft: draft)
+        var turn = StudioMessage(role: .user, content: content)
+        turn.attachments = attachments
+        let messages = (activeConversationItem?.messages ?? []) + [turn]
         let request = try conversationRequest(mode: mode, draft: draft, conversationID: conversationID,
             messages: messages, systemPrompt: systemPrompt, inventory: inventory)
 
         library.appendUser(conversationID: conversationID, mode: mode, model: model,
-            systemPrompt: systemPrompt, content: content, imagePath: turnImage)
+            systemPrompt: systemPrompt, content: content, attachments: attachments)
         controller.run(studio: request)
         var sent = draft
         sent.prompt = ""
-        sent.inputPath = ""
+        StudioTurnAttachments().apply(to: &sent)
         if activeConversationID == nil {
             sessions.rememberConversationDraft(sent, conversationID: nil, mode: mode)
         }
@@ -64,7 +65,7 @@ extension StudioPromptTaskController {
         guard messages.last?.role == .user else { return nil }
         var runDraft = draft
         runDraft.secondaryText = item.systemPrompt ?? ""
-        runDraft.inputPath = messages.last?.imagePath ?? ""
+        (messages.last?.attachments ?? StudioTurnAttachments()).apply(to: &runDraft)
         if let model = item.model, !model.isBlank { runDraft.model = model }
         try ensureRunnable(mode: item.mode, draft: runDraft)
         let request = try conversationRequest(mode: item.mode, draft: runDraft, conversationID: conversationID,
@@ -81,7 +82,7 @@ extension StudioPromptTaskController {
               let removed = library.truncate(conversationID: conversationID, removingFrom: messageID) else { return false }
         var edited = draft
         edited.prompt = removed.content
-        if mode == .chat { edited.inputPath = removed.imagePath ?? "" }
+        if mode == .chat { removed.attachments.apply(to: &edited) }
         if let item = activeConversationItem, item.messages?.isEmpty ?? true {
             library.delete(id: conversationID)
             sessions.forgetConversationDrafts([conversationID])
@@ -107,7 +108,7 @@ extension StudioPromptTaskController {
         applyConversationSettings(from: branch, to: &branchDraft)
         if message.role == .user {
             branchDraft.prompt = message.content
-            if branch.mode == .chat { branchDraft.inputPath = message.imagePath ?? "" }
+            if branch.mode == .chat { message.attachments.apply(to: &branchDraft) }
         }
         let branchID: UUID?
         if branch.messages?.isEmpty ?? true {

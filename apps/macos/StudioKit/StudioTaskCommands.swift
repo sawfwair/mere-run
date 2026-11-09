@@ -7,27 +7,28 @@ extension CommandTemplateID {
         case .imageGenerate: return .imageGenerate
         case .imageValidate, .imageDatasetDiscover, .imageRunPlan: return .imageDatasets
         case .imageTrainLoRA, .imageVisualizeRun: return .imageTrain
-        case .videoGenerate, .videoRetake, .videoDubIt, .videoCosmos3: return .videoGenerate
+        case .videoGenerate: return .videoGenerate
+        case .videoRetake, .videoDubIt: return .videoEdit
+        case .videoCosmos3: return .videoCosmos
         case .videoAnimate, .videoPrepareMasks, .videoExportLatents, .videoSession: return .videoSubjects
-        case .musicGenerate: return .musicCompose
+        case .musicGenerate, .musicYue2Plan, .musicYue2Semantic, .musicYue2Synthesize, .musicYue2Decode, .musicYue2Inspect, .musicYue2Validate, .musicYue2Instrumentalize, .musicYue2Cover, .musicYue2Export, .musicYue2Batch: return .musicCompose
         case .musicRealtime: return .musicRealtime
         case .musicAnalyze: return .musicAnalyze
-        case .musicTranscribe: return .musicTranscribe
+        case .musicTranscribe, .musicYue2Transcribe: return .musicTranscribe
         case .musicSeparate: return .musicSeparate
         case .musicTrainAdapter: return .musicTrain
         case .sfxGenerate, .audioGenerate: return .soundGenerate
         case .sfxVideo: return .soundFoley
-        case .sfxConditionText: return .soundCondition
-        case .sfxAEEncode: return .soundEncode
-        case .sfxAEDecode: return .soundDecode
+        case .sfxAEEncode, .sfxAEDecode, .sfxConditionText: return .soundLatents
         case .sfxClapScore: return .soundScore
         case .speechSynthesize: return .voiceSpeak
         case .speechProfileList, .speechProfileCreate, .speechProfileDelete: return .voiceVoices
-        case .imageReconstruct3D, .imageReconstruct3DTrellis2, .imageReconstruct3DMultiview: return .threeDFromImage
+        case .imageReconstruct3D, .imageReconstruct3DTrellis2, .imageReconstruct3DMultiview, .visionImageTo3DIdol: return .threeDFromImage
         case .textChat: return .chatChat
         case .textCode: return .chatCode
         case .textTrainLoRA: return .chatTrain
-        case .visionInspect, .visionEmbed, .visionCaption, .visionOCR: return .visionRead
+        case .visionInspect, .visionEmbed, .visionCaption: return .visionRead
+        case .visionOCR: return .visionDocument
         case .visionGround: return .visionFind
         case .visionSegment: return .visionSegment
         case .visionTrack: return .visionTrack
@@ -40,7 +41,8 @@ extension CommandTemplateID {
         case .speechTranscribe: return .audioTranscribe
         case .speechDiarize: return .audioWhoSpoke
         case .speechDiarizeLive: return .audioLive
-        case .audioEnhance, .audioEdit: return .audioEnhance
+        case .audioEnhance: return .audioEnhance
+        case .audioEdit: return .voiceEdit
         case .speechListen: return .audioLive
         case .textEmbed: return .textEmbeddings
         case .textAnonymize: return .textAnonymize
@@ -61,11 +63,12 @@ extension CommandTemplateID {
              .modelBenchmarkToolContinuations, .modelBenchmarkGemma4KV, .modelBenchmarkGemma4MTP,
              .modelBenchmarkParakeetCoreML, .modelBenchmarkAPIWorkload: return .modelsBenchmarks
         case .adapterList, .adapterPull: return .modelsAdapters
-        case .apiServe, .openWebui, .worldServe,
+        case .worldServe: return .serverWorld
+        case .apiServe, .openWebui,
              .statusSnapshot, .agentOnboard, .agentStatus, .agentInstallPi,
              .agentStart, .setup, .graphStudio, .nodeConsole,
              .custom: return .serverServing
-        case .musicServe: return .serverMusic
+        case .musicServe, .musicYue2Serve: return .serverMusic
         case .visionServe: return .serverVision
         case .runList, .runInspect, .runWatch, .runFetch,
              .runCancel, .runRetry, .evaluationPackValidate, .evaluationRun,
@@ -78,13 +81,11 @@ extension CommandTemplateID {
 
 extension StudioTask {
     package var commandTemplates: [CommandTemplate] {
-        let owner: StudioTask = self == .audioSeparate ? .musicSeparate : self
-        return CommandCatalog.templates.filter { $0.id.studioTask == owner && $0.externalURL == nil }
+        CommandCatalog.templates.filter { $0.id.studioTask == self && $0.externalURL == nil }
     }
 
-    /// Whether this task runs `templateID`: one of its own variants, which for Audio ▸ Separate
-    /// is Music ▸ Separate's command. The feed and Stop read a row's task through this, so a run
-    /// shows on the page that started it.
+    /// Whether this task runs `templateID`: one of its own variants. The feed and Stop read a
+    /// row's task through this, so a run shows on the page that started it.
     package func runs(_ templateID: CommandTemplateID) -> Bool {
         variantTemplates.contains { $0.id == templateID }
     }
@@ -94,7 +95,7 @@ extension CommandTemplateID {
     /// The commands that run until stopped and that Studio starts in the `.service` lane.
     package var isResidentServer: Bool {
         switch self {
-        case .apiServe, .visionServe, .musicServe, .worldServe: return true
+        case .apiServe, .visionServe, .musicServe, .musicYue2Serve, .worldServe: return true
         default: return false
         }
     }

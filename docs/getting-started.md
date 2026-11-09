@@ -104,7 +104,7 @@ The app looks for a CLI in this order: the bundled CLI, nearby Swift Package
 Manager build products, common install locations, and the active package
 checkout. It doesn't install the terminal command on launch. To copy the
 bundled command or the `use-mere-run` Codex skill into user-visible locations,
-open **Settings** and click **Install CLI** or **Install Skill**.
+open **Settings** and click **Install CLI** or **Install skill**.
 
 The Studio is macOS-only. On Linux, use the CLI and the local API server
 directly.

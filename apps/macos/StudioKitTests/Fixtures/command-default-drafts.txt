@@ -7,7 +7,7 @@ apiServe	model	text-chat-gemma4-12b-4bit
 audioEdit	audioGuidanceScale	Optional(2.0)
 audioEdit	durationSeconds	4.0
 audioEdit	model	audio-auk-base
-audioEdit	outputPath	~/Music/mere.run/Audio/auk-speech-editing-<stamp>.wav
+audioEdit	outputPath	~/Music/mere.run/Voice/auk-speech-editing-<stamp>.wav
 audioEdit	prompt	Say hello in a calm voice.
 audioEdit	seed	42
 audioEdit	steps	32
@@ -129,6 +129,24 @@ musicTrainAdapter	steps	1000
 musicTranscribe	model	music-muscriptor-medium
 musicTranscribe	outputPath	~/Music/mere.run/Music/transcribe-to-midi-<stamp>.mid
 musicTranscribe	temperature	1.0
+musicYue2Batch	model	music-yue2
+musicYue2Batch	outputPath	~/Documents/mere.run/Music/run-yue2-batch-<stamp>
+musicYue2Cover	model	music-yue2
+musicYue2Cover	outputPath	~/Documents/mere.run/Music/create-yue2-cover-<stamp>
+musicYue2Decode	outputPath	~/Music/mere.run/Music/decode-yue2-audio-<stamp>.wav
+musicYue2Export	model	music-yue2
+musicYue2Export	outputPath	~/Documents/mere.run/Music/export-yue2-pipeline-<stamp>
+musicYue2Instrumentalize	outputPath	~/Documents/mere.run/Music/convert-instrumental-score-<stamp>.abc
+musicYue2Plan	model	music-yue2
+musicYue2Plan	outputPath	~/Documents/mere.run/Music/plan-yue2-score-<stamp>
+musicYue2Semantic	model	music-yue2
+musicYue2Semantic	outputPath	~/Documents/mere.run/Music/generate-yue2-music-tokens-<stamp>
+musicYue2Serve	model	music-yue2
+musicYue2Serve	outputPath	~/Documents/mere.run/Server/serve-yue2-jobs-<stamp>
+musicYue2Synthesize	model	music-yue2
+musicYue2Synthesize	outputPath	~/Documents/mere.run/Music/synthesize-yue2-latents-<stamp>
+musicYue2Transcribe	model	music-sheetsage2
+musicYue2Transcribe	outputPath	~/Documents/mere.run/Music/transcribe-music-to-score-<stamp>
 openWebui	host	0.0.0.0
 openWebui	model	text-chat-gemma4-12b-4bit
 pluginDoctor	prompt	mere-runpod
@@ -254,10 +272,10 @@ visionCaption	prompt	Write a short, concrete caption describing the image for Lo
 visionCaption	temperature	0.2
 visionDepth	dryRun	true
 visionDepth	model	vision-depth-marigold-v2
-visionDepth	outputPath	~/Documents/mere.run/Vision/image-depth-<stamp>
+visionDepth	outputPath	~/Documents/mere.run/3D/image-depth-<stamp>
 visionDepthVideo	dryRun	true
 visionDepthVideo	model	vision-depth-vda-small
-visionDepthVideo	outputPath	~/Documents/mere.run/Vision/video-depth-<stamp>
+visionDepthVideo	outputPath	~/Documents/mere.run/3D/video-depth-<stamp>
 visionEmbed	maxTokens	8192
 visionEmbed	model	vision-embed-qwen3-vl-2b
 visionEmbed	outputPath	~/Documents/mere.run/Vision/embed-text-image-<stamp>.json
@@ -273,13 +291,16 @@ visionFaceEmbed	model	vision-face-buffalo-l
 visionFlow	outputPath	~/Documents/mere.run/Vision/optical-flow-<stamp>.flo
 visionGeometry	dryRun	true
 visionGeometry	model	vision-geometry-moge2-small
-visionGeometry	outputPath	~/Documents/mere.run/Vision/metric-geometry-<stamp>
+visionGeometry	outputPath	~/Documents/mere.run/3D/metric-geometry-<stamp>
 visionGeometryMultiview	dryRun	true
 visionGeometryMultiview	model	vision-geometry-da3-small
-visionGeometryMultiview	outputPath	~/Documents/mere.run/Vision/multi-view-geometry-<stamp>
+visionGeometryMultiview	outputPath	~/Documents/mere.run/3D/multi-view-geometry-<stamp>
 visionGround	model	vision-ground-falcon-perception
 visionGround	outputPath	~/Pictures/mere.run/Vision/ground-objects-<stamp>.png
 visionGround	prompt	a person
+visionImageTo3DIdol	outputPath	~/Documents/mere.run/3D/idol-gaussian-splats-<stamp>
+visionImageTo3DIdol	seed	42
+visionImageTo3DIdol	steps	50
 visionInspect	prompt	Describe this image.
 visionOCR	backend	lighton
 visionOCR	maxTokens	4096

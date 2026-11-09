@@ -29,7 +29,7 @@ struct StudioRecentPromptsMenu: View {
         .buttonStyle(.mereIcon)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("Recent prompts · ↑ in the prompt recalls them too")
+        .help("Recent prompts. Press ↑ in the prompt to recall them too.")
         .accessibilityLabel("Recent prompts")
         .accessibilityValue(prompts.count == 1 ? "1 prompt" : "\(prompts.count) prompts")
     }

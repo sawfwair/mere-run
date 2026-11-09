@@ -30,11 +30,30 @@ package struct StudioSceneActions {
     package let importReceipt: () -> Void
 }
 
+/// A page's own Run for Run ▸ Run (⌘↩), published while the page's form is what runs rather
+/// than the task's Command view: Training's Start training, Voices' Create voice. The menu
+/// prefers it over `StudioSceneActions.runComposer`, so the key and the page's button do one thing.
+package struct StudioPageRun {
+    package let isEnabled: Bool
+    package let run: () -> Void
+
+    package init(isEnabled: Bool, run: @escaping () -> Void) {
+        self.isEnabled = isEnabled
+        self.run = run
+    }
+}
+
 private struct StudioSceneActionsKey: FocusedValueKey { typealias Value = StudioSceneActions }
+private struct StudioPageRunKey: FocusedValueKey { typealias Value = StudioPageRun }
 
 extension FocusedValues {
     package var studioActions: StudioSceneActions? {
         get { self[StudioSceneActionsKey.self] }
         set { self[StudioSceneActionsKey.self] = newValue }
+    }
+
+    package var studioPageRun: StudioPageRun? {
+        get { self[StudioPageRunKey.self] }
+        set { self[StudioPageRunKey.self] = newValue }
     }
 }

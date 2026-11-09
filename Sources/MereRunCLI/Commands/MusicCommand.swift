@@ -12,6 +12,7 @@ struct Music: ParsableCommand {
             MusicSeparate.self,
             MusicTrainAdapter.self,
             MusicTranscribe.self,
+            MusicYuE2.self,
         ]
     )
 }

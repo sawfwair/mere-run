@@ -66,6 +66,25 @@ final class YuE2Tests: XCTestCase {
         }
     }
 
+    func testPhaseLoadingRetainsTheSameAcousticArithmetic() throws {
+        let configuration = try load(YuE2Configuration.self, "model-config.json")
+        let expected = try arrays("expected.safetensors")
+        let tokens = try XCTUnwrap(expected["tokens"]).asArray(Int32.self).map(Int.init)
+        let noise = try XCTUnwrap(expected["noise"])
+        let weights = try arrays("model-fp32.safetensors").filter { !YuE2Model.isAcousticWeight($0.key) }
+        let model = try YuE2Model(configuration: configuration, arrays: weights, loadAcoustic: false)
+        let acoustic = try YuE2Acoustic(model: model, tokens: tokens)
+        XCTAssertThrowsError(try acoustic.velocity(noise, rawTime: 0.4))
+        model.autoregressive = []
+        model.head = nil
+        try model.loadBranches(acoustic: true, from: fixture.appendingPathComponent("model-fp32.safetensors"))
+        assertClose(try acoustic.velocity(noise, rawTime: 0.4), try XCTUnwrap(expected["fp32.velocity"]), tolerance: 4e-5)
+        XCTAssertThrowsError(try model.logits(tokens, cache: model.makeCache()))
+        model.acoustic = []
+        try model.loadBranches(acoustic: false, from: fixture.appendingPathComponent("model-fp32.safetensors"))
+        XCTAssertEqual(model.autoregressive.count, configuration.numHiddenLayers)
+    }
+
     func testDecoderAndExactTileBoundariesMatchUpstream() throws {
         let config = try load(YuE2VAEConfiguration.self, "decoder-config.json")
         let decoder = try YuE2Decoder(configuration: config, arrays: arrays("decoder.safetensors"))
@@ -156,6 +175,21 @@ final class YuE2Tests: XCTestCase {
         XCTAssertThrowsError(try YuE2Protocol.prefix(plan: plan, tokenizer: tokenizer, score: [151643]))
     }
 
+    func testInstrumentalPlanningUsesUpstreamSectionTagsOnlyDuringScoreGeneration() throws {
+        let tokenizer = try syntheticTokenizer()
+        for mode in [YuE2PlanningMode.full, .melody] {
+            let plan = try YuE2GenerationPlan(style: "piano", lyrics: "", planning: mode, instrumental: true)
+            let planning = try YuE2Protocol.prefix(plan: plan, tokenizer: tokenizer, score: nil)
+            XCTAssertEqual(try tokenizer.decode(Array(planning.dropFirst().dropLast())),
+                "\(mode.instruction)\n[Tags]\npiano\n[Lyrics]\n[Intro]\n\n[Verse]\n\n[Chorus]\n\n[Outro]\n\n")
+            let rendering = try YuE2Protocol.prefix(plan: plan, tokenizer: tokenizer, score: [1, 2, 3])
+            XCTAssertEqual(try tokenizer.decode(Array(rendering.dropFirst().dropLast(6))), plan.prompt)
+            XCTAssertEqual(plan.lyrics, "")
+        }
+        let vocal = try YuE2GenerationPlan(style: "piano", lyrics: "hello")
+        XCTAssertEqual(vocal.planningPrompt, vocal.prompt)
+    }
+
     func testSamplingMasksVocabulariesCountsFrequencyAndHonorsMinimum() throws {
         var sampling = YuE2Sampling()
         sampling.temperature = 0
@@ -221,8 +255,19 @@ final class YuE2Tests: XCTestCase {
         XCTAssertEqual(spec.mountedHubFallbacks.first?.destinationPath, "vae")
         XCTAssertEqual(spec.usageRestriction?.terms.count, 2)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
-        XCTAssertEqual(spec.defaultCLICommands, ["music generate"])
+        XCTAssertEqual(spec.defaultCLICommands, ["music generate", "music yue2 decode"])
         XCTAssertEqual(spec.validationKind, .yue2)
+        let transcription = try XCTUnwrap(ManagedModelCatalog.spec(for: SheetSage2Resources.modelID))
+        XCTAssertEqual(transcription.hubFallback?.revision, SheetSage2Resources.revision)
+        XCTAssertEqual(transcription.mountedHubFallbacks.first?.hubFallback.revision, SheetSage2Resources.parentRevision)
+        XCTAssertEqual(transcription.mountedHubFallbacks.first?.destinationPath, "mert2")
+        XCTAssertFalse(transcription.runtimeAutoDownloadAllowed)
+        XCTAssertNotNil(transcription.usageRestriction)
+        let legacy = try XCTUnwrap(ManagedModelCatalog.spec(for: YuE2Resources.legacyVAEModelID))
+        XCTAssertEqual(legacy.hubFallback?.revision, YuE2Resources.legacyVAERevision)
+        XCTAssertEqual(legacy.defaultCLICommands, ["music yue2 decode"])
+        XCTAssertFalse(legacy.runtimeAutoDownloadAllowed)
+        XCTAssertNotNil(legacy.usageRestriction)
     }
 
     private func syntheticTokenizer() throws -> YuE2Tokenizer {

@@ -66,7 +66,7 @@ to work with saved runs. The API does not expose an HTTP history endpoint.
 
 MereRun Studio exposes this control plane as the **Server** domain in its
 sidebar (Go ▸ Server, `Option-Command-4`). It is an operational client of the
-public CLI and HTTP contracts, not a second runtime. The Serving task provides:
+public CLI and HTTP contracts, not a second runtime. The API task provides:
 
 - API preflight, app-owned start, stop, restart, and reconnection to a server
   started outside Studio

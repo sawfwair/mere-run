@@ -13,7 +13,7 @@ final class StudioComposerSchemaTests: XCTestCase {
             .video: ["startFrame", "endFrame", "audio"],
             .music: ["source", "timbre"],
             .speak: ["referenceAudio"],
-            .chat: ["image"],
+            .chat: ["image", "chatAudio", "chatVideo"],
             .code: [],
             .readImage: ["input"],
             .findObjects: ["input"],
@@ -166,6 +166,66 @@ final class StudioComposerSchemaTests: XCTestCase {
         var sfx = StudioDraft()
         sfx.reset(for: .sfx)
         XCTAssertFalse(StudioMode.sfx.showsAttachmentWell(for: sfx, source: .contract))
+    }
+
+    func testChatWellsFollowWhatTheModelsFamilyReads() {
+        let cases: [(model: String, slots: [String])] = [
+            // Gemma 4 text: no well and no paperclip.
+            ("text-chat-gemma4-12b-4bit", []),
+            // Vision families read an image only.
+            ("vision-chat-gemma4-12b", ["image"]),
+            ("vision-chat-lfm25-3b-8bit", ["image"]),
+            // Nemotron 3 Nano Omni reads all three.
+            ("omni-chat-nemotron3-nano-30b-a3b-bf16", ["image", "chatAudio", "chatVideo"]),
+        ]
+        for (model, expected) in cases {
+            var draft = StudioDraft()
+            draft.reset(for: .chat)
+            draft.model = model
+            XCTAssertEqual(StudioMode.chat.attachmentSlots(for: draft, source: .contract).map(\.id), expected, model)
+            XCTAssertFalse(StudioMode.chat.showsAttachmentWell(for: draft, source: .contract), "\(model) starts collapsed")
+        }
+
+        var vision = StudioDraft()
+        vision.reset(for: .chat)
+        vision.model = "vision-chat-gemma4-12b"
+        XCTAssertEqual(StudioMode.chat.paperclipSlots(for: vision, source: .contract).map(\.id), ["image"])
+        XCTAssertFalse(vision.attach(dropped: [URL(fileURLWithPath: "/tmp/clip.wav")], for: .chat, source: .contract))
+        XCTAssertNil(vision.chatAudioPath)
+    }
+
+    func testChatDropsAndPastesRouteByFileType() {
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+        draft.model = "omni-chat-nemotron3-nano-30b-a3b-bf16"
+        XCTAssertEqual(StudioMode.chat.paperclipSlots(for: draft, source: .contract).map(\.id), ["image", "chatAudio", "chatVideo"])
+        let files = ["/tmp/clip.mp4", "/tmp/voice.m4a", "/tmp/photo.jpg"].map { URL(fileURLWithPath: $0) }
+        XCTAssertTrue(draft.attach(dropped: files, for: .chat, source: .contract))
+        XCTAssertEqual(draft.inputPath, "/tmp/photo.jpg")
+        XCTAssertEqual(draft.chatAudioPath, "/tmp/voice.m4a")
+        XCTAssertEqual(draft.chatVideoPath, "/tmp/clip.mp4")
+        XCTAssertEqual(StudioMode.chat.wellSlots(for: draft, source: .contract).map(\.id), ["image", "chatAudio", "chatVideo"])
+        XCTAssertTrue(StudioMode.chat.paperclipSlots(for: draft, source: .contract).isEmpty, "a full well hides the paperclip")
+
+        // A second clip replaces the first: a turn carries one of each.
+        XCTAssertTrue(draft.attach(dropped: [URL(fileURLWithPath: "/tmp/other.wav")], for: .chat, source: .contract))
+        XCTAssertEqual(draft.chatAudioPath, "/tmp/other.wav")
+
+        // Clearing a slot stores nil, so the draft encodes as one that never held it.
+        StudioMode.chat.attachmentSlots[1].clear(in: &draft)
+        XCTAssertNil(draft.chatAudioPath)
+    }
+
+    func testAChatAttachmentTheNewModelCannotReadStaysInTheWell() {
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+        draft.model = "omni-chat-nemotron3-nano-30b-a3b-bf16"
+        draft.attach(dropped: [URL(fileURLWithPath: "/tmp/voice.wav")], for: .chat, source: .contract)
+        draft.model = "vision-chat-gemma4-12b"
+        XCTAssertEqual(StudioMode.chat.attachmentSlots(for: draft, source: .contract).map(\.id), ["image"])
+        XCTAssertEqual(StudioMode.chat.unreadAttachmentSlots(for: draft, source: .contract).map(\.id), ["chatAudio"])
+        XCTAssertEqual(StudioMode.chat.wellSlots(for: draft, source: .contract).map(\.id), ["chatAudio"])
+        XCTAssertTrue(StudioMode.chat.showsAttachmentWell(for: draft, source: .contract))
     }
 
     // MARK: - Chips
@@ -343,7 +403,7 @@ final class StudioComposerSchemaTests: XCTestCase {
         XCTAssertEqual(StudioModelNaming.displayLabel(for: .createImage, model: "image-zimage-nano", titles: titles), "Z-Image Nano (4-bit)")
         XCTAssertEqual(
             ModelReadinessState.missingModel("image-zimage-nano").message(titles: titles),
-            "Z-Image Nano (4-bit) isn't on this Mac yet. Get it once and it stays."
+            "Z-Image Nano (4-bit) isn't on this Mac. Download it once and it stays."
         )
         XCTAssertEqual(StudioModelNaming.displayName("image-zimage-nano", titles: .none), "Zimage Nano")
         XCTAssertEqual(StudioModelTitles(rows: [untitled]), .none, "rows without titles add nothing")

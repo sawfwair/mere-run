@@ -152,7 +152,7 @@ apiServe	videoOutputMode=video-only	api serve --host 1 --port 8081 --engine 1 --
 apiServe	videoQuality=draft	api serve --host 1 --port 8081 --engine 1 --model 1 --lora 1 --rate-limit-per-minute 61 --max-active-requests 2 --memory-guard 1 --context-size 32769 --memory-guard-custom-ceiling-gb 1 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --preflight --json 1
 apiServe	videoQuality=final	api serve --host 1 --port 8081 --engine 1 --model 1 --lora 1 --rate-limit-per-minute 61 --max-active-requests 2 --memory-guard 1 --context-size 32769 --memory-guard-custom-ceiling-gb 1 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --preflight --json 1
 apiServe	voiceMode=clone	api serve --host 1 --port 8081 --engine 1 --model 1 --lora 1 --rate-limit-per-minute 61 --max-active-requests 2 --memory-guard 1 --context-size 32769 --memory-guard-custom-ceiling-gb 1 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --preflight --json 1
-audioEdit	default	audio edit 'Say hello in a calm voice.' --model audio-auk-base --output ~/Music/mere.run/Audio/auk-speech-editing-<stamp>.wav --duration 4 --seed 42
+audioEdit	default	audio edit 'Say hello in a calm voice.' --model audio-auk-base --output ~/Music/mere.run/Voice/auk-speech-editing-<stamp>.wav --duration 4 --seed 42
 audioEdit	maximal	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
 audioEdit	maximal-booleans-off	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --steps 33 --guidance 2.5 --seed 1 1
 audioEdit	modelRoot=video-minimax-h3-ref2va	audio edit 1 --model 1 --audio 1 --model-path video-minimax-h3-ref2va --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
@@ -1428,6 +1428,270 @@ musicTranscribe	videoOutputMode=video-only	music transcribe 1 --model 1 --model-
 musicTranscribe	videoQuality=draft	music transcribe 1 --model 1 --model-path 1 --variant 1 --output 1 --format 1 --instruments 1 --list-instruments --sampling --temperature 1.5 --max-tokens-per-chunk 2001 --beam-size 2 --chunk-batch-size 5 --dtype 1 --strict-eos --no-musical-context --context-output 1 --quiet 1
 musicTranscribe	videoQuality=final	music transcribe 1 --model 1 --model-path 1 --variant 1 --output 1 --format 1 --instruments 1 --list-instruments --sampling --temperature 1.5 --max-tokens-per-chunk 2001 --beam-size 2 --chunk-batch-size 5 --dtype 1 --strict-eos --no-musical-context --context-output 1 --quiet 1
 musicTranscribe	voiceMode=clone	music transcribe 1 --model 1 --model-path 1 --variant 1 --output 1 --format 1 --instruments 1 --list-instruments --sampling --temperature 1.5 --max-tokens-per-chunk 2001 --beam-size 2 --chunk-batch-size 5 --dtype 1 --strict-eos --no-musical-context --context-output 1 --quiet 1
+musicYue2Batch	default	music yue2 batch '' --model music-yue2 --output ~/Documents/mere.run/Music/run-yue2-batch-<stamp>
+musicYue2Batch	maximal	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	maximal-booleans-off	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	modelRoot=video-minimax-h3-ref2va	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	musicLMMode=disable	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	musicLMMode=use	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	musicMIDINoteOffset=-12	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	musicTask=lego	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	musicTask=repaint	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	musicTrainingKind=lokr	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	renderProfile=quality	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	responseFormat=json_object	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	responseFormat=text	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	thinkingMode=automatic	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	thinkingMode=hide	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	thinkingMode=show	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	videoOutputMode=audio-video	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	videoOutputMode=video-only	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	videoQuality=draft	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	videoQuality=final	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Batch	voiceMode=clone	music yue2 batch 1 --model 1 --output 1 1
+musicYue2Cover	default	music yue2 cover '' --model music-yue2 --output ~/Documents/mere.run/Music/create-yue2-cover-<stamp>
+musicYue2Cover	maximal	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	maximal-booleans-off	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	modelRoot=video-minimax-h3-ref2va	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	musicLMMode=disable	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	musicLMMode=use	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	musicMIDINoteOffset=-12	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	musicTask=lego	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	musicTask=repaint	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	musicTrainingKind=lokr	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	renderProfile=quality	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	responseFormat=json_object	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	responseFormat=text	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	thinkingMode=automatic	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	thinkingMode=hide	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	thinkingMode=show	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	videoOutputMode=audio-video	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	videoOutputMode=video-only	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	videoQuality=draft	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	videoQuality=final	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Cover	voiceMode=clone	music yue2 cover 1 --request 1 --model 1 --output 1 1
+musicYue2Decode	default	music yue2 decode '' --output ~/Music/mere.run/Music/decode-yue2-audio-<stamp>.wav
+musicYue2Decode	maximal	music yue2 decode 1 --output 1 1
+musicYue2Decode	maximal-booleans-off	music yue2 decode 1 --output 1 1
+musicYue2Decode	modelRoot=video-minimax-h3-ref2va	music yue2 decode 1 --output 1 1
+musicYue2Decode	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 decode 1 --output 1 1
+musicYue2Decode	musicLMMode=disable	music yue2 decode 1 --output 1 1
+musicYue2Decode	musicLMMode=use	music yue2 decode 1 --output 1 1
+musicYue2Decode	musicMIDINoteOffset=-12	music yue2 decode 1 --output 1 1
+musicYue2Decode	musicTask=lego	music yue2 decode 1 --output 1 1
+musicYue2Decode	musicTask=repaint	music yue2 decode 1 --output 1 1
+musicYue2Decode	musicTrainingKind=lokr	music yue2 decode 1 --output 1 1
+musicYue2Decode	renderProfile=quality	music yue2 decode 1 --output 1 1
+musicYue2Decode	responseFormat=json_object	music yue2 decode 1 --output 1 1
+musicYue2Decode	responseFormat=text	music yue2 decode 1 --output 1 1
+musicYue2Decode	thinkingMode=automatic	music yue2 decode 1 --output 1 1
+musicYue2Decode	thinkingMode=hide	music yue2 decode 1 --output 1 1
+musicYue2Decode	thinkingMode=show	music yue2 decode 1 --output 1 1
+musicYue2Decode	videoOutputMode=audio-video	music yue2 decode 1 --output 1 1
+musicYue2Decode	videoOutputMode=video-only	music yue2 decode 1 --output 1 1
+musicYue2Decode	videoQuality=draft	music yue2 decode 1 --output 1 1
+musicYue2Decode	videoQuality=final	music yue2 decode 1 --output 1 1
+musicYue2Decode	voiceMode=clone	music yue2 decode 1 --output 1 1
+musicYue2Export	default	music yue2 export --model music-yue2 --output ~/Documents/mere.run/Music/export-yue2-pipeline-<stamp>
+musicYue2Export	maximal	music yue2 export --model 1 --output 1 1
+musicYue2Export	maximal-booleans-off	music yue2 export --model 1 --output 1 1
+musicYue2Export	modelRoot=video-minimax-h3-ref2va	music yue2 export --model 1 --output 1 1
+musicYue2Export	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 export --model 1 --output 1 1
+musicYue2Export	musicLMMode=disable	music yue2 export --model 1 --output 1 1
+musicYue2Export	musicLMMode=use	music yue2 export --model 1 --output 1 1
+musicYue2Export	musicMIDINoteOffset=-12	music yue2 export --model 1 --output 1 1
+musicYue2Export	musicTask=lego	music yue2 export --model 1 --output 1 1
+musicYue2Export	musicTask=repaint	music yue2 export --model 1 --output 1 1
+musicYue2Export	musicTrainingKind=lokr	music yue2 export --model 1 --output 1 1
+musicYue2Export	renderProfile=quality	music yue2 export --model 1 --output 1 1
+musicYue2Export	responseFormat=json_object	music yue2 export --model 1 --output 1 1
+musicYue2Export	responseFormat=text	music yue2 export --model 1 --output 1 1
+musicYue2Export	thinkingMode=automatic	music yue2 export --model 1 --output 1 1
+musicYue2Export	thinkingMode=hide	music yue2 export --model 1 --output 1 1
+musicYue2Export	thinkingMode=show	music yue2 export --model 1 --output 1 1
+musicYue2Export	videoOutputMode=audio-video	music yue2 export --model 1 --output 1 1
+musicYue2Export	videoOutputMode=video-only	music yue2 export --model 1 --output 1 1
+musicYue2Export	videoQuality=draft	music yue2 export --model 1 --output 1 1
+musicYue2Export	videoQuality=final	music yue2 export --model 1 --output 1 1
+musicYue2Export	voiceMode=clone	music yue2 export --model 1 --output 1 1
+musicYue2Inspect	default	music yue2 inspect ''
+musicYue2Inspect	maximal	music yue2 inspect 1 1
+musicYue2Inspect	maximal-booleans-off	music yue2 inspect 1 1
+musicYue2Inspect	modelRoot=video-minimax-h3-ref2va	music yue2 inspect 1 1
+musicYue2Inspect	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 inspect 1 1
+musicYue2Inspect	musicLMMode=disable	music yue2 inspect 1 1
+musicYue2Inspect	musicLMMode=use	music yue2 inspect 1 1
+musicYue2Inspect	musicMIDINoteOffset=-12	music yue2 inspect 1 1
+musicYue2Inspect	musicTask=lego	music yue2 inspect 1 1
+musicYue2Inspect	musicTask=repaint	music yue2 inspect 1 1
+musicYue2Inspect	musicTrainingKind=lokr	music yue2 inspect 1 1
+musicYue2Inspect	renderProfile=quality	music yue2 inspect 1 1
+musicYue2Inspect	responseFormat=json_object	music yue2 inspect 1 1
+musicYue2Inspect	responseFormat=text	music yue2 inspect 1 1
+musicYue2Inspect	thinkingMode=automatic	music yue2 inspect 1 1
+musicYue2Inspect	thinkingMode=hide	music yue2 inspect 1 1
+musicYue2Inspect	thinkingMode=show	music yue2 inspect 1 1
+musicYue2Inspect	videoOutputMode=audio-video	music yue2 inspect 1 1
+musicYue2Inspect	videoOutputMode=video-only	music yue2 inspect 1 1
+musicYue2Inspect	videoQuality=draft	music yue2 inspect 1 1
+musicYue2Inspect	videoQuality=final	music yue2 inspect 1 1
+musicYue2Inspect	voiceMode=clone	music yue2 inspect 1 1
+musicYue2Instrumentalize	default	music yue2 instrumentalize '' --output ~/Documents/mere.run/Music/convert-instrumental-score-<stamp>.abc
+musicYue2Instrumentalize	maximal	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	maximal-booleans-off	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	modelRoot=video-minimax-h3-ref2va	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	musicLMMode=disable	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	musicLMMode=use	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	musicMIDINoteOffset=-12	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	musicTask=lego	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	musicTask=repaint	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	musicTrainingKind=lokr	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	renderProfile=quality	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	responseFormat=json_object	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	responseFormat=text	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	thinkingMode=automatic	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	thinkingMode=hide	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	thinkingMode=show	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	videoOutputMode=audio-video	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	videoOutputMode=video-only	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	videoQuality=draft	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	videoQuality=final	music yue2 instrumentalize 1 --output 1 1
+musicYue2Instrumentalize	voiceMode=clone	music yue2 instrumentalize 1 --output 1 1
+musicYue2Plan	default	music yue2 plan --model music-yue2 --output ~/Documents/mere.run/Music/plan-yue2-score-<stamp>
+musicYue2Plan	maximal	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	maximal-booleans-off	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	modelRoot=video-minimax-h3-ref2va	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	musicLMMode=disable	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	musicLMMode=use	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	musicMIDINoteOffset=-12	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	musicTask=lego	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	musicTask=repaint	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	musicTrainingKind=lokr	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	renderProfile=quality	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	responseFormat=json_object	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	responseFormat=text	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	thinkingMode=automatic	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	thinkingMode=hide	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	thinkingMode=show	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	videoOutputMode=audio-video	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	videoOutputMode=video-only	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	videoQuality=draft	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	videoQuality=final	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Plan	voiceMode=clone	music yue2 plan --request 1 --model 1 --output 1 1
+musicYue2Semantic	default	music yue2 semantic '' --model music-yue2 --output ~/Documents/mere.run/Music/generate-yue2-music-tokens-<stamp>
+musicYue2Semantic	maximal	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	maximal-booleans-off	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	modelRoot=video-minimax-h3-ref2va	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	musicLMMode=disable	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	musicLMMode=use	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	musicMIDINoteOffset=-12	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	musicTask=lego	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	musicTask=repaint	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	musicTrainingKind=lokr	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	renderProfile=quality	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	responseFormat=json_object	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	responseFormat=text	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	thinkingMode=automatic	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	thinkingMode=hide	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	thinkingMode=show	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	videoOutputMode=audio-video	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	videoOutputMode=video-only	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	videoQuality=draft	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	videoQuality=final	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Semantic	voiceMode=clone	music yue2 semantic 1 --model 1 --output 1 1
+musicYue2Serve	default	music yue2 serve --model music-yue2 --output ~/Documents/mere.run/Server/serve-yue2-jobs-<stamp>
+musicYue2Serve	maximal	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	maximal-booleans-off	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	modelRoot=video-minimax-h3-ref2va	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	musicLMMode=disable	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	musicLMMode=use	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	musicMIDINoteOffset=-12	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	musicTask=lego	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	musicTask=repaint	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	musicTrainingKind=lokr	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	renderProfile=quality	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	responseFormat=json_object	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	responseFormat=text	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	thinkingMode=automatic	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	thinkingMode=hide	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	thinkingMode=show	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	videoOutputMode=audio-video	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	videoOutputMode=video-only	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	videoQuality=draft	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	videoQuality=final	music yue2 serve --model 1 --output 1 1
+musicYue2Serve	voiceMode=clone	music yue2 serve --model 1 --output 1 1
+musicYue2Synthesize	default	music yue2 synthesize '' --model music-yue2 --output ~/Documents/mere.run/Music/synthesize-yue2-latents-<stamp>
+musicYue2Synthesize	maximal	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	maximal-booleans-off	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	modelRoot=video-minimax-h3-ref2va	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	musicLMMode=disable	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	musicLMMode=use	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	musicMIDINoteOffset=-12	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	musicTask=lego	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	musicTask=repaint	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	musicTrainingKind=lokr	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	renderProfile=quality	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	responseFormat=json_object	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	responseFormat=text	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	thinkingMode=automatic	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	thinkingMode=hide	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	thinkingMode=show	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	videoOutputMode=audio-video	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	videoOutputMode=video-only	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	videoQuality=draft	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	videoQuality=final	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Synthesize	voiceMode=clone	music yue2 synthesize 1 --model 1 --output 1 1
+musicYue2Transcribe	default	music yue2 transcribe '' --model music-sheetsage2 --output ~/Documents/mere.run/Music/transcribe-music-to-score-<stamp>
+musicYue2Transcribe	maximal	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	maximal-booleans-off	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	modelRoot=video-minimax-h3-ref2va	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	musicLMMode=disable	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	musicLMMode=use	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	musicMIDINoteOffset=-12	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	musicTask=lego	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	musicTask=repaint	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	musicTrainingKind=lokr	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	renderProfile=quality	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	responseFormat=json_object	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	responseFormat=text	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	thinkingMode=automatic	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	thinkingMode=hide	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	thinkingMode=show	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	videoOutputMode=audio-video	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	videoOutputMode=video-only	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	videoQuality=draft	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	videoQuality=final	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Transcribe	voiceMode=clone	music yue2 transcribe 1 --model 1 --output 1 1
+musicYue2Validate	default	music yue2 validate ''
+musicYue2Validate	maximal	music yue2 validate 1 1
+musicYue2Validate	maximal-booleans-off	music yue2 validate 1 1
+musicYue2Validate	modelRoot=video-minimax-h3-ref2va	music yue2 validate 1 1
+musicYue2Validate	modelRoot=video-wan22-ti2v-5b-mlx	music yue2 validate 1 1
+musicYue2Validate	musicLMMode=disable	music yue2 validate 1 1
+musicYue2Validate	musicLMMode=use	music yue2 validate 1 1
+musicYue2Validate	musicMIDINoteOffset=-12	music yue2 validate 1 1
+musicYue2Validate	musicTask=lego	music yue2 validate 1 1
+musicYue2Validate	musicTask=repaint	music yue2 validate 1 1
+musicYue2Validate	musicTrainingKind=lokr	music yue2 validate 1 1
+musicYue2Validate	renderProfile=quality	music yue2 validate 1 1
+musicYue2Validate	responseFormat=json_object	music yue2 validate 1 1
+musicYue2Validate	responseFormat=text	music yue2 validate 1 1
+musicYue2Validate	thinkingMode=automatic	music yue2 validate 1 1
+musicYue2Validate	thinkingMode=hide	music yue2 validate 1 1
+musicYue2Validate	thinkingMode=show	music yue2 validate 1 1
+musicYue2Validate	videoOutputMode=audio-video	music yue2 validate 1 1
+musicYue2Validate	videoOutputMode=video-only	music yue2 validate 1 1
+musicYue2Validate	videoQuality=draft	music yue2 validate 1 1
+musicYue2Validate	videoQuality=final	music yue2 validate 1 1
+musicYue2Validate	voiceMode=clone	music yue2 validate 1 1
 nodeConsole	default	
 nodeConsole	maximal	
 nodeConsole	maximal-booleans-off	
@@ -2067,27 +2331,27 @@ speechSynthesize	videoQuality=draft	speech synthesize 1 --output 1 --model 1 --s
 speechSynthesize	videoQuality=final	speech synthesize 1 --output 1 --model 1 --speaker 1 --voice 1 --language 1 --temperature 1.2 --seed 1 --cfg-scale 0.5 --stream --stream-chunk-tokens 26 --quiet 1
 speechSynthesize	voiceMode=clone	speech synthesize 1 --output 1 --model 1 --mode clone --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --seed 1 --cfg-scale 0.5 --stream --stream-chunk-tokens 26 --quiet 1
 speechTranscribe	default	speech transcribe '' --output ~/Documents/mere.run/Audio/transcribe-<stamp>.txt --backend auto --task transcribe
-speechTranscribe	maximal	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	maximal-booleans-off	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --input-format 1 --sample-rate 16001 --no-timestamps 1
-speechTranscribe	modelRoot=video-minimax-h3-ref2va	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	modelRoot=video-wan22-ti2v-5b-mlx	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	musicLMMode=disable	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	musicLMMode=use	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	musicMIDINoteOffset=-12	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	musicTask=lego	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	musicTask=repaint	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	musicTrainingKind=lokr	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	renderProfile=quality	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	responseFormat=json_object	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	responseFormat=text	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	thinkingMode=automatic	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	thinkingMode=hide	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	thinkingMode=show	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	videoOutputMode=audio-video	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	videoOutputMode=video-only	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	videoQuality=draft	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	videoQuality=final	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
-speechTranscribe	voiceMode=clone	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	maximal	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	maximal-booleans-off	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --input-format 1 --sample-rate 16001 --no-timestamps 1
+speechTranscribe	modelRoot=video-minimax-h3-ref2va	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	modelRoot=video-wan22-ti2v-5b-mlx	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	musicLMMode=disable	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	musicLMMode=use	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	musicMIDINoteOffset=-12	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	musicTask=lego	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	musicTask=repaint	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	musicTrainingKind=lokr	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	renderProfile=quality	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	responseFormat=json_object	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	responseFormat=text	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	thinkingMode=automatic	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	thinkingMode=hide	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	thinkingMode=show	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	videoOutputMode=audio-video	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	videoOutputMode=video-only	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	videoQuality=draft	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	videoQuality=final	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
+speechTranscribe	voiceMode=clone	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --provider 1 --beam-size 1 --keyword 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
 statusSnapshot	default	status --host 127.0.0.1 --port 8080 --timeout-seconds 1 --json
 statusSnapshot	maximal	status --host 1 --port 8081 --timeout-seconds 1.5 --json 1
 statusSnapshot	maximal-booleans-off	status --host 1 --port 8081 --timeout-seconds 1.5 1
@@ -2133,27 +2397,27 @@ textAnonymize	videoQuality=draft	text anonymize 1 --model 1 --max-tokens 2049 --
 textAnonymize	videoQuality=final	text anonymize 1 --model 1 --max-tokens 2049 --replacement 1 --output 1 --json --pretty 1
 textAnonymize	voiceMode=clone	text anonymize 1 --model 1 --max-tokens 2049 --replacement 1 --output 1 --json --pretty 1
 textChat	default	text chat --prompt 'Summarize diffusion models in one paragraph.' --max-tokens 2048 --model text-chat-gemma4-12b-4bit --stream
-textChat	maximal	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	maximal-booleans-off	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --sandbox-dir 1 1
-textChat	modelRoot=video-minimax-h3-ref2va	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root video-minimax-h3-ref2va --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	modelRoot=video-wan22-ti2v-5b-mlx	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root video-wan22-ti2v-5b-mlx --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	musicLMMode=disable	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	musicLMMode=use	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	musicMIDINoteOffset=-12	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	musicTask=lego	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	musicTask=repaint	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	musicTrainingKind=lokr	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	renderProfile=quality	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	responseFormat=json_object	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	responseFormat=text	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	thinkingMode=automatic	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	thinkingMode=hide	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --no-thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	thinkingMode=show	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	videoOutputMode=audio-video	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	videoOutputMode=video-only	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	videoQuality=draft	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	videoQuality=final	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
-textChat	voiceMode=clone	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	maximal	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	maximal-booleans-off	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --sandbox-dir 1 1
+textChat	modelRoot=video-minimax-h3-ref2va	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root video-minimax-h3-ref2va --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	modelRoot=video-wan22-ti2v-5b-mlx	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root video-wan22-ti2v-5b-mlx --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	musicLMMode=disable	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	musicLMMode=use	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	musicMIDINoteOffset=-12	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	musicTask=lego	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	musicTask=repaint	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	musicTrainingKind=lokr	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	renderProfile=quality	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	responseFormat=json_object	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	responseFormat=text	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	thinkingMode=automatic	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	thinkingMode=hide	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --no-thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	thinkingMode=show	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	videoOutputMode=audio-video	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	videoOutputMode=video-only	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	videoQuality=draft	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	videoQuality=final	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textChat	voiceMode=clone	text chat --prompt 1 --system 1 --image 1 --audio 1 --video 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
 textClassify	default	text classify --input '' --model text-classify-gliner25-decide --output ~/Documents/mere.run/Text/classify-<stamp>.json
 textClassify	maximal	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
 textClassify	maximal-booleans-off	text classify --input 1 --model 1 --output 1 1
@@ -2177,27 +2441,27 @@ textClassify	videoQuality=draft	text classify --input 1 --model 1 --output 1 --p
 textClassify	videoQuality=final	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
 textClassify	voiceMode=clone	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
 textCode	default	text code --prompt 'Write a tiny Swift function that formats byte counts.' --max-tokens 2048 --model text-code-north-mini --stream
-textCode	maximal	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
-textCode	maximal-booleans-off	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 1
-textCode	modelRoot=video-minimax-h3-ref2va	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
-textCode	modelRoot=video-wan22-ti2v-5b-mlx	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
-textCode	musicLMMode=disable	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
-textCode	musicLMMode=use	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
-textCode	musicMIDINoteOffset=-12	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
-textCode	musicTask=lego	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
-textCode	musicTask=repaint	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
-textCode	musicTrainingKind=lokr	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
-textCode	renderProfile=quality	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
-textCode	responseFormat=json_object	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
-textCode	responseFormat=text	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
+textCode	maximal	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking --stream --stats --quiet 1
+textCode	maximal-booleans-off	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking 1
+textCode	modelRoot=video-minimax-h3-ref2va	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking --stream --stats --quiet 1
+textCode	modelRoot=video-wan22-ti2v-5b-mlx	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking --stream --stats --quiet 1
+textCode	musicLMMode=disable	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking --stream --stats --quiet 1
+textCode	musicLMMode=use	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking --stream --stats --quiet 1
+textCode	musicMIDINoteOffset=-12	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking --stream --stats --quiet 1
+textCode	musicTask=lego	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking --stream --stats --quiet 1
+textCode	musicTask=repaint	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking --stream --stats --quiet 1
+textCode	musicTrainingKind=lokr	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking --stream --stats --quiet 1
+textCode	renderProfile=quality	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking --stream --stats --quiet 1
+textCode	responseFormat=json_object	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking --stream --stats --quiet 1
+textCode	responseFormat=text	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking --stream --stats --quiet 1
 textCode	thinkingMode=automatic	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
 textCode	thinkingMode=hide	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
-textCode	thinkingMode=show	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
-textCode	videoOutputMode=audio-video	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
-textCode	videoOutputMode=video-only	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
-textCode	videoQuality=draft	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
-textCode	videoQuality=final	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
-textCode	voiceMode=clone	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
+textCode	thinkingMode=show	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking --stream --stats --quiet 1
+textCode	videoOutputMode=audio-video	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking --stream --stats --quiet 1
+textCode	videoOutputMode=video-only	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking --stream --stats --quiet 1
+textCode	videoQuality=draft	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking --stream --stats --quiet 1
+textCode	videoQuality=final	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking --stream --stats --quiet 1
+textCode	voiceMode=clone	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --thinking --stream --stats --quiet 1
 textDecide	default	text decide --input '' --model text-decide-laya --output ~/Documents/mere.run/Text/decisions-<stamp>.json
 textDecide	maximal	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
 textDecide	maximal-booleans-off	text decide --input 1 --model 1 --output 1 1
@@ -2375,27 +2639,27 @@ videoExportLatents	videoQuality=draft	video export-latents 1 --output 1 --model 
 videoExportLatents	videoQuality=final	video export-latents 1 --output 1 --model 1 --width 769 --height 513 --num-frames 66 --seed 1 --quiet 1
 videoExportLatents	voiceMode=clone	video export-latents 1 --output 1 --model 1 --width 769 --height 513 --num-frames 66 --seed 1 --quiet 1
 videoGenerate	default	video generate 'a cinematic drone flythrough over snowy mountains' --output ~/Pictures/mere.run/Video/generate-video-<stamp>.mp4 --model video-ltx25-full-bf16 --quality final --output-mode video-only --width 768 --height 512 --num-frames 65 --fps 24
-videoGenerate	maximal	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
-videoGenerate	maximal-booleans-off	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --num-frames 66 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --timings-output 1 1
-videoGenerate	modelRoot=video-minimax-h3-ref2va	video generate 1 --output 1 --model 1 --model-root video-minimax-h3-ref2va --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	maximal	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	maximal-booleans-off	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --num-frames 66 --fps 25 --seed 1 --negative-prompt 1 --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --timings-output 1 1
+videoGenerate	modelRoot=video-minimax-h3-ref2va	video generate 1 --output 1 --model 1 --model-root video-minimax-h3-ref2va --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
 videoGenerate	modelRoot=video-wan22-ti2v-5b-mlx	video generate 1 --output 1 --model 1 --model-root video-wan22-ti2v-5b-mlx --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 41 --guidance-scale 5.5 --shift 5.5 --image 1 --preflight --json --quiet 1
-videoGenerate	musicLMMode=disable	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
-videoGenerate	musicLMMode=use	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
-videoGenerate	musicMIDINoteOffset=-12	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
-videoGenerate	musicTask=lego	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
-videoGenerate	musicTask=repaint	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
-videoGenerate	musicTrainingKind=lokr	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
-videoGenerate	renderProfile=quality	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
-videoGenerate	responseFormat=json_object	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
-videoGenerate	responseFormat=text	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
-videoGenerate	thinkingMode=automatic	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
-videoGenerate	thinkingMode=hide	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
-videoGenerate	thinkingMode=show	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
-videoGenerate	videoOutputMode=audio-video	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
-videoGenerate	videoOutputMode=video-only	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
-videoGenerate	videoQuality=draft	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
-videoGenerate	videoQuality=final	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
-videoGenerate	voiceMode=clone	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	musicLMMode=disable	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	musicLMMode=use	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	musicMIDINoteOffset=-12	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	musicTask=lego	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	musicTask=repaint	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	musicTrainingKind=lokr	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	renderProfile=quality	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	responseFormat=json_object	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	responseFormat=text	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	thinkingMode=automatic	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	thinkingMode=hide	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	thinkingMode=show	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	videoOutputMode=audio-video	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	videoOutputMode=video-only	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	videoQuality=draft	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	videoQuality=final	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
+videoGenerate	voiceMode=clone	video generate 1 --output 1 --model 1 --model-root 1 --quality final --output-mode audio-video --width 769 --height 513 --duration 10.5 --fps 25 --seed 1 --negative-prompt 1 --enhance-prompt --lora 1 --steps 1 --guidance-scale 5.5 --shift 5.5 --h3-weight-mode 1 --h3-acceleration 1 --reference 1 --audio 1 --audio-start-time 0.5 --a2v-guidance-scale 3.5 --video-cfg-guidance-scale 3.5 --audio-cfg-guidance-scale 7.5 --v2a-guidance-scale 3.5 --a2v-steps 31 --audio-max-duration 0.5 --image 1 --image-strength 1.25 --end-image 1 --end-image-strength 1.5 --preflight --json --timings --timings-output 1 --quiet 1
 videoPrepareMasks	default	video prepare-masks --plan '' --output-dir ~/Documents/mere.run/Video/prepare-scail-2-masks-<stamp> --model vision-segment-sam31
 videoPrepareMasks	maximal	video prepare-masks --plan 1 --output-dir 1 --preview-frame 1 --model 1 --preflight --json --quiet 1
 videoPrepareMasks	maximal-booleans-off	video prepare-masks --plan 1 --output-dir 1 --preview-frame 1 --model 1 1
@@ -2484,7 +2748,7 @@ visionCaption	videoOutputMode=video-only	vision caption 1 1 --model 1 --output-d
 visionCaption	videoQuality=draft	vision caption 1 1 --model 1 --output-dir 1 --prompt 1 --prompt-file 1 --focus 1 --trigger-token 1 --max-tokens 97 --temperature 0.7 --top-p 1.4 1
 visionCaption	videoQuality=final	vision caption 1 1 --model 1 --output-dir 1 --prompt 1 --prompt-file 1 --focus 1 --trigger-token 1 --max-tokens 97 --temperature 0.7 --top-p 1.4 1
 visionCaption	voiceMode=clone	vision caption 1 1 --model 1 --output-dir 1 --prompt 1 --prompt-file 1 --focus 1 --trigger-token 1 --max-tokens 97 --temperature 0.7 --top-p 1.4 1
-visionDepth	default	vision depth '' --output ~/Documents/mere.run/Vision/image-depth-<stamp> --model vision-depth-marigold-v2 --dry-run
+visionDepth	default	vision depth '' --output ~/Documents/mere.run/3D/image-depth-<stamp> --model vision-depth-marigold-v2 --dry-run
 visionDepth	maximal	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
 visionDepth	maximal-booleans-off	vision depth 1 --output 1 --model 1 --max-edge 1 --checkpoint 1 1
 visionDepth	modelRoot=video-minimax-h3-ref2va	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
@@ -2506,7 +2770,7 @@ visionDepth	videoOutputMode=video-only	vision depth 1 --output 1 --model 1 --max
 visionDepth	videoQuality=draft	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
 visionDepth	videoQuality=final	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
 visionDepth	voiceMode=clone	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
-visionDepthVideo	default	vision depth-video '' --output ~/Documents/mere.run/Vision/video-depth-<stamp> --model vision-depth-vda-small --input-size 518 --max-frames 240 --dry-run
+visionDepthVideo	default	vision depth-video '' --output ~/Documents/mere.run/3D/video-depth-<stamp> --model vision-depth-vda-small --input-size 518 --max-frames 240 --dry-run
 visionDepthVideo	maximal	vision depth-video 1 --output 1 --model 1 --input-size 519 --max-frames 241 --dry-run --json 1
 visionDepthVideo	maximal-booleans-off	vision depth-video 1 --output 1 --model 1 --input-size 519 --max-frames 241 1
 visionDepthVideo	modelRoot=video-minimax-h3-ref2va	vision depth-video 1 --output 1 --model 1 --input-size 519 --max-frames 241 --dry-run --json 1
@@ -2660,7 +2924,7 @@ visionFlow	videoOutputMode=video-only	vision flow 1 1 --output 1 --json-output 1
 visionFlow	videoQuality=draft	vision flow 1 1 --output 1 --json-output 1 --accuracy 1 --json 1
 visionFlow	videoQuality=final	vision flow 1 1 --output 1 --json-output 1 --accuracy 1 --json 1
 visionFlow	voiceMode=clone	vision flow 1 1 --output 1 --json-output 1 --accuracy 1 --json 1
-visionGeometry	default	vision geometry '' --output ~/Documents/mere.run/Vision/metric-geometry-<stamp> --model vision-geometry-moge2-small --resolution-level 9 --dry-run
+visionGeometry	default	vision geometry '' --output ~/Documents/mere.run/3D/metric-geometry-<stamp> --model vision-geometry-moge2-small --resolution-level 9 --dry-run
 visionGeometry	maximal	vision geometry 1 --output 1 --model 1 --resolution-level 10 --token-count 1 --max-points 1 --dry-run --json 1
 visionGeometry	maximal-booleans-off	vision geometry 1 --output 1 --model 1 --resolution-level 10 --token-count 1 --max-points 1 1
 visionGeometry	modelRoot=video-minimax-h3-ref2va	vision geometry 1 --output 1 --model 1 --resolution-level 10 --token-count 1 --max-points 1 --dry-run --json 1
@@ -2682,7 +2946,7 @@ visionGeometry	videoOutputMode=video-only	vision geometry 1 --output 1 --model 1
 visionGeometry	videoQuality=draft	vision geometry 1 --output 1 --model 1 --resolution-level 10 --token-count 1 --max-points 1 --dry-run --json 1
 visionGeometry	videoQuality=final	vision geometry 1 --output 1 --model 1 --resolution-level 10 --token-count 1 --max-points 1 --dry-run --json 1
 visionGeometry	voiceMode=clone	vision geometry 1 --output 1 --model 1 --resolution-level 10 --token-count 1 --max-points 1 --dry-run --json 1
-visionGeometryMultiview	default	vision geometry-multiview --output ~/Documents/mere.run/Vision/multi-view-geometry-<stamp> --model vision-geometry-da3-small --process-resolution 504 --reference-view saddle-balanced --confidence-percentile 40 --dry-run
+visionGeometryMultiview	default	vision geometry-multiview --output ~/Documents/mere.run/3D/multi-view-geometry-<stamp> --model vision-geometry-da3-small --process-resolution 504 --reference-view saddle-balanced --confidence-percentile 40 --dry-run
 visionGeometryMultiview	maximal	vision geometry-multiview 1 1 --output 1 --model 1 --cameras 1 --process-resolution 505 --reference-view 1 --confidence-percentile 40.5 --max-points 1 --dry-run --json 1
 visionGeometryMultiview	maximal-booleans-off	vision geometry-multiview 1 1 --output 1 --model 1 --cameras 1 --process-resolution 505 --reference-view 1 --confidence-percentile 40.5 --max-points 1 1
 visionGeometryMultiview	modelRoot=video-minimax-h3-ref2va	vision geometry-multiview 1 1 --output 1 --model 1 --cameras 1 --process-resolution 505 --reference-view 1 --confidence-percentile 40.5 --max-points 1 --dry-run --json 1
@@ -2726,6 +2990,28 @@ visionGround	videoOutputMode=video-only	vision ground 1 --query 1 --model 1 --ou
 visionGround	videoQuality=draft	vision ground 1 --query 1 --model 1 --output 1 --json-output 1 --mask-output-dir 1 1
 visionGround	videoQuality=final	vision ground 1 --query 1 --model 1 --output 1 --json-output 1 --mask-output-dir 1 1
 visionGround	voiceMode=clone	vision ground 1 --query 1 --model 1 --output 1 --json-output 1 --mask-output-dir 1 1
+visionImageTo3DIdol	default	vision image-to-3d-idol '' --output ~/Documents/mere.run/3D/idol-gaussian-splats-<stamp> --seed 42
+visionImageTo3DIdol	maximal	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	maximal-booleans-off	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 1
+visionImageTo3DIdol	modelRoot=video-minimax-h3-ref2va	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	modelRoot=video-wan22-ti2v-5b-mlx	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	musicLMMode=disable	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	musicLMMode=use	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	musicMIDINoteOffset=-12	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	musicTask=lego	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	musicTask=repaint	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	musicTrainingKind=lokr	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	renderProfile=quality	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	responseFormat=json_object	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	responseFormat=text	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	thinkingMode=automatic	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	thinkingMode=hide	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	thinkingMode=show	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	videoOutputMode=audio-video	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	videoOutputMode=video-only	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	videoQuality=draft	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	videoQuality=final	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
+visionImageTo3DIdol	voiceMode=clone	vision image-to-3d-idol 1 --model 1 --dino 1 --vae 1 --output 1 --mode 1 --already-framed --seed 1 --steps 51 --guidance 0.5 --time-shift 0.5 --num-gaussians 1 --dry-run --json 1
 visionInspect	default	vision inspect '' --prompt 'Describe this image.' --max-tokens 2048
 visionInspect	maximal	vision inspect 1 --prompt 1 --model 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 1
 visionInspect	maximal-booleans-off	vision inspect 1 --prompt 1 --model 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 1

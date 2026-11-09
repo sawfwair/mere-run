@@ -418,7 +418,7 @@ extension CommandCatalog {
                !draft.secondaryText.isBlank || !draft.musicLyricsFile.isBlank
                     || !draft.musicLRCFile.isBlank
             {
-                return "Instrumental cannot be combined with lyrics."
+                return "Instrumental can't be combined with lyrics."
             }
             if !draft.musicLRCFile.isBlank
                 && (!draft.secondaryText.isBlank || !draft.musicLyricsFile.isBlank) {

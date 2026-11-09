@@ -1,3 +1,4 @@
+import AppKit
 import StudioKit
 import SwiftUI
 
@@ -90,7 +91,7 @@ struct StudioConverseView: View {
                 .lineLimit(2)
             Spacer(minLength: 8)
             if error == nil, readiness.canPull {
-                Button("Get the model", action: readinessActions.pullModel)
+                Button("Download the model", action: readinessActions.pullModel)
                     .buttonStyle(.mereSecondary)
             }
         }
@@ -358,7 +359,20 @@ struct StudioConversationView: View {
         }
     }
 
+    /// A user turn that carried files shows them above its bubble.
+    @ViewBuilder
     private func turn(for message: StudioMessage) -> some View {
+        if message.role == .user, !message.attachments.isEmpty {
+            VStack(alignment: .trailing, spacing: 6) {
+                StudioTurnAttachmentsRow(attachments: message.attachments)
+                turnView(for: message)
+            }
+        } else {
+            turnView(for: message)
+        }
+    }
+
+    private func turnView(for message: StudioMessage) -> some View {
         StudioTurnView(
             role: message.role,
             content: message.content,
@@ -881,5 +895,106 @@ private struct StudioPulsingDots: View {
             }
         }
         .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Turn attachments
+
+/// The files a user turn carried, right-aligned above its bubble: the image, then the audio,
+/// then the video.
+private struct StudioTurnAttachmentsRow: View {
+    let attachments: StudioTurnAttachments
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Spacer(minLength: 0)
+            ForEach(attachments.paths, id: \.self) { path in
+                StudioTurnAttachmentChip(url: URL(fileURLWithPath: path))
+            }
+        }
+    }
+}
+
+/// One attached file as a chip: its thumbnail (the picture, a poster frame, or a waveform) and
+/// its name. Audio plays in place from its button; a picture or video opens in Quick Look.
+private struct StudioTurnAttachmentChip: View {
+    let url: URL
+
+    @StateObject private var player = StudioAudioPlayer()
+
+    private static let side: CGFloat = 32
+    private var kind: StudioOutputFileKind { .classify(url) }
+    private var isAudio: Bool { kind == .audio }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if isAudio { playButton }
+            StudioFileThumbnail(url: url, side: Self.side, fallbackSystemImage: kind == .video ? "film" : "photo")
+                .frame(width: Self.side, height: Self.side)
+                .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
+                .overlay(alignment: .bottomTrailing) {
+                    if kind == .video {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(3)
+                            .shadow(radius: 1)
+                    }
+                }
+            Text(url.lastPathComponent)
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textSecondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: 180, alignment: .leading)
+        }
+        .padding(4)
+        .padding(.trailing, 6)
+        .background {
+            RoundedRectangle(cornerRadius: MereRunTheme.Radius.popover).fill(MereRunTheme.surfaceRaised)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.popover))
+        .onTapGesture {
+            if !isAudio { QuickLookCoordinator.shared.preview(url) }
+        }
+        .contextMenu {
+            Button("Quick Look") { QuickLookCoordinator.shared.preview(url) }
+            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+        }
+        .help(url.path)
+        .task(id: player.isPlaying) {
+            // Follow the playhead only while it plays, so a thread of clips keeps no timers.
+            while player.isPlaying, !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(200))
+                player.refresh()
+            }
+        }
+        .onDisappear { player.stop() }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(kindName) attachment, \(url.lastPathComponent)")
+    }
+
+    private var kindName: String {
+        switch kind {
+        case .image: return "Image"
+        case .audio: return "Audio"
+        case .video: return "Video"
+        case .text, .model3D, .other: return "File"
+        }
+    }
+
+    private var playButton: some View {
+        Button {
+            if !player.isReady { player.load(url: url) }
+            player.togglePlay()
+        } label: {
+            Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                .font(.system(size: 22))
+                .foregroundStyle(MereRunTheme.accent)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.plain)
+        .help(player.isPlaying ? "Pause" : "Play")
+        .accessibilityLabel(player.isPlaying ? "Pause \(url.lastPathComponent)" : "Play \(url.lastPathComponent)")
     }
 }
