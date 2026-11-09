@@ -179,8 +179,8 @@ requests per group do not establish a universal speedup.
 The long-prompt reference prefill medians shift from 17.060 to 12.263 seconds
 between blocks, while the candidate is 13.793. No reliable prefill gain is
 established. Fresh SDK checks pass on this corrected executable with the unchanged fixtures.
-The mode remains unselected pending fresh desktop trials and an unlocked
-repository-gate rerun.
+The mode remains unselected pending corresponding fresh desktop trials. The
+unlocked repository gate passes in the November 9 follow-up.
 
 ## Corrected task comparison
 
@@ -251,8 +251,8 @@ and only the selected Q8 model loaded. Owned servers stop after qualification.
 Ordinary advanced generations use a 2,048-token output budget. Cancellation
 workloads request 4,096 tokens and close before exhaustion; warming requests
 use zero. These functional probes are separate from the controlled throughput
-comparison. Desktop qualification and the unlocked full repository gate remain
-outstanding.
+comparison. The unlocked full repository gate passes in the November 9
+follow-up. Desktop qualification for the tiled candidate remains outstanding.
 
 ## Implementation and checks
 
@@ -300,10 +300,16 @@ task evidence. The four-row broad candidates failed the speed criterion, so thei
 full quality sweeps were deferred. Historical SDK cohorts remain in the JSON
 summary. Their results do not qualify the corrected production executable.
 
-The corrected-source repository gate runs 5,919 tests: 5,396 pass, 493 skip, and
-30 fail in protected run-record storage paths while macOS reports the screen
-locked. Cocoa permission errors prevent those records from being reopened. No
-Glimmer test fails. Strict lint passes across 2,775 files; the separate unchanged
-post-test CLI help and hygiene checks pass. The docs build and three Python
-qualification-command regressions pass. An unlocked full-gate rerun and fresh
-desktop trials remain validation gaps.
+An earlier locked-device gate on the corrected source ran 5,919 XCTest cases:
+5,396 passed, 493 skipped, and 30 failed in protected run-record storage paths.
+Cocoa permission errors prevented those records from being reopened. No Glimmer
+test failed. Strict lint passed across 2,775 files, as did the separate unchanged
+post-test CLI help and hygiene checks, docs build, and three Python
+qualification-command regressions.
+
+The unlocked November 9 rerun passes the full gate, including all 30 cases that
+failed while locked. It completes 5,919 XCTest cases (493 skipped) and 197 Swift
+Testing cases with zero failures. Fresh desktop trials for the tiled candidate
+remain a validation gap. The [established-Q8 qualification](messages-release-qualification-2026-11-09.md)
+uses `head4` and three drafts and passes all six fresh desktop cases; those
+results do not promote tiled execution.

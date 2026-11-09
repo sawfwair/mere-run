@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "Corrected production passes sampled speed, paired likelihood, repeated SDK, coding and advanced-combination checks; experimental and unselected pending desktop and unlocked repository gate",
+  "status": "Sampled speed, paired likelihood, repeated SDK, coding, advanced combinations and unlocked full repository gate pass; tiling remains experimental and unselected, without corresponding fresh desktop evidence",
   "hardware": "Apple M5 Max, 40 GPU cores, 128 GB unified memory",
   "checkpoint_receipt_sha256": "c8545755dce55ab11e63739ff23fd3acfd08b2132edc059cef14edc0a3da7b55",
   "precision": {
@@ -8682,7 +8682,7 @@
     }
   },
   "channel_correction_followup": {
-    "status": "Corrected production passes sampled speed, paired likelihood, repeated SDK, coding and advanced-combination checks; experimental and unselected pending desktop and unlocked repository gate",
+    "status": "Sampled speed, paired likelihood, repeated SDK, coding, advanced combinations and unlocked full repository gate pass; tiling remains experimental and unselected, without corresponding fresh desktop evidence",
     "production_provenance": {
       "source_base_commit": "db3034dccee4db9689401dc53b30f2a587d8aa7c",
       "source_digest": "1c21e641b159aa9d7aa5114bbd8baaa12c20109ec4bc43695b330e9aaee26565",
@@ -10071,37 +10071,140 @@
       "custom_helper_static_inspection": "Reads only NSProcessInfo thermal/power state and prints JSON; direct helper call was not retried after review rejection; built-in power/process checks used"
     },
     "repository_gate": {
-      "exit_code": 1,
-      "wall_seconds": 491.9078469276428,
-      "screen_state_at_launch": "locked; no bypass",
-      "failed_test_cases": 30,
-      "failed_tests_by_class": {
-        "MereRunExecutionTests.RunStorageTests": 2,
-        "MereRunCoreTests.ImageGenerationOperationTests": 1,
-        "MereRunCoreTests.ImageRunRecordTests": 10,
-        "MereRunCLITests.ImageGenerationAdapterTests": 1,
-        "MereRunCLITests.ImageRunCommandTests": 3,
-        "MereRunCLITests.ReceiptCommandRunTests": 1,
-        "MereRunCLITests.TranscriptionRunCommandTests": 4,
-        "AudioCoreTests.SpeechTranscriptionRunTests": 8
-      },
-      "glimmer_failed_cases": [],
-      "failure_cause": "Locked macOS denies protected run-record reads/writes (Cocoa 257/513; POSIX 1); unchanged storage paths",
-      "strict_lint": {
-        "files": 2775,
-        "violations": 0
-      },
+      "exit_code": 0,
+      "wall_seconds": 296.0633430480957,
       "xctest_totals": {
-        "tests": 5919,
-        "passed": 5396,
         "skipped": 493,
-        "failed_test_cases": 30
+        "passed": 5426
       },
-      "cli_hygiene": {
-        "exit_code": 0,
-        "wall_seconds": 6.516512874979526,
-        "scope": "Unmodified post-test CLI help and hygiene portion; separate from failed full gate"
-      }
+      "xctest_cases": 5919,
+      "previous_locked_failures_recovered": 30,
+      "swift_testing_summaries": [
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "51",
+          "5"
+        ],
+        [
+          "45",
+          "0"
+        ],
+        [
+          "101",
+          "2"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ],
+        [
+          "0",
+          "0"
+        ]
+      ],
+      "commit": "8ea41731",
+      "sdk_enabled": true,
+      "tokenizer_fixtures": [
+        "Ornith",
+        "Glimmer"
+      ],
+      "scope": "Full unmodified scripts/check.sh with CPU unit-test device; independent checkpoint evidence retained",
+      "swift_testing_cases": 197
     },
     "docs_build": {
       "exit_code": 0,
@@ -12257,14 +12360,46 @@
       }
     },
     "remaining_gaps": [
-      "Fresh Calculator and website cases for this corrected candidate: macOS screen locked",
-      "Full repository gate rerun while unlocked: 30 protected run-record cases fail while locked",
+      "Fresh Calculator and website cases for the unselected tiled candidate remain unqualified; established head4 Q8 is being qualified separately",
       "Broader task-quality and hardware qualification beyond these bounded samples"
     ],
     "cleanup": {
       "qualification_port_listener_count": 0,
       "all_owned_servers_stopped": true,
       "task_owned_keep_awake_helper_stopped": true
+    },
+    "locked_repository_gate": {
+      "exit_code": 1,
+      "wall_seconds": 491.9078469276428,
+      "screen_state_at_launch": "locked; no bypass",
+      "failed_test_cases": 30,
+      "failed_tests_by_class": {
+        "MereRunExecutionTests.RunStorageTests": 2,
+        "MereRunCoreTests.ImageGenerationOperationTests": 1,
+        "MereRunCoreTests.ImageRunRecordTests": 10,
+        "MereRunCLITests.ImageGenerationAdapterTests": 1,
+        "MereRunCLITests.ImageRunCommandTests": 3,
+        "MereRunCLITests.ReceiptCommandRunTests": 1,
+        "MereRunCLITests.TranscriptionRunCommandTests": 4,
+        "AudioCoreTests.SpeechTranscriptionRunTests": 8
+      },
+      "glimmer_failed_cases": [],
+      "failure_cause": "Locked macOS denies protected run-record reads/writes (Cocoa 257/513; POSIX 1); unchanged storage paths",
+      "strict_lint": {
+        "files": 2775,
+        "violations": 0
+      },
+      "xctest_totals": {
+        "tests": 5919,
+        "passed": 5396,
+        "skipped": 493,
+        "failed_test_cases": 30
+      },
+      "cli_hygiene": {
+        "exit_code": 0,
+        "wall_seconds": 6.516512874979526,
+        "scope": "Unmodified post-test CLI help and hygiene portion; separate from failed full gate"
+      }
     }
   }
 }

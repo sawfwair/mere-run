@@ -3,6 +3,12 @@
 This record separates transport evidence from model task outcomes. A successful
 connection preview or a model's own success statement does not qualify a model.
 
+The [November 9 unlocked qualification](../benchmarks/messages-release-qualification-2026-11-09.md)
+passes the full repository gate and all six fresh desktop cases on established
+Glimmer Q8 at high effort. It closes the latest baseline gate and desktop gaps.
+Experimental tiling remains off and unselected; model and capability boundaries
+remain explicit.
+
 ## Environment
 
 - Base: committed `main`, `0b64fac1`.
@@ -1173,9 +1179,48 @@ additional per-fixture failures. A reference coding session and two fresh
 optimized sessions pass all 10 fixture and three independent holdout tests,
 including observed tool-error recovery. Both modes pass seven advanced phases:
 regex/BM25 search, vision/cache identity, PDFs, explicit capability errors,
-disconnect recovery, and prefill cancellation. Fresh desktop cases and an
-unlocked full gate remain gaps; the selected configuration is unchanged. See the
+disconnect recovery, and prefill cancellation. The full gate passes in the
+unlocked November 9 follow-up, including all 30 previously failing protected
+run-record cases. Fresh desktop cases for the tiled candidate remain a gap;
+the selected configuration is unchanged. See the
 [sampled benchmark report](../benchmarks/glimmer-q8-tiled-sampled-2026-11-08.md)
 for separate source revisions, request samples, numerical checks, memory cost,
 and the remaining qualification scope. No new coding or desktop success is
 claimed from throughput probes, and the quality bar is unchanged.
+
+
+## Unlocked established-Q8 qualification on November 9
+
+Source commit `8ea41731` passes the full unmodified repository gate while
+unlocked: 5,919 XCTest cases (493 skipped), 197 Swift Testing cases, and zero
+failures. All 30 protected run-record cases that failed while locked pass
+without changing file protection. The installed official SDK and tokenizer
+fixtures remain enabled. Runtime sources match the frozen production binary.
+
+The unchanged Claude Code/Cua reference loop passes six independently verified
+cases at temperature 1.0, top-p 0.95, top-k 64, and high effort. Established Q8
+uses `head4`, three drafts, deferred scheduling, cost-checked fallback, and
+original normalization. Each Calculator case and the real MDN task passes twice
+from distinct app processes; browser trials use separate sandboxed Chrome
+profiles.
+
+| Task | First fresh run | Second fresh run |
+| --- | ---: | ---: |
+| Calculator `6 × 7 = 42` | Pass, 292.94 s | Pass, 245.04 s |
+| Calculator `47 × 23 = 1,081` | Pass, 245.02 s | Pass, 261.94 s |
+| MDN visible search, interface, and `getAll()` method | Pass, 389.37 s | Pass, 429.87 s |
+
+Independent evidence includes initial zero, expression, result, app identity,
+window state, screenshots, and the website's visible interaction sequence,
+final page text, URL, and isolated history. The second browser case recovers
+from one output-validation stream error through the client's buffered retry
+and one Cua focus error that dispatches no key. Those errors remain recorded;
+no malformed executable tool input is published. Model-declared success alone
+does not count.
+
+All owned app processes, the native inference server, Cua daemon, and keep-awake
+helper are stopped after verification. Session wall times include inference,
+reasoning, tools, and client work. Native counters cover completed rounds; the
+failed generation's phase/token accounting is unavailable. These observations
+do not establish a speedup. The [full report](../benchmarks/messages-release-qualification-2026-11-09.md)
+retains source identity, timing scope, and remaining capability/model boundaries.

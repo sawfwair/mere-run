@@ -1,0 +1,603 @@
+{
+  "schema_version": 1,
+  "status": "Full unlocked repository gate and all six fresh desktop cases pass on established native Q8; experimental tiling remains off",
+  "source_commit": "8ea41731",
+  "production_binary_sha256": "75067462635c24d670961d7b470919bc39536b8c27e9034205f1792580631823",
+  "model": "q8-symmetric-bf16-g64",
+  "precision": "Same symmetric Q8/group64 target; BF16 activations, KV and DFlash2 assistant",
+  "sampling": {
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 64,
+    "effort": "high",
+    "seed": "No wire seed; unseeded client tasks"
+  },
+  "configuration": {
+    "verification": "head4",
+    "draft_tokens": 3,
+    "deferred": true,
+    "cost_fallback": true,
+    "fused_norm": false,
+    "experimental_tiling": false,
+    "context_tokens": 65536,
+    "output_tokens": 4096
+  },
+  "reference_loop": {
+    "mcp_config_sha256": "ab2625025535d1b5bfe04bffc2f36c3f5c07dc16fb2f8da66186e0677e0dfc7f",
+    "tool_count": 13,
+    "claude_code_version": "2.1.316",
+    "permission_mode": "standard",
+    "task_prompts_and_tool_loop_unchanged": true,
+    "cua_version": "0.38.0",
+    "cua_executable_sha256": "b4d974a9c1c92a700cd7be7ede987aea4a1e6835e37039ce3d628b71bd5f0ca8",
+    "harness_sha256": "64577e6a7c6290f7b2ccb084f3046a4caba7d602a96bad58bf72b51337670f9c"
+  },
+  "browser": {
+    "name": "Google Chrome",
+    "version": "157.0.8103.38",
+    "separate_temporary_profile_each_trial": true,
+    "sandbox_disabled": false,
+    "security_release_source": "https://chromereleases.googleblog.com/2026/11/stable-channel-update-for-desktop.html"
+  },
+  "repository_gate": {
+    "exit_code": 0,
+    "wall_seconds": 296.0633430480957,
+    "xctest_totals": {
+      "skipped": 493,
+      "passed": 5426
+    },
+    "xctest_cases": 5919,
+    "previous_locked_failures_recovered": 30,
+    "swift_testing_summaries": [
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "51",
+        "5"
+      ],
+      [
+        "45",
+        "0"
+      ],
+      [
+        "101",
+        "2"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "commit": "8ea41731",
+    "sdk_enabled": true,
+    "tokenizer_fixtures": [
+      "Ornith",
+      "Glimmer"
+    ],
+    "scope": "Full unmodified scripts/check.sh with CPU unit-test device; independent checkpoint evidence retained",
+    "swift_testing_cases": 197
+  },
+  "desktop_cases": [
+    {
+      "model": "q8-symmetric-bf16-g64",
+      "task": "calculator",
+      "expression": "6 × 7",
+      "expected": "42",
+      "client_exit": 0,
+      "session_wall_seconds": 292.93936454190407,
+      "mcp_config_sha256": "ab2625025535d1b5bfe04bffc2f36c3f5c07dc16fb2f8da66186e0677e0dfc7f",
+      "text_only": false,
+      "client_finished": true,
+      "passed": true,
+      "independent_displays": [
+        "42"
+      ],
+      "independent_expressions": [
+        "6 × 7"
+      ],
+      "independent_expression_verified": true,
+      "independent_initial_zero": true,
+      "independent_screenshot_verified": true,
+      "visual_evidence_sha256": "c34cb275b253bc0be43cecb930d6fd923529df70850c118f77412ff09c9599f1",
+      "case": "calculator42-r1",
+      "fresh_process_verified": true,
+      "owned_process_closed": true,
+      "client_tools": {
+        "call_count": 15,
+        "counts": {
+          "start_session": 1,
+          "launch_app": 1,
+          "list_windows": 1,
+          "get_window_state": 6,
+          "click": 5,
+          "end_session": 1
+        },
+        "error_results": 0,
+        "output_limit_stops": 0
+      },
+      "native_generation": {
+        "completed_rounds": 16,
+        "failed_rounds": 0,
+        "generated_tokens": 2780,
+        "request_load_seconds": 0.0010427236557006836,
+        "prefill_seconds": 78.51516199111938,
+        "decode_seconds": 164.2553333044052,
+        "decode_tokens_per_second": 16.924869007741634,
+        "measurement": "Completed native request counters differenced at session boundaries; includes every generated token in those completed requests. Failed-request timing/tokens are not reported by these counters; client task wall includes failure and retry."
+      },
+      "admission": {
+        "sampled_active_before": 0,
+        "sampled_queued_before": 0,
+        "sampled_active_after": 0,
+        "sampled_queued_after": 0,
+        "queue_wait_separately_measured": false,
+        "only_selected_model_loaded": true
+      },
+      "application": {
+        "pid": 68319,
+        "window_id": 94039
+      },
+      "private_trace_sha256": "f6eb94d220463d8a150e959a529daa8c0be927ab4d6afc42099f2c4ee9d5789e",
+      "independent_window_state_sha256": "c4d9463738daff5616df29742e0ef007167b6f76632dba93151d90167f0e66ef"
+    },
+    {
+      "model": "q8-symmetric-bf16-g64",
+      "task": "calculator",
+      "expression": "6 × 7",
+      "expected": "42",
+      "client_exit": 0,
+      "session_wall_seconds": 245.043405000004,
+      "mcp_config_sha256": "ab2625025535d1b5bfe04bffc2f36c3f5c07dc16fb2f8da66186e0677e0dfc7f",
+      "text_only": false,
+      "client_finished": true,
+      "passed": true,
+      "independent_displays": [
+        "42"
+      ],
+      "independent_expressions": [
+        "6 × 7"
+      ],
+      "independent_expression_verified": true,
+      "independent_initial_zero": true,
+      "independent_screenshot_verified": true,
+      "visual_evidence_sha256": "c34cb275b253bc0be43cecb930d6fd923529df70850c118f77412ff09c9599f1",
+      "case": "calculator42-r2",
+      "fresh_process_verified": true,
+      "owned_process_closed": true,
+      "client_tools": {
+        "call_count": 14,
+        "counts": {
+          "start_session": 1,
+          "launch_app": 1,
+          "get_window_state": 6,
+          "click": 5,
+          "end_session": 1
+        },
+        "error_results": 0,
+        "output_limit_stops": 0
+      },
+      "native_generation": {
+        "completed_rounds": 15,
+        "failed_rounds": 0,
+        "generated_tokens": 2616,
+        "request_load_seconds": 0.0008440017700195308,
+        "prefill_seconds": 66.37780511379242,
+        "decode_seconds": 134.6701020002365,
+        "decode_tokens_per_second": 19.42524703809466,
+        "measurement": "Completed native request counters differenced at session boundaries; includes every generated token in those completed requests. Failed-request timing/tokens are not reported by these counters; client task wall includes failure and retry."
+      },
+      "admission": {
+        "sampled_active_before": 0,
+        "sampled_queued_before": 0,
+        "sampled_active_after": 0,
+        "sampled_queued_after": 0,
+        "queue_wait_separately_measured": false,
+        "only_selected_model_loaded": true
+      },
+      "application": {
+        "pid": 90589,
+        "window_id": 94206
+      },
+      "private_trace_sha256": "cfd73e288d9e9d81d38dca0df48e0207313026e8f11b01d436896a9e286c4944",
+      "independent_window_state_sha256": "8b82b3840e3fb78cf03193386b81a2ca81f3cee2196990516c5a882a587137d0"
+    },
+    {
+      "model": "q8-symmetric-bf16-g64",
+      "task": "calculator",
+      "expression": "47 × 23",
+      "expected": "1081",
+      "client_exit": 0,
+      "session_wall_seconds": 245.0187336669769,
+      "mcp_config_sha256": "ab2625025535d1b5bfe04bffc2f36c3f5c07dc16fb2f8da66186e0677e0dfc7f",
+      "text_only": false,
+      "client_finished": true,
+      "passed": true,
+      "independent_displays": [
+        "1,081"
+      ],
+      "independent_expressions": [
+        "47 × 23"
+      ],
+      "independent_expression_verified": true,
+      "independent_initial_zero": true,
+      "independent_screenshot_verified": true,
+      "visual_evidence_sha256": "ae9ed8583c951cbf4566f5f60560b5ab861ebb120550b3cf346abe23ff9cd8a9",
+      "case": "calculator1081-r1",
+      "fresh_process_verified": true,
+      "owned_process_closed": true,
+      "client_tools": {
+        "call_count": 13,
+        "counts": {
+          "start_session": 1,
+          "launch_app": 1,
+          "list_windows": 1,
+          "get_window_state": 2,
+          "click": 7,
+          "end_session": 1
+        },
+        "error_results": 0,
+        "output_limit_stops": 0
+      },
+      "native_generation": {
+        "completed_rounds": 14,
+        "failed_rounds": 0,
+        "generated_tokens": 2243,
+        "request_load_seconds": 0.0009158849716186523,
+        "prefill_seconds": 72.21268117427826,
+        "decode_seconds": 130.47060310840607,
+        "decode_tokens_per_second": 17.19161210695351,
+        "measurement": "Completed native request counters differenced at session boundaries; includes every generated token in those completed requests. Failed-request timing/tokens are not reported by these counters; client task wall includes failure and retry."
+      },
+      "admission": {
+        "sampled_active_before": 0,
+        "sampled_queued_before": 0,
+        "sampled_active_after": 0,
+        "sampled_queued_after": 0,
+        "queue_wait_separately_measured": false,
+        "only_selected_model_loaded": true
+      },
+      "application": {
+        "pid": 75641,
+        "window_id": 94101
+      },
+      "private_trace_sha256": "4935a35fc70a14433af3aaa20a01fa640c5ea187b862d603d93c3cd702c738bc",
+      "independent_window_state_sha256": "03d0ae05c017564e9cd80b784fc823dbc77a0e898e558908d5483e054747e4fb"
+    },
+    {
+      "model": "q8-symmetric-bf16-g64",
+      "task": "calculator",
+      "expression": "47 × 23",
+      "expected": "1081",
+      "client_exit": 0,
+      "session_wall_seconds": 261.9449971250724,
+      "mcp_config_sha256": "ab2625025535d1b5bfe04bffc2f36c3f5c07dc16fb2f8da66186e0677e0dfc7f",
+      "text_only": false,
+      "client_finished": true,
+      "passed": true,
+      "independent_displays": [
+        "1,081"
+      ],
+      "independent_expressions": [
+        "47 × 23"
+      ],
+      "independent_expression_verified": true,
+      "independent_initial_zero": true,
+      "independent_screenshot_verified": true,
+      "visual_evidence_sha256": "ae9ed8583c951cbf4566f5f60560b5ab861ebb120550b3cf346abe23ff9cd8a9",
+      "case": "calculator1081-r2",
+      "fresh_process_verified": true,
+      "owned_process_closed": true,
+      "client_tools": {
+        "call_count": 14,
+        "counts": {
+          "start_session": 1,
+          "launch_app": 1,
+          "list_windows": 1,
+          "get_window_state": 3,
+          "click": 7,
+          "end_session": 1
+        },
+        "error_results": 0,
+        "output_limit_stops": 0
+      },
+      "native_generation": {
+        "completed_rounds": 15,
+        "failed_rounds": 0,
+        "generated_tokens": 2808,
+        "request_load_seconds": 0.0009568929672241215,
+        "prefill_seconds": 71.88933324813843,
+        "decode_seconds": 144.44673025608074,
+        "decode_tokens_per_second": 19.43969236978829,
+        "measurement": "Completed native request counters differenced at session boundaries; includes every generated token in those completed requests. Failed-request timing/tokens are not reported by these counters; client task wall includes failure and retry."
+      },
+      "admission": {
+        "sampled_active_before": 0,
+        "sampled_queued_before": 0,
+        "sampled_active_after": 0,
+        "sampled_queued_after": 0,
+        "queue_wait_separately_measured": false,
+        "only_selected_model_loaded": true
+      },
+      "application": {
+        "pid": 258,
+        "window_id": 94268
+      },
+      "private_trace_sha256": "01e3ef2051baf0cf0b610b92972229e63505d9171d22a460593a8fe8e7c0c9a2",
+      "independent_window_state_sha256": "c2a18ff36b9bf3a97d24e6861d1b337de2dd62587cb6f7f1ff852ac3ccaed35d"
+    },
+    {
+      "model": "q8-symmetric-bf16-g64",
+      "task": "website",
+      "expression": null,
+      "expected": null,
+      "client_exit": 0,
+      "session_wall_seconds": 389.3667056669947,
+      "mcp_config_sha256": "ab2625025535d1b5bfe04bffc2f36c3f5c07dc16fb2f8da66186e0677e0dfc7f",
+      "text_only": false,
+      "client_finished": true,
+      "passed": true,
+      "independent_screenshot_verified": true,
+      "visual_evidence_sha256": "42435edd530f7728c35e4dbcf49fedd90eb2a946283da568b7461a112553efc1",
+      "independent_url": "https://developer.mozilla.org/en-US/docs/Web/API/URLSearchParams/getAll",
+      "independent_title": "URLSearchParams: getAll() method - Web APIs | MDN",
+      "visible_search_verified": true,
+      "method_link_verified": true,
+      "independent_page_text_verified": true,
+      "independent_history_verified": true,
+      "case": "website-r1",
+      "fresh_process_verified": true,
+      "owned_process_closed": true,
+      "client_tools": {
+        "call_count": 13,
+        "counts": {
+          "list_windows": 1,
+          "get_window_state": 7,
+          "click": 3,
+          "type_text": 1,
+          "end_session": 1
+        },
+        "error_results": 0,
+        "output_limit_stops": 0
+      },
+      "native_generation": {
+        "completed_rounds": 14,
+        "failed_rounds": 0,
+        "generated_tokens": 3488,
+        "request_load_seconds": 0.0008661746978759766,
+        "prefill_seconds": 112.32977795600891,
+        "decode_seconds": 225.9645608663559,
+        "decode_tokens_per_second": 15.43604885043428,
+        "measurement": "Completed native request counters differenced at session boundaries; includes every generated token in those completed requests. Failed-request timing/tokens are not reported by these counters; client task wall includes failure and retry."
+      },
+      "admission": {
+        "sampled_active_before": 0,
+        "sampled_queued_before": 0,
+        "sampled_active_after": 0,
+        "sampled_queued_after": 0,
+        "queue_wait_separately_measured": false,
+        "only_selected_model_loaded": true
+      },
+      "application": {
+        "pid": 80301,
+        "window_id": 94135
+      },
+      "private_trace_sha256": "0a90379052856dbeb00bd8521ffd7aff77fc57e8a742ee746f8b2871054268b2",
+      "independent_window_state_sha256": "a7e113a763bfabdce85cca0e7b9d4716aba84263cd8f9ce263102e1ea3825a27"
+    },
+    {
+      "model": "q8-symmetric-bf16-g64",
+      "task": "website",
+      "expression": null,
+      "expected": null,
+      "client_exit": 0,
+      "session_wall_seconds": 429.8660902919946,
+      "mcp_config_sha256": "ab2625025535d1b5bfe04bffc2f36c3f5c07dc16fb2f8da66186e0677e0dfc7f",
+      "text_only": false,
+      "client_finished": true,
+      "passed": true,
+      "independent_screenshot_verified": true,
+      "visual_evidence_sha256": "3951c366cf041ec4327971ad36a331f9f09cfbddeada3db278bb7be331f87456",
+      "independent_url": "https://developer.mozilla.org/en-US/docs/Web/API/URLSearchParams/getAll",
+      "independent_title": "URLSearchParams: getAll() method - Web APIs | MDN",
+      "visible_search_verified": true,
+      "method_link_verified": true,
+      "independent_page_text_verified": true,
+      "independent_history_verified": true,
+      "case": "website-r2",
+      "fresh_process_verified": true,
+      "owned_process_closed": true,
+      "application": {
+        "pid": 4934,
+        "window_id": 94309
+      },
+      "private_trace_sha256": "d07b626adebb36f586af329e01c5f4de3c4a1ea081c75e0756e26def7968ba3d",
+      "independent_window_state_sha256": "8dcc1ecd5a0fce72d955071d0a9fbb65308cadfcdd5f070e978e0bfcbb20954d",
+      "client_tools": {
+        "call_count": 15,
+        "counts": {
+          "list_windows": 1,
+          "get_window_state": 7,
+          "click": 4,
+          "type_text": 1,
+          "press_key": 1,
+          "end_session": 1
+        },
+        "error_results": 1,
+        "output_limit_stops": 0
+      },
+      "native_generation": {
+        "completed_rounds": 16,
+        "failed_rounds": 1,
+        "generated_tokens": 3498,
+        "request_load_seconds": 0.0009361505508422852,
+        "prefill_seconds": 68.39475500583649,
+        "decode_seconds": 222.55146992206562,
+        "decode_tokens_per_second": 15.717712407044313,
+        "measurement": "Completed native request counters differenced at session boundaries; includes every generated token in those completed requests. Failed-request timing/tokens are not reported by these counters; client task wall includes failure and retry."
+      },
+      "admission": {
+        "sampled_active_before": 0,
+        "sampled_queued_before": 0,
+        "sampled_active_after": 0,
+        "sampled_queued_after": 0,
+        "queue_wait_separately_measured": false,
+        "only_selected_model_loaded": true
+      },
+      "recovered_errors": [
+        {
+          "kind": "output_validation",
+          "request_id": "req_89A28B3BB8A14C0B90A4D1A0B26A3962",
+          "message": "Local adapter output error in tool_use.input: unparseable parameter content",
+          "transport": "SSE error; client retried in buffered mode",
+          "invalid_tool_input_published": false,
+          "specific_parameter": "Not available in validated-wire evidence",
+          "failed_request_timing_tokens_available": false
+        },
+        {
+          "kind": "client_tool_focus",
+          "tool": "press_key",
+          "key_dispatched": false,
+          "recovery": "Subsequent UI clicks and state reads; required search/interface/method sequence independently verified"
+        }
+      ]
+    }
+  ],
+  "qualification_scope": "Each required Calculator result and website task repeated from fresh state; independent app identity, trace and screenshot checks; observed outcomes only; session wall includes client work, tools and inference and is not a controlled speed comparison One output-validation error and one Cua focus error are retained; both recovered in the successful browser repeat.",
+  "startup": {
+    "process_launch_to_ready_seconds": 49.51989883300848,
+    "startup_timing": {
+      "loadSeconds": 8.168963074684143,
+      "graphCompilationAccounting": "included_in_warmup_load",
+      "completedAt": 815918774.546685,
+      "warmupDecodeSeconds": 0.0005890130996704102,
+      "warmupSeconds": 41.03743803501129,
+      "warmupPrefillSeconds": 0.2865030765533447,
+      "warmupTimeToFirstTokenSeconds": 41.00172019004822
+    },
+    "scope": "Before client tasks; independent from task wall, prefill and decode"
+  },
+  "model_artifact_receipt_sha256": "c8545755dce55ab11e63739ff23fd3acfd08b2132edc059cef14edc0a3da7b55",
+  "timing_limits": [
+    "Unseeded agent trajectories and variable cache state; task times are observations, not a controlled performance comparison",
+    "First Calculator session overlaps the end of CPU repository validation",
+    "Queue wait is not separately instrumented; requests sequential and sampled admission idle at session boundaries"
+  ],
+  "remaining_boundaries": [
+    "Qualification covers these bounded tasks and the declared adapter capabilities, not general agent reliability",
+    "Extended decimal-workflow and Gemma desktop-repeat failures remain recorded in the historical qualification record",
+    "Unselected tiled execution has no corresponding fresh desktop qualification and is not promoted",
+    "Strict tools, constrained JSON-schema output, exact thinking budgets, generated citations, scanned-PDF rendering and server compaction remain unsupported and rejected"
+  ],
+  "cleanup": {
+    "all_six_owned_app_processes_closed": true,
+    "native_server_stopped": true,
+    "owned_cua_daemon_stopped": true,
+    "owned_keep_awake_helper_stopped": true
+  },
+  "runtime_source_hashes_match_qualified_binary": 1745,
+  "documentation_validation": {
+    "docs_build_exit": 0,
+    "docs_example_check_exit": 0,
+    "readiness_hygiene_exit": 0,
+    "prose_lint_findings": 0,
+    "diff_check_exit": 0
+  }
+}
