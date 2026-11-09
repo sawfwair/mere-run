@@ -1,6 +1,22 @@
+import Foundation
 import MLX
 
 enum Q35Sampling {
+    static func packedGreedyVerificationEnabled(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Bool {
+        let raw = environment["MERERUN_Q35_PACKED_GREEDY_VERIFICATION"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return raw == "1" || raw == "true" || raw == "on"
+    }
+
+    static func greedyVerificationTokenIDs(
+        logits: MLXArray, config: GenerationConfig, banMask: MLXArray?
+    ) -> MLXArray {
+        precondition(config.temperature == 0 && !config.hasActivePenalties)
+        return sampledTokenArray(logits: logits, config: config, previousTokenIndices: nil, banMask: banMask)
+    }
+
     static func generationConfig(for request: ChatRequest, promptTokenCount: Int) -> GenerationConfig {
         GenerationConfig(
             maxTokens: request.maxTokens,

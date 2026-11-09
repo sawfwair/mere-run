@@ -6,6 +6,9 @@ MLXRandom. It does not load models or tokenize prompts.
 
 - `GenerationConfig.swift` defines the sampling policy.
 - `Sampling.swift` selects tokens and constructs exact policy distributions.
+- `SamplingDistribution.swift` supplies device-side normalized distributions
+  matching the pipelined sampler's filtering and top-p prefilter policy for
+  speculative verification.
 - `SamplingPenalties.swift` applies repetition, presence, and frequency penalties.
 - `NoRepeatNGram.swift` computes generated-token n-gram bans within an explicit window.
 - `SamplingLogprobs.swift` measures raw and policy distributions through opt-in

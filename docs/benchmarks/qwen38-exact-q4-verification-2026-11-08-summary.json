@@ -1,0 +1,439 @@
+{
+  "activationShape": [
+    1,
+    8,
+    "inputSize"
+  ],
+  "arithmeticControls": {
+    "binarySHA256": "46d6697b68c99fd17c1fb352463957bcf0532179a7d881ef34b98efd922963e0",
+    "conditions": [
+      {
+        "decodeTokensPerSecond": [
+          76.71953309726402,
+          75.09932413240998,
+          73.30285565694221
+        ],
+        "matchesSerialOutput": true,
+        "medianDecodeTokensPerSecond": 75.09932413240998,
+        "mode": "exact",
+        "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+        "rawArtifact": ".build/qwen-q4-verification-2026-11-08/main/code/exact/result.json",
+        "resourceQualified": true,
+        "workload": "code"
+      },
+      {
+        "decodeTokensPerSecond": [
+          79.78803855431964,
+          71.7135759007156,
+          67.44989382489243
+        ],
+        "matchesSerialOutput": true,
+        "medianDecodeTokensPerSecond": 71.7135759007156,
+        "mode": "native",
+        "outputSHA256": "79468dc071f1290ab863a030ccb6f2e14574fc2519344f71e9c716d2257f25ca",
+        "rawArtifact": ".build/qwen-q4-verification-2026-11-08/main/code/native/result.json",
+        "resourceQualified": true,
+        "workload": "code"
+      },
+      {
+        "decodeTokensPerSecond": [
+          25.088241308778525,
+          24.311832607518188,
+          24.263527255303416
+        ],
+        "matchesSerialOutput": false,
+        "medianDecodeTokensPerSecond": 24.311832607518188,
+        "mode": "native",
+        "outputSHA256": "6fc6e5cdf2ff0df20256f8235afadf97d2da68842251efa8c6de26649656dfa3",
+        "rawArtifact": ".build/qwen-q4-verification-2026-11-08/main/prose/native/result.json",
+        "resourceQualified": true,
+        "workload": "prose"
+      }
+    ],
+    "contextSize": 8192,
+    "draft": "DFlash 2 from matched Splash comparison",
+    "model": "vision-chat-q38-27b-4bit",
+    "outputTokens": 512,
+    "repetitions": 3,
+    "scope": "Exact-Q4 toggle affects eligible target and draft projections. Native wide arithmetic is not a target-only intervention.",
+    "sourceDigest": "fdcab756c20778516dcd62d996e6302f89059f8d410ffae490926b723421675e",
+    "status": "Partial: exact prose and reversed code controls still pending. These do not test the new head layout.",
+    "stopOnEOS": false,
+    "temperature": 0,
+    "thinking": false,
+    "topP": 1,
+    "warmupTokens": 256,
+    "warmups": 1
+  },
+  "date": "2026-11-08",
+  "dtype": "bfloat16",
+  "hardware": {
+    "chip": "Apple M5 Max",
+    "gpuCores": 40,
+    "unifiedMemoryGiB": 128
+  },
+  "limitations": [
+    "Component wall times are not isolated per-kernel GPU measurements or full-model TPS.",
+    "The first geometry has substantial variation; its medians do not establish a reliable gain.",
+    "Shared layouts are bit-exact in tested synthetic cases; real-checkpoint output and throughput qualification remain pending.",
+    "The MLX native component is timed but is not qualified as numerically equivalent to serial QMV."
+  ],
+  "postMeasurementChanges": {
+    "description": "Added the opt-in head-only process selector; no default dispatch or arithmetic change. Focused native build passed afterward (GPU tests skipped on CPU).",
+    "environmentVariable": "MERERUN_Q38_EXACT_Q4_HEAD_OUTPUT_ROWS",
+    "sourceFiles": {
+      "Sources/MereRunTensor/SmallBatchAffineQMV.swift": "10944444eabe3bb9d5fb43a96effba20273ef416ec0e39db9236a7eeb3e6144b",
+      "Tests/QwenRuntimeTests/SmallBatchAffineQMVTests.swift": "2627e054ca223be2fb241b3f68ad08db5866ec55da06b80a796a91ac26f661e7"
+    },
+    "values": {
+      "0": "Default split groups",
+      "1": "Eight inputs, one output row per SIMD group",
+      "2": "Eight inputs, two output rows per SIMD group",
+      "4": "Eight inputs, four output rows per SIMD group"
+    }
+  },
+  "quantization": {
+    "bits": 4,
+    "groupSize": 64,
+    "mode": "affine"
+  },
+  "resourceReceipt": {
+    "admission": "No competing compute GPU counters or compilation; desktop GPU utilization <=50% for 30 seconds.",
+    "competingComputeObserved": false,
+    "exclusionReasons": [],
+    "gpuUtilizationPercentRange": [
+      0,
+      99
+    ],
+    "lowPowerMode": false,
+    "monitorSamples": 3,
+    "pressureLevels": [
+      1
+    ],
+    "qualified": true,
+    "swapGrowthMiB": 0.0,
+    "thermalStates": [
+      1
+    ]
+  },
+  "rows": [
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "split",
+      "maximumMilliseconds": 0.2925885,
+      "medianMilliseconds": 0.286744875,
+      "minimumMilliseconds": 0.2163385,
+      "outputSize": 17408,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "shared",
+      "maximumMilliseconds": 0.3229635,
+      "medianMilliseconds": 0.232395875,
+      "minimumMilliseconds": 0.222276,
+      "outputSize": 17408,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "sharedTwo",
+      "maximumMilliseconds": 0.32880725,
+      "medianMilliseconds": 0.309541625,
+      "minimumMilliseconds": 0.244067625,
+      "outputSize": 17408,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "sharedOne",
+      "maximumMilliseconds": 0.410026,
+      "medianMilliseconds": 0.39865625,
+      "minimumMilliseconds": 0.3339635,
+      "outputSize": 17408,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "native",
+      "maximumMilliseconds": 0.305895875,
+      "medianMilliseconds": 0.292125,
+      "minimumMilliseconds": 0.215682375,
+      "outputSize": 17408,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 17408,
+      "layout": "split",
+      "maximumMilliseconds": 0.22153125,
+      "medianMilliseconds": 0.22068225,
+      "minimumMilliseconds": 0.217703125,
+      "outputSize": 5120,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 17408,
+      "layout": "shared",
+      "maximumMilliseconds": 0.23918225,
+      "medianMilliseconds": 0.23222925,
+      "minimumMilliseconds": 0.229078125,
+      "outputSize": 5120,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 17408,
+      "layout": "sharedTwo",
+      "maximumMilliseconds": 0.266296875,
+      "medianMilliseconds": 0.263802125,
+      "minimumMilliseconds": 0.259359375,
+      "outputSize": 5120,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 17408,
+      "layout": "sharedOne",
+      "maximumMilliseconds": 0.376427,
+      "medianMilliseconds": 0.375385375,
+      "minimumMilliseconds": 0.37155725,
+      "outputSize": 5120,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 17408,
+      "layout": "native",
+      "maximumMilliseconds": 0.22379175,
+      "medianMilliseconds": 0.221895875,
+      "minimumMilliseconds": 0.2200105,
+      "outputSize": 5120,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "split",
+      "maximumMilliseconds": 0.213125,
+      "medianMilliseconds": 0.2106615,
+      "minimumMilliseconds": 0.207927125,
+      "outputSize": 16384,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "shared",
+      "maximumMilliseconds": 0.2192865,
+      "medianMilliseconds": 0.2177865,
+      "minimumMilliseconds": 0.2165,
+      "outputSize": 16384,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "sharedTwo",
+      "maximumMilliseconds": 0.2433855,
+      "medianMilliseconds": 0.23445825,
+      "minimumMilliseconds": 0.233916625,
+      "outputSize": 16384,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "sharedOne",
+      "maximumMilliseconds": 0.3220885,
+      "medianMilliseconds": 0.321609375,
+      "minimumMilliseconds": 0.320073,
+      "outputSize": 16384,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "native",
+      "maximumMilliseconds": 0.20784375,
+      "medianMilliseconds": 0.2048855,
+      "minimumMilliseconds": 0.203833375,
+      "outputSize": 16384,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "split",
+      "maximumMilliseconds": 0.19080725,
+      "medianMilliseconds": 0.189770875,
+      "minimumMilliseconds": 0.18761975,
+      "outputSize": 14336,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "shared",
+      "maximumMilliseconds": 0.200479125,
+      "medianMilliseconds": 0.19580725,
+      "minimumMilliseconds": 0.194005125,
+      "outputSize": 14336,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "sharedTwo",
+      "maximumMilliseconds": 0.21302075,
+      "medianMilliseconds": 0.210489625,
+      "minimumMilliseconds": 0.209005125,
+      "outputSize": 14336,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "sharedOne",
+      "maximumMilliseconds": 0.289291625,
+      "medianMilliseconds": 0.28674475,
+      "minimumMilliseconds": 0.283973875,
+      "outputSize": 14336,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "native",
+      "maximumMilliseconds": 0.185916625,
+      "medianMilliseconds": 0.182473875,
+      "minimumMilliseconds": 0.180640625,
+      "outputSize": 14336,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 6144,
+      "layout": "split",
+      "maximumMilliseconds": 0.10619275,
+      "medianMilliseconds": 0.1043385,
+      "minimumMilliseconds": 0.103526,
+      "outputSize": 5120,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 6144,
+      "layout": "shared",
+      "maximumMilliseconds": 0.109171875,
+      "medianMilliseconds": 0.10838025,
+      "minimumMilliseconds": 0.10738025,
+      "outputSize": 5120,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 6144,
+      "layout": "sharedTwo",
+      "maximumMilliseconds": 0.115953125,
+      "medianMilliseconds": 0.113890625,
+      "minimumMilliseconds": 0.112984375,
+      "outputSize": 5120,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 6144,
+      "layout": "sharedOne",
+      "maximumMilliseconds": 0.14888025,
+      "medianMilliseconds": 0.147526,
+      "minimumMilliseconds": 0.143541625,
+      "outputSize": 5120,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 6144,
+      "layout": "native",
+      "maximumMilliseconds": 0.097734375,
+      "medianMilliseconds": 0.096067625,
+      "minimumMilliseconds": 0.0954375,
+      "outputSize": 5120,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "split",
+      "maximumMilliseconds": 6.864614625,
+      "medianMilliseconds": 6.6049115,
+      "minimumMilliseconds": 5.857166625,
+      "outputSize": 248320,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "shared",
+      "maximumMilliseconds": 5.959276125,
+      "medianMilliseconds": 5.648333375,
+      "minimumMilliseconds": 4.90327075,
+      "outputSize": 248320,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "sharedTwo",
+      "maximumMilliseconds": 10.58394275,
+      "medianMilliseconds": 10.155385375,
+      "minimumMilliseconds": 8.707323,
+      "outputSize": 248320,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "sharedOne",
+      "maximumMilliseconds": 16.2249635,
+      "medianMilliseconds": 15.5125,
+      "minimumMilliseconds": 12.866151,
+      "outputSize": 248320,
+      "repetitions": 9
+    },
+    {
+      "callsPerRepetition": 8,
+      "inputSize": 5120,
+      "layout": "native",
+      "maximumMilliseconds": 7.305911375,
+      "medianMilliseconds": 7.06809375,
+      "minimumMilliseconds": 5.937276,
+      "outputSize": 248320,
+      "repetitions": 9
+    }
+  ],
+  "schemaVersion": 1,
+  "sourceBaseRevision": "0b64fac1a5e60853461e1d7b1759200b141cf929",
+  "sourceFiles": {
+    "Package.resolved": "317cf43b3c32b3032372b36b00a2ea7ce9d034693de3d795eb7a8e74ee36cf32",
+    "Sources/MereRunTensor/SmallBatchAffineQMV.swift": "06daee0a882c4fa6534fa1f68bab8d29104f11f0bd899248c8e722fc035d979d",
+    "Tests/QwenRuntimeTests/SmallBatchAffineQMVTests.swift": "2627e054ca223be2fb241b3f68ad08db5866ec55da06b80a796a91ac26f661e7"
+  },
+  "status": "Code arithmetic control and native prose completed; remaining controls and opt-in head A/B queued. Production default unchanged.",
+  "testBinarySHA256": "1643fc230c1f1751834787e5bd174ec8c89af22c53e8bae352123bdbf8cd0d90",
+  "timing": "Synchronized wall time for 8 separately constructed calls, divided by 8; includes submission and launch overhead. Two unrecorded rounds, nine recorded rounds; layout order rotates each round.",
+  "validation": {
+    "cliAndHygiene": "Passed separately after the test-stage failure.",
+    "defaultChanged": false,
+    "fullGate": "Blocked: screen locked; 52 protected run-record assertion failures across 5831 XCTest cases (485 skipped). 197 Swift Testing checks passed.",
+    "newGPUParity": "Passed one test covering split plus three shared layouts at four geometries; zero error against serial QMV."
+  },
+  "weights": "Synthetic packed UInt32 weights, BF16 scales and biases; no checkpoint loaded for component timings.",
+  "workingTreeDirty": true
+}

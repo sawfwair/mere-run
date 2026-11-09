@@ -375,6 +375,14 @@ extension ManagedModelCatalog {
                     )
                 ),
                 MountedHubFallbackConfig(
+                    destinationPath: Q35Resources.q38DFlash2ComponentPath,
+                    hubFallback: HubFallbackConfig(
+                        repoId: Q35Resources.q38DFlash2UpstreamRepoId,
+                        revision: Q35Resources.q38DFlash2UpstreamRevision,
+                        patterns: Q35Resources.q38DFlash2SnapshotPatterns
+                    )
+                ),
+                MountedHubFallbackConfig(
                     destinationPath: Q35Resources.q38LicenseComponentPath,
                     hubFallback: HubFallbackConfig(
                         repoId: Q35Resources.q38TwentySevenBUpstreamRepoId,
@@ -388,7 +396,7 @@ extension ManagedModelCatalog {
             validationKind: .q35,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: Q35Resources.q38TwentySevenB4BitEstimatedDownloadBytes
-                + Q35Resources.q38VisionComponentEstimatedDownloadBytes,
+                + Q35Resources.q38VisionComponentEstimatedDownloadBytes + Q35Resources.q38DFlash2EstimatedDownloadBytes,
             defaultCLICommands: [
                 "text chat",
                 "api serve",

@@ -655,11 +655,26 @@ passed 20/24 with the same four failures, but one failing case generated 174
 tokens with MTP versus 177 target-only. MTP also changed a thinking-mode token
 trajectory in those measurements.
 
-The 4-bit model enables greedy MTP decode by default from short prompts, because
-its small-batch Q4 verification matches serial decode exactly. To use
-target-only decode, set `MERERUN_Q35_MTP_SPECULATION=0`. MTP stays opt-in for
-the BF16 model. JSON-constrained, tool, image, log-probability, and penalized
-requests keep target-only decode on both models.
+The 4-bit model uses DFlash 2 and M5 matrix kernels by default for eligible text
+on Apple10 GPU Macs with macOS 26 or later, at least 64 GiB of memory, and the
+installed draft. The managed pull includes the pinned `dflash2/` component;
+refresh older installs with `mere.run model pull vision-chat-q38-27b-4bit --force`.
+Both thinking and non-thinking requests use it, with Qwen's sampled presets
+and penalties preserved. There is no prose classifier or adaptive routing gate.
+Set [`MERERUN_Q35_DFLASH2=0`](../configuration.md#mererun-q35-dflash2) to opt out.
+
+Without an active DFlash companion, the existing MTP policy applies: greedy
+MTP is enabled for the Q4 target and opt-in for BF16. Set
+`MERERUN_Q35_MTP_SPECULATION=0` to disable MTP. JSON-constrained, tool, image,
+log-probability, and continuous-batched requests retain their existing paths
+and reference projections under the automatic policy.
+
+Sampled DFlash verification has local distribution and cache coverage.
+The [sampled throughput measurements](../benchmarks/qwen38-sampled-dflash2-2026-11-08.md)
+show code gains with both presets and a non-thinking prose regression. The
+default accepts that roughly 4.4 TPS cost in exchange for the other measured
+gains. Broader quality and workload evaluation remain pending. The earlier
+greedy TPS results do not establish sampled speed.
 
 The Qwen3.8 Flash Next builds (`vision-chat-q38-flash-next-*`) are large
 mixed-precision models for 96 GB and larger Macs. Their sources, quantization,

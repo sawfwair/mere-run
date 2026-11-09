@@ -577,6 +577,9 @@ final class Q35MLP: Module {
         if let parts = prismGateUp.callSplit(x, projections: [gateProj, upProj]) {
             return downProj(q35Swiglu(parts[0], parts[1]))
         }
+        if let activated = PortableQuantizedLinear.fusedVerificationSwiGLU(x, gate: gateProj, up: upProj) {
+            return downProj(activated)
+        }
         return downProj(q35Swiglu(gateProj(x), upProj(x)))
     }
 }
@@ -693,6 +696,9 @@ final class Q35FeedForward: Module {
         }
         if let parts = prismGateUp.callSplit(x, projections: [gateProj, upProj]) {
             return downProj(q35Swiglu(parts[0], parts[1]))
+        }
+        if let activated = PortableQuantizedLinear.fusedVerificationSwiGLU(x, gate: gateProj, up: upProj) {
+            return downProj(activated)
         }
         return downProj(q35Swiglu(gateProj(x), upProj(x)))
     }

@@ -42,11 +42,23 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--prompt-repeat", label: "Prompt repeat", kind: .integer),
             .init(flag: "--prompt-repeat-values", label: "Prompt repeat matrix", kind: .string),
             .init(flag: "--decode-tokens", label: "Decode tokens", kind: .integer),
+            .init(flag: "--stop-on-eos", label: "Stop at EOS", kind: .boolean),
             .init(flag: "--decode-token-values", label: "Decode matrix", kind: .string),
             .init(flag: "--temperature", label: "Temperature", kind: .number),
             .init(flag: "--temperature-values", label: "Temperature matrix", kind: .string),
             .init(flag: "--top-p", label: "Top-p", kind: .number),
+            .init(flag: "--top-k", label: "Top-k", kind: .integer),
+            .init(flag: "--min-p", label: "Min-p", kind: .number),
+            .init(flag: "--presence-penalty", label: "Presence penalty", kind: .number),
+            .init(flag: "--frequency-penalty", label: "Frequency penalty", kind: .number),
+            .init(flag: "--repetition-penalty", label: "Repetition penalty", kind: .number),
+            .init(flag: "--seed", label: "Sampling seed", kind: .integer),
             .init(flag: "--context-size", label: "Context", kind: .integer),
+            .init(flag: "--thinking", label: "Enable reasoning", kind: .boolean),
+            .init(
+                flag: "--reasoning-effort", label: "Reasoning effort", kind: .number,
+                range: .init(min: 0, max: 1, step: 0.01)
+            ),
             .init(flag: "--mtp-block-size", label: "MTP block", kind: .integer),
             .init(flag: "--forced-mtp-min-prompt-tokens", label: "Forced MTP threshold", kind: .integer),
             .init(flag: "--json", label: "JSON", kind: .boolean)

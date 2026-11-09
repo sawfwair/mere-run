@@ -273,6 +273,7 @@ final class Q35DecoderLayer: Module {
 struct Q35TransformerOutput {
     let hidden: MLXArray
     let mtpHidden: MLXArray?
+    let capturedHiddenStates: [Int: MLXArray]
 }
 
 final class Q35Transformer: Module {
@@ -339,7 +340,8 @@ final class Q35Transformer: Module {
         cache: [Q35LayerCache?]?,
         inputEmbeddings: MLXArray? = nil,
         positionIds: MLXArray? = nil,
-        targetVerify: Bool = false
+        targetVerify: Bool = false,
+        captureLayerIndices: Set<Int> = []
     ) -> Q35TransformerOutput {
         var preparedPLEInputs: [Int: Q38PLELayer.PreparedInput] = [:]
         if isQwen4Exp {
@@ -369,6 +371,7 @@ final class Q35Transformer: Module {
         let fullMask = createAttentionMask(h: hidden, cache: firstFullCache(from: cache))
         Q35DebugLayerDump.record(stage: "embeddings", hidden)
 
+        var capturedHiddenStates: [Int: MLXArray] = [:]
         for (index, layer) in layers.enumerated() {
             let layerCache = cache?[index] ?? nil
             hidden = layer(
@@ -380,6 +383,9 @@ final class Q35Transformer: Module {
                 targetVerify: targetVerify,
                 preparedPLEInput: preparedPLEInputs[index]
             )
+            if captureLayerIndices.contains(index) {
+                capturedHiddenStates[index] = hidden
+            }
             if preparedPLEInputs[index + 1] != nil {
                 // Start the preceding decoder block without waiting for it.
                 // Its GPU work can overlap the already-running packed PLE row
@@ -411,7 +417,8 @@ final class Q35Transformer: Module {
         Q35DebugLayerDump.flush()
         return Q35TransformerOutput(
             hidden: normed,
-            mtpHidden: isQwen4Exp ? hidden : nil
+            mtpHidden: isQwen4Exp ? hidden : nil,
+            capturedHiddenStates: capturedHiddenStates
         )
     }
 
@@ -436,6 +443,7 @@ package struct Q35ForwardOutput {
     package let hidden: MLXArray
     package let logits: MLXArray
     package let mtpHidden: MLXArray?
+    package let capturedHiddenStates: [Int: MLXArray]
 }
 
 #if os(macOS) || os(iOS)
@@ -805,19 +813,22 @@ public final class Q35Model: Module, @unchecked Sendable {
         cache: [Q35LayerCache?]?,
         inputEmbeddings: MLXArray? = nil,
         positionIds: MLXArray? = nil,
-        targetVerify: Bool = false
+        targetVerify: Bool = false,
+        captureLayerIndices: Set<Int> = []
     ) -> Q35ForwardOutput {
         let output = model.forward(
             inputIds,
             cache: cache,
             inputEmbeddings: inputEmbeddings,
             positionIds: positionIds,
-            targetVerify: targetVerify
+            targetVerify: targetVerify,
+            captureLayerIndices: captureLayerIndices
         )
         return Q35ForwardOutput(
             hidden: output.hidden,
             logits: logits(from: output.hidden),
-            mtpHidden: output.mtpHidden
+            mtpHidden: output.mtpHidden,
+            capturedHiddenStates: output.capturedHiddenStates
         )
     }
 
@@ -833,13 +844,15 @@ public final class Q35Model: Module, @unchecked Sendable {
         cache: [Q35LayerCache?]?,
         inputEmbeddings: MLXArray? = nil,
         positionIds: MLXArray? = nil,
-        retainAllHidden: Bool = false
+        retainAllHidden: Bool = false,
+        captureLayerIndices: Set<Int> = []
     ) -> Q35ForwardOutput {
         let output = model.forward(
             inputIds,
             cache: cache,
             inputEmbeddings: inputEmbeddings,
-            positionIds: positionIds
+            positionIds: positionIds,
+            captureLayerIndices: captureLayerIndices
         )
         let hidden = output.hidden
         let sequenceLength = hidden.dim(1)
@@ -862,7 +875,8 @@ public final class Q35Model: Module, @unchecked Sendable {
         return Q35ForwardOutput(
             hidden: retainAllHidden ? hidden : lastHidden,
             logits: logits(from: lastHidden),
-            mtpHidden: mtpHidden
+            mtpHidden: mtpHidden,
+            capturedHiddenStates: output.capturedHiddenStates
         )
     }
 
