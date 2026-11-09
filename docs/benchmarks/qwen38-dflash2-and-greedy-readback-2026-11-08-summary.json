@@ -1,0 +1,2218 @@
+{
+  "conditions": [
+    {
+      "afterLoadAverage": [
+        4.169921875,
+        5.8701171875,
+        6.083984375
+      ],
+      "beforeLoadAverage": [
+        4.84326171875,
+        6.3642578125,
+        6.267578125
+      ],
+      "condition": "serial",
+      "decodeTPS": {
+        "max": 33.83585751540217,
+        "median": 33.21431122536887,
+        "min": 32.92170865260224
+      },
+      "endToEndTPSMedian": 31.523358839973838,
+      "gpuSamples": [
+        {
+          "deviceUtilizationPercent": 0,
+          "elapsedSeconds": 0.08318495750427246,
+          "loadAverage": [
+            4.84326171875,
+            6.3642578125,
+            6.267578125
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 0,
+          "elapsedSeconds": 2.166679859161377,
+          "loadAverage": [
+            4.84326171875,
+            6.3642578125,
+            6.267578125
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 0,
+          "elapsedSeconds": 4.255366802215576,
+          "loadAverage": [
+            4.53515625,
+            6.27490234375,
+            6.236328125
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 0,
+          "elapsedSeconds": 6.3417627811431885,
+          "loadAverage": [
+            4.53515625,
+            6.27490234375,
+            6.236328125
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 29,
+          "elapsedSeconds": 8.425149917602539,
+          "loadAverage": [
+            4.412109375,
+            6.22021484375,
+            6.21728515625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 20,
+          "elapsedSeconds": 10.514347076416016,
+          "loadAverage": [
+            4.412109375,
+            6.22021484375,
+            6.21728515625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 31,
+          "elapsedSeconds": 12.604519844055176,
+          "loadAverage": [
+            4.412109375,
+            6.22021484375,
+            6.21728515625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 20,
+          "elapsedSeconds": 14.695663928985596,
+          "loadAverage": [
+            4.138671875,
+            6.13330078125,
+            6.1865234375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 24,
+          "elapsedSeconds": 16.77808690071106,
+          "loadAverage": [
+            4.138671875,
+            6.13330078125,
+            6.1865234375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 24,
+          "elapsedSeconds": 18.868716716766357,
+          "loadAverage": [
+            4.04736328125,
+            6.0810546875,
+            6.16748046875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 32,
+          "elapsedSeconds": 20.957504749298096,
+          "loadAverage": [
+            4.04736328125,
+            6.0810546875,
+            6.16748046875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 99,
+          "elapsedSeconds": 23.059606790542603,
+          "loadAverage": [
+            4.04736328125,
+            6.0810546875,
+            6.16748046875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 25.166183948516846,
+          "loadAverage": [
+            3.80322265625,
+            5.99658203125,
+            6.13671875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 27.2667818069458,
+          "loadAverage": [
+            3.80322265625,
+            5.99658203125,
+            6.13671875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 99,
+          "elapsedSeconds": 29.36097002029419,
+          "loadAverage": [
+            3.65869140625,
+            5.93017578125,
+            6.1123046875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 99,
+          "elapsedSeconds": 31.45919895172119,
+          "loadAverage": [
+            3.65869140625,
+            5.93017578125,
+            6.1123046875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 33.56539964675903,
+          "loadAverage": [
+            3.765625,
+            5.91455078125,
+            6.10546875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 35.66633081436157,
+          "loadAverage": [
+            3.765625,
+            5.91455078125,
+            6.10546875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 99,
+          "elapsedSeconds": 37.76350378990173,
+          "loadAverage": [
+            3.765625,
+            5.91455078125,
+            6.10546875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 39.88664197921753,
+          "loadAverage": [
+            3.7841796875,
+            5.88232421875,
+            6.0927734375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 99,
+          "elapsedSeconds": 42.02786469459534,
+          "loadAverage": [
+            3.7841796875,
+            5.88232421875,
+            6.0927734375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 44.183892011642456,
+          "loadAverage": [
+            4.20166015625,
+            5.93408203125,
+            6.109375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 99,
+          "elapsedSeconds": 46.33068585395813,
+          "loadAverage": [
+            4.20166015625,
+            5.93408203125,
+            6.109375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 48.445127964019775,
+          "loadAverage": [
+            4.18505859375,
+            5.90185546875,
+            6.0966796875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 50.592888832092285,
+          "loadAverage": [
+            4.18505859375,
+            5.90185546875,
+            6.0966796875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 52.73062181472778,
+          "loadAverage": [
+            4.18505859375,
+            5.90185546875,
+            6.0966796875
+          ]
+        }
+      ],
+      "maxPressureLevel": 1,
+      "peakResidentBytes": 15436185600,
+      "prompt": "Write a complete Python implementation of an LRU cache using a dictionary and a doubly linked list, with get and put operations, type hints, and a short usage example. Return the code directly without introductory prose.",
+      "requests": [
+        {
+          "acceleration": {
+            "route": "final-target-pipelined"
+          },
+          "decodeSeconds": 7.5659379959106445,
+          "decodeTokensPerSecond": 33.83585751540217,
+          "elapsedSeconds": 7.8264479637146,
+          "endToEndTokensPerSecond": 32.70960225978388,
+          "expectedMTPActive": false,
+          "firstTokenSeconds": 0.03220796585083008,
+          "generatedTokens": 256,
+          "loadSeconds": 8.940696716308594e-06,
+          "name": "baseline",
+          "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+          "policy": "disabled",
+          "prefillSeconds": 0.259876012802124,
+          "prefillTokensPerSecond": 207.79139797375962,
+          "promptTokens": 54,
+          "residentMemoryAfterBytes": 15435923456,
+          "residentMemoryBeforeBytes": 15435661312,
+          "ttftSeconds": 0.2920929193496704
+        },
+        {
+          "acceleration": {
+            "route": "final-target-pipelined"
+          },
+          "decodeSeconds": 7.776024103164673,
+          "decodeTokensPerSecond": 32.92170865260224,
+          "elapsedSeconds": 8.138764023780823,
+          "endToEndTokensPerSecond": 31.4544074815277,
+          "expectedMTPActive": false,
+          "firstTokenSeconds": 0.03213906288146973,
+          "generatedTokens": 256,
+          "loadSeconds": 1.0013580322265625e-05,
+          "name": "baseline",
+          "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+          "policy": "disabled",
+          "prefillSeconds": 0.36186301708221436,
+          "prefillTokensPerSecond": 149.22773936782642,
+          "promptTokens": 54,
+          "residentMemoryAfterBytes": 15436136448,
+          "residentMemoryBeforeBytes": 15435972608,
+          "ttftSeconds": 0.39401209354400635
+        },
+        {
+          "acceleration": {
+            "route": "final-target-pipelined"
+          },
+          "decodeSeconds": 7.707520961761475,
+          "decodeTokensPerSecond": 33.21431122536887,
+          "elapsedSeconds": 8.120962023735046,
+          "endToEndTokensPerSecond": 31.523358839973838,
+          "expectedMTPActive": false,
+          "firstTokenSeconds": 0.033795952796936035,
+          "generatedTokens": 256,
+          "loadSeconds": 1.5020370483398438e-05,
+          "name": "baseline",
+          "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+          "policy": "disabled",
+          "prefillSeconds": 0.4125380516052246,
+          "prefillTokensPerSecond": 130.89701614161623,
+          "promptTokens": 54,
+          "residentMemoryAfterBytes": 15436185600,
+          "residentMemoryBeforeBytes": 15436136448,
+          "ttftSeconds": 0.44634902477264404
+        }
+      ],
+      "swapUsedMiBAfter": 8228.94,
+      "swapUsedMiBBefore": 8228.94,
+      "ttftSecondsMedian": 0.39401209354400635,
+      "uncontended": true,
+      "workload": "code"
+    },
+    {
+      "afterLoadAverage": [
+        4.5078125,
+        5.83056640625,
+        6.06396484375
+      ],
+      "beforeLoadAverage": [
+        4.169921875,
+        5.8701171875,
+        6.083984375
+      ],
+      "condition": "mtp-previous",
+      "decodeTPS": {
+        "max": 73.2506818760913,
+        "median": 67.257427249616,
+        "min": 65.24986080176905
+      },
+      "endToEndTPSMedian": 62.29997380044947,
+      "gpuSamples": [
+        {
+          "deviceUtilizationPercent": 0,
+          "elapsedSeconds": 0.0900580883026123,
+          "loadAverage": [
+            4.169921875,
+            5.8701171875,
+            6.083984375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 2.2262940406799316,
+          "loadAverage": [
+            4.169921875,
+            5.8701171875,
+            6.083984375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 90,
+          "elapsedSeconds": 4.331032037734985,
+          "loadAverage": [
+            4.15625,
+            5.8388671875,
+            6.0712890625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 91,
+          "elapsedSeconds": 6.43471622467041,
+          "loadAverage": [
+            4.15625,
+            5.8388671875,
+            6.0712890625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 94,
+          "elapsedSeconds": 8.54384994506836,
+          "loadAverage": [
+            4.0634765625,
+            5.79150390625,
+            6.05322265625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 94,
+          "elapsedSeconds": 10.661427974700928,
+          "loadAverage": [
+            4.0634765625,
+            5.79150390625,
+            6.05322265625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 12.77338719367981,
+          "loadAverage": [
+            4.0634765625,
+            5.79150390625,
+            6.05322265625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 14.888745069503784,
+          "loadAverage": [
+            4.37841796875,
+            5.828125,
+            6.064453125
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 17.014228105545044,
+          "loadAverage": [
+            4.37841796875,
+            5.828125,
+            6.064453125
+          ]
+        }
+      ],
+      "maxPressureLevel": 1,
+      "peakResidentBytes": 15808561152,
+      "prompt": "Write a complete Python implementation of an LRU cache using a dictionary and a doubly linked list, with get and put operations, type hints, and a short usage example. Return the code directly without introductory prose.",
+      "requests": [
+        {
+          "acceleration": {
+            "acceptanceRate": 0.7299270072992701,
+            "acceptedDraftTokens": 200,
+            "draftHistoryTokens": 53,
+            "draftModel": "qwen-mtp",
+            "draftedTokens": 274,
+            "rounds": 56,
+            "route": "mtp-speculative"
+          },
+          "decodeSeconds": 3.4948480129241943,
+          "decodeTokensPerSecond": 73.2506818760913,
+          "elapsedSeconds": 3.771536946296692,
+          "endToEndTokensPerSecond": 67.87683738624617,
+          "expectedMTPActive": true,
+          "firstTokenSeconds": 0.0002599954605102539,
+          "generatedTokens": 256,
+          "loadSeconds": 1.1086463928222656e-05,
+          "name": "adaptive",
+          "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+          "policy": "adaptive",
+          "prefillSeconds": 0.2758270502090454,
+          "prefillTokensPerSecond": 195.7748522455436,
+          "promptTokens": 54,
+          "residentMemoryAfterBytes": 15808495616,
+          "residentMemoryBeforeBytes": 15808479232,
+          "ttftSeconds": 0.2760981321334839
+        },
+        {
+          "acceleration": {
+            "acceptanceRate": 0.7299270072992701,
+            "acceptedDraftTokens": 200,
+            "draftHistoryTokens": 53,
+            "draftModel": "qwen-mtp",
+            "draftedTokens": 274,
+            "rounds": 56,
+            "route": "mtp-speculative"
+          },
+          "decodeSeconds": 3.8062710762023926,
+          "decodeTokensPerSecond": 67.257427249616,
+          "elapsedSeconds": 4.109151005744934,
+          "endToEndTokensPerSecond": 62.29997380044947,
+          "expectedMTPActive": true,
+          "firstTokenSeconds": 0.0002760887145996094,
+          "generatedTokens": 256,
+          "loadSeconds": 1.0967254638671875e-05,
+          "name": "adaptive",
+          "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+          "policy": "adaptive",
+          "prefillSeconds": 0.3019040822982788,
+          "prefillTokensPerSecond": 178.86475594804458,
+          "promptTokens": 54,
+          "residentMemoryAfterBytes": 15808544768,
+          "residentMemoryBeforeBytes": 15808544768,
+          "ttftSeconds": 0.3021911382675171
+        },
+        {
+          "acceleration": {
+            "acceptanceRate": 0.7299270072992701,
+            "acceptedDraftTokens": 200,
+            "draftHistoryTokens": 53,
+            "draftModel": "qwen-mtp",
+            "draftedTokens": 274,
+            "rounds": 56,
+            "route": "mtp-speculative"
+          },
+          "decodeSeconds": 3.9233800172805786,
+          "decodeTokensPerSecond": 65.24986080176905,
+          "elapsedSeconds": 4.245677947998047,
+          "endToEndTokensPerSecond": 60.29661296394631,
+          "expectedMTPActive": true,
+          "firstTokenSeconds": 0.0002709627151489258,
+          "generatedTokens": 256,
+          "loadSeconds": 1.1920928955078125e-05,
+          "name": "adaptive",
+          "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+          "policy": "adaptive",
+          "prefillSeconds": 0.3213399648666382,
+          "prefillTokensPerSecond": 168.04632446639795,
+          "promptTokens": 54,
+          "residentMemoryAfterBytes": 15808561152,
+          "residentMemoryBeforeBytes": 15808544768,
+          "ttftSeconds": 0.3216228485107422
+        }
+      ],
+      "swapUsedMiBAfter": 8228.94,
+      "swapUsedMiBBefore": 8228.94,
+      "ttftSecondsMedian": 0.3021911382675171,
+      "uncontended": true,
+      "workload": "code"
+    },
+    {
+      "afterLoadAverage": [
+        3.9921875,
+        5.62890625,
+        5.98583984375
+      ],
+      "beforeLoadAverage": [
+        4.5078125,
+        5.83056640625,
+        6.06396484375
+      ],
+      "condition": "mtp-packed",
+      "decodeTPS": {
+        "max": 67.83741022688888,
+        "median": 65.38248046731094,
+        "min": 62.16055909557449
+      },
+      "endToEndTPSMedian": 60.265156584802156,
+      "gpuSamples": [
+        {
+          "deviceUtilizationPercent": 0,
+          "elapsedSeconds": 0.09428596496582031,
+          "loadAverage": [
+            4.5078125,
+            5.83056640625,
+            6.06396484375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 56,
+          "elapsedSeconds": 2.1983327865600586,
+          "loadAverage": [
+            4.5078125,
+            5.83056640625,
+            6.06396484375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 4.315542936325073,
+          "loadAverage": [
+            4.38671875,
+            5.783203125,
+            6.0458984375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 6.427978992462158,
+          "loadAverage": [
+            4.38671875,
+            5.783203125,
+            6.0458984375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 94,
+          "elapsedSeconds": 8.544971942901611,
+          "loadAverage": [
+            4.38671875,
+            5.783203125,
+            6.0458984375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 95,
+          "elapsedSeconds": 10.661613941192627,
+          "loadAverage": [
+            4.275390625,
+            5.73681640625,
+            6.02783203125
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 94,
+          "elapsedSeconds": 12.79298186302185,
+          "loadAverage": [
+            4.275390625,
+            5.73681640625,
+            6.02783203125
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 94,
+          "elapsedSeconds": 14.9061279296875,
+          "loadAverage": [
+            4.2529296875,
+            5.70751953125,
+            6.015625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 17.024263858795166,
+          "loadAverage": [
+            4.2529296875,
+            5.70751953125,
+            6.015625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 95,
+          "elapsedSeconds": 19.155558824539185,
+          "loadAverage": [
+            3.9921875,
+            5.62890625,
+            5.98583984375
+          ]
+        }
+      ],
+      "maxPressureLevel": 1,
+      "peakResidentBytes": 15812395008,
+      "prompt": "Write a complete Python implementation of an LRU cache using a dictionary and a doubly linked list, with get and put operations, type hints, and a short usage example. Return the code directly without introductory prose.",
+      "requests": [
+        {
+          "acceleration": {
+            "acceptanceRate": 0.7299270072992701,
+            "acceptedDraftTokens": 200,
+            "draftHistoryTokens": 53,
+            "draftModel": "qwen-mtp",
+            "draftedTokens": 274,
+            "rounds": 56,
+            "route": "mtp-speculative"
+          },
+          "decodeSeconds": 3.7737289667129517,
+          "decodeTokensPerSecond": 67.83741022688888,
+          "elapsedSeconds": 4.080383062362671,
+          "endToEndTokensPerSecond": 62.739207590908855,
+          "expectedMTPActive": true,
+          "firstTokenSeconds": 0.0002589225769042969,
+          "generatedTokens": 256,
+          "loadSeconds": 1.1920928955078125e-05,
+          "name": "adaptive",
+          "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+          "policy": "adaptive",
+          "prefillSeconds": 0.3057368993759155,
+          "prefillTokensPerSecond": 176.62244927003357,
+          "promptTokens": 54,
+          "residentMemoryAfterBytes": 15812345856,
+          "residentMemoryBeforeBytes": 15812198400,
+          "ttftSeconds": 0.3060077428817749
+        },
+        {
+          "acceleration": {
+            "acceptanceRate": 0.7299270072992701,
+            "acceptedDraftTokens": 200,
+            "draftHistoryTokens": 53,
+            "draftModel": "qwen-mtp",
+            "draftedTokens": 274,
+            "rounds": 56,
+            "route": "mtp-speculative"
+          },
+          "decodeSeconds": 3.915421962738037,
+          "decodeTokensPerSecond": 65.38248046731094,
+          "elapsedSeconds": 4.247894048690796,
+          "endToEndTokensPerSecond": 60.265156584802156,
+          "expectedMTPActive": true,
+          "firstTokenSeconds": 0.00025594234466552734,
+          "generatedTokens": 256,
+          "loadSeconds": 1.2040138244628906e-05,
+          "name": "adaptive",
+          "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+          "policy": "adaptive",
+          "prefillSeconds": 0.3314330577850342,
+          "prefillTokensPerSecond": 162.9288290096401,
+          "promptTokens": 54,
+          "residentMemoryAfterBytes": 15812362240,
+          "residentMemoryBeforeBytes": 15812395008,
+          "ttftSeconds": 0.33170104026794434
+        },
+        {
+          "acceleration": {
+            "acceptanceRate": 0.7299270072992701,
+            "acceptedDraftTokens": 200,
+            "draftHistoryTokens": 53,
+            "draftModel": "qwen-mtp",
+            "draftedTokens": 274,
+            "rounds": 56,
+            "route": "mtp-speculative"
+          },
+          "decodeSeconds": 4.118367075920105,
+          "decodeTokensPerSecond": 62.16055909557449,
+          "elapsedSeconds": 4.472754955291748,
+          "endToEndTokensPerSecond": 57.235418116774895,
+          "expectedMTPActive": true,
+          "firstTokenSeconds": 0.00033605098724365234,
+          "generatedTokens": 256,
+          "loadSeconds": 1.1920928955078125e-05,
+          "name": "adaptive",
+          "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+          "policy": "adaptive",
+          "prefillSeconds": 0.35344696044921875,
+          "prefillTokensPerSecond": 152.78105640339328,
+          "promptTokens": 54,
+          "residentMemoryAfterBytes": 15812362240,
+          "residentMemoryBeforeBytes": 15812362240,
+          "ttftSeconds": 0.3537949323654175
+        }
+      ],
+      "swapUsedMiBAfter": 8228.94,
+      "swapUsedMiBBefore": 8228.94,
+      "ttftSecondsMedian": 0.33170104026794434,
+      "uncontended": true,
+      "workload": "code"
+    },
+    {
+      "afterLoadAverage": [
+        3.42578125,
+        5.3671875,
+        5.880859375
+      ],
+      "beforeLoadAverage": [
+        3.9921875,
+        5.62890625,
+        5.98583984375
+      ],
+      "condition": "dflash2",
+      "decodeTPS": {
+        "max": 84.23330217494592,
+        "median": 76.99685828913435,
+        "min": 73.75636372004172
+      },
+      "endToEndTPSMedian": 70.37036551088536,
+      "gpuSamples": [
+        {
+          "deviceUtilizationPercent": 0,
+          "elapsedSeconds": 0.10031008720397949,
+          "loadAverage": [
+            3.9921875,
+            5.62890625,
+            5.98583984375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 0,
+          "elapsedSeconds": 2.194040060043335,
+          "loadAverage": [
+            3.9921875,
+            5.62890625,
+            5.98583984375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 0,
+          "elapsedSeconds": 4.295658111572266,
+          "loadAverage": [
+            3.99267578125,
+            5.6015625,
+            5.97412109375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 79,
+          "elapsedSeconds": 6.441895961761475,
+          "loadAverage": [
+            3.99267578125,
+            5.6015625,
+            5.97412109375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 91,
+          "elapsedSeconds": 8.547868013381958,
+          "loadAverage": [
+            3.8330078125,
+            5.54150390625,
+            5.95068359375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 10.643408060073853,
+          "loadAverage": [
+            3.8330078125,
+            5.54150390625,
+            5.95068359375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 92,
+          "elapsedSeconds": 12.748775005340576,
+          "loadAverage": [
+            3.60595703125,
+            5.4658203125,
+            5.92138671875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 94,
+          "elapsedSeconds": 14.866465091705322,
+          "loadAverage": [
+            3.60595703125,
+            5.4658203125,
+            5.92138671875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 16.971705198287964,
+          "loadAverage": [
+            3.60595703125,
+            5.4658203125,
+            5.92138671875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 95,
+          "elapsedSeconds": 19.086271047592163,
+          "loadAverage": [
+            3.63720703125,
+            5.44140625,
+            5.90966796875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 95,
+          "elapsedSeconds": 21.193373918533325,
+          "loadAverage": [
+            3.63720703125,
+            5.44140625,
+            5.90966796875
+          ]
+        }
+      ],
+      "maxPressureLevel": 1,
+      "peakResidentBytes": 19262095360,
+      "prompt": "Write a complete Python implementation of an LRU cache using a dictionary and a doubly linked list, with get and put operations, type hints, and a short usage example. Return the code directly without introductory prose.",
+      "requests": [
+        {
+          "acceleration": {
+            "acceptanceRate": 0.8195488721804511,
+            "acceptedDraftTokens": 218,
+            "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+            "draftedTokens": 266,
+            "rounds": 38,
+            "route": "dflash2-experimental"
+          },
+          "decodeSeconds": 3.0391780138015747,
+          "decodeTokensPerSecond": 84.23330217494592,
+          "elapsedSeconds": 3.317018985748291,
+          "endToEndTokensPerSecond": 77.17773130027732,
+          "expectedMTPActive": true,
+          "firstTokenSeconds": 0.00027501583099365234,
+          "generatedTokens": 256,
+          "loadSeconds": 1.0967254638671875e-05,
+          "name": "adaptive",
+          "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+          "policy": "adaptive",
+          "prefillSeconds": 0.2772400379180908,
+          "prefillTokensPerSecond": 194.7770618035842,
+          "promptTokens": 54,
+          "residentMemoryAfterBytes": 19261784064,
+          "residentMemoryBeforeBytes": 19261620224,
+          "ttftSeconds": 0.27752602100372314
+        },
+        {
+          "acceleration": {
+            "acceptanceRate": 0.8195488721804511,
+            "acceptedDraftTokens": 218,
+            "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+            "draftedTokens": 266,
+            "rounds": 38,
+            "route": "dflash2-experimental"
+          },
+          "decodeSeconds": 3.3248109817504883,
+          "decodeTokensPerSecond": 76.99685828913435,
+          "elapsedSeconds": 3.6378949880599976,
+          "endToEndTokensPerSecond": 70.37036551088536,
+          "expectedMTPActive": true,
+          "firstTokenSeconds": 0.0002529621124267578,
+          "generatedTokens": 256,
+          "loadSeconds": 1.0967254638671875e-05,
+          "name": "adaptive",
+          "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+          "policy": "adaptive",
+          "prefillSeconds": 0.31244003772735596,
+          "prefillTokensPerSecond": 172.83316310159304,
+          "promptTokens": 54,
+          "residentMemoryAfterBytes": 19261849600,
+          "residentMemoryBeforeBytes": 19261833216,
+          "ttftSeconds": 0.3127039670944214
+        },
+        {
+          "acceleration": {
+            "acceptanceRate": 0.8195488721804511,
+            "acceptedDraftTokens": 218,
+            "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+            "draftedTokens": 266,
+            "rounds": 38,
+            "route": "dflash2-experimental"
+          },
+          "decodeSeconds": 3.4708869457244873,
+          "decodeTokensPerSecond": 73.75636372004172,
+          "elapsedSeconds": 3.809509038925171,
+          "endToEndTokensPerSecond": 67.20026055437023,
+          "expectedMTPActive": true,
+          "firstTokenSeconds": 0.0002770423889160156,
+          "generatedTokens": 256,
+          "loadSeconds": 1.0967254638671875e-05,
+          "name": "adaptive",
+          "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+          "policy": "adaptive",
+          "prefillSeconds": 0.33795011043548584,
+          "prefillTokensPerSecond": 159.78689851710678,
+          "promptTokens": 54,
+          "residentMemoryAfterBytes": 19261849600,
+          "residentMemoryBeforeBytes": 19261849600,
+          "ttftSeconds": 0.3382381200790405
+        }
+      ],
+      "swapUsedMiBAfter": 8212.94,
+      "swapUsedMiBBefore": 8228.94,
+      "ttftSecondsMedian": 0.3127039670944214,
+      "uncontended": true,
+      "workload": "code"
+    },
+    {
+      "afterLoadAverage": [
+        3.18603515625,
+        4.59033203125,
+        5.482421875
+      ],
+      "beforeLoadAverage": [
+        4.0947265625,
+        4.89892578125,
+        5.62451171875
+      ],
+      "condition": "serial",
+      "decodeTPS": {
+        "max": 31.80946514098966,
+        "median": 31.728975308522863,
+        "min": 31.06352374798798
+      },
+      "endToEndTPSMedian": 29.856615940712526,
+      "gpuSamples": [
+        {
+          "deviceUtilizationPercent": 0,
+          "elapsedSeconds": 0.09027600288391113,
+          "loadAverage": [
+            4.0947265625,
+            4.89892578125,
+            5.62451171875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 98,
+          "elapsedSeconds": 2.188667058944702,
+          "loadAverage": [
+            4.0947265625,
+            4.89892578125,
+            5.62451171875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 4.296833038330078,
+          "loadAverage": [
+            4.0869140625,
+            4.8837890625,
+            5.61474609375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 6.416153907775879,
+          "loadAverage": [
+            4.0869140625,
+            4.8837890625,
+            5.61474609375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 8.533323049545288,
+          "loadAverage": [
+            3.91943359375,
+            4.83544921875,
+            5.59326171875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 99,
+          "elapsedSeconds": 10.642506122589111,
+          "loadAverage": [
+            3.91943359375,
+            4.83544921875,
+            5.59326171875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 12.74092698097229,
+          "loadAverage": [
+            3.91943359375,
+            4.83544921875,
+            5.59326171875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 14.857574939727783,
+          "loadAverage": [
+            3.845703125,
+            4.8046875,
+            5.57763671875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 16.96444296836853,
+          "loadAverage": [
+            3.845703125,
+            4.8046875,
+            5.57763671875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 99,
+          "elapsedSeconds": 19.06093120574951,
+          "loadAverage": [
+            3.69775390625,
+            4.7578125,
+            5.556640625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 21.16141104698181,
+          "loadAverage": [
+            3.69775390625,
+            4.7578125,
+            5.556640625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 23.262691974639893,
+          "loadAverage": [
+            3.4814453125,
+            4.6953125,
+            5.52978515625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 25.365746021270752,
+          "loadAverage": [
+            3.4814453125,
+            4.6953125,
+            5.52978515625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 99,
+          "elapsedSeconds": 27.469786882400513,
+          "loadAverage": [
+            3.4814453125,
+            4.6953125,
+            5.52978515625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 29.57780694961548,
+          "loadAverage": [
+            3.20263671875,
+            4.6171875,
+            5.4970703125
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 31.68807101249695,
+          "loadAverage": [
+            3.20263671875,
+            4.6171875,
+            5.4970703125
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 100,
+          "elapsedSeconds": 33.79619598388672,
+          "loadAverage": [
+            3.18603515625,
+            4.59033203125,
+            5.482421875
+          ]
+        }
+      ],
+      "maxPressureLevel": 1,
+      "peakResidentBytes": 15399141376,
+      "prompt": "Explain how a small community could turn an abandoned railway station into a public library. Discuss the building, accessibility, staffing, the collection, and a realistic opening-day scene. Write approximately 400 words of clear, connected prose.",
+      "requests": [
+        {
+          "acceleration": {
+            "route": "final-target-pipelined"
+          },
+          "decodeSeconds": 8.047919034957886,
+          "decodeTokensPerSecond": 31.80946514098966,
+          "elapsedSeconds": 8.574313998222351,
+          "endToEndTokensPerSecond": 29.856615940712526,
+          "expectedMTPActive": false,
+          "firstTokenSeconds": 0.034103989601135254,
+          "generatedTokens": 256,
+          "loadSeconds": 1.3947486877441406e-05,
+          "name": "baseline",
+          "outputSHA256": "d266bcb52e213bb28fb1811c86f12736da4570959074bc1574899f29a32b14a5",
+          "policy": "disabled",
+          "prefillSeconds": 0.5256509780883789,
+          "prefillTokensPerSecond": 114.14418026615384,
+          "promptTokens": 60,
+          "residentMemoryAfterBytes": 15399075840,
+          "residentMemoryBeforeBytes": 15398928384,
+          "ttftSeconds": 0.5597689151763916
+        },
+        {
+          "acceleration": {
+            "route": "final-target-pipelined"
+          },
+          "decodeSeconds": 8.068334937095642,
+          "decodeTokensPerSecond": 31.728975308522863,
+          "elapsedSeconds": 8.567407965660095,
+          "endToEndTokensPerSecond": 29.880682818665786,
+          "expectedMTPActive": false,
+          "firstTokenSeconds": 0.033421993255615234,
+          "generatedTokens": 256,
+          "loadSeconds": 1.0967254638671875e-05,
+          "name": "baseline",
+          "outputSHA256": "d266bcb52e213bb28fb1811c86f12736da4570959074bc1574899f29a32b14a5",
+          "policy": "disabled",
+          "prefillSeconds": 0.498337984085083,
+          "prefillTokensPerSecond": 120.40021414413393,
+          "promptTokens": 60,
+          "residentMemoryAfterBytes": 15399092224,
+          "residentMemoryBeforeBytes": 15399124992,
+          "ttftSeconds": 0.5317709445953369
+        },
+        {
+          "acceleration": {
+            "route": "final-target-pipelined"
+          },
+          "decodeSeconds": 8.241177082061768,
+          "decodeTokensPerSecond": 31.06352374798798,
+          "elapsedSeconds": 8.754142999649048,
+          "endToEndTokensPerSecond": 29.24329657514882,
+          "expectedMTPActive": false,
+          "firstTokenSeconds": 0.03487706184387207,
+          "generatedTokens": 256,
+          "loadSeconds": 1.1086463928222656e-05,
+          "name": "baseline",
+          "outputSHA256": "d266bcb52e213bb28fb1811c86f12736da4570959074bc1574899f29a32b14a5",
+          "policy": "disabled",
+          "prefillSeconds": 0.5116299390792847,
+          "prefillTokensPerSecond": 117.2722614864454,
+          "promptTokens": 60,
+          "residentMemoryAfterBytes": 15399092224,
+          "residentMemoryBeforeBytes": 15399092224,
+          "ttftSeconds": 0.546518087387085
+        }
+      ],
+      "swapUsedMiBAfter": 8188.94,
+      "swapUsedMiBBefore": 8196.94,
+      "ttftSecondsMedian": 0.546518087387085,
+      "uncontended": true,
+      "workload": "prose"
+    },
+    {
+      "afterLoadAverage": [
+        4.0947265625,
+        4.89892578125,
+        5.62451171875
+      ],
+      "beforeLoadAverage": [
+        3.2802734375,
+        4.8544921875,
+        5.63623046875
+      ],
+      "condition": "mtp-previous",
+      "decodeTPS": {
+        "max": 38.70823931380395,
+        "median": 38.197991757531,
+        "min": 37.36253805244717
+      },
+      "endToEndTPSMedian": 36.20148577086185,
+      "gpuSamples": [
+        {
+          "deviceUtilizationPercent": 0,
+          "elapsedSeconds": 0.08595013618469238,
+          "loadAverage": [
+            3.2802734375,
+            4.8544921875,
+            5.63623046875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 94,
+          "elapsedSeconds": 2.192817211151123,
+          "loadAverage": [
+            3.2802734375,
+            4.8544921875,
+            5.63623046875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 94,
+          "elapsedSeconds": 4.286987066268921,
+          "loadAverage": [
+            3.41796875,
+            4.8564453125,
+            5.63232421875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 92,
+          "elapsedSeconds": 6.409353256225586,
+          "loadAverage": [
+            3.41796875,
+            4.8564453125,
+            5.63232421875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 8.53565001487732,
+          "loadAverage": [
+            3.46435546875,
+            4.841796875,
+            5.62255859375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 91,
+          "elapsedSeconds": 10.65348505973816,
+          "loadAverage": [
+            3.46435546875,
+            4.841796875,
+            5.62255859375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 92,
+          "elapsedSeconds": 12.768805027008057,
+          "loadAverage": [
+            3.46435546875,
+            4.841796875,
+            5.62255859375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 14.881633996963501,
+          "loadAverage": [
+            3.4267578125,
+            4.81103515625,
+            5.60693359375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 16.99616312980652,
+          "loadAverage": [
+            3.4267578125,
+            4.81103515625,
+            5.60693359375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 92,
+          "elapsedSeconds": 19.171109199523926,
+          "loadAverage": [
+            4.033203125,
+            4.91357421875,
+            5.63818359375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 92,
+          "elapsedSeconds": 21.317708015441895,
+          "loadAverage": [
+            4.033203125,
+            4.91357421875,
+            5.63818359375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 94,
+          "elapsedSeconds": 23.460279941558838,
+          "loadAverage": [
+            4.1904296875,
+            4.93115234375,
+            5.64013671875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 94,
+          "elapsedSeconds": 25.60979127883911,
+          "loadAverage": [
+            4.1904296875,
+            4.93115234375,
+            5.64013671875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 27.733756065368652,
+          "loadAverage": [
+            4.1904296875,
+            4.93115234375,
+            5.64013671875
+          ]
+        }
+      ],
+      "maxPressureLevel": 1,
+      "peakResidentBytes": 15826731008,
+      "prompt": "Explain how a small community could turn an abandoned railway station into a public library. Discuss the building, accessibility, staffing, the collection, and a realistic opening-day scene. Write approximately 400 words of clear, connected prose.",
+      "requests": [
+        {
+          "acceleration": {
+            "acceptanceRate": 0.3853211009174312,
+            "acceptedDraftTokens": 126,
+            "draftHistoryTokens": 59,
+            "draftModel": "qwen-mtp",
+            "draftedTokens": 327,
+            "rounds": 129,
+            "route": "mtp-speculative"
+          },
+          "decodeSeconds": 6.613579034805298,
+          "decodeTokensPerSecond": 38.70823931380395,
+          "elapsedSeconds": 6.995753049850464,
+          "endToEndTokensPerSecond": 36.59363018902905,
+          "expectedMTPActive": true,
+          "firstTokenSeconds": 0.00032198429107666016,
+          "generatedTokens": 256,
+          "loadSeconds": 1.1920928955078125e-05,
+          "name": "adaptive",
+          "outputSHA256": "d266bcb52e213bb28fb1811c86f12736da4570959074bc1574899f29a32b14a5",
+          "policy": "adaptive",
+          "prefillSeconds": 0.3810359239578247,
+          "prefillTokensPerSecond": 157.46546776162018,
+          "promptTokens": 60,
+          "residentMemoryAfterBytes": 15824846848,
+          "residentMemoryBeforeBytes": 15824764928,
+          "ttftSeconds": 0.38136982917785645
+        },
+        {
+          "acceleration": {
+            "acceptanceRate": 0.3853211009174312,
+            "acceptedDraftTokens": 126,
+            "draftHistoryTokens": 59,
+            "draftModel": "qwen-mtp",
+            "draftedTokens": 327,
+            "rounds": 129,
+            "route": "mtp-speculative"
+          },
+          "decodeSeconds": 6.851782917976379,
+          "decodeTokensPerSecond": 37.36253805244717,
+          "elapsedSeconds": 7.244714021682739,
+          "endToEndTokensPerSecond": 35.33610840038908,
+          "expectedMTPActive": true,
+          "firstTokenSeconds": 0.00029790401458740234,
+          "generatedTokens": 256,
+          "loadSeconds": 1.1086463928222656e-05,
+          "name": "adaptive",
+          "outputSHA256": "d266bcb52e213bb28fb1811c86f12736da4570959074bc1574899f29a32b14a5",
+          "policy": "adaptive",
+          "prefillSeconds": 0.3914480209350586,
+          "prefillTokensPerSecond": 153.27705542277866,
+          "promptTokens": 60,
+          "residentMemoryAfterBytes": 15825715200,
+          "residentMemoryBeforeBytes": 15824912384,
+          "ttftSeconds": 0.3917570114135742
+        },
+        {
+          "acceleration": {
+            "acceptanceRate": 0.3853211009174312,
+            "acceptedDraftTokens": 126,
+            "draftHistoryTokens": 59,
+            "draftModel": "qwen-mtp",
+            "draftedTokens": 327,
+            "rounds": 129,
+            "route": "mtp-speculative"
+          },
+          "decodeSeconds": 6.7019230127334595,
+          "decodeTokensPerSecond": 38.197991757531,
+          "elapsedSeconds": 7.071532964706421,
+          "endToEndTokensPerSecond": 36.20148577086185,
+          "expectedMTPActive": true,
+          "firstTokenSeconds": 0.0002980232238769531,
+          "generatedTokens": 256,
+          "loadSeconds": 1.3947486877441406e-05,
+          "name": "adaptive",
+          "outputSHA256": "d266bcb52e213bb28fb1811c86f12736da4570959074bc1574899f29a32b14a5",
+          "policy": "adaptive",
+          "prefillSeconds": 0.3683168888092041,
+          "prefillTokensPerSecond": 162.9032005401231,
+          "promptTokens": 60,
+          "residentMemoryAfterBytes": 15826731008,
+          "residentMemoryBeforeBytes": 15825715200,
+          "ttftSeconds": 0.3686288595199585
+        }
+      ],
+      "swapUsedMiBAfter": 8196.94,
+      "swapUsedMiBBefore": 8204.94,
+      "ttftSecondsMedian": 0.38136982917785645,
+      "uncontended": true,
+      "workload": "prose"
+    },
+    {
+      "afterLoadAverage": [
+        3.2802734375,
+        4.8544921875,
+        5.63623046875
+      ],
+      "beforeLoadAverage": [
+        3.53857421875,
+        5.06884765625,
+        5.73779296875
+      ],
+      "condition": "mtp-packed",
+      "decodeTPS": {
+        "max": 40.61500624227612,
+        "median": 39.729183252609246,
+        "min": 37.65639553113115
+      },
+      "endToEndTPSMedian": 37.51422556379419,
+      "gpuSamples": [
+        {
+          "deviceUtilizationPercent": 0,
+          "elapsedSeconds": 0.0850837230682373,
+          "loadAverage": [
+            3.53857421875,
+            5.06884765625,
+            5.73779296875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 2.190234899520874,
+          "loadAverage": [
+            3.53857421875,
+            5.06884765625,
+            5.73779296875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 4.299517869949341,
+          "loadAverage": [
+            3.4951171875,
+            5.0341796875,
+            5.7216796875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 6.40832781791687,
+          "loadAverage": [
+            3.4951171875,
+            5.0341796875,
+            5.7216796875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 96,
+          "elapsedSeconds": 8.51492190361023,
+          "loadAverage": [
+            3.375,
+            4.9833984375,
+            5.69970703125
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 10.647280931472778,
+          "loadAverage": [
+            3.375,
+            4.9833984375,
+            5.69970703125
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 91,
+          "elapsedSeconds": 12.766731023788452,
+          "loadAverage": [
+            3.375,
+            4.9833984375,
+            5.69970703125
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 92,
+          "elapsedSeconds": 14.887515783309937,
+          "loadAverage": [
+            3.3447265625,
+            4.9501953125,
+            5.68359375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 91,
+          "elapsedSeconds": 17.006672859191895,
+          "loadAverage": [
+            3.3447265625,
+            4.9501953125,
+            5.68359375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 92,
+          "elapsedSeconds": 19.12715983390808,
+          "loadAverage": [
+            3.23681640625,
+            4.90087890625,
+            5.66162109375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 94,
+          "elapsedSeconds": 21.236612796783447,
+          "loadAverage": [
+            3.23681640625,
+            4.90087890625,
+            5.66162109375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 92,
+          "elapsedSeconds": 23.363683700561523,
+          "loadAverage": [
+            3.2177734375,
+            4.869140625,
+            5.64599609375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 90,
+          "elapsedSeconds": 25.485583782196045,
+          "loadAverage": [
+            3.2177734375,
+            4.869140625,
+            5.64599609375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 91,
+          "elapsedSeconds": 27.602803945541382,
+          "loadAverage": [
+            3.2177734375,
+            4.869140625,
+            5.64599609375
+          ]
+        }
+      ],
+      "maxPressureLevel": 1,
+      "peakResidentBytes": 15825354752,
+      "prompt": "Explain how a small community could turn an abandoned railway station into a public library. Discuss the building, accessibility, staffing, the collection, and a realistic opening-day scene. Write approximately 400 words of clear, connected prose.",
+      "requests": [
+        {
+          "acceleration": {
+            "acceptanceRate": 0.3853211009174312,
+            "acceptedDraftTokens": 126,
+            "draftHistoryTokens": 59,
+            "draftModel": "qwen-mtp",
+            "draftedTokens": 327,
+            "rounds": 129,
+            "route": "mtp-speculative"
+          },
+          "decodeSeconds": 6.7983139753341675,
+          "decodeTokensPerSecond": 37.65639553113115,
+          "elapsedSeconds": 7.237978935241699,
+          "endToEndTokensPerSecond": 35.368989367119696,
+          "expectedMTPActive": true,
+          "firstTokenSeconds": 0.00028204917907714844,
+          "generatedTokens": 256,
+          "loadSeconds": 1.0967254638671875e-05,
+          "name": "adaptive",
+          "outputSHA256": "d266bcb52e213bb28fb1811c86f12736da4570959074bc1574899f29a32b14a5",
+          "policy": "adaptive",
+          "prefillSeconds": 0.4384990930557251,
+          "prefillTokensPerSecond": 136.8303856272175,
+          "promptTokens": 60,
+          "residentMemoryAfterBytes": 15825240064,
+          "residentMemoryBeforeBytes": 15824994304,
+          "ttftSeconds": 0.4387921094894409
+        },
+        {
+          "acceleration": {
+            "acceptanceRate": 0.3853211009174312,
+            "acceptedDraftTokens": 126,
+            "draftHistoryTokens": 59,
+            "draftModel": "qwen-mtp",
+            "draftedTokens": 327,
+            "rounds": 129,
+            "route": "mtp-speculative"
+          },
+          "decodeSeconds": 6.303089022636414,
+          "decodeTokensPerSecond": 40.61500624227612,
+          "elapsedSeconds": 6.6805150508880615,
+          "endToEndTokensPerSecond": 38.32039865937719,
+          "expectedMTPActive": true,
+          "firstTokenSeconds": 0.00024902820587158203,
+          "generatedTokens": 256,
+          "loadSeconds": 1.2040138244628906e-05,
+          "name": "adaptive",
+          "outputSHA256": "d266bcb52e213bb28fb1811c86f12736da4570959074bc1574899f29a32b14a5",
+          "policy": "adaptive",
+          "prefillSeconds": 0.3762819766998291,
+          "prefillTokensPerSecond": 159.45488680119195,
+          "promptTokens": 60,
+          "residentMemoryAfterBytes": 15825338368,
+          "residentMemoryBeforeBytes": 15825289216,
+          "ttftSeconds": 0.3765430450439453
+        },
+        {
+          "acceleration": {
+            "acceptanceRate": 0.3853211009174312,
+            "acceptedDraftTokens": 126,
+            "draftHistoryTokens": 59,
+            "draftModel": "qwen-mtp",
+            "draftedTokens": 327,
+            "rounds": 129,
+            "route": "mtp-speculative"
+          },
+          "decodeSeconds": 6.443626046180725,
+          "decodeTokensPerSecond": 39.729183252609246,
+          "elapsedSeconds": 6.8240779638290405,
+          "endToEndTokensPerSecond": 37.51422556379419,
+          "expectedMTPActive": true,
+          "firstTokenSeconds": 0.000247955322265625,
+          "generatedTokens": 256,
+          "loadSeconds": 1.0013580322265625e-05,
+          "name": "adaptive",
+          "outputSHA256": "d266bcb52e213bb28fb1811c86f12736da4570959074bc1574899f29a32b14a5",
+          "policy": "adaptive",
+          "prefillSeconds": 0.3792750835418701,
+          "prefillTokensPerSecond": 158.19652437931978,
+          "promptTokens": 60,
+          "residentMemoryAfterBytes": 15825321984,
+          "residentMemoryBeforeBytes": 15825338368,
+          "ttftSeconds": 0.379533052444458
+        }
+      ],
+      "swapUsedMiBAfter": 8204.94,
+      "swapUsedMiBBefore": 8204.94,
+      "ttftSecondsMedian": 0.379533052444458,
+      "uncontended": true,
+      "workload": "prose"
+    },
+    {
+      "afterLoadAverage": [
+        3.53857421875,
+        5.06884765625,
+        5.73779296875
+      ],
+      "beforeLoadAverage": [
+        3.42578125,
+        5.3671875,
+        5.880859375
+      ],
+      "condition": "dflash2",
+      "decodeTPS": {
+        "max": 23.425375430360695,
+        "median": 22.965031396404527,
+        "min": 21.096490127371606
+      },
+      "endToEndTPSMedian": 22.256060249577786,
+      "gpuSamples": [
+        {
+          "deviceUtilizationPercent": 0,
+          "elapsedSeconds": 0.09249496459960938,
+          "loadAverage": [
+            3.42578125,
+            5.3671875,
+            5.880859375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 87,
+          "elapsedSeconds": 2.194917678833008,
+          "loadAverage": [
+            3.42578125,
+            5.3671875,
+            5.880859375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 92,
+          "elapsedSeconds": 4.2961578369140625,
+          "loadAverage": [
+            3.3115234375,
+            5.31103515625,
+            5.85791015625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 92,
+          "elapsedSeconds": 6.409850835800171,
+          "loadAverage": [
+            3.3115234375,
+            5.31103515625,
+            5.85791015625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 94,
+          "elapsedSeconds": 8.530067920684814,
+          "loadAverage": [
+            3.3115234375,
+            5.31103515625,
+            5.85791015625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 89,
+          "elapsedSeconds": 10.649487733840942,
+          "loadAverage": [
+            3.2060546875,
+            5.255859375,
+            5.8349609375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 76,
+          "elapsedSeconds": 12.760926961898804,
+          "loadAverage": [
+            3.2060546875,
+            5.255859375,
+            5.8349609375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 94,
+          "elapsedSeconds": 14.890800714492798,
+          "loadAverage": [
+            3.189453125,
+            5.21826171875,
+            5.81787109375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 91,
+          "elapsedSeconds": 16.99739694595337,
+          "loadAverage": [
+            3.189453125,
+            5.21826171875,
+            5.81787109375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 91,
+          "elapsedSeconds": 19.106562852859497,
+          "loadAverage": [
+            3.09375,
+            5.16455078125,
+            5.79541015625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 21.208250761032104,
+          "loadAverage": [
+            3.09375,
+            5.16455078125,
+            5.79541015625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 23.324293851852417,
+          "loadAverage": [
+            3.09375,
+            5.16455078125,
+            5.79541015625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 95,
+          "elapsedSeconds": 25.426812887191772,
+          "loadAverage": [
+            3.24609375,
+            5.16162109375,
+            5.79052734375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 95,
+          "elapsedSeconds": 27.53101897239685,
+          "loadAverage": [
+            3.24609375,
+            5.16162109375,
+            5.79052734375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 95,
+          "elapsedSeconds": 29.63744568824768,
+          "loadAverage": [
+            3.30615234375,
+            5.14208984375,
+            5.77978515625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 94,
+          "elapsedSeconds": 31.746238946914673,
+          "loadAverage": [
+            3.30615234375,
+            5.14208984375,
+            5.77978515625
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 95,
+          "elapsedSeconds": 33.85797882080078,
+          "loadAverage": [
+            3.28125,
+            5.1064453125,
+            5.76318359375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 95,
+          "elapsedSeconds": 35.96605205535889,
+          "loadAverage": [
+            3.28125,
+            5.1064453125,
+            5.76318359375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 95,
+          "elapsedSeconds": 38.068418979644775,
+          "loadAverage": [
+            3.28125,
+            5.1064453125,
+            5.76318359375
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 40.17497801780701,
+          "loadAverage": [
+            3.25830078125,
+            5.0712890625,
+            5.74658203125
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 42.27663588523865,
+          "loadAverage": [
+            3.25830078125,
+            5.0712890625,
+            5.74658203125
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 94,
+          "elapsedSeconds": 44.38244700431824,
+          "loadAverage": [
+            3.2373046875,
+            5.03662109375,
+            5.73046875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 46.47633385658264,
+          "loadAverage": [
+            3.2373046875,
+            5.03662109375,
+            5.73046875
+          ]
+        },
+        {
+          "deviceUtilizationPercent": 93,
+          "elapsedSeconds": 48.58226490020752,
+          "loadAverage": [
+            3.2373046875,
+            5.03662109375,
+            5.73046875
+          ]
+        }
+      ],
+      "maxPressureLevel": 1,
+      "peakResidentBytes": 19264061440,
+      "prompt": "Explain how a small community could turn an abandoned railway station into a public library. Discuss the building, accessibility, staffing, the collection, and a realistic opening-day scene. Write approximately 400 words of clear, connected prose.",
+      "requests": [
+        {
+          "acceleration": {
+            "acceptanceRate": 0.17181705809641531,
+            "acceptedDraftTokens": 139,
+            "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+            "draftedTokens": 809,
+            "rounds": 117,
+            "route": "dflash2-experimental"
+          },
+          "decodeSeconds": 10.928320050239563,
+          "decodeTokensPerSecond": 23.425375430360695,
+          "elapsedSeconds": 11.250203013420105,
+          "endToEndTokensPerSecond": 22.75514492446257,
+          "expectedMTPActive": true,
+          "firstTokenSeconds": 0.0002930164337158203,
+          "generatedTokens": 256,
+          "loadSeconds": 1.2993812561035156e-05,
+          "name": "adaptive",
+          "outputSHA256": "d266bcb52e213bb28fb1811c86f12736da4570959074bc1574899f29a32b14a5",
+          "policy": "adaptive",
+          "prefillSeconds": 0.2843749523162842,
+          "prefillTokensPerSecond": 210.98904636744345,
+          "promptTokens": 60,
+          "residentMemoryAfterBytes": 16091938816,
+          "residentMemoryBeforeBytes": 19263930368,
+          "ttftSeconds": 0.28468096256256104
+        },
+        {
+          "acceleration": {
+            "acceptanceRate": 0.17181705809641531,
+            "acceptedDraftTokens": 139,
+            "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+            "draftedTokens": 809,
+            "rounds": 117,
+            "route": "dflash2-experimental"
+          },
+          "decodeSeconds": 12.134719967842102,
+          "decodeTokensPerSecond": 21.096490127371606,
+          "elapsedSeconds": 12.517503023147583,
+          "endToEndTokensPerSecond": 20.45136314539732,
+          "expectedMTPActive": true,
+          "firstTokenSeconds": 0.0002859830856323242,
+          "generatedTokens": 256,
+          "loadSeconds": 1.2040138244628906e-05,
+          "name": "adaptive",
+          "outputSHA256": "d266bcb52e213bb28fb1811c86f12736da4570959074bc1574899f29a32b14a5",
+          "policy": "adaptive",
+          "prefillSeconds": 0.38207101821899414,
+          "prefillTokensPerSecond": 157.03886748512656,
+          "promptTokens": 60,
+          "residentMemoryAfterBytes": 16092135424,
+          "residentMemoryBeforeBytes": 16091987968,
+          "ttftSeconds": 0.3823690414428711
+        },
+        {
+          "acceleration": {
+            "acceptanceRate": 0.17181705809641531,
+            "acceptedDraftTokens": 139,
+            "draftModel": "incoai/Qwen3.8-27B-DFlash2",
+            "draftedTokens": 809,
+            "rounds": 117,
+            "route": "dflash2-experimental"
+          },
+          "decodeSeconds": 11.147382974624634,
+          "decodeTokensPerSecond": 22.965031396404527,
+          "elapsedSeconds": 11.502485036849976,
+          "endToEndTokensPerSecond": 22.256060249577786,
+          "expectedMTPActive": true,
+          "firstTokenSeconds": 0.00028502941131591797,
+          "generatedTokens": 256,
+          "loadSeconds": 1.5020370483398438e-05,
+          "name": "adaptive",
+          "outputSHA256": "d266bcb52e213bb28fb1811c86f12736da4570959074bc1574899f29a32b14a5",
+          "policy": "adaptive",
+          "prefillSeconds": 0.35439300537109375,
+          "prefillTokensPerSecond": 169.303567199845,
+          "promptTokens": 60,
+          "residentMemoryAfterBytes": 16092200960,
+          "residentMemoryBeforeBytes": 16092135424,
+          "ttftSeconds": 0.35469305515289307
+        }
+      ],
+      "swapUsedMiBAfter": 8204.94,
+      "swapUsedMiBBefore": 8212.94,
+      "ttftSecondsMedian": 0.35469305515289307,
+      "uncontended": true,
+      "workload": "prose"
+    }
+  ],
+  "date": "2026-11-08",
+  "excludedAttempts": [
+    {
+      "competingInferenceProcessCount": 1,
+      "condition": "mtp-previous",
+      "maxPressureLevel": 1,
+      "reason": "Competing inference process observed during measurement.",
+      "requestCount": 3,
+      "stage": "reverse",
+      "uncontended": false,
+      "workload": "code"
+    }
+  ],
+  "featureSelectionAfterMeasurement": {
+    "decoderHasExplicitReadbackSelection": true,
+    "finalRuntimeSourceSHA256": "233d32c56309c76bdc0f8d563b3ad90f248ee777d817d11c7ad056ccc9824ac4",
+    "packedMTPDefault": false,
+    "runtimeFilesChanged": [
+      "Sources/MereRunCore/Q35/Q35Generator+Speculation.swift",
+      "Sources/MereRunCore/Q35/Q35Sampling.swift"
+    ],
+    "verificationArithmeticChanged": false
+  },
+  "finalBuild": {
+    "binarySHA256": "28b3c7d5104beacb753069bc2a4e0306c4fadba709fbe85977d0d95f478d3fcc",
+    "cliHelpExitCode": 0,
+    "command": "swift build --build-system native -c release --product mere.run --disable-index-store",
+    "exitCode": 0,
+    "measuredBinaryIsSeparate": true,
+    "sourceSHA256": "233d32c56309c76bdc0f8d563b3ad90f248ee777d817d11c7ad056ccc9824ac4"
+  },
+  "finalValidation": {
+    "buildSystem": "native",
+    "focusedGPUFailures": 0,
+    "focusedGPUTests": 16,
+    "localGateExitCode": 0,
+    "swiftTestingCases": 197,
+    "swiftTestingFailures": 0,
+    "swiftTestingSuites": 7,
+    "xctestCases": 5828,
+    "xctestFailures": 0,
+    "xctestSkipped": 483
+  },
+  "hardware": {
+    "chip": "Apple M5 Max",
+    "gpuCores": 40,
+    "unifiedMemoryGiB": 128
+  },
+  "limitations": [
+    "Same binary with explicit feature switches, not a release-to-release comparison.",
+    "Two short text prompts; fixed-token continuation throughput does not measure completion quality.",
+    "Shared workstation admitted at low GPU utilization and normal memory pressure; no exclusive hardware guarantee.",
+    "The reversed-order previous-readback control was contended and excluded. Its paired packed sample is reported separately.",
+    "The final source defaults packed MTP readbacks to off; measured explicit 0 and 1 routes are otherwise unchanged.",
+    "Text-only assembly includes official vision metadata but no vision tower weights; image inference was not qualified."
+  ],
+  "macOS": "27.2",
+  "macOSBuild": "26B123",
+  "protocol": {
+    "MLX_ENABLE_TF32": "0",
+    "contextTokens": 8192,
+    "explicitTextOnlyModelAssembly": true,
+    "ignoreEOS": true,
+    "mainSchedule": [
+      [
+        "code",
+        "serial"
+      ],
+      [
+        "code",
+        "mtp-previous"
+      ],
+      [
+        "code",
+        "mtp-packed"
+      ],
+      [
+        "code",
+        "dflash2"
+      ],
+      [
+        "prose",
+        "dflash2"
+      ],
+      [
+        "prose",
+        "mtp-packed"
+      ],
+      [
+        "prose",
+        "mtp-previous"
+      ],
+      [
+        "prose",
+        "serial"
+      ]
+    ],
+    "outputTokens": 256,
+    "repetitionsPerCondition": 3,
+    "showThinking": false,
+    "synchronizedProfiling": false,
+    "temperature": 0,
+    "topP": 1,
+    "warmupTokens": 256,
+    "warmupsPerCondition": 1
+  },
+  "provenance": {
+    "binarySHA256": "9c8e2aab78f629ab47e06b8ab6ec8fe7ca10def50b5899385e13aa5c2b513090",
+    "buildCommand": "swift build --build-system native -c release --product mere.run --disable-index-store",
+    "models": {
+      "dflash2": "incoai/Qwen3.8-27B-DFlash2@015e795645c74b1a0eeef3b570031fb62e769bc5",
+      "mtp": "morgan/qwen38-27b-mtp-r20k-lr3-q4-g64-q2-rerank@fd4a99c590dd6e468c0e2a28168c235e32151a4b",
+      "target": "EigenLabs/Qwen3.8-27B-4bit@eda45ab47f465d08d6558f0353a2346e2eb9d5b3"
+    },
+    "sourceFilesSHA256": "e44c6489056362efc32fe46e402a9f6ca5908a295973817cc5f5d5a6d5e54e75",
+    "sourceHead": "0b64fac1a5e60853461e1d7b1759200b141cf929",
+    "workingTreeDirty": true
+  },
+  "schemaVersion": 1,
+  "unpairedControl": {
+    "condition": "mtp-packed",
+    "requests": [
+      {
+        "acceleration": {
+          "acceptanceRate": 0.7299270072992701,
+          "acceptedDraftTokens": 200,
+          "draftHistoryTokens": 53,
+          "draftModel": "qwen-mtp",
+          "draftedTokens": 274,
+          "rounds": 56,
+          "route": "mtp-speculative"
+        },
+        "decodeSeconds": 4.187685012817383,
+        "decodeTokensPerSecond": 61.131627430538,
+        "elapsedSeconds": 4.558333992958069,
+        "endToEndTokensPerSecond": 56.16086938681566,
+        "expectedMTPActive": true,
+        "firstTokenSeconds": 0.00023806095123291016,
+        "generatedTokens": 256,
+        "loadSeconds": 1.5020370483398438e-05,
+        "name": "adaptive",
+        "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+        "policy": "adaptive",
+        "prefillSeconds": 0.3698129653930664,
+        "prefillTokensPerSecond": 146.0197587788858,
+        "promptTokens": 54,
+        "residentMemoryAfterBytes": 15807660032,
+        "residentMemoryBeforeBytes": 15807594496,
+        "ttftSeconds": 0.3700660467147827
+      },
+      {
+        "acceleration": {
+          "acceptanceRate": 0.7299270072992701,
+          "acceptedDraftTokens": 200,
+          "draftHistoryTokens": 53,
+          "draftModel": "qwen-mtp",
+          "draftedTokens": 274,
+          "rounds": 56,
+          "route": "mtp-speculative"
+        },
+        "decodeSeconds": 4.053294062614441,
+        "decodeTokensPerSecond": 63.158506648016505,
+        "elapsedSeconds": 4.409704923629761,
+        "endToEndTokensPerSecond": 58.053771042185446,
+        "expectedMTPActive": true,
+        "firstTokenSeconds": 0.00021207332611083984,
+        "generatedTokens": 256,
+        "loadSeconds": 1.1086463928222656e-05,
+        "name": "adaptive",
+        "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+        "policy": "adaptive",
+        "prefillSeconds": 0.3555600643157959,
+        "prefillTokensPerSecond": 151.87307411453023,
+        "promptTokens": 54,
+        "residentMemoryAfterBytes": 15807725568,
+        "residentMemoryBeforeBytes": 15807709184,
+        "ttftSeconds": 0.35578322410583496
+      },
+      {
+        "acceleration": {
+          "acceptanceRate": 0.7299270072992701,
+          "acceptedDraftTokens": 200,
+          "draftHistoryTokens": 53,
+          "draftModel": "qwen-mtp",
+          "draftedTokens": 274,
+          "rounds": 56,
+          "route": "mtp-speculative"
+        },
+        "decodeSeconds": 4.0802940130233765,
+        "decodeTokensPerSecond": 62.74057682679381,
+        "elapsedSeconds": 4.438243985176086,
+        "endToEndTokensPerSecond": 57.680470216385196,
+        "expectedMTPActive": true,
+        "firstTokenSeconds": 0.00026595592498779297,
+        "generatedTokens": 256,
+        "loadSeconds": 8.940696716308594e-06,
+        "name": "adaptive",
+        "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+        "policy": "adaptive",
+        "prefillSeconds": 0.35709309577941895,
+        "prefillTokensPerSecond": 151.22106990653356,
+        "promptTokens": 54,
+        "residentMemoryAfterBytes": 15807725568,
+        "residentMemoryBeforeBytes": 15807725568,
+        "ttftSeconds": 0.35736799240112305
+      }
+    ],
+    "uncontended": true,
+    "usableAsPairedComparison": false,
+    "workload": "code"
+  }
+}

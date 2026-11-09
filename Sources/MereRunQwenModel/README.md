@@ -29,6 +29,53 @@ package-scoped. Run the independent `QwenRuntimeTests` target before the full
 repository gate. See [Qwen runtime boundaries](../../docs/internals/qwen-runtime-boundaries.md)
 for the generator stages and validation limits.
 
+Core selects the M5 backend by default for eligible Qwen3.8 27B Q4 DFlash text
+on supported hardware with sufficient memory. `MERERUN_Q38_M5_VERIFICATION`
+retains explicit overrides. Compatible portable projections use the shared
+Metal 4 matrix backend. Dense FFNs fuse gate/up and SwiGLU without extra weight
+copies; `MERERUN_Q38_M5_FUSED_FFN=0` retains separate matrix projections for
+comparison. The backend's serial and verification calls share an eight-row tile
+and split policy. Its FP16 weight staging defines a new numerical reference;
+canonical agreement is checked within that backend. Other geometries, devices,
+and independent draft layers keep their existing path. The target output head
+also scores DFlash proposals and follows the target policy.
+Reference request scopes suppress M5 without changing stored module policy.
+
+`Q35DFlash2Config`, `Q35DFlash2Model`, `Q35DFlash2Cache`, and
+`Q35DFlash2Decoder` implement the experimental Qwen3.8 27B DFlash 2 path.
+The draft captures zero-based target layer outputs before final normalization,
+projects their concatenation once, and retains only its sliding context window.
+Draft attention reads confirmed KV without appending proposals. Target
+verification forks the hybrid caches and commits only an accepted prefix;
+caches without prefix rollback replay confirmed tokens on the original state.
+Core owns checkpoint discovery and loading, request admission, and streaming.
+Quantized draft attention prepares fused Q/K/V and context K/V projections at
+load time; replacement modules invalidate their use. These fusions retain extra
+packed weight copies. The draft shares one block
+mask across its layers and uses the request's compiled SwiGLU. Proposals feed
+target verification on the GPU, and each ordinary verification round reads
+proposal and target token IDs together. Confirmed context updates stay lazy
+until the next draft; prefill evaluates all draft caches together per chunk.
+The verification result supplies the next anchor without another argmax or
+logit synchronization. Quantized-KV recovery retains its separate target read.
+An optional phase observer lets Core collect synchronized draft, verification,
+acceptance, and cache-update timings with `MERERUN_Q35_MTP_PROFILE=1`. Ordinary
+decode has no observer; profiled runs are excluded from throughput comparisons.
+`Q35DFlash2Tests` covers the upstream config, block mask, history bounds, fork
+isolation, greedy acceptance and rejection, quantized-KV recovery, EOS, and
+cancellation. Real-checkpoint parity and throughput require separate validation.
+
+`Q35DFlash2Sampling` adds sampled verification using sparse selector proposal
+probabilities. Core supplies the target distribution with the request's filters,
+penalties, bans, and history. Acceptance uses `min(1, p/q)`; a rejected proposal
+is replaced from normalized `max(p-q, 0)` over the full vocabulary. Each position
+uses its proposed prefix, and only accepted history survives the round. All
+acceptance and replacement draws share the request's random stream and one
+packed readback. Quantized-KV recovery retains the verified replacement rather
+than drawing again. Synthetic tests enumerate the output probability law and
+exercise accepted blocks, rejection, EOS, and history isolation. They do not
+qualify checkpoint quality or sampled throughput.
+
 Bonsai 2 uses `Q35PrismConfiguration` and the packed Prism projection and
 embedding modules. Schema-2 module records bind each transformed tensor to its
 explicit sign vector and block size. Projections apply the signed normalized

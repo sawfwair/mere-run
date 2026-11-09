@@ -578,11 +578,14 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertEqual(cmd.promptRepeat, 150)
         XCTAssertNil(cmd.promptRepeatValues)
         XCTAssertEqual(cmd.decodeTokens, 32)
+        XCTAssertFalse(cmd.stopOnEOS)
         XCTAssertNil(cmd.decodeTokenValues)
         XCTAssertEqual(cmd.temperature, 0)
         XCTAssertNil(cmd.temperatureValues)
         XCTAssertEqual(cmd.topP, 0.9)
         XCTAssertEqual(cmd.contextSize, Q35Resources.defaultContextLength)
+        XCTAssertFalse(cmd.thinking)
+        XCTAssertNil(cmd.reasoningEffort)
         XCTAssertNil(cmd.mtpBlockSize)
         XCTAssertEqual(cmd.forcedMTPMinPromptTokens, 1)
         XCTAssertFalse(cmd.json)
@@ -591,6 +594,45 @@ final class ModelBenchmarkCommandTests: XCTestCase {
     func testBenchmarkCommandExposesQ38VerificationSubcommand() {
         let commandNames = Set(ModelBenchmark.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertTrue(commandNames.contains("q38-verification"))
+    }
+
+    func testQwenBenchmarkParsesReasoningForMatchedEngineComparisons() throws {
+        let command = try ModelBenchmarkQ36MTP.parse([
+            "--thinking", "--reasoning-effort", "0.5", "--stop-on-eos",
+        ])
+        XCTAssertTrue(command.thinking)
+        XCTAssertEqual(command.reasoningEffort, 0.5)
+        XCTAssertTrue(command.stopOnEOS)
+        for value in ["-0.1", "1.1", "nan", "inf"] {
+            XCTAssertThrowsError(try ModelBenchmarkQ36MTP.parse(["--reasoning-effort", value]))
+        }
+    }
+
+    func testQwenBenchmarkAcceptsRecommendedSamplingAndRecordsSeed() throws {
+        let command = try ModelBenchmarkQ36MTP.parse([
+            "--temperature", "0.7", "--top-p", "0.8", "--top-k", "20", "--min-p", "0",
+            "--presence-penalty", "1.5", "--frequency-penalty", "0", "--repetition-penalty", "1",
+            "--seed", "42",
+        ])
+        XCTAssertEqual(command.temperature, 0.7)
+        XCTAssertEqual(command.topP, 0.8)
+        XCTAssertEqual(command.topK, 20)
+        XCTAssertEqual(command.minP, 0)
+        XCTAssertEqual(command.presencePenalty, 1.5)
+        XCTAssertEqual(command.frequencyPenalty, 0)
+        XCTAssertEqual(command.repetitionPenalty, 1)
+        XCTAssertEqual(command.seed, 42)
+        for arguments in [["--top-k", "-1"], ["--min-p", "1.1"], ["--presence-penalty", "nan"],
+                          ["--frequency-penalty", "2.1"], ["--repetition-penalty", "0"]] {
+            XCTAssertThrowsError(try ModelBenchmarkQ36MTP.parse(arguments))
+        }
+    }
+
+    func testQwenBenchmarkBaselineExcludesDFlashEvenWhenEnvironmentEnablesIt() {
+        let environment = ["MERERUN_Q35_DFLASH2_PATH": "/tmp/draft"]
+        XCTAssertNil(Q36MTPBenchmarkVariant.baseline.dflash2Path(environment: environment))
+        XCTAssertEqual(Q36MTPBenchmarkVariant.forced.dflash2Path(environment: environment), "/tmp/draft")
+        XCTAssertNil(Q36MTPBenchmarkVariant.forced.dflash2Path(environment: [:]))
     }
 
     func testQ38VerificationBenchmarkParsesDefaults() throws {

@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Use DFlash 2 speculative decoding and tiled M5 kernels by default for eligible
+  Qwen3.8-27B Q4 text requests on M5 Macs with at least 64 GiB of memory and the
+  installed draft. Preserve the requested sampling settings. The managed model
+  download includes the pinned draft, adding about 3.85 GB; refresh older installs
+  with `mere.run model pull vision-chat-q38-27b-4bit --force`. Set
+  `MERERUN_Q35_DFLASH2=0` to opt out.
+- Add sampling controls to Qwen speculation benchmarks and publish throughput
+  reports, including the measured slowdown for non-thinking prose.
+
 - Qualify bounded native YuE2 and SheetSage2 checkpoint paths on an M5 Max.
   Fix companion-model installation validation, fresh-stage containment, and
   offline export of managed license-directory links;

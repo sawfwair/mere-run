@@ -518,9 +518,14 @@ also mounts the official Qwen3.8 configuration, processor metadata, weight
 index, and the first indexed BF16 shard under `vision/` from the pinned official
 revision above. That shard contains all 333 vision tensors; language tensors in
 it are not loaded. Qwen's official Apache-2.0 license is retained separately.
-The sources total about 19.49 GB. Greedy MTP decode is enabled by default for
-this quantized target because its small-batch Q4 verification is serial-exact;
-set `MERERUN_Q35_MTP_SPECULATION=0` to use target-only decode.
+The managed pull also mounts `incoai/Qwen3.8-27B-DFlash2` at revision
+`015e795645c74b1a0eeef3b570031fb62e769bc5` under `dflash2/`. This adds about
+3.85 GB, bringing the source total to about 23.34 GB. On Apple10 GPU Macs with
+macOS 26 or later and at least 64 GiB of memory, eligible text requests use this
+draft and the M5 matrix kernels by default, preserving Qwen's sampling settings.
+Set `MERERUN_Q35_DFLASH2=0` to disable the draft. Without an active DFlash
+companion, the existing MTP policy applies; set `MERERUN_Q35_MTP_SPECULATION=0`
+to disable MTP too.
 
 `vision-chat-q38-flash-next-mixed` installs Sawfwair's immutable
 `Qwen3.8-Flash-Next-MLX-Mixed-2bit` revision

@@ -4,6 +4,44 @@ import XCTest
 @testable import MereRunQwenModel
 
 final class Q35SamplingTests: MereRunCoreTestCase {
+    func testPackedGreedyVerificationRequiresOptInForMatchedMeasurements() {
+        XCTAssertFalse(Q35Sampling.packedGreedyVerificationEnabled(environment: [:]))
+        for value in ["0", "false", "off", " OFF ", "invalid"] {
+            XCTAssertFalse(Q35Sampling.packedGreedyVerificationEnabled(environment: [
+                "MERERUN_Q35_PACKED_GREEDY_VERIFICATION": value,
+            ]))
+        }
+        for value in ["1", "true", "on", " ON "] {
+            XCTAssertTrue(Q35Sampling.packedGreedyVerificationEnabled(environment: [
+                "MERERUN_Q35_PACKED_GREEDY_VERIFICATION": value,
+            ]))
+        }
+    }
+
+    func testGreedyVerificationBlocksMatchSerialSamplingIncludingBansAndTies() {
+        for dtype in [DType.float32, .bfloat16] {
+            for width in [1, 2, 4, 8, 9] {
+                let values = (0..<(width * 64)).map { Float(($0 * 17) % 11 - 5) }
+                let logits = MLXArray(values).reshaped(1, width, 64).asType(dtype)
+                for banned in [[], [0, 1, 3, 5, 7, 63], [-1, 64, 65]] {
+                    let config = GenerationConfig(
+                        temperature: 0, topK: 20, topP: 0.95, repetitionPenalty: 1, bannedTokens: banned
+                    )
+                    let original = logits.asArray(Float.self)
+                    let ids = Q35Sampling.greedyVerificationTokenIDs(
+                        logits: logits, config: config,
+                        banMask: tokenBanMask(vocabularySize: 64, dtype: dtype, tokens: banned)
+                    ).asArray(Int32.self).map(Int.init)
+                    let expected = (0..<width).map { index in
+                        sampleToken(logits: logits[0, index, 0...], config: config, previousTokens: [1, 2, 3])
+                    }
+                    XCTAssertEqual(ids, expected)
+                    XCTAssertEqual(logits.asArray(Float.self), original, "Verification cannot modify target logits")
+                }
+            }
+        }
+    }
+
     func testRequestControlsReachSamplerWithoutEnablingNeutralPenalties() {
         var request = ChatRequest(
             messages: [], temperature: 0.6, topP: 0.95, topK: 20, minP: 0,

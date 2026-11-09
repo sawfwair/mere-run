@@ -2,11 +2,36 @@ import Foundation
 import MediaIO
 import MLX
 import MLXNN
+import MereRunTensor
 #if canImport(Darwin)
 import Darwin
 #endif
 
 extension Q35Generator {
+    static func shouldUseM5Verification(
+        modelID: String, draftAvailable: Bool = false,
+        hardwareSupported: Bool = QuantizedVerificationBackend.m5Supported,
+        physicalMemory: UInt64 = ProcessInfo.processInfo.physicalMemory,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Bool {
+        guard modelID == Q35Resources.q38TwentySevenB4BitModelId else { return false }
+        let value = environment["MERERUN_Q38_M5_VERIFICATION"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if value == nil { return draftAvailable && hardwareSupported && physicalMemory >= 64 * 1_024 * 1_024 * 1_024 }
+        return value == "1" || value == "true" || value == "yes" || value == "on"
+    }
+
+    static func shouldUseM5Projection(
+        path: String, environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Bool {
+        switch environment["MERERUN_Q38_M5_PROJECTIONS"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case nil, "all": return true
+        case "head": return path == "lm_head"
+        default: return false
+        }
+    }
+
     func ensureLoaded(
         rootURL: URL,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
@@ -20,6 +45,7 @@ extension Q35Generator {
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family config"))
         let configData = try Data(contentsOf: normalizedRoot.appendingPathComponent("config.json"))
         let config = try JSONDecoder().decode(Q35Config.self, from: configData)
+        let dflash2 = try dflash2Configuration(target: config, targetRoot: normalizedRoot)
         let generationConfigURL = normalizedRoot.appendingPathComponent("generation_config.json")
         let generationEOSTokenIds: [Int]
         if FileManager.default.fileExists(atPath: generationConfigURL.path) {
@@ -67,6 +93,11 @@ extension Q35Generator {
         #if DEBUG
         try checkpointTransformForTesting?(q35Model)
         #endif
+        if Self.shouldUseM5Verification(modelID: modelId, draftAvailable: dflash2 != nil) {
+            for (path, module) in q35Model.leafModules().flattened() where Self.shouldUseM5Projection(path: path) {
+                (module as? PortableQuantizedLinear)?.verificationBackend = .m5Matrix
+            }
+        }
         if Q35FusedSwitchGLUPolicy.enabled, config.textConfig.usesMoE {
             progressHandler?(ChatProgress(
                 stage: .loadingModel,
@@ -110,7 +141,7 @@ extension Q35Generator {
         let mtpExplicitlyEnabled = mtpPolicy == "1" || mtpPolicy == "true"
             || mtpPolicy == "yes" || mtpPolicy == "on"
         let q38Q4 = modelId == Q35Resources.q38TwentySevenB4BitModelId
-        let shouldLoadMTP = !mtpExplicitlyDisabled
+        let shouldLoadMTP = dflash2 == nil && !mtpExplicitlyDisabled
             && (config.textConfig.usesMoE || q38Q4 || mtpExplicitlyEnabled)
         let loadedMTP: (any Q35MTPDraftModel)?
         let ornithMTPCompanionRoot = Q35Resources.isOrnith35BMLXModelId(modelId)
@@ -161,10 +192,12 @@ extension Q35Generator {
             loadedMTP = nil
         }
 
+        let loadedDFlash2 = try loadDFlash2(configuration: dflash2, progressHandler: progressHandler)
         model = q35Model
         tokenizerAndTemplate = tokenizer
         visionTower = tower
         mtpModel = loadedMTP
+        dflash2Model = loadedDFlash2
         loadedConfig = config
         loadedGenerationEOSTokenIds = generationEOSTokenIds
         loadedResources = resources

@@ -1,5 +1,27 @@
 # Third-Party Notices
 
+## Splash staged matrix operand construction
+
+`Sources/MereRunTensor/M5AffineQ4Verification.swift` adapts the Metal Performance
+Primitives operand and accumulator construction from `incoai/splash` 1.6.0,
+`runtime/metal/kernels/common/gguf_staged_tile.h`, under Apache License 2.0:
+<https://github.com/incoai/splash/tree/1.6.0>.
+The original experiment reads MLX affine Q4 buffers and uses its own staging
+mapping and split reduction. `Sources/MereRunTensor/M5TiledAffineQ4.swift` and
+`M5TiledAffineQ4+SwiGLU.swift` additionally adapt the tile-major column layout,
+32-channel stages, and paired per-step matrix operations from those helpers.
+Their packing uses MLX array operations and retains original parameters for
+fallback. They do not include Splash's quantization format registry or
+calibrated dispatch policy. The Apache License 2.0 text is included in this
+file's YuE2 notice.
+
+The sigmoid expressions in
+`Sources/MereRunTensor/M5AffineQ4Verification+SwiGLU.swift` and
+`Sources/MereRunTensor/M5TiledAffineQ4.swift` follow MLX's
+`mlx/backend/metal/kernels/unary_ops.h`, copyright © 2023–2024 Apple Inc., under
+the MIT License. The MIT notice is reproduced in the MLX runtime bundle
+notice below.
+
 ## libjpeg-turbo
 
 `Sources/CMereRunJPEG/libjpeg/src/` contains the scalar decoder source closure

@@ -168,8 +168,11 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
     @Option(name: [.long], help: "Comma-separated repeat counts for a prompt-size benchmark matrix.")
     var promptRepeatValues: String?
 
-    @Option(name: [.long], help: "Exact number of decode tokens to force per variant.")
+    @Option(name: [.long], help: "Decode-token budget; exact unless --stop-on-eos is set.")
     var decodeTokens: Int = 32
+
+    @Flag(name: [.long], help: "Stop at EOS instead of forcing the full decode-token budget.")
+    var stopOnEOS: Bool = false
 
     @Option(name: [.long], help: "Comma-separated decode token counts for a decode-length benchmark matrix.")
     var decodeTokenValues: String?
@@ -183,8 +186,32 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
     @Option(name: [.long], help: "Top-p for benchmark sampling.")
     var topP: Double = 0.9
 
+    @Option(name: [.long], help: "Top-k for benchmark sampling; zero disables it.")
+    var topK: Int = 0
+
+    @Option(name: [.long], help: "Minimum probability relative to the most likely token.")
+    var minP: Double = 0
+
+    @Option(name: [.long], help: "Presence penalty on generated tokens.")
+    var presencePenalty: Double = 0
+
+    @Option(name: [.long], help: "Frequency penalty on generated tokens.")
+    var frequencyPenalty: Double = 0
+
+    @Option(name: [.long], help: "Repetition penalty; one disables it.")
+    var repetitionPenalty: Double = 1
+
+    @Option(name: [.long], help: "Sampling seed, reset for each benchmark request.")
+    var seed: UInt64?
+
     @Option(name: [.long], help: "Context size passed to Qwen3.6 generation.")
     var contextSize: Int = Q35Resources.defaultContextLength
+
+    @Flag(name: [.long], help: "Enable reasoning in the benchmark chat template.")
+    var thinking: Bool = false
+
+    @Option(name: [.long], help: "Reasoning strength from 0 to 1; Qwen3.8 maps 0.5 to medium.")
+    var reasoningEffort: Double?
 
     @Option(name: [.long], help: "Override MERERUN_Q35_MTP_BLOCK_SIZE for MTP variants.")
     var mtpBlockSize: Int?
@@ -261,6 +288,11 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
         guard contextSize > 0 else {
             throw ValidationError("--context-size must be greater than zero.")
         }
+        if let reasoningEffort {
+            guard reasoningEffort.isFinite, (0...1).contains(reasoningEffort) else {
+                throw ValidationError("--reasoning-effort must be finite and between 0 and 1.")
+            }
+        }
         guard forcedMTPMinPromptTokens >= 0 else {
             throw ValidationError("--forced-mtp-min-prompt-tokens must be non-negative.")
         }
@@ -283,6 +315,11 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
         guard (0...1).contains(topP), topP.isFinite else {
             throw ValidationError("--top-p must be finite and between 0 and 1.")
         }
+        try ChatRequestResolver.validate(ChatRequest(
+            messages: [ChatMessage(role: .user, content: "benchmark")],
+            topK: topK, minP: minP, presencePenalty: presencePenalty,
+            frequencyPenalty: frequencyPenalty, repetitionPenalty: repetitionPenalty
+        ))
         if prompt != nil || promptFile != nil {
             guard promptRepeats.count == 1 else {
                 throw ValidationError("--prompt-repeat-values can only contain one value when using --prompt or --prompt-file.")
@@ -316,8 +353,11 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
                         maxTokens: decodeTokenCount,
                         temperature: temperature,
                         topP: topP,
-                        showThinking: false,
-                        stopOnEOS: false,
+                        topK: topK, minP: minP, presencePenalty: presencePenalty,
+                        frequencyPenalty: frequencyPenalty, repetitionPenalty: repetitionPenalty, seed: seed,
+                        reasoningEffort: reasoningEffort,
+                        showThinking: thinking,
+                        stopOnEOS: stopOnEOS,
                         maxContextTokens: contextSize
                     )
                     var results: [[Q36MTPBenchmarkVariantResult]] = []
@@ -333,7 +373,12 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
                                 promptRepeat: self.prompt != nil || self.promptFile != nil ? nil : repeatCount,
                                 promptCharacters: prompt.count,
                                 requestedDecodeTokens: decodeTokenCount,
+                                stopOnEOS: stopOnEOS,
                                 temperature: temperature,
+                                topP: topP, topK: topK, minP: minP, presencePenalty: presencePenalty,
+                                frequencyPenalty: frequencyPenalty, repetitionPenalty: repetitionPenalty, seed: seed,
+                                thinking: thinking,
+                                reasoningEffort: reasoningEffort,
                                 contextSize: contextSize,
                                 variants: results.map { $0[repetition] }
                             )
@@ -413,10 +458,16 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
         _ variant: Q36MTPBenchmarkVariant,
         request: ChatRequest
     ) async throws -> [Q36MTPBenchmarkVariantResult] {
+        // This command isolates native MTP variants unless the caller selects
+        // a DFlash checkpoint explicitly; normal runtime defaults stay outside
+        // its baseline and MTP controls.
+        let draftPath = variant.dflash2Path()
         let generator = Q35Generator(
             modelId: model,
             prefixKVCacheEnabled: false,
-            continuousBatchingEnabled: false
+            continuousBatchingEnabled: false,
+            dflash2ModelPath: draftPath,
+            dflash2Enabled: draftPath != nil
         )
         let results = try await withTemporaryEnvironment(variant.environmentOverrides(self)) {
             var warmup = request
@@ -451,7 +502,8 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
         return Q36MTPBenchmarkVariantResult(
             name: variant.name,
             policy: variant.policy,
-            expectedMTPActive: variant.expectedMTPActive(
+            expectedMTPActive: response.acceleration?.draftModel != Q35Resources.q38DFlash2UpstreamRepoId
+                && variant.expectedMTPActive(
                 modelID: model,
                 promptTokens: promptTokens,
                 contextSize: contextSize,
@@ -492,6 +544,10 @@ struct Q36MTPBenchmarkVariant {
     static let baseline = Self(name: "baseline", policy: "disabled")
     static let adaptive = Self(name: "adaptive", policy: "adaptive")
     static let forced = Self(name: "forced", policy: "forced")
+
+    func dflash2Path(environment: [String: String] = ProcessInfo.processInfo.environment) -> String? {
+        name == Self.baseline.name ? nil : environment["MERERUN_Q35_DFLASH2_PATH"]
+    }
 
     func environmentOverrides(_ command: ModelBenchmarkQ36MTP) -> [String: String?] {
         var overrides: [String: String?] = [
@@ -567,7 +623,17 @@ private struct Q36MTPBenchmarkScenarioResult: Encodable {
     let promptRepeat: Int?
     let promptCharacters: Int
     let requestedDecodeTokens: Int
+    let stopOnEOS: Bool
     let temperature: Double
+    let topP: Double
+    let topK: Int
+    let minP: Double
+    let presencePenalty: Double
+    let frequencyPenalty: Double
+    let repetitionPenalty: Double
+    let seed: UInt64?
+    let thinking: Bool
+    let reasoningEffort: Double?
     let contextSize: Int
     let variants: [Q36MTPBenchmarkVariantResult]
 
@@ -590,7 +656,10 @@ private struct Q36MTPBenchmarkScenarioResult: Encodable {
         case promptRepeat
         case promptCharacters
         case requestedDecodeTokens
+        case stopOnEOS
         case temperature
+        case topP, topK, minP, presencePenalty, frequencyPenalty, repetitionPenalty, seed
+        case thinking, reasoningEffort
         case contextSize
         case decodeSpeedups
         case endToEndSpeedups
@@ -606,7 +675,17 @@ private struct Q36MTPBenchmarkScenarioResult: Encodable {
         try container.encodeIfPresent(promptRepeat, forKey: .promptRepeat)
         try container.encode(promptCharacters, forKey: .promptCharacters)
         try container.encode(requestedDecodeTokens, forKey: .requestedDecodeTokens)
+        try container.encode(stopOnEOS, forKey: .stopOnEOS)
         try container.encode(temperature, forKey: .temperature)
+        try container.encode(topP, forKey: .topP)
+        try container.encode(topK, forKey: .topK)
+        try container.encode(minP, forKey: .minP)
+        try container.encode(presencePenalty, forKey: .presencePenalty)
+        try container.encode(frequencyPenalty, forKey: .frequencyPenalty)
+        try container.encode(repetitionPenalty, forKey: .repetitionPenalty)
+        try container.encodeIfPresent(seed, forKey: .seed)
+        try container.encode(thinking, forKey: .thinking)
+        try container.encodeIfPresent(reasoningEffort, forKey: .reasoningEffort)
         try container.encode(contextSize, forKey: .contextSize)
         try container.encode(decodeSpeedups, forKey: .decodeSpeedups)
         try container.encode(endToEndSpeedups, forKey: .endToEndSpeedups)

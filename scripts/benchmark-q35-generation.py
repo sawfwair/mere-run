@@ -124,6 +124,8 @@ def run_case(args, root, binary, name, prompt, environment):
     ]
     if args.block_size:
         command.extend(["--mtp-block-size", str(args.block_size)])
+    if args.model_root:
+        command.extend(["--model-root", str(args.model_root)])
     started = time.time()
     print(f"start {args.model} {name}", flush=True)
     peak_rss = 0
@@ -183,6 +185,7 @@ def main():
     parser.add_argument("--source-root", type=Path, help="Checkout used to build the binary.")
     parser.add_argument("--build-source-revision", help="Exact Git revision recorded when building this binary.")
     parser.add_argument("--model", choices=MODELS, required=True)
+    parser.add_argument("--model-root", type=Path, help="Use an explicit local target and companion assembly.")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--workloads", nargs="+", choices=PROMPTS, default=list(PROMPTS))
     parser.add_argument("--tokens", type=int, default=512)
@@ -202,6 +205,7 @@ def main():
     parser.add_argument("--async-blocks", choices=["0", "1"])
     parser.add_argument("--pipelined-fallback", choices=["0", "1"])
     parser.add_argument("--scoped-compile", choices=["0", "1"])
+    parser.add_argument("--packed-greedy-verification", choices=["0", "1"])
     args = parser.parse_args()
     root = (args.source_root or Path(__file__).resolve().parents[1]).resolve()
     args.output = args.output.resolve()
@@ -215,6 +219,8 @@ def main():
         environment["MERERUN_Q35_ASYNC_DECODE_BLOCKS"] = args.async_blocks
     if args.scoped_compile is not None:
         environment["MERERUN_Q35_SCOPED_COMPILE"] = args.scoped_compile
+    if args.packed_greedy_verification is not None:
+        environment["MERERUN_Q35_PACKED_GREEDY_VERIFICATION"] = args.packed_greedy_verification
     if args.pipelined_fallback is not None:
         environment["MERERUN_Q35_MTP_PIPELINED_FALLBACK"] = args.pipelined_fallback
     if args.profile:
