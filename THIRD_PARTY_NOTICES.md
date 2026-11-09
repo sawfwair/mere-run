@@ -1,5 +1,16 @@
 # Third-Party Notices
 
+## Splash matrix operand construction
+
+`Sources/MereRunTensor/M5AffineQ8Head.swift` adapts Metal Performance Primitives
+operand and accumulator construction from the Qwen matrix experiment and
+`incoai/splash` 1.6.0, `runtime/metal/kernels/common/gguf_staged_tile.h`, under
+Apache License 2.0: <https://github.com/incoai/splash/tree/1.6.0>.
+The Q8 implementation reads original MLX affine buffers, stages BF16 tiles, and
+retains native fallback. It does not include Splash's quantization registry or
+dispatch policy. The Apache License 2.0 text is included in this file's YuE2
+notice.
+
 ## libjpeg-turbo
 
 `Sources/CMereRunJPEG/libjpeg/src/` contains the scalar decoder source closure

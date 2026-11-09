@@ -186,13 +186,27 @@ Smaller output budgets retain the acceptance policy. An explicit zero minimum
 acceptance disables fallback and calibration for controlled width experiments.
 The probes emit no tokens and do not change the caller's prompt cache.
 
-The vocabulary-head kernel preserves native serial Q8 accumulation and reads
+The `head4` vocabulary-head kernel preserves native serial Q8 accumulation and reads
 the original packed buffers. Ordinary MLP and attention projections retain native
 execution. Component controls `shared1`, `shared2`, and `shared4` apply the kernel
 more broadly for diagnostics; they are separate from the narrowed `head4` route.
 The head route requires the quantized-prefill adapter, selected automatically on
 supported M5 hardware. `MERERUN_MUSE_GLIMMER_QUANTIZED_PREFILL=native` bypasses it.
 Unsupported dtypes, layouts, and packed-byte index ranges retain native matmul.
+
+Experimental `MERERUN_MUSE_GLIMMER_Q8_VERIFY=nax-head1`, `nax-head2`,
+`nax-head4`, and `nax-head8` select an M5 matrix kernel for the exact `lm_head`
+module. The suffix is the number of input-dimension splits. All other projections
+retain their existing execution paths. The BF16 assistant's independent layers
+are unchanged; its projections through the shared target head use the selected
+head arithmetic. This requires affine Q8/group-64 weights, BF16 metadata, the
+quantized-prefill adapter, and compatible head dimensions. Unsupported selections
+fail during model preparation. These modes change dequantization rounding and
+accumulation, so native-Q8 parity does not follow from serial/batched agreement
+within the new kernel. The [November 8 comparison](../../../docs/internals/messages-qualification.md#q8-nax-output-head-experiment-on-november-8)
+found no end-to-end speedup, so these modes remain experimental and unselected.
+The bounded likelihood and content checks passed; broader coding, vision, and
+desktop qualification is not claimed. Q4 and normalization fusion are not selected.
 
 The checkpoint harness records admission wait and checkpoint preparation
 separately from prefill and decode. Its optional synchronized phase observer

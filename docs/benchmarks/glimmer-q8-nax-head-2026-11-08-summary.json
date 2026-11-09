@@ -1,0 +1,1364 @@
+{
+  "schema_version": 1,
+  "status": "Experimental opt-in; not selected because the measured end-to-end throughput does not improve. Broader coding, advanced-feature, vision and desktop qualification is not claimed for this NAX mode.",
+  "hardware": "Apple M5 Max, 40 GPU cores, 128 GB unified memory",
+  "source_base_commit": "6db96ec09e4f47fe134e7b87879636ed21ae3015",
+  "production_provenance": {
+    "source_base_commit": "6db96ec09e4f47fe134e7b87879636ed21ae3015",
+    "source_digest": "1ba60e2021d7fe5364f59b5087acf9fc8ae30d8a4e7a37b99a09fed44990a436",
+    "binary_sha256": "caa3ac2ecdcf6d41dacebbb4af1e111fd71462c86675120decffbd4390faba48",
+    "compiler_configuration": "Production Release without DEBUG test hooks",
+    "quality_bar_sha256": "fae0e26b43d42e564af22115685e1a1b31f090746b8c7dbc58698c9f8773ef4f",
+    "created_unix": 1794183032.149458
+  },
+  "precision": {
+    "target": "Unchanged selective symmetric affine Q8/group64",
+    "activations_and_kv": "BF16",
+    "assistant": "Unchanged BF16 DFlash2",
+    "normalization": "Original; fusion disabled",
+    "head": "Direct original packed Q8 buffers; BF16 dequantized tiles; FP32 matrix accumulation and partial reduction; BF16 output"
+  },
+  "checkpoint_receipt_sha256": "c8545755dce55ab11e63739ff23fd3acfd08b2132edc059cef14edc0a3da7b55",
+  "controls": {
+    "reference": "head4",
+    "candidate": "nax-head4",
+    "deferred": true,
+    "cost_fallback": true,
+    "fused_norm": false,
+    "draft_tokens": 3,
+    "context_size": 65536
+  },
+  "measurement_rule": "Same production Release executable. Baseline/candidate/baseline; first attempt per prompt/configuration retained as warmup and excluded. First two later resource-qualified samples selected. Generated tokens/full decode duration excludes load, admission, prefill and tools. HTTP wall includes the generation request, excluding the separate token-count request. No timing-based exclusions.",
+  "performance": [
+    {
+      "prompt": "python-lru",
+      "prompt_tokens": 86,
+      "output_tokens": 256,
+      "reference": {
+        "samples": 4,
+        "median_decode_tps": 39.10237911693955,
+        "median_prefill_seconds": 0.44704848527908325,
+        "median_http_wall_seconds": 7.044424416555557
+      },
+      "candidate": {
+        "samples": 2,
+        "median_decode_tps": 39.631700068632284,
+        "median_prefill_seconds": 0.47515296936035156,
+        "median_http_wall_seconds": 6.965392374491785
+      },
+      "decode_tps_change_percent": 1.3536796574697973,
+      "reference_blocks": {
+        "http-head4-a": {
+          "samples": 2,
+          "median_decode_tps": 40.45923051011199,
+          "median_prefill_seconds": 0.4428889751434326,
+          "median_http_wall_seconds": 6.80205062503228
+        },
+        "http-head4-b": {
+          "samples": 2,
+          "median_decode_tps": 38.33170888872705,
+          "median_prefill_seconds": 0.47119849920272827,
+          "median_http_wall_seconds": 7.179915416520089
+        }
+      }
+    },
+    {
+      "prompt": "context-8k",
+      "prompt_tokens": 7173,
+      "output_tokens": 256,
+      "reference": {
+        "samples": 4,
+        "median_decode_tps": 29.630750020851984,
+        "median_prefill_seconds": 11.560148477554321,
+        "median_http_wall_seconds": 20.247778291988652
+      },
+      "candidate": {
+        "samples": 2,
+        "median_decode_tps": 27.916073557586525,
+        "median_prefill_seconds": 12.351939022541046,
+        "median_http_wall_seconds": 21.59311420796439
+      },
+      "decode_tps_change_percent": -5.7868142455347655,
+      "reference_blocks": {
+        "http-head4-a": {
+          "samples": 2,
+          "median_decode_tps": 30.891947292681056,
+          "median_prefill_seconds": 10.924691498279572,
+          "median_http_wall_seconds": 19.284004666493274
+        },
+        "http-head4-b": {
+          "samples": 2,
+          "median_decode_tps": 28.666292761593965,
+          "median_prefill_seconds": 12.18036699295044,
+          "median_http_wall_seconds": 21.18493235448841
+        }
+      }
+    }
+  ],
+  "http_samples": [
+    {
+      "label": "http-head4-a-python-lru-a00",
+      "prompt": "python-lru",
+      "repetition": 0,
+      "warmup": true,
+      "model": "q8-symmetric-bf16-g64",
+      "prompt_tokens": 86,
+      "output_tokens": 256,
+      "request_id": "req_CEE6C3E5D2924F5497430DC02FBA2522",
+      "http_wall_seconds": 7.705103209009394,
+      "timing": {
+        "decodeKVCache": "native-bf16",
+        "prefillSeconds": 0.6746220588684082,
+        "timeToFirstTokenSeconds": 0.7929480075836182,
+        "promptTokens": 86,
+        "decodeSeconds": 6.997696042060852,
+        "generatedTokens": 256,
+        "loadSeconds": 5.2928924560546875e-05,
+        "prefillKVCache": "native-bf16"
+      },
+      "decode_tps": 36.58346953929809,
+      "visible_text_sha256": "33a29972caff105724e19aae12a6ea7605efcacabcc8db8acc9d271a964a7120",
+      "thinking_sha256": "3070cf6f1abce2f32d59fcf00f905a784d52649d1a77a76f4750d44ef204372d",
+      "usage": {
+        "cache_creation": null,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": null,
+        "input_tokens": 86,
+        "output_tokens": 256,
+        "output_tokens_details": null,
+        "server_tool_use": null,
+        "service_tier": null,
+        "speed": null
+      },
+      "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+      "head_backend": "head4",
+      "server_configuration": "http-head4-a",
+      "resource_qualified": true,
+      "selected": false
+    },
+    {
+      "label": "http-head4-a-python-lru-a01",
+      "prompt": "python-lru",
+      "repetition": 1,
+      "warmup": false,
+      "model": "q8-symmetric-bf16-g64",
+      "prompt_tokens": 86,
+      "output_tokens": 256,
+      "request_id": "req_F7CAAC56A1B24570AC6E7280F63D1159",
+      "http_wall_seconds": 6.9347825000295416,
+      "timing": {
+        "decodeKVCache": "native-bf16",
+        "timeToFirstTokenSeconds": 0.5562108755111694,
+        "prefillSeconds": 0.43883800506591797,
+        "promptTokens": 86,
+        "generatedTokens": 256,
+        "loadSeconds": 4.696846008300781e-05,
+        "decodeSeconds": 6.46712589263916,
+        "prefillKVCache": "native-bf16"
+      },
+      "decode_tps": 39.584817776839245,
+      "visible_text_sha256": "33a29972caff105724e19aae12a6ea7605efcacabcc8db8acc9d271a964a7120",
+      "thinking_sha256": "3070cf6f1abce2f32d59fcf00f905a784d52649d1a77a76f4750d44ef204372d",
+      "usage": {
+        "cache_creation": null,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": null,
+        "input_tokens": 86,
+        "output_tokens": 256,
+        "output_tokens_details": null,
+        "server_tool_use": null,
+        "service_tier": null,
+        "speed": null
+      },
+      "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+      "head_backend": "head4",
+      "server_configuration": "http-head4-a",
+      "resource_qualified": true,
+      "selected": true
+    },
+    {
+      "label": "http-head4-a-python-lru-a02",
+      "prompt": "python-lru",
+      "repetition": 2,
+      "warmup": false,
+      "model": "q8-symmetric-bf16-g64",
+      "prompt_tokens": 86,
+      "output_tokens": 256,
+      "request_id": "req_17B2922396B24C62B0674152D26E662E",
+      "http_wall_seconds": 6.669318750035018,
+      "timing": {
+        "prefillKVCache": "native-bf16",
+        "decodeSeconds": 6.193501949310303,
+        "generatedTokens": 256,
+        "prefillSeconds": 0.44693994522094727,
+        "promptTokens": 86,
+        "decodeKVCache": "native-bf16",
+        "timeToFirstTokenSeconds": 0.5603218078613281,
+        "loadSeconds": 4.494190216064453e-05
+      },
+      "decode_tps": 41.333643243384735,
+      "visible_text_sha256": "33a29972caff105724e19aae12a6ea7605efcacabcc8db8acc9d271a964a7120",
+      "thinking_sha256": "3070cf6f1abce2f32d59fcf00f905a784d52649d1a77a76f4750d44ef204372d",
+      "usage": {
+        "cache_creation": null,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": null,
+        "input_tokens": 86,
+        "output_tokens": 256,
+        "output_tokens_details": null,
+        "server_tool_use": null,
+        "service_tier": null,
+        "speed": null
+      },
+      "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+      "head_backend": "head4",
+      "server_configuration": "http-head4-a",
+      "resource_qualified": true,
+      "selected": true
+    },
+    {
+      "label": "http-head4-a-context-8k-a00",
+      "prompt": "context-8k",
+      "repetition": 0,
+      "warmup": true,
+      "model": "q8-symmetric-bf16-g64",
+      "prompt_tokens": 7173,
+      "output_tokens": 256,
+      "request_id": "req_1BEF8A7AA5884897ADDCCA2F81143DE9",
+      "http_wall_seconds": 19.771601250045933,
+      "timing": {
+        "prefillKVCache": "native-bf16",
+        "decodeSeconds": 8.411939978599548,
+        "generatedTokens": 256,
+        "prefillSeconds": 11.288906931877136,
+        "promptTokens": 7173,
+        "decodeKVCache": "native-bf16",
+        "timeToFirstTokenSeconds": 11.531630992889404,
+        "loadSeconds": 4.601478576660156e-05
+      },
+      "decode_tps": 30.432932314219848,
+      "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+      "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+      "usage": {
+        "cache_creation": null,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": null,
+        "input_tokens": 7173,
+        "output_tokens": 256,
+        "output_tokens_details": null,
+        "server_tool_use": null,
+        "service_tier": null,
+        "speed": null
+      },
+      "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+      "head_backend": "head4",
+      "server_configuration": "http-head4-a",
+      "resource_qualified": true,
+      "selected": false
+    },
+    {
+      "label": "http-head4-a-context-8k-a01",
+      "prompt": "context-8k",
+      "repetition": 1,
+      "warmup": false,
+      "model": "q8-symmetric-bf16-g64",
+      "prompt_tokens": 7173,
+      "output_tokens": 256,
+      "request_id": "req_D156375300894A90A0A5A5BF171DAFF4",
+      "http_wall_seconds": 19.33108912501484,
+      "timing": {
+        "decodeKVCache": "native-bf16",
+        "prefillSeconds": 10.890330076217651,
+        "timeToFirstTokenSeconds": 11.139650106430054,
+        "promptTokens": 7173,
+        "decodeSeconds": 8.369161009788513,
+        "loadSeconds": 4.8995018005371094e-05,
+        "generatedTokens": 256,
+        "prefillKVCache": "native-bf16"
+      },
+      "decode_tps": 30.588490256142062,
+      "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+      "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+      "usage": {
+        "cache_creation": null,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": null,
+        "input_tokens": 7173,
+        "output_tokens": 256,
+        "output_tokens_details": null,
+        "server_tool_use": null,
+        "service_tier": null,
+        "speed": null
+      },
+      "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+      "head_backend": "head4",
+      "server_configuration": "http-head4-a",
+      "resource_qualified": true,
+      "selected": true
+    },
+    {
+      "label": "http-head4-a-context-8k-a02",
+      "prompt": "context-8k",
+      "repetition": 2,
+      "warmup": false,
+      "model": "q8-symmetric-bf16-g64",
+      "prompt_tokens": 7173,
+      "output_tokens": 256,
+      "request_id": "req_AC216BD20C1E4C0CBC9C9D88A71CA493",
+      "http_wall_seconds": 19.236920207971707,
+      "timing": {
+        "decodeKVCache": "native-bf16",
+        "prefillSeconds": 10.959052920341492,
+        "timeToFirstTokenSeconds": 11.20418894290924,
+        "promptTokens": 7173,
+        "generatedTokens": 256,
+        "loadSeconds": 5.0067901611328125e-05,
+        "decodeSeconds": 8.206336975097656,
+        "prefillKVCache": "native-bf16"
+      },
+      "decode_tps": 31.19540432922005,
+      "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+      "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+      "usage": {
+        "cache_creation": null,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": null,
+        "input_tokens": 7173,
+        "output_tokens": 256,
+        "output_tokens_details": null,
+        "server_tool_use": null,
+        "service_tier": null,
+        "speed": null
+      },
+      "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+      "head_backend": "head4",
+      "server_configuration": "http-head4-a",
+      "resource_qualified": true,
+      "selected": true
+    },
+    {
+      "label": "http-nax-python-lru-a00",
+      "prompt": "python-lru",
+      "repetition": 0,
+      "warmup": true,
+      "model": "q8-symmetric-bf16-g64",
+      "prompt_tokens": 86,
+      "output_tokens": 256,
+      "request_id": "req_BD4BE338C2D0437EBC2C64B13B636625",
+      "http_wall_seconds": 6.948015791946091,
+      "timing": {
+        "decodeKVCache": "native-bf16",
+        "generatedTokens": 256,
+        "prefillSeconds": 0.44690895080566406,
+        "decodeSeconds": 6.4721009731292725,
+        "prefillKVCache": "native-bf16",
+        "timeToFirstTokenSeconds": 0.5613188743591309,
+        "promptTokens": 86,
+        "loadSeconds": 4.696846008300781e-05
+      },
+      "decode_tps": 39.55438907131629,
+      "visible_text_sha256": "33a29972caff105724e19aae12a6ea7605efcacabcc8db8acc9d271a964a7120",
+      "thinking_sha256": "3070cf6f1abce2f32d59fcf00f905a784d52649d1a77a76f4750d44ef204372d",
+      "usage": {
+        "cache_creation": null,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": null,
+        "input_tokens": 86,
+        "output_tokens": 256,
+        "output_tokens_details": null,
+        "server_tool_use": null,
+        "service_tier": null,
+        "speed": null
+      },
+      "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+      "head_backend": "nax-head4",
+      "server_configuration": "http-nax",
+      "resource_qualified": true,
+      "selected": false
+    },
+    {
+      "label": "http-nax-python-lru-a01",
+      "prompt": "python-lru",
+      "repetition": 1,
+      "warmup": false,
+      "model": "q8-symmetric-bf16-g64",
+      "prompt_tokens": 86,
+      "output_tokens": 256,
+      "request_id": "req_8C7747B1F6D44E018EB5485F19C7FFAC",
+      "http_wall_seconds": 7.090801707934588,
+      "timing": {
+        "timeToFirstTokenSeconds": 0.6276359558105469,
+        "decodeSeconds": 6.559553027153015,
+        "prefillKVCache": "native-bf16",
+        "prefillSeconds": 0.502269983291626,
+        "generatedTokens": 256,
+        "decodeKVCache": "native-bf16",
+        "loadSeconds": 5.996227264404297e-05,
+        "promptTokens": 86
+      },
+      "decode_tps": 39.02704939502706,
+      "visible_text_sha256": "33a29972caff105724e19aae12a6ea7605efcacabcc8db8acc9d271a964a7120",
+      "thinking_sha256": "3070cf6f1abce2f32d59fcf00f905a784d52649d1a77a76f4750d44ef204372d",
+      "usage": {
+        "cache_creation": null,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": null,
+        "input_tokens": 86,
+        "output_tokens": 256,
+        "output_tokens_details": null,
+        "server_tool_use": null,
+        "service_tier": null,
+        "speed": null
+      },
+      "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+      "head_backend": "nax-head4",
+      "server_configuration": "http-nax",
+      "resource_qualified": true,
+      "selected": true
+    },
+    {
+      "label": "http-nax-python-lru-a02",
+      "prompt": "python-lru",
+      "repetition": 2,
+      "warmup": false,
+      "model": "q8-symmetric-bf16-g64",
+      "prompt_tokens": 86,
+      "output_tokens": 256,
+      "request_id": "req_D13717DB5E5D49218BAE544B54055E69",
+      "http_wall_seconds": 6.839983041048981,
+      "timing": {
+        "prefillKVCache": "native-bf16",
+        "generatedTokens": 256,
+        "loadSeconds": 4.792213439941406e-05,
+        "prefillSeconds": 0.44803595542907715,
+        "promptTokens": 86,
+        "decodeSeconds": 6.362406015396118,
+        "decodeKVCache": "native-bf16",
+        "timeToFirstTokenSeconds": 0.5671828985214233
+      },
+      "decode_tps": 40.23635074223751,
+      "visible_text_sha256": "33a29972caff105724e19aae12a6ea7605efcacabcc8db8acc9d271a964a7120",
+      "thinking_sha256": "3070cf6f1abce2f32d59fcf00f905a784d52649d1a77a76f4750d44ef204372d",
+      "usage": {
+        "cache_creation": null,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": null,
+        "input_tokens": 86,
+        "output_tokens": 256,
+        "output_tokens_details": null,
+        "server_tool_use": null,
+        "service_tier": null,
+        "speed": null
+      },
+      "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+      "head_backend": "nax-head4",
+      "server_configuration": "http-nax",
+      "resource_qualified": true,
+      "selected": true
+    },
+    {
+      "label": "http-nax-context-8k-a00",
+      "prompt": "context-8k",
+      "repetition": 0,
+      "warmup": true,
+      "model": "q8-symmetric-bf16-g64",
+      "prompt_tokens": 7173,
+      "output_tokens": 256,
+      "request_id": "req_5B9FF6347D934E6A85F81C4067541B9F",
+      "http_wall_seconds": 21.045119709102437,
+      "timing": {
+        "decodeKVCache": "native-bf16",
+        "generatedTokens": 256,
+        "prefillSeconds": 11.725492000579834,
+        "decodeSeconds": 9.248385071754456,
+        "prefillKVCache": "native-bf16",
+        "timeToFirstTokenSeconds": 11.949348092079163,
+        "promptTokens": 7173,
+        "loadSeconds": 4.7087669372558594e-05
+      },
+      "decode_tps": 27.680508328081086,
+      "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+      "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+      "usage": {
+        "cache_creation": null,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": null,
+        "input_tokens": 7173,
+        "output_tokens": 256,
+        "output_tokens_details": null,
+        "server_tool_use": null,
+        "service_tier": null,
+        "speed": null
+      },
+      "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+      "head_backend": "nax-head4",
+      "server_configuration": "http-nax",
+      "resource_qualified": true,
+      "selected": false
+    },
+    {
+      "label": "http-nax-context-8k-a01",
+      "prompt": "context-8k",
+      "repetition": 1,
+      "warmup": false,
+      "model": "q8-symmetric-bf16-g64",
+      "prompt_tokens": 7173,
+      "output_tokens": 256,
+      "request_id": "req_F475FE326D0D4E96AC05B7E485FE7AC6",
+      "http_wall_seconds": 21.916532165952958,
+      "timing": {
+        "promptTokens": 7173,
+        "decodeSeconds": 9.215113997459412,
+        "prefillKVCache": "native-bf16",
+        "prefillSeconds": 12.630735993385315,
+        "generatedTokens": 256,
+        "decodeKVCache": "native-bf16",
+        "loadSeconds": 4.696846008300781e-05,
+        "timeToFirstTokenSeconds": 12.873113989830017
+      },
+      "decode_tps": 27.78044851865953,
+      "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+      "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+      "usage": {
+        "cache_creation": null,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": null,
+        "input_tokens": 7173,
+        "output_tokens": 256,
+        "output_tokens_details": null,
+        "server_tool_use": null,
+        "service_tier": null,
+        "speed": null
+      },
+      "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+      "head_backend": "nax-head4",
+      "server_configuration": "http-nax",
+      "resource_qualified": true,
+      "selected": true
+    },
+    {
+      "label": "http-nax-context-8k-a02",
+      "prompt": "context-8k",
+      "repetition": 2,
+      "warmup": false,
+      "model": "q8-symmetric-bf16-g64",
+      "prompt_tokens": 7173,
+      "output_tokens": 256,
+      "request_id": "req_5C4C74B1876C48B9842756E109E2923B",
+      "http_wall_seconds": 21.269696249975823,
+      "timing": {
+        "prefillKVCache": "native-bf16",
+        "generatedTokens": 256,
+        "loadSeconds": 5.698204040527344e-05,
+        "prefillSeconds": 12.073142051696777,
+        "promptTokens": 7173,
+        "decodeSeconds": 9.126007080078125,
+        "decodeKVCache": "native-bf16",
+        "timeToFirstTokenSeconds": 12.310798048973083
+      },
+      "decode_tps": 28.05169859651352,
+      "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+      "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+      "usage": {
+        "cache_creation": null,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": null,
+        "input_tokens": 7173,
+        "output_tokens": 256,
+        "output_tokens_details": null,
+        "server_tool_use": null,
+        "service_tier": null,
+        "speed": null
+      },
+      "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+      "head_backend": "nax-head4",
+      "server_configuration": "http-nax",
+      "resource_qualified": true,
+      "selected": true
+    },
+    {
+      "label": "http-head4-b-python-lru-a00",
+      "prompt": "python-lru",
+      "repetition": 0,
+      "warmup": true,
+      "model": "q8-symmetric-bf16-g64",
+      "prompt_tokens": 86,
+      "output_tokens": 256,
+      "request_id": "req_1C626A2A9BCD42F08B987D76A3D90804",
+      "http_wall_seconds": 7.090750625007786,
+      "timing": {
+        "prefillKVCache": "native-bf16",
+        "decodeKVCache": "native-bf16",
+        "decodeSeconds": 6.584544062614441,
+        "timeToFirstTokenSeconds": 0.5934231281280518,
+        "generatedTokens": 256,
+        "prefillSeconds": 0.4771610498428345,
+        "promptTokens": 86,
+        "loadSeconds": 4.398822784423828e-05
+      },
+      "decode_tps": 38.878925794347765,
+      "visible_text_sha256": "33a29972caff105724e19aae12a6ea7605efcacabcc8db8acc9d271a964a7120",
+      "thinking_sha256": "3070cf6f1abce2f32d59fcf00f905a784d52649d1a77a76f4750d44ef204372d",
+      "usage": {
+        "cache_creation": null,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": null,
+        "input_tokens": 86,
+        "output_tokens": 256,
+        "output_tokens_details": null,
+        "server_tool_use": null,
+        "service_tier": null,
+        "speed": null
+      },
+      "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+      "head_backend": "head4",
+      "server_configuration": "http-head4-b",
+      "resource_qualified": true,
+      "selected": false
+    },
+    {
+      "label": "http-head4-b-python-lru-a01",
+      "prompt": "python-lru",
+      "repetition": 1,
+      "warmup": false,
+      "model": "q8-symmetric-bf16-g64",
+      "prompt_tokens": 86,
+      "output_tokens": 256,
+      "request_id": "req_1460C3D815484961A885170FE77A99FA",
+      "http_wall_seconds": 7.205764499958605,
+      "timing": {
+        "prefillKVCache": "native-bf16",
+        "decodeKVCache": "native-bf16",
+        "decodeSeconds": 6.729143023490906,
+        "generatedTokens": 256,
+        "timeToFirstTokenSeconds": 0.5661811828613281,
+        "prefillSeconds": 0.44715702533721924,
+        "promptTokens": 86,
+        "loadSeconds": 4.7087669372558594e-05
+      },
+      "decode_tps": 38.04347732041424,
+      "visible_text_sha256": "33a29972caff105724e19aae12a6ea7605efcacabcc8db8acc9d271a964a7120",
+      "thinking_sha256": "3070cf6f1abce2f32d59fcf00f905a784d52649d1a77a76f4750d44ef204372d",
+      "usage": {
+        "cache_creation": null,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": null,
+        "input_tokens": 86,
+        "output_tokens": 256,
+        "output_tokens_details": null,
+        "server_tool_use": null,
+        "service_tier": null,
+        "speed": null
+      },
+      "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+      "head_backend": "head4",
+      "server_configuration": "http-head4-b",
+      "resource_qualified": true,
+      "selected": true
+    },
+    {
+      "label": "http-head4-b-python-lru-a02",
+      "prompt": "python-lru",
+      "repetition": 2,
+      "warmup": false,
+      "model": "q8-symmetric-bf16-g64",
+      "prompt_tokens": 86,
+      "output_tokens": 256,
+      "request_id": "req_014D541FB3034DBC8E6DBD2E5E1A43BA",
+      "http_wall_seconds": 7.154066333081573,
+      "timing": {
+        "prefillKVCache": "native-bf16",
+        "decodeKVCache": "native-bf16",
+        "decodeSeconds": 6.628700017929077,
+        "generatedTokens": 256,
+        "timeToFirstTokenSeconds": 0.6116790771484375,
+        "prefillSeconds": 0.4952399730682373,
+        "promptTokens": 86,
+        "loadSeconds": 4.8995018005371094e-05
+      },
+      "decode_tps": 38.61994045703986,
+      "visible_text_sha256": "33a29972caff105724e19aae12a6ea7605efcacabcc8db8acc9d271a964a7120",
+      "thinking_sha256": "3070cf6f1abce2f32d59fcf00f905a784d52649d1a77a76f4750d44ef204372d",
+      "usage": {
+        "cache_creation": null,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": null,
+        "input_tokens": 86,
+        "output_tokens": 256,
+        "output_tokens_details": null,
+        "server_tool_use": null,
+        "service_tier": null,
+        "speed": null
+      },
+      "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+      "head_backend": "head4",
+      "server_configuration": "http-head4-b",
+      "resource_qualified": true,
+      "selected": true
+    },
+    {
+      "label": "http-head4-b-context-8k-a00",
+      "prompt": "context-8k",
+      "repetition": 0,
+      "warmup": true,
+      "model": "q8-symmetric-bf16-g64",
+      "prompt_tokens": 7173,
+      "output_tokens": 256,
+      "request_id": "req_0565E29CC8C64D00B63E1C725B4EC626",
+      "http_wall_seconds": 21.113302542013116,
+      "timing": {
+        "prefillKVCache": "native-bf16",
+        "decodeKVCache": "native-bf16",
+        "decodeSeconds": 8.92485797405243,
+        "timeToFirstTokenSeconds": 12.365673899650574,
+        "generatedTokens": 256,
+        "prefillSeconds": 12.113057017326355,
+        "promptTokens": 7173,
+        "loadSeconds": 4.792213439941406e-05
+      },
+      "decode_tps": 28.683929844517223,
+      "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+      "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+      "usage": {
+        "cache_creation": null,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": null,
+        "input_tokens": 7173,
+        "output_tokens": 256,
+        "output_tokens_details": null,
+        "server_tool_use": null,
+        "service_tier": null,
+        "speed": null
+      },
+      "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+      "head_backend": "head4",
+      "server_configuration": "http-head4-b",
+      "resource_qualified": true,
+      "selected": false
+    },
+    {
+      "label": "http-head4-b-context-8k-a01",
+      "prompt": "context-8k",
+      "repetition": 1,
+      "warmup": false,
+      "model": "q8-symmetric-bf16-g64",
+      "prompt_tokens": 7173,
+      "output_tokens": 256,
+      "request_id": "req_2B72F5F6BD91489A8389CA8229F77C25",
+      "http_wall_seconds": 21.205397250014357,
+      "timing": {
+        "prefillKVCache": "native-bf16",
+        "decodeKVCache": "native-bf16",
+        "decodeSeconds": 8.93244206905365,
+        "timeToFirstTokenSeconds": 12.4515780210495,
+        "generatedTokens": 256,
+        "prefillSeconds": 12.199489951133728,
+        "promptTokens": 7173,
+        "loadSeconds": 5.1021575927734375e-05
+      },
+      "decode_tps": 28.659575737626025,
+      "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+      "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+      "usage": {
+        "cache_creation": null,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": null,
+        "input_tokens": 7173,
+        "output_tokens": 256,
+        "output_tokens_details": null,
+        "server_tool_use": null,
+        "service_tier": null,
+        "speed": null
+      },
+      "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+      "head_backend": "head4",
+      "server_configuration": "http-head4-b",
+      "resource_qualified": true,
+      "selected": true
+    },
+    {
+      "label": "http-head4-b-context-8k-a02",
+      "prompt": "context-8k",
+      "repetition": 2,
+      "warmup": false,
+      "model": "q8-symmetric-bf16-g64",
+      "prompt_tokens": 7173,
+      "output_tokens": 256,
+      "request_id": "req_DD9DFC147BE1484DAB5A6EC805F8CBCB",
+      "http_wall_seconds": 21.164467458962463,
+      "timing": {
+        "prefillKVCache": "native-bf16",
+        "decodeKVCache": "native-bf16",
+        "decodeSeconds": 8.92825698852539,
+        "timeToFirstTokenSeconds": 12.397110939025879,
+        "generatedTokens": 256,
+        "prefillSeconds": 12.16124403476715,
+        "promptTokens": 7173,
+        "loadSeconds": 5.793571472167969e-05
+      },
+      "decode_tps": 28.673009785561906,
+      "visible_text_sha256": "3f9432cabbf5f693c20ac52aa7418a7c220d2adbd7b47adc2e562908bb2bcc23",
+      "thinking_sha256": "31b16ef1fe1330c290067e0b7818f0788f997bb0e4f670813a8f151c1f94eab7",
+      "usage": {
+        "cache_creation": null,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": null,
+        "input_tokens": 7173,
+        "output_tokens": 256,
+        "output_tokens_details": null,
+        "server_tool_use": null,
+        "service_tier": null,
+        "speed": null
+      },
+      "queue": "Sequential HTTP client; sampled admission idle before/after. Queue wait not separately instrumented.",
+      "head_backend": "head4",
+      "server_configuration": "http-head4-b",
+      "resource_qualified": true,
+      "selected": true
+    }
+  ],
+  "components": {
+    "configuration": "Debug diagnostic only; 8 retained repetitions, 4 operations per sample, rotated mode order",
+    "qualified": true,
+    "shape": [
+      202048,
+      6656
+    ],
+    "results": [
+      {
+        "rows": 1,
+        "mode": "head4",
+        "median_ms": 2.5569945573806763,
+        "maximum_difference": 0,
+        "relative_rms_error": 0
+      },
+      {
+        "rows": 1,
+        "mode": "nax-head1",
+        "median_ms": 4.578620195388794,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.0025566127
+      },
+      {
+        "rows": 1,
+        "mode": "nax-head2",
+        "median_ms": 4.271745681762695,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.0025567226
+      },
+      {
+        "rows": 1,
+        "mode": "nax-head4",
+        "median_ms": 4.0486156940460205,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.0025568004
+      },
+      {
+        "rows": 1,
+        "mode": "nax-head8",
+        "median_ms": 4.780486226081848,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.0025567554
+      },
+      {
+        "rows": 3,
+        "mode": "head4",
+        "median_ms": 3.1199902296066284,
+        "maximum_difference": 0,
+        "relative_rms_error": 0
+      },
+      {
+        "rows": 3,
+        "mode": "nax-head1",
+        "median_ms": 4.6075135469436646,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.0025724706
+      },
+      {
+        "rows": 3,
+        "mode": "nax-head2",
+        "median_ms": 4.384130239486694,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.0025724987
+      },
+      {
+        "rows": 3,
+        "mode": "nax-head4",
+        "median_ms": 4.299864172935486,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.002572649
+      },
+      {
+        "rows": 3,
+        "mode": "nax-head8",
+        "median_ms": 5.0371140241622925,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.0025724603
+      },
+      {
+        "rows": 4,
+        "mode": "head4",
+        "median_ms": 3.913998603820801,
+        "maximum_difference": 0,
+        "relative_rms_error": 0
+      },
+      {
+        "rows": 4,
+        "mode": "nax-head1",
+        "median_ms": 4.672124981880188,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.0025787812
+      },
+      {
+        "rows": 4,
+        "mode": "nax-head2",
+        "median_ms": 4.35812771320343,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.0025787475
+      },
+      {
+        "rows": 4,
+        "mode": "nax-head4",
+        "median_ms": 4.3975114822387695,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.0025788834
+      },
+      {
+        "rows": 4,
+        "mode": "nax-head8",
+        "median_ms": 5.219370126724243,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.002578709
+      },
+      {
+        "rows": 7,
+        "mode": "head4",
+        "median_ms": 6.321251392364502,
+        "maximum_difference": 0,
+        "relative_rms_error": 0
+      },
+      {
+        "rows": 7,
+        "mode": "nax-head1",
+        "median_ms": 4.753381013870239,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.002589257
+      },
+      {
+        "rows": 7,
+        "mode": "nax-head2",
+        "median_ms": 4.483118653297424,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.002589247
+      },
+      {
+        "rows": 7,
+        "mode": "nax-head4",
+        "median_ms": 4.5149922370910645,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.0025893068
+      },
+      {
+        "rows": 7,
+        "mode": "nax-head8",
+        "median_ms": 5.32175600528717,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.0025892032
+      },
+      {
+        "rows": 8,
+        "mode": "head4",
+        "median_ms": 7.63934850692749,
+        "maximum_difference": 0,
+        "relative_rms_error": 0
+      },
+      {
+        "rows": 8,
+        "mode": "nax-head1",
+        "median_ms": 4.326999187469482,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.0025932258
+      },
+      {
+        "rows": 8,
+        "mode": "nax-head2",
+        "median_ms": 4.394248127937317,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.0025931662
+      },
+      {
+        "rows": 8,
+        "mode": "nax-head4",
+        "median_ms": 5.102619528770447,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.0025932214
+      },
+      {
+        "rows": 8,
+        "mode": "nax-head8",
+        "median_ms": 6.677120923995972,
+        "maximum_difference": 0.0625,
+        "relative_rms_error": 0.0025931208
+      }
+    ]
+  },
+  "quality": {
+    "frozen_bar": {
+      "checkpoint": "unchanged symmetric-Q8/BF16/group64",
+      "normalization": "original",
+      "likelihood_upper_paired_ratio_limit": 1.001,
+      "likelihood_scored_positions": 32768,
+      "content": "No additional failures beyond fresh head4 reference; frozen 20-case plan unchanged",
+      "coding": "Two fresh sessions, ten public and three independent hidden checks per session",
+      "performance": "Same binary, checkpoint and controls; only head backend changes; no component-only speedup claim",
+      "desktop": "Fresh Calculator and website repeats if desktop access remains available"
+    },
+    "likelihood": {
+      "schema_version": 1,
+      "reference_bits": 8,
+      "candidate_bits": 8,
+      "suite_sha256": "4a7166944d17bfcd382c5fa77d8dd16c60c20b9b6b390cced54be8c55c7821d0",
+      "windows": 16,
+      "scored_tokens": 32768,
+      "reference_perplexity": 5.992670956416251,
+      "candidate_perplexity": 5.992583302646603,
+      "perplexity_ratio": 0.9999853731716147,
+      "ratio_95_percent_window_bootstrap": [
+        0.9999109633395376,
+        1.0000739586336187
+      ],
+      "top1_agreement": 0.9996337890625,
+      "maximum_perplexity_ratio": 1.001,
+      "passes_likelihood_diagnostic": true,
+      "by_window": [
+        {
+          "id": "wikitext2-test-0",
+          "delta_nll": -0.00011048590358349749,
+          "perplexity_ratio": 0.9998895201997592,
+          "top1_agreement": 0.99951171875
+        },
+        {
+          "id": "wikitext2-test-1",
+          "delta_nll": 9.405887950690436e-06,
+          "perplexity_ratio": 1.0000094059321862,
+          "top1_agreement": 0.99951171875
+        },
+        {
+          "id": "wikitext2-test-10",
+          "delta_nll": 9.066616636913699e-05,
+          "perplexity_ratio": 1.0000906702766703,
+          "top1_agreement": 0.99951171875
+        },
+        {
+          "id": "wikitext2-test-11",
+          "delta_nll": 6.97682973601158e-05,
+          "perplexity_ratio": 1.0000697707312243,
+          "top1_agreement": 1.0
+        },
+        {
+          "id": "wikitext2-test-12",
+          "delta_nll": -0.00019677359630078362,
+          "perplexity_ratio": 0.9998032457623536,
+          "top1_agreement": 0.9990234375
+        },
+        {
+          "id": "wikitext2-test-13",
+          "delta_nll": -0.00010779747334179398,
+          "perplexity_ratio": 0.9998922083365971,
+          "top1_agreement": 1.0
+        },
+        {
+          "id": "wikitext2-test-14",
+          "delta_nll": -4.788564434619006e-05,
+          "perplexity_ratio": 0.999952115502153,
+          "top1_agreement": 1.0
+        },
+        {
+          "id": "wikitext2-test-15",
+          "delta_nll": -0.0001496831074188489,
+          "perplexity_ratio": 0.9998503280945386,
+          "top1_agreement": 0.99951171875
+        },
+        {
+          "id": "wikitext2-test-2",
+          "delta_nll": -0.00014552891178467588,
+          "perplexity_ratio": 0.9998544816770337,
+          "top1_agreement": 1.0
+        },
+        {
+          "id": "wikitext2-test-3",
+          "delta_nll": 0.00048428399259736483,
+          "perplexity_ratio": 1.0004844012770224,
+          "top1_agreement": 1.0
+        },
+        {
+          "id": "wikitext2-test-4",
+          "delta_nll": 0.00014066875531884695,
+          "perplexity_ratio": 1.000140678649632,
+          "top1_agreement": 0.99951171875
+        },
+        {
+          "id": "wikitext2-test-5",
+          "delta_nll": -6.60732713725592e-05,
+          "perplexity_ratio": 0.999933928911418,
+          "top1_agreement": 0.9990234375
+        },
+        {
+          "id": "wikitext2-test-6",
+          "delta_nll": -6.827429679589818e-05,
+          "perplexity_ratio": 0.9999317280338409,
+          "top1_agreement": 0.99951171875
+        },
+        {
+          "id": "wikitext2-test-7",
+          "delta_nll": -0.0002504787347121657,
+          "perplexity_ratio": 0.9997495526324671,
+          "top1_agreement": 0.99951171875
+        },
+        {
+          "id": "wikitext2-test-8",
+          "delta_nll": 4.45384544877872e-05,
+          "perplexity_ratio": 1.0000445394463395,
+          "top1_agreement": 0.99951171875
+        },
+        {
+          "id": "wikitext2-test-9",
+          "delta_nll": 6.961841983886723e-05,
+          "perplexity_ratio": 1.0000696208432573,
+          "top1_agreement": 1.0
+        }
+      ],
+      "limitation": "Bounded text regression diagnostic; coding, vision, and general quality require separate evidence.",
+      "reference_head": "head4",
+      "candidate_head": "nax-head4",
+      "body": "Identical original-normalization hidden states, body evaluated once per block",
+      "head_rows": 8
+    },
+    "likelihood_resource_qualified": false,
+    "likelihood_timing_exclusion": "Concurrent Python GPU work observed; use scores for bounded numerical diagnostic only, not performance.",
+    "content": [
+      {
+        "label": "http-head4-a",
+        "passed": 19,
+        "attempted": 20,
+        "failures": [
+          "escape"
+        ],
+        "plan_sha256": "2e347b4bc479a7af528bcdc0eba59084902d9bac3f23a9bccae55b6695c719a6"
+      },
+      {
+        "label": "http-nax",
+        "passed": 19,
+        "attempted": 20,
+        "failures": [
+          "escape"
+        ],
+        "plan_sha256": "2e347b4bc479a7af528bcdc0eba59084902d9bac3f23a9bccae55b6695c719a6"
+      }
+    ],
+    "no_additional_content_failures": true,
+    "arithmetic": "96 GPU comparisons passed; wide BF16 activations, K=512/6656, widths=1/2/3/4/7/8, splits=1/2/4/8. Exact serial/batched rows within each split; relative RMS error below 0.005 versus FP32 matmul of BF16-dequantized weights.",
+    "scope": "Reused bounded fixtures; no general quality or task-success rate established. Broader qualification deferred because this candidate fails the speed selection criterion."
+  },
+  "prompt_plan_sha256": "f4f819599d246b7b02de18796d974446c22f32041896f54c24cee49d24787d8d",
+  "repository_gate": {
+    "exit_code": 0,
+    "started_unix": 1794183960.7954922,
+    "wall_seconds": 320.23856592178345,
+    "command": "./scripts/check.sh",
+    "device": "cpu; focused NAX GPU checks recorded separately",
+    "bundles": [
+      {
+        "bundle": "UnlimitedOCRRuntimeTests.xctest",
+        "tests": 22,
+        "skipped": 4,
+        "failures": 0
+      },
+      {
+        "bundle": "StudioUITests.xctest",
+        "tests": 419,
+        "skipped": 60,
+        "failures": 0
+      },
+      {
+        "bundle": "StudioKitTests.xctest",
+        "tests": 896,
+        "skipped": 34,
+        "failures": 0
+      },
+      {
+        "bundle": "SpeechRuntimeTests.xctest",
+        "tests": 31,
+        "skipped": 2,
+        "failures": 0
+      },
+      {
+        "bundle": "QwenRuntimeTests.xctest",
+        "tests": 53,
+        "skipped": 15,
+        "failures": 0
+      },
+      {
+        "bundle": "NemotronTranscribeRuntimeTests.xctest",
+        "tests": 12,
+        "skipped": 0,
+        "failures": 0
+      },
+      {
+        "bundle": "NemotronBoltRuntimeTests.xctest",
+        "tests": 9,
+        "skipped": 0,
+        "failures": 0
+      },
+      {
+        "bundle": "MereRunResidencyTests.xctest",
+        "tests": 24,
+        "skipped": 0,
+        "failures": 0
+      },
+      {
+        "bundle": "MereRunRelayKitTests.xctest",
+        "tests": 24,
+        "skipped": 0,
+        "failures": 0
+      },
+      {
+        "bundle": "MereRunModelKitTests.xctest",
+        "tests": 19,
+        "skipped": 0,
+        "failures": 0
+      },
+      {
+        "bundle": "MereRunExecutionTests.xctest",
+        "tests": 8,
+        "skipped": 0,
+        "failures": 0
+      },
+      {
+        "bundle": "MereRunEvaluationTests.xctest",
+        "tests": 12,
+        "skipped": 0,
+        "failures": 0
+      },
+      {
+        "bundle": "MereRunCoreTests.xctest",
+        "tests": 2466,
+        "skipped": 300,
+        "failures": 0
+      },
+      {
+        "bundle": "MereRunCLITests.xctest",
+        "tests": 1476,
+        "skipped": 2,
+        "failures": 0
+      },
+      {
+        "bundle": "MereRunAppTests.xctest",
+        "tests": 1,
+        "skipped": 0,
+        "failures": 0
+      },
+      {
+        "bundle": "MereRunAdmissionTests.xctest",
+        "tests": 22,
+        "skipped": 0,
+        "failures": 0
+      },
+      {
+        "bundle": "LagunaRuntimeTests.xctest",
+        "tests": 46,
+        "skipped": 12,
+        "failures": 0
+      },
+      {
+        "bundle": "LTXRuntimeTests.xctest",
+        "tests": 27,
+        "skipped": 1,
+        "failures": 0
+      },
+      {
+        "bundle": "KolibriRuntimeTests.xctest",
+        "tests": 6,
+        "skipped": 0,
+        "failures": 0
+      },
+      {
+        "bundle": "ImageRuntimeTests.xctest",
+        "tests": 47,
+        "skipped": 0,
+        "failures": 0
+      },
+      {
+        "bundle": "H3RuntimeTests.xctest",
+        "tests": 70,
+        "skipped": 31,
+        "failures": 0
+      },
+      {
+        "bundle": "GemmaRuntimeTests.xctest",
+        "tests": 69,
+        "skipped": 16,
+        "failures": 0
+      },
+      {
+        "bundle": "FlintRuntimeTests.xctest",
+        "tests": 13,
+        "skipped": 3,
+        "failures": 0
+      },
+      {
+        "bundle": "Drama3RuntimeTests.xctest",
+        "tests": 12,
+        "skipped": 0,
+        "failures": 0
+      },
+      {
+        "bundle": "DecodeRuntimeTests.xctest",
+        "tests": 52,
+        "skipped": 2,
+        "failures": 0
+      },
+      {
+        "bundle": "AudioTTSTests.xctest",
+        "tests": 20,
+        "skipped": 5,
+        "failures": 0
+      },
+      {
+        "bundle": "AudioPhononModelTests.xctest",
+        "tests": 10,
+        "skipped": 1,
+        "failures": 0
+      },
+      {
+        "bundle": "AudioCoreTests.xctest",
+        "tests": 42,
+        "skipped": 0,
+        "failures": 0
+      }
+    ],
+    "tests": 5908,
+    "skipped": 488,
+    "official_anthropic_sdk": "testOfficialAnthropicSDK passed",
+    "protected_run_storage": "RunStorageTests passed",
+    "strict_lint": "0 violations"
+  }
+}

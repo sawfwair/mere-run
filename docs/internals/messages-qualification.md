@@ -1061,3 +1061,94 @@ Calculator and website trials are not repeated for this candidate because the
 Mac remains locked. Earlier Q8 app results qualify the reference configuration;
 they do not qualify changed verification arithmetic or fallback policy. All
 optimization controls remain opt-in, with reference defaults unchanged.
+
+## Q8 NAX output-head experiment on November 8
+
+The Q8 NAX port is implemented but is not selected: this comparison found no
+end-to-end speedup over the existing `head4` configuration. See the
+[machine-readable results](../benchmarks/glimmer-q8-nax-head-2026-11-08-summary.json).
+The experiment uses the same symmetric Q8/group-64 checkpoint, BF16 DFlash2
+assistant, original normalization, deferred scheduling, and cost fallback.
+Defaults remain unchanged.
+
+`M5AffineQ8Head` reads the original packed weights and stages BF16 tiles for M5
+matrix execution, with FP32 accumulation. It retains no second model-sized copy.
+The adapter selects only the exact `lm_head` module. Independent assistant layers
+retain their existing execution, while the assistant's shared target-head
+projection uses the selected arithmetic. Unsupported hardware, quantization,
+metadata, or head dimensions fail during preparation. The upstream backend's
+quantized-NAX safety guard is unchanged.
+
+The installed head has 202,048 outputs and 6,656 inputs. Component measurements
+are Debug diagnostics, with eight retained repetitions per mode and four
+operations per sample. They are not generation throughput:
+
+| Input rows | Existing `head4` | Four-way NAX split |
+| --- | ---: | ---: |
+| 1 | 2.557 ms | 4.049 ms |
+| 3 | 3.120 ms | 4.300 ms |
+| 4 | 3.914 ms | 4.398 ms |
+| 8 | 7.639 ms | 5.103 ms |
+
+DFlash2 projects the three draft rows together, then verifies four target rows.
+The four-way split has the lowest measured combined cost for those two shapes
+among NAX splits 1, 2, 4, and 8. Wider-row component gains do not establish a gain
+at the selected three-token draft width. An initial selection calculation
+incorrectly assumed three single-row draft calls; correcting it to the actual
+3-row and 4-row shapes leaves the selected split unchanged.
+
+The HTTP comparison uses one production Release executable, without Debug test
+hooks, in baseline/NAX/baseline order. Each request generates 256 tokens through
+the official Anthropic SDK. The first attempt per prompt/configuration is retained
+as warmup and excluded. The first two later resource-qualified samples are
+selected. All 18 attempts passed resource monitoring; no slow samples or answers
+were excluded. Baseline columns combine four retained requests, while NAX columns
+contain two.
+
+| Prepared prompt tokens | Baseline decode | NAX decode | Baseline HTTP wall | NAX HTTP wall |
+| --- | ---: | ---: | ---: | ---: |
+| 86 | 39.10 tokens/s | 39.63 tokens/s | 7.04 s | 6.97 s |
+| 7,173 | 29.63 tokens/s | 27.92 tokens/s | 20.25 s | 21.59 s |
+
+These are medians. Decode duration includes the complete native decode loop and
+excludes load, admission, prefill, and tool execution. HTTP wall time excludes the
+separate token-count request. Loading and warmup are recorded separately. The
+short-prompt baseline shifts from 40.46 to 38.33 tokens/s between blocks; the
+long-prompt baseline shifts from 30.89 to 28.67. This drift and the small sample
+count make the short-prompt difference inconclusive. NAX is behind both baseline
+blocks on the long prompt. Median prefill is 0.447 versus 0.475 seconds for the
+short prompt and 11.560 versus 12.352 seconds for the long prompt. No prefill gain
+is established.
+
+The quality checks retain the frozen thresholds and graders:
+
+- All 96 synthetic GPU arithmetic comparisons pass, including BF16 activations
+  beyond FP16 range. Serial and batched rows agree exactly within each NAX split.
+  Relative RMS error stays below 0.005 against FP32 matmul of BF16-dequantized
+  weights. This is not native-Q8 bit parity.
+- The real-checkpoint component fixture passes, including serial/batched
+  agreement at the full vocabulary size.
+- On 32,768 identical next-token positions, reference perplexity is 5.992671 and
+  NAX perplexity is 5.992583. The paired ratio is 0.999985, with a 95% window
+  bootstrap interval of 0.999911–1.000074. Its upper bound passes the frozen
+  1.001 limit. Top-token agreement is 99.9634%. Both heads consume the same
+  original-normalization hidden states, with eight-row head calls so the NAX
+  path is exercised. Concurrent Python GPU work invalidates this diagnostic's
+  timing; its duration is excluded from performance evidence.
+- Both fresh configurations pass 19/20 unchanged SDK content fixtures across the
+  two API versions, with the same `escape` failure. There are no additional
+  failures. The nested-reference tool schema case passes.
+
+These reused, bounded checks do not establish general task quality. The candidate
+fails the speed selection criterion, so additional coding sessions, advanced
+combinations, vision, Calculator, and website trials are not run for this mode.
+Earlier app qualifications do not transfer to changed head arithmetic. The
+existing selected Q8 configuration remains in place.
+
+The unlocked `./scripts/check.sh` gate passes: 5,908 tests reported across 28
+XCTest bundles, 488 skipped, and zero failures. Optional checkpoint and GPU
+fixtures remain opt-in; the NAX GPU and real-checkpoint results above are separate
+runs. Strict lint, the official Anthropic SDK HTTP contract test, existing OpenAI
+contracts, CLI help and hygiene checks, and the docs build pass. Protected
+run-storage tests also pass, resolving the earlier locked-device gate gap for
+this source state. All three benchmark servers are stopped.
