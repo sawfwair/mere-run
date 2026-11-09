@@ -104,7 +104,6 @@ The format is based on Keep a Changelog.
   as false color from the first three principal components. **Map** is now the
   first result view for the four Earth tasks; **Tensor** and **JSON** remain.
 
-
 ## 0.69.1 - 2026-11-04
 
 - Make the Studio private-mode ghost button respond across its full button area.

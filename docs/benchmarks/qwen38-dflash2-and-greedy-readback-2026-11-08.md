@@ -100,6 +100,6 @@ this report comes from the measured requests, separate from synthetic tests.
 
 To reproduce the feature selections, see
 [Qwen runtime configuration](../configuration.md#mererun-q35-packed-greedy-verification)
-and [the generation collector](../../scripts/benchmark-q35-generation.py).
+and [the generation collector](https://github.com/sawfwair/mere-run/blob/main/scripts/benchmark-q35-generation.py).
 Use an installed target and companion assembly with `--model-root`; retain each
 receipt and exclude samples with competing inference or elevated pressure.
