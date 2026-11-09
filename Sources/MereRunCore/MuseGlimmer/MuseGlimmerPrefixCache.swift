@@ -23,8 +23,18 @@ extension MuseGlimmerGenerator {
                 return nil
             }
         }.joined(separator: "\u{0}")
-        return [request.prefixCachePolicy?.scope ?? "", loadedModelPath ?? "", loadedAssistantPath ?? "target-only", prefillAdapterIdentity, "atem-v2", String(request.showThinking),
-         String(request.reasoningEffort ?? -1), String(request.maxContextTokens ?? 0), request.kvCacheMode?.rawValue ?? "default", media].joined(separator: "\u{0}")
+        let scope = request.prefixCachePolicy?.scope ?? ""
+        let target = loadedModelPath ?? ""
+        let assistant = loadedAssistantPath ?? "target-only"
+        let thinking = String(request.showThinking)
+        let effort = String(request.reasoningEffort ?? -1)
+        let context = String(request.maxContextTokens ?? 0)
+        let cacheMode = request.kvCacheMode?.rawValue ?? "default"
+        let components: [String] = [
+            scope, target, assistant, prefillAdapterIdentity, "atem-v2", thinking,
+            effort, context, cacheMode, media
+        ]
+        return components.joined(separator: "\u{0}")
     }
 
     func prefixCheckpoints(_ request: ChatRequest, tokens: [Int]) throws -> [Int: Int] {
