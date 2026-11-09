@@ -210,6 +210,10 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         if fusedNormalization { prefillAdapterIdentity += "/fp32-rms-v1" }
         if let verification = ProcessInfo.processInfo.environment["MERERUN_MUSE_GLIMMER_Q8_VERIFY"], verification != "native" {
             prefillAdapterIdentity += "/q8-\(verification)-v1"
+            if verification.hasPrefix("tiled-") {
+                let splits = try MuseGlimmerModel.tiledQ8HeadSplits(environment: ProcessInfo.processInfo.environment)
+                prefillAdapterIdentity += "/head-splits-\(splits)"
+            }
         }
         model = loadedModel
         tokenizerAndTemplate = tokenizer
@@ -267,6 +271,7 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         scheduling: MuseGlimmerDFlashScheduling = .selected
     ) throws -> MuseGlimmerDFlashStats? {
         try checkCancellation?()
+        try model.materializeTiledWarmup(checkCancellation: checkCancellation)
         let token = MLXArray([Int32(0)]).reshaped(1, 1)
         let captureLayers = Set(assistant?.config.targetLayerIds ?? [])
         let targetCache = model.makeCache()
@@ -293,7 +298,7 @@ public actor MuseGlimmerGenerator: ChatGenerator {
             ?? MuseGlimmerDFlashPolicy.speculativeTokens(maximum: assistant.config.blockSize - 1)
         let generation = GenerationConfig(
             maxTokens: 8,
-            temperature: 0,
+            temperature: Float(MuseGlimmerResources.recommendedTemperature),
             topK: MuseGlimmerResources.recommendedTopK,
             topP: 0.95,
             minP: 0,

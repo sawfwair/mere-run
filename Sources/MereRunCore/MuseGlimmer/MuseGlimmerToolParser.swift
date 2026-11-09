@@ -6,7 +6,7 @@ public enum MuseGlimmerToolParser {
     private static let parameterPattern = #"(?s)<atem:parameter\s+name=[\"']([^\"']+)[\"']\s*>(.*?)</atem:parameter>"#
 
     public static func parseToolCalls(_ text: String) -> [ToolCall] {
-        matches(pattern: invokePattern, in: text).compactMap { match in
+        matches(pattern: invokePattern, in: executableSource(text)).compactMap { match in
             guard match.count == 3 else { return nil }
             let name = unescape(match[1]).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { return nil }
@@ -22,6 +22,7 @@ public enum MuseGlimmerToolParser {
     }
 
     static func validatedToolCalls(_ text: String, tools: [ToolDefinition], parallel: Bool) throws -> [ToolCall] {
+        let text = executableSource(text)
         let invocations = matches(pattern: invokePattern, in: text)
         let openings = text.components(separatedBy: "<atem:invoke").count - 1
         guard openings == invocations.count,
@@ -83,6 +84,12 @@ public enum MuseGlimmerToolParser {
                 return String(text[range])
             }
         }
+    }
+
+    private static func executableSource(_ text: String) -> String {
+        var channels = MuseGlimmerContentStream()
+        _ = channels.append(text, final: true)
+        return channels.toolSource
     }
 
     private static func unescape(_ text: String) -> String {

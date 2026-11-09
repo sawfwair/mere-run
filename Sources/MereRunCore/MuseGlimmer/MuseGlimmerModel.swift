@@ -67,6 +67,7 @@ final class MuseGlimmerRMSNorm: Module {
 }
 
 final class MuseGlimmerTextMLP: Module {
+    var useTiledQ8 = false
     @ModuleInfo(key: "gate_proj") var gateProj: Linear
     @ModuleInfo(key: "up_proj") var upProj: Linear
     @ModuleInfo(key: "down_proj") var downProj: Linear
@@ -79,7 +80,15 @@ final class MuseGlimmerTextMLP: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        downProj(MLXNN.silu(gateProj(x)) * upProj(x))
+        #if os(macOS)
+        if useTiledQ8, let gate = gateProj as? MuseGlimmerTiledQ8Linear,
+           let up = upProj as? MuseGlimmerTiledQ8Linear, gate.hasCurrentTiles, up.hasCurrentTiles,
+           let gateTiles = gate.tiled, let upTiles = up.tiled,
+           let fused = M5TiledAffineQ8.swiglu(x, gate: gateTiles, up: upTiles) {
+            return downProj(fused)
+        }
+        #endif
+        return downProj(MLXNN.silu(gateProj(x)) * upProj(x))
     }
 }
 

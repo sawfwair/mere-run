@@ -60,13 +60,14 @@ extension MuseGlimmerModel {
         case "shared2": verificationRows = 2
         case "shared4": verificationRows = 4
         case "head4": verificationRows = 4; verificationMinimumOutputs = 65_536
+        case "tiled-head", "tiled-projections", "tiled-all", "tiled-ffn": verificationRows = 4; verificationMinimumOutputs = 65_536
         case "nax-head1": verificationRows = nil; naxSplits = 1
         case "nax-head2": verificationRows = nil; naxSplits = 2
         case "nax-head4": verificationRows = nil; naxSplits = 4
         case "nax-head8": verificationRows = nil; naxSplits = 8
         default:
             throw MuseGlimmerError.unsupportedConfiguration(
-                "MERERUN_MUSE_GLIMMER_Q8_VERIFY must be native, shared1, shared2, shared4, head4, or nax-head{1,2,4,8}."
+                "MERERUN_MUSE_GLIMMER_Q8_VERIFY must be native, shared1, shared2, shared4, head4, nax-head{1,2,4,8}, tiled-head, tiled-projections, tiled-all, or tiled-ffn."
             )
         }
         if naxSplits != nil {
@@ -92,7 +93,7 @@ extension MuseGlimmerModel {
         enabled = raw == "dense"
         #endif
         guard enabled else {
-            if naxSplits != nil {
+            if naxSplits != nil || environment["MERERUN_MUSE_GLIMMER_Q8_VERIFY"]?.hasPrefix("tiled-") == true {
                 throw MuseGlimmerError.unsupportedConfiguration("Q8 NAX head requires the dense quantized-prefill adapter; use auto on M5 or dense.")
             }
             return 0
@@ -123,6 +124,9 @@ extension MuseGlimmerModel {
         }
         if naxSplits != nil, headCount != 1 {
             throw MuseGlimmerError.unsupportedConfiguration("Q8 NAX head requires exactly one eligible quantized lm_head.")
+        }
+        if let mode = environment["MERERUN_MUSE_GLIMMER_Q8_VERIFY"], mode.hasPrefix("tiled-") {
+            try installTiledQ8(mode: mode, environment: environment)
         }
         return count
     }

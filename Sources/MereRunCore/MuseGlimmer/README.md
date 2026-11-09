@@ -156,6 +156,10 @@ compares identical held-out windows and reports a paired bootstrap interval.
 The float32 mathematical GPU fixtures use `MLX_ENABLE_TF32=0`; normal BF16 and
 quantized performance measurements retain the default accelerated settings.
 
+Tool validation reads only generation outside the private reasoning channel.
+Native tool examples inside reasoning remain literal reasoning content. Actual
+duplicate tool calls keep their IDs and remain subject to parallel-call controls.
+
 ## Experimental verification controls
 
 These controls are opt-in while the optimized execution paths are qualified.
@@ -212,3 +216,33 @@ The checkpoint harness records admission wait and checkpoint preparation
 separately from prefill and decode. Its optional synchronized phase observer
 separates drafting, verification submission and wait, acceptance, and cache
 updates. Profiled rows are excluded from throughput comparisons.
+
+### Experimental tiled Q8 execution
+
+`MERERUN_MUSE_GLIMMER_Q8_VERIFY` also accepts `tiled-head`,
+`tiled-projections`, `tiled-all`, and `tiled-ffn`. These opt-in modes reorder original Q8
+bytes and metadata into tile-major buffers, use 32-channel BF16 stages, and
+retain BF16 activations and original normalization. They do not requantize the
+checkpoint or enable FP16 staging.
+
+`tiled-head` changes only the shared vocabulary head. `tiled-projections` also
+changes eligible decoder projections. `tiled-all` adds interleaved gate/up/SwiGLU
+execution. `tiled-ffn` restricts tiling and fusion to decoder MLPs, retaining
+reference attention projections and vocabulary-head execution. Independent
+assistant and vision layers retain their existing paths.
+Serial and verification calls use the same matrix geometry and partition policy.
+`MERERUN_MUSE_GLIMMER_Q8_TILED_HEAD_SPLITS` accepts 1, 2, 4, or 8 and defaults to
+1. Both mode and head partition count enter the prefix-cache adapter identity.
+Unsupported selections fail during preparation. Replacing parameters invalidates
+their reordered views and uses current parameters through the reference path.
+
+Packing increases resident memory: the original quantized parameters remain
+available for prefill alongside reordered selected matrices. Buffers belong to
+the loaded model and are released with it. Preparation checks cancellation
+between matrices. These modes remain experimental until corresponding quality
+and end-to-end measurements pass.
+
+Use Glimmer's published sampling settings for normal-use qualification:
+temperature 1.0, top-p 0.95, and top-k 64. Its model card recommends high or xhigh
+reasoning for coding and agentic tasks. Preserve these settings when comparing
+execution paths; greedy measurements do not establish sampled performance.

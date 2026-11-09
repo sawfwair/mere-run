@@ -57,8 +57,19 @@ def qualify(args, report):
         raise ValueError("Selected adapter does not support adaptive thinking")
     if not args.vision_only and not {"clear_thinking_20251015", "clear_tool_uses_20250919"}.issubset(caps["context_editing"]):
         raise ValueError("Selected adapter does not support both context-edit strategies")
+    if args.effort is not None and args.effort not in caps["effort"]:
+        supported = ", ".join(caps["effort"])
+        remedy = "supported efforts: " + supported if supported else "omit --effort for this adapter"
+        raise ValueError("Selected adapter does not support effort " + args.effort
+                         + "; " + remedy)
     report.update(model=info["id"], sdk=anthropic.__version__, capabilities=caps,
-                  limits={"context_tokens": info.get("max_input_tokens"), "output_tokens": info.get("max_tokens")})
+                  limits={"context_tokens": info.get("max_input_tokens"), "output_tokens": info.get("max_tokens")},
+                  requested_effort=args.effort)
+    effort_options = {"output_config": {"effort": args.effort}} if args.effort is not None else {}
+    vision_effort = args.effort
+    if vision_effort is None and "low" in caps["effort"]:
+        vision_effort = "low"
+    vision_max_tokens = args.max_tokens if args.effort is not None else min(args.max_tokens, 256)
     # An explicit key disables the SDK's credential auto-discovery.
     client = anthropic.Anthropic(base_url=origin, api_key=key, max_retries=0, timeout=360)
     api = client.beta.messages
@@ -100,12 +111,12 @@ def qualify(args, report):
                     {"type": "text", "text": "First image:"}, images[first],
                     {"type": "text", "text": "Second image:"}, images[second],
                     {"type": "text", "text": "Return only the word printed in the FIRST image."}]}])
-            if "low" in caps["effort"]:
-                options["output_config"] = {"effort": "low"}
+            if vision_effort is not None:
+                options["output_config"] = {"effort": vision_effort}
             count = measured("vision_count", lambda: api.count_tokens(**options))
 
             def generate_image():
-                with api.stream(**options, max_tokens=min(args.max_tokens, 256)) as stream:
+                with api.stream(**options, max_tokens=vision_max_tokens) as stream:
                     stream.until_done()
                     return stream_message(stream)
 
@@ -141,15 +152,15 @@ def qualify(args, report):
                     extra_headers=headers, messages=[{"role": "user", "content": [
                         images[first], images[second],
                         {"type": "text", "text": "Return only the word printed in the FIRST image."}]}])
-                if "low" in caps["effort"]:
-                    options["output_config"] = {"effort": "low"}
+                if vision_effort is not None:
+                    options["output_config"] = {"effort": vision_effort}
                 count = measured("vision_text_prefix_count", lambda: api.count_tokens(**options))
                 if first == 0:
                     warm = measured("vision_text_prefix_warm", lambda: api.create(**options, max_tokens=0))
                     assert warm.usage.cache_read_input_tokens + warm.usage.cache_creation_input_tokens > 0
 
                 def generate_cached_image():
-                    with api.stream(**options, max_tokens=min(args.max_tokens, 256)) as stream:
+                    with api.stream(**options, max_tokens=vision_max_tokens) as stream:
                         stream.until_done()
                         return stream_message(stream)
 
@@ -167,8 +178,10 @@ def qualify(args, report):
         report["passed"] = True
         return
 
-    seed = measured("reasoning_seed", lambda: api.create(model=args.model, max_tokens=128, thinking={"type": "adaptive"},
-        messages=[{"role": "user", "content": "Think briefly about the next step, then reply READY."}], extra_headers=headers))
+    seed = measured("reasoning_seed", lambda: api.create(model=args.model,
+        max_tokens=128 if args.effort is None else args.max_tokens, thinking={"type": "adaptive"},
+        messages=[{"role": "user", "content": "Think briefly about the next step, then reply READY."}],
+        extra_headers=headers, **effort_options))
     thinking = [b.model_dump() for b in seed.content if b.type == "thinking"]
     assert thinking, "This seed did not produce thinking; reasoning replay is unqualified"
     search = "tool_search_tool_" + args.search
@@ -190,7 +203,7 @@ def qualify(args, report):
         {"type": "clear_tool_uses_20250919", "trigger": {"type": "input_tokens", "value": 0},
             "keep": {"type": "tool_uses", "value": 0}, "exclude_tools": [search], "clear_tool_inputs": True}]}}
     options = dict(model=args.model, tools=tools, messages=history, thinking={"type": "adaptive"}, extra_headers=headers,
-        extra_body=extra, tool_choice={"type": "tool", "name": search, "disable_parallel_tool_use": True})
+        extra_body=extra, tool_choice={"type": "tool", "name": search, "disable_parallel_tool_use": True}, **effort_options)
     count = measured("prepared_count", lambda: api.count_tokens(**options))
     assert count.context_management.original_input_tokens > count.input_tokens
     if caps["prompt_cache"]:
@@ -268,6 +281,7 @@ def main():
     parser.add_argument("--search", choices=["regex", "bm25"], default="regex")
     parser.add_argument("--api-version", choices=["2023-06-01", "2026-10-21"], default="2026-10-21")
     parser.add_argument("--max-tokens", type=int, default=512)
+    parser.add_argument("--effort", help="Use this model-supported effort for every generation and count request")
     parser.add_argument("--vision-images", type=Path, nargs=2, metavar=("FIRST", "SECOND"))
     parser.add_argument("--vision-labels", nargs=2, metavar=("FIRST_WORD", "SECOND_WORD"))
     mode = parser.add_mutually_exclusive_group()

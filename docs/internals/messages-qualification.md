@@ -315,7 +315,10 @@ Unsupported Ornith and Gemma cache backends reported zero reads/writes and
 rejected zero-output warming explicitly.
 
 `scripts/qualify-messages-native.py` makes the core native combination checks
-repeatable against an already-running server. Its generated PDF was separately
+repeatable against an already-running server. Use `--effort high --max-tokens 2048`
+to apply a declared high effort to every generation and count request. An
+unsupported effort is rejected before creating a generation client. The error
+lists supported efforts or asks you to omit the flag. Its generated PDF was separately
 verified with PDFKit. The harness passed on Glimmer with actual warming/reuse
 and Gemma with regex search and explicit unsupported-cache handling. The Gemma
 repeat counted 215 + 381 input tokens, matching usage of 596, and generated
@@ -1152,3 +1155,27 @@ runs. Strict lint, the official Anthropic SDK HTTP contract test, existing OpenA
 contracts, CLI help and hygiene checks, and the docs build pass. Protected
 run-storage tests also pass, resolving the earlier locked-device gate gap for
 this source state. All three benchmark servers are stopped.
+
+## Sampled tiled Q8 follow-up on November 8
+
+The newer tile-major, 32-channel matrix and interleaved FFN implementation was
+ported to Glimmer Q8 and measured with the model's recommended sampling:
+temperature 1.0, top-p 0.95, top-k 64, and high reasoning. Broad head/projection/
+fusion modes and a narrower FFN-only control fail the speed bar at four target
+rows. Matching eight target rows with seven drafts and full tiling reaches
+46.08 and 29.57 tokens/s, versus 32.23 and 26.57 for its bracketing reference.
+That first adapter fails the sampled SDK task bar. A reasoning/tool channel
+correction excludes private tool examples from executable calls while retaining
+real duplicate calls. Its fresh comparison reaches 31.52 and 26.96 tokens/s,
+versus 29.40 and 22.35 for its reference. The corrected candidate passes the speed
+bar and scores 56/60 unchanged SDK cases versus 55/60 for its reference, with no
+additional per-fixture failures. A reference coding session and two fresh
+optimized sessions pass all 10 fixture and three independent holdout tests,
+including observed tool-error recovery. Both modes pass seven advanced phases:
+regex/BM25 search, vision/cache identity, PDFs, explicit capability errors,
+disconnect recovery, and prefill cancellation. Fresh desktop cases and an
+unlocked full gate remain gaps; the selected configuration is unchanged. See the
+[sampled benchmark report](../benchmarks/glimmer-q8-tiled-sampled-2026-11-08.md)
+for separate source revisions, request samples, numerical checks, memory cost,
+and the remaining qualification scope. No new coding or desktop success is
+claimed from throughput probes, and the quality bar is unchanged.

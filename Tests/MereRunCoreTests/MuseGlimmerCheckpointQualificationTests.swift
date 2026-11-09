@@ -2,6 +2,7 @@
 import Foundation
 import MLX
 import MLXNN
+import MLXRandom
 import MereRunAdmission
 import MereRunTensor
 import XCTest
@@ -20,12 +21,16 @@ final class MuseGlimmerCheckpointQualificationTests: MereRunCoreTestCase {
         var schedulings: [MuseGlimmerDFlashScheduling]?
         var profile: Bool?
         var temperature: Float?
+        var topK: Int?
+        var topP: Float?
+        var reasoningStrength: String?
+        var seed: UInt64?
         var acceptanceRounds: Int?
         var minimumAcceptance: Double?
         var fallback: MuseGlimmerDFlashFallback?
     }
 
-    private struct Record: Encodable {
+    struct Record: Encodable {
         let kind: String
         let modelRoot: String
         let bits: Int?
@@ -50,6 +55,10 @@ final class MuseGlimmerCheckpointQualificationTests: MereRunCoreTestCase {
         var activationDType: String?
         var scheduling: String?
         var temperature: Float?
+        var topK: Int?
+        var topP: Float?
+        var reasoningStrength: String?
+        var seed: UInt64?
         var phaseSeconds: [String: Double]?
         var admissionWaitSeconds: Double?
         var checkpointPreparationSeconds: Double?
@@ -110,7 +119,8 @@ final class MuseGlimmerCheckpointQualificationTests: MereRunCoreTestCase {
         let densePrefill = target.namedModules().contains { $0.1 is MuseGlimmerPrefillLinear }
         let assistant = try plan.widths.contains(where: { $0 > 0 }) ? loadAssistant(env) : nil
         defer { Memory.clearCache() }
-        let sampling = GenerationConfig(maxTokens: plan.outputTokens, temperature: plan.temperature ?? 0, topK: 0, topP: 1, minP: 0, repetitionPenalty: 1)
+        let sampling = GenerationConfig(maxTokens: plan.outputTokens, temperature: plan.temperature ?? 0,
+            topK: plan.topK ?? 0, topP: plan.topP ?? 1, minP: 0, repetitionPenalty: 1)
         // Materialize production serial/speculative kernels outside measured trials.
         let schedulings = plan.schedulings ?? [.eager]
         for scheduling in schedulings {
@@ -119,12 +129,14 @@ final class MuseGlimmerCheckpointQualificationTests: MereRunCoreTestCase {
         let preparationSeconds = Date().timeIntervalSince(preparationStart)
         for prompt in plan.prompts {
             let tokens = try tokenizer.encodeForGeneration(messages: [.init(role: .user, content: prompt.text)],
-                reasoningStrength: "low", currentDate: "2026-11-08", maxLength: 65536, truncate: false)
+                reasoningStrength: plan.reasoningStrength ?? "low", currentDate: "2026-11-08", maxLength: 65536, truncate: false)
             for chunk in plan.chunkSizes {
                 for repetition in 0..<plan.repetitions {
                     for width in plan.widths {
                         let order = repetition.isMultiple(of: 2) ? schedulings : Array(schedulings.reversed())
                         for scheduling in width == 0 ? Array(order.prefix(1)) : order {
+                            if let seed = plan.seed { MLXRandom.seed(seed + UInt64(repetition)) }
+                            var acceptanceSeed = (plan.seed ?? 0) + UInt64(repetition)
                             let cache = target.makeCache()
                             let draftCache = width > 0 ? assistant?.makeCache() : nil
                             let start = Date()
@@ -153,6 +165,9 @@ final class MuseGlimmerCheckpointQualificationTests: MereRunCoreTestCase {
                             row.admissionWaitSeconds = admissionWait
                             row.checkpointPreparationSeconds = preparationSeconds
                             row.temperature = sampling.temperature
+                            row.topK = sampling.topK; row.topP = sampling.topP
+                            row.reasoningStrength = plan.reasoningStrength ?? "low"
+                            row.seed = plan.seed.map { $0 + UInt64(repetition) }
                             let profile = plan.profile == true ? PhaseProfile() : nil
                             let observer: ((MuseGlimmerDFlashEvent) -> Void)? = profile.map { profile in { profile.observe($0) } }
                             if width > 0 {
@@ -163,7 +178,12 @@ final class MuseGlimmerCheckpointQualificationTests: MereRunCoreTestCase {
                                     checkCancellation: { try Task.checkCancellation() }, scheduling: scheduling,
                                     minimumAcceptanceRate: plan.minimumAcceptance ?? MuseGlimmerDFlashPolicy.minimumAcceptanceRate(),
                                     acceptanceEvaluationRounds: plan.acceptanceRounds ?? MuseGlimmerDFlashPolicy.defaultAcceptanceEvaluationRounds,
-                                    fallback: plan.fallback ?? .selected, observer: observer)
+                                    fallback: plan.fallback ?? .selected, observer: observer,
+                                    acceptanceDraw: {
+                                        guard plan.seed != nil else { return Float.random(in: 0..<1) }
+                                        acceptanceSeed = acceptanceSeed &* 6_364_136_223_846_793_005 &+ 1
+                                        return Float(acceptanceSeed >> 40) / Float(1 << 24)
+                                    })
                                 row.tokens = result.generatedTokens; row.decodeSeconds = result.decodeSeconds
                                 row.firstTokenSeconds = result.firstTokenSeconds; row.stats = result.stats
                             } else {
@@ -254,132 +274,6 @@ final class MuseGlimmerCheckpointQualificationTests: MereRunCoreTestCase {
         }
     }
 
-    func testNAXHeadComponents() async throws {
-        let env = ProcessInfo.processInfo.environment
-        guard let rootPath = env["MERERUN_GLIMMER_QUALIFICATION_ROOT"] else { throw XCTSkip("Set Glimmer checkpoint root") }
-        try XCTSkipUnless(M5AffineQ8Head.isSupported, "Requires M5")
-        let lease = try await checkpointAdmission()
-        defer { lease.release() }
-        let root = URL(fileURLWithPath: rootPath)
-        let config = try JSONDecoder().decode(MuseGlimmerConfig.self, from: Data(contentsOf: root.appendingPathComponent("config.json")))
-        let target = try loadTarget(root, config: config)
-        let head = try XCTUnwrap(target.lmHead as? QuantizedLinear)
-        let biases = try XCTUnwrap(head.biases)
-        let modes = [0, 1, 2, 4, 8]
-        for rows in [1, 3, 4, 7, 8] {
-            let x = MLX.sin(MLXArray(0..<(rows * config.textConfig.hiddenSize)).asType(.float32) * 0.017)
-                .asType(.bfloat16).reshaped(1, rows, config.textConfig.hiddenSize)
-            func operation(_ mode: Int) throws -> MLXArray {
-                if mode == 0 {
-                    return SmallBatchAffineQ8.matmul(x, weight: head.weight, scales: head.scales, biases: biases,
-                        groupSize: 64, bits: 8, mode: .affine, rowsPerSIMD: 4)
-                        ?? MLX.quantizedMM(x, head.weight, scales: head.scales, biases: biases, transpose: true, groupSize: 64, bits: 8)
-                }
-                return try XCTUnwrap(M5AffineQ8Head.matmul(x, weight: head.weight, scales: head.scales, biases: biases, splits: mode))
-            }
-            let reference = try operation(0).asType(.float32)
-            MLX.eval(reference)
-            var errors: [Int: (Float, Float)] = [:]
-            for mode in modes {
-                let actual = try operation(mode).asType(.float32)
-                let delta = actual - reference
-                errors[mode] = (delta.abs().max().item(Float.self), MLX.sqrt((delta * delta).mean() / (reference * reference).mean()).item(Float.self))
-                XCTAssertTrue(MLX.all(MLX.isFinite(actual)).item(Bool.self))
-                if mode > 0 {
-                    let serial = try (0..<rows).map { index in
-                        try XCTUnwrap(M5AffineQ8Head.matmul(x[0..., index..<(index + 1), 0...],
-                            weight: head.weight, scales: head.scales, biases: biases, splits: mode))
-                    }
-                    XCTAssertEqual((actual - MLX.concatenated(serial, axis: 1).asType(.float32)).abs().max().item(Float.self), 0)
-                }
-            }
-            for repetition in 0..<9 {
-                for offset in modes.indices {
-                    let mode = modes[(repetition + offset) % modes.count]
-                    let start = Date()
-                    let values = try (0..<4).map { _ in try operation(mode) }
-                    MLX.eval(values)
-                    let seconds = Date().timeIntervalSince(start) / 4
-                    if repetition > 0 {
-                        var row = Record(kind: "nax-head-operator", modelRoot: rootPath, bits: 8,
-                            id: "\(config.textConfig.vocabSize)x\(config.textConfig.hiddenSize)", width: rows, repetition: repetition)
-                        row.verificationKernel = mode == 0 ? "head4" : "nax-head\(mode)"
-                        row.operatorSeconds = seconds; row.maximumDifference = errors[mode]!.0
-                        row.relativeRMSError = errors[mode]!.1; row.thermalState = ProcessInfo.processInfo.thermalState.rawValue
-                        try record(row, env: env)
-                    }
-                }
-            }
-        }
-    }
-
-    func testNAXHeadLikelihoodPairs() async throws {
-        let env = ProcessInfo.processInfo.environment
-        guard let rootPath = env["MERERUN_GLIMMER_QUALIFICATION_ROOT"],
-              let textPath = env["MERERUN_GLIMMER_QUALIFICATION_TEXT"] else { throw XCTSkip("Set Glimmer root and held-out text") }
-        let splits = try XCTUnwrap(Int(env["MERERUN_GLIMMER_NAX_SPLITS"] ?? "1"))
-        XCTAssertTrue([1, 2, 4, 8].contains(splits))
-        try XCTSkipUnless(M5AffineQ8Head.isSupported, "Requires M5")
-        let lease = try await checkpointAdmission()
-        defer { lease.release() }
-        let root = URL(fileURLWithPath: rootPath)
-        let config = try JSONDecoder().decode(MuseGlimmerConfig.self, from: Data(contentsOf: root.appendingPathComponent("config.json")))
-        let target = try loadTarget(root, config: config)
-        let head = try XCTUnwrap(target.lmHead as? QuantizedLinear)
-        let biases = try XCTUnwrap(head.biases)
-        let tokenizer = try await loadTokenizer(root)
-        let tokens = tokenizer.tokenizer.encode(text: try String(contentsOfFile: textPath, encoding: .utf8))
-        let length = 2049
-        XCTAssertGreaterThan(tokens.count, 16 * length)
-        func logits(_ x: MLXArray, mode: Int) throws -> MLXArray {
-            var result: MLXArray
-            if mode == 0 {
-                result = try XCTUnwrap(SmallBatchAffineQ8.matmul(x, weight: head.weight, scales: head.scales,
-                    biases: biases, groupSize: 64, bits: 8, mode: .affine, rowsPerSIMD: 4))
-            } else {
-                result = try XCTUnwrap(M5AffineQ8Head.matmul(x, weight: head.weight, scales: head.scales, biases: biases, splits: mode))
-            }
-            result = result * config.textConfig.outputMultiplier
-            let cap = config.textConfig.finalLogitSoftcapping
-            if cap > 0 { result = MLX.tanh(result / cap) * cap }
-            return result[0].asType(.float32)
-        }
-        for window in 0..<16 {
-            let start = window * (tokens.count - length) / 15
-            let sequence = Array(tokens[start..<(start + length)])
-            let cache = target.makeCache()
-            var losses: [Int: [Float]] = [0: [], splits: []]
-            var top1: [Int: [Int]] = [0: [], splits: []]
-            for offset in stride(from: 0, to: length - 1, by: 128) {
-                try Task.checkCancellation()
-                let input = MLXArray(sequence[offset..<(offset + 128)].map(Int32.init)).reshaped(1, 128)
-                let hidden = target.model.languageModel.forward(target.inputEmbeddings(for: input), cache: cache).hidden
-                MLX.eval(hidden); evaluateGemma4CacheStorage(cache)
-                for block in stride(from: 0, to: 128, by: 8) {
-                    let x = hidden[0..., block..<(block + 8), 0...]
-                    let labels = MLXArray(sequence[(offset + block + 1)...(offset + block + 8)].map(Int32.init)).expandedDimensions(axis: -1)
-                    for mode in [0, splits] {
-                        let projected = try logits(x, mode: mode)
-                        let nll = (logSumExp(projected, axis: -1, keepDims: true) - takeAlong(projected, labels, axis: -1)).reshaped(8)
-                        let best = argMax(projected, axis: -1).asType(.int32)
-                        MLX.eval(nll, best)
-                        losses[mode]! += nll.asArray(Float.self)
-                        top1[mode]! += best.asArray(Int32.self).map(Int.init)
-                    }
-                }
-            }
-            for mode in [0, splits] {
-                var row = Record(kind: "nax-head-likelihood", modelRoot: rootPath, bits: 8,
-                    id: "wikitext2-test-\(window)", tokens: sequence, nll: losses[mode], top1: top1[mode])
-                row.verificationKernel = mode == 0 ? "head4" : "nax-head\(mode)"
-                XCTAssertEqual(row.nll?.count, length - 1)
-                XCTAssertTrue(row.nll!.allSatisfy { $0.isFinite })
-                try record(row, env: env)
-            }
-            Memory.clearCache()
-        }
-    }
-
     func testTeacherForcedLikelihood() async throws {
         let env = ProcessInfo.processInfo.environment
         guard let rootPath = env["MERERUN_GLIMMER_QUALIFICATION_ROOT"],
@@ -424,20 +318,20 @@ final class MuseGlimmerCheckpointQualificationTests: MereRunCoreTestCase {
         }
     }
 
-    private func checkpointAdmission() async throws -> MachineInferenceLease {
+    func checkpointAdmission() async throws -> MachineInferenceLease {
         let coordinator = MachineInferenceCoordinator(
             stateDirectory: MereRunModelPaths.applicationSupportBase.appendingPathComponent("admission", isDirectory: true)
         )
         return try await coordinator.acquire(.init(label: "Glimmer checkpoint qualification", resourceClass: .large))
     }
 
-    private func loadTokenizer(_ root: URL) async throws -> MuseGlimmerTokenizerAndTemplate {
+    func loadTokenizer(_ root: URL) async throws -> MuseGlimmerTokenizerAndTemplate {
         let generation = try JSONDecoder().decode(MuseGlimmerGenerationConfig.self,
             from: Data(contentsOf: root.appendingPathComponent("generation_config.json")))
         return try await MuseGlimmerTokenizerAndTemplate.load(from: root, generationConfig: generation)
     }
 
-    private func loadTarget(_ root: URL, config: MuseGlimmerConfig) throws -> MuseGlimmerModel {
+    func loadTarget(_ root: URL, config: MuseGlimmerConfig) throws -> MuseGlimmerModel {
         let target = MuseGlimmerModel(config: config)
         let index = root.appendingPathComponent("model.safetensors.index.json")
         if let quantization = config.quantization {
@@ -454,7 +348,27 @@ final class MuseGlimmerCheckpointQualificationTests: MereRunCoreTestCase {
         }, by: { $0 }).mapValues(\.count)
         FileHandle.standardError.write(Data("[glimmer-qualification-formats] \(formats)\n".utf8))
         target.configureFusedNormalization(ProcessInfo.processInfo.environment["MERERUN_MUSE_GLIMMER_FUSED_NORM"] == "1")
+        let parameterKeys = Set(target.parameters().flattened().map(\.0))
         let count = try target.installQuantizedPrefill()
+        #if os(macOS)
+        if let mode = ProcessInfo.processInfo.environment["MERERUN_MUSE_GLIMMER_Q8_VERIFY"], mode.hasPrefix("tiled-") {
+            let packed = target.namedModules().compactMap { path, module -> (String, MuseGlimmerTiledQ8Linear)? in
+                (module as? MuseGlimmerTiledQ8Linear).map { (path, $0) }
+            }
+            XCTAssertEqual(Set(target.parameters().flattened().map(\.0)), parameterKeys)
+            XCTAssertEqual(packed.contains { $0.0 == "lm_head" }, mode != "tiled-ffn")
+            XCTAssertTrue(packed.allSatisfy { $0.0 == "lm_head" || $0.0.hasPrefix("model.language_model.layers.") })
+            if mode == "tiled-head" { XCTAssertEqual(packed.count, 1) } else { XCTAssertGreaterThan(packed.count, 100) }
+            let fused = target.namedModules().compactMap { $0.1 as? MuseGlimmerTextMLP }.filter(\.useTiledQ8).count
+            XCTAssertEqual(fused, ["tiled-all", "tiled-ffn"].contains(mode) ? config.textConfig.numHiddenLayers : 0)
+            if mode == "tiled-ffn" {
+                XCTAssertEqual(packed.count, config.textConfig.numHiddenLayers * 3)
+                XCTAssertTrue(packed.allSatisfy { $0.0.contains(".mlp.") })
+            }
+            let bytes = packed.reduce(0) { $0 + $1.1.tiled!.codes.size * 4 + $1.1.tiled!.scales.size * 4 }
+            FileHandle.standardError.write(Data("[glimmer-tiled-q8] projections=\(packed.count) fused=\(fused) packed_bytes=\(bytes)\n".utf8))
+        }
+        #endif
         if let mode = ProcessInfo.processInfo.environment["MERERUN_MUSE_GLIMMER_Q8_VERIFY"], mode.hasPrefix("nax-head") {
             let selected = target.namedModules().compactMap { path, module -> String? in
                 (module as? MuseGlimmerPrefillLinear)?.naxHeadSplits == nil ? nil : path
@@ -474,7 +388,7 @@ final class MuseGlimmerCheckpointQualificationTests: MereRunCoreTestCase {
         return assistant
     }
 
-    private func record(_ row: Record, env: [String: String]) throws {
+    func record(_ row: Record, env: [String: String]) throws {
         let output = try XCTUnwrap(env["MERERUN_GLIMMER_QUALIFICATION_OUTPUT"])
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(row) + Data("\n".utf8)

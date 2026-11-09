@@ -52,3 +52,10 @@ implementation used by Laguna and other Core model families.
 
 `FusedAttentionPolicy` provides the shared `MERERUN_FUSED_SDPA` diagnostic
 switch for native encoders and Core orchestration.
+
+`M5TiledAffineQ8` keeps losslessly reordered affine-Q8 codes and metadata alongside
+original parameters. Its matrix kernel stages 32 channels in BF16 and uses FP32
+accumulation, with optional FP32 partial reduction. An interleaved gate/up kernel
+preserves separate BF16 projection and activation boundaries. Packing costs
+resident memory and startup time; callers own its lifetime, parameter identity,
+model selection, and generation-level qualification.
