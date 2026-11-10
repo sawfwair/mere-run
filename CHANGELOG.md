@@ -6,6 +6,18 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Speed up Nemotron 3 Nano Omni prefill by grouping each MoE layer's routes by
+  expert and running one dense BF16 matmul per used expert, in place of
+  copying routed expert matrices per token in four-token batches. Raise the
+  prefill chunk from 128 to 1,024 tokens. On an M5 Max with 128 GiB, an
+  18,239-token prompt from a 128-frame video prefilled in 19 and 23 seconds in
+  two runs and 83 seconds in a third that stalled mid-prefill, against 749
+  seconds before. A 4,552-token prompt measured back to back took 22 seconds
+  against 176. Greedy output was identical for the text, audio, and video
+  prompts tested. An image prompt diverged at a decode step whose top two
+  logits were one BF16 step apart, because the grouped matmul rounds
+  differently from the gather path. One-token decode is unchanged.
+
 ## 0.71.0 - 2026-11-09
 
 - Retain bounded Glimmer text and image prefix KV with draft context, keyed by

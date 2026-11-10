@@ -1,5 +1,6 @@
 import Foundation
 import MLX
+import MLXRandom
 import XCTest
 @testable import MereRunCore
 
@@ -203,12 +204,49 @@ final class NemotronOmniTests: MereRunCoreTestCase {
         )
     }
 
-    func testMoEPrefillPlanBoundsWatchdogSafeTokenBatches() {
-        XCTAssertEqual(
-            NemotronOmniMoE.prefillRanges(tokenCount: 10),
-            [0..<4, 4..<8, 8..<10]
+    func testExpertRoutePlanGroupsRoutesByAscendingExpert() {
+        // Two tokens, top-2: token 0 routes to experts 5 and 1, token 1 to 1 and 3.
+        let plan = NemotronOmniExpertRoutePlan(flatIndices: [5, 1, 1, 3], topK: 2)
+
+        XCTAssertEqual(plan.groups, [
+            .init(expert: 1, tokens: [0, 1]),
+            .init(expert: 3, tokens: [1]),
+            .init(expert: 5, tokens: [0]),
+        ])
+        XCTAssertEqual(plan.inverseOrder, [3, 0, 1, 2])
+    }
+
+    func testGroupedExpertPrefillMatchesGatherPath() {
+        let experts = 40
+        let hidden = 24
+        let intermediate = 16
+        let topK = 3
+        let tokens = 37
+        MLXRandom.seed(11)
+        let module = NemotronOmniExperts(
+            upWeight: (MLXRandom.normal([experts, intermediate, hidden]) * 0.2).asType(.bfloat16),
+            downWeight: (MLXRandom.normal([experts, hidden, intermediate]) * 0.2).asType(.bfloat16)
         )
-        XCTAssertEqual(NemotronOmniMoE.prefillRanges(tokenCount: 1), [0..<1])
+        let input = MLXRandom.normal([1, tokens, hidden]).asType(.bfloat16)
+        // Distinct experts per token, as top-k routing guarantees. Forty
+        // experts cross two evaluation batches.
+        let indices = MLX.argSort(MLXRandom.uniform(low: 0, high: 1, [1, tokens, experts]), axis: -1)[
+            0..., 0..., 0..<topK
+        ].asType(.int32)
+
+        let gathered = module(input, indices: indices)
+        let grouped = module(
+            input.reshaped([tokens, hidden]),
+            plan: NemotronOmniExpertRoutePlan(
+                flatIndices: indices.reshaped([-1]).asArray(Int32.self),
+                topK: topK
+            )
+        ).reshaped([1, tokens, topK, hidden])
+
+        XCTAssertEqual(grouped.shape, gathered.shape)
+        let difference = MLX.abs(grouped.asType(.float32) - gathered.asType(.float32))
+            .max().item(Float.self)
+        XCTAssertLessThanOrEqual(difference, 0.02)
     }
 
     func testBF16ExpertWeightKeyDecodesExactCheckpointNamespace() throws {
