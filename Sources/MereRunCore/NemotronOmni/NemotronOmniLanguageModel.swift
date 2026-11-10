@@ -1,19 +1,72 @@
 import MLX
 import MLXNN
 
+/// Routes of one prefill chunk grouped by expert, so each used expert runs a
+/// single dense matmul over the tokens routed to it.
+struct NemotronOmniExpertRoutePlan: Equatable {
+    struct Group: Equatable {
+        let expert: Int
+        /// Flattened token row of every route assigned to this expert.
+        let tokens: [Int32]
+    }
+
+    /// Used experts in ascending order.
+    let groups: [Group]
+    /// For each route in `[token, rank]` order, its row in the concatenated
+    /// group outputs.
+    let inverseOrder: [Int32]
+
+    init(flatIndices: [Int32], topK: Int) {
+        precondition(topK > 0 && flatIndices.count.isMultiple(of: topK))
+        var routesByExpert: [Int: [Int32]] = [:]
+        for (route, expert) in flatIndices.enumerated() {
+            routesByExpert[Int(expert), default: []].append(Int32(route))
+        }
+        var groups: [Group] = []
+        groups.reserveCapacity(routesByExpert.count)
+        var inverseOrder = [Int32](repeating: 0, count: flatIndices.count)
+        var row: Int32 = 0
+        for expert in routesByExpert.keys.sorted() {
+            let routes = routesByExpert[expert, default: []]
+            for route in routes {
+                inverseOrder[Int(route)] = row
+                row += 1
+            }
+            groups.append(Group(expert: expert, tokens: routes.map { $0 / Int32(topK) }))
+        }
+        self.groups = groups
+        self.inverseOrder = inverseOrder
+    }
+}
+
 /// BF16 routed experts used by the Omni checkpoint. The source checkpoint
 /// publishes one tensor per expert; the loader stacks those tensors lazily so
 /// MLX can issue gather matmuls for only the six selected experts per token.
 final class NemotronOmniExperts: Module {
+    /// Each evaluated batch reads at most this many experts' up and down
+    /// matrices, which bounds one Metal command buffer below the weight
+    /// volume of the four-token gather batches this path replaced.
+    static let expertsPerEvaluation = 16
+
     @ModuleInfo(key: "up_proj") var upProjection: Q35SwitchLinear
     @ModuleInfo(key: "down_proj") var downProjection: Q35SwitchLinear
 
-    init(config: NemotronHConfig) {
-        self._upProjection.wrappedValue = Q35SwitchLinear(
-            weight: MLXArray.zeros(
+    convenience init(config: NemotronHConfig) {
+        self.init(
+            upWeight: MLXArray.zeros(
                 [config.nRoutedExperts, config.moeIntermediateSize, config.hiddenSize],
                 dtype: .bfloat16
             ),
+            downWeight: MLXArray.zeros(
+                [config.nRoutedExperts, config.hiddenSize, config.moeIntermediateSize],
+                dtype: .bfloat16
+            )
+        )
+    }
+
+    init(upWeight: MLXArray, downWeight: MLXArray) {
+        self._upProjection.wrappedValue = Q35SwitchLinear(
+            weight: upWeight,
             scales: nil,
             biases: nil,
             bias: nil,
@@ -21,10 +74,7 @@ final class NemotronOmniExperts: Module {
             bits: 4
         )
         self._downProjection.wrappedValue = Q35SwitchLinear(
-            weight: MLXArray.zeros(
-                [config.nRoutedExperts, config.hiddenSize, config.moeIntermediateSize],
-                dtype: .bfloat16
-            ),
+            weight: downWeight,
             scales: nil,
             biases: nil,
             bias: nil,
@@ -36,10 +86,36 @@ final class NemotronOmniExperts: Module {
 
     func callAsFunction(_ input: MLXArray, indices: MLXArray) -> MLXArray {
         let projected = upProjection(input, indices: indices)
-        let activated = MLX.square(
-            MLX.maximum(projected, MLXArray(0).asType(projected.dtype))
-        )
-        return downProjection(activated, indices: indices)
+        return downProjection(Self.activated(projected), indices: indices)
+    }
+
+    /// Multitoken prefill. `rows` is `[tokens, hidden]`; the result is
+    /// `[tokens * topK, hidden]` in `[token, rank]` route order. Expert
+    /// matrices are read in place, where the gather path copies one matrix
+    /// per route.
+    func callAsFunction(_ rows: MLXArray, plan: NemotronOmniExpertRoutePlan) -> MLXArray {
+        var outputs: [MLXArray] = []
+        outputs.reserveCapacity(plan.groups.count)
+        for group in plan.groups {
+            let selected = rows.take(MLXArray(group.tokens), axis: 0)
+            let projected = MLX.matmul(
+                selected,
+                upProjection.weight[group.expert].swappedAxes(-1, -2)
+            )
+            outputs.append(MLX.matmul(
+                Self.activated(projected),
+                downProjection.weight[group.expert].swappedAxes(-1, -2)
+            ))
+            if outputs.count.isMultiple(of: Self.expertsPerEvaluation) {
+                MLX.eval(outputs.suffix(Self.expertsPerEvaluation))
+            }
+        }
+        return MLX.concatenated(outputs, axis: 0)
+            .take(MLXArray(plan.inverseOrder), axis: 0)
+    }
+
+    private static func activated(_ projected: MLXArray) -> MLXArray {
+        MLX.square(MLX.maximum(projected, MLXArray(0).asType(projected.dtype)))
     }
 }
 
@@ -86,33 +162,29 @@ final class NemotronOmniMoE: NemotronHMixer {
         _ input: MLXArray,
         cache: NemotronHLayerCache?
     ) -> MLXArray {
-        let tokenCount = input.ndim == 3 ? input.dim(1) : 1
-        let ranges = Self.prefillRanges(tokenCount: tokenCount)
-        guard ranges.count > 1 else {
+        guard input.ndim == 3, input.dim(1) > 1 else {
             return mixedOutput(input)
         }
-
-        // BF16 gather matmul selects routed matrices with `take` because
-        // MLX's native gatherMM path is float32-only. Evaluating an entire
-        // prompt at once can therefore page several gigabytes of selected
-        // expert rows into one Metal command buffer and trip the macOS GPU
-        // watchdog. Materialize small token runs independently; decode keeps
-        // the original single-token path.
-        var pieces: [MLXArray] = []
-        pieces.reserveCapacity(ranges.count)
-        for range in ranges {
-            let piece = mixedOutput(input[0..., range, 0...])
-            MLX.eval(piece)
-            pieces.append(piece)
-        }
-        return MLX.concatenated(pieces, axis: 1)
+        return prefillOutput(input)
     }
 
-    static func prefillRanges(tokenCount: Int, chunkSize: Int = 4) -> [Range<Int>] {
-        precondition(tokenCount > 0 && chunkSize > 0)
-        return stride(from: 0, to: tokenCount, by: chunkSize).map { start in
-            start..<min(start + chunkSize, tokenCount)
-        }
+    /// BF16 gather matmul selects routed matrices with `take` because MLX's
+    /// native gatherMM path is float32-only, which copies twelve expert
+    /// matrices per token. Prefill instead reads the route back and groups it
+    /// by expert; decode keeps the single-token gather path.
+    private func prefillOutput(_ input: MLXArray) -> MLXArray {
+        let route = gate(input)
+        let topK = route.indices.dim(-1)
+        let plan = NemotronOmniExpertRoutePlan(
+            flatIndices: route.indices.asType(.int32).reshaped([-1]).asArray(Int32.self),
+            topK: topK
+        )
+        let routed = experts(
+            input.reshaped([input.dim(0) * input.dim(1), input.dim(2)]),
+            plan: plan
+        ).reshaped([input.dim(0), input.dim(1), topK, input.dim(2)])
+        return (routed * route.weights.expandedDimensions(axis: -1)).sum(axis: -2)
+            + sharedExperts(input)
     }
 
     private func mixedOutput(_ input: MLXArray) -> MLXArray {

@@ -2,7 +2,7 @@ import Foundation
 import MLX
 
 public actor NemotronOmniGenerator: ChatGenerator {
-    private static let prefillChunkSize = 128
+    private static let prefillChunkSize = 1_024
 
     private var model: NemotronOmniCausalLM?
     private var visionTower: NemotronOmniVisionTower?

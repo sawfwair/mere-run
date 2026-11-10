@@ -21,6 +21,11 @@ The runtime has four layers:
   keys, shapes, dtypes, and payload bytes.
   Multitoken prefill evaluates at layer boundaries to keep every Metal command
   buffer below the macOS watchdog; one-token decode remains fused.
+  Prefill runs in 1,024-token chunks. Each MoE layer reads the chunk's route
+  back, groups it by expert, and runs one dense matmul per used expert,
+  evaluating 16 experts at a time. One-token decode keeps the gather path,
+  which copies the six routed expert matrices per token because MLX's native
+  gather matmul is float32-only.
 
 Managed installation remains explicit because the checkpoint uses the NVIDIA
 Open Model Agreement. The managed pull downloads one approximately 66 GB
