@@ -101,6 +101,7 @@ enum APISidecarEvictionPlanner {
 /// Non-actor image generators are safe here because the resident slot holds an
 /// exclusive lease for their entire lifetime of use.
 private enum APISidecarImageGenerator: @unchecked Sendable {
+    case miniMaxH3Image(MiniMaxH3ImageGenerator)
     case flux3(Flux3Generator)
     case flux1(Flux1Generator)
     case flux2Klein(Flux2KleinGenerator)
@@ -248,6 +249,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 },
                 make: {
                     switch kind {
+                    case .miniMaxH3Image:
+                        return .miniMaxH3Image(MiniMaxH3ImageGenerator())
                     case .flux3:
                         return .flux3(Flux3Generator())
                     case .flux1:
@@ -286,7 +289,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                         generator.unload()
                     case .ideogram4(let generator):
                         generator.unload()
-                    case .flux3, .qwenImage21:
+                    case .miniMaxH3Image, .flux3, .qwenImage21:
                         break
                     case .qwenImageEdit(let generator):
                         await generator.clearCache()
@@ -309,6 +312,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                     case .ideogram4(let generator):
                         return try await generator.generate(request, progressHandler: nil)
                     case .qwenImage21(let generator):
+                        return try await generator.generate(request, progressHandler: nil)
+                    case .miniMaxH3Image(let generator):
                         return try await generator.generate(request, progressHandler: nil)
                     case .flux3(let generator):
                         return try await generator.generate(request, progressHandler: nil)
@@ -1073,7 +1078,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
             generator.unload()
         case .ideogram4(let generator):
             generator.unload()
-        case .flux3, .qwenImage21:
+        case .miniMaxH3Image, .flux3, .qwenImage21:
             break
         case .qwenImageEdit(let generator):
             await generator.clearCache()
@@ -1124,7 +1129,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         residentNeedsLoad: Bool
     ) -> UInt64? {
         // Qwen Image 2.1 releases all weights at the end of every operation.
-        let needsWeights = residentNeedsLoad || kind == .qwenImage21 || kind == .flux3
+        let needsWeights = residentNeedsLoad || kind == .qwenImage21 || kind == .flux3 || kind == .miniMaxH3Image
         let baseBytes = needsWeights
             ? Self.imageBaseLoadBytes(for: kind)
             : 8 * Self.gibibyte
@@ -1133,11 +1138,14 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
             width: width,
             height: height
         )
+        if kind == .miniMaxH3Image {
+            // Components load sequentially; their combined on-disk size is not resident memory.
+            // The transformer is fixed; activation space grows with the internal canvas.
+            return 68 * Self.gibibyte + Self.scaledImageLoadBytes(
+                baseBytes: 2 * Self.gibibyte, width: dimensions.width, height: dimensions.height)
+        }
         let minimumBytes = Self.scaledImageLoadBytes(
-            baseBytes: baseBytes,
-            width: dimensions.width,
-            height: dimensions.height
-        )
+            baseBytes: baseBytes, width: dimensions.width, height: dimensions.height)
         guard needsWeights else {
             // Warm staged pipelines can temporarily reload components, but
             // their checkpoint is already resident/accounted for. Avoid an
@@ -1169,6 +1177,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
             return 40 * gibibyte
         case .flux2Klein:
             return 10 * gibibyte
+        case .miniMaxH3Image:
+            return 80 * gibibyte
         case .flux3:
             return 24 * gibibyte
         case .zImageTurbo:
@@ -1192,6 +1202,9 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 height: height
             )
             return (resolution.width, resolution.height)
+        case .miniMaxH3Image:
+            let size = MiniMaxH3ImageGeometry.canvas(width: width, height: height)
+            return (size.width, size.height)
         case .flux1, .flux2Klein, .flux3, .zImageTurbo, .senseNovaU15, .krea2, .ideogram4, .qwenImageEdit, .qwenImage21:
             return (width, height)
         }

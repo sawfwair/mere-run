@@ -229,6 +229,13 @@ final class APISidecarResidentSlotTests: XCTestCase {
         let pool = APISidecarModelPool()
         let missingPath = "/tmp/mere-run-missing-image-model-\(UUID().uuidString)"
 
+        XCTAssertEqual(pool.estimatedImageLoadBytesForTesting(kind: .miniMaxH3Image,
+            modelID: MiniMaxH3ImageResources.modelID, modelPath: missingPath,
+            width: 1_024, height: 1_024, residentNeedsLoad: false), 76 * gib)
+        XCTAssertEqual(pool.estimatedImageLoadBytesForTesting(kind: .miniMaxH3Image,
+            modelID: MiniMaxH3ImageResources.modelID, modelPath: missingPath,
+            width: 4_096, height: 4_096, residentNeedsLoad: true), 100 * gib)
+
         XCTAssertEqual(
             pool.estimatedImageLoadBytesForTesting(
                 kind: .flux2Klein,

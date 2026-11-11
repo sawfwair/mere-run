@@ -461,8 +461,14 @@ For development on Apple Silicon macOS:
 2. From the repository root, build the package:
 
    ```bash
+   python3 scripts/prepare_mlx.py
    swift build
    ```
+
+   The preparation step verifies the pinned MLX checkout and applies the audited
+   M5 affine-Q8 host-dispatch patch. It leaves shader sources unchanged.
+   See [MLX host patches](./docs/internals/mlx-host-patches.md) for provenance
+   and regression checks. The main check script and app build also prepare MLX.
 
 3. Run the tests:
 

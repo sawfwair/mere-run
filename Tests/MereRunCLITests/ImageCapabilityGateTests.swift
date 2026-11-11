@@ -11,6 +11,19 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
     try #require(CLICapabilityGate.evaluate(commandLine: commandLine)).report
 }
 
+@Test func h3ImageUsesSixPDDStepsAndSixteenReferenceLimit() throws {
+    let command = ["image", "generate", "--prompt", "A camera", "--model", "image-minimax-h3"]
+    #expect(try report(command).family == "h3-image")
+    #expect(try report(command + ["--steps", "6", "--cfg", "1", "--width", "6272", "--height", "2688"]).violations.isEmpty)
+    for flags in [["--steps", "7"], ["--cfg", "2"], ["--negative-prompt", "blurry"], ["--sigma-shift", "3"],
+                  ["--strength", "0.5"], ["--sigmas", "1,0.5"], ["--lora", "/tmp/style.safetensors"]] {
+        #expect(try report(command + flags).violations.count == 1)
+    }
+    let references = (0..<16).flatMap { ["--ref-image", "/tmp/ref-\($0).png"] }
+    #expect(try report(command + references).violations.isEmpty)
+    #expect(try report(command + references + ["--ref-image", "/tmp/extra.png"]).violations.count == 1)
+}
+
 @Test func flux3UsesDistilledFlowSamplingAndRejectsUnsupportedOptions() throws {
     let command = ["image", "generate", "--prompt", "A camera", "--model", "image-flux3-klein"]
     #expect(try report(command).family == "flux3")
@@ -85,14 +98,14 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
     #expect(krea.warnings == [
         "--negative-prompt has no effect with Krea 2. It applies to FLUX.2 Klein, Z-Image, HiDream-O1, SenseNova U1.5, "
             + "Qwen-Image 2.1, Qwen-Image 2.1 Turbo and Qwen-Image-Edit.",
-        "--cfg has no effect with Krea 2. It applies to FLUX 3 Klein, FLUX.1-dev, FLUX.2 Klein, FLUX.2-dev, Z-Image, HiDream-O1, "
+        "--cfg has no effect with Krea 2. It applies to MiniMax-H3-Image, FLUX 3 Klein, FLUX.1-dev, FLUX.2 Klein, FLUX.2-dev, Z-Image, HiDream-O1, "
             + "SenseNova U1.5, Qwen-Image 2.1, Qwen-Image 2.1 Turbo, Qwen-Image-Edit, Qwen-Image-Edit Lightning and Ideogram 4."
     ])
     let stacked = try report(["image", "generate", "-p", "a mug", "-m", "image-zimage-nano", "-l", "a.safetensors", "-l", "b.safetensors"])
     #expect(stacked.violations == ["Z-Image takes --lora at most 1 time; got 2."])
     let flux1 = try report(["image", "generate", "-p", "a mug", "-m", "image-flux1-dev", "-i", "/tmp/in.png"])
     #expect(flux1.violations == [
-        "--input is not supported by FLUX.1-dev. It applies to FLUX 3 Klein, FLUX.2 Klein, FLUX.2-dev, Z-Image, HiDream-O1, "
+        "--input is not supported by FLUX.1-dev. It applies to MiniMax-H3-Image, FLUX 3 Klein, FLUX.2 Klein, FLUX.2-dev, Z-Image, HiDream-O1, "
             + "SenseNova U1.5, Qwen-Image 2.1, Qwen-Image 2.1 Turbo, Qwen-Image-Edit and Qwen-Image-Edit Lightning."
     ])
 }

@@ -20,7 +20,7 @@ public struct ImageGenerationSampling: Sendable, Equatable {
         let usesManifest: Bool
         switch manifest?.family {
         case .klein: usesManifest = policy.kleinUsesManifestDefaults
-        case .hidream, .senseNova, .krea, .ideogram, .flux1, .flux3: usesManifest = true
+        case .h3Image, .hidream, .senseNova, .krea, .ideogram, .flux1, .flux3: usesManifest = true
         case .qwen: usesManifest = manifest?.engine == .qwenImageEdit || manifest?.engine == .qwenImage21
         default: usesManifest = false
         }
@@ -89,7 +89,7 @@ public struct ImageGenerationConditioning: Sendable, Equatable {
         family: MereRunModelManifest.Family?, inputImage: URL?, referenceImages: [URL]
     ) -> String {
         guard inputImage != nil || !referenceImages.isEmpty else { return "text_to_image" }
-        if family == .klein || family == .flux3 { return "reference_image" }
+        if family == .klein || family == .flux3 || family == .h3Image { return "reference_image" }
         if inputImage != nil, !referenceImages.isEmpty { return "image_to_image_with_references" }
         return inputImage == nil ? "reference_image" : "image_to_image"
     }
@@ -240,6 +240,23 @@ public struct ImageGenerationPlan: Sendable {
             manifest.family == .senseNova && (!options.width.isMultiple(of: 32) || !options.height.isMultiple(of: 32)),
             "dimensions_invalid", "SenseNova image dimensions must be multiples of 32."
         )
+        if manifest.engine == .miniMaxH3Image {
+            reject(sampling.steps != 6, "steps_invalid", "MiniMax-H3-Image requires its fixed six-step PDD schedule.")
+            reject(sampling.guidanceScale != 1, "cfg_invalid", "MiniMax-H3-Image requires CFG 1.")
+            reject(options.negativePrompt?.isEmpty == false, "negative_prompt_unsupported", "MiniMax-H3-Image does not use negative prompts.")
+            reject(options.sigmaShift != nil, "sigma_shift_unsupported", "MiniMax-H3-Image uses its saved PDD schedule.")
+            reject(options.strength != nil, "strength_unsupported", "MiniMax-H3-Image uses reference conditioning without edit strength.")
+            reject(options.outputURL.pathExtension.lowercased() != "png", "output_format_invalid", "MiniMax-H3-Image requires PNG output.")
+            reject(options.referenceImages.count + (options.inputImage == nil ? 0 : 1) > 16,
+                   "reference_count_invalid", "MiniMax-H3-Image supports up to 16 ordered images, including --input.")
+            reject(!(32...8_192).contains(options.width) || !(32...8_192).contains(options.height)
+                || Double(options.width) * Double(options.height) > 20_971_520,
+                "dimensions_invalid", "MiniMax-H3-Image requires 32–8192 pixel sides and at most 20 MP.")
+            reject(manifest.precision != .bf16 && manifest.precision != .int8,
+                   "model_precision_unsupported", "Use the original BF16 or native Q8 MiniMax-H3-Image checkpoint.")
+            reject(manifest.precision == .int8 && (manifest.quantization?.bits != 8 || manifest.quantization?.groupSize != 64),
+                   "model_quantization_unsupported", "H3-Image Q8 requires affine 8-bit/group-64 weights.")
+        }
         if manifest.engine == .qwenImage21 {
             if manifest.tier == .turbo {
                 reject(sampling.steps != 8, "steps_invalid", "Qwen Image 2.1 Turbo uses its saved eight-step schedule; --steps must be 8.")

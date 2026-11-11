@@ -81,6 +81,9 @@ if [[ "$configuration" == "release" ]]; then
 fi
 
 if (( do_build )); then
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    python3 scripts/prepare_mlx.py
+  fi
   echo "[install-local] swift build (--configuration $configuration)"
   swift "${swift_build_args[@]}"
 fi

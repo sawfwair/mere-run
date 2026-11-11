@@ -55,6 +55,7 @@ models. Choose **Use model default** to clear it. For example, Qwen Image Edit
 | `image-klein-base-9b` | Undistilled FLUX.2 Klein 9B base for LoRA training | 50, 1 | 51.5 GB | 64 / 96 GB |
 | `image-bonsai-binary` | Smallest Klein deployment (1-bit) | 4, 1 | 3.4 GB | 16 / 24 GB |
 | `image-bonsai-ternary` | Compact Klein deployment (2-bit) | 4, 1 | 3.9 GB | 12 / 16 GB |
+| `image-minimax-h3` | Six-step MiniMax-H3-Image generation and up to 16 references; 2K and 4K text-to-image qualified | 6, 1 | About 135 GB | 96 / 128 GB (estimates) |
 | `image-flux3-klein` | Experimental FLUX 3 Klein generation and up to 10 references | 16, 1 | 20.3 GB | 32 / 48 GB |
 | `image-flux1-dev` | Gated FLUX.1-dev with FLUX.1 LoRAs | 28, 3.5 | 34.0 GB | 48 / 64 GB |
 | `image-flux2-dev` | Gated FLUX.2-dev with Dev LoRAs | 50, 4.0 | 78.1 GB | 96 / 128 GB |
@@ -79,6 +80,51 @@ install steps, read the offline handbook:
 mere.run guide --model image-flux3-klein
 mere.run guide --list-models
 ```
+
+## MiniMax-H3-Image
+
+`image-minimax-h3` uses native Swift and MLX for the original BF16 checkpoint.
+Its fixed sampler runs six evaluations at CFG 1. Each evaluation selects a
+separate PDD output head. Text-to-image and editing share the same checkpoint;
+`--input` and ordered `--ref-image` values count toward the 16-image limit.
+
+```bash
+mere.run model pull image-minimax-h3 --accept-model-license
+mere.run image generate --model image-minimax-h3 \
+  --prompt "A detailed studio photograph of a brass camera on a walnut desk, with soft window light." \
+  --width 4096 --height 4096 --seed 42 --output ./camera.png
+mere.run guide --model image-minimax-h3
+```
+
+Review the upstream MiniMax-H3-Image Community License before installation.
+The snapshot is pinned to `492fd8c4eca666f1085f57e30738c1e0d86b3439` and
+includes the text encoder. It needs about 135 GB of disk space. Downloads
+are explicit and require license acceptance.
+
+Use detailed English prompts. Negative prompts, LoRAs, edit strength, and
+custom schedules are unsupported. Images below 4 MP use a larger internal
+canvas and resize back to the requested output. Output must be PNG; the
+native request limit is 20 MP with 32–8192 pixel sides.
+
+Tiny upstream fixtures verify FP32 and mixed-BF16 transformer trajectories
+and the image VAE decoder. The
+[real-checkpoint report](../benchmarks/minimax-h3-image-native-qualification-2026-11-10.md)
+records coherent 2K and 4K camera images on a 128 GiB M5 Max: 213 and 499 seconds,
+with peak process footprints of 67.35 and 72.12 GiB. These are shared-host
+single runs; reference editing and broader quality remain unqualified.
+Native MLX seeds are repeatable but produce different noise from PyTorch CPU
+seeds.
+
+`model optimize image-minimax-h3 --output ./image-minimax-h3-q8` exports a
+separate native MLX affine Q8/group-64 checkpoint with exact timestep tables.
+The source remains intact. The
+[Q8 follow-up](../benchmarks/minimax-h3-image-q8-2026-11-10.md) compares storage,
+image quality, process memory, and cold/warm generation. Its contributor
+benchmark also tests dense BF16 compute from Q8-stored weights; this uses more
+runtime memory than packed Q8 compute. The
+[M5 acceleration report](../benchmarks/minimax-h3-image-m5-nax-2026-11-10.md)
+qualifies restored affine Q8 matrix acceleration, attention scheduling, and
+batched VAE decode against that baseline.
 
 ## Generate an image
 

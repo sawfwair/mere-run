@@ -48,6 +48,8 @@ swiftpm() {
   fi
 }
 
+python3 scripts/prepare_mlx.py
+python3 -B -m unittest discover -s scripts/tests -p test_prepare_mlx.py
 swiftpm build
 ./scripts/build_mlx_metallib.sh \
   --verify-only vendor/mlx-swift_Cmlx.bundle

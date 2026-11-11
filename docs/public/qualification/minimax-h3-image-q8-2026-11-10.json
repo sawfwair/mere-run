@@ -1,0 +1,1396 @@
+{
+  "schema_version": 1,
+  "checkpoint": {
+    "repository": "MiniMaxAI/MiniMax-H3-Image",
+    "revision": "492fd8c4eca666f1085f57e30738c1e0d86b3439",
+    "format": "mere.run.h3-image-q8-g64-v1",
+    "total_bytes": 52035131360,
+    "component_bytes": {
+      "transformer": 21323325285,
+      "text_encoder": 28222898985,
+      "vae": 2336966498,
+      "exact_modulations": 116513288
+    },
+    "source_preserved": true,
+    "changes": [
+      "affine Q8/group64 on eligible BF16 linear weights",
+      "exact six-step original-precision AdaLN cache",
+      "omit unused encoder layers after activation layer50"
+    ],
+    "retained_precision": [
+      "FP32 projections and original VAE",
+      "embeddings",
+      "unaligned vision matrices"
+    ],
+    "h3_image_mlx.json_sha256": "f2fb6fcd22addf6d7509ad8d3b52aea7833468c8dbc2d63a0831bfea6e56ca6c",
+    "image_modulations.safetensors_sha256": "e83aaf4509638855698d3dd33c9471e07cd79d720344148d59dae58a22182f36",
+    "q8-files.json_sha256": "e6eada5d5e3bccd6787e75cb61efafbf218498a7201a326cce7345fece96ebcd"
+  },
+  "host": {
+    "chip": "Apple M5 Max",
+    "gpu_cores": 40,
+    "physical_memory_bytes": 137438953472,
+    "os": "macOS 27.2",
+    "power": "AC",
+    "checkpoint_storage": "external MODELS volume"
+  },
+  "prompt": "A high-resolution photorealistic studio product photograph of a single vintage brass rangefinder camera on a dark walnut tabletop. The camera is viewed from a three-quarter front angle and has one round black glass lens, a textured black leather grip, a silver shutter button, and engraved mechanical details. A small cobalt-blue ceramic cup sits behind the camera on the left. Soft daylight enters from the right, casting consistent gentle shadows to the left. A pale blue seamless background is out of focus. Show crisp brushed-metal grain, subtle fingerprints and realistic wood pores, with natural reflections and no artificial plastic smoothing. Balanced composition, shallow depth of field, physically plausible proportions, no illustration.",
+  "steps": 6,
+  "cfg": 1,
+  "seed": 42,
+  "implementation": "native Swift/MLX Metal; release",
+  "precision_note": "Resident BF16 mode expands Q8 weights and rounds reconstructed weights to BF16; it does not restore original BF16 values.",
+  "packed_cli": [
+    {
+      "case": "camera-2048-q8-release-ready",
+      "exit_code": 0,
+      "wall_seconds": 169.45907662506215,
+      "denoising_seconds": 125.72669474990107,
+      "mean_step_seconds": 20.954449124983512,
+      "prompt_encoding_seconds": 30.4870514171198,
+      "conditioner_load_seconds": 0.6601687909569591,
+      "transformer_load_and_text_refinement_seconds": 1.3342001249548048,
+      "decode_and_image_preparation_seconds": 7.850352999987081,
+      "peak_memory_footprint_bytes": 28037124520,
+      "maximum_resident_bytes": 27710619648,
+      "binary_sha256": "0e7539718058b17f68894ce14c05fee8787d8a3ce14d8edea5d5046d0a733b00",
+      "source_base_commit": "deee21fdd17919a912417e1950ee13991bf1c1c5",
+      "source_sha256": {
+        "Sources/MereRunH3Model/MiniMaxH3AdaLNCache.swift": "abd5a109c01250726ab67e97f45dc26ca3510fa3692de10e7afca9fa183f5719",
+        "Sources/MereRunH3Model/MiniMaxH3Attention.swift": "bd89fa7b9ded20a7a8254c8a67cdbe77faf2ca228345cf83437ae51206474307",
+        "Sources/MereRunH3Model/MiniMaxH3AudioVAE.swift": "97a487d55422d20d9b5b57d152e667e5faa75208b83e2f55687d3c5e0d649c4f",
+        "Sources/MereRunH3Model/MiniMaxH3BlockReuse.swift": "2883be3cad647c6128554da3f209b73f62b5ce2133470fa4d78baa2e09408439",
+        "Sources/MereRunH3Model/MiniMaxH3CompiledBlockTypes.swift": "910cac4b62720060c7a843ed3d2d5d58216c937e6d842a6a92da133ea119f0f6",
+        "Sources/MereRunH3Model/MiniMaxH3Conditioning.swift": "7a9c96fe2638b0404dd53413f0370f13f94846209662a42075580ea3a6c8d82e",
+        "Sources/MereRunH3Model/MiniMaxH3Configuration.swift": "cac88cc04d8936108c9b59fb900ba2c8f0a3a94fb7a4c75dd1f9cfedda86c8ac",
+        "Sources/MereRunH3Model/MiniMaxH3FastVSA+Kernels.swift": "0ecf268f49861cc6b0f3a58a93adbdd1e444bdc9a5fbaa101ecaabe8d487702f",
+        "Sources/MereRunH3Model/MiniMaxH3FastVSA.swift": "e061277d1a4a8f0e6c0dc7d22b7e58f3407b7cb64f848d5dae6de7a27db574a2",
+        "Sources/MereRunH3Model/MiniMaxH3FeedForward.swift": "af91adae757e0ca859618f21cff59acfacf3787c5cf1ea9c0088daad3d080d17",
+        "Sources/MereRunH3Model/MiniMaxH3FinalLayer.swift": "5cb86e0774071ba0e28285048dd3f5dcb92f21e1176c8731eb3d24f3e17066f2",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+AdaLN.swift": "8688f5c0c719e433fe55bba7410af475f708d400097d83a225823694414c6758",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+FeedForward.swift": "5bd09a050771ebba524980a2d315b5679834b43f752312473a44d8c2129d3923",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+Projection.swift": "096d5ad69106da8719127efef3edbb616a4ecd12b2e555261ea77eb29a7837e8",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+QKV.swift": "dbb298854495e0ca8ee7335d146d98dac9775ea253c3a61def60bb51c3ee17b4",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+Rotary.swift": "9a9caf00a2f6c0a5f7c475d7fcdf8fc1272c200175e9e2932fd55379959314e3",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+TiledInput.swift": "934dd8f9389b5c21a93924a3a73e47f19d96d126807fcb4e3820c1fe62a4d18e",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+TiledOutput.swift": "1ace9978504b873613ec93dee0f3c7862ae60323fbf814cc36313e16ac661ef8",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels.swift": "06ff85123ab312d8cb44f843e94ce321a28302cafba3e3bc5a308e1bf455cfd1",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry+FL2VA.swift": "9fe7f81d17088cefed3337b5b0112b542e8d3b57b3d3f762fc4d392de8b1d1d2",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry+Positions.swift": "16810b294bb59325d1acd7b4d9594ac3577621908044a3afb9814fae4daaef8a",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry+Ref2VA.swift": "379c33d606b0cc48b0e97ad03d74f53b725122df7f97b8aee64c12fb049e835c",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry.swift": "00e76634d2c94ad1a1b76ee6be46dc41771af023f7d206e1bed99eddead367ac",
+        "Sources/MereRunH3Model/MiniMaxH3ImageConfiguration.swift": "714600d99670259be073315073706419e716e8a9640e09e3562ca4f98863875a",
+        "Sources/MereRunH3Model/MiniMaxH3ImageDecoder.swift": "114dfe7c6222ad30fb08f4a0b56c50d1ab7ea951814445660fdb361a62db8ac7",
+        "Sources/MereRunH3Model/MiniMaxH3ImageGeometry.swift": "2629c945942c5dcca43f1e07a5b130538f52e0a12c4d9c398ad353baedeb6fb1",
+        "Sources/MereRunH3Model/MiniMaxH3ImageModulationCache.swift": "4543a06c82458eae0af5f531a178419fefeaf10082ced313ace442298c16f64f",
+        "Sources/MereRunH3Model/MiniMaxH3ImageTransformer.swift": "812fb9026f3c530ac3147f64f980847e97d4baa1a26d81808ddb240fdf162c45",
+        "Sources/MereRunH3Model/MiniMaxH3ImageVAE.swift": "62feac444ee61944d6e61c30920227cc1cc7fd3b2883c632974dea82d5182704",
+        "Sources/MereRunH3Model/MiniMaxH3Layout.swift": "37f44d09b48f014a5d9074844475e5f4e1ea3a2b2270ff2ab2a54112a7e06da0",
+        "Sources/MereRunH3Model/MiniMaxH3MPPProjection.swift": "7e6355e8908f0776bd47403aab509a4420802cca533ec03a7e9d194a1f243cf8",
+        "Sources/MereRunH3Model/MiniMaxH3Projection.swift": "61a2a2c0d00b3ca6429b07c183506192b55f93641404fe3fca6d58a9aca3b970",
+        "Sources/MereRunH3Model/MiniMaxH3ResidentWeights.swift": "1f7a201d555803650155dd454e05d4a60e73821a95d9a9db4cea972d9e0737a8",
+        "Sources/MereRunH3Model/MiniMaxH3ReusePolicy.swift": "1d08336af554a6a0c5fcf6d4e4a84a20ffb85c0a1f21da695a0d351a67426528",
+        "Sources/MereRunH3Model/MiniMaxH3RuntimeLoRA.swift": "fae5726a4ac65d1b1fee0460bcde0e81073bb556772b75cd1cb5ad3be66bddce",
+        "Sources/MereRunH3Model/MiniMaxH3Scheduler.swift": "50d7cf0a78c61764513f0716ae7a799cb4d8613d612eddb0798c88272b5d3da3",
+        "Sources/MereRunH3Model/MiniMaxH3TokenReduction.swift": "916b5b66e07b6b66c49f6de343cb4aa1962fd6bd8f5252a5081cc5036509f379",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+AdaLN.swift": "4834fef064c6bad84a1a853d2effe0b4f11575a03514532ba3a29d086bbeb723",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+Blocks.swift": "6fdf540c266fd15702d1d6051a2f733eee1dd48677e4ad805737ce85d6568208",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+Compilation.swift": "c778416ab6d504cd7f2b94e84116fc4378b195622c9675356df91b81bcb16e5f",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+Forward.swift": "37ba6e8e9564945651c94b7139cc4eb4e6ea4b709b371e2835197c7823308038",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer.swift": "8c2595e27055a52ec9b0bc81719ce5390f851ef02ef716049d1b4c2fcd7d5018",
+        "Sources/MereRunH3Model/MiniMaxH3TransformerBlock.swift": "bd97aa2982a40f2361e9b71b7dc563bd2ac381ccf10da1b18d37c811453bc7ba",
+        "Sources/MereRunH3Model/MiniMaxH3TransformerConfiguration.swift": "6470f8a86fb6ea3cd9fd1719f8c436bf09167477aa6474e2555d7edfce3d4248",
+        "Sources/MereRunH3Model/MiniMaxH3VideoDecoder.swift": "f017b87992c4e2b7ebd5af6b62fefb3bfabfa3ee84bcb59dccd357de9eed89c0",
+        "Sources/MereRunH3Model/MiniMaxH3VideoEncoder.swift": "d97de7ece3e89e88abf7a9d8910acbbec88c8e67a60b8fa4090c1697d5ea86ca",
+        "Sources/MereRunH3Model/MiniMaxH3VideoVAE.swift": "0ae85822412237e8aac180e1aafb4c2ccc9bf101632ce77bdfd7c98224244981",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageConditioner.swift": "b1c968d25ea72ab3d1e765572682473ea7d607ee624bfa9533d99585b0b1d3f3",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageGenerator.swift": "bb1c07eb6c82c09b15cd94836f7379383f48ac4d7dd1a5ee968e2e9d45b7e560",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageLoader.swift": "83913596e7c48bccbd7a84756a9689cb591efbfc8a33a3cd2304f8662fd9087b",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageMLXFormat.swift": "a27c608890dfcafa4dcbded54fede8ac8b4ac91db76f1504898591254d6e2861",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageOptimizer.swift": "2cce08d50ac6f7a6d91bf674672493ce6aadbd32fd92d8e03629399a0f74edac",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageProfile.swift": "33b4ed986afb34f4a22047c2d87c5125285d3229643c975df919197452f886ae",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageResources.swift": "a683323d3e932dcec2dc09304d5c736d62bb4bd8368d8027b8780459baaa85b7"
+      },
+      "model_manifest_sha256": "06633d903eb0b9468992b3018f089e68bd7873fd8f1969875135229cd7a7978f",
+      "precision": "int8",
+      "quantization": {
+        "bits": 8,
+        "groupSize": 64,
+        "scheme": "mere.run.h3-image-q8-g64-v1"
+      },
+      "mlx_enable_tf32": "unset (MLX default enabled)",
+      "profile_totals_seconds": {
+        "block": 125.57602369785309
+      },
+      "profile_after_first_step_seconds": {
+        "block": 91.14583611488342
+      },
+      "progress_events": [
+        {
+          "elapsed_seconds": 2.6866338751278818,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingEncoder",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 3.346802666084841,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 33.83385408320464,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 1,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 34.043663875199854,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingTransformer",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 35.37786400015466,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 0,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 69.9027529580053,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 1,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 89.40004570805468,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 2,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 107.33701920812018,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 3,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 125.30669141607359,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 4,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 143.11175195802934,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 5,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 161.10455875005573,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 6,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 161.34810791607015,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 161.3805977080483,
+          "payload": {
+            "event": "progress",
+            "stage": "decoding",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 169.23095070803538,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 169.41791125014424,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 1,
+            "total_steps": 1
+          }
+        }
+      ],
+      "run_context": "Shared desktop host; repository gate overlapped this single CLI run. File caches were not purged.",
+      "visual_inspection": {
+        "whole_frame": "Coherent brass rangefinder camera, blue cup behind on left, walnut tabletop; sharp textured covering and reflections. Invented markings and oversized cup remain.",
+        "unscaled_crops": "Reviewed unscaled 512-pixel lens, textured covering, and tabletop crops. No obvious tile seams or mosaic corruption; malformed engraved lettering remains."
+      },
+      "size": 2048,
+      "image": {
+        "size": [
+          2048,
+          2048
+        ],
+        "format": "PNG",
+        "file_bytes": 6390438,
+        "sha256": "d063e4a7fa7142d6fe635e62b0ee2045a604ec381db0c70944eb471f89231d62",
+        "rgb_mean": [
+          126.44244575500488,
+          130.07660293579102,
+          135.4903655052185
+        ],
+        "rgb_standard_deviation": 83.68007210472592,
+        "black_fraction": 0.00022220611572265625,
+        "white_fraction": 0.00017309188842773438
+      }
+    },
+    {
+      "case": "camera-4096-q8-release",
+      "exit_code": 0,
+      "wall_seconds": 510.7588125830516,
+      "denoising_seconds": 485.1815726249479,
+      "mean_step_seconds": 80.86359543749131,
+      "prompt_encoding_seconds": 8.650263583054766,
+      "conditioner_load_seconds": 0.43780262488871813,
+      "transformer_load_and_text_refinement_seconds": 0.1632852500770241,
+      "decode_and_image_preparation_seconds": 14.7171391248703,
+      "peak_memory_footprint_bytes": 28088160632,
+      "maximum_resident_bytes": 27642757120,
+      "binary_sha256": "0e7539718058b17f68894ce14c05fee8787d8a3ce14d8edea5d5046d0a733b00",
+      "source_base_commit": "deee21fdd17919a912417e1950ee13991bf1c1c5",
+      "source_sha256": {
+        "Sources/MereRunH3Model/MiniMaxH3AdaLNCache.swift": "abd5a109c01250726ab67e97f45dc26ca3510fa3692de10e7afca9fa183f5719",
+        "Sources/MereRunH3Model/MiniMaxH3Attention.swift": "bd89fa7b9ded20a7a8254c8a67cdbe77faf2ca228345cf83437ae51206474307",
+        "Sources/MereRunH3Model/MiniMaxH3AudioVAE.swift": "97a487d55422d20d9b5b57d152e667e5faa75208b83e2f55687d3c5e0d649c4f",
+        "Sources/MereRunH3Model/MiniMaxH3BlockReuse.swift": "2883be3cad647c6128554da3f209b73f62b5ce2133470fa4d78baa2e09408439",
+        "Sources/MereRunH3Model/MiniMaxH3CompiledBlockTypes.swift": "910cac4b62720060c7a843ed3d2d5d58216c937e6d842a6a92da133ea119f0f6",
+        "Sources/MereRunH3Model/MiniMaxH3Conditioning.swift": "7a9c96fe2638b0404dd53413f0370f13f94846209662a42075580ea3a6c8d82e",
+        "Sources/MereRunH3Model/MiniMaxH3Configuration.swift": "cac88cc04d8936108c9b59fb900ba2c8f0a3a94fb7a4c75dd1f9cfedda86c8ac",
+        "Sources/MereRunH3Model/MiniMaxH3FastVSA+Kernels.swift": "0ecf268f49861cc6b0f3a58a93adbdd1e444bdc9a5fbaa101ecaabe8d487702f",
+        "Sources/MereRunH3Model/MiniMaxH3FastVSA.swift": "e061277d1a4a8f0e6c0dc7d22b7e58f3407b7cb64f848d5dae6de7a27db574a2",
+        "Sources/MereRunH3Model/MiniMaxH3FeedForward.swift": "af91adae757e0ca859618f21cff59acfacf3787c5cf1ea9c0088daad3d080d17",
+        "Sources/MereRunH3Model/MiniMaxH3FinalLayer.swift": "5cb86e0774071ba0e28285048dd3f5dcb92f21e1176c8731eb3d24f3e17066f2",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+AdaLN.swift": "8688f5c0c719e433fe55bba7410af475f708d400097d83a225823694414c6758",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+FeedForward.swift": "5bd09a050771ebba524980a2d315b5679834b43f752312473a44d8c2129d3923",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+Projection.swift": "096d5ad69106da8719127efef3edbb616a4ecd12b2e555261ea77eb29a7837e8",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+QKV.swift": "dbb298854495e0ca8ee7335d146d98dac9775ea253c3a61def60bb51c3ee17b4",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+Rotary.swift": "9a9caf00a2f6c0a5f7c475d7fcdf8fc1272c200175e9e2932fd55379959314e3",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+TiledInput.swift": "934dd8f9389b5c21a93924a3a73e47f19d96d126807fcb4e3820c1fe62a4d18e",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+TiledOutput.swift": "1ace9978504b873613ec93dee0f3c7862ae60323fbf814cc36313e16ac661ef8",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels.swift": "06ff85123ab312d8cb44f843e94ce321a28302cafba3e3bc5a308e1bf455cfd1",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry+FL2VA.swift": "9fe7f81d17088cefed3337b5b0112b542e8d3b57b3d3f762fc4d392de8b1d1d2",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry+Positions.swift": "16810b294bb59325d1acd7b4d9594ac3577621908044a3afb9814fae4daaef8a",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry+Ref2VA.swift": "379c33d606b0cc48b0e97ad03d74f53b725122df7f97b8aee64c12fb049e835c",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry.swift": "00e76634d2c94ad1a1b76ee6be46dc41771af023f7d206e1bed99eddead367ac",
+        "Sources/MereRunH3Model/MiniMaxH3ImageConfiguration.swift": "714600d99670259be073315073706419e716e8a9640e09e3562ca4f98863875a",
+        "Sources/MereRunH3Model/MiniMaxH3ImageDecoder.swift": "114dfe7c6222ad30fb08f4a0b56c50d1ab7ea951814445660fdb361a62db8ac7",
+        "Sources/MereRunH3Model/MiniMaxH3ImageGeometry.swift": "2629c945942c5dcca43f1e07a5b130538f52e0a12c4d9c398ad353baedeb6fb1",
+        "Sources/MereRunH3Model/MiniMaxH3ImageModulationCache.swift": "4543a06c82458eae0af5f531a178419fefeaf10082ced313ace442298c16f64f",
+        "Sources/MereRunH3Model/MiniMaxH3ImageTransformer.swift": "812fb9026f3c530ac3147f64f980847e97d4baa1a26d81808ddb240fdf162c45",
+        "Sources/MereRunH3Model/MiniMaxH3ImageVAE.swift": "62feac444ee61944d6e61c30920227cc1cc7fd3b2883c632974dea82d5182704",
+        "Sources/MereRunH3Model/MiniMaxH3Layout.swift": "37f44d09b48f014a5d9074844475e5f4e1ea3a2b2270ff2ab2a54112a7e06da0",
+        "Sources/MereRunH3Model/MiniMaxH3MPPProjection.swift": "7e6355e8908f0776bd47403aab509a4420802cca533ec03a7e9d194a1f243cf8",
+        "Sources/MereRunH3Model/MiniMaxH3Projection.swift": "61a2a2c0d00b3ca6429b07c183506192b55f93641404fe3fca6d58a9aca3b970",
+        "Sources/MereRunH3Model/MiniMaxH3ResidentWeights.swift": "1f7a201d555803650155dd454e05d4a60e73821a95d9a9db4cea972d9e0737a8",
+        "Sources/MereRunH3Model/MiniMaxH3ReusePolicy.swift": "1d08336af554a6a0c5fcf6d4e4a84a20ffb85c0a1f21da695a0d351a67426528",
+        "Sources/MereRunH3Model/MiniMaxH3RuntimeLoRA.swift": "fae5726a4ac65d1b1fee0460bcde0e81073bb556772b75cd1cb5ad3be66bddce",
+        "Sources/MereRunH3Model/MiniMaxH3Scheduler.swift": "50d7cf0a78c61764513f0716ae7a799cb4d8613d612eddb0798c88272b5d3da3",
+        "Sources/MereRunH3Model/MiniMaxH3TokenReduction.swift": "916b5b66e07b6b66c49f6de343cb4aa1962fd6bd8f5252a5081cc5036509f379",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+AdaLN.swift": "4834fef064c6bad84a1a853d2effe0b4f11575a03514532ba3a29d086bbeb723",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+Blocks.swift": "6fdf540c266fd15702d1d6051a2f733eee1dd48677e4ad805737ce85d6568208",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+Compilation.swift": "c778416ab6d504cd7f2b94e84116fc4378b195622c9675356df91b81bcb16e5f",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+Forward.swift": "37ba6e8e9564945651c94b7139cc4eb4e6ea4b709b371e2835197c7823308038",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer.swift": "8c2595e27055a52ec9b0bc81719ce5390f851ef02ef716049d1b4c2fcd7d5018",
+        "Sources/MereRunH3Model/MiniMaxH3TransformerBlock.swift": "bd97aa2982a40f2361e9b71b7dc563bd2ac381ccf10da1b18d37c811453bc7ba",
+        "Sources/MereRunH3Model/MiniMaxH3TransformerConfiguration.swift": "6470f8a86fb6ea3cd9fd1719f8c436bf09167477aa6474e2555d7edfce3d4248",
+        "Sources/MereRunH3Model/MiniMaxH3VideoDecoder.swift": "f017b87992c4e2b7ebd5af6b62fefb3bfabfa3ee84bcb59dccd357de9eed89c0",
+        "Sources/MereRunH3Model/MiniMaxH3VideoEncoder.swift": "d97de7ece3e89e88abf7a9d8910acbbec88c8e67a60b8fa4090c1697d5ea86ca",
+        "Sources/MereRunH3Model/MiniMaxH3VideoVAE.swift": "0ae85822412237e8aac180e1aafb4c2ccc9bf101632ce77bdfd7c98224244981",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageConditioner.swift": "b1c968d25ea72ab3d1e765572682473ea7d607ee624bfa9533d99585b0b1d3f3",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageGenerator.swift": "bb1c07eb6c82c09b15cd94836f7379383f48ac4d7dd1a5ee968e2e9d45b7e560",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageLoader.swift": "83913596e7c48bccbd7a84756a9689cb591efbfc8a33a3cd2304f8662fd9087b",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageMLXFormat.swift": "a27c608890dfcafa4dcbded54fede8ac8b4ac91db76f1504898591254d6e2861",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageOptimizer.swift": "2cce08d50ac6f7a6d91bf674672493ce6aadbd32fd92d8e03629399a0f74edac",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageProfile.swift": "33b4ed986afb34f4a22047c2d87c5125285d3229643c975df919197452f886ae",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageResources.swift": "a683323d3e932dcec2dc09304d5c736d62bb4bd8368d8027b8780459baaa85b7"
+      },
+      "model_manifest_sha256": "06633d903eb0b9468992b3018f089e68bd7873fd8f1969875135229cd7a7978f",
+      "precision": "int8",
+      "quantization": {
+        "bits": 8,
+        "groupSize": 64,
+        "scheme": "mere.run.h3-image-q8-g64-v1"
+      },
+      "mlx_enable_tf32": "unset (MLX default enabled)",
+      "profile_totals_seconds": {
+        "qkv": 121.7668753862381,
+        "attention": 109.57048165798187,
+        "mlp_and_residual": 253.73259019851685,
+        "block": 485.1189674139023
+      },
+      "profile_after_first_step_seconds": {
+        "qkv": 102.9201043844223,
+        "attention": 93.47021460533142,
+        "mlp_and_residual": 214.08532440662384,
+        "block": 410.5177472829819
+      },
+      "progress_events": [
+        {
+          "elapsed_seconds": 0.173860999988392,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingEncoder",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.6116636248771101,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 9.261927207931876,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 1,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 9.357158541912213,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingTransformer",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 9.520443791989237,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 0,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 84.13111183303408,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 1,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 161.09340316685848,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 2,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 239.67349591688253,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 3,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 321.23100041691214,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 4,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 410.2364849168807,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 5,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 494.7020164169371,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 6,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 495.05447624996305,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 495.0940620000474,
+          "payload": {
+            "event": "progress",
+            "stage": "decoding",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 509.8112011249177,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 510.6769152500201,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 1,
+            "total_steps": 1
+          }
+        }
+      ],
+      "run_context": "Shared desktop host; repository gate had finished before this run. Qualification inference runs were sequential; OS file caches were not purged.",
+      "visual_inspection": {
+        "whole_frame": "Coherent brass rangefinder camera, textured covering, lens, blue cup behind on the left, walnut tabletop. More empty blue background than the 2K composition. Small controls and invented markings differ from dense reconstruction.",
+        "unscaled_crops": "Reviewed 512-pixel lens, covering, and tabletop crops; fine rings, wear and texture are visible. No obvious tile seams or mosaic corruption. Engraved markings are malformed."
+      },
+      "size": 4096,
+      "image": {
+        "size": [
+          4096,
+          4096
+        ],
+        "format": "PNG",
+        "file_bytes": 23749690,
+        "sha256": "a472d2469e1aaab9cac5bd826010eab678d47d1ca971ed6e988fb7d865a74454",
+        "rgb_mean": [
+          153.30733460187912,
+          161.98214149475098,
+          165.06196510791779
+        ],
+        "rgb_standard_deviation": 76.29257409495253,
+        "black_fraction": 0.00143355131149292,
+        "white_fraction": 5.4836273193359375e-05
+      }
+    }
+  ],
+  "resident_bf16_sessions": [
+    {
+      "case": "warm-release-dense-2048-h56",
+      "command": [
+        "mere.run",
+        "model",
+        "benchmark",
+        "h3-image",
+        "--model-root",
+        "./image-minimax-h3-q8",
+        "--prompt",
+        "A high-resolution photorealistic studio product photograph of a single vintage brass rangefinder camera on a dark walnut tabletop. The camera is viewed from a three-quarter front angle and has one round black glass lens, a textured black leather grip, a silver shutter button, and engraved mechanical details. A small cobalt-blue ceramic cup sits behind the camera on the left. Soft daylight enters from the right, casting consistent gentle shadows to the left. A pale blue seamless background is out of focus. Show crisp brushed-metal grain, subtle fingerprints and realistic wood pores, with natural reflections and no artificial plastic smoothing. Balanced composition, shallow depth of field, physically plausible proportions, no illustration.",
+        "--size",
+        "2048",
+        "--runs",
+        "2",
+        "--attention-heads",
+        "56",
+        "--output",
+        "./warm-release-dense-2048-h56",
+        "--json",
+        "--resident-bf16"
+      ],
+      "binary_sha256": "0e7539718058b17f68894ce14c05fee8787d8a3ce14d8edea5d5046d0a733b00",
+      "source_sha256": {
+        "Sources/MereRunH3Model/MiniMaxH3AdaLNCache.swift": "abd5a109c01250726ab67e97f45dc26ca3510fa3692de10e7afca9fa183f5719",
+        "Sources/MereRunH3Model/MiniMaxH3Attention.swift": "bd89fa7b9ded20a7a8254c8a67cdbe77faf2ca228345cf83437ae51206474307",
+        "Sources/MereRunH3Model/MiniMaxH3AudioVAE.swift": "97a487d55422d20d9b5b57d152e667e5faa75208b83e2f55687d3c5e0d649c4f",
+        "Sources/MereRunH3Model/MiniMaxH3BlockReuse.swift": "2883be3cad647c6128554da3f209b73f62b5ce2133470fa4d78baa2e09408439",
+        "Sources/MereRunH3Model/MiniMaxH3CompiledBlockTypes.swift": "910cac4b62720060c7a843ed3d2d5d58216c937e6d842a6a92da133ea119f0f6",
+        "Sources/MereRunH3Model/MiniMaxH3Conditioning.swift": "7a9c96fe2638b0404dd53413f0370f13f94846209662a42075580ea3a6c8d82e",
+        "Sources/MereRunH3Model/MiniMaxH3Configuration.swift": "cac88cc04d8936108c9b59fb900ba2c8f0a3a94fb7a4c75dd1f9cfedda86c8ac",
+        "Sources/MereRunH3Model/MiniMaxH3FastVSA+Kernels.swift": "0ecf268f49861cc6b0f3a58a93adbdd1e444bdc9a5fbaa101ecaabe8d487702f",
+        "Sources/MereRunH3Model/MiniMaxH3FastVSA.swift": "e061277d1a4a8f0e6c0dc7d22b7e58f3407b7cb64f848d5dae6de7a27db574a2",
+        "Sources/MereRunH3Model/MiniMaxH3FeedForward.swift": "af91adae757e0ca859618f21cff59acfacf3787c5cf1ea9c0088daad3d080d17",
+        "Sources/MereRunH3Model/MiniMaxH3FinalLayer.swift": "5cb86e0774071ba0e28285048dd3f5dcb92f21e1176c8731eb3d24f3e17066f2",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+AdaLN.swift": "8688f5c0c719e433fe55bba7410af475f708d400097d83a225823694414c6758",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+FeedForward.swift": "5bd09a050771ebba524980a2d315b5679834b43f752312473a44d8c2129d3923",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+Projection.swift": "096d5ad69106da8719127efef3edbb616a4ecd12b2e555261ea77eb29a7837e8",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+QKV.swift": "dbb298854495e0ca8ee7335d146d98dac9775ea253c3a61def60bb51c3ee17b4",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+Rotary.swift": "9a9caf00a2f6c0a5f7c475d7fcdf8fc1272c200175e9e2932fd55379959314e3",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+TiledInput.swift": "934dd8f9389b5c21a93924a3a73e47f19d96d126807fcb4e3820c1fe62a4d18e",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+TiledOutput.swift": "1ace9978504b873613ec93dee0f3c7862ae60323fbf814cc36313e16ac661ef8",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels.swift": "06ff85123ab312d8cb44f843e94ce321a28302cafba3e3bc5a308e1bf455cfd1",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry+FL2VA.swift": "9fe7f81d17088cefed3337b5b0112b542e8d3b57b3d3f762fc4d392de8b1d1d2",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry+Positions.swift": "16810b294bb59325d1acd7b4d9594ac3577621908044a3afb9814fae4daaef8a",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry+Ref2VA.swift": "379c33d606b0cc48b0e97ad03d74f53b725122df7f97b8aee64c12fb049e835c",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry.swift": "00e76634d2c94ad1a1b76ee6be46dc41771af023f7d206e1bed99eddead367ac",
+        "Sources/MereRunH3Model/MiniMaxH3ImageConfiguration.swift": "714600d99670259be073315073706419e716e8a9640e09e3562ca4f98863875a",
+        "Sources/MereRunH3Model/MiniMaxH3ImageDecoder.swift": "114dfe7c6222ad30fb08f4a0b56c50d1ab7ea951814445660fdb361a62db8ac7",
+        "Sources/MereRunH3Model/MiniMaxH3ImageGeometry.swift": "2629c945942c5dcca43f1e07a5b130538f52e0a12c4d9c398ad353baedeb6fb1",
+        "Sources/MereRunH3Model/MiniMaxH3ImageModulationCache.swift": "4543a06c82458eae0af5f531a178419fefeaf10082ced313ace442298c16f64f",
+        "Sources/MereRunH3Model/MiniMaxH3ImageTransformer.swift": "812fb9026f3c530ac3147f64f980847e97d4baa1a26d81808ddb240fdf162c45",
+        "Sources/MereRunH3Model/MiniMaxH3ImageVAE.swift": "62feac444ee61944d6e61c30920227cc1cc7fd3b2883c632974dea82d5182704",
+        "Sources/MereRunH3Model/MiniMaxH3Layout.swift": "37f44d09b48f014a5d9074844475e5f4e1ea3a2b2270ff2ab2a54112a7e06da0",
+        "Sources/MereRunH3Model/MiniMaxH3MPPProjection.swift": "7e6355e8908f0776bd47403aab509a4420802cca533ec03a7e9d194a1f243cf8",
+        "Sources/MereRunH3Model/MiniMaxH3Projection.swift": "61a2a2c0d00b3ca6429b07c183506192b55f93641404fe3fca6d58a9aca3b970",
+        "Sources/MereRunH3Model/MiniMaxH3ResidentWeights.swift": "1f7a201d555803650155dd454e05d4a60e73821a95d9a9db4cea972d9e0737a8",
+        "Sources/MereRunH3Model/MiniMaxH3ReusePolicy.swift": "1d08336af554a6a0c5fcf6d4e4a84a20ffb85c0a1f21da695a0d351a67426528",
+        "Sources/MereRunH3Model/MiniMaxH3RuntimeLoRA.swift": "fae5726a4ac65d1b1fee0460bcde0e81073bb556772b75cd1cb5ad3be66bddce",
+        "Sources/MereRunH3Model/MiniMaxH3Scheduler.swift": "50d7cf0a78c61764513f0716ae7a799cb4d8613d612eddb0798c88272b5d3da3",
+        "Sources/MereRunH3Model/MiniMaxH3TokenReduction.swift": "916b5b66e07b6b66c49f6de343cb4aa1962fd6bd8f5252a5081cc5036509f379",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+AdaLN.swift": "4834fef064c6bad84a1a853d2effe0b4f11575a03514532ba3a29d086bbeb723",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+Blocks.swift": "6fdf540c266fd15702d1d6051a2f733eee1dd48677e4ad805737ce85d6568208",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+Compilation.swift": "c778416ab6d504cd7f2b94e84116fc4378b195622c9675356df91b81bcb16e5f",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+Forward.swift": "37ba6e8e9564945651c94b7139cc4eb4e6ea4b709b371e2835197c7823308038",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer.swift": "8c2595e27055a52ec9b0bc81719ce5390f851ef02ef716049d1b4c2fcd7d5018",
+        "Sources/MereRunH3Model/MiniMaxH3TransformerBlock.swift": "bd97aa2982a40f2361e9b71b7dc563bd2ac381ccf10da1b18d37c811453bc7ba",
+        "Sources/MereRunH3Model/MiniMaxH3TransformerConfiguration.swift": "6470f8a86fb6ea3cd9fd1719f8c436bf09167477aa6474e2555d7edfce3d4248",
+        "Sources/MereRunH3Model/MiniMaxH3VideoDecoder.swift": "f017b87992c4e2b7ebd5af6b62fefb3bfabfa3ee84bcb59dccd357de9eed89c0",
+        "Sources/MereRunH3Model/MiniMaxH3VideoEncoder.swift": "d97de7ece3e89e88abf7a9d8910acbbec88c8e67a60b8fa4090c1697d5ea86ca",
+        "Sources/MereRunH3Model/MiniMaxH3VideoVAE.swift": "0ae85822412237e8aac180e1aafb4c2ccc9bf101632ce77bdfd7c98224244981",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageConditioner.swift": "b1c968d25ea72ab3d1e765572682473ea7d607ee624bfa9533d99585b0b1d3f3",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageGenerator.swift": "bb1c07eb6c82c09b15cd94836f7379383f48ac4d7dd1a5ee968e2e9d45b7e560",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageLoader.swift": "83913596e7c48bccbd7a84756a9689cb591efbfc8a33a3cd2304f8662fd9087b",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageMLXFormat.swift": "a27c608890dfcafa4dcbded54fede8ac8b4ac91db76f1504898591254d6e2861",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageOptimizer.swift": "2cce08d50ac6f7a6d91bf674672493ce6aadbd32fd92d8e03629399a0f74edac",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageProfile.swift": "33b4ed986afb34f4a22047c2d87c5125285d3229643c975df919197452f886ae",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageResources.swift": "a683323d3e932dcec2dc09304d5c736d62bb4bd8368d8027b8780459baaa85b7",
+        "Sources/MereRunCLI/Commands/ModelBenchmarkH3ImageCommand.swift": "4a341f4e55d8c83832f95f6c93ea323648fa453a1dbe7b8dfaeb8f2f2b3b73a2"
+      },
+      "measurement": "Native release process; first cold request then retained models and identical cached text conditioning; every request includes six steps, decode and PNG. OS peak process footprint covers the entire session.",
+      "mlx_enable_tf32": "unset (MLX default enabled)",
+      "started_at_utc": "2026-11-11T00:28:11Z",
+      "exit_code": 0,
+      "session_wall_seconds": 102.60742441704497,
+      "profile_totals_by_run_seconds": [
+        {
+          "block": 41.01320958137512
+        },
+        {
+          "block": 39.25302278995514
+        }
+      ],
+      "maximum_resident_bytes": 27644919808,
+      "peak_memory_footprint_bytes": 43953294408,
+      "benchmark": {
+        "attentionHeads": 56,
+        "identicalOutputs": true,
+        "modelRoot": "./image-minimax-h3-q8",
+        "prompt": "A high-resolution photorealistic studio product photograph of a single vintage brass rangefinder camera on a dark walnut tabletop. The camera is viewed from a three-quarter front angle and has one round black glass lens, a textured black leather grip, a silver shutter button, and engraved mechanical details. A small cobalt-blue ceramic cup sits behind the camera on the left. Soft daylight enters from the right, casting consistent gentle shadows to the left. A pale blue seamless background is out of focus. Show crisp brushed-metal grain, subtle fingerprints and realistic wood pores, with natural reflections and no artificial plastic smoothing. Balanced composition, shallow depth of field, physically plausible proportions, no illustration.",
+        "records": [
+          {
+            "denoisingSeconds": 41.073466333327815,
+            "index": 0,
+            "output": "warm-release-dense-2048-h56/run-0.png",
+            "seconds": 58.04804729158059,
+            "sha256": "a55ddcf8492d2fd1b5187ade0a2a4714c2150cd61718f5cfed90831289d8c600",
+            "warm": false
+          },
+          {
+            "denoisingSeconds": 39.31959645822644,
+            "index": 1,
+            "output": "warm-release-dense-2048-h56/run-1.png",
+            "seconds": 43.99318570829928,
+            "sha256": "a55ddcf8492d2fd1b5187ade0a2a4714c2150cd61718f5cfed90831289d8c600",
+            "warm": true
+          }
+        ],
+        "residentBF16": true,
+        "seed": 42,
+        "size": 2048,
+        "warmMedianSeconds": 43.99318570829928
+      },
+      "run_context": "Repository gate finished during this session; no simultaneous image inference. First request includes loading and materialization; warm request reuses identical text conditioning.",
+      "visual_inspection": "Coherent camera, blue cup, wood, and material detail. Small controls and invented lens markings differ from packed Q8. Repeated images are byte-identical.",
+      "verified_images": [
+        {
+          "run": 0,
+          "size": [
+            2048,
+            2048
+          ],
+          "mode": "RGBA",
+          "opaque": true,
+          "byte_count": 6375606,
+          "sha256": "a55ddcf8492d2fd1b5187ade0a2a4714c2150cd61718f5cfed90831289d8c600"
+        },
+        {
+          "run": 1,
+          "size": [
+            2048,
+            2048
+          ],
+          "mode": "RGBA",
+          "opaque": true,
+          "byte_count": 6375606,
+          "sha256": "a55ddcf8492d2fd1b5187ade0a2a4714c2150cd61718f5cfed90831289d8c600"
+        }
+      ]
+    },
+    {
+      "case": "warm-release-dense-4096-h56",
+      "command": [
+        "mere.run",
+        "model",
+        "benchmark",
+        "h3-image",
+        "--model-root",
+        "./image-minimax-h3-q8",
+        "--prompt",
+        "A high-resolution photorealistic studio product photograph of a single vintage brass rangefinder camera on a dark walnut tabletop. The camera is viewed from a three-quarter front angle and has one round black glass lens, a textured black leather grip, a silver shutter button, and engraved mechanical details. A small cobalt-blue ceramic cup sits behind the camera on the left. Soft daylight enters from the right, casting consistent gentle shadows to the left. A pale blue seamless background is out of focus. Show crisp brushed-metal grain, subtle fingerprints and realistic wood pores, with natural reflections and no artificial plastic smoothing. Balanced composition, shallow depth of field, physically plausible proportions, no illustration.",
+        "--size",
+        "4096",
+        "--runs",
+        "2",
+        "--attention-heads",
+        "56",
+        "--output",
+        "./warm-release-dense-4096-h56",
+        "--json",
+        "--resident-bf16"
+      ],
+      "binary_sha256": "0e7539718058b17f68894ce14c05fee8787d8a3ce14d8edea5d5046d0a733b00",
+      "source_sha256": {
+        "Sources/MereRunH3Model/MiniMaxH3AdaLNCache.swift": "abd5a109c01250726ab67e97f45dc26ca3510fa3692de10e7afca9fa183f5719",
+        "Sources/MereRunH3Model/MiniMaxH3Attention.swift": "bd89fa7b9ded20a7a8254c8a67cdbe77faf2ca228345cf83437ae51206474307",
+        "Sources/MereRunH3Model/MiniMaxH3AudioVAE.swift": "97a487d55422d20d9b5b57d152e667e5faa75208b83e2f55687d3c5e0d649c4f",
+        "Sources/MereRunH3Model/MiniMaxH3BlockReuse.swift": "2883be3cad647c6128554da3f209b73f62b5ce2133470fa4d78baa2e09408439",
+        "Sources/MereRunH3Model/MiniMaxH3CompiledBlockTypes.swift": "910cac4b62720060c7a843ed3d2d5d58216c937e6d842a6a92da133ea119f0f6",
+        "Sources/MereRunH3Model/MiniMaxH3Conditioning.swift": "7a9c96fe2638b0404dd53413f0370f13f94846209662a42075580ea3a6c8d82e",
+        "Sources/MereRunH3Model/MiniMaxH3Configuration.swift": "cac88cc04d8936108c9b59fb900ba2c8f0a3a94fb7a4c75dd1f9cfedda86c8ac",
+        "Sources/MereRunH3Model/MiniMaxH3FastVSA+Kernels.swift": "0ecf268f49861cc6b0f3a58a93adbdd1e444bdc9a5fbaa101ecaabe8d487702f",
+        "Sources/MereRunH3Model/MiniMaxH3FastVSA.swift": "e061277d1a4a8f0e6c0dc7d22b7e58f3407b7cb64f848d5dae6de7a27db574a2",
+        "Sources/MereRunH3Model/MiniMaxH3FeedForward.swift": "af91adae757e0ca859618f21cff59acfacf3787c5cf1ea9c0088daad3d080d17",
+        "Sources/MereRunH3Model/MiniMaxH3FinalLayer.swift": "5cb86e0774071ba0e28285048dd3f5dcb92f21e1176c8731eb3d24f3e17066f2",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+AdaLN.swift": "8688f5c0c719e433fe55bba7410af475f708d400097d83a225823694414c6758",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+FeedForward.swift": "5bd09a050771ebba524980a2d315b5679834b43f752312473a44d8c2129d3923",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+Projection.swift": "096d5ad69106da8719127efef3edbb616a4ecd12b2e555261ea77eb29a7837e8",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+QKV.swift": "dbb298854495e0ca8ee7335d146d98dac9775ea253c3a61def60bb51c3ee17b4",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+Rotary.swift": "9a9caf00a2f6c0a5f7c475d7fcdf8fc1272c200175e9e2932fd55379959314e3",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+TiledInput.swift": "934dd8f9389b5c21a93924a3a73e47f19d96d126807fcb4e3820c1fe62a4d18e",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+TiledOutput.swift": "1ace9978504b873613ec93dee0f3c7862ae60323fbf814cc36313e16ac661ef8",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels.swift": "06ff85123ab312d8cb44f843e94ce321a28302cafba3e3bc5a308e1bf455cfd1",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry+FL2VA.swift": "9fe7f81d17088cefed3337b5b0112b542e8d3b57b3d3f762fc4d392de8b1d1d2",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry+Positions.swift": "16810b294bb59325d1acd7b4d9594ac3577621908044a3afb9814fae4daaef8a",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry+Ref2VA.swift": "379c33d606b0cc48b0e97ad03d74f53b725122df7f97b8aee64c12fb049e835c",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry.swift": "00e76634d2c94ad1a1b76ee6be46dc41771af023f7d206e1bed99eddead367ac",
+        "Sources/MereRunH3Model/MiniMaxH3ImageConfiguration.swift": "714600d99670259be073315073706419e716e8a9640e09e3562ca4f98863875a",
+        "Sources/MereRunH3Model/MiniMaxH3ImageDecoder.swift": "114dfe7c6222ad30fb08f4a0b56c50d1ab7ea951814445660fdb361a62db8ac7",
+        "Sources/MereRunH3Model/MiniMaxH3ImageGeometry.swift": "2629c945942c5dcca43f1e07a5b130538f52e0a12c4d9c398ad353baedeb6fb1",
+        "Sources/MereRunH3Model/MiniMaxH3ImageModulationCache.swift": "4543a06c82458eae0af5f531a178419fefeaf10082ced313ace442298c16f64f",
+        "Sources/MereRunH3Model/MiniMaxH3ImageTransformer.swift": "812fb9026f3c530ac3147f64f980847e97d4baa1a26d81808ddb240fdf162c45",
+        "Sources/MereRunH3Model/MiniMaxH3ImageVAE.swift": "62feac444ee61944d6e61c30920227cc1cc7fd3b2883c632974dea82d5182704",
+        "Sources/MereRunH3Model/MiniMaxH3Layout.swift": "37f44d09b48f014a5d9074844475e5f4e1ea3a2b2270ff2ab2a54112a7e06da0",
+        "Sources/MereRunH3Model/MiniMaxH3MPPProjection.swift": "7e6355e8908f0776bd47403aab509a4420802cca533ec03a7e9d194a1f243cf8",
+        "Sources/MereRunH3Model/MiniMaxH3Projection.swift": "61a2a2c0d00b3ca6429b07c183506192b55f93641404fe3fca6d58a9aca3b970",
+        "Sources/MereRunH3Model/MiniMaxH3ResidentWeights.swift": "1f7a201d555803650155dd454e05d4a60e73821a95d9a9db4cea972d9e0737a8",
+        "Sources/MereRunH3Model/MiniMaxH3ReusePolicy.swift": "1d08336af554a6a0c5fcf6d4e4a84a20ffb85c0a1f21da695a0d351a67426528",
+        "Sources/MereRunH3Model/MiniMaxH3RuntimeLoRA.swift": "fae5726a4ac65d1b1fee0460bcde0e81073bb556772b75cd1cb5ad3be66bddce",
+        "Sources/MereRunH3Model/MiniMaxH3Scheduler.swift": "50d7cf0a78c61764513f0716ae7a799cb4d8613d612eddb0798c88272b5d3da3",
+        "Sources/MereRunH3Model/MiniMaxH3TokenReduction.swift": "916b5b66e07b6b66c49f6de343cb4aa1962fd6bd8f5252a5081cc5036509f379",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+AdaLN.swift": "4834fef064c6bad84a1a853d2effe0b4f11575a03514532ba3a29d086bbeb723",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+Blocks.swift": "6fdf540c266fd15702d1d6051a2f733eee1dd48677e4ad805737ce85d6568208",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+Compilation.swift": "c778416ab6d504cd7f2b94e84116fc4378b195622c9675356df91b81bcb16e5f",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+Forward.swift": "37ba6e8e9564945651c94b7139cc4eb4e6ea4b709b371e2835197c7823308038",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer.swift": "8c2595e27055a52ec9b0bc81719ce5390f851ef02ef716049d1b4c2fcd7d5018",
+        "Sources/MereRunH3Model/MiniMaxH3TransformerBlock.swift": "bd97aa2982a40f2361e9b71b7dc563bd2ac381ccf10da1b18d37c811453bc7ba",
+        "Sources/MereRunH3Model/MiniMaxH3TransformerConfiguration.swift": "6470f8a86fb6ea3cd9fd1719f8c436bf09167477aa6474e2555d7edfce3d4248",
+        "Sources/MereRunH3Model/MiniMaxH3VideoDecoder.swift": "f017b87992c4e2b7ebd5af6b62fefb3bfabfa3ee84bcb59dccd357de9eed89c0",
+        "Sources/MereRunH3Model/MiniMaxH3VideoEncoder.swift": "d97de7ece3e89e88abf7a9d8910acbbec88c8e67a60b8fa4090c1697d5ea86ca",
+        "Sources/MereRunH3Model/MiniMaxH3VideoVAE.swift": "0ae85822412237e8aac180e1aafb4c2ccc9bf101632ce77bdfd7c98224244981",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageConditioner.swift": "b1c968d25ea72ab3d1e765572682473ea7d607ee624bfa9533d99585b0b1d3f3",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageGenerator.swift": "bb1c07eb6c82c09b15cd94836f7379383f48ac4d7dd1a5ee968e2e9d45b7e560",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageLoader.swift": "83913596e7c48bccbd7a84756a9689cb591efbfc8a33a3cd2304f8662fd9087b",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageMLXFormat.swift": "a27c608890dfcafa4dcbded54fede8ac8b4ac91db76f1504898591254d6e2861",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageOptimizer.swift": "2cce08d50ac6f7a6d91bf674672493ce6aadbd32fd92d8e03629399a0f74edac",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageProfile.swift": "33b4ed986afb34f4a22047c2d87c5125285d3229643c975df919197452f886ae",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageResources.swift": "a683323d3e932dcec2dc09304d5c736d62bb4bd8368d8027b8780459baaa85b7",
+        "Sources/MereRunCLI/Commands/ModelBenchmarkH3ImageCommand.swift": "4a341f4e55d8c83832f95f6c93ea323648fa453a1dbe7b8dfaeb8f2f2b3b73a2"
+      },
+      "measurement": "Native release process; first cold request then retained models and identical cached text conditioning; every request includes six steps, decode and PNG. OS peak process footprint covers the entire session.",
+      "mlx_enable_tf32": "unset (MLX default enabled)",
+      "started_at_utc": "2026-11-11T00:38:41Z",
+      "host": {
+        "chip": "Apple M5 Max",
+        "physical_memory_bytes": 137438953472,
+        "initial_swap_usage": "vm.swapusage: total = 9216.00M  used = 8060.19M  free = 1155.81M  (encrypted)"
+      },
+      "model_manifest_sha256": "06633d903eb0b9468992b3018f089e68bd7873fd8f1969875135229cd7a7978f",
+      "exit_code": 0,
+      "session_wall_seconds": 536.5150477080606,
+      "profile_totals_by_run_seconds": [
+        {
+          "qkv": 43.83990800380707,
+          "attention": 92.43534910678864,
+          "mlp_and_residual": 93.11394238471985,
+          "block": 229.51375246047974
+        },
+        {
+          "qkv": 44.47165834903717,
+          "attention": 91.4714263677597,
+          "mlp_and_residual": 92.57177078723907,
+          "block": 228.7428855895996
+        }
+      ],
+      "maximum_resident_bytes": 27632517120,
+      "peak_memory_footprint_bytes": 46679575528,
+      "benchmark": {
+        "attentionHeads": 56,
+        "identicalOutputs": true,
+        "modelRoot": "./image-minimax-h3-q8",
+        "prompt": "A high-resolution photorealistic studio product photograph of a single vintage brass rangefinder camera on a dark walnut tabletop. The camera is viewed from a three-quarter front angle and has one round black glass lens, a textured black leather grip, a silver shutter button, and engraved mechanical details. A small cobalt-blue ceramic cup sits behind the camera on the left. Soft daylight enters from the right, casting consistent gentle shadows to the left. A pale blue seamless background is out of focus. Show crisp brushed-metal grain, subtle fingerprints and realistic wood pores, with natural reflections and no artificial plastic smoothing. Balanced composition, shallow depth of field, physically plausible proportions, no illustration.",
+        "records": [
+          {
+            "denoisingSeconds": 229.5995952084195,
+            "index": 0,
+            "output": "warm-release-dense-4096-h56/run-0.png",
+            "seconds": 289.1744578334037,
+            "sha256": "45ccdee3217efb2ba6ce6037220be5909819c36e18ee87bccbf5b4cd83c390b3",
+            "warm": false
+          },
+          {
+            "denoisingSeconds": 228.87533808336593,
+            "index": 1,
+            "output": "warm-release-dense-4096-h56/run-1.png",
+            "seconds": 246.50788066675887,
+            "sha256": "45ccdee3217efb2ba6ce6037220be5909819c36e18ee87bccbf5b4cd83c390b3",
+            "warm": true
+          }
+        ],
+        "residentBF16": true,
+        "seed": 42,
+        "size": 4096,
+        "warmMedianSeconds": 246.50788066675887
+      },
+      "verified_images": [
+        {
+          "run": 0,
+          "size": [
+            4096,
+            4096
+          ],
+          "mode": "RGBA",
+          "opaque": true,
+          "byte_count": 23829562,
+          "sha256": "45ccdee3217efb2ba6ce6037220be5909819c36e18ee87bccbf5b4cd83c390b3"
+        },
+        {
+          "run": 1,
+          "size": [
+            4096,
+            4096
+          ],
+          "mode": "RGBA",
+          "opaque": true,
+          "byte_count": 23829562,
+          "sha256": "45ccdee3217efb2ba6ce6037220be5909819c36e18ee87bccbf5b4cd83c390b3"
+        }
+      ],
+      "run_context": "Repository validation and builds completed before this sequential 4K series. Shared desktop host; file caches were not purged. AC power verified during the run; pmset reported no recorded thermal warning.",
+      "visual_inspection": "Reviewed complete frame and unscaled lens, covering, and tabletop crops. Coherent brass camera and blue cup; no obvious mosaic corruption or tile seams. Fine control geometry and invented engraving differ from packed Q8; repeated dense PNGs are byte-identical."
+    }
+  ],
+  "baseline_cases": [
+    {
+      "case": "camera-2048-s42-fixed",
+      "exit_code": 0,
+      "wall_seconds": 212.91325254179537,
+      "denoising_seconds": 143.47649195813574,
+      "mean_step_seconds": 23.91274865968929,
+      "prompt_encoding_seconds": 54.839747166028246,
+      "decode_and_image_preparation_seconds": 7.688790499931201,
+      "maximum_resident_bytes": 51634733056,
+      "peak_memory_footprint_bytes": 72319525712,
+      "binary_sha256": "b5cf04e32b5d13ce800b75cbc78f567e0d718562af4100d51eedb58da0bc0591",
+      "source_base_commit": "deee21fdd17919a912417e1950ee13991bf1c1c5",
+      "source_sha256": {
+        "Sources/MereRunH3Model/MiniMaxH3AdaLNCache.swift": "abd5a109c01250726ab67e97f45dc26ca3510fa3692de10e7afca9fa183f5719",
+        "Sources/MereRunH3Model/MiniMaxH3Attention.swift": "bd89fa7b9ded20a7a8254c8a67cdbe77faf2ca228345cf83437ae51206474307",
+        "Sources/MereRunH3Model/MiniMaxH3AudioVAE.swift": "97a487d55422d20d9b5b57d152e667e5faa75208b83e2f55687d3c5e0d649c4f",
+        "Sources/MereRunH3Model/MiniMaxH3BlockReuse.swift": "2883be3cad647c6128554da3f209b73f62b5ce2133470fa4d78baa2e09408439",
+        "Sources/MereRunH3Model/MiniMaxH3CompiledBlockTypes.swift": "910cac4b62720060c7a843ed3d2d5d58216c937e6d842a6a92da133ea119f0f6",
+        "Sources/MereRunH3Model/MiniMaxH3Conditioning.swift": "7a9c96fe2638b0404dd53413f0370f13f94846209662a42075580ea3a6c8d82e",
+        "Sources/MereRunH3Model/MiniMaxH3Configuration.swift": "cac88cc04d8936108c9b59fb900ba2c8f0a3a94fb7a4c75dd1f9cfedda86c8ac",
+        "Sources/MereRunH3Model/MiniMaxH3FastVSA+Kernels.swift": "0ecf268f49861cc6b0f3a58a93adbdd1e444bdc9a5fbaa101ecaabe8d487702f",
+        "Sources/MereRunH3Model/MiniMaxH3FastVSA.swift": "e061277d1a4a8f0e6c0dc7d22b7e58f3407b7cb64f848d5dae6de7a27db574a2",
+        "Sources/MereRunH3Model/MiniMaxH3FeedForward.swift": "af91adae757e0ca859618f21cff59acfacf3787c5cf1ea9c0088daad3d080d17",
+        "Sources/MereRunH3Model/MiniMaxH3FinalLayer.swift": "5cb86e0774071ba0e28285048dd3f5dcb92f21e1176c8731eb3d24f3e17066f2",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+AdaLN.swift": "8688f5c0c719e433fe55bba7410af475f708d400097d83a225823694414c6758",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+FeedForward.swift": "5bd09a050771ebba524980a2d315b5679834b43f752312473a44d8c2129d3923",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+Projection.swift": "096d5ad69106da8719127efef3edbb616a4ecd12b2e555261ea77eb29a7837e8",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+QKV.swift": "dbb298854495e0ca8ee7335d146d98dac9775ea253c3a61def60bb51c3ee17b4",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+Rotary.swift": "9a9caf00a2f6c0a5f7c475d7fcdf8fc1272c200175e9e2932fd55379959314e3",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+TiledInput.swift": "934dd8f9389b5c21a93924a3a73e47f19d96d126807fcb4e3820c1fe62a4d18e",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+TiledOutput.swift": "1ace9978504b873613ec93dee0f3c7862ae60323fbf814cc36313e16ac661ef8",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels.swift": "06ff85123ab312d8cb44f843e94ce321a28302cafba3e3bc5a308e1bf455cfd1",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry+FL2VA.swift": "9fe7f81d17088cefed3337b5b0112b542e8d3b57b3d3f762fc4d392de8b1d1d2",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry+Positions.swift": "16810b294bb59325d1acd7b4d9594ac3577621908044a3afb9814fae4daaef8a",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry+Ref2VA.swift": "379c33d606b0cc48b0e97ad03d74f53b725122df7f97b8aee64c12fb049e835c",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry.swift": "00e76634d2c94ad1a1b76ee6be46dc41771af023f7d206e1bed99eddead367ac",
+        "Sources/MereRunH3Model/MiniMaxH3ImageConfiguration.swift": "714600d99670259be073315073706419e716e8a9640e09e3562ca4f98863875a",
+        "Sources/MereRunH3Model/MiniMaxH3ImageDecoder.swift": "114dfe7c6222ad30fb08f4a0b56c50d1ab7ea951814445660fdb361a62db8ac7",
+        "Sources/MereRunH3Model/MiniMaxH3ImageGeometry.swift": "2629c945942c5dcca43f1e07a5b130538f52e0a12c4d9c398ad353baedeb6fb1",
+        "Sources/MereRunH3Model/MiniMaxH3ImageTransformer.swift": "aec42177843d11633cecd8fe331f21056db4182482980ad5f54d4a649d542221",
+        "Sources/MereRunH3Model/MiniMaxH3ImageVAE.swift": "62feac444ee61944d6e61c30920227cc1cc7fd3b2883c632974dea82d5182704",
+        "Sources/MereRunH3Model/MiniMaxH3Layout.swift": "37f44d09b48f014a5d9074844475e5f4e1ea3a2b2270ff2ab2a54112a7e06da0",
+        "Sources/MereRunH3Model/MiniMaxH3MPPProjection.swift": "7e6355e8908f0776bd47403aab509a4420802cca533ec03a7e9d194a1f243cf8",
+        "Sources/MereRunH3Model/MiniMaxH3Projection.swift": "61a2a2c0d00b3ca6429b07c183506192b55f93641404fe3fca6d58a9aca3b970",
+        "Sources/MereRunH3Model/MiniMaxH3ResidentWeights.swift": "1f7a201d555803650155dd454e05d4a60e73821a95d9a9db4cea972d9e0737a8",
+        "Sources/MereRunH3Model/MiniMaxH3ReusePolicy.swift": "1d08336af554a6a0c5fcf6d4e4a84a20ffb85c0a1f21da695a0d351a67426528",
+        "Sources/MereRunH3Model/MiniMaxH3RuntimeLoRA.swift": "fae5726a4ac65d1b1fee0460bcde0e81073bb556772b75cd1cb5ad3be66bddce",
+        "Sources/MereRunH3Model/MiniMaxH3Scheduler.swift": "50d7cf0a78c61764513f0716ae7a799cb4d8613d612eddb0798c88272b5d3da3",
+        "Sources/MereRunH3Model/MiniMaxH3TokenReduction.swift": "916b5b66e07b6b66c49f6de343cb4aa1962fd6bd8f5252a5081cc5036509f379",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+AdaLN.swift": "4834fef064c6bad84a1a853d2effe0b4f11575a03514532ba3a29d086bbeb723",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+Blocks.swift": "6fdf540c266fd15702d1d6051a2f733eee1dd48677e4ad805737ce85d6568208",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+Compilation.swift": "c778416ab6d504cd7f2b94e84116fc4378b195622c9675356df91b81bcb16e5f",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+Forward.swift": "37ba6e8e9564945651c94b7139cc4eb4e6ea4b709b371e2835197c7823308038",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer.swift": "8c2595e27055a52ec9b0bc81719ce5390f851ef02ef716049d1b4c2fcd7d5018",
+        "Sources/MereRunH3Model/MiniMaxH3TransformerBlock.swift": "bd97aa2982a40f2361e9b71b7dc563bd2ac381ccf10da1b18d37c811453bc7ba",
+        "Sources/MereRunH3Model/MiniMaxH3TransformerConfiguration.swift": "6470f8a86fb6ea3cd9fd1719f8c436bf09167477aa6474e2555d7edfce3d4248",
+        "Sources/MereRunH3Model/MiniMaxH3VideoDecoder.swift": "f017b87992c4e2b7ebd5af6b62fefb3bfabfa3ee84bcb59dccd357de9eed89c0",
+        "Sources/MereRunH3Model/MiniMaxH3VideoEncoder.swift": "d97de7ece3e89e88abf7a9d8910acbbec88c8e67a60b8fa4090c1697d5ea86ca",
+        "Sources/MereRunH3Model/MiniMaxH3VideoVAE.swift": "0ae85822412237e8aac180e1aafb4c2ccc9bf101632ce77bdfd7c98224244981",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageConditioner.swift": "b1c968d25ea72ab3d1e765572682473ea7d607ee624bfa9533d99585b0b1d3f3",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageGenerator.swift": "6bbfb1792c4512ca34f144237c8585b96d2d7184708c6d4e09c6be8c6d9e0618",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageLoader.swift": "bffaf4311782e1bc3d06719aea4ce6a2b6fde3cc4f6cffe0c55e42bb68e67959",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageResources.swift": "3701fb2ebdce7d9c947795bc46bdcaa4aca22233c49baabf3041c3569b556c11"
+      },
+      "model_manifest_sha256": "903e4e916cebce1f4cb9c123ecaf0f067a91fbabfd8adfe89233769a6fac303e",
+      "mlx_enable_tf32": "unset (MLX default enabled)",
+      "visual_inspection": {
+        "status": "pass_with_limitations",
+        "review": "Full frame and two unscaled 512-pixel crops covering lens and tabletop.",
+        "findings": [
+          "Coherent brass rangefinder-style camera with one primary lens, black textured covering, and a blue cup behind on the left.",
+          "Brushed metal, lens reflections, leather texture and wood grain are visible.",
+          "No mosaic corruption or obvious tile seams in the reviewed frame and crops."
+        ],
+        "limitations": [
+          "Engraved lens text is invented and malformed.",
+          "The cup appears larger than the requested small cup.",
+          "Single prompt and seed; this does not qualify general quality or editing."
+        ]
+      },
+      "run_context": "Repository build and tests ran in the background; shared-host timing, not an isolated throughput benchmark.",
+      "progress_events": [
+        {
+          "elapsed_seconds": 2.840231333859265,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingEncoder",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 3.1778772089164704,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 58.01762437494472,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 1,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 58.554273708956316,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingTransformer",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 60.3403961667791,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 0,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 140.0380072919652,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 1,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 155.24788887496106,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 2,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 167.68669962487184,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 3,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 179.75308125000447,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 4,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 191.83235129178502,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 5,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 203.81688812491484,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 6,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 204.8550349168945,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 204.88593908399343,
+          "payload": {
+            "event": "progress",
+            "stage": "decoding",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 212.57472958392464,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 212.86491312482394,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 1,
+            "total_steps": 1
+          }
+        }
+      ],
+      "size": 2048,
+      "image": {
+        "size": [
+          2048,
+          2048
+        ],
+        "format": "PNG",
+        "file_bytes": 6417296,
+        "sha256": "9b4b57aacf4f29f35c65823f07891641122274f4e67e8ff1bf93885c6fe48ddd",
+        "rgb_mean": [
+          127.0218415260315,
+          130.62492895126343,
+          136.08661699295044
+        ],
+        "rgb_standard_deviation": 83.54439836563661,
+        "black_fraction": 0.0001933574676513672,
+        "white_fraction": 0.00010704994201660156
+      }
+    },
+    {
+      "case": "camera-4096-s42-bounded",
+      "exit_code": 0,
+      "wall_seconds": 498.93271574983373,
+      "denoising_seconds": 424.65916312509216,
+      "mean_step_seconds": 70.77652718751536,
+      "prompt_encoding_seconds": 54.79680416593328,
+      "decode_and_image_preparation_seconds": 12.063272416125983,
+      "maximum_resident_bytes": 54369566720,
+      "peak_memory_footprint_bytes": 77435462720,
+      "binary_sha256": "ca62ff1f7e99d713b4566dd65681d6fd364ec185f10ff9c234636f47087b016b",
+      "source_base_commit": "deee21fdd17919a912417e1950ee13991bf1c1c5",
+      "source_sha256": {
+        "Sources/MereRunH3Model/MiniMaxH3AdaLNCache.swift": "abd5a109c01250726ab67e97f45dc26ca3510fa3692de10e7afca9fa183f5719",
+        "Sources/MereRunH3Model/MiniMaxH3Attention.swift": "bd89fa7b9ded20a7a8254c8a67cdbe77faf2ca228345cf83437ae51206474307",
+        "Sources/MereRunH3Model/MiniMaxH3AudioVAE.swift": "97a487d55422d20d9b5b57d152e667e5faa75208b83e2f55687d3c5e0d649c4f",
+        "Sources/MereRunH3Model/MiniMaxH3BlockReuse.swift": "2883be3cad647c6128554da3f209b73f62b5ce2133470fa4d78baa2e09408439",
+        "Sources/MereRunH3Model/MiniMaxH3CompiledBlockTypes.swift": "910cac4b62720060c7a843ed3d2d5d58216c937e6d842a6a92da133ea119f0f6",
+        "Sources/MereRunH3Model/MiniMaxH3Conditioning.swift": "7a9c96fe2638b0404dd53413f0370f13f94846209662a42075580ea3a6c8d82e",
+        "Sources/MereRunH3Model/MiniMaxH3Configuration.swift": "cac88cc04d8936108c9b59fb900ba2c8f0a3a94fb7a4c75dd1f9cfedda86c8ac",
+        "Sources/MereRunH3Model/MiniMaxH3FastVSA+Kernels.swift": "0ecf268f49861cc6b0f3a58a93adbdd1e444bdc9a5fbaa101ecaabe8d487702f",
+        "Sources/MereRunH3Model/MiniMaxH3FastVSA.swift": "e061277d1a4a8f0e6c0dc7d22b7e58f3407b7cb64f848d5dae6de7a27db574a2",
+        "Sources/MereRunH3Model/MiniMaxH3FeedForward.swift": "af91adae757e0ca859618f21cff59acfacf3787c5cf1ea9c0088daad3d080d17",
+        "Sources/MereRunH3Model/MiniMaxH3FinalLayer.swift": "5cb86e0774071ba0e28285048dd3f5dcb92f21e1176c8731eb3d24f3e17066f2",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+AdaLN.swift": "8688f5c0c719e433fe55bba7410af475f708d400097d83a225823694414c6758",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+FeedForward.swift": "5bd09a050771ebba524980a2d315b5679834b43f752312473a44d8c2129d3923",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+Projection.swift": "096d5ad69106da8719127efef3edbb616a4ecd12b2e555261ea77eb29a7837e8",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+QKV.swift": "dbb298854495e0ca8ee7335d146d98dac9775ea253c3a61def60bb51c3ee17b4",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+Rotary.swift": "9a9caf00a2f6c0a5f7c475d7fcdf8fc1272c200175e9e2932fd55379959314e3",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+TiledInput.swift": "934dd8f9389b5c21a93924a3a73e47f19d96d126807fcb4e3820c1fe62a4d18e",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels+TiledOutput.swift": "1ace9978504b873613ec93dee0f3c7862ae60323fbf814cc36313e16ac661ef8",
+        "Sources/MereRunH3Model/MiniMaxH3FusedKernels.swift": "06ff85123ab312d8cb44f843e94ce321a28302cafba3e3bc5a308e1bf455cfd1",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry+FL2VA.swift": "9fe7f81d17088cefed3337b5b0112b542e8d3b57b3d3f762fc4d392de8b1d1d2",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry+Positions.swift": "16810b294bb59325d1acd7b4d9594ac3577621908044a3afb9814fae4daaef8a",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry+Ref2VA.swift": "379c33d606b0cc48b0e97ad03d74f53b725122df7f97b8aee64c12fb049e835c",
+        "Sources/MereRunH3Model/MiniMaxH3Geometry.swift": "00e76634d2c94ad1a1b76ee6be46dc41771af023f7d206e1bed99eddead367ac",
+        "Sources/MereRunH3Model/MiniMaxH3ImageConfiguration.swift": "714600d99670259be073315073706419e716e8a9640e09e3562ca4f98863875a",
+        "Sources/MereRunH3Model/MiniMaxH3ImageDecoder.swift": "114dfe7c6222ad30fb08f4a0b56c50d1ab7ea951814445660fdb361a62db8ac7",
+        "Sources/MereRunH3Model/MiniMaxH3ImageGeometry.swift": "2629c945942c5dcca43f1e07a5b130538f52e0a12c4d9c398ad353baedeb6fb1",
+        "Sources/MereRunH3Model/MiniMaxH3ImageTransformer.swift": "de268e21e5045afca827f0b35b113b3032cabb28afec529da63cb41c435752ae",
+        "Sources/MereRunH3Model/MiniMaxH3ImageVAE.swift": "62feac444ee61944d6e61c30920227cc1cc7fd3b2883c632974dea82d5182704",
+        "Sources/MereRunH3Model/MiniMaxH3Layout.swift": "37f44d09b48f014a5d9074844475e5f4e1ea3a2b2270ff2ab2a54112a7e06da0",
+        "Sources/MereRunH3Model/MiniMaxH3MPPProjection.swift": "7e6355e8908f0776bd47403aab509a4420802cca533ec03a7e9d194a1f243cf8",
+        "Sources/MereRunH3Model/MiniMaxH3Projection.swift": "61a2a2c0d00b3ca6429b07c183506192b55f93641404fe3fca6d58a9aca3b970",
+        "Sources/MereRunH3Model/MiniMaxH3ResidentWeights.swift": "1f7a201d555803650155dd454e05d4a60e73821a95d9a9db4cea972d9e0737a8",
+        "Sources/MereRunH3Model/MiniMaxH3ReusePolicy.swift": "1d08336af554a6a0c5fcf6d4e4a84a20ffb85c0a1f21da695a0d351a67426528",
+        "Sources/MereRunH3Model/MiniMaxH3RuntimeLoRA.swift": "fae5726a4ac65d1b1fee0460bcde0e81073bb556772b75cd1cb5ad3be66bddce",
+        "Sources/MereRunH3Model/MiniMaxH3Scheduler.swift": "50d7cf0a78c61764513f0716ae7a799cb4d8613d612eddb0798c88272b5d3da3",
+        "Sources/MereRunH3Model/MiniMaxH3TokenReduction.swift": "916b5b66e07b6b66c49f6de343cb4aa1962fd6bd8f5252a5081cc5036509f379",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+AdaLN.swift": "4834fef064c6bad84a1a853d2effe0b4f11575a03514532ba3a29d086bbeb723",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+Blocks.swift": "6fdf540c266fd15702d1d6051a2f733eee1dd48677e4ad805737ce85d6568208",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+Compilation.swift": "c778416ab6d504cd7f2b94e84116fc4378b195622c9675356df91b81bcb16e5f",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer+Forward.swift": "37ba6e8e9564945651c94b7139cc4eb4e6ea4b709b371e2835197c7823308038",
+        "Sources/MereRunH3Model/MiniMaxH3Transformer.swift": "8c2595e27055a52ec9b0bc81719ce5390f851ef02ef716049d1b4c2fcd7d5018",
+        "Sources/MereRunH3Model/MiniMaxH3TransformerBlock.swift": "bd97aa2982a40f2361e9b71b7dc563bd2ac381ccf10da1b18d37c811453bc7ba",
+        "Sources/MereRunH3Model/MiniMaxH3TransformerConfiguration.swift": "6470f8a86fb6ea3cd9fd1719f8c436bf09167477aa6474e2555d7edfce3d4248",
+        "Sources/MereRunH3Model/MiniMaxH3VideoDecoder.swift": "f017b87992c4e2b7ebd5af6b62fefb3bfabfa3ee84bcb59dccd357de9eed89c0",
+        "Sources/MereRunH3Model/MiniMaxH3VideoEncoder.swift": "d97de7ece3e89e88abf7a9d8910acbbec88c8e67a60b8fa4090c1697d5ea86ca",
+        "Sources/MereRunH3Model/MiniMaxH3VideoVAE.swift": "0ae85822412237e8aac180e1aafb4c2ccc9bf101632ce77bdfd7c98224244981",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageConditioner.swift": "b1c968d25ea72ab3d1e765572682473ea7d607ee624bfa9533d99585b0b1d3f3",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageGenerator.swift": "6bbfb1792c4512ca34f144237c8585b96d2d7184708c6d4e09c6be8c6d9e0618",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageLoader.swift": "bffaf4311782e1bc3d06719aea4ce6a2b6fde3cc4f6cffe0c55e42bb68e67959",
+        "Sources/MereRunCore/MiniMaxH3Image/MiniMaxH3ImageResources.swift": "3701fb2ebdce7d9c947795bc46bdcaa4aca22233c49baabf3041c3569b556c11"
+      },
+      "model_manifest_sha256": "903e4e916cebce1f4cb9c123ecaf0f067a91fbabfd8adfe89233769a6fac303e",
+      "mlx_enable_tf32": "unset (MLX default enabled)",
+      "visual_inspection": {
+        "status": "pass_with_limitations",
+        "review": "Full frame and three unscaled 512-pixel crops covering lens, leather grip, and tabletop.",
+        "findings": [
+          "Coherent brass rangefinder-style camera and a blue cup behind on the left, with plausible scene lighting.",
+          "Fine lens rings, metal wear, and textured black covering are visible in unscaled crops.",
+          "No mosaic corruption or obvious tile seams in the reviewed frame and crops."
+        ],
+        "limitations": [
+          "Engraved markings and mechanical details are invented; typography accuracy is not qualified.",
+          "The cup is larger than the requested small cup; the composition leaves substantial empty background.",
+          "One prompt and seed, with no reference editing qualification."
+        ]
+      },
+      "run_context": "Repository build/test activity overlapped prompt encoding and early denoising. Shared-host single-run timing; file caches were not purged.",
+      "progress_events": [
+        {
+          "elapsed_seconds": 2.7425232918467373,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingEncoder",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 3.0775771669577807,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 57.87438133289106,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 1,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 58.37499654199928,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingTransformer",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 60.15576412482187,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 0,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 186.53686916688457,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 1,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 248.53421512502246,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 2,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 307.132826291956,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 3,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 365.3870559169445,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 4,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 425.3268386248965,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 5,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 484.81492724991404,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 6,
+            "total_steps": 6
+          }
+        },
+        {
+          "elapsed_seconds": 486.2779205830302,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 486.308342916891,
+          "payload": {
+            "event": "progress",
+            "stage": "decoding",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 498.37161533301696,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 498.88362333294936,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 1,
+            "total_steps": 1
+          }
+        }
+      ],
+      "size": 4096,
+      "image": {
+        "size": [
+          4096,
+          4096
+        ],
+        "format": "PNG",
+        "file_bytes": 23620132,
+        "sha256": "453cbaf6bd814923c41e09e537f493a31a20dcf494a52e541fa735f6e09e04e0",
+        "rgb_mean": [
+          152.98453283309937,
+          161.72737860679626,
+          164.85816103219986
+        ],
+        "rgb_standard_deviation": 76.35271008353925,
+        "black_fraction": 0.0010828971862792969,
+        "white_fraction": 7.62939453125e-05
+      }
+    }
+  ],
+  "microbenchmarks": {
+    "feed_forward_projection": {
+      "raw": "mode=packed_bf16 repeat=0 seconds=0.09826024994254112 dtype=bfloat16 finite=true\nmode=packed_bf16 repeat=1 seconds=0.09264274989254773 dtype=bfloat16 finite=true\nmode=packed_bf16 repeat=2 seconds=0.0909655001014471 dtype=bfloat16 finite=true\nmode=packed_bf16 repeat=3 seconds=0.0903439165558666 dtype=bfloat16 finite=true\nmode=packed_bf16 repeat=4 seconds=0.09133824985474348 dtype=bfloat16 finite=true\nmode=packed_bf16 repeat=5 seconds=0.09255125001072884 dtype=bfloat16 finite=true\nmode=packed_fp32 repeat=0 seconds=0.12576295831240714 dtype=float32 finite=true\nmode=packed_fp32 repeat=1 seconds=0.10976445837877691 dtype=float32 finite=true\nmode=packed_fp32 repeat=2 seconds=0.11682866676710546 dtype=float32 finite=true\nmode=packed_fp32 repeat=3 seconds=0.11524970829486847 dtype=float32 finite=true\nmode=packed_fp32 repeat=4 seconds=0.1203346666879952 dtype=float32 finite=true\nmode=packed_fp32 repeat=5 seconds=0.12537004170008004 dtype=float32 finite=true\nmode=dense_bf16 repeat=0 seconds=0.3862305833026767 dtype=bfloat16 finite=true\nmode=dense_bf16 repeat=1 seconds=0.020807249937206507 dtype=bfloat16 finite=true\nmode=dense_bf16 repeat=2 seconds=0.02106462512165308 dtype=bfloat16 finite=true\nmode=dense_bf16 repeat=3 seconds=0.02145520830526948 dtype=bfloat16 finite=true\nmode=dense_bf16 repeat=4 seconds=0.02118495828472078 dtype=bfloat16 finite=true\nmode=dense_bf16 repeat=5 seconds=0.021686041494831443 dtype=bfloat16 finite=true\n",
+      "source_sha256": "87f6fe453bb6e49d41cf5830f07662933f01627aadf01a74af23901a7ef9d44c",
+      "context": "Synthetic tensors at real model dimensions; no concurrent image inference. First repetition excluded from warm statistics; not end-to-end latency."
+    },
+    "attention": {
+      "raw": "rows=640 heads=8 repeat=0 seconds=0.4012818750925362 finite=true\nrows=640 heads=8 repeat=1 seconds=0.376090666744858 finite=true\nrows=640 heads=8 repeat=2 seconds=0.4345699166879058 finite=true\nrows=640 heads=56 repeat=0 seconds=0.2613398749381304 finite=true\nrows=640 heads=56 repeat=1 seconds=0.3186748749576509 finite=true\nrows=640 heads=56 repeat=2 seconds=0.34670991683378816 finite=true\nrows=2048 heads=56 repeat=0 seconds=0.3325512083247304 finite=true\nrows=2048 heads=56 repeat=1 seconds=0.3489694583695382 finite=true\nrows=2048 heads=56 repeat=2 seconds=0.3777042916044593 finite=true\nrows=16528 heads=56 repeat=0 seconds=0.3926588334143162 finite=true\nrows=16528 heads=56 repeat=1 seconds=0.3937921249307692 finite=true\nrows=16528 heads=56 repeat=2 seconds=0.4026828333735466 finite=true\n",
+      "source_sha256": "8b984ab1e04e994534e94d1eff4653e4a3bcbb1c62dcc397d12eabfd70588e85",
+      "context": "Synthetic tensors at real model dimensions; no concurrent image inference. First repetition excluded from warm statistics; not end-to-end latency."
+    }
+  },
+  "upstream": {
+    "recipe": "https://github.com/sgl-project/sglang/blob/main/docs/cookbook/diffusion/MiniMax/MiniMax-H3-Image.mdx",
+    "hardware": "one DGX Spark GB10",
+    "shape": [
+      4736,
+      3552
+    ],
+    "warm_pipeline_median_seconds": 84.96,
+    "two_k_warm_pipeline_median_seconds": 16.21,
+    "recipe_blob_sha": "7145ac23af4f31e356b71be09a5620ffde0df4be",
+    "benchmark_source_revision": "539fea720b86",
+    "warm_requests": 10,
+    "servers": 2,
+    "excluded": [
+      "startup",
+      "HTTP",
+      "PNG encoding",
+      "saving"
+    ],
+    "precision": "native BF16; exact AdaLN precompute; resident components; warm conditioning",
+    "comparison": "Different hardware, aspect ratio, precision and timing boundary; not an Apple Silicon 70-second measurement."
+  },
+  "validation": {
+    "repository_gate": "./scripts/check.sh passed after final Swift changes",
+    "final_guide_and_documentation_contract_tests": {
+      "tests": 31,
+      "failures": 0
+    },
+    "documentation_build": {
+      "command": "pnpm docs:build",
+      "exit_code": 0
+    },
+    "metal_numerical_fixtures": {
+      "H3ImageComputationTests": 6,
+      "H3ImageQ8Tests": 4,
+      "failures": 0,
+      "MLX_ENABLE_TF32": "0"
+    },
+    "remaining_scope": [
+      "one text-only prompt and seed",
+      "editing unqualified",
+      "other aspects/hardware unqualified"
+    ],
+    "interrupted_debug_probes_excluded": true
+  },
+  "mlx": {
+    "swift_revision": "1e077ba968b291e0237d1ab522b271d433fa1713",
+    "core_revision": "e3214809fa5ebd5aac5d6783e8101513b3d9a774",
+    "gpu_architecture": "applegpu_g17s",
+    "quantized_nax_guard": "Pinned fork permits quantized NAX dispatch only for architecture generation >=18; generation17 uses the existing quantized fallback. Floating-point matmul and attention retain NAX availability.",
+    "source": "https://github.com/sawfwair/mlx/blob/e3214809fa5ebd5aac5d6783e8101513b3d9a774/mlx/backend/metal/quantized.cpp#L21"
+  },
+  "metal_library_sha256": "64431ed485178f63a8dc870c8231ba021090c3356218c607a726821a7b6abb82"
+}

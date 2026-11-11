@@ -21,4 +21,11 @@ final class ModelOptimizeCommandTests: XCTestCase {
         XCTAssertEqual(command.output, "/tmp/native-model")
         XCTAssertTrue(command.json)
     }
+
+    func testH3ImageQ8ExportFlagsParse() throws {
+        let command = try ModelOptimize.parse(["image-minimax-h3", "--output", "/tmp/image-minimax-h3-q8", "--json"])
+        XCTAssertEqual(command.target, "image-minimax-h3")
+        XCTAssertEqual(command.output, "/tmp/image-minimax-h3-q8")
+        XCTAssertFalse(command.force)
+    }
 }

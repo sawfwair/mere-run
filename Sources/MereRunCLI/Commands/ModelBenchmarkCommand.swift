@@ -27,6 +27,7 @@ struct ModelBenchmark: ParsableCommand {
             ModelBenchmarkParakeetCoreML.self,
             ModelBenchmarkAPIWorkload.self,
             ModelBenchmarkVLM.self,
+            ModelBenchmarkH3Image.self,
         ]
     )
 }

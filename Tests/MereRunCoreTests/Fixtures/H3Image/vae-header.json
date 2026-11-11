@@ -1,0 +1,2323 @@
+{
+  "decoder.mask_token": {
+    "shape": [
+      1,
+      1,
+      1024
+    ]
+  },
+  "decoder.norm_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.norm_out.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.proj_out.bias": {
+    "shape": [
+      768
+    ]
+  },
+  "decoder.proj_out.weight": {
+    "shape": [
+      768,
+      1024
+    ]
+  },
+  "decoder.register_tokens": {
+    "shape": [
+      1,
+      4,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.0.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.0.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.0.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.0.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.0.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.0.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.0.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.0.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.0.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.0.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.0.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.0.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.1.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.1.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.1.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.1.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.1.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.1.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.1.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.1.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.1.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.1.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.1.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.1.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.10.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.10.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.10.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.10.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.10.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.10.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.10.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.10.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.10.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.10.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.10.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.10.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.11.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.11.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.11.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.11.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.11.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.11.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.11.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.11.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.11.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.11.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.11.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.11.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.12.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.12.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.12.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.12.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.12.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.12.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.12.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.12.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.12.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.12.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.12.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.12.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.13.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.13.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.13.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.13.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.13.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.13.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.13.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.13.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.13.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.13.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.13.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.13.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.14.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.14.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.14.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.14.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.14.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.14.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.14.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.14.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.14.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.14.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.14.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.14.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.15.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.15.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.15.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.15.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.15.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.15.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.15.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.15.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.15.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.15.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.15.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.15.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.16.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.16.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.16.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.16.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.16.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.16.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.16.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.16.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.16.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.16.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.16.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.16.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.17.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.17.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.17.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.17.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.17.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.17.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.17.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.17.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.17.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.17.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.17.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.17.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.18.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.18.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.18.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.18.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.18.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.18.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.18.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.18.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.18.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.18.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.18.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.18.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.19.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.19.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.19.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.19.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.19.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.19.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.19.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.19.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.19.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.19.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.19.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.19.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.2.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.2.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.2.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.2.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.2.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.2.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.2.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.2.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.2.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.2.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.2.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.2.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.20.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.20.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.20.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.20.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.20.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.20.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.20.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.20.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.20.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.20.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.20.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.20.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.21.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.21.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.21.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.21.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.21.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.21.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.21.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.21.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.21.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.21.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.21.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.21.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.22.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.22.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.22.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.22.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.22.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.22.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.22.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.22.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.22.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.22.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.22.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.22.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.23.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.23.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.23.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.23.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.23.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.23.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.23.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.23.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.23.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.23.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.23.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.23.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.3.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.3.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.3.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.3.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.3.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.3.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.3.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.3.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.3.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.3.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.3.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.3.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.4.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.4.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.4.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.4.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.4.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.4.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.4.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.4.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.4.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.4.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.4.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.4.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.5.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.5.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.5.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.5.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.5.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.5.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.5.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.5.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.5.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.5.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.5.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.5.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.6.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.6.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.6.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.6.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.6.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.6.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.6.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.6.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.6.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.6.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.6.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.6.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.7.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.7.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.7.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.7.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.7.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.7.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.7.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.7.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.7.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.7.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.7.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.7.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.8.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.8.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.8.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.8.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.8.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.8.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.8.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.8.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.8.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.8.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.8.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.8.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.9.attn.to_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.9.attn.to_out.weight": {
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.9.attn.to_qkv.bias": {
+    "shape": [
+      3072
+    ]
+  },
+  "decoder.transformer_blocks.9.attn.to_qkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.9.ff.w1.bias": {
+    "shape": [
+      8192
+    ]
+  },
+  "decoder.transformer_blocks.9.ff.w1.weight": {
+    "shape": [
+      8192,
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.9.ff.w2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.9.ff.w2.weight": {
+    "shape": [
+      1024,
+      4096
+    ]
+  },
+  "decoder.transformer_blocks.9.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.9.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.9.scale1": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.transformer_blocks.9.scale2": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.x_embedder.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "decoder.x_embedder.weight": {
+    "shape": [
+      1024,
+      24
+    ]
+  },
+  "encoder.conv_in.bias": {
+    "shape": [
+      128
+    ]
+  },
+  "encoder.conv_in.weight": {
+    "shape": [
+      128,
+      3,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.conv_out.bias": {
+    "shape": [
+      48
+    ]
+  },
+  "encoder.conv_out.weight": {
+    "shape": [
+      48,
+      1024,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.0.block.0.conv1.bias": {
+    "shape": [
+      128
+    ]
+  },
+  "encoder.down.0.block.0.conv1.weight": {
+    "shape": [
+      128,
+      128,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.0.block.0.conv2.bias": {
+    "shape": [
+      128
+    ]
+  },
+  "encoder.down.0.block.0.conv2.weight": {
+    "shape": [
+      128,
+      128,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.0.block.0.norm1.bias": {
+    "shape": [
+      128
+    ]
+  },
+  "encoder.down.0.block.0.norm1.weight": {
+    "shape": [
+      128
+    ]
+  },
+  "encoder.down.0.block.0.norm2.bias": {
+    "shape": [
+      128
+    ]
+  },
+  "encoder.down.0.block.0.norm2.weight": {
+    "shape": [
+      128
+    ]
+  },
+  "encoder.down.0.block.1.conv1.bias": {
+    "shape": [
+      128
+    ]
+  },
+  "encoder.down.0.block.1.conv1.weight": {
+    "shape": [
+      128,
+      128,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.0.block.1.conv2.bias": {
+    "shape": [
+      128
+    ]
+  },
+  "encoder.down.0.block.1.conv2.weight": {
+    "shape": [
+      128,
+      128,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.0.block.1.norm1.bias": {
+    "shape": [
+      128
+    ]
+  },
+  "encoder.down.0.block.1.norm1.weight": {
+    "shape": [
+      128
+    ]
+  },
+  "encoder.down.0.block.1.norm2.bias": {
+    "shape": [
+      128
+    ]
+  },
+  "encoder.down.0.block.1.norm2.weight": {
+    "shape": [
+      128
+    ]
+  },
+  "encoder.down.0.downsample.conv.bias": {
+    "shape": [
+      128
+    ]
+  },
+  "encoder.down.0.downsample.conv.weight": {
+    "shape": [
+      128,
+      128,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.1.block.0.conv1.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.1.block.0.conv1.weight": {
+    "shape": [
+      256,
+      128,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.1.block.0.conv2.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.1.block.0.conv2.weight": {
+    "shape": [
+      256,
+      256,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.1.block.0.nin_shortcut.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.1.block.0.nin_shortcut.weight": {
+    "shape": [
+      256,
+      128,
+      1,
+      1,
+      1
+    ]
+  },
+  "encoder.down.1.block.0.norm1.bias": {
+    "shape": [
+      128
+    ]
+  },
+  "encoder.down.1.block.0.norm1.weight": {
+    "shape": [
+      128
+    ]
+  },
+  "encoder.down.1.block.0.norm2.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.1.block.0.norm2.weight": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.1.block.1.conv1.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.1.block.1.conv1.weight": {
+    "shape": [
+      256,
+      256,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.1.block.1.conv2.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.1.block.1.conv2.weight": {
+    "shape": [
+      256,
+      256,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.1.block.1.norm1.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.1.block.1.norm1.weight": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.1.block.1.norm2.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.1.block.1.norm2.weight": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.1.downsample.conv.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.1.downsample.conv.weight": {
+    "shape": [
+      256,
+      256,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.2.block.0.conv1.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.2.block.0.conv1.weight": {
+    "shape": [
+      256,
+      256,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.2.block.0.conv2.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.2.block.0.conv2.weight": {
+    "shape": [
+      256,
+      256,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.2.block.0.norm1.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.2.block.0.norm1.weight": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.2.block.0.norm2.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.2.block.0.norm2.weight": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.2.block.1.conv1.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.2.block.1.conv1.weight": {
+    "shape": [
+      256,
+      256,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.2.block.1.conv2.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.2.block.1.conv2.weight": {
+    "shape": [
+      256,
+      256,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.2.block.1.norm1.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.2.block.1.norm1.weight": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.2.block.1.norm2.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.2.block.1.norm2.weight": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.2.downsample.conv.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.2.downsample.conv.weight": {
+    "shape": [
+      256,
+      256,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.3.block.0.conv1.bias": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.3.block.0.conv1.weight": {
+    "shape": [
+      512,
+      256,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.3.block.0.conv2.bias": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.3.block.0.conv2.weight": {
+    "shape": [
+      512,
+      512,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.3.block.0.nin_shortcut.bias": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.3.block.0.nin_shortcut.weight": {
+    "shape": [
+      512,
+      256,
+      1,
+      1,
+      1
+    ]
+  },
+  "encoder.down.3.block.0.norm1.bias": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.3.block.0.norm1.weight": {
+    "shape": [
+      256
+    ]
+  },
+  "encoder.down.3.block.0.norm2.bias": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.3.block.0.norm2.weight": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.3.block.1.conv1.bias": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.3.block.1.conv1.weight": {
+    "shape": [
+      512,
+      512,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.3.block.1.conv2.bias": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.3.block.1.conv2.weight": {
+    "shape": [
+      512,
+      512,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.3.block.1.norm1.bias": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.3.block.1.norm1.weight": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.3.block.1.norm2.bias": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.3.block.1.norm2.weight": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.3.downsample.conv.bias": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.3.downsample.conv.weight": {
+    "shape": [
+      512,
+      512,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.4.block.0.conv1.bias": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.4.block.0.conv1.weight": {
+    "shape": [
+      512,
+      512,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.4.block.0.conv2.bias": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.4.block.0.conv2.weight": {
+    "shape": [
+      512,
+      512,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.4.block.0.norm1.bias": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.4.block.0.norm1.weight": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.4.block.0.norm2.bias": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.4.block.0.norm2.weight": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.4.block.1.conv1.bias": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.4.block.1.conv1.weight": {
+    "shape": [
+      512,
+      512,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.4.block.1.conv2.bias": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.4.block.1.conv2.weight": {
+    "shape": [
+      512,
+      512,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.4.block.1.norm1.bias": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.4.block.1.norm1.weight": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.4.block.1.norm2.bias": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.4.block.1.norm2.weight": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.5.block.0.conv1.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "encoder.down.5.block.0.conv1.weight": {
+    "shape": [
+      1024,
+      512,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.5.block.0.conv2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "encoder.down.5.block.0.conv2.weight": {
+    "shape": [
+      1024,
+      1024,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.5.block.0.nin_shortcut.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "encoder.down.5.block.0.nin_shortcut.weight": {
+    "shape": [
+      1024,
+      512,
+      1,
+      1,
+      1
+    ]
+  },
+  "encoder.down.5.block.0.norm1.bias": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.5.block.0.norm1.weight": {
+    "shape": [
+      512
+    ]
+  },
+  "encoder.down.5.block.0.norm2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "encoder.down.5.block.0.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "encoder.down.5.block.1.conv1.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "encoder.down.5.block.1.conv1.weight": {
+    "shape": [
+      1024,
+      1024,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.5.block.1.conv2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "encoder.down.5.block.1.conv2.weight": {
+    "shape": [
+      1024,
+      1024,
+      3,
+      3,
+      3
+    ]
+  },
+  "encoder.down.5.block.1.norm1.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "encoder.down.5.block.1.norm1.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "encoder.down.5.block.1.norm2.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "encoder.down.5.block.1.norm2.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "encoder.norm_out.bias": {
+    "shape": [
+      1024
+    ]
+  },
+  "encoder.norm_out.weight": {
+    "shape": [
+      1024
+    ]
+  },
+  "post_quant_conv.bias": {
+    "shape": [
+      24
+    ]
+  },
+  "post_quant_conv.weight": {
+    "shape": [
+      24,
+      24,
+      1,
+      1
+    ]
+  },
+  "quant_conv.bias": {
+    "shape": [
+      48
+    ]
+  },
+  "quant_conv.weight": {
+    "shape": [
+      48,
+      48,
+      1,
+      1,
+      1
+    ]
+  }
+}

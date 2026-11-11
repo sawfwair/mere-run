@@ -14,6 +14,20 @@ checkpoint discovery, media preparation, and generation requests.
   geometry. `MiniMaxH3Schedule` owns numerical schedules.
 - Video encoder, decoder, and audio VAE types consume tensors. The audio VAE uses
   the shared BigVGAN layers from `MereRunAudioModels`.
+- `MiniMaxH3ImageTransformer`, image geometry, and the image VAE reuse H3 layers
+  for six-step image generation. Image-specific PDD heads and two-axis VAE
+  rotary embeddings remain separate from video and audio execution.
+- Image decoding batches up to 32 existing overlapping tiles while preserving
+  the original FP32 VAE, tile geometry, and assembly order. The encoder keeps
+  sequential tiling. Computation fixtures compare sequential and batched decode,
+  including multiple samples and a final partial batch.
+- Large image attention accepts separate query and head limits while attending
+  to every key. Core selects the qualified 28-head/1024-query schedule for
+  native Q8 on `applegpu_g17s`; other models and architectures keep their
+  previous attention schedule.
+- `MiniMaxH3ImageModulationCache` holds exact outputs of the released six-step
+  image schedule. Installing it releases timestep-only weights; prepared image
+  layouts reuse rotary tables throughout denoising.
 - `MiniMaxH3AdaLNCache` owns in-memory schedule tensors and interpolation. Core
   owns cache files, source identity validation, and adapter cache installation.
 

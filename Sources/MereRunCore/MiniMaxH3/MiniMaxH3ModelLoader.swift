@@ -139,42 +139,7 @@ public enum MiniMaxH3ModelLoader {
         configuration: MiniMaxH3Configuration,
         progressHandler: (@Sendable (HFSafetensorsWeightsLoader.ShardProgress) -> Void)? = nil
     ) throws -> QwenVLEncoder {
-        let textConfiguration = QwenTextEncoderConfiguration(
-            vocabSize: 151_936,
-            hiddenSize: 5_120,
-            numHiddenLayers: 50,
-            numAttentionHeads: 64,
-            numKeyValueHeads: 8,
-            intermediateSize: 25_600,
-            ropeTheta: 5_000_000,
-            maxPositionEmbeddings: 262_144,
-            rmsNormEps: 1e-6,
-            headDim: 128,
-            mropeSection: [24, 20, 20],
-            mropeInterleaved: true
-        )
-        let visionConfiguration = QwenVisionConfiguration(
-            depth: 27,
-            embedDim: 1_152,
-            mlpHiddenDim: 4_304,
-            hiddenAct: .geluApproximate,
-            numHeads: 16,
-            patchSize: 16,
-            temporalPatchSize: 2,
-            spatialMergeSize: 2,
-            inChannels: 3,
-            outHiddenDim: 5_120,
-            windowSize: 112,
-            fullAttentionBlockIndices: [],
-            patchEmbedBias: true,
-            numPositionEmbeddings: 2_304,
-            useLearnedPosEmbed: true,
-            deepstackVisualIndexes: [8, 16, 24]
-        )
-        let encoder = QwenVLEncoder(
-            textEncoderConfig: textConfiguration,
-            visionConfig: visionConfiguration
-        )
+        let encoder = makeConditioner()
         if resources.usesShardedBF16Conditioner {
             try HFSafetensorsWeightsLoader.applyShardedWeights(
                 indexURL: resources.bf16TextEncoderIndexURL,
@@ -207,6 +172,45 @@ public enum MiniMaxH3ModelLoader {
             )
         }
         return encoder
+    }
+
+    static func makeConditioner() -> QwenVLEncoder {
+        let textConfiguration = QwenTextEncoderConfiguration(
+            vocabSize: 151_936,
+            hiddenSize: 5_120,
+            numHiddenLayers: 50,
+            numAttentionHeads: 64,
+            numKeyValueHeads: 8,
+            intermediateSize: 25_600,
+            ropeTheta: 5_000_000,
+            maxPositionEmbeddings: 262_144,
+            rmsNormEps: 1e-6,
+            headDim: 128,
+            mropeSection: [24, 20, 20],
+            mropeInterleaved: true
+        )
+        let visionConfiguration = QwenVisionConfiguration(
+            depth: 27,
+            embedDim: 1_152,
+            mlpHiddenDim: 4_304,
+            hiddenAct: .geluApproximate,
+            numHeads: 16,
+            patchSize: 16,
+            temporalPatchSize: 2,
+            spatialMergeSize: 2,
+            inChannels: 3,
+            outHiddenDim: 5_120,
+            windowSize: 112,
+            fullAttentionBlockIndices: [],
+            patchEmbedBias: true,
+            numPositionEmbeddings: 2_304,
+            useLearnedPosEmbed: true,
+            deepstackVisualIndexes: [8, 16, 24]
+        )
+        return QwenVLEncoder(
+            textEncoderConfig: textConfiguration,
+            visionConfig: visionConfiguration
+        )
     }
 
     public static func loadVideoVAE(

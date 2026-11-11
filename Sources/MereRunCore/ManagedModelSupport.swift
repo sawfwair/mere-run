@@ -202,6 +202,13 @@ public enum ManagedModelCapabilityCatalog {
     private static let descriptorsByID: [String: ManagedModelCapabilityDescriptor] = {
         let descriptors = [
             descriptor(
+                MiniMaxH3ImageResources.modelID,
+                "Image, MiniMax-H3-Image",
+                "Runs native BF16 six-step generation and up to 16 reference images; checkpoint quality and peak memory remain unqualified.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
                 Flux3Resources.modelID,
                 "Image, FLUX 3 Klein",
                 "Installs experimental native BF16 FLUX 3 Klein generation and reference editing; released-checkpoint quality and memory remain unqualified.",
