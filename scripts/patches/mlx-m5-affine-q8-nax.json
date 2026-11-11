@@ -1,0 +1,8 @@
+{
+  "swift_revision": "1e077ba968b291e0237d1ab522b271d433fa1713",
+  "core_revision": "e3214809fa5ebd5aac5d6783e8101513b3d9a774",
+  "source_path": "mlx/backend/metal/quantized.cpp",
+  "base_sha256": "b34865aefca6dd2987cc87ed1ebd40181a6de58cf672af676d30f9233c7ac0ac",
+  "patched_sha256": "24d910208eace758c57b18b432ce860b2c6a2bef42c59e93a19c060c9aaf1689",
+  "patch_sha256": "3938e661352a1931830331fd217c106522a90f18b0b4987af8b8296a6fac8f86"
+}

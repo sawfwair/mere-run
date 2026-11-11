@@ -50,6 +50,13 @@ if [[ -n "$swift_scratch_path" ]]; then
   swift_bin_path_args+=(--scratch-path "$swift_scratch_path")
 fi
 
+if [[ -n "$swift_scratch_path" ]]; then
+  swift package --scratch-path "$swift_scratch_path" resolve
+  python3 scripts/prepare_mlx.py --checkout "$swift_scratch_path/checkouts/mlx-swift"
+else
+  python3 scripts/prepare_mlx.py
+fi
+
 private_build_roots=("$repo_root")
 source_path_maps=("${repo_root}=/src/mere-run")
 if [[ -n "$swift_scratch_path" && "$swift_scratch_path" != "${repo_root}/.build" ]]; then

@@ -1,0 +1,53 @@
+--- a/mlx/backend/metal/quantized.cpp
++++ b/mlx/backend/metal/quantized.cpp
+@@ -18,10 +18,11 @@
+ 
+ namespace {
+ 
+-bool is_quantized_nax_available() {
+-  // Keep the generation-17 quantized workaround local to quantized dispatch.
++bool is_quantized_nax_available(const std::string& mode, int bits) {
++  const auto generation = metal::device(Device::gpu).get_architecture_gen();
+   return metal::is_nax_available() &&
+-      metal::device(Device::gpu).get_architecture_gen() >= 18;
++      (generation >= 18 ||
++       (generation == 17 && mode == "affine" && bits == 8));
+ }
+ 
+ template <typename... Args>
+@@ -1090,7 +1091,7 @@
+       "qmm global scale requires transposed weights without biases");
+ 
+   bool has_nax_kernel =
+-      is_quantized_nax_available() && (transpose || mode == "affine");
++      is_quantized_nax_available(mode, bits) && (transpose || mode == "affine");
+   bool nax_aligned = (K % 64 == 0) && (transpose || N % 64 == 0);
+   if (has_nax_kernel && nax_aligned &&
+       (env::enable_tf32() || x.dtype() != float32)) {
+@@ -1311,7 +1312,7 @@
+     metal::Device& d,
+     const Stream& s,
+     const std::string& mode) {
+-  if (is_quantized_nax_available() && transpose && (K % 64 == 0) &&
++  if (is_quantized_nax_available(mode, bits) && transpose && (K % 64 == 0) &&
+       (env::enable_tf32() || x.dtype() != float32)) {
+     return gather_qmm_nax(
+         /* const array& x = */ x,
+@@ -1706,7 +1707,7 @@
+     metal::Device& d,
+     const Stream& s,
+     const std::string mode) {
+-  if (is_quantized_nax_available() &&
++  if (is_quantized_nax_available(mode, bits) &&
+       (env::enable_tf32() || x_.dtype() != float32)) {
+     return gather_qmm_rhs_nax(
+         /* const array& x_ = */ x_,
+@@ -2244,7 +2245,7 @@
+   int B = out.size() / M / N;
+   bool use_matrix_kernels = has_global_scales && w_quantized &&
+       x.dtype() == bfloat16 && w_q.ndim() == 3 &&
+-      K % (is_quantized_nax_available() ? 64 : 32) == 0;
++      K % (is_quantized_nax_available(mode, bits_) ? 64 : 32) == 0;
+ 
+   if (use_matrix_kernels && M == 1 && B >= 16 && right_sorted_) {
+     int E = w_q.size() / w_q.shape(-1) / w_q.shape(-2);

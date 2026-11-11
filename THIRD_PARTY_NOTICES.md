@@ -1117,6 +1117,11 @@ limitations under the License.
   0.32.3
 - pinned package revision: `1e077ba968b291e0237d1ab522b271d433fa1713`
 - embedded MLX revision: `e3214809fa5ebd5aac5d6783e8101513b3d9a774`
+- owned host-dispatch patch: `scripts/patches/mlx-m5-affine-q8-nax.patch`,
+  applied by `scripts/prepare_mlx.py` against the exact pinned source hash.
+  This restores generation-17 affine Q8 NAX dispatch after numerical
+  qualification. Other quantization modes retain the existing restriction.
+  The patch changes no shader sources or vendored shader bytes.
 - embedded C bindings: [`sawfwair/mlx-c`](https://github.com/sawfwair/mlx-c),
   revision `dc502b106252d1899e93dd6f6da0a77a2366e80b`, based on upstream
   `ml-explore/mlx-c` revision `57731b00e8bed710e0750e7356da9f18f8eb3e20`;
@@ -1978,3 +1983,24 @@ Pillow's fixed-point algorithm and premultiplied RGBA conversion, under the
 Pillow MIT-CMU notice already recorded in this file. Qualification renders
 show model outputs from the pinned SDK's public submarine and strawberry
 examples; they contain no model weights.
+
+
+### MiniMax-H3-Image reference architecture
+
+The native H3-Image implementation follows the original checkpoint configuration
+and the MiniMax/Hugging Face Diffusers transformer and image VAE at commit
+`f598e6e6a99528858b962c1399c45b59a6c25484`:
+
+- <https://github.com/huggingface/diffusers/blob/f598e6e6a99528858b962c1399c45b59a6c25484/src/diffusers/models/transformers/transformer_minimax_h3_image.py>
+- <https://github.com/huggingface/diffusers/blob/f598e6e6a99528858b962c1399c45b59a6c25484/src/diffusers/models/autoencoders/autoencoder_kl_minimax_h3_image.py>
+
+Copyright 2026 The MiniMax and HuggingFace Teams. All rights reserved.
+The reference implementation is licensed under the Apache License, Version 2.0:
+<https://www.apache.org/licenses/LICENSE-2.0>. The test-only fixture generator
+verifies source hashes and executes these upstream classes on synthetic weights.
+
+The model checkpoint is separately licensed under the MiniMax-H3-Image Community
+License Agreement, available in the pinned official model repository:
+<https://huggingface.co/MiniMaxAI/MiniMax-H3-Image/blob/492fd8c4eca666f1085f57e30738c1e0d86b3439/LICENSE>.
+Checkpoint files are not bundled with mere.run. Managed installation retains
+the upstream license and requires explicit acceptance.

@@ -22,7 +22,7 @@ struct ModelOptimize: ParsableCommand {
 
     @Option(
         name: [.customLong("output")],
-        help: "For Nemotron Omni or DRAMA-3, write a standalone native checkpoint to this directory."
+        help: "For Nemotron Omni, DRAMA-3, or H3-Image Q8, write a standalone native checkpoint here."
     )
     var output: String?
 
@@ -33,7 +33,15 @@ struct ModelOptimize: ParsableCommand {
         let rootURL = try resolveRootURL()
         let artifacts: [URL]
         let optimization: String
-        if Drama3Resources.isDrama3(root: rootURL) {
+        if try MereRunModelManifest.loadIfPresent(from: rootURL)?.engine == .miniMaxH3Image {
+            guard !textEncoderOnly, !force, let output, !output.isEmpty else {
+                throw ValidationError("H3-Image Q8 export requires --output <new-directory>; --force and --text-encoder-only are unsupported.")
+            }
+            try MLXBundleSupport.ensureAvailable(quiet: false)
+            artifacts = try MiniMaxH3ImageOptimizer.exportQ8(source: rootURL, destination: URL(fileURLWithPath: output),
+                progress: { phase, completed, total in CLIStderr.write("H3-Image Q8 \(phase): \(completed)/\(total)\n") })
+            optimization = MiniMaxH3ImageOptimizer.format
+        } else if Drama3Resources.isDrama3(root: rootURL) {
             guard !textEncoderOnly, let output, !output.isEmpty else {
                 throw ValidationError("DRAMA-3 Q4 export requires --output <new-directory>.")
             }
@@ -256,11 +264,12 @@ struct ModelOptimize: ParsableCommand {
                 || modelID == .miniMaxH3FL2VABF16MLX
                 || modelID == .miniMaxH3FL2VAQ8MLX
                 || modelID == .miniMaxH3Ref2VAMLX
+                || modelID == .miniMaxH3Image
                 || modelID == .ltxVideo25DistilledBF16
                 || modelID == .ltxVideo25FullBF16
                 || modelID == .nemotron3NanoOmni30BA3BBF16 else {
             throw ValidationError(
-                "Model optimization supports MiniMax-H3 MLX, LTX 2.5, and Nemotron Omni models."
+                "Model optimization supports MiniMax-H3, H3-Image Q8, LTX 2.5, and Nemotron Omni models."
             )
         }
         do {

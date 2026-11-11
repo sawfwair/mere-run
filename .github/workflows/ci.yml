@@ -150,6 +150,11 @@ jobs:
                     lane=full
                     linux_required=true
                     ;;
+                  # MLX host-patch provenance is validated by the full macOS gate.
+                  scripts/prepare_mlx.py|scripts/patches/*|scripts/tests/test_prepare_mlx.py)
+                    record_category mlx-host-patch
+                    lane=full
+                    ;;
                   # The iOS project links Core and RelayKit, not MereRunCLI.
                   # CLI implementation and its tests still need macOS and Linux.
                   Sources/MereRunCLI/*|Tests/MereRunCLITests/*)
@@ -365,6 +370,9 @@ jobs:
           # Homebrew command to fail before resolving Homebrew/core formulae.
           brew untap --force aws/tap
           brew install swiftlint ripgrep
+      - name: Prepare audited MLX host dispatch
+        if: env.RUN_GATE == 'true'
+        run: python3 scripts/prepare_mlx.py
       - name: Run package checks
         if: env.RUN_GATE == 'true' && env.LANE == 'full'
         run: ./scripts/check.sh

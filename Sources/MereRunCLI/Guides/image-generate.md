@@ -11,6 +11,7 @@ Use one installed image model:
 - `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`
 - `image-klein-max`, `image-klein-base`, `image-klein-nano`, `image-klein-9b`, `image-klein-base-9b`
 - `image-bonsai-binary`, `image-bonsai-ternary`
+- `image-minimax-h3`
 - `image-flux3-klein`
 - `image-flux1-dev`
 - `image-flux2-dev`

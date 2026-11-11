@@ -206,7 +206,7 @@ enum InstalledModelSmokePlans {
             return direct(spec, route: "text classify and extract") { runner in
                 try await runner.installedGLiNERCheck(model: spec.id)
             }
-        case .flux1, .flux2Klein, .flux3, .bonsaiImage, .zimageTurbo, .hidreamO1, .senseNovaU15, .krea2, .ideogram4SDNQ, .qwenImage21:
+        case .miniMaxH3Image, .flux1, .flux2Klein, .flux3, .bonsaiImage, .zimageTurbo, .hidreamO1, .senseNovaU15, .krea2, .ideogram4SDNQ, .qwenImage21:
             return direct(spec, route: "image generate") { runner in
                 try await runner.installedImageCheck(model: spec.id)
             }
@@ -848,7 +848,7 @@ extension GateRunner {
                 "--prompt", "A red cube on a clean neutral background.",
                 "--width", "512",
                 "--height", "512",
-                "--steps", model == QwenImage21Resources.modelID ? "2" : "1",
+                "--steps", model == MiniMaxH3ImageResources.modelID ? "6" : (model == QwenImage21Resources.modelID ? "2" : "1"),
                 "--seed", "7",
                 "--output", output.path,
                 "--quiet",

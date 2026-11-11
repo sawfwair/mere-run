@@ -284,7 +284,7 @@ public final class MiniMaxH3VideoVAE: Module {
         return (starts, Array(repeating: tileSize, count: count), overlaps)
     }
 
-    private static func blend(_ previous: MLXArray, _ current: MLXArray, extent: Int, axis: Int) -> MLXArray {
+    package static func blend(_ previous: MLXArray, _ current: MLXArray, extent: Int, axis: Int) -> MLXArray {
         let length = min(previous.dim(axis), current.dim(axis), extent)
         guard length > 0 else { return current }
         var shape = Array(repeating: 1, count: current.ndim)

@@ -6,6 +6,31 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Restore M5 affine-Q8 matrix acceleration through an audited patch to the
+  pinned MLX host dispatcher. Source preparation validates both revisions and
+  exact file hashes; shader provenance still rejects other tracked edits.
+  Add Metal regressions for tile boundaries, H3 projection widths, large
+  dimensions, broadcast batches, and gathered experts. Batch H3-Image decode
+  tiles with the original FP32 VAE and tune native Q8 attention scheduling on
+  the qualified M5 architecture. Benchmark receipts record head/query limits
+  and tile batch size.
+
+- Add native MiniMax-H3-Image generation and editing with up to 16 references
+  through `image-minimax-h3`. Load the pinned original BF16 checkpoint, fixed
+  six-step PDD heads, and image VAE with Swift and MLX. Real 2K and 4K camera
+  generations on a 128 GiB M5 Max took 213 and 499 seconds, with peak process
+  footprints of 67.35 and 72.12 GiB. Qualification corrected the data-ward
+  Euler update and bounded large GPU operations to avoid a 4K timeout.
+  Independent fixtures cover the transformer, upstream scheduler, and image
+  decoder. Reference editing and broader quality remain unqualified.
+
+- Add standalone native Q8/group-64 H3-Image export with exact six-step AdaLN
+  tables, strict sharded loading, and source identity. The qualified checkpoint
+  occupies 52.04 GB; the original stays intact. Match upstream BF16 rotary
+  precision and add cold/warm image benchmarks with optional resident BF16
+  compute and attention batching controls. See the Q8 qualification report for
+  measured speed, memory, and quality tradeoffs.
+
 - Speed up Nemotron 3 Nano Omni prefill by grouping each MoE layer's routes by
   expert and running one dense BF16 matmul per used expert, in place of
   copying routed expert matrices per token in four-token batches. Raise the

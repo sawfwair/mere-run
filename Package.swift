@@ -912,6 +912,7 @@ targets.append(
       "MMAudio/README.md",
       "MultimodalEmbeddings/README.md",
       "MiniMaxH3/README.md",
+      "MiniMaxH3Image/README.md",
       "MiniMaxMusic3/README.md",
       "YuE2/README.md",
       "PrivacyFilter/README.md",

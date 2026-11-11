@@ -82,3 +82,15 @@ cache and prompt-padding behavior, transformer checkpoint reloads, batch and
 cache parity, and VAE scale and shift. These small generated tensors test
 numerical and loading contracts. They don't establish image quality,
 large-checkpoint compatibility, or GPU throughput.
+
+### MiniMax-H3-Image generation
+
+`MereRunCore/MiniMaxH3Image` owns the pinned original BF16 checkpoint loader,
+reference preprocessing, Qwen3-VL conditioning, six-step orchestration, and
+PNG output. `MereRunH3Model` owns the audio-free transformer, fused PDD heads,
+packed image geometry, tiled VAE, and two-axis image decoder. Shared H3 blocks
+and the CNN encoder stay in that library.
+
+Small upstream PyTorch fixtures cover FP32 and mixed-BF16 trajectories and
+image decoding. They do not establish released-checkpoint quality, memory,
+or throughput.

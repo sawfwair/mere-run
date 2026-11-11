@@ -150,15 +150,12 @@ if [[ "$checkout_revision" != "$swift_pin_revision" ]]; then
   echo "error: mlx-swift checkout revision $checkout_revision != pinned $swift_pin_revision" >&2
   exit 1
 fi
-if [[ -n "$(git -C "$checkout" status --porcelain --untracked-files=no)" ]]; then
-  echo "error: mlx-swift checkout has tracked modifications; refusing to build unverifiable Metal kernels" >&2
-  exit 1
-fi
-
 core_revision="$(git -C "$core_checkout" rev-parse HEAD)"
-if [[ -n "$(git -C "$core_checkout" status --porcelain --untracked-files=no)" ]]; then
-  echo "error: MLX core checkout has tracked modifications; refusing to build unverifiable Metal kernels" >&2
-  exit 1
+if [[ -n "$(git -C "$checkout" status --porcelain --untracked-files=no)" ]] \
+  || [[ -n "$(git -C "$core_checkout" status --porcelain --untracked-files=no)" ]]; then
+  # This verifier permits only the exact pinned host-dispatch patch. Any shader
+  # edit or additional tracked change still fails provenance verification.
+  python3 "$repo_root/scripts/prepare_mlx.py" --checkout "$checkout" --verify-only
 fi
 if ! git -C "$core_checkout" merge-base --is-ancestor "$upstream_revision" "$core_revision"; then
   echo "error: MLX core $core_revision does not contain upstream $upstream_tag ($upstream_revision)" >&2
@@ -170,7 +167,7 @@ fi
 # through platform line-ending settings), while the blobs still identify the
 # exact sources that produced the library. Reconstructing the original
 # `shasum` listing from blob contents preserves existing stamp compatibility.
-# The clean-worktree check above ensures this cannot hide local source edits.
+# The check above ensures that all tracked shader sources remain unchanged.
 sources_hash="$(
   {
     git -C "$checkout" ls-tree -r --full-tree HEAD -- Source/Cmlx/mlx-generated/metal \

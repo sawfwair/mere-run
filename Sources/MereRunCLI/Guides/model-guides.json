@@ -116,6 +116,13 @@
     "resourceName": "handbook-flux3-klein.md"
   },
   {
+    "topic": "handbook-minimax-h3-image",
+    "title": "MiniMax-H3-Image (MiniMax)",
+    "category": "Image",
+    "models": ["image-minimax-h3"],
+    "resourceName": "handbook-minimax-h3-image.md"
+  },
+  {
     "topic": "handbook-qwen-image-21",
     "title": "Qwen Image 2.1 (Qwen)",
     "category": "Image",

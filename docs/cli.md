@@ -224,6 +224,7 @@ against the CLI and fails if they disagree.
     - `mere.run model benchmark parakeet-coreml` — Benchmark the prepared Parakeet Core ML pipeline in one resident process.
     - `mere.run model benchmark api-workload` — Replay a chat workload against a running API server and measure runtime cache counters.
     - `mere.run model benchmark vlm` — Compare vision-language chat models on synthetic or lmms-eval datasets.
+    - `mere.run model benchmark h3-image` — Measure cold and warm native H3-Image generation with retained models.
   - `mere.run model repair-manifests` — Write missing mererun_model.json for known models in the local mere.run model store.
 - [`mere.run adapter`](/runtime/model-management) — List and pull verified LoRA adapters.
   - `mere.run adapter list` — List cataloged LoRA adapters and their install state.
