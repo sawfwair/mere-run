@@ -43,6 +43,9 @@ struct ModelInfo: ParsableCommand {
                 if id == .gemma4 {
                     throw ValidationError("Model \(id.rawValue) is not installed in the local model store. Gemma4 resolves through the native Hugging Face snapshot path on first use, or you can point info at a local model path.")
                 }
+                if ManagedModelCatalog.spec(for: id.rawValue)?.hasAnyManagedDownloadSource() == false {
+                    throw ValidationError(ManagedModelCatalog.missingHubSourceMessage(for: id.rawValue))
+                }
                 throw ValidationError("Model \(id.rawValue) not found. Pull it with `\(CLICommandDisplay.modelPullCommand(for: id.rawValue))`, register its catalog location, or point info at a local model path.")
             }
         } else {

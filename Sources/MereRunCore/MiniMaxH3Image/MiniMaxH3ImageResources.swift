@@ -2,6 +2,7 @@ import Foundation
 
 public struct MiniMaxH3ImageResources: Sendable {
     public static let modelID = "image-minimax-h3"
+    public static let q8ModelID = "image-minimax-h3-q8"
     public static let repository = "MiniMaxAI/MiniMax-H3-Image"
     public static let revision = "492fd8c4eca666f1085f57e30738c1e0d86b3439"
     public static let patterns = ["LICENSE", "README.md", "model_index.json", "pdd_config.json",
@@ -36,12 +37,16 @@ public struct MiniMaxH3ImageResources: Sendable {
         return value
     }
 
-    public func validate(fileManager: FileManager = .default) -> [URL] {
+    public func validate(fileManager: FileManager = .default, requiresQ8: Bool = false) -> [URL] {
         var files = ["LICENSE", "transformer/config.json", "vae/config.json", "vae/diffusion_pytorch_model.safetensors",
                      "pdd_config.json", "pdd_fused_heads.safetensors", "tokenizer/tokenizer.json", "tokenizer/tokenizer_config.json",
                      "text_encoder/config.json"]
         do {
-            if try mlxFormat() != nil { files.append(MiniMaxH3ImageMLXFormat.cacheFilename) }
+            if try mlxFormat() != nil {
+                files.append(MiniMaxH3ImageMLXFormat.cacheFilename)
+            } else if requiresQ8 {
+                return [rootURL.appending(path: MiniMaxH3ImageMLXFormat.filename)]
+            }
         } catch { return [rootURL.appending(path: MiniMaxH3ImageMLXFormat.filename)] }
         for component in ["transformer", "text_encoder"] {
             let name = "\(component)/model.safetensors.index.json"

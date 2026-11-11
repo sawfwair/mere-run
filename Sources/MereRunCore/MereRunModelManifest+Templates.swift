@@ -1385,10 +1385,12 @@ extension MereRunModelManifest {
                 upstreamRepoId: "\(Krea2Resources.upstreamRepoId)@\(Krea2Resources.upstreamRevision)",
                 createdAt: createdAt
             )
-        case .miniMaxH3Image:
+        case .miniMaxH3Image, .miniMaxH3ImageQ8:
+            let q8 = modelID == .miniMaxH3ImageQ8
             return MereRunModelManifest(
                 id: modelID.rawValue, engine: .miniMaxH3Image, family: .h3Image,
-                tier: .latest, variant: .distilled, precision: .bf16,
+                tier: .latest, variant: .distilled, precision: q8 ? .int8 : .bf16,
+                quantization: q8 ? .init(bits: 8, groupSize: 64, scheme: MiniMaxH3ImageMLXFormat.name) : nil,
                 defaults: Defaults(steps: 6, cfg: 1), supports: [.txt2img, .referenceEdit],
                 components: Components(tokenizer: .local(path: "tokenizer"), textEncoder: .local(path: "text_encoder"),
                     transformer: .local(path: "transformer"), vae: .local(path: "vae"), scheduler: nil),

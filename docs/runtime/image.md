@@ -56,6 +56,7 @@ models. Choose **Use model default** to clear it. For example, Qwen Image Edit
 | `image-bonsai-binary` | Smallest Klein deployment (1-bit) | 4, 1 | 3.4 GB | 16 / 24 GB |
 | `image-bonsai-ternary` | Compact Klein deployment (2-bit) | 4, 1 | 3.9 GB | 12 / 16 GB |
 | `image-minimax-h3` | Six-step MiniMax-H3-Image generation and up to 16 references; 2K and 4K text-to-image qualified | 6, 1 | About 135 GB | 96 / 128 GB (estimates) |
+| `image-minimax-h3-q8` | Local affine Q8 export of MiniMax-H3-Image | 6, 1 | 52.04 GB local export | 48 / 64 GB (estimates) |
 | `image-flux3-klein` | Experimental FLUX 3 Klein generation and up to 10 references | 16, 1 | 20.3 GB | 32 / 48 GB |
 | `image-flux1-dev` | Gated FLUX.1-dev with FLUX.1 LoRAs | 28, 3.5 | 34.0 GB | 48 / 64 GB |
 | `image-flux2-dev` | Gated FLUX.2-dev with Dev LoRAs | 50, 4.0 | 78.1 GB | 96 / 128 GB |

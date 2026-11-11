@@ -210,6 +210,7 @@ enum GuideRegistry {
                 "image-bonsai-ternary",
                 "image-flux3-klein",
                 "image-minimax-h3",
+                "image-minimax-h3-q8",
                 "image-flux1-dev",
                 "image-flux2-dev",
                 "image-hidream-o1",

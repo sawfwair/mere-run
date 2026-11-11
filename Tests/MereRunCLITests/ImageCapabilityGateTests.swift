@@ -11,8 +11,9 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
     try #require(CLICapabilityGate.evaluate(commandLine: commandLine)).report
 }
 
-@Test func h3ImageUsesSixPDDStepsAndSixteenReferenceLimit() throws {
-    let command = ["image", "generate", "--prompt", "A camera", "--model", "image-minimax-h3"]
+@Test(arguments: ["image-minimax-h3", "image-minimax-h3-q8"])
+func h3ImageUsesSixPDDStepsAndSixteenReferenceLimit(modelID: String) throws {
+    let command = ["image", "generate", "--prompt", "A camera", "--model", modelID]
     #expect(try report(command).family == "h3-image")
     #expect(try report(command + ["--steps", "6", "--cfg", "1", "--width", "6272", "--height", "2688"]).violations.isEmpty)
     for flags in [["--steps", "7"], ["--cfg", "2"], ["--negative-prompt", "blurry"], ["--sigma-shift", "3"],

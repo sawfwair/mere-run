@@ -66,6 +66,9 @@ final class H3ImageIntegrationTests: XCTestCase {
         }
         let resources = MiniMaxH3ImageResources(rootURL: root)
         XCTAssertTrue(resources.validate().isEmpty)
+        let q8Spec = try XCTUnwrap(ManagedModelCatalog.spec(for: MiniMaxH3ImageResources.q8ModelID))
+        XCTAssertEqual(q8Spec.missingPaths(in: root), [root.appending(path: MiniMaxH3ImageMLXFormat.filename)])
+        XCTAssertEqual(MereRunModelManifest.template(for: .miniMaxH3ImageQ8).precision, .int8)
         XCTAssertTrue(try resources.configuration().isReleasedArchitecture)
         try MereRunModelManifest.template(for: .miniMaxH3Image).write(to: root)
         let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: MiniMaxH3ImageResources.modelID)

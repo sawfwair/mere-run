@@ -119,7 +119,7 @@
     "topic": "handbook-minimax-h3-image",
     "title": "MiniMax-H3-Image (MiniMax)",
     "category": "Image",
-    "models": ["image-minimax-h3"],
+    "models": ["image-minimax-h3", "image-minimax-h3-q8"],
     "resourceName": "handbook-minimax-h3-image.md"
   },
   {

@@ -122,7 +122,9 @@ public extension ManagedModelSpec {
         case .flux1:
             return Flux1Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .miniMaxH3Image:
-            return MiniMaxH3ImageResources(rootURL: rootURL).validate(fileManager: fileManager)
+            return MiniMaxH3ImageResources(rootURL: rootURL).validate(
+                fileManager: fileManager, requiresQ8: id == MiniMaxH3ImageResources.q8ModelID
+            )
         case .flux3:
             return Flux3Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .flux2Klein:

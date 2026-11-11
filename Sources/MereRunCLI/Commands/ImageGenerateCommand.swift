@@ -307,6 +307,9 @@ struct ImageGenerate: AsyncParsableCommand {
         case .local(let url): return url
         case .managed(let id):
             do { return try selection.resolveRoot() } catch {
+                if ManagedModelCatalog.spec(for: id.rawValue)?.hasAnyManagedDownloadSource() == false {
+                    throw ValidationError(ManagedModelCatalog.missingHubSourceMessage(for: id.rawValue))
+                }
                 let prefix = model == nil ? "Image model" : "Model"
                 throw ValidationError(
                     "\(prefix) \(id.rawValue) not found. Pull it with `\(CLICommandDisplay.modelPullCommand(for: id.rawValue))` or point --model at a local path."

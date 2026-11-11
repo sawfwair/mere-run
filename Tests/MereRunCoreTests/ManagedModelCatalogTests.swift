@@ -235,6 +235,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "image-qwen-21-turbo",
             "image-flux3-klein",
             "image-minimax-h3",
+            "image-minimax-h3-q8",
             "image-flux1-dev",
             "image-flux2-dev",
             "image-klein-9b",

@@ -49,7 +49,7 @@ extension MereRunCapabilityCatalog {
         modelFlags: ["--model"],
         defaultModels: [.always("image-zimage-nano")],
         families: [
-            .init(ImageGenerateFamily.h3Image, title: "MiniMax-H3-Image", models: ["image-minimax-h3"]),
+            .init(ImageGenerateFamily.h3Image, title: "MiniMax-H3-Image", models: ["image-minimax-h3", "image-minimax-h3-q8"]),
             .init(ImageGenerateFamily.flux3, title: "FLUX 3 Klein", models: ["image-flux3-klein"]),
             .init(ImageGenerateFamily.flux1, title: "FLUX.1-dev", models: ["image-flux1-dev"]),
             .init(

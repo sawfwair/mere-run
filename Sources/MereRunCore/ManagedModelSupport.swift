@@ -209,6 +209,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 128
             ),
             descriptor(
+                MiniMaxH3ImageResources.q8ModelID,
+                "Image, MiniMax-H3-Image Q8",
+                "Runs locally exported affine Q8 weights for six-step generation and up to 16 reference images.",
+                minimum: 48,
+                recommended: 64
+            ),
+            descriptor(
                 Flux3Resources.modelID,
                 "Image, FLUX 3 Klein",
                 "Installs experimental native BF16 FLUX 3 Klein generation and reference editing; released-checkpoint quality and memory remain unqualified.",

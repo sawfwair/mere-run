@@ -63,6 +63,8 @@ weight hashes. Q8 can change image details and needs its own quality review.
 
 The qualified export occupies 52.04 GB, including its text encoder and original
 VAE. This reduction combines Q8, cached AdaLN outputs, and encoder trimming.
+The catalog ID `image-minimax-h3-q8` resolves an export in the model store.
+For exports elsewhere, pass the directory path to `--model`.
 A prepared source build restores affine Q8 matrix acceleration on the tested
 M5 Max. See the M5 acceleration report in `docs/benchmarks/` for native 4K
 latency, peak memory, and example images.

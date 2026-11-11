@@ -1,19 +1,26 @@
 import Foundation
 
 extension ManagedModelCatalog {
+    private static let miniMaxH3ImageUsageRestriction = usageRestriction(
+        summary: "MiniMax-H3-Image excludes the US, EU, UK and Republic of Korea; commercial revenue above USD 1 million or hosted services require separate authorization.",
+        license: "MiniMax-H3-Image Community License Agreement",
+        sourceRepoId: MiniMaxH3ImageResources.repository, sourceRevision: MiniMaxH3ImageResources.revision,
+        licenseURL: "https://huggingface.co/\(MiniMaxH3ImageResources.repository)/blob/\(MiniMaxH3ImageResources.revision)/LICENSE"
+    )
+
     static let imageSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
             id: MiniMaxH3ImageResources.modelID, category: .image, installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(repoId: MiniMaxH3ImageResources.repository,
                 revision: MiniMaxH3ImageResources.revision, patterns: MiniMaxH3ImageResources.patterns),
             upstreamRepoId: MiniMaxH3ImageResources.repository, upstreamRevision: MiniMaxH3ImageResources.revision,
-            usageRestriction: usageRestriction(
-                summary: "MiniMax-H3-Image excludes the US, EU, UK and Republic of Korea; commercial revenue above USD 1 million or hosted services require separate authorization.",
-                license: "MiniMax-H3-Image Community License Agreement",
-                sourceRepoId: MiniMaxH3ImageResources.repository, sourceRevision: MiniMaxH3ImageResources.revision,
-                licenseURL: "https://huggingface.co/\(MiniMaxH3ImageResources.repository)/blob/\(MiniMaxH3ImageResources.revision)/LICENSE"),
+            usageRestriction: miniMaxH3ImageUsageRestriction,
             validationKind: .miniMaxH3Image, runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 135_400_000_000, defaultCLICommands: ["image generate"]),
+        ManagedModelSpec(
+            id: MiniMaxH3ImageResources.q8ModelID, category: .image, installShape: .directoryRoot,
+            upstreamRevision: MiniMaxH3ImageResources.revision, usageRestriction: miniMaxH3ImageUsageRestriction,
+            validationKind: .miniMaxH3Image, runtimeAutoDownloadAllowed: false, defaultCLICommands: ["image generate"]),
         ManagedModelSpec(
             id: Cosmos3Resources.superTextToImageModelID,
             category: .image,

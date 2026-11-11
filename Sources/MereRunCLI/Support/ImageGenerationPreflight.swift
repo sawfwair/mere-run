@@ -467,13 +467,15 @@ struct ImageGenerationPreflightAnalyzer {
                 ), manifest)
             }
 
+            let canPull = spec?.hasAnyManagedDownloadSource() != false
             diagnostics.append(
                 PreflightDiagnostic(
                     id: "model_missing",
                     severity: .blocker,
                     title: "Model missing",
-                    message: "Model \(modelID.rawValue) is not installed. Pull it before generation.",
-                    suggestedActionIDs: ["pull-model"]
+                    message: canPull ? "Model \(modelID.rawValue) is not installed. Pull it before generation."
+                        : ManagedModelCatalog.missingHubSourceMessage(for: modelID.rawValue),
+                    suggestedActionIDs: canPull ? ["pull-model"] : []
                 )
             )
             return (modelResult(
@@ -851,7 +853,8 @@ struct ImageGenerationPreflightAnalyzer {
             )
         )
 
-        if model.kind == "managed_model", !model.installed {
+        if model.kind == "managed_model", !model.installed,
+           ManagedModelCatalog.spec(for: model.requested)?.hasAnyManagedDownloadSource() != false {
             actions.append(
                 DeclarativeAction(
                     id: "pull-model",

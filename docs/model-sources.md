@@ -71,6 +71,7 @@ Use `mere.run guide --model text-chat-gemma4-26b-a4b-bf16` for its text workflow
 | Catalog category | Model ID |
 | --- | --- |
 | `image` | `image-minimax-h3` |
+| `image` | `image-minimax-h3-q8` |
 | `image` | `image-cosmos3-super-t2i-4step` |
 | `image` | `image-flux3-klein` |
 | `image` | `image-klein-nano` |
@@ -298,7 +299,7 @@ validates all configured models before downloading any; both accept the same
 
 | Models | Upstream terms that require acceptance |
 | --- | --- |
-| `image-minimax-h3` | MiniMax-H3-Image Community License; excludes the US, EU, UK, and Republic of Korea; revenue above USD 1 million or hosted services require separate authorization |
+| `image-minimax-h3`, `image-minimax-h3-q8` | MiniMax-H3-Image Community License; excludes the US, EU, UK, and Republic of Korea; revenue above USD 1 million or hosted services require separate authorization |
 | `image-flux3-klein` | FLUX Kommunity License v1.0; use restrictions, a Qualifying User commercial-output exception, and filtering or output-review conditions |
 | `image-flux1-dev` | FLUX.1 dev Non-Commercial License v1.1.1; non-commercial, non-production use |
 | `image-flux2-dev` | FLUX Non-Commercial License and BFL Acceptable Use Policy; non-commercial, non-production use |

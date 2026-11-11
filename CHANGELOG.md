@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Recognize a local MiniMax H3 Image Q8 export in the model store as
+  `image-minimax-h3-q8`.
+
 - Restore M5 affine-Q8 matrix acceleration through an audited patch to the
   pinned MLX host dispatcher. Source preparation validates both revisions and
   exact file hashes; shader provenance still rejects other tracked edits.
