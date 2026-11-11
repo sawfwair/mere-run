@@ -5,8 +5,13 @@ public struct MiniMaxH3ImageResources: Sendable {
     public static let q8ModelID = "image-minimax-h3-q8"
     public static let repository = "MiniMaxAI/MiniMax-H3-Image"
     public static let revision = "492fd8c4eca666f1085f57e30738c1e0d86b3439"
+    public static let q8Repository = "Sawfwair/MiniMax-H3-Image-MLX-8bit"
+    public static let q8Revision = "13cadcb6347ffcb8f5487f6530566cb1a8e9942d"
     public static let patterns = ["LICENSE", "README.md", "model_index.json", "pdd_config.json",
         "pdd_fused_heads.safetensors", "transformer/*", "vae/*", "tokenizer/*", "processor/*", "text_encoder/*"]
+    // The installer writes its own manifest with the selected revision and license acknowledgment.
+    static let q8SnapshotPatterns = patterns + ["NOTICE", "MODIFICATIONS.md", "SOURCE_MANIFEST.json",
+        "q8-files.json", MiniMaxH3ImageMLXFormat.filename, MiniMaxH3ImageMLXFormat.cacheFilename]
     public let rootURL: URL
     public init(rootURL: URL) { self.rootURL = rootURL }
 

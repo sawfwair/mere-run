@@ -814,6 +814,16 @@ quantized targets was outside that release's scope. See the
 [LFM2.5-VL-DSpark release](https://www.liquid.ai/blog/lfm2-5-vl-dspark)
 for upstream measurements. They are not mere.run results.
 
+`image-minimax-h3-q8` installs the 52 GB affine Q8 checkpoint, including the
+text encoder, original FP32 VAE, and exact timestep tables. The catalog pins
+revision `13cadcb6347ffcb8f5487f6530566cb1a8e9942d`. Review the territory
+and use restrictions in the model card and included license before downloading.
+[Sawfwair Q8 checkpoint](https://huggingface.co/Sawfwair/MiniMax-H3-Image-MLX-8bit/tree/13cadcb6347ffcb8f5487f6530566cb1a8e9942d)
+
+```bash
+mere.run model pull image-minimax-h3-q8 --accept-model-license
+```
+
 `image-klein-9b` installs the ungated `mlx-community/FLUX.2-klein-9B` mirror for
 larger distilled Klein generation and reference-image workflows. It is distinct
 from `image-klein-base-9b`, which pulls the undistilled Base 9B transformer plus

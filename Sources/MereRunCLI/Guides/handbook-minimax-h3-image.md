@@ -42,7 +42,16 @@ aspect ratio, then resized to the requested dimensions with Lanczos.
 Canvas sides round to multiples of 32. Native requests accept 32–8192 pixel
 sides and up to 20 MP. Output must be PNG.
 
-## Native Q8 export
+## Native Q8 checkpoint
+
+Pull the pinned Sawfwair export after reviewing the MiniMax-H3-Image license:
+
+```bash
+mere.run model pull image-minimax-h3-q8 --accept-model-license
+mere.run image generate --model image-minimax-h3-q8 \
+  --prompt "A detailed studio photograph of a brass camera on a walnut desk." \
+  --width 4096 --height 4096 --seed 42 --output ./camera-q8.png
+```
 
 Create a separate Q8 checkpoint from an installed original BF16 model:
 
@@ -63,8 +72,8 @@ weight hashes. Q8 can change image details and needs its own quality review.
 
 The qualified export occupies 52.04 GB, including its text encoder and original
 VAE. This reduction combines Q8, cached AdaLN outputs, and encoder trimming.
-The catalog ID `image-minimax-h3-q8` resolves an export in the model store.
-For exports elsewhere, pass the directory path to `--model`.
+To use your own export, put it in the model store under `image-minimax-h3-q8`
+or pass the directory path to `--model`.
 A prepared source build restores affine Q8 matrix acceleration on the tested
 M5 Max. See the M5 acceleration report in `docs/benchmarks/` for native 4K
 latency, peak memory, and example images.

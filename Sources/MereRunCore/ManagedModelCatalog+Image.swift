@@ -19,8 +19,12 @@ extension ManagedModelCatalog {
             estimatedDownloadBytes: 135_400_000_000, defaultCLICommands: ["image generate"]),
         ManagedModelSpec(
             id: MiniMaxH3ImageResources.q8ModelID, category: .image, installShape: .directoryRoot,
-            upstreamRevision: MiniMaxH3ImageResources.revision, usageRestriction: miniMaxH3ImageUsageRestriction,
-            validationKind: .miniMaxH3Image, runtimeAutoDownloadAllowed: false, defaultCLICommands: ["image generate"]),
+            hubFallback: HubFallbackConfig(repoId: MiniMaxH3ImageResources.q8Repository,
+                revision: MiniMaxH3ImageResources.q8Revision, patterns: MiniMaxH3ImageResources.q8SnapshotPatterns),
+            upstreamRepoId: MiniMaxH3ImageResources.repository, upstreamRevision: MiniMaxH3ImageResources.revision,
+            usageRestriction: miniMaxH3ImageUsageRestriction,
+            validationKind: .miniMaxH3Image, runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 52_035_111_125, defaultCLICommands: ["image generate"]),
         ManagedModelSpec(
             id: Cosmos3Resources.superTextToImageModelID,
             category: .image,

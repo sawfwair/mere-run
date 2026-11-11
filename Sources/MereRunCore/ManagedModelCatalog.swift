@@ -35,10 +35,7 @@ public enum ManagedModelCatalog {
     }
 
     public static func missingHubSourceMessage(for modelId: String) -> String {
-        if modelId == MiniMaxH3ImageResources.q8ModelID {
-            return "Create a local Q8 export with `mere.run model optimize image-minimax-h3 --output <model-store>/image-minimax-h3-q8`."
-        }
-        return "Model \(modelId) does not have a Hugging Face Hub source in this public build. Install it from a local path or choose a model listed by `mere.run model capabilities --recommended`."
+        "Model \(modelId) does not have a Hugging Face Hub source in this public build. Install it from a local path or choose a model listed by `mere.run model capabilities --recommended`."
     }
 
     public static let allKnownSpecs: [ManagedModelSpec] = allSpecs + companionSpecs

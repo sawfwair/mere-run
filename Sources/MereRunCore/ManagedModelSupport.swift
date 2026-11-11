@@ -211,7 +211,7 @@ public enum ManagedModelCapabilityCatalog {
             descriptor(
                 MiniMaxH3ImageResources.q8ModelID,
                 "Image, MiniMax-H3-Image Q8",
-                "Runs locally exported affine Q8 weights for six-step generation and up to 16 reference images.",
+                "Installs affine Q8 weights for six-step generation and up to 16 reference images.",
                 minimum: 48,
                 recommended: 64
             ),
