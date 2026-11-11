@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.72.0 - 2026-11-11
+
 - Restore M5 affine-Q8 matrix acceleration through an audited patch to the
   pinned MLX host dispatcher. Source preparation validates both revisions and
   exact file hashes; shader provenance still rejects other tracked edits.
