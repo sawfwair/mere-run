@@ -202,6 +202,7 @@ mereRunCoreDependencies.append("MereRunDecode")
 mereRunCoreDependencies.append("MereRunQwenModel")
 mereRunCoreDependencies.append("MereRunKolibriModel")
 mereRunCoreDependencies.append("MereRunFlintModel")
+mereRunCoreDependencies.append("MereRunInkling2Model")
 mereRunCoreDependencies.append("MereRunUnlimitedOCRModel")
 mereRunCoreDependencies.append("MereRunNemotronBoltModel")
 mereRunCoreDependencies.append("MereRunGemmaModel")
@@ -489,6 +490,25 @@ targets.append(
     name: "FlintRuntimeTests",
     dependencies: ["MereRunFlintModel", "MereRunMLXTestSupport"] + mlxDependency("MLX") + mlxDependency("MLXNN"),
     path: "Tests/FlintRuntimeTests",
+    exclude: ["Fixtures"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "MereRunInkling2Model",
+    dependencies: mlxDependency("MLX"),
+    path: "Sources/MereRunInkling2Model",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+targets.append(
+  .testTarget(
+    name: "Inkling2RuntimeTests",
+    dependencies: ["MereRunInkling2Model", "MereRunMLXTestSupport"] + mlxDependency("MLX"),
+    path: "Tests/Inkling2RuntimeTests",
     exclude: ["Fixtures"],
     swiftSettings: commonSwiftSettings
   )
@@ -893,6 +913,7 @@ targets.append(
       "HiDreamO1/README.md",
       "Ideogram4/README.md",
       "Inkling/README.md",
+      "Inkling2/README.md",
       "InstantMesh/README.md",
       "Krea2/README.md",
       "Laguna/README.md",

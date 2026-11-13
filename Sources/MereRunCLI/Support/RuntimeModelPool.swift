@@ -1203,7 +1203,7 @@ actor RuntimeModelPool {
             prefixCache = lfm2PrefixKVCacheEnabled
             batching = lfm2ContinuousBatchingEnabled
         case .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatDeepseekV4Flash,
-             .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronOmni, .textChatFlint, .textChatKolibri:
+             .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronOmni, .textChatInkling2, .textChatFlint, .textChatKolibri:
             prefixCache = nil
             batching = nil
         }
@@ -1431,7 +1431,7 @@ actor RuntimeModelPool {
              .textChatDeepseekV4Flash,
              .textChatNemotronH:
             return ManagedModelCategory.textChat.rawValue
-        case .textChatMuseGlimmer:
+        case .textChatInkling2, .textChatMuseGlimmer:
             return ManagedModelCategory.visionChat.rawValue
         case .textChatNemotronOmni:
             return ManagedModelCategory.omniChat.rawValue

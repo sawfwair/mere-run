@@ -357,6 +357,16 @@ public extension ManagedModelAPIProfile {
         )
     }
 
+    static func inkling2() -> ManagedModelAPIProfile {
+        .chat(servingEngine: .textChatInkling2, inputModalities: [.text, .image],
+              contextWindow: Inkling2Resources.maximumContextLength, maximumOutputTokens: 131_072,
+              thinkingLevels: [.off, .minimal, .low, .medium, .high, .xhigh, .max],
+              reasoningEffortStrengths: [.off: 0, .minimal: 0.1, .low: 0.2, .medium: 0.7, .high: 0.9, .xhigh: 0.99, .max: 0.99],
+              toolCall: true, compatibility: .init(supportsReasoningEffort: true),
+              supportsStopSequences: true, supportsSeed: true, supportsPenalties: true, supportsLogprobs: true,
+              supportsProviderThinkingControls: true)
+    }
+
     static func flint() -> ManagedModelAPIProfile {
         .chat(servingEngine: .textChatFlint, contextWindow: FlintResources.maximumContextLength,
               maximumOutputTokens: 32_768, toolCall: true,
@@ -375,6 +385,8 @@ public extension ManagedModelAPIProfile {
             return .gemma4()
         case .textChatDiffusionGemma:
             return .diffusionGemma()
+        case .textChatInkling2:
+            return .inkling2()
         case .textChatFlint:
             return .flint()
         case .textChatKolibri:

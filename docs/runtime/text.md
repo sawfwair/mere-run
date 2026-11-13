@@ -35,6 +35,7 @@ validation results:
 
 | Guide | Model IDs | Use it for |
 | --- | --- | --- |
+| [Inkling 2 Small](./inkling2.md) | `vision-chat-inkling-2-small` | Native text and image chat with disk-streamed original experts |
 | [Recursive Flint](./flint.md) | `text-chat-flint-4bit`, `text-chat-flint-bf16` | MoE chat and tools from the published INT4 export or original BF16 weights |
 | [Nemotron 3.5 Bolt](./nemotron-bolt.md) | `vision-chat-nemotron-35-bolt-24gb` | Text and image chat from NVIDIA's original mixed packed checkpoint |
 | [Native Kolibri-1](./kolibri.md) | Converted local checkpoint directories | MoE chat from mixed 2-bit, 8-bit, or BF16 conversions, with paired-logprob tooling |

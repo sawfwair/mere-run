@@ -96,6 +96,7 @@ Use `mere.run guide --model text-chat-gemma4-26b-a4b-bf16` for its text workflow
 | `image` | `image-qwen-edit-2511` |
 | `image` | `image-qwen-edit-2511-lightning` |
 | `image` | `image-ideogram4-sdnq-uint4` |
+| `vision-chat` | `vision-chat-inkling-2-small` |
 | `text-chat` | `text-chat-flint-4bit` |
 | `text-chat` | `text-chat-flint-bf16` |
 | `text-chat` | `text-chat-mebot` |
@@ -2190,3 +2191,11 @@ separately addressable for repair and inspection, appear in `model list` and
 | `text-chat-lfm25-2.6b-dspark` | `LiquidAI/LFM2.5-2.6B-DSpark` | `text-chat-lfm25-2.6b-bf16` |
 | `vision-chat-lfm25-3b-dspark` | `LiquidAI/LFM2.5-VL-3B-DSpark` | `vision-chat-lfm25-3b-bf16` |
 | `text-encoder-ltx-gemma3-12b-4bit` | `mlx-community/gemma-3-12b-it-4bit` | LTX 2.3 MLX video models |
+
+## Inkling 2 Small
+
+`vision-chat-inkling-2-small` pins `thinkingmachines/Inkling-2-Small` at
+`aac974122acd33ddb0d3e1f54433a9c5dd2249ce` under Apache-2.0. The explicit
+managed pull includes the original mixed NVFP4/MXFP8 shards and tokenizer;
+it excludes the auxiliary MTP predictor. See [Native Inkling 2](./runtime/inkling2.md)
+for reference-path precision, disk requirements, and validation limits.

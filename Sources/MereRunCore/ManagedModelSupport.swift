@@ -400,6 +400,11 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 64
             ),
             descriptor(
+                Inkling2Resources.modelID, "Inkling 2 Small 594B-A17B",
+                "Native Swift/MLX reference inference with selected experts streamed from the original checkpoint; requires about 394 GB of disk space.",
+                minimum: 32, recommended: 64
+            ),
+            descriptor(
                 FlintResources.modelID, "Recursive Flint INT4",
                 "Runs the pinned group-64 INT4 export through native Swift/MLX with BF16 attention caches.",
                 minimum: 48, recommended: 64

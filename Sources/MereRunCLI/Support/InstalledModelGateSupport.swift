@@ -241,7 +241,7 @@ enum InstalledModelSmokePlans {
                 try await runner.installedTextCheck(model: spec.id)
             }
 
-        case .flint, .diffusionGemma, .laguna, .inkling, .nemotronH, .codegenGGUF:
+        case .inkling2, .flint, .diffusionGemma, .laguna, .inkling, .nemotronH, .codegenGGUF:
             return direct(spec, route: "text chat") { runner in
                 try await runner.installedTextCheck(model: spec.id)
             }

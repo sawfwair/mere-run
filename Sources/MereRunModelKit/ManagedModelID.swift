@@ -44,6 +44,7 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case lagunaS21 = "text-chat-laguna-s-2-1"
     case lagunaXS21 = "text-chat-laguna-xs-2-1"
     case lagunaS21DFlash = "text-chat-laguna-s-2-1-dflash"
+    case inkling2Small = "vision-chat-inkling-2-small"
     case inklingSmall = "text-chat-inkling-small"
     case museGlimmer30B = "vision-chat-muse-glimmer-30b"
     case museGlimmer30BDFlash2 = "vision-chat-muse-glimmer-30b-dflash2"

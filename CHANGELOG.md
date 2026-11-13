@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add a native Swift/MLX reference runtime for Inkling 2 Small text and image
+  chat, reasoning, and tools through `vision-chat-inkling-2-small` and the
+  `text-chat-inkling2` API engine. Read original NVFP4/MXFP8 expert weights
+  from disk with BF16 activations. Numerical fixtures and checkpoint headers
+  are validated; full-checkpoint quality, memory fit, and throughput remain
+  unqualified.
+
 ## 0.72.0 - 2026-11-11
 
 - Restore M5 affine-Q8 matrix acceleration through an audited patch to the

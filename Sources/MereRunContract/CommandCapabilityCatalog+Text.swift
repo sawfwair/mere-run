@@ -17,14 +17,14 @@ extension MereRunCapabilityCatalog {
             ).scoped(Chat.only(.nemotronOmni, ignoredBy: Chat.allCases.filter { ![.nemotronOmni, .diffusionGemma].contains($0) })),
             .init(
                 flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .expert
-            ).scoped(Chat.only(.flint, .kolibri, .diffusionGemma, .q35, .q35VL, .q38)),
+            ).scoped(Chat.only(.inkling2, .flint, .kolibri, .diffusionGemma, .q35, .q35VL, .q38)),
             .init(
                 flag: "--show-unmasking", label: "Show canvas drafts", kind: .boolean, group: Group.run, tier: .expert
             ).scoped(Chat.only(.diffusionGemma)),
             .init(flag: "--prompt", aliases: ["-p"], label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
             .init(flag: "--image", label: "Image", kind: .file, group: Group.inputs, tier: .standard, blankReadsAsOmitted: true)
                 .scoped(Chat.only(
-                    .gemma4Unified, .museGlimmer, .nemotronBolt, .nemotronOmni, .lfm2VL, .q35VL, .q38,
+                    .inkling2, .gemma4Unified, .museGlimmer, .nemotronBolt, .nemotronOmni, .lfm2VL, .q35VL, .q38,
                     ignoredBy: [.laguna, .nemotronH, .gguf, .psi]
                 )),
             .init(flag: "--system", aliases: ["-s"], label: "System prompt", kind: .string, group: Group.prompt, tier: .standard),
@@ -105,7 +105,7 @@ extension MereRunCapabilityCatalog {
                 choices: TextResponseFormat.allCases.map(\.rawValue),
                 defaultValue: TextResponseFormat.text.rawValue, group: Group.output, tier: .standard
             ).scoped(
-                Chat.rule(.flint, values: ["text"]), .rule(.kolibri, values: ["text"]), Chat.rule(.diffusionGemma, values: ["text"]), .rule(.laguna, values: ["text"]),
+                Chat.rule(.inkling2, values: ["text"]), Chat.rule(.flint, values: ["text"]), .rule(.kolibri, values: ["text"]), Chat.rule(.diffusionGemma, values: ["text"]), .rule(.laguna, values: ["text"]),
                 .rule(.inkling, values: ["text"]), .rule(.museGlimmer, values: ["text"]),
                 .rule(.nemotronBolt, values: ["text"]), .rule(.nemotronH, values: ["text"]), .rule(.nemotronOmni, values: ["text"]),
                 .rule(.lfm2, values: ["text"]), .rule(.lfm2A2B, values: ["text"]), .rule(.lfm2A1B, values: ["text"]), .rule(.lfm2VL, values: ["text"]),
@@ -137,7 +137,8 @@ extension MereRunCapabilityCatalog {
                 flag: "--reasoning-effort", label: "Reasoning effort", kind: .number,
                 group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.01)
             ).scoped(
-                Chat.only(.inkling, .museGlimmer, .q38),
+                Chat.only(.inkling2, .inkling, .museGlimmer, .q38),
+                .rule(.inkling2, range: .init(min: 0, max: 0.99, step: 0.01)),
                 .rule(.inkling, range: .init(min: 0, max: 0.99, step: 0.01)),
                 .rule(.museGlimmer, range: .init(min: 0, max: 1, step: 0.01)),
                 .rule(.q38, range: .init(min: 0, max: 1, step: 0.01))
@@ -189,7 +190,7 @@ extension MereRunCapabilityCatalog {
 
     /// Families whose runtime keeps its own KV cache whatever the KV options say.
     private static let kvCacheIgnoring: [Chat] = [
-        .flint, .kolibri, .diffusionGemma, .laguna, .museGlimmer, .nemotronH, .nemotronBolt, .nemotronOmni, .gguf, .psi
+        .inkling2, .flint, .kolibri, .diffusionGemma, .laguna, .museGlimmer, .nemotronH, .nemotronBolt, .nemotronOmni, .gguf, .psi
     ]
 
     public static let textCode = MereRunCommandCapability(

@@ -10,6 +10,7 @@ private struct ChatLogprobRegionTracker {
     private let defaultRegion: ChatLogprobRegion
     private var reasoning = false
     private var toolCall = false
+    private var inklingHeader = false
 
     init(defaultRegion: ChatLogprobRegion) {
         self.defaultRegion = defaultRegion
@@ -17,6 +18,19 @@ private struct ChatLogprobRegionTracker {
 
     mutating func classify(_ piece: String) -> ChatLogprobRegion {
         let normalized = piece.lowercased()
+        if normalized == "<|message_model|>" || normalized == "<|end_message|>" || normalized == "<|content_model_end_sampling|>" {
+            reasoning = false
+            toolCall = false
+            inklingHeader = normalized == "<|message_model|>"
+            return .markup
+        }
+        if ["<|content_thinking|>", "<|content_text|>", "<|content_invoke_tool_json|>"].contains(normalized) {
+            inklingHeader = false
+            reasoning = normalized == "<|content_thinking|>"
+            toolCall = normalized == "<|content_invoke_tool_json|>"
+            return .markup
+        }
+        if inklingHeader { return .toolName }
         if normalized.contains("<think>") {
             reasoning = true
             return .markup

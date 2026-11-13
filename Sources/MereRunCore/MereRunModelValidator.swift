@@ -205,6 +205,7 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .olmoEarth
             || spec?.validationKind == .nemotronOmni
             || spec?.validationKind == .nemotronBolt
+            || spec?.validationKind == .inkling2
             || spec?.validationKind == .inkling {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
             transformerDir = nil
@@ -602,7 +603,7 @@ public enum MereRunModelValidator {
                 return true
             }
             switch manifest.engine {
-            case .qwen3Coder?, .northMiniCode?, .inkling?, .deepseekV4Flash?, .aceStep?, .miniMaxMusic3?, .yue2?, .sheetSage2?, .magentaRT2?, .muScriptor?, .roFormer?, .auk?, .apBWE?, .univerSR?, .woosh?, .mmaudio?, .ltxVideo?,
+            case .qwen3Coder?, .northMiniCode?, .inkling2?, .inkling?, .deepseekV4Flash?, .aceStep?, .miniMaxMusic3?, .yue2?, .sheetSage2?, .magentaRT2?, .muScriptor?, .roFormer?, .auk?, .apBWE?, .univerSR?, .woosh?, .mmaudio?, .ltxVideo?,
                  .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .marigoldV2?, .tripoSR?, .instantMesh?, .trellis2?,
                  .insightFace?, .sortformer?, .whistleASR?, .nemotronTranscribeASR?, .terramindFlood?, .terramindFire?, .tessera?, .olmoEarth?:
                 return true

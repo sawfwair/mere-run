@@ -27,7 +27,7 @@ struct APIEngineCapabilities: Equatable, Sendable {
         APIEngineCapabilities(
             supportsRawProxy: profile.supportsRawProxy,
             supportsTools: profile.toolCall,
-            usesNativeToolHistory: [.textChatQ36, .textChatLaguna, .textChatGemma4, .textChatFlint, .textChatKolibri,
+            usesNativeToolHistory: [.textChatQ36, .textChatLaguna, .textChatGemma4, .textChatInkling2, .textChatFlint, .textChatKolibri,
                                     .textChatLFM2, .textChatMuseGlimmer]
                 .contains(profile.servingEngine),
             supportsToolChoice: profile.supportsToolChoice,
@@ -43,10 +43,10 @@ struct APIEngineCapabilities: Equatable, Sendable {
             supportsStopSequences: profile.supportsStopSequences,
             supportsSeed: profile.supportsSeed,
             supportsPenalties: profile.supportsPenalties,
-            supportsTopK: [.textChatQ35, .textChatQ36, .textChatLaguna, .textChatLFM2, .textChatFlint, .textChatKolibri,
+            supportsTopK: [.textChatQ35, .textChatQ36, .textChatLaguna, .textChatLFM2, .textChatInkling2, .textChatFlint, .textChatKolibri,
                           .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronOmni,
                           .textChatDiffusionGemma].contains(profile.servingEngine),
-            supportsRepetitionPenalty: [.textChatQ35, .textChatQ36, .textChatFlint, .textChatKolibri].contains(profile.servingEngine),
+            supportsRepetitionPenalty: [.textChatQ35, .textChatQ36, .textChatInkling2, .textChatFlint, .textChatKolibri].contains(profile.servingEngine),
             supportsLogprobs: profile.supportsLogprobs,
             supportsProviderThinkingControls: profile.supportsProviderThinkingControls
         )
