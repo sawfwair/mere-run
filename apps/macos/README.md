@@ -76,6 +76,15 @@ The 59 tasks use six surface archetypes: 10 Generate, 2 Converse, 28 Analyze,
   three Train projects, Video ▸ Animate, Music ▸ Realtime, Audio ▸ Live,
   Vision ▸ Live, Voice ▸ Voices, Models, Server, Runs, and Plugins.
 
+Operation, Engine, and Backend selectors have visible labels above the composer's
+setting chips and at the top of the inspector. Choose the operation first, then
+its Model. Model menus name their scope, separate Auto from an explicit selection,
+and offer a folder chooser for operations that use local checkpoints. Commands
+without a model argument show no model menu. The readiness card's **Change operation
+or model** menu offers both selectors together, so a missing model never hides
+other operations. Changing an operation keeps compatible model choices; an
+incompatible managed model returns to the new operation's default.
+
 Every task has an editable **Command** panel. A separate **Command Console**
 window provides the complete command catalog. Both are
 rendered from the capability contract, so a capability nobody has designed a
@@ -1274,7 +1283,11 @@ reference recording to keep its voice.
 
 **3D** ▸ From image is a Generate task on the shared task workspace for
 TripoSR, native TRELLIS.2 PBR reconstruction, ordered 4- and 6-view
-InstantMesh, and IDOL Gaussian splats. The Engine chip picks the template; the
+InstantMesh, and IDOL Gaussian splats. The labeled Engine chip picks the template;
+the Model chip chooses checkpoints for that engine. When a model is missing,
+**Change operation or model** offers all four engines, including IDOL, along with
+models for the selected engine. Choosing IDOL
+opens the inspector for its three local checkpoint folders. The
 well takes one picture (or InstantMesh's ordered views), the inspector shows
 each engine's own controls from the contract, and every run lands in a fresh
 directory under the 3D folder. Results are feed cards with the mesh in an

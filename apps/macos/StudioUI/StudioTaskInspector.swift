@@ -31,9 +31,18 @@ struct StudioTaskInspector: View {
     private var baseline: StudioTaskDraft {
         sessions?.freshTaskDraft(for: task, templateID: draft.templateID) ?? StudioTaskDraft(templateID: draft.templateID)
     }
-    private var sections: [StudioTaskSection] { StudioTaskSchema.sections(for: task, draft: draft, source: scopeSource) }
+    private var operations: [StudioOperationSelection] {
+        StudioOperationSelection.task(task, draft: $draft, source: scopeSource)
+    }
+    private var sections: [StudioTaskSection] {
+        StudioTaskSchema.sections(for: task, draft: draft, source: scopeSource).compactMap { section in
+            let fields = section.fields.filter { field in !operations.contains { $0.id == field.flag } }
+            return fields.isEmpty ? nil : StudioTaskSection(group: section.group, fields: fields)
+        }
+    }
     private var advancedFields: [StudioContractField<StudioTaskDraft>] {
         StudioTaskSchema.advanced(for: task, draft: draft, source: scopeSource)
+            .filter { field in !operations.contains { $0.id == field.flag } }
     }
     private var changedCount: Int {
         StudioTaskSchema.fields(for: task, draft: draft, source: scopeSource)
@@ -46,6 +55,8 @@ struct StudioTaskInspector: View {
             header
             ScrollView {
                 VStack(spacing: 0) {
+                    StudioOperationSection(selections: operations,
+                        defaults: StudioOperationSelection.task(task, draft: .constant(baseline), source: scopeSource))
                     if let notice = StudioTaskSchema.notice(for: draft, source: scopeSource) {
                         StudioScopeNote(notice: notice)
                             .padding(.horizontal, 16)
@@ -263,7 +274,7 @@ struct StudioTaskInspector: View {
                     shape: shape,
                     items: templates.map(\.id),
                     selection: selection,
-                    accessibilityLabel: "Variant",
+                    accessibilityLabel: task == .threeDFromImage ? "Engine" : "Operation",
                     menuWidth: 170
                 ) { StudioTaskSchema.variantTitle($0.rawValue) }
             }
@@ -272,14 +283,16 @@ struct StudioTaskInspector: View {
 
     private var modelPicker: some View {
         let scope = StudioTaskSchema.modelScope(for: draft, source: scopeSource)
-        return StudioModelPicker(scope: scope, model: $draft.model, modelInventory: modelInventory, onShowModels: onShowModels) {
+        let flag = StudioTaskSchema.modelPickerFlag(for: draft, source: scopeSource) ?? "--model"
+        let selection = Binding(get: { draft.text(flag) }, set: { draft.form[flag] = .text($0) })
+        return StudioModelPicker(scope: scope, model: selection, modelInventory: modelInventory, onShowModels: onShowModels) {
             HStack(spacing: 8) {
                 if let glyph = modelStatusGlyph {
                     Image(systemName: glyph)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(MereRunTheme.accent)
                 }
-                Text(scope.displayLabel(model: draft.model, titles: titles))
+                Text("Model · \(scope.displayLabel(model: draft.text(flag), titles: titles))")
                     .font(.callout)
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .lineLimit(1)

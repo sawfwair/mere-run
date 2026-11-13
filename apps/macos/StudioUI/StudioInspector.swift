@@ -37,12 +37,20 @@ struct StudioInspector: View {
 
     static let width = StudioLayoutPolicy.inspectorWidth
 
+    private var operations: [StudioOperationSelection] {
+        StudioOperationSelection.prompt(mode, draft: $draft, source: scopeSource, capabilities: controller.modelCapabilitiesByID)
+    }
+
     private var sections: [StudioContractSection] {
-        StudioInspectorSchema.sections(for: mode, draft: draft, source: scopeSource)
+        StudioInspectorSchema.sections(for: mode, draft: draft, source: scopeSource).compactMap { section in
+            let fields = section.fields.filter { field in !operations.contains { $0.id == field.flag } }
+            return fields.isEmpty ? nil : StudioContractSection(group: section.group, fields: fields)
+        }
     }
 
     private var advancedFields: [StudioContractField<StudioDraft>] {
         StudioInspectorSchema.advancedFields(for: mode, draft: draft, source: scopeSource)
+            .filter { field in !operations.contains { $0.id == field.flag } }
     }
 
     private var changedCount: Int {
@@ -54,6 +62,8 @@ struct StudioInspector: View {
             header
             ScrollView {
                 VStack(spacing: 0) {
+                    StudioOperationSection(selections: operations,
+                        defaults: StudioOperationSelection.prompt(mode, draft: .constant(baseline), source: scopeSource))
                     if let notice = StudioInspectorSchema.notice(for: mode, draft: draft, source: scopeSource) {
                         StudioScopeNote(notice: notice)
                             .padding(.horizontal, 16)
@@ -241,11 +251,7 @@ struct StudioInspector: View {
             }
         case .orderedReferences: orderedReferences
         case .readImageAction:
-            MereSegmentedControl(
-                StudioReadImageAction.allCases,
-                selection: $draft.readImageAction,
-                accessibilityLabel: "Read task"
-            ) { $0.title }
+            EmptyView() // The shared Operation section owns this control.
         case .attachment, .regionPrompts:
             EmptyView()
         case .variant, .cameras, .orderedViews, .musicManifest, .faceIndex, .instruments, .renoise, .targetRanks,
@@ -259,7 +265,7 @@ struct StudioInspector: View {
 
     private var modelPicker: some View {
         StudioModelPicker(
-            scope: StudioModelScope(mode: mode, readImageAction: draft.readImageAction, source: scopeSource),
+            scope: StudioModelScope(mode: mode, draft: draft, source: scopeSource),
             model: $draft.model, modelInventory: modelInventory, onShowModels: onShowModels
         ) {
             HStack(spacing: 8) {
@@ -268,7 +274,7 @@ struct StudioInspector: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(MereRunTheme.accent)
                 }
-                Text(StudioModelNaming.displayLabel(for: mode, model: draft.model, titles: titles))
+                Text("Model · \(StudioModelNaming.displayLabel(for: mode, model: draft.model, titles: titles))")
                     .font(.callout)
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .lineLimit(1)

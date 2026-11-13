@@ -57,6 +57,11 @@ package struct StudioTaskSection: Identifiable {
     package let group: StudioContractGroup
     package let fields: [StudioContractField<StudioTaskDraft>]
 
+    package init(group: StudioContractGroup, fields: [StudioContractField<StudioTaskDraft>]) {
+        self.group = group
+        self.fields = fields
+    }
+
     package var id: StudioContractGroup { group }
     package var title: String { group.title }
 
@@ -263,6 +268,7 @@ package enum StudioTaskSchema {
         })
         let hidden = hiddenFlags(for: capability).union(slotFlags)
         let options = scope.options
+        let pickerFlag = modelPickerFlag(for: draft, source: source)
         var prompt: String?
         if case .flag(let flag) = promptField(for: capability) { prompt = flag }
         var claimed: Set<StudioContractOverrideID> = []
@@ -270,17 +276,22 @@ package enum StudioTaskSchema {
             // A model location the contract filed under Inputs (a `.directory` option) belongs
             // with the model it points at; a destination the user chooses belongs under Output.
             let option: MereRunCapabilityOption
-            if modelLocationFlags.contains(declared.flag) {
+            if declared.flag == pickerFlag {
+                option = declared.filed(under: .model, tier: .standard)
+            } else if modelLocationFlags.contains(declared.flag) {
                 option = declared.filed(under: .model)
             } else if chosenOutputFlags.contains(declared.flag) {
                 option = declared.filed(under: .output)
             } else {
                 option = declared
             }
-            if let override = overrideID(forFlag: option.flag, templateID: draft.templateID) {
+            let override: StudioContractOverrideID? = option.flag == pickerFlag ? .model
+                : (option.flag == "--model" ? nil : overrideID(forFlag: option.flag, templateID: draft.templateID))
+            if let override {
                 // A composite editor renders once, where the first of its flags is declared.
                 guard claimed.insert(override).inserted else { continue }
-                let owned = options.filter { overrideID(forFlag: $0.flag, templateID: draft.templateID) == override }
+                let owned = override == .model ? [option]
+                    : options.filter { overrideID(forFlag: $0.flag, templateID: draft.templateID) == override }
                 fields.append(StudioContractField(
                     option: option, bindings: owned.map { .flag($0.flag) }, overrideID: override, family: scope.family?.id
                 ))
@@ -391,8 +402,13 @@ package enum StudioTaskSchema {
         var scope = StudioModelScope(templateID: draft.templateID, source: source)
         if let capability = source.capability(for: draft.templateID), let routing = capability.routing {
             var unset = draft.form
-            for flag in routing.modelFlags { unset.values[flag] = nil }
-            if let model = source.scope(capability: capability, form: unset).managedModel { scope.defaultModelID = model }
+            for flag in routing.modelFlags + routing.families.compactMap(\.modelFlag) { unset.values[flag] = nil }
+            let resolvedDefault = source.scope(capability: capability, form: unset).managedModel
+            if routing.routesBySelectors { scope.defaultModelID = resolvedDefault ?? "" }
+            else if let model = resolvedDefault { scope.defaultModelID = model }
+            if routing.routesBySelectors, let family = source.scope(for: draft)?.family {
+                scope.runnableModels = Set(family.models)
+            }
         }
         return scope
     }
@@ -402,8 +418,11 @@ package enum StudioTaskSchema {
     /// `--model`, else the base its training recipe trains (`StudioTrainingRun.recipeBaseModel`),
     /// else the template's default; empty when the template runs no managed model.
     package static func modelID(for draft: StudioTaskDraft, source: StudioScopeSource) -> String {
-        let model = draft.text("--model")
+        let model = draft.text(modelPickerFlag(for: draft, source: source) ?? "--model")
         if let scope = source.scope(for: draft), scope.capability.routing != nil {
+            if scope.capability.routing?.routesBySelectors == true, modelPickerFlag(for: draft, source: source) == nil {
+                return scope.managedModel ?? ""
+            }
             return scope.managedModel ?? model
         }
         if model.isBlank, let base = StudioTrainingRun.recipeBaseModel(for: draft, source: source) { return base }
@@ -418,7 +437,8 @@ package enum StudioTaskSchema {
     /// selectors match no family, blocks the run with the CLI gate's reason.
     package static func requirement(for draft: StudioTaskDraft, source: StudioScopeSource) -> StudioCapabilityRequirement? {
         if let reason = source.scope(for: draft)?.blockingReason { return .unavailable(reason) }
-        if isLocalPath(draft.text("--model").trimmingCharacters(in: .whitespacesAndNewlines)) { return nil }
+        let flag = modelPickerFlag(for: draft, source: source) ?? "--model"
+        if isLocalPath(draft.text(flag).trimmingCharacters(in: .whitespacesAndNewlines)) { return nil }
         if ["--model-path", "--checkpoints-root"].contains(where: { !draft.text($0).isBlank }) { return nil }
         let model = modelID(for: draft, source: source)
         return model.isBlank ? nil : .managedModel(model)
@@ -439,10 +459,10 @@ package enum StudioTaskSchema {
 
 extension MereRunCapabilityOption {
     /// The same option under another of the contract's groups.
-    fileprivate func filed(under group: StudioContractGroup) -> MereRunCapabilityOption {
+    fileprivate func filed(under group: StudioContractGroup, tier: MereRunCapabilityOptionTier? = nil) -> MereRunCapabilityOption {
         MereRunCapabilityOption(
             flag: flag, label: label, kind: kind, required: required, repeatable: repeatable, choices: choices,
-            defaultValue: defaultValue, group: group.rawValue, tier: tier, range: range, dependsOn: dependsOn
+            defaultValue: defaultValue, group: group.rawValue, tier: tier ?? self.tier, range: range, dependsOn: dependsOn
         )
     }
 }

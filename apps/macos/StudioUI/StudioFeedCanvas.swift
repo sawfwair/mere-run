@@ -43,6 +43,9 @@ struct StudioReadinessActions {
     let pullModel: () -> Void
     let openModels: () -> Void
     let recheck: () -> Void
+    /// The same operation selectors as the composer, including backend choices.
+    var operations: [StudioOperationSelection] = []
+    var showsModelPicker = true
 }
 
 /// The feed of generations for a prompt mode: oldest at the top, the newest just above the
@@ -1119,6 +1122,12 @@ struct StudioReadinessCard: View {
                 .font(.callout)
                 .foregroundStyle(MereRunTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+            if !actions.operations.isEmpty {
+                Text("Model choices follow the selected operation. Change the operation to see other models.")
+                    .font(.callout)
+                    .foregroundStyle(MereRunTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if let detail = readiness.detail {
                 // The CLI's own last line, kept small: it is what makes a wrong model
                 // location or a missing binary diagnosable.
@@ -1164,20 +1173,42 @@ struct StudioReadinessCard: View {
         }
     }
 
-    /// The composer's own picker under a plain title, so picking here is the same as picking on
-    /// the model chip and readiness re-checks the new choice.
-    private var chooseModelMenu: some View {
-        StudioModelPicker(
-            scope: actions.scope,
-            model: actions.model,
-            modelInventory: actions.modelInventory,
-            onShowModels: actions.openModels
-        ) {
+    /// Operation choices and compatible models stay reachable together when a run is blocked.
+    @ViewBuilder private var chooseModelMenu: some View {
+        if !actions.operations.isEmpty {
+            Menu {
+                ForEach(actions.operations) { selection in
+                    Section(selection.label) { StudioOperationMenuItems(selection: selection) }
+                }
+                if actions.showsModelPicker {
+                    Divider()
+                    modelPicker.items
+                }
+            } label: {
+                MereSecondaryMenuLabel("Change operation or model", systemImage: "chevron.up.chevron.down")
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Choose an operation, then one of its compatible models")
+            .accessibilityLabel("Change operation or model")
+        } else if actions.showsModelPicker {
+            modelPicker
+            .fixedSize()
+            .help("Choose a different model for this task")
+            .accessibilityLabel("Choose another model")
+        } else {
+            Button("Browse Models…", action: actions.openModels)
+                .buttonStyle(.mereSecondary)
+        }
+    }
+
+    private var modelPicker: StudioModelPicker<MereSecondaryMenuLabel> {
+        StudioModelPicker(scope: actions.scope, model: actions.model, modelInventory: actions.modelInventory,
+                          onShowModels: actions.openModels) {
             MereSecondaryMenuLabel("Choose another model", systemImage: "chevron.up.chevron.down")
         }
-        .fixedSize()
-        .help("Choose a different model for this task")
-        .accessibilityLabel("Choose another model")
     }
 
     private var statusImage: String {

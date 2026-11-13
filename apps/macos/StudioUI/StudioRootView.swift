@@ -226,12 +226,14 @@ private struct StudioWorkspaceView: View {
     /// terms send the user to Models first, and the shell's pull, navigate, and recheck.
     private var readinessActions: StudioReadinessActions {
         StudioReadinessActions(
-            scope: StudioModelScope(mode: mode, readImageAction: draft.readImageAction, source: scopeSource),
+            scope: StudioModelScope(mode: mode, draft: draft, source: scopeSource),
             model: $prompt.draft.model,
             modelInventory: modelInventory,
             pullModel: pullModel,
             openModels: { navigation.open(task: .modelsInstalled) },
-            recheck: refreshReadiness
+            recheck: refreshReadiness,
+            operations: StudioOperationSelection.prompt(mode, draft: $prompt.draft, source: scopeSource,
+                                                       capabilities: controller.modelCapabilitiesByID)
         )
     }
 
@@ -1275,6 +1277,10 @@ private struct StudioWorkspaceView: View {
 
     private var validationObservedShell: some View {
         navigationObservedShell
+        .onChange(of: StudioCommandAdapter.capabilityRequirement(for: mode, draft: draft, source: scopeSource)) { _, _ in
+            studioError = nil
+            refreshReadiness()
+        }
         .onChange(of: draft.model) { _, _ in
             studioError = nil
             refreshReadiness()

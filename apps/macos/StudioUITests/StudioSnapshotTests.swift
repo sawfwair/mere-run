@@ -2374,6 +2374,122 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    /// Operation and model controls on shared workspaces and prompt tasks, in compact layouts.
+    func testStudioOperationSelectionSnapshots() throws {
+        let tasks: [StudioTask] = [.visionDepth, .visionGeometry, .visionFaces, .videoEdit, .musicTranscribe, .visionDocument]
+        let templates = tasks.compactMap { $0.variantTemplates.first }
+        let models = templates.map {
+            (id: $0.defaultModel, title: $0.title, category: StudioModelScope.categories(for: $0.id).sorted().first ?? "image")
+        }.filter { !$0.id.isEmpty }
+        let list = "ID  Category  Status  Referenced\n" + models.map { model in
+            "\(model.id)  \(model.category)  missing  —"
+        }.joined(separator: "\n")
+        struct Metadata: Encodable {
+            let id: String
+            let title: String
+            let summary = ""
+            let minimumUnifiedMemoryGB = 8
+            let recommendedUnifiedMemoryGB = 16
+            let supported = true
+            let reasons: [String] = []
+        }
+        struct Capabilities: Encodable { let models: [Metadata] }
+        let capabilities = String(decoding: try JSONEncoder().encode(Capabilities(models: models.map {
+            Metadata(id: $0.id, title: $0.title)
+        })), as: UTF8.self)
+        let workspace = try SnapshotFixture(outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: [
+                .init(matches: { $0 == ["model", "list"] }, stdout: list, exitCode: 0),
+                .init(matches: { $0 == ["model", "list", "--json"] },
+                      stdout: ModelsInventoryScript.inventoryJSON(from: list), exitCode: 0),
+                .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilities, exitCode: 0),
+            ]))
+        defer { workspace.tearDown() }
+        for task in tasks {
+            var draft = try XCTUnwrap(StudioTaskDraft(task: task))
+            for slot in draft.slots(source: .contract) { slot.attach([workspace.mugURL], to: &draft) }
+            workspace.controller.taskSessions.setTaskDraft(draft, for: task)
+            let view = StudioTaskWorkspace(task: task, models: workspace.controller.modelStore)
+                .environmentObject(workspace.controller)
+                .environmentObject(workspace.library)
+                .environmentObject(NavigationModel(destination: task.destination))
+                .environment(\.studioTaskSessions, workspace.controller.taskSessions)
+                .environment(\.studioTaskScope, task.rawValue)
+                .frame(width: 600, height: 680)
+            for appearance in StudioSnapshotAppearance.allCases {
+                try workspace.write(view, size: CGSize(width: 600, height: 680), appearance: appearance,
+                                    name: "selection-\(task.rawValue)-\(appearance.rawValue)", settle: 1)
+            }
+        }
+        for mode in [StudioMode.createImage, .readImage, .speak, .listen, .chat] {
+            let navigation = NavigationModel(destination: mode.task.destination)
+            let view = StudioRootView()
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environmentObject(navigation)
+                .frame(width: 1_280, height: 820)
+            try fixture.write(view, size: CGSize(width: 1_280, height: 820), appearance: .dark,
+                              name: "selection-prompt-\(mode.rawValue)", settle: 1,
+                              afterAppear: { navigation.open(task: mode.task) })
+        }
+    }
+
+    /// The missing-model recovery offers every engine, and choosing IDOL exposes its folders.
+    func testThreeDEngineRecoverySnapshots() throws {
+        let list = """
+        ID  Category  Status  Referenced
+        image-3d-trellis2-4b  image-3d  missing  —
+        """
+        let workspace = try SnapshotFixture(outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: [
+                .init(matches: { $0 == ["model", "list"] }, stdout: list, exitCode: 0),
+                .init(matches: { $0 == ["model", "list", "--json"] },
+                      stdout: ModelsInventoryScript.inventoryJSON(from: list), exitCode: 0),
+                .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] },
+                      stdout: """
+                      {"models":[{"id":"image-3d-trellis2-4b","title":"TRELLIS.2", "summary":"", "supported":true,
+                      "minimumUnifiedMemoryGB":8,"recommendedUnifiedMemoryGB":16,"reasons":[]}]}
+                      """, exitCode: 0),
+            ]))
+        defer { workspace.tearDown() }
+        let task = StudioTask.threeDFromImage
+        let sessions = workspace.controller.taskSessions
+        var draft = StudioTaskDraft(templateID: .imageReconstruct3DTrellis2)
+        draft.setArgument(0, workspace.mugURL.path)
+        sessions.setTaskDraft(draft, for: task)
+        let navigation = NavigationModel(destination: task.destination)
+        let view = StudioTaskWorkspace(task: task, models: workspace.controller.modelStore)
+            .environmentObject(workspace.controller)
+            .environmentObject(workspace.library)
+            .environmentObject(navigation)
+            .environment(\.studioTaskSessions, sessions)
+            .environment(\.studioTaskScope, task.rawValue)
+        for appearance in StudioSnapshotAppearance.allCases {
+            try workspace.write(view.frame(width: 760, height: 620), size: CGSize(width: 760, height: 620),
+                                appearance: appearance, name: "three-d-engine-recovery-\(appearance.rawValue)", settle: 2)
+        }
+        XCTAssertEqual(workspace.controller.readiness(for: task), .missingModel("image-3d-trellis2-4b"))
+        if navigation.showsInspector(for: task) { navigation.toggleInspector(for: task) }
+        try workspace.write(view.frame(width: 600, height: 620), size: CGSize(width: 600, height: 620),
+                            appearance: .dark, name: "three-d-engine-recovery-idol", settle: 2, afterAppear: {
+            var next = sessions.taskDraft(for: task) ?? draft
+            next.switchTemplate(to: .visionImageTo3DIdol)
+            sessions.setTaskDraft(next, for: task)
+        })
+        XCTAssertTrue(navigation.showsInspector(for: task), "IDOL opens the checkpoint settings")
+        let idol = try XCTUnwrap(sessions.taskDraft(for: task))
+        XCTAssertEqual(idol.templateID, .visionImageTo3DIdol)
+        XCTAssertEqual(idol.argument(0), workspace.mugURL.path)
+        let inspector = StudioTaskInspector(task: task, draft: .constant(idol), modelInventory: [],
+            readiness: .ready, onShowModels: {}, onClose: {})
+            .environmentObject(workspace.controller)
+            .environmentObject(workspace.library)
+            .environment(\.studioTaskSessions, sessions)
+            .environment(\.studioTaskScope, task.rawValue)
+        try workspace.write(inspector.frame(width: 320, height: 820), size: CGSize(width: 320, height: 820),
+                            appearance: .dark, name: "three-d-engine-idol-folders", settle: 1)
+    }
+
     /// 3D ▸ From image with a finished IDOL run: the card draws `object.ply` in the Metal splat
     /// viewer from the run's input camera, with the prepared input beside it and the Gaussian
     /// count under both, light and dark. The harness captures with `cacheDisplay`, which the

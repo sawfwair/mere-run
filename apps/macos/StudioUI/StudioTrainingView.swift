@@ -542,7 +542,7 @@ struct StudioTrainingView: View {
                         .foregroundStyle(MereRunTheme.accent)
                 }
                 // Blank means the recipe's base or the template's default: name what will train.
-                Text(scope.displayLabel(model: StudioTaskSchema.modelID(for: draft, source: scopeSource), titles: titles))
+                Text("Base model · \(scope.displayLabel(model: StudioTaskSchema.modelID(for: draft, source: scopeSource), titles: titles))")
                     .font(.callout)
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .lineLimit(1)

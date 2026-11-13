@@ -50,6 +50,9 @@ struct StudioTaskComposer: View {
     private var essentials: [StudioContractField<StudioTaskDraft>] {
         StudioTaskSchema.essentials(for: task, draft: draft, source: scopeSource)
     }
+    private var operations: [StudioOperationSelection] {
+        StudioOperationSelection.task(task, draft: $draft, source: scopeSource)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Metrics.rowSpacing) {
@@ -58,6 +61,9 @@ struct StudioTaskComposer: View {
             }
             if showsPrompt, promptField != nil {
                 promptEntry
+            }
+            ForEach(operations) { selection in
+                StudioOperationPicker(selection: selection)
             }
             chipStrip
             if showsScopeNote, let notice = StudioTaskSchema.notice(for: draft, source: scopeSource) {
@@ -135,11 +141,11 @@ struct StudioTaskComposer: View {
 
     private var chipStrip: some View {
         HStack(alignment: .center, spacing: 6) {
-            ForEach(essentials) { field in
+            ForEach(essentials.filter { field in !operations.contains { $0.id == field.flag } }) { field in
                 chip(for: field)
             }
             // A command that reads its checkpoints from folders picks them in the inspector.
-            if !StudioTaskSchema.takesModelFolder(draft.templateID) {
+            if StudioTaskSchema.modelPickerFlag(for: draft, source: scopeSource) != nil {
                 modelChip
             }
             Spacer(minLength: 8)
@@ -162,7 +168,8 @@ struct StudioTaskComposer: View {
     @ViewBuilder
     private func chip(for field: StudioContractField<StudioTaskDraft>) -> some View {
         if field.overrideID == .variant {
-            variantChip(field)
+            StudioOperationPicker(selection: StudioOperationSelection(field: field, draft: $draft,
+                                                                       title: StudioTaskSchema.variantTitle))
         } else if field.control == .segmented || field.control == .picker {
             choiceChip(field)
         } else {
@@ -208,27 +215,6 @@ struct StudioTaskComposer: View {
         .accessibilityValue(chipTitle(field))
     }
 
-    private func variantChip(_ field: StudioContractField<StudioTaskDraft>) -> some View {
-        Menu {
-            ForEach(task.variantTemplates) { template in
-                Toggle(isOn: Binding(
-                    get: { draft.templateID == template.id },
-                    set: { _ in draft.switchTemplate(to: template.id) }
-                )) {
-                    Text(template.title)
-                }
-            }
-        } label: {
-            StudioComposerChipLabel(title: draft.template?.title ?? field.label)
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .accessibilityLabel(field.label)
-        .accessibilityValue(draft.template?.title ?? "")
-    }
-
     /// The chip's words, shared with the feed card (`StudioContractField.chipTitle(in:)`).
     private func chipTitle(_ field: StudioContractField<StudioTaskDraft>) -> String {
         field.chipTitle(in: draft)
@@ -239,7 +225,8 @@ struct StudioTaskComposer: View {
     private var modelChip: some View {
         StudioModelChip(
             scope: StudioTaskSchema.modelScope(for: draft, source: scopeSource),
-            model: $draft.model,
+            model: Binding(get: { draft.text(StudioTaskSchema.modelPickerFlag(for: draft, source: scopeSource) ?? "--model") },
+                           set: { draft.form[StudioTaskSchema.modelPickerFlag(for: draft, source: scopeSource) ?? "--model"] = .text($0) }),
             modelInventory: modelInventory,
             readiness: readiness,
             onShowModels: onShowModels

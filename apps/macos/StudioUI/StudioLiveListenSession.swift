@@ -152,45 +152,27 @@ private struct StudioLiveListenSessionContent: View {
     // MARK: Chips
 
     private var chips: some View {
-        HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             operationChip
-            deviceChip
-            optionsChip
-            StudioModelChip(
+            HStack(spacing: 6) {
+                deviceChip
+                optionsChip
+                StudioModelChip(
                 scope: StudioTaskSchema.modelScope(for: draft, source: scopeSource),
                 model: draftBinding.model,
                 modelInventory: models.rows,
                 readiness: readiness,
                 onShowModels: { navigation.open(task: .modelsInstalled) }
-            )
+                )
+            }
         }
         .disabled(session.isActive)
     }
 
     private var operationChip: some View {
-        Menu {
-            ForEach(Self.task.variantTemplates) { template in
-                Toggle(isOn: Binding(
-                    get: { draft.templateID == template.id },
-                    set: { _ in
-                        var next = draft
-                        next.switchTemplate(to: template.id)
-                        draft = next
-                    }
-                )) {
-                    Text(template.title)
-                }
-            }
-        } label: {
-            StudioComposerChipLabel(title: draft.template?.title ?? "Operation")
+        ForEach(StudioOperationSelection.task(Self.task, draft: draftBinding, source: scopeSource)) { selection in
+            StudioOperationPicker(selection: selection)
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Transcribe what is said, or tell the speakers apart")
-        .accessibilityLabel("Operation")
-        .accessibilityValue(draft.template?.title ?? "")
     }
 
     private var selectedDeviceUID: String {
