@@ -51,6 +51,9 @@ package final class StudioPromptTaskController {
         let previous = active.draft
         var next = newValue
         if isUserEdit {
+            if let mode = activatedMode {
+                next.reconcileModelAfterOperationChange(from: previous, mode: mode, source: controller.scopeSource)
+            }
             next.modelSource = .afterEdit(model: next.model, previousModel: previous.model,
                                           source: next.modelSource, previousSource: previous.modelSource)
         }

@@ -82,6 +82,37 @@ final class StudioTaskSchemaTests: XCTestCase {
 
     // MARK: Fields
 
+    func testThreeDEngineMenuIncludesIDOLAndKeepsItsCheckpointFolders() throws {
+        let engine = try XCTUnwrap(StudioTaskSchema.variantField(for: .threeDFromImage))
+        XCTAssertEqual(engine.label, "Engine")
+        XCTAssertEqual(engine.option.choices, [
+            CommandTemplateID.imageReconstruct3DTrellis2.rawValue,
+            CommandTemplateID.imageReconstruct3D.rawValue,
+            CommandTemplateID.imageReconstruct3DMultiview.rawValue,
+            CommandTemplateID.visionImageTo3DIdol.rawValue,
+        ])
+        var draft = StudioTaskDraft(templateID: .imageReconstruct3DTrellis2)
+        draft.setArgument(0, "/tmp/object.png")
+        engine.write(.text(CommandTemplateID.visionImageTo3DIdol.rawValue), to: &draft)
+        XCTAssertEqual(draft.argument(0), "/tmp/object.png")
+        XCTAssertEqual(draft.model, "", "a managed model ID cannot become a checkpoint folder")
+        XCTAssertTrue(StudioTaskSchema.takesModelFolder(draft.templateID))
+        XCTAssertEqual(StudioTaskSchema.requiredModelID(for: draft, source: .contract), "")
+        for flag in ["--model", "--dino", "--vae"] {
+            draft.form[flag] = .text("/tmp/checkpoints" + flag)
+        }
+        let fields = StudioTaskSchema.sections(for: .threeDFromImage, draft: draft, source: .contract).flatMap(\.fields)
+        for flag in ["--model", "--dino", "--vae"] {
+            let field = try XCTUnwrap(fields.first { $0.flag == flag })
+            XCTAssertNil(field.overrideID, "checkpoint folders use path controls, not the managed model picker")
+            XCTAssertEqual(field.option.kind, .directory)
+        }
+        engine.write(.text(CommandTemplateID.imageReconstruct3DTrellis2.rawValue), to: &draft)
+        engine.write(.text(CommandTemplateID.visionImageTo3DIdol.rawValue), to: &draft)
+        XCTAssertEqual(draft.text("--dino"), "/tmp/checkpoints--dino")
+        XCTAssertEqual(draft.text("--vae"), "/tmp/checkpoints--vae")
+    }
+
     func testHiddenFlagsNeverReachTheComposerOrInspector() throws {
         for task in migratingTasks {
             for template in task.variantTemplates {

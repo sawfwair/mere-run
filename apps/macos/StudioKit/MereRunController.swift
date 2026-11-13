@@ -625,7 +625,7 @@ package final class MereRunController: ObservableObject {
         to studioDraft: inout StudioDraft, for mode: StudioMode, inventory: [StudioModelInventoryRow]
     ) {
         guard studioDraft.modelSource != .chosen else { return }
-        var scope = StudioModelScope(mode: mode, readImageAction: studioDraft.readImageAction, source: scopeSource)
+        var scope = StudioModelScope(mode: mode, draft: studioDraft, source: scopeSource)
         var defaults = Set([scope.defaultModelID])
         if mode == .chat { defaults.insert(recommendedChatModelForStudioDefault()) }
         if mode == .code { defaults.insert(recommendedCodeModelForStudioDefault()) }
@@ -635,7 +635,8 @@ package final class MereRunController: ObservableObject {
         guard automatic || current.isEmpty || defaults.contains(current) else { return }
         // A stand-in goes back to the default it replaced, so the choice follows the current scope.
         if automatic {
-            scope.defaultModelID = taskSessions.preferredModel(for: mode) ?? recommendedModel(for: mode) ?? scope.defaultModelID
+            let preferred = taskSessions.preferredModel(for: mode) ?? recommendedModel(for: mode) ?? scope.defaultModelID
+            if scope.runnableModels?.contains(preferred) != false { scope.defaultModelID = preferred }
         } else if !current.isEmpty {
             scope.defaultModelID = current
         }

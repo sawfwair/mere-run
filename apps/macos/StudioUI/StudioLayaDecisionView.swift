@@ -134,12 +134,16 @@ struct StudioLayaDecisionView: View {
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Picker("Model", selection: $model) {
+            Picker("Laya model", selection: $model) {
                 Text("Laya · English").tag("text-decide-laya")
                 Text("Laya · Multilingual").tag("text-decide-laya-multilingual")
                 Text("Laya · Typed decisions").tag("text-decide-laya-typed-decisions")
             }
             .pickerStyle(.menu)
+            Text("This editor uses Laya requests. Use the Command Console for Clef or D1 requests.")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

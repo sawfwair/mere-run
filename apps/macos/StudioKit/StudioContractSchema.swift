@@ -537,6 +537,11 @@ package struct StudioContractSection: Identifiable {
     package let group: StudioContractGroup
     package let fields: [StudioContractField<StudioDraft>]
 
+    package init(group: StudioContractGroup, fields: [StudioContractField<StudioDraft>]) {
+        self.group = group
+        self.fields = fields
+    }
+
     package var id: StudioContractGroup { group }
     package var title: String { group.title }
 
@@ -637,7 +642,7 @@ package enum StudioContractSchema {
             StudioContractField(
                 option: .init(
                     flag: "read-image-action",
-                    label: "Read task",
+                    label: "Operation",
                     kind: .choice,
                     choices: StudioReadImageAction.allCases.map(\.rawValue),
                     defaultValue: StudioReadImageAction.inspect.rawValue,

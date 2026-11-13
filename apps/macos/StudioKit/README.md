@@ -86,6 +86,20 @@ identity is current. Stop invalidates in-flight results and follow-up agent
 probes. Connection changes clear the old snapshot and telemetry baseline;
 late responses cannot restore them.
 
+`StudioTaskSchema.operationFields` identifies operation and backend choices from
+the capability contract. `modelPickerFlag` selects the active runtime's model
+argument, including OCR's separate model flags; commands without a managed-model
+argument show no model picker. `StudioOperationSelection` in StudioUI binds these
+fields for both the composer and readiness recovery menu. Operation, Engine,
+Backend, and Model controls carry visible labels. The shared model menu names its
+scope, distinguishes Auto from an explicit model, and offers a folder chooser for
+operations that use local checkpoints.
+`StudioDraft.reconcileModelAfterOperationChange` runs through the prompt controller
+for edits from either the composer or inspector. It clears an incompatible old
+managed model when operation flags change, preserves compatible choices and local
+paths, and lets the shared model scope name the new default. Readiness observes
+the resulting capability requirement, including backend changes.
+
 `StudioModelStore` owns the inventory shared by Models and the composer. Refreshes
 publish a complete typed snapshot and reject results from older requests or CLI
 configurations. Downloads use the same typed inference jobs from either entry

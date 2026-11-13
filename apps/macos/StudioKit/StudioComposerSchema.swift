@@ -411,7 +411,7 @@ package enum StudioComposerChipKind: String, CaseIterable, Identifiable {
         case .steps: return "Steps"
         case .seed: return "Seed"
         case .threshold: return "Threshold"
-        case .readImageAction: return "Task"
+        case .readImageAction: return "Operation"
         case .voiceMode: return "Voice"
         case .thinking: return "Thinking"
         case .model: return "Model"
@@ -540,13 +540,18 @@ package struct StudioModelScope: Equatable {
     package let categories: Set<String>
     /// The managed models that run the command, for a command the contract routes
     /// (`MereRunCapabilityRouting.runnableModels`). nil offers every row of `categories`.
-    package let runnableModels: Set<String>?
+    package var runnableModels: Set<String>?
+    package let usesLocalCheckpoints: Bool
 
-    package init(noun: String, defaultModelID: String, categories: Set<String>, runnableModels: Set<String>? = nil) {
+    package init(
+        noun: String, defaultModelID: String, categories: Set<String>,
+        runnableModels: Set<String>? = nil, usesLocalCheckpoints: Bool = false
+    ) {
         self.noun = noun
         self.defaultModelID = defaultModelID
         self.categories = categories
         self.runnableModels = runnableModels
+        self.usesLocalCheckpoints = usesLocalCheckpoints
     }
 
     /// A prompt mode's picker. Its default is the template's model, which the composer sends
@@ -554,10 +559,12 @@ package struct StudioModelScope: Equatable {
     package init(mode: StudioMode, readImageAction: StudioReadImageAction = .inspect, source: StudioScopeSource) {
         let templateID = mode == .readImage ? readImageAction.templateID : mode.defaultTemplateID
         self.init(
-            noun: mode.title.lowercased(),
-            defaultModelID: StudioModelNaming.defaultModelID(for: mode),
+            noun: mode == .readImage ? readImageAction.title.lowercased() : mode.title.lowercased(),
+            defaultModelID: mode == .readImage ? (CommandCatalog.template(id: templateID)?.defaultModel ?? "")
+                : StudioModelNaming.defaultModelID(for: mode),
             categories: mode.modelCategories,
-            runnableModels: source.capability(for: templateID)?.routing?.runnableModels
+            runnableModels: source.capability(for: templateID)?.routing?.runnableModels,
+            usesLocalCheckpoints: source.capability(for: templateID)?.routing?.runnableModels.isEmpty == true
         )
     }
 
@@ -573,8 +580,34 @@ package struct StudioModelScope: Equatable {
             noun: template?.title.lowercased() ?? templateID.rawValue,
             defaultModelID: contractDefault ?? template?.defaultModel ?? "",
             categories: Self.categories(for: templateID),
-            runnableModels: capability?.routing?.runnableModels
+            runnableModels: capability?.routing?.runnableModels,
+            usesLocalCheckpoints: capability?.routing?.runnableModels.isEmpty == true
         )
+    }
+
+    /// Model choices follow the operation flags in the prompt draft, using the same contract
+    /// resolver as execution. This keeps a forced ASR backend or voice mode from offering a
+    /// model that would be ignored or refused by that operation.
+    package init(mode: StudioMode, draft: StudioDraft, source: StudioScopeSource) {
+        self.init(mode: mode, readImageAction: draft.readImageAction, source: source)
+        guard let scope = source.scope(mode: mode, draft: draft), let routing = scope.capability.routing,
+              routing.modelFlags.contains("--model"), routing.families.contains(where: { !$0.selectors.isEmpty }) else { return }
+        runnableModels = Set((runnableModels ?? []).filter { model in
+            var values = scope.invocation.values
+            for flag in routing.modelFlags { values[flag] = nil }
+            values["--model"] = [model]
+            if case .family(_, let resolved, _) = scope.capability.resolveFamily(MereRunCommandInvocation(values: values)) {
+                return resolved == model
+            }
+            return false
+        })
+        var automatic = draft
+        automatic.model = ""
+        if let resolved = source.scope(mode: mode, draft: automatic)?.managedModel {
+            defaultModelID = resolved
+        } else if runnableModels?.contains(defaultModelID) == false {
+            defaultModelID = ""
+        }
     }
 
     /// Inventory rows the picker lists: the scope's categories (and, for a routed command, only

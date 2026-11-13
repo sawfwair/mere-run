@@ -37,6 +37,9 @@ struct StudioComposer: View {
     @Environment(\.studioScopeSource) private var scopeSource
     @Environment(\.studioLibraryItems) private var libraryItems
     @State private var editingChip: StudioComposerChipKind?
+    private var operations: [StudioOperationSelection] {
+        StudioOperationSelection.prompt(mode, draft: $draft, source: scopeSource, capabilities: controller.modelCapabilitiesByID)
+    }
 
     private enum Metrics {
         static let outerInsets = EdgeInsets(top: 12, leading: 24, bottom: 20, trailing: 24)
@@ -53,6 +56,7 @@ struct StudioComposer: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
             promptEntry
+            ForEach(operations) { selection in StudioOperationPicker(selection: selection) }
             chipStrip
             if showsScopeNote, let notice = StudioInspectorSchema.notice(for: mode, draft: draft, source: scopeSource) {
                 StudioScopeNote(notice: notice)
@@ -154,7 +158,9 @@ struct StudioComposer: View {
     private var chipStrip: some View {
         HStack(alignment: .center, spacing: 6) {
             ForEach(mode.composerChips(for: draft, source: scopeSource)) { chip in
-                if let value = chip.fixedValue {
+                if chip.kind == .readImageAction || operations.contains(where: { chip.kind.flags(for: mode).contains($0.id) }) {
+                    EmptyView()
+                } else if let value = chip.fixedValue {
                     fixedChip(chip.kind, value: value, family: chip.fixedBy)
                 } else {
                     self.chip(for: chip.kind)
@@ -183,8 +189,7 @@ struct StudioComposer: View {
         case .steps: stepsChip
         case .seed: seedChip
         case .threshold: thresholdChip
-        case .readImageAction: readImageActionChip
-        case .voiceMode: voiceModeChip
+        case .readImageAction, .voiceMode: EmptyView() // Operation selectors are above the chip strip.
         case .thinking: thinkingChip
         case .model: modelChip
         }
@@ -406,47 +411,6 @@ struct StudioComposer: View {
         }
     }
 
-    private var readImageActionChip: some View {
-        chipMenu(title: draft.readImageAction.title, accessibilityLabel: "Task", kind: .readImageAction) {
-            ForEach(StudioReadImageAction.allCases) { action in
-                Toggle(isOn: Binding(
-                    get: { draft.readImageAction == action },
-                    set: { _ in draft.readImageAction = action }
-                )) {
-                    Text(action.title)
-                }
-                .disabled(readImageActionUnavailableMessage(action) != nil)
-                .help(readImageActionUnavailableMessage(action) ?? action.title)
-            }
-        }
-    }
-
-    /// Why a Read Image variant cannot run on this machine, from the capability report.
-    private func readImageActionUnavailableMessage(_ action: StudioReadImageAction) -> String? {
-        guard mode == .readImage else { return nil }
-        var candidateDraft = draft
-        candidateDraft.readImageAction = action
-        switch StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: candidateDraft, source: scopeSource) {
-        case .unavailable(let message):
-            return message
-        case .managedModel(let modelID):
-            return controller.modelCapabilitiesByID[modelID]?.unavailableMessage(titles: titles)
-        case nil:
-            return nil
-        }
-    }
-
-    private var voiceModeChip: some View {
-        chipMenu(title: StudioComposerPresets.voiceModeTitle(draft), accessibilityLabel: "Voice", kind: .voiceMode) {
-            Toggle(isOn: Binding(get: { draft.voiceMode != "clone" }, set: { _ in draft.voiceMode = "style" })) {
-                Text("Preset voice")
-            }
-            Toggle(isOn: Binding(get: { draft.voiceMode == "clone" }, set: { _ in draft.voiceMode = "clone" })) {
-                Text("Cloned voice")
-            }
-        }
-    }
-
     private var thinkingChip: some View {
         chipMenu(
             title: StudioComposerPresets.thinkingTitle(draft.thinkingMode),
@@ -524,7 +488,7 @@ struct StudioComposer: View {
 
     private var modelChip: some View {
         StudioModelChip(
-            scope: StudioModelScope(mode: mode, readImageAction: draft.readImageAction, source: scopeSource),
+            scope: StudioModelScope(mode: mode, draft: draft, source: scopeSource),
             model: $draft.model,
             modelInventory: modelInventory,
             readiness: readiness,

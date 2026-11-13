@@ -12,7 +12,6 @@ struct StudioModelPicker<Label: View>: View {
     let modelInventory: [StudioModelInventoryRow]
     let onShowModels: () -> Void
     @ViewBuilder let label: () -> Label
-    @Environment(\.studioModelTitles) private var titles
 
     init(
         scope: StudioModelScope,
@@ -29,36 +28,63 @@ struct StudioModelPicker<Label: View>: View {
     }
 
     var body: some View {
-        Menu {
-            let defaultID = scope.resolvedModelID(model: scope.selectingInstalledDefault(model: "", from: modelInventory))
-            // Auto's installed stand-in is written into the draft so its arguments name it.
-            Toggle(isOn: Binding(get: { model.isBlank || model == defaultID }, set: { _ in model = "" })) {
-                Text(defaultID.isEmpty ? "Auto" : "Auto · \(StudioModelNaming.displayName(defaultID, titles: titles))")
-            }
-            let choices = scope.choices(from: modelInventory)
-            let installed = choices.filter(\.isInstalled)
-            let downloadable = choices.filter { !$0.isInstalled }
-            if !installed.isEmpty {
-                Section("Installed") {
-                    ForEach(installed) { row in modelRow(row) }
-                }
-            }
-            if !downloadable.isEmpty {
-                Section("Needs download") {
-                    ForEach(downloadable) { row in modelRow(row) }
-                }
-            }
-            if choices.isEmpty {
-                Text("No \(scope.noun) models listed yet")
-            }
-            Divider()
-            Button("Browse Models…", action: onShowModels)
-        } label: {
+        Menu { items } label: {
             label()
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
+        .accessibilityLabel("Model")
+        .help("Choose a model for \(scope.noun)")
+    }
+
+    var items: some View {
+        StudioModelMenuItems(scope: scope, model: $model, modelInventory: modelInventory, onShowModels: onShowModels)
+    }
+}
+
+/// A view of its own so the recovery menu reads the same live inventory titles as the picker.
+struct StudioModelMenuItems: View {
+    let scope: StudioModelScope
+    @Binding var model: String
+    let modelInventory: [StudioModelInventoryRow]
+    let onShowModels: () -> Void
+    @Environment(\.studioModelTitles) private var titles
+
+    var body: some View {
+        Text("Models for \(scope.noun)")
+        let defaultID = scope.resolvedModelID(model: scope.selectingInstalledDefault(model: "", from: modelInventory))
+        // A filled draft selects its named model; only an empty model selects Auto.
+        Toggle(isOn: Binding(get: { model.isBlank }, set: { _ in model = "" })) {
+            Text(defaultID.isEmpty ? "Auto" : "Auto · \(StudioModelNaming.displayName(defaultID, titles: titles))")
+        }
+        let choices = scope.choices(from: modelInventory)
+        let installed = choices.filter(\.isInstalled)
+        let downloadable = choices.filter { !$0.isInstalled }
+        if !installed.isEmpty {
+            Section("Installed") {
+                ForEach(installed) { row in modelRow(row) }
+            }
+        }
+        if !downloadable.isEmpty {
+            Section("Needs download") {
+                ForEach(downloadable) { row in modelRow(row) }
+            }
+        }
+        if choices.isEmpty {
+            if scope.usesLocalCheckpoints {
+                Text("This operation uses local checkpoints")
+                Button("Choose checkpoint folder…") {
+                    if let folder = StudioFilePanels.chooseDirectory(title: "Choose model checkpoints") {
+                        model = folder.path
+                    }
+                }
+            } else {
+                Text("No compatible models listed yet")
+            }
+        }
+        Divider()
+        Button("Browse Models…", action: onShowModels)
     }
 
     private func modelRow(_ row: StudioModelInventoryRow) -> some View {
@@ -113,7 +139,8 @@ struct StudioModelChip: View {
     }
 
     private var label: String {
-        scope.displayLabel(model: model, titles: titles)
+        let name = scope.displayLabel(model: model, titles: titles)
+        return "Model · \(name)"
     }
 
     /// A glyph before the model name when the model is not ready: missing locally, or unsupported.

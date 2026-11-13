@@ -208,6 +208,9 @@ struct StudioTaskWorkspace: View {
             refreshReadiness()
         }
         .onChange(of: draft.templateID) { _, _ in
+            if StudioTaskSchema.takesModelFolder(draft.templateID), !navigation.showsInspector(for: task) {
+                navigation.toggleInspector(for: task)
+            }
             if controller.privateSession != nil {
                 do { try controller.discardPrivateWork(preserving: draft.templateID) }
                 catch { self.error = error.localizedDescription }
@@ -319,11 +322,14 @@ struct StudioTaskWorkspace: View {
     private var readinessActions: StudioReadinessActions {
         StudioReadinessActions(
             scope: StudioTaskSchema.modelScope(for: draft, source: scopeSource),
-            model: draftBinding.model,
+            model: Binding(get: { draft.text(StudioTaskSchema.modelPickerFlag(for: draft, source: scopeSource) ?? "--model") },
+                           set: { draft.form[StudioTaskSchema.modelPickerFlag(for: draft, source: scopeSource) ?? "--model"] = .text($0) }),
             modelInventory: models.rows,
             pullModel: { pull(modelID: StudioTaskSchema.modelID(for: draft, source: scopeSource)) },
             openModels: { navigation.open(task: .modelsInstalled) },
-            recheck: refreshReadiness
+            recheck: refreshReadiness,
+            operations: StudioOperationSelection.task(task, draft: draftBinding, source: scopeSource),
+            showsModelPicker: StudioTaskSchema.modelPickerFlag(for: draft, source: scopeSource) != nil
         )
     }
 
