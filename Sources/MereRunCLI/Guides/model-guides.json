@@ -1,5 +1,12 @@
 [
   {
+    "topic": "handbook-inkling2",
+    "title": "Inkling 2 Small",
+    "category": "Vision chat",
+    "models": ["vision-chat-inkling-2-small"],
+    "resourceName": "handbook-inkling2.md"
+  },
+  {
     "topic": "handbook-flint",
     "title": "Recursive Flint",
     "category": "Text chat",

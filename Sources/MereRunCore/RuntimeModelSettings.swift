@@ -5,6 +5,7 @@ public enum RuntimeServingEngine: String, Codable, CaseIterable, Hashable, Senda
     case textChatKlein = "text-chat-klein"
     case textChatGemma4 = "text-chat-gemma4"
     case textChatDiffusionGemma = "text-chat-diffusiongemma"
+    case textChatInkling2 = "text-chat-inkling2"
     case textChatFlint = "text-chat-flint"
     case textChatKolibri = "text-chat-kolibri"
     case textChatLaguna = "text-chat-laguna"

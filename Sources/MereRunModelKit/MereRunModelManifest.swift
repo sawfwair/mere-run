@@ -138,6 +138,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         /// DeepSeek V4 Flash family, served by the bundled `ds4-server` subprocess.
         case deepseekV4Flash = "deepseek-v4-flash"
         /// Thinking Machines Lab Inkling family via the native Swift/MLX runtime.
+        case inkling2
         case inkling
         /// Meta Muse Glimmer multimodal agent family via native Swift/MLX.
         case museGlimmer = "muse-glimmer"

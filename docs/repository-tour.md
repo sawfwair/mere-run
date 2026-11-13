@@ -44,7 +44,7 @@ It also defines two executable products:
 
 Many runtime targets are internal: they build as part of the package but
 aren't products. They include `MereRunCoreMLModel`, `MereRunD1Model`,
-`MereRunFlintModel`, `MereRunGLiNERModel`, `MereRunKolibriModel`,
+`MereRunFlintModel`, `MereRunInkling2Model`, `MereRunGLiNERModel`, `MereRunKolibriModel`,
 `MereRunLayaModel`, `MereRunNemotronBoltModel`, `AudioBreezeTTSModel`,
 `AudioDrama3Model`, `AudioNemotronTranscribeModel`, `AudioPhononModel`, and
 `AudioWhistleModel`. Platform adapters (`llama`, `magentart`, and
@@ -159,6 +159,7 @@ family.
 | `MereRunImageModels` | FLUX.2, FLUX 3, and ZImage transformer layers and the shared VAE | [Image runtime boundaries](./internals/image-runtime-boundaries.md) |
 | `MereRunKolibriModel` | Kolibri attention, sigmoid expert routing, stacked projections, and decoder arithmetic | [Native Kolibri-1](./runtime/kolibri.md) |
 | `MereRunFlintModel` | Recursive Flint attention, sigmoid routing, and expert projections | [Run Recursive Flint](./runtime/flint.md) |
+| `MereRunInkling2Model` | Inkling 2 text and vision computation, original checkpoint decoding, and disk-streamed experts | [Native Inkling 2](./runtime/inkling2.md) |
 | `MereRunUnlimitedOCRModel` | Unlimited-OCR-2 SAM/CLIP vision, DeepSeek MoE, and page-aware DASH attention | [Unlimited-OCR-2](./runtime/unlimited-ocr-2.md) |
 | `MereRunNemotronBoltModel` | Nemotron Bolt packed IQ2, Q8, and NVFP4 weights, hybrid blocks, and C-RADIO vision | [Nemotron Bolt](./runtime/nemotron-bolt.md) |
 | `MereRunLayaModel` | Native ModernBERT and Laya decision heads | [Laya decisions](./runtime/laya.md) |
@@ -184,7 +185,7 @@ families include:
   `ZImageTurbo/`, `ZImageI2L/`, `HiDreamO1/`, `Ideogram4/`, `Krea2/`,
   `QwenImage21/`, `QwenImageEdit/`, and `SenseNovaU15/`.
 - Text and vision-language chat: `Gemma4/`, `Q35/`, `LFM2/`, `Psi/`,
-  `Inkling/`, `Laguna/`, `Kolibri/`, `Flint/`, `NemotronH/`, `NemotronBolt/`,
+  `Inkling/`, `Inkling2/`, `Laguna/`, `Kolibri/`, `Flint/`, `NemotronH/`, `NemotronBolt/`,
   `NemotronOmni/`, `MuseGlimmer/`, `DiffusionGemma/`, `DeepseekV4Flash/`, and
   `MeBot/`.
 - Code generation over the vendored llama.cpp runtime: `CodeGen/`.
@@ -287,7 +288,7 @@ SwiftPM test targets live under `Tests/`:
 - Runtime numerical tests: `DecodeRuntimeTests`, `QwenRuntimeTests`,
   `GemmaRuntimeTests`, `LTXRuntimeTests`, `H3RuntimeTests`,
   `LagunaRuntimeTests`, `ImageRuntimeTests`, `SpeechRuntimeTests`,
-  `KolibriRuntimeTests`, `FlintRuntimeTests`, `NemotronBoltRuntimeTests`,
+  `KolibriRuntimeTests`, `FlintRuntimeTests`, `Inkling2RuntimeTests`, `NemotronBoltRuntimeTests`,
   `NemotronTranscribeRuntimeTests`, `Drama3RuntimeTests`, and
   `AudioPhononModelTests`.
 - `MereRunMLXTestSupport`: shared MLX fixtures and device preparation.

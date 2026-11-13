@@ -18,6 +18,7 @@ extension ModelFamilyIdentifier {
         if Gemma4Resources.handles(modelSpec: model) {
             return .gemma4Unified
         }
+        if Inkling2Resources.handles(modelSpec: model) { return .inkling2 }
         if FlintResources.handles(modelSpec: model) { return .flint }
         if KolibriResources.handles(modelSpec: model) { return .kolibri }
         if LagunaResources.handles(modelSpec: model) {
@@ -62,6 +63,7 @@ extension ModelFamilyIdentifier {
     /// profile, so any other id is unidentified and the command reports it.
     static func textChatProbe(model: String, invocation: MereRunCommandInvocation) -> MereRunModelIdentification? {
         let model = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        if Inkling2Resources.localModelRoot(for: model) != nil { return .family("inkling2") }
         if FlintResources.localModelRoot(for: model) != nil { return .family("flint") }
         if KolibriResources.localModelRoot(for: model) != nil { return .family("kolibri") }
         if let local = lfm2Family(folder: model) { return .family(local.rawValue) }

@@ -98,7 +98,7 @@ public enum QuantizedModelManifestWriter {
             case .ltxVideo, .wanVideo, .miniMaxH3, .cosmos3Edge: return .video
             case .psiChat: return .psi
             case .deepseekV4Flash: return .deepseek
-            case .inkling: return .inkling
+            case .inkling2, .inkling: return .inkling
             case .museGlimmer: return .muse
             case .nemotronH, .nemotronOmni: return .nemotron
             }
@@ -236,6 +236,8 @@ public enum QuantizedModelManifestWriter {
                     return [.chat]
                 case .deepseekV4Flash:
                     return [.chat]
+                case .inkling2:
+                    return [.chat, .codeGeneration, .visionChat]
                 case .inkling:
                     return [.chat, .codeGeneration]
                 }
@@ -329,7 +331,7 @@ public enum QuantizedModelManifestWriter {
                 break
             case .laya, .clef, .d1, .gliner25Decide, .qwen3TTS, .breezeTTS, .drama3TTS, .phononTTS, .qwen3ASR, .parakeetASR, .whistleASR, .nemotronTranscribeASR, .sortformer, .qwen3Embedding, .embeddingGemma2, .embeddingGemma2CoreML, .pplxEmbedV2, .openAIPrivacyFilter,
                  .qwen3Coder, .northMiniCode, .lightOnOCR, .unlimitedOCR, .woosh, .mmaudio, .psiChat, .deepseekV4Flash,
-                 .muScriptor, .sheetSage2, .roFormer, .apBWE, .univerSR, .auk, .inkling:
+                 .muScriptor, .sheetSage2, .roFormer, .apBWE, .univerSR, .auk, .inkling2, .inkling:
                 break
             case .aceStep, .magentaRT2, .ltxVideo:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 8, cfg: 1.0)

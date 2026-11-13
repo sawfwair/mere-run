@@ -937,6 +937,8 @@ private extension APIEngine {
             self = .textChatGemma4
         case .textChatDiffusionGemma:
             self = .textChatDiffusionGemma
+        case .textChatInkling2:
+            self = .textChatInkling2
         case .textChatFlint:
             self = .textChatFlint
         case .textChatKolibri:

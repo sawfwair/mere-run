@@ -212,6 +212,22 @@ final class AutoregressiveDecodeEngineTests: XCTestCase {
         XCTAssertEqual(tokens[3].topLogprobs.count, 3)
     }
 
+    func testInklingChannelsClassifyLogprobsAndRedactReasoning() throws {
+        let names = [3: "<|message_model|>", 4: "<|content_thinking|>", 5: "private chain",
+                     6: "<|end_message|>", 7: "read", 8: "<|content_invoke_tool_json|>", 9: "{}",
+                     10: "<|content_text|>", 11: "answer"]
+        let result = try AutoregressiveDecodeEngine.decode(
+            request(firstToken: 3, budget: 20, logprobCapture: .tokens),
+            stepForward: scriptedModel([4, 5, 6, 3, 7, 8, 9, 6, 3, 10, 11, eos]),
+            decodeToken: { names[$0] ?? "" }
+        )
+        let tokens = try XCTUnwrap(result.logprobs?.tokens)
+        XCTAssertEqual(tokens.map(\.region), [.markup, .markup, .reasoning, .markup, .markup, .toolName,
+                                             .markup, .toolArgument, .markup, .markup, .markup, .visible])
+        XCTAssertNil(tokens[2].token)
+        XCTAssertEqual(tokens.last?.token, "answer")
+    }
+
     func testDecodeCanStopAfterAConfirmedProtocolTerminator() throws {
         let names = [3: "<tool_call>", 7: "<function=film_status>", 2: "</function>", 9: "</tool_call>"]
         var decoded = ""

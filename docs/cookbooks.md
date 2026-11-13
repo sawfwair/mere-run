@@ -9,7 +9,7 @@ connection. For source research and recipe status, see the
 
 ## Read a model guide
 
-As of v0.67.1, the model handbook covers 181 managed model IDs in 77 families.
+The model handbook covers the managed model IDs in the local catalog.
 Each guide includes an example, supported controls, variant notes,
 review advice, and sources. Guides for models without a text-prompt interface
 describe how to prepare inputs instead.

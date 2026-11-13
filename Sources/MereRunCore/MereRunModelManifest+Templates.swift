@@ -538,6 +538,13 @@ extension MereRunModelManifest {
                     "\(LagunaResources.dflashUpstreamModelID)@\(LagunaResources.dflashUpstreamRevision)",
                 createdAt: createdAt
             )
+        case .inkling2Small:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .inkling2, family: .inkling,
+                tier: .small, variant: .standard,
+                defaults: nil, supports: [.chat, .codeGeneration, .visionChat], components: nil,
+                upstreamRepoId: "\(Inkling2Resources.repository)@\(Inkling2Resources.revision)", createdAt: createdAt
+            )
         case .inklingSmall:
             return MereRunModelManifest(
                 id: modelID.rawValue,

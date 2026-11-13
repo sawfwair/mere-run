@@ -286,6 +286,8 @@ struct APIServe: AsyncParsableCommand {
             return ModelResolver.ModelID.gemma4.rawValue
         case .textChatDiffusionGemma:
             return DiffusionGemmaResources.modelID
+        case .textChatInkling2:
+            return Inkling2Resources.modelID
         case .textChatFlint:
             return FlintResources.modelID
         case .textChatKolibri:
@@ -356,6 +358,13 @@ struct APIServe: AsyncParsableCommand {
             return ManagedModelResolver.resolveInstalledModel(
                 id: DiffusionGemmaResources.modelID
             )?.path
+        case .textChatInkling2:
+            let requested = model ?? Inkling2Resources.modelID
+            if let root = Inkling2Resources.localModelRoot(for: requested) { return root }
+            guard let path = ManagedModelResolver.resolveInstalledModel(id: requested)?.path else {
+                throw ValidationError("Install Inkling 2 with 'mere.run model pull vision-chat-inkling-2-small' or pass its checkpoint directory.")
+            }
+            return path
         case .textChatFlint:
             let requested = model ?? FlintResources.modelID
             if let root = FlintResources.localModelRoot(for: requested) { return root }
@@ -581,6 +590,7 @@ enum APIEngine: String, ExpressibleByArgument {
     case textChatGemma4 = "text-chat-gemma4"
     case textChatDiffusionGemma = "text-chat-diffusiongemma"
     case textChatLaguna = "text-chat-laguna"
+    case textChatInkling2 = "text-chat-inkling2"
     case textChatFlint = "text-chat-flint"
     case textChatKolibri = "text-chat-kolibri"
     case textChatQ36 = "text-chat-q36"
@@ -601,6 +611,8 @@ enum APIEngine: String, ExpressibleByArgument {
             return .textChatGemma4
         case .textChatDiffusionGemma:
             return .textChatDiffusionGemma
+        case .textChatInkling2:
+            return .textChatInkling2
         case .textChatFlint:
             return .textChatFlint
         case .textChatKolibri:

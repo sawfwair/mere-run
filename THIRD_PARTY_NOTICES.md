@@ -2004,3 +2004,15 @@ License Agreement, available in the pinned official model repository:
 <https://huggingface.co/MiniMaxAI/MiniMax-H3-Image/blob/492fd8c4eca666f1085f57e30738c1e0d86b3439/LICENSE>.
 Checkpoint files are not bundled with mere.run. Managed installation retains
 the upstream license and requires explicit acceptance.
+
+## Inkling 2 architecture and template
+
+`Sources/MereRunInkling2Model` implements equations from the Hugging Face
+Transformers Inkling 2 reference (copyright 2026 The HuggingFace Team), under
+Apache License 2.0:
+<https://github.com/huggingface/transformers/tree/main/src/transformers/models/inkling2>.
+`Tests/MereRunCoreTests/Fixtures/Inkling2/chat_template.jinja` and the published
+configuration and tensor metadata in `Tests/Inkling2RuntimeTests/Fixtures` come
+from Thinking Machines Lab’s `thinkingmachines/Inkling-2-Small` checkpoint,
+revision `aac974122acd33ddb0d3e1f54433a9c5dd2249ce`, under Apache License 2.0.
+The Apache License 2.0 text appears in this file’s YuE2 notice.

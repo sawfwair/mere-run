@@ -3,6 +3,13 @@ import Foundation
 extension ManagedModelCatalog {
     static let chatSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
+            id: Inkling2Resources.modelID, category: .visionChat, installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(repoId: Inkling2Resources.repository, revision: Inkling2Resources.revision, patterns: Inkling2Resources.snapshotPatterns),
+            upstreamRepoId: Inkling2Resources.repository, upstreamRevision: Inkling2Resources.revision,
+            validationKind: .inkling2, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 393_500_000_000,
+            defaultCLICommands: ["text chat", "api serve"], apiProfile: .inkling2()
+        ),
+        ManagedModelSpec(
             id: FlintResources.modelID, category: .textChat, installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(repoId: FlintResources.repository, revision: FlintResources.revision, patterns: FlintResources.snapshotPatterns),
             upstreamRepoId: FlintResources.repository, upstreamRevision: FlintResources.revision,

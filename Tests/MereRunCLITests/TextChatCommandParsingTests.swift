@@ -77,7 +77,7 @@ final class TextChatCommandParsingTests: XCTestCase {
     func testTextChatGateRejectsDiffusionOptionsForOtherModels() throws {
         let report = try gate("--model", Gemma4Resources.nanoModelId, "--seed", "123", "--show-unmasking")
         XCTAssertEqual(report.violations, [
-            "--seed is not supported by Gemma 4. It applies to DiffusionGemma, Recursive Flint, Kolibri 1, Qwen3.6 text, Qwen3.6 vision and Qwen3.8.",
+            "--seed is not supported by Gemma 4. It applies to DiffusionGemma, Recursive Flint, Inkling 2 Small, Kolibri 1, Qwen3.6 text, Qwen3.6 vision and Qwen3.8.",
             "--show-unmasking is not supported by Gemma 4. It applies to DiffusionGemma."
         ])
     }
@@ -247,7 +247,7 @@ final class TextChatCommandParsingTests: XCTestCase {
         )
         XCTAssertEqual(
             try gate("--model", Gemma4Resources.twelveB4BitModelId, "--reasoning-effort", "0.2").violations,
-            ["--reasoning-effort is not supported by Gemma 4. It applies to Inkling-Small, Muse Glimmer and Qwen3.8."]
+            ["--reasoning-effort is not supported by Gemma 4. It applies to Inkling 2 Small, Inkling-Small, Muse Glimmer and Qwen3.8."]
         )
     }
 
@@ -632,7 +632,7 @@ final class TextChatCommandParsingTests: XCTestCase {
         }
         XCTAssertEqual(
             try gate("--model", NemotronHResources.modelID, "--image", "a.png").warnings,
-            ["--image has no effect with Nemotron 3.5 Lightning. It applies to Gemma 4 12B vision, Muse Glimmer, Nemotron 3.5 Bolt, Nemotron 3 Nano Omni, LFM2.5-VL, Qwen3.6 vision and Qwen3.8."]
+            ["--image has no effect with Nemotron 3.5 Lightning. It applies to Gemma 4 12B vision, Inkling 2 Small, Muse Glimmer, Nemotron 3.5 Bolt, Nemotron 3 Nano Omni, LFM2.5-VL, Qwen3.6 vision and Qwen3.8."]
         )
     }
 
