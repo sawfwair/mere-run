@@ -40,13 +40,13 @@ enum SOVPortableBundle {
         var loaded: Set<String> = []
         for file in manifest.shards {
             try Task.checkCancellation()
+            var duplicate: String?
             try SafetensorsStreamingLoader.applyWeightsLazyMaterialized(url: root.appendingPathComponent(file.name),
                 to: model, verify: [.noUnusedKeys, .shapeMismatch], mapper: { name, value in
-                    guard loaded.insert(name).inserted else {
-                        throw SOVTranscribeError.invalid("Duplicate portable SOV tensor: \(name).")
-                    }
+                    if !loaded.insert(name).inserted { duplicate = name }
                     return [(name, value)]
                 }, batchSize: 4)
+            if let duplicate { throw SOVTranscribeError.invalid("Duplicate portable SOV tensor: \(duplicate).") }
         }
         try SOVPackedWeights.checkComplete(model: model, loaded: loaded)
     }
