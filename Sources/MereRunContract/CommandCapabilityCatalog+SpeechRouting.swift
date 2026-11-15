@@ -13,6 +13,7 @@ extension MereRunCapabilityCatalog {
     }
 
     enum SpeechTranscribeFamily: String, MereRunFamilyID {
+        case sovTranscribe = "sov-transcribe"
         case nemotronTranscribe = "nemotron-transcribe"
         case parakeet
         case whistle
@@ -47,6 +48,7 @@ extension MereRunCapabilityCatalog {
     static let speechTranscribeRouting = MereRunCapabilityRouting(
         modelFlags: ["--model"],
         defaultModels: [
+            .init(whenAny: [.init(flag: "--backend", values: ["sov"])], models: ["speech-asr-sov-transcribe-1"]),
             .init(whenAny: [.init(flag: "--backend", values: ["nemotron"])], models: ["speech-asr-nemotron-35-transcribe"]),
             .init(whenAny: [.init(flag: "--backend", values: ["whistle"])], models: ["speech-asr-whistle"]),
             .init(
@@ -60,6 +62,8 @@ extension MereRunCapabilityCatalog {
             .always("speech-asr-parakeet")
         ],
         families: [
+            .init(SpeechTranscribeFamily.sovTranscribe, title: "SOV-Transcribe-1",
+                  models: ["speech-asr-sov-transcribe-1"], selectors: [.init(flag: "--backend", values: ["auto", "sov"])]),
             .init(SpeechTranscribeFamily.nemotronTranscribe, title: "Nemotron 3.5 Transcribe",
                   models: ["speech-asr-nemotron-35-transcribe", "speech-asr-nemotron-35-transcribe-bf16"],
                   selectors: [.init(flag: "--backend", values: ["auto", "nemotron"])]),
@@ -79,6 +83,8 @@ extension MereRunCapabilityCatalog {
                 selectors: [.init(flag: "--backend", values: ["auto", "qwen"])]
             )
         ],
+        excludedModels: .models(["speech-asr-sov-transcribe-1-dflash"],
+                                reason: "Use SOV-Transcribe-1 as --model and pass its DFlash companion with --draft-model."),
         selectorsOverrideModel: true,
         // Which languages leave Parakeet depends on its checkpoint's vocabulary and on how the
         // language is spelled; `SpeechTranscriptionResolver.route` decides.

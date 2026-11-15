@@ -1766,6 +1766,16 @@ extension MereRunModelManifest {
                 upstreamRepoId: "mlx-community/Qwen3-ASR-1.7B-8bit",
                 createdAt: createdAt
             )
+        case .sovTranscribeASR, .sovTranscribeDFlash:
+            let isDraft = modelID == .sovTranscribeDFlash
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .sovTranscribeASR, family: .asr, tier: .latest,
+                variant: .standard, precision: .bf16, defaults: nil,
+                supports: isDraft ? [] : [.speechRecognition], components: genericTextComponents,
+                upstreamRepoId: isDraft ? SOVTranscribeResources.draftRepository + "@" + SOVTranscribeResources.draftRevision
+                    : SOVTranscribeResources.repository + "@" + SOVTranscribeResources.revision,
+                createdAt: createdAt
+            )
         case .nemotronTranscribeASR, .nemotronTranscribeBF16ASR:
             let bf16 = modelID == .nemotronTranscribeBF16ASR
             return MereRunModelManifest(

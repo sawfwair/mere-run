@@ -222,6 +222,8 @@ against the CLI and fails if they disagree.
     - `mere.run model benchmark kolibri-logprobs` — Score fixed token sequences with native Kolibri and export raw logits.
     - `mere.run model benchmark laguna-dflash` — Measure Laguna target-only and DFlash decode in one resident process.
     - `mere.run model benchmark parakeet-coreml` — Benchmark the prepared Parakeet Core ML pipeline in one resident process.
+    - `mere.run model benchmark sov` — Profile resident SOV encoder/projector and DFlash transcription.
+    - `mere.run model benchmark asr` — Compare prepared ASR latency on local recordings without reloading between runs.
     - `mere.run model benchmark api-workload` — Replay a chat workload against a running API server and measure runtime cache counters.
     - `mere.run model benchmark vlm` — Compare vision-language chat models on synthetic or lmms-eval datasets.
     - `mere.run model benchmark h3-image` — Measure cold and warm native H3-Image generation with retained models.

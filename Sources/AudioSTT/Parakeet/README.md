@@ -36,3 +36,9 @@ Schema-v4 artifacts use ANE-compatible encoder masks and decoder selection.
 Use `scripts/model-conversion/inspect_parakeet_coreml.py --require-ane` and an
 Instruments trace to qualify placement on the target hardware. Runtime support
 for schemas 1 through 3 preserves existing artifact compatibility.
+
+Compiler versions are artifact provenance. Conversion records the selected
+Xcode version, and the loader accepts compatible compiled artifacts without an
+exact version match. The source revision, converter/dependency versions, tensor
+contract, and complete file-hash closure remain validated. Qualify graph placement
+and actual ANE execution on each target system.

@@ -431,6 +431,9 @@ package struct StudioDraft: Codable, Equatable, Sendable {
     package var speechProvider: String?
     package var speechBeamSize: Int?
     package var speechKeywords: String?
+    package var speechInstruction: String?
+    package var speechDraftModel: String?
+    package var speechPackedWeights: String?
     /// Video's LTX LoRAs as `PATH[=STRENGTH]`, one per line or separated by commas.
     package var videoLoRAs: String?
     package var videoEnhancePrompt: Bool?
@@ -583,6 +586,9 @@ package struct StudioDraft: Codable, Equatable, Sendable {
         speechProvider = nil
         speechBeamSize = nil
         speechKeywords = nil
+        speechInstruction = nil
+        speechDraftModel = nil
+        speechPackedWeights = nil
         videoLoRAs = nil
         videoEnhancePrompt = nil
         visionShowBoxes = nil
@@ -859,6 +865,9 @@ package enum StudioCommandAdapter {
             draft.speechProvider = studioDraft.speechProvider
             draft.speechBeamSize = studioDraft.speechBeamSize
             draft.speechKeywords = studioDraft.speechKeywords
+            draft.speechInstruction = studioDraft.speechInstruction
+            draft.speechDraftModel = studioDraft.speechDraftModel
+            draft.speechPackedWeights = studioDraft.speechPackedWeights
 
         case .readImage:
             draft.inputPath = studioDraft.inputPath

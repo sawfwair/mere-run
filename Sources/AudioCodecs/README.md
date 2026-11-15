@@ -10,3 +10,8 @@ runtime paths and tests.
 
 Keep codec behavior deterministic and covered by focused tests before changing
 runtime callers.
+
+The Whisper mel extractor stores each filter's nonzero frequency range and
+preserves accumulation order while skipping zero coefficients. Its FFT input
+buffer is reused between frames. Batch and incremental extraction share those
+same coefficients and normalization rules.

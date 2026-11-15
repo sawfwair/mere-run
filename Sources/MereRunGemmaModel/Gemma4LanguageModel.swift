@@ -14,6 +14,7 @@ package final class Gemma4LanguageModel: Module {
     let config: Gemma4TextConfig
     let firstKVSharedLayerIndex: Int
     let layerIndexToCacheIndex: [Int]
+    var experimentalSharedAttentionMasks = false
     private let embedScale: Float
     private let embedTokensPerLayerScale: Float
     private let perLayerInputScale: Float
@@ -110,9 +111,11 @@ package final class Gemma4LanguageModel: Module {
         mmTokenTypeIds: MLXArray? = nil,
         captureSharedKV: Bool = true,
         attentionMask: MLXArray? = nil,
-        captureHiddenStates: Bool = false
+        captureHiddenStates: Bool = false,
+        captureLayerIndices: Set<Int> = []
     ) -> Gemma4LanguageModelOutput {
         var hidden = embeddings
+        var capturedLayerStates: [Int: MLXArray] = [:]
         var hiddenStates: [MLXArray]? = captureHiddenStates ? [hidden] : nil
         let perLayerInputs = inputIds.flatMap { tokenIds -> MLXArray? in
             guard config.hiddenSizePerLayerInput > 0 else { return nil }
@@ -123,7 +126,8 @@ package final class Gemma4LanguageModel: Module {
         }
         let visionBlockIDs = Self.visionBlockIDs(from: mmTokenTypeIds, sequenceLength: hidden.dim(1))
         let caches = cache ?? makeCache()
-        let forwardCaches = caches.map(Gemma4ForwardAttentionCache.init)
+        let masks = experimentalSharedAttentionMasks ? Gemma4AttentionMaskCache() : nil
+        let forwardCaches = caches.map { Gemma4ForwardAttentionCache($0, masks: masks) }
         for (index, layer) in layers.enumerated() {
             let cacheIndex = index < layerIndexToCacheIndex.count ? layerIndexToCacheIndex[index] : index
             let perLayerInput = perLayerInputs?[0..., 0..., index, 0...]
@@ -134,6 +138,7 @@ package final class Gemma4LanguageModel: Module {
                 visionBlockIDs: visionBlockIDs,
                 attentionMask: attentionMask
             )
+            if captureLayerIndices.contains(index) { capturedLayerStates[index] = hidden }
             if captureHiddenStates {
                 MLX.eval(hidden)
                 hiddenStates?.append(hidden)
@@ -149,7 +154,8 @@ package final class Gemma4LanguageModel: Module {
             hidden: normalizedHidden,
             preNormHidden: preNormHidden,
             sharedKVStates: sharedKVStates,
-            hiddenStates: hiddenStates
+            hiddenStates: hiddenStates,
+            capturedLayerStates: capturedLayerStates
         )
     }
 

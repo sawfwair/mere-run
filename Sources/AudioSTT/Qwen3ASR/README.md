@@ -18,3 +18,9 @@ Concurrent streaming finishes join one finalization task and emit one final
 event. Cancellation closes the event stream and waits for native decode to
 settle without publishing late results. Decode failure rejects further audio;
 every subsequent finish reports the same failure.
+
+`transcribePrepared(samples:language:task:maxTokens:)` reuses a prepared model
+with already-decoded 16 kHz samples. It leases synchronized request streams for
+resident measurements; missing preparation and nonpositive token budgets fail
+before inference. File-based transcription and streaming retain their existing
+entry points.

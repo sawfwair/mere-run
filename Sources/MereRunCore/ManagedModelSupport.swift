@@ -878,6 +878,18 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 16
             ),
             descriptor(
+                SOVTranscribeResources.draftModelID,
+                "SOV-Transcribe-1 DFlash companion",
+                "Auxiliary draft for SOV-Transcribe-1; select it with --draft-model when transcribing with the target.",
+                minimum: 64, recommended: 96
+            ),
+            descriptor(
+                SOVTranscribeResources.modelID,
+                "SOV-Transcribe-1",
+                "Native BF16 file transcription in seven languages with instructions and optional DFlash decoding; checkpoint quality remains unqualified.",
+                minimum: 64, recommended: 96
+            ),
+            descriptor(
                 NemotronTranscribeResources.modelID,
                 "Nemotron 3.5 Transcribe",
                 "Native offline transcription and speech translation with 4-bit routed experts.",

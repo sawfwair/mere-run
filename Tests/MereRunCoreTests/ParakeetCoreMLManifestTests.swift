@@ -129,6 +129,21 @@ final class ParakeetCoreMLManifestTests: XCTestCase {
         XCTAssertEqual(loaded.manifest.coreMLDecoder?.decisionEncoding, .base128Float16)
     }
 
+    func testCompilerVersionIsRecordedProvenanceRatherThanAnExactRuntimeLock() throws {
+        let fixture = try makeHybridFixture(includeCoreMLDecoder: true, aneGraphs: true)
+        let url = fixture.root.appendingPathComponent(ParakeetCoreMLManifest.filename)
+        let original = try String(contentsOf: url, encoding: .utf8)
+        for version in ["Xcode 26.4 / Build version 17E192", "Xcode 27.2 / Build version 27B52", "Xcode 99.0 / Build version future"] {
+            try original.replacingOccurrences(of: "Xcode 26.4 / Build version 17E192", with: version)
+                .write(to: url, atomically: true, encoding: .utf8)
+            let loaded = try ParakeetCoreMLManifest.load(artifactURL: fixture.root, config: makeConfig(packaging: .coreMLHybrid))
+            XCTAssertEqual(loaded.manifest.conversion.xcode, version)
+        }
+        try original.replacingOccurrences(of: "Xcode 26.4 / Build version 17E192", with: "")
+            .write(to: url, atomically: true, encoding: .utf8)
+        XCTAssertThrowsError(try ParakeetCoreMLManifest.load(artifactURL: fixture.root, config: makeConfig(packaging: .coreMLHybrid)))
+    }
+
     func testRejectsANEGraphArtifactWithoutDecisionEncoding() throws {
         let fixture = try makeHybridFixture(includeCoreMLDecoder: true, aneGraphs: true)
         let url = fixture.root.appendingPathComponent(ParakeetCoreMLManifest.filename)

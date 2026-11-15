@@ -4,6 +4,8 @@ import json
 import sys
 import tempfile
 import unittest
+from unittest import mock
+from types import SimpleNamespace
 from pathlib import Path
 
 
@@ -32,6 +34,16 @@ class ParakeetCoreMLConverterTests(unittest.TestCase):
         self.assertEqual(value["decoder"]["embeddingFile"], "embedding.f16")
         self.assertEqual(value["decoder"]["lanes"], 16)
         self.assertEqual(value["decoder"]["windowFrames"], 8)
+
+    def test_selected_xcode_is_recorded_without_an_exact_version_lock(self) -> None:
+        for version in ["Xcode 26.4\nBuild version 17E192", "Xcode 27.2\nBuild version 27B52", "Xcode 99.0\nBuild version future"]:
+            with mock.patch.object(CONVERTER, "environment_versions", return_value=CONVERTER.EXPECTED_ENVIRONMENT), \
+                 mock.patch.object(CONVERTER.subprocess, "run", return_value=SimpleNamespace(stdout=version+"\n")):
+                self.assertEqual(CONVERTER.validate_environment(), version)
+        with mock.patch.object(CONVERTER, "environment_versions", return_value=CONVERTER.EXPECTED_ENVIRONMENT), \
+             mock.patch.object(CONVERTER.subprocess, "run", return_value=SimpleNamespace(stdout="\n")):
+            with self.assertRaises(ValueError):
+                CONVERTER.validate_environment()
 
     def test_source_verification_rejects_changed_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

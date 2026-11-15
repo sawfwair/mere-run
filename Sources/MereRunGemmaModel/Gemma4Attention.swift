@@ -25,6 +25,23 @@ final class Gemma4Attention: Module {
     private var fusedQKVAttempted = false
     private var compiledQKVSegment: Gemma4CompiledSegment?
     private var compiledQKVAttempted = false
+    private let ropeBase: Float
+    private let rotatedDims: Int
+    private let proportional: Bool
+    private var headKernel: Gemma4HeadNormRoPE?
+    private var experimentalHeadNorm = false
+
+    func setExperimentalHeadNorm(_ enabled: Bool) throws {
+        if enabled && headKernel == nil {
+            headKernel = try Gemma4HeadNormRoPE(heads: numHeads, kvHeads: numKVHeads, dim: headDim,
+                rotatedDims: rotatedDims, proportional: proportional, base: ropeBase, eps: rmsNormEps)
+        }
+        experimentalHeadNorm = enabled
+    }
+
+    func setDirectPartialRoPE(_ enabled: Bool) {
+        (rope as? Gemma4ProportionalRoPE)?.directRotation = enabled
+    }
 
     init(config: Gemma4TextConfig, layerIndex: Int, forceKVShared: Bool = false) {
         self.layerType = config.layerTypes[layerIndex]
@@ -42,6 +59,9 @@ final class Gemma4Attention: Module {
         let ropeBase = ropeConfig?.ropeTheta ?? 10_000
         let partial = max(0, min(1, ropeConfig?.partialRotaryFactor ?? 1))
         let ropeType = ropeConfig?.ropeType ?? "default"
+        self.ropeBase = ropeBase
+        self.proportional = ropeType == "proportional"
+        self.rotatedDims = ropeType == "proportional" ? 2 * Int(partial * Float(headDim / 2)) : max(1, Int(Float(headDim) * partial))
         if ropeType == "proportional" {
             self.rope = Gemma4ProportionalRoPE(
                 dims: headDim,
@@ -154,10 +174,17 @@ final class Gemma4Attention: Module {
                     rawKeys = kProj(x)
                     rawValues = useKeyEqualsValue ? rawKeys : vProj!(x)
                 }
-                queries = finishedQueries(rawQueries)
-                let keyValues = finishedKeyValues(rawKeys: rawKeys, rawValues: rawValues)
-                computedKeys = keyValues.0
-                computedValues = keyValues.1
+                let position = experimentalHeadNorm && sequenceLength <= 16 ? ((cache as? Gemma4ForwardAttentionCache)?.masks?.positionOffset(offset)
+                    ?? MLXArray([Int32(offset)])) : nil
+                if let position, let heads = headKernel?(queries: rawQueries, keys: rawKeys, values: rawValues,
+                    queryWeight: qNorm.weight, keyWeight: kNorm.weight, offset: position) {
+                    queries = heads.0; computedKeys = heads.1; computedValues = heads.2
+                } else {
+                    queries = finishedQueries(rawQueries)
+                    let keyValues = finishedKeyValues(rawKeys: rawKeys, rawValues: rawValues)
+                    computedKeys = keyValues.0
+                    computedValues = keyValues.1
+                }
             }
 
             if let cache {
@@ -176,15 +203,22 @@ final class Gemma4Attention: Module {
             }
         }
 
-        let mask = makeAttentionMask(
+        let attentionWindow = layerType == "sliding_attention" ? windowSize : nil
+        let buildMask = { self.makeAttentionMask(
             queryLength: sequenceLength,
             queryOffset: offset,
             keyLength: keys.dim(2),
-            windowSize: layerType == "sliding_attention" ? windowSize : nil,
+            windowSize: attentionWindow,
             dtype: x.dtype,
             visionBlockIDs: visionBlockIDs,
             keyPaddingMask: attentionMask
-        )
+        ) }
+        let mask: MLXFast.ScaledDotProductAttentionMaskMode
+        if visionBlockIDs == nil, attentionMask == nil, let masks = (cache as? Gemma4ForwardAttentionCache)?.masks {
+            let activeWindow = attentionWindow.flatMap { keys.dim(2) > $0 ? $0 : nil }
+            mask = masks.resolve(.init(queryLength: sequenceLength, queryOffset: offset, keyLength: keys.dim(2),
+                                       window: activeWindow, dtype: x.dtype), build: buildMask)
+        } else { mask = buildMask() }
 
         let attended = MLXFast.scaledDotProductAttention(
             queries: queries,

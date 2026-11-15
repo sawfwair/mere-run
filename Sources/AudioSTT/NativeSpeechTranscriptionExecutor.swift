@@ -10,6 +10,23 @@ public struct NativeSpeechTranscriptionExecutor: SpeechTranscriptionExecutor {
         self.parakeetExecutionProvider = parakeetExecutionProvider
     }
 
+    public func transcribeSOV(
+        request: ASRRequest, modelID: String, modelPath: String?,
+        progressHandler: (@Sendable (ASRProgress) -> Void)?
+    ) async throws -> ASRResult {
+        let generator = SOVTranscribeGenerator(executionProvider: parakeetExecutionProvider,
+            decoderExperts: request.sov?.packedWeights == nil ? .bf16 : .q8Metal,
+            packedWeights: request.sov?.packedWeights.map { URL(fileURLWithPath: $0) })
+        do {
+            let result = try await generator.transcribe(request, modelID: modelID, modelPath: modelPath, progressHandler: progressHandler)
+            await generator.unload()
+            return result
+        } catch {
+            await generator.unload()
+            throw error
+        }
+    }
+
     public func transcribeNemotron(
         request: ASRRequest, modelID: String, modelPath: String?,
         progressHandler: (@Sendable (ASRProgress) -> Void)?

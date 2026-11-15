@@ -13,6 +13,8 @@ package final class Gemma4ProportionalRoPE: Module, OffsetLayer {
     private let rotatedDims: Int
     private let traditional: Bool
     private let freqs: MLXArray?
+    private let directFreqs: MLXArray?
+    var directRotation = false
 
     package init(dims: Int, traditional: Bool = false, base: Float = 10_000, partialRotaryFactor: Float = 1.0, factor: Float = 1.0) {
         self.dims = dims
@@ -27,11 +29,20 @@ package final class Gemma4ProportionalRoPE: Module, OffsetLayer {
         } else {
             self.freqs = nil
         }
+        // Zero angular velocity leaves the unrotated part of each half in
+        // place. MLX's full-width kernel then avoids intermediate concatenations.
+        if let freqs = self.freqs, !traditional {
+            self.directFreqs = concatenated([freqs, MLXArray.full([dims / 2 - ropeAngles], values: MLXArray(Float.infinity))], axis: 0)
+        } else { self.directFreqs = nil }
         super.init()
     }
 
     package func callAsFunction(_ x: MLXArray, offset: Int) -> MLXArray {
         guard rotatedDims > 0 else { return x }
+
+        if directRotation, let directFreqs {
+            return MLXFast.RoPE(x, dimensions: dims, traditional: false, base: nil, scale: 1, offset: offset, freqs: directFreqs)
+        }
 
         let head = x[0..., 0..., 0..., ..<dims]
         let half = dims / 2

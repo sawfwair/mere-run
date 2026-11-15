@@ -936,6 +936,9 @@ package struct CommandDraft: Equatable, Codable {
     package var speechProvider: String?
     package var speechBeamSize: Int?
     package var speechKeywords: String?
+    package var speechInstruction: String?
+    package var speechDraftModel: String?
+    package var speechPackedWeights: String?
     // Vision chat (vision-capable chat models) and the agentic tool loop for `text chat`.
     package var imagePath = ""
     /// The audio and video an omni chat turn carries (`--audio`, `--video`). Optional so Library

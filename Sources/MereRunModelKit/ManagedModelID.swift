@@ -100,6 +100,8 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case drama3TTS = "speech-tts-drama-3"
     case qwen3ASR = "speech-asr-qwen3"
     case parakeetASR = "speech-asr-parakeet"
+    case sovTranscribeASR = "speech-asr-sov-transcribe-1"
+    case sovTranscribeDFlash = "speech-asr-sov-transcribe-1-dflash"
     case nemotronTranscribeASR = "speech-asr-nemotron-35-transcribe"
     case nemotronTranscribeBF16ASR = "speech-asr-nemotron-35-transcribe-bf16"
     case whistleASR = "speech-asr-whistle"

@@ -1,5 +1,70 @@
 # Third-Party Notices
 
+## Salesforce SOV-Transcribe-1 and DFlash
+
+`Sources/AudioSOVTranscribeModel/`, `Sources/AudioSTT/SOVTranscribe/`, and
+`scripts/model-conversion/convert_sov_coreml.py` contain native Swift/MLX
+adaptations of the Salesforce SOV-Transcribe-1 and DFlash reference architectures and preprocessing. Copyright 2026 Salesforce and
+The HuggingFace Inc. team. Licensed under the Apache License, Version 2.0.
+
+Sources: [SOV-Transcribe-1](https://huggingface.co/salesforce-sovereign-intelligence/SOV-Transcribe-1/tree/505d8fae243924c0d8acdc622f7f0abab344eba3)
+and [SOV-Transcribe-1-DFlash](https://huggingface.co/salesforce-sovereign-intelligence/SOV-Transcribe-1-DFlash/tree/8c0b3f3a98507d2e3dd35b1bee0f147fa3bded05).
+The converter exports the audio encoder and projector. The native
+implementation replaces PyTorch modules, cache handling, and model
+execution with Swift/MLX and an optional Core ML audio graph. The public
+configuration fixtures retain the upstream schemas. The Apache License 2.0 text is included in this file's YuE2 notice.
+
+## Fused head normalization and RoPE
+
+`Sources/MereRunGemmaModel/Kernels/Gemma4HeadNormRoPE.metal` adapts the RMS
+reduction and staged BF16 scaling from MLX's `rms_norm.metal` (copyright 2024 Apple
+Inc., MIT license). The MLX runtime bundle notice below includes the license.
+`Gemma4HeadNormRoPE.swift` adapts Cmlx ownership and binding from mlx-swift's
+`MLXFastKernel.swift` (copyright 2024 Apple Inc., MIT license), with cached
+launch configurations and current parameters supplied on every invocation.
+
+## Dynamic int8 Metal research
+
+`Sources/AudioSOVTranscribeModel/SOVDynamicInt8.swift`, its Metal resource, and
+`scripts/model-conversion/profile_sov_metal_quant.py` use an independently
+implemented block-floating int8 algorithm inspired by the staged int8 integer
+accumulator rescaling in
+[precisit/mlx, commit d03fed7b6965864b61c7c10fc48277e38c1a272f](https://github.com/precisit/mlx/blob/d03fed7b6965864b61c7c10fc48277e38c1a272f/mlx/backend/metal/kernels/quantized_nax.h).
+The implementation uses Apple Metal Performance Primitives, exponents for both
+operands, tile-major packing, and fused block Hadamard activation rotation.
+The fork is MIT licensed, copyright © 2023 Apple Inc.; the MIT license text is
+reproduced in the MLX runtime bundle notice below. No forked MLX runtime is
+required or bundled by this experiment.
+
+## ANEForge attention research bridge
+
+`scripts/model-conversion/profile_sov_direct_attention.py` adapts the
+asymmetric-query netplist adjustment from
+[ANEForge 0.4.0](https://github.com/sbryngelson/ANEForge). This optional offline
+experiment uses private system interfaces; the shipping runtime uses Core ML.
+
+MIT License
+
+Copyright (c) 2026 Spencer H. Bryngelson
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
 ## Splash matrix operand construction
 
 `Sources/MereRunTensor/M5AffineQ8Head.swift`, `M5TiledAffineQ8.swift`, and

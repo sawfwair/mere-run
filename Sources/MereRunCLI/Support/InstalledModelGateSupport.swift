@@ -386,7 +386,13 @@ enum InstalledModelSmokePlans {
                 try await runner.installedTTSCheck(model: spec.id)
             }
 
-        case .qwen3ASR, .parakeet, .whistle, .nemotronTranscribe:
+        case .sovTranscribeDFlash:
+            guard installedIDs.contains("speech-tts-qwen3-nano") else { return nil }
+            return companion(spec, installedIDs: installedIDs, candidates: [SOVTranscribeResources.modelID],
+                             route: "SOV DFlash companion") { runner, primary in
+                try await runner.installedASRCheck(model: primary, fixtureModel: "speech-tts-qwen3-nano", draftModel: spec.id)
+            }
+        case .qwen3ASR, .parakeet, .whistle, .nemotronTranscribe, .sovTranscribe:
             return companion(
                 spec,
                 installedIDs: installedIDs,
@@ -919,7 +925,8 @@ extension GateRunner {
 
     func installedASRCheck(
         model: String,
-        fixtureModel: String
+        fixtureModel: String,
+        draftModel: String? = nil
     ) async throws -> GateObservation {
         let sentence = "The release smoke proves speech recognition works."
         let input = workDirectory.appendingPathComponent("installed-asr-spoken-source.wav")
@@ -936,7 +943,7 @@ extension GateRunner {
                 timeout: 1_800
             )
         }
-        let backend = NemotronTranscribeResources.handles(model) ? "nemotron" : model == "speech-asr-whistle" ? "whistle" : model.contains("qwen") ? "qwen" : "parakeet"
+        let backend = SOVTranscribeResources.handles(model) ? "sov" : NemotronTranscribeResources.handles(model) ? "nemotron" : model == "speech-asr-whistle" ? "whistle" : model.contains("qwen") ? "qwen" : "parakeet"
         let run = try await exec(
             [
                 "speech", "transcribe", input.path,
@@ -945,7 +952,7 @@ extension GateRunner {
                 "--max-tokens", "16",
                 "--no-timestamps",
                 "--quiet",
-            ],
+            ] + (draftModel.map { ["--draft-model", $0] } ?? []),
             timeout: 1_800
         )
         let transcript = run.stdout.trimmingCharacters(in: .whitespacesAndNewlines)

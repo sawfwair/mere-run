@@ -6,16 +6,23 @@ final class Gemma4ForwardAttentionCache: Gemma4AttentionCache {
     private let cache: Gemma4AttentionCache
     private var attentionContext: (MLXArray, MLXArray)?
     let offset: Int
+    let masks: Gemma4AttentionMaskCache?
 
-    init(_ cache: Gemma4AttentionCache) {
-        self.cache = cache
-        self.offset = cache.offset
+    convenience init(_ cache: Gemma4AttentionCache) {
+        self.init(cache, masks: nil)
     }
 
-    private init(cache: Gemma4AttentionCache, offset: Int, context: (MLXArray, MLXArray)?) {
+    init(_ cache: Gemma4AttentionCache, masks: Gemma4AttentionMaskCache?) {
+        self.cache = cache
+        self.offset = cache.offset
+        self.masks = masks
+    }
+
+    private init(cache: Gemma4AttentionCache, offset: Int, context: (MLXArray, MLXArray)?, masks: Gemma4AttentionMaskCache?) {
         self.cache = cache
         self.offset = offset
         self.attentionContext = context
+        self.masks = masks
     }
 
     func currentState() -> (MLXArray, MLXArray)? {
@@ -40,6 +47,6 @@ final class Gemma4ForwardAttentionCache: Gemma4AttentionCache {
     }
 
     func fork() -> Gemma4AttentionCache {
-        Gemma4ForwardAttentionCache(cache: cache.fork(), offset: offset, context: attentionContext)
+        Gemma4ForwardAttentionCache(cache: cache.fork(), offset: offset, context: attentionContext, masks: masks)
     }
 }

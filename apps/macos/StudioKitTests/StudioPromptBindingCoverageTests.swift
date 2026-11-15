@@ -169,6 +169,18 @@ final class StudioPromptBindingCoverageTests: XCTestCase {
         XCTAssertFalse(untouched.contains("--temperature"), "an untouched temperature follows Caption's default")
     }
 
+    func testSOVInstructionAndDFlashReachTranscriptionArguments() throws {
+        let argv = try arguments(.listen, model: "speech-asr-sov-transcribe-1", [
+            "--backend": .text("sov"),
+            "--instruction": .text("Preserve names and use digits."),
+            "--draft-model": .text("speech-asr-sov-transcribe-1-dflash"),
+            "--sov-packed-weights": .text("/Volumes/SSD/sov-q8"),
+        ])
+        assertPair(argv, "--instruction", "Preserve names and use digits.")
+        assertPair(argv, "--draft-model", "speech-asr-sov-transcribe-1-dflash")
+        assertPair(argv, "--sov-packed-weights", "/Volumes/SSD/sov-q8")
+    }
+
     /// The argv a prompt task launches after its inspector writes `values` through the bindings.
     private func arguments(
         _ mode: StudioMode,

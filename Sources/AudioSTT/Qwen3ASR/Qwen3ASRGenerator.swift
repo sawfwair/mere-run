@@ -79,6 +79,18 @@ public actor Qwen3ASRGenerator: ASRGenerator {
         )
     }
 
+    /// Reuse a prepared checkpoint while excluding audio-file I/O from inference.
+    public func transcribePrepared(
+        samples: [Float], language: String? = nil, task: ASRTask = .transcribe, maxTokens: Int = 448
+    ) async throws -> ASRResult {
+        guard maxTokens > 0 else { throw ASRStreamingError.invalidInput("maxTokens must be positive.") }
+        return try await MLXRequestStreams.withStream(isolation: self) {
+            await Task.yield()
+            return try await decodeSamples(samples, request: ASRStreamingRequest(
+                language: language, task: task, maxTokens: maxTokens, sampleRate: Qwen3ASRResources.sampleRate), progressHandler: nil)
+        }
+    }
+
     public func makeStreamingSession(
         _ request: ASRStreamingRequest
     ) async throws -> any ASRStreamingSession {

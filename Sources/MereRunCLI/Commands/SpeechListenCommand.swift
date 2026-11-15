@@ -141,6 +141,9 @@ struct SpeechListen: AsyncParsableCommand {
         let configuration = Qwen3ASRLiveConfiguration(decodeIntervalMs: decodeMs, silenceMs: silenceMs)
         let route = try SpeechTranscriptionResolver.route(task: .transcribe, language: language,
                                                           preferredBackend: model == nil ? .qwen : .auto, modelOverride: model)
+        if route.decision.backend == .sov {
+            throw ValidationError("SOV-Transcribe-1 supports files through speech transcribe.")
+        }
         if route.decision.backend == .nemotron {
             return try await CLINemotronLiveSession.make(model: route.modelOverride, request: request, configuration: configuration,
                                                          progressHandler: progressHandler)
