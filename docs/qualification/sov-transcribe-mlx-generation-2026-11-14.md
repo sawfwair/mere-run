@@ -52,7 +52,7 @@ machine and these recordings, with paired comparisons used to limit timing drift
 
 ## Implementation
 
-The [decoder](../../Sources/AudioSOVTranscribeModel/SOVTranscribeDecoder.swift)
+The [decoder](https://github.com/sawfwair/mere-run/blob/400cc5f2be5ce7b7ccb12ffab62d90f155d7949c/Sources/AudioSOVTranscribeModel/SOVTranscribeDecoder.swift)
 starts draft evaluation asynchronously, builds target input IDs from the device
 proposal array, and reads proposals and predictions together. It carries the
 verified next prediction on the host after acceptance or prefix reuse. Replay

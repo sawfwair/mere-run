@@ -254,7 +254,7 @@ Both checkpoints and their reference modeling code are Apache 2.0 licensed:
 - [SOV-Transcribe-1 at the pinned revision](https://huggingface.co/salesforce-sovereign-intelligence/SOV-Transcribe-1/tree/505d8fae243924c0d8acdc622f7f0abab344eba3)
 - [SOV-Transcribe-1-DFlash at the pinned revision](https://huggingface.co/salesforce-sovereign-intelligence/SOV-Transcribe-1-DFlash/tree/8c0b3f3a98507d2e3dd35b1bee0f147fa3bded05)
 
-See [third-party notices](../../THIRD_PARTY_NOTICES.md) for attribution.
+See [third-party notices](https://github.com/sawfwair/mere-run/blob/main/THIRD_PARTY_NOTICES.md) for attribution.
 
 The M5 GPU also has an experimental custom Metal FFN path. Compare it with the
 reference using the same checkpoint, audio, prefill size, and DFlash settings:
