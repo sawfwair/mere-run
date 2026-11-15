@@ -8,6 +8,7 @@ public final class Gemma4TextCausalLM: Module, Gemma4CausalModel, @unchecked Sen
 
     public let config: Gemma4TextConfig
     private let finalLogitSoftcapping: Float?
+    var experimentalMetalExperts: Gemma4MetalExperts?
 
     public init(config: Gemma4TextConfig) {
         self.config = config
@@ -91,7 +92,7 @@ public final class Gemma4TextCausalLM: Module, Gemma4CausalModel, @unchecked Sen
         makeAttentionCache(quantization: quantization)
     }
 
-    private func applyFinalSoftcap(_ logits: MLXArray) -> MLXArray {
+    func applyFinalSoftcap(_ logits: MLXArray) -> MLXArray {
         guard let finalLogitSoftcapping else { return logits }
         let softcap = MLXArray(finalLogitSoftcapping).asType(logits.dtype)
         return tanh(logits / softcap) * softcap

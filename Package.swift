@@ -550,6 +550,7 @@ targets.append(
     dependencies: mereRunGemmaModelDependencies,
     path: "Sources/MereRunGemmaModel",
     exclude: ["README.md"],
+    resources: [.copy("Kernels")],
     swiftSettings: commonSwiftSettings
   )
 )
@@ -788,6 +789,17 @@ targets.append(
 
 targets.append(
   .target(
+    name: "AudioSOVTranscribeModel",
+    dependencies: ["MereRunGemmaModel"] + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/AudioSOVTranscribeModel",
+    exclude: ["README.md"],
+    resources: [.copy("Kernels")],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
     name: "AudioNemotronTranscribeModel",
     dependencies: ["AudioSortformer"] + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
     path: "Sources/AudioNemotronTranscribeModel",
@@ -1008,12 +1020,13 @@ targets.append(
 targets.append(
   .target(
     name: "AudioSTT",
-    dependencies: audioRuntimeDependencies + (hasMediaIOTarget ? ["MediaIO"] : []) + ["AudioNemotronTranscribeModel", "AudioQwen3ASRModel", "AudioSortformer", "AudioParakeetModel", "AudioWhistleModel"],
+    dependencies: ["AudioSOVTranscribeModel", .product(name: "Crypto", package: "swift-crypto")] + audioRuntimeDependencies + (hasMediaIOTarget ? ["MediaIO"] : []) + ["AudioNemotronTranscribeModel", "AudioQwen3ASRModel", "AudioSortformer", "AudioParakeetModel", "AudioWhistleModel"],
     path: "Sources/AudioSTT",
     exclude: [
       "README.md",
       "Parakeet/README.md",
       "Qwen3ASR/README.md",
+      "SOVTranscribe/README.md",
       "Whistle/README.md"
     ],
     swiftSettings: commonSwiftSettings,
@@ -1146,6 +1159,18 @@ targets.append(
       + mlxDependency("MLXRandom"),
     path: "Tests/ImageRuntimeTests",
     exclude: ["Fixtures"],
+    swiftSettings: commonSwiftSettings,
+    linkerSettings: linuxNativeLinkerSettings
+  )
+)
+
+targets.append(
+  .testTarget(
+    name: "SOVTranscribeRuntimeTests",
+    dependencies: ["AudioSOVTranscribeModel", "MereRunGemmaModel", "MereRunMLXTestSupport"]
+      + mlxDependency("MLX") + mlxDependency("MLXNN"),
+    path: "Tests/SOVTranscribeRuntimeTests",
+    resources: [.copy("Fixtures")],
     swiftSettings: commonSwiftSettings,
     linkerSettings: linuxNativeLinkerSettings
   )

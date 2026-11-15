@@ -1,6 +1,6 @@
 import Foundation
 
-/// Selects the execution engine for the Parakeet encoder. AudioSTT resolves
+/// Selects the speech audio encoder engine (Parakeet or SOV). AudioSTT resolves
 /// and validates the model assets for the selected provider.
 public enum ParakeetExecutionProvider: Codable, Sendable, Hashable {
     case mlx

@@ -25,6 +25,8 @@ struct ModelBenchmark: ParsableCommand {
             ModelBenchmarkKolibri.self,
             ModelBenchmarkLagunaDFlash.self,
             ModelBenchmarkParakeetCoreML.self,
+            ModelBenchmarkSOV.self,
+            ModelBenchmarkASR.self,
             ModelBenchmarkAPIWorkload.self,
             ModelBenchmarkVLM.self,
             ModelBenchmarkH3Image.self,

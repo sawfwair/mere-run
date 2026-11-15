@@ -164,19 +164,22 @@ public struct ASRRequest: Sendable, Hashable, Codable {
     public var task: ASRTask
     public var maxTokens: Int
     public var whistle: WhistleOptions?
+    public var sov: SOVTranscribeOptions?
 
     public init(
         audioURL: URL,
         language: String? = nil,
         task: ASRTask = .transcribe,
         maxTokens: Int = 448,
-        whistle: WhistleOptions? = nil
+        whistle: WhistleOptions? = nil,
+        sov: SOVTranscribeOptions? = nil
     ) {
         self.audioURL = audioURL
         self.language = language
         self.task = task
         self.maxTokens = maxTokens
         self.whistle = whistle
+        self.sov = sov
     }
 }
 

@@ -39,6 +39,7 @@ package struct Gemma4LanguageModelOutput {
     package let preNormHidden: MLXArray
     package let sharedKVStates: [String: Gemma4SharedKVState]
     package let hiddenStates: [MLXArray]?
+    package var capturedLayerStates: [Int: MLXArray] = [:]
 }
 
 package struct Gemma4ForwardOutput {

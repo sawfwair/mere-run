@@ -11,6 +11,8 @@ package final class Gemma4SlidingKVCache: Gemma4AttentionCache {
     private var values: MLXArray?
     package private(set) var offset: Int = 0
     private var writeIndex: Int = 0
+    /// Explicit SOV experiment: retain a view of the attention concatenation instead of concatenating twice.
+    package var reuseAttentionStorage = false
 
     package init(maxSize: Int, initialOffset: Int = 0) {
         self.maxSize = max(1, maxSize)
@@ -56,6 +58,18 @@ package final class Gemma4SlidingKVCache: Gemma4AttentionCache {
         }
 
         let previous = currentState()
+        if reuseAttentionStorage {
+            let attentionKeys = previous.map { concatenated([$0.0, keys], axis: 2) } ?? keys
+            let attentionValues = previous.map { concatenated([$0.1, values], axis: 2) } ?? values
+            // An incoming chunk larger than the window must remain available in
+            // full, matching the reference cache's multi-token append behavior.
+            let start = max(0, attentionKeys.dim(2) - max(maxSize, keys.dim(2)))
+            self.keys = attentionKeys[0..., 0..., start..., 0...]
+            self.values = attentionValues[0..., 0..., start..., 0...]
+            offset += keys.dim(2)
+            writeIndex = attentionKeys.dim(2) - start
+            return (attentionKeys, attentionValues)
+        }
         append(keys: keys, values: values)
         guard let previous else {
             return currentState()
@@ -166,6 +180,7 @@ package final class Gemma4SlidingKVCache: Gemma4AttentionCache {
         copy.values = values.map { $0.reshaped($0.shape) }
         copy.offset = offset
         copy.writeIndex = writeIndex
+        copy.reuseAttentionStorage = reuseAttentionStorage
         return copy
     }
 

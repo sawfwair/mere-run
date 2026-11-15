@@ -563,3 +563,99 @@ mere.run model benchmark vlm \
 - `Sources/MereRunCLI/Commands/ModelBenchmarkVLMCommand.swift`
 - `Sources/MereRunCore/Gemma4/Gemma4Generator.swift`
 - `Sources/MereRunGemmaModel/Gemma4KVQuantization.swift`
+
+
+## Resident ASR comparison
+
+`model benchmark asr short.wav long.wav --backend parakeet --model-root /path/to/model --json`
+compares recordings with one checkpoint held resident. Select `parakeet`, `qwen`,
+`whistle`, `nemotron`, or `sov`; use the same `--warmups` and `--repetitions` for
+all models. JSON includes every transcript, first-inference and resident timing,
+separate model-load/audio-read times, and memory peaks. The command requires
+local assets. Core ML uses `--artifact`; SOV can use `--draft-model` and
+`--experimental-dynamic-int8` or `--experimental-decoder q8`. Whistle exposes beam size, decoder depth, and
+optional word alignment.
+
+`model benchmark sov` adds stage timings, exact token sequences, and experimental
+decoder selection through `--experimental-decoder bf16-gemv`, `q4`, `q6`, `mixed`,
+`q6-matrix`, `q8`, or `q8-g32`.
+The default remains `bf16`. Q8 packs only MoE expert weights during preparation;
+qualify token agreement and transcription quality against the original target.
+`--experimental-decoder q8-metal` adds a custom Metal expert-vector kernel to
+the Q8 group-64 path. It shares weights across two sorted routes and retains
+the regular matrix path for larger batches.
+
+`q4` and `q6` pack affine expert weights in groups of 64. `mixed` requires
+`--expert-recipe path.json`, a typed recipe with `schemaVersion: 1`,
+`groupSize: 32` or `64`, and `layerBits`, one value of 4, 6, or 8 per decoder
+layer. Mixed group-64 Q8 layers use the custom Metal path; lower precisions use
+MLX. The JSON report records the recipe digest. These policies change target
+weights and require held-out recognition evaluation.
+
+`q6-matrix` retains Q6 verification and caches the same six-bit codes in
+eight-bit containers for large sorted prefill batches. Shared scales and biases
+preserve the quantized weight values. This uses the M5 Q8 matrix backend without
+another weight quantization. It adds a second expert representation in memory;
+matrix accumulation can still change outputs and requires recognition checks.
+
+Add `--interleave-experts` to compare Q4, Q6, or mixed against a separately
+resident Q8 Metal model with identical generation and attention settings.
+`--experts-first` reverses starting order. This comparison uses two model copies
+in memory; JSON records their combined active allocation and the baseline load
+time. It excludes other interleaving modes and allocator-retention experiments.
+
+`--wire-models` requests explicit Metal residency throughout sampling through
+MLX's managed wired-memory tickets. The budget is active MLX memory plus 4 GiB,
+capped just under the GPU's recommended working set. It is restored after
+sampling or errors. `--interleave-wired` instead pairs default and wired
+residency on one model; `--wired-first` reverses starting order. This excludes
+other interleaving, allocator retention, and projected-output modes. Ticket
+transitions occur outside each measured interval. JSON records the requested
+budget and labels wired samples. These are benchmark controls; normal SOV
+transcription does not change its residency policy.
+
+For paired measurements, run `model benchmark sov` with
+`--experimental-decoder q8 --interleave-metal`. It alternates stock and custom
+kernels on one prepared model, preserving packed weights and compiled shaders.
+Warmups/repetitions apply to each mode. `--metal-first` reverses the starting
+order. JSON labels each measurement and records synchronized resident time.
+
+`model benchmark sov --experimental-attention` enables shared position masks and
+direct proportional partial RoPE in the target decoder. It preserves parameters
+and remains off by default. With `q8-metal` selected, use `--interleave-attention` for paired attention
+measurements, and `--attention-first`
+to reverse their starting order. This comparison holds expert dispatch constant;
+it cannot be combined with `--interleave-metal` or `--experimental-attention`.
+
+For SOV on the MLX GPU, `--experimental-head-norm` fuses BF16 head normalization
+and RoPE while retaining intermediate rounding. `--interleave-head-norm` and
+`--head-norm-first` provide paired measurements with expert dispatch and the
+attention policy held constant. Only one interleaving mode can be active.
+
+SOV generation experiments use `--generation-experiment pipeline|draft-q8|shared-cache|retained-allocator|combined`.
+The pipeline keeps proposal IDs on the GPU and overlaps drafting with target
+graph construction. `draft-q8` packs a separate draft-only vocabulary head;
+`shared-cache` shares the sliding attention concatenation with retained KV state.
+`retained-allocator` skips request cache clearing, subject to MLX's configured
+allocator limit. `combined` selects all four. Ordinary transcription uses the
+weight-preserving pipeline automatically with DFlash; this benchmark defaults
+to explicit `reference` scheduling.
+
+Add `--interleave-generation` to pair `pipeline`, `draft-q8`, or `shared-cache`
+with the reference on one resident target. `--generation-first` reverses the
+starting order. Warmups and repetitions apply per mode. Other interleaving and
+projected-output options are excluded. Allocator retention requires separate
+resident runs. JSON includes per-round acceptance, emitted draft counts,
+allocator cache bytes, and peak allocation.
+
+Further SOV research policies are `rollback`, `compiled`, `block-4`, `block-8`,
+`block-12`, `adaptive`, `adaptive-after-first`, and `vocabulary-32k`. Pair each
+against the production pipeline with `--generation-baseline pipeline
+--interleave-generation`. Fixed block sizes include the anchor; confidence
+truncation uses a 0.5 threshold. The after-first policy preserves the initial
+full block. `compiled` covers each MoE layer's segment after attention with
+runtime parameter inputs. All these policies remain explicit experiments.
+
+`--draft-vocabulary vocabulary.json` supplies global token IDs for the restricted
+head. Calibration happens before timing. JSON records the file digest and
+`proposedLengths` alongside accepted and emitted draft counts.

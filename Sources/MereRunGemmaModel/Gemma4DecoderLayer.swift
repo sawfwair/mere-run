@@ -24,6 +24,8 @@ final class Gemma4DecoderLayer: Module {
     private let rmsNormEps: Float
     private var compiledPostSegment: Gemma4CompiledSegment?
     private var compiledPostAttempted = false
+    var experimentalCompiledPost = false
+    private var researchPost: Gemma4CompiledSegment?
 
     init(config: Gemma4TextConfig, layerIndex: Int, forceKVShared: Bool = false) {
         self._selfAttention.wrappedValue = Gemma4Attention(
@@ -75,6 +77,10 @@ final class Gemma4DecoderLayer: Module {
         )
 
         let perLayerInputActive = hasPerLayerInput && perLayerInput != nil
+        if experimentalCompiledPost, x.dim(1) <= 16, !perLayerInputActive,
+           let function = researchPostFunction() {
+            return function([hidden, attentionResidual, layerScalar])[0]
+        }
         if let fusedOutput = fusedDecodeFeedForward(
             attentionOutput: hidden,
             attentionResidual: attentionResidual,
@@ -123,6 +129,31 @@ final class Gemma4DecoderLayer: Module {
         }
 
         return hidden * layerScalar
+    }
+
+    /// Compile a complete MoE feed-forward segment. Modules are observed inputs,
+    /// and the layer scalar is an explicit argument: no parameter values freeze.
+    private func researchPostFunction() -> (([MLXArray]) -> [MLXArray])? {
+        guard let router, let experts, let pre2 = preFeedforwardLayerNorm2,
+              let post1 = postFeedforwardLayerNorm1, let post2 = postFeedforwardLayerNorm2 else { return nil }
+        let post = postAttentionLayerNorm, pre = preFeedforwardLayerNorm, final = postFeedforwardLayerNorm, mlp = mlp
+        let identities: [AnyObject] = [post, pre, final, mlp, mlp.gateProj, mlp.upProj, mlp.downProj,
+            router, router.proj, experts, experts.switchGLU, experts.switchGLU.downProj, pre2, post1, post2]
+            + [experts.switchGLU.gateProj, experts.switchGLU.upProj, experts.switchGLU.gateUpProj].compactMap { $0 }
+            + [experts.switchGLU.downProj.metalVerification, experts.switchGLU.gateUpProj?.metalVerification,
+               experts.switchGLU.gateProj?.metalVerification, experts.switchGLU.upProj?.metalVerification]
+                .compactMap { $0?.compilationIdentity }
+        let fingerprint = identities.map(ObjectIdentifier.init)
+        if let researchPost, researchPost.matches(fingerprint) { return researchPost.function }
+        let function = MLX.compile(inputs: [post, pre, final, mlp, router, experts, pre2, post1, post2]) { (inputs: [MLXArray]) -> [MLXArray] in
+            let residual = inputs[1] + post(inputs[0])
+            let dense = post1(mlp(pre(residual)))
+            let route = router(residual)
+            let sparse = post2(experts(pre2(residual), indices: route.indices, weights: route.weights))
+            return [(residual + final(dense + sparse)) * inputs[2]]
+        }
+        researchPost = Gemma4CompiledSegment(function: function, fingerprint: fingerprint)
+        return function
     }
 
     /// Fused-kernel decode path for everything after attention in the dense

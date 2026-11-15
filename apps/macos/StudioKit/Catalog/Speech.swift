@@ -125,6 +125,9 @@ extension CommandArguments {
         if let provider = draft.speechProvider, !provider.isBlank { args.optionUnlessDefault(F.provider, provider) }
         if let beamSize = draft.speechBeamSize { args.optionUnlessDefault(F.beamSize, String(beamSize)) }
         args.repeated(F.keyword, pathList(draft.speechKeywords ?? ""))
+        if let instruction = draft.speechInstruction, !instruction.isBlank { args.option(F.instruction, instruction) }
+        if let draftModel = draft.speechDraftModel, !draftModel.isBlank { args.option(F.draftModel, draftModel) }
+        if let packed = draft.speechPackedWeights, !packed.isBlank { args.option(F.sovPackedWeights, packed) }
         if draft.stream {
             args.flag(F.stream)
             args.option(F.streamChunkMs, String(draft.speechStreamChunkMS))

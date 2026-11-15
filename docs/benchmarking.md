@@ -25,6 +25,7 @@ The following table maps each goal to the command that measures it.
 | Runtime microbenchmarks | `model benchmark gemma4-kv`, `gemma4-mtp`, `q36-mtp`, `q38-verification` | KV-cache, speculative-decode, and target-verification modes against real checkpoints |
 | Laguna DFlash timing | `model benchmark laguna-dflash` | Target-only, forced DFlash, and automatic routing in one resident process |
 | Kolibri log probabilities | `model benchmark kolibri-logprobs` | Raw logits and log probabilities for fixed token sequences on a converted Kolibri checkpoint |
+| Native ASR comparison | `model benchmark asr` | Prepared Parakeet, Qwen3-ASR, Whistle, Nemotron Transcribe, and SOV latency, transcripts, first inference, and peak memory on the same recordings |
 | Parakeet Core ML timing | `model benchmark parakeet-coreml` | Stage-level timings for a prepared Parakeet Core ML transcription pipeline |
 | Fused model quality | `model benchmark fused`, `fused-fixture` | Versioned 24-case Lite and 110-case Comprehensive chat, code, tool, long-context, and vision suites, native sampled profiles, repeated trials, and calibration diagnostics |
 | External or private evals | `eval pack validate`, `eval run`, `eval promote` | Content-addressed external cases, matched model, adapter, and prompt arms, logprob calibration, gates, and promotion receipts without importing pack content |
@@ -61,6 +62,42 @@ mere.run model benchmark chat \
 
 Benchmark commands don't pull models during scoring. They report missing
 models as skipped, so the comparison stays explicit.
+
+## Native ASR timing
+
+Use the same recordings and measurement controls for each installed checkpoint:
+
+```bash
+mere.run model benchmark asr short.wav long.wav \
+  --backend parakeet --model-root /path/to/parakeet \
+  --warmups 2 --repetitions 5 --json
+mere.run model benchmark asr short.wav long.wav \
+  --backend sov --model-root /path/to/SOV-Transcribe-1 \
+  --draft-model /path/to/SOV-Transcribe-1-DFlash \
+  --experimental-dynamic-int8 --warmups 2 --repetitions 5 --json
+```
+
+The command loads one model, reads each recording once, warms it up, and records
+resident inference with every transcript. It reports checkpoint loading,
+audio-file reading, and the first inference separately. Peak process memory
+includes loading and warmup; MLX active-memory peaks are recorded for each run.
+Core ML allocations are included in process memory, but not MLX memory counters.
+
+Choose `parakeet`, `qwen`, `whistle`, `nemotron`, or `sov` explicitly. Existing
+checkpoint directories are required; scoring never downloads models. Parakeet
+and SOV accept `--artifact` for Core ML. SOV also accepts `--draft-model` and
+`--experimental-dynamic-int8`. Whistle defaults to beam 5, full decoder depth,
+and text-only output; use `--beam-size 1` for greedy decoding or
+`--word-timestamps` to include word alignment. Parakeet's built-in alignment
+remains included in its pipeline timings.
+
+`scripts/validation/benchmark_asr.py` orchestrates a serial comparison on the
+two checksum-verified repository recordings and scores transcripts against their
+references. Its default two sessions reverse model and recording order. Run
+`--dry-run` to inspect paths and commands; missing checkpoints and failed runs
+are reported explicitly. Use `--keep-awake` to hold temporary macOS display and
+system idle-sleep assertions while each benchmark process runs. Word error rates from two recordings are a local
+sanity check, not a corpus-wide model ranking.
 
 ## Quality evaluations
 

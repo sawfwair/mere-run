@@ -27,6 +27,11 @@ public enum SpeechTranscriptionResolver {
         let effectiveOverride = route.modelOverride
         var plan: SpeechTranscriptionPlan
         switch decision.backend {
+        case .sov:
+            let root = existingPath(from: effectiveOverride)
+            plan = SpeechTranscriptionPlan(request: request, decision: decision,
+                                           modelID: root == nil ? effectiveOverride ?? SOVTranscribeResources.modelID : SOVTranscribeResources.modelID,
+                                           modelPath: root?.path, provider: parakeetExecutionProvider)
         case .nemotron:
             let root = existingPath(from: effectiveOverride)
             plan = SpeechTranscriptionPlan(
@@ -84,12 +89,18 @@ public enum SpeechTranscriptionResolver {
         let normalizedOverride = normalized(
             modelOverride ?? parakeetExecutionProvider.bundledModelURL?.path
         )
+        if let normalizedOverride, SOVTranscribeResources.isDraft(normalizedOverride) {
+            throw SpeechTranscriptionIssue("draft_requires_target", "SOV DFlash requires SOV-Transcribe-1; pass it with --draft-model.")
+        }
         let inferredBackend = inferredBackendFromModelOverride(normalizedOverride)
         let effectivePreferredBackend: ASRBackend = {
             guard preferredBackend == .auto, normalizedOverride != nil else { return preferredBackend }
             return inferredBackend
         }()
 
+        if effectivePreferredBackend == .sov {
+            _ = try SOVTranscribeGenerator.validate(task: task, language: language)
+        }
         if effectivePreferredBackend == .nemotron {
             _ = try NemotronTranscribeGenerator.validate(language: language)
         }
@@ -109,14 +120,14 @@ public enum SpeechTranscriptionResolver {
             task: task,
             languageHint: routesByFolder ? nil : language,
             preferredBackend: effectivePreferredBackend,
-            availableBackends: ASRBackendAvailability(parakeetAvailable: true, qwenAvailable: true, whistleAvailable: true, nemotronAvailable: true),
+            availableBackends: ASRBackendAvailability(parakeetAvailable: true, qwenAvailable: true, whistleAvailable: true, nemotronAvailable: true, sovAvailable: true),
             parakeetSupportedLanguageCodes: parakeetCodes
         )
 
-        if case .coreML = parakeetExecutionProvider, decision.backend != .parakeet {
+        if case .coreML = parakeetExecutionProvider, decision.backend != .parakeet && decision.backend != .sov {
             throw SpeechTranscriptionIssue(
                 "incompatible_execution_provider",
-                "Core ML requires a Parakeet-compatible transcription request. "
+                "Core ML requires a Parakeet or SOV transcription request. "
                     + "This request selects \(decision.backend.rawValue) (\(decision.reason))."
             )
         }
@@ -142,6 +153,13 @@ public enum SpeechTranscriptionResolver {
         let modelRoot = plan.decision.backend == .parakeet ? ParakeetResources.resolveNestedIfNeeded(base: root) : root
         var files = ["config.json", "tokenizer.json", "tokenizer_config.json", MereRunModelManifest.filename]
             .map { modelRoot.appendingPathComponent($0) }
+        if plan.decision.backend == .sov {
+            files += ["preprocessor_config.json", "processor_config.json", "generation_config.json"].map { root.appendingPathComponent($0) }
+            if let draft = plan.request.sov?.draftModel {
+                let draftRoot = existingPath(from: draft) ?? MereRunModelPaths.modelDir(SOVTranscribeResources.draftModelID)
+                files.append(draftRoot.appendingPathComponent("config.json"))
+            }
+        }
         if plan.decision.backend == .whistle {
             files.append(modelRoot.appendingPathComponent("whistle.cact"))
             if plan.request.whistle?.weights == .fp32 {
@@ -149,7 +167,7 @@ public enum SpeechTranscriptionResolver {
             }
         }
         if case .coreML(let artifactURL) = plan.provider {
-            files.append(artifactURL.appendingPathComponent(ParakeetCoreMLManifest.filename))
+            files.append(artifactURL.appendingPathComponent(plan.decision.backend == .sov ? "sov-coreml.json" : ParakeetCoreMLManifest.filename))
         }
         return SpeechTranscriptionPlan(
             request: plan.request, decision: plan.decision, modelID: plan.modelID, modelPath: plan.modelPath,
@@ -161,7 +179,8 @@ public enum SpeechTranscriptionResolver {
         _ modelOverride: String?, inferredBackend: ASRBackend, selectedBackend: ASRResolvedBackend
     ) throws -> String? {
         guard let modelOverride else { return nil }
-        let matches = inferredBackend == .nemotron && selectedBackend == .nemotron
+        let matches = inferredBackend == .sov && selectedBackend == .sov
+            || inferredBackend == .nemotron && selectedBackend == .nemotron
             || inferredBackend == .qwen && selectedBackend == .qwen
             || inferredBackend == .parakeet && selectedBackend == .parakeet
             || inferredBackend == .whistle && selectedBackend == .whistle
@@ -272,6 +291,7 @@ public enum SpeechTranscriptionResolver {
     private static func inferredBackendFromModelOverride(_ modelOverride: String?) -> ASRBackend {
         guard let modelOverride else { return .auto }
         if let existingPath = existingPath(from: modelOverride) {
+            if SOVTranscribeResources.isLocalModel(existingPath) { return .sov }
             if NemotronTranscribeResources.isLocalModel(existingPath) { return .nemotron }
             if FileManager.default.fileExists(atPath: existingPath.appendingPathComponent("whistle.cact").path) {
                 return .whistle
@@ -290,6 +310,7 @@ public enum SpeechTranscriptionResolver {
             return .qwen
         }
 
+        if SOVTranscribeResources.handles(modelOverride) { return .sov }
         if NemotronTranscribeResources.handles(modelOverride) { return .nemotron }
         let lowered = modelOverride.lowercased()
         if lowered == WhistleGenerator.modelID || lowered == "cactus-compute/whistle" { return .whistle }

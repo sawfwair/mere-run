@@ -69,7 +69,6 @@ EXPECTED_ENVIRONMENT = {
     "numpy": "2.3.5",
     "safetensors": "0.8.0",
 }
-EXPECTED_XCODE = "Xcode 26.4\nBuild version 17E192"
 MINIMUM_FREE_BYTES = 10 * 1_073_741_824
 
 
@@ -209,8 +208,8 @@ def validate_environment() -> str:
         capture_output=True,
         text=True,
     ).stdout.strip()
-    if xcode != EXPECTED_XCODE:
-        raise ValueError(f"Xcode mismatch: expected {EXPECTED_XCODE!r}, found {xcode!r}")
+    if not xcode:
+        raise ValueError("The selected Xcode toolchain did not report a version.")
     return xcode
 
 
@@ -854,7 +853,7 @@ def plan() -> dict[str, Any]:
             for name, pin in sorted(SOURCE_FILES.items())
         },
         "environment": EXPECTED_ENVIRONMENT,
-        "xcode": EXPECTED_XCODE.replace("\n", " / "),
+        "xcode": "installed toolchain; actual version recorded during conversion",
         "encoder": {
             "inputShape": [1, INPUT_FRAMES, INPUT_FEATURES],
             "outputFeatures": OUTPUT_FEATURES,

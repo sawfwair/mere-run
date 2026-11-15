@@ -474,6 +474,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 },
                 make: {
                     switch key.backend {
+                    case .sov:
+                        throw SpeechTranscriptionIssue("unsupported_backend", "SOV-Transcribe-1 is available through the CLI.")
                     case .nemotron:
                         return .nemotron(NemotronTranscribeGenerator())
                     case .whistle:

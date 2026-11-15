@@ -276,6 +276,8 @@ public extension ManagedModelSpec {
             return Self.missingQwen3ASRPaths(in: rootURL, fileManager: fileManager)
         case .parakeet:
             return Self.missingParakeetPaths(in: rootURL, fileManager: fileManager)
+        case .sovTranscribe, .sovTranscribeDFlash:
+            return SOVTranscribeResources.missingFiles(root: rootURL, draft: validationKind == .sovTranscribeDFlash, fileManager: fileManager)
         case .nemotronTranscribe:
             return NemotronTranscribeResources.missingFiles(modelID: id, root: rootURL, fileManager: fileManager)
         case .whistle:

@@ -151,6 +151,7 @@ Use `mere.run guide --model text-chat-gemma4-26b-a4b-bf16` for its text workflow
 | `text-chat` | `text-chat-lfm25-2.6b-bf16` |
 | `vision-chat` | `vision-chat-lfm25-3b-8bit` |
 | `vision-chat` | `vision-chat-lfm25-3b-bf16` |
+| `speech-asr` | `speech-asr-sov-transcribe-1` |
 | `speech-asr` | `speech-asr-nemotron-35-transcribe` |
 | `speech-asr` | `speech-asr-nemotron-35-transcribe-bf16` |
 | `speech-tts` | `speech-tts-drama-3` |

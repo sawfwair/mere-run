@@ -1110,6 +1110,9 @@ package enum StudioContractBindings {
         "--provider": .optionalText("speechProvider", \.speechProvider),
         "--beam-size": .optionalInteger("speechBeamSize", \.speechBeamSize),
         "--keyword": .optionalText("speechKeywords", \.speechKeywords),
+        "--instruction": .optionalText("speechInstruction", \.speechInstruction),
+        "--draft-model": .optionalText("speechDraftModel", \.speechDraftModel),
+        "--sov-packed-weights": .optionalText("speechPackedWeights", \.speechPackedWeights),
     ]) { first, _ in first } }
 
     private static var chat: [String: StudioContractBinding<StudioDraft>] { model.merging([

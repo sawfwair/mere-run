@@ -35,6 +35,14 @@ extension ManagedModelCatalog {
     static var companionSpecs: [ManagedModelSpec] {
         [
             ManagedModelSpec(
+                id: SOVTranscribeResources.draftModelID, category: .speechASR, installShape: .directoryRoot,
+                hubFallback: HubFallbackConfig(repoId: SOVTranscribeResources.draftRepository, revision: SOVTranscribeResources.draftRevision,
+                                               patterns: ["config.json", "model*.safetensors", "model.safetensors.index.json", "README.md", "LICENSE*"]),
+                upstreamRepoId: SOVTranscribeResources.draftRepository, upstreamRevision: SOVTranscribeResources.draftRevision,
+                validationKind: .sovTranscribeDFlash, runtimeAutoDownloadAllowed: false,
+                estimatedDownloadBytes: 860_000_000, apiAvailability: .cliOnly
+            ),
+            ManagedModelSpec(
                 id: Q35Resources.ornith35BMTPModelId,
                 category: .textCode,
                 installShape: .directoryRoot,

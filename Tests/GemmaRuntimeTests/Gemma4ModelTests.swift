@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 import MLX
 import MLXRandom
+import MLXNN
 @testable import MereRunGemmaModel
 import MereRunMLXTestSupport
 
@@ -316,6 +317,98 @@ final class Gemma4ModelTests: MLXTestCase {
             MLX.max(MLX.abs(batched - serial)).item(Float.self),
             1e-5
         )
+    }
+
+    func testPackedExpertsMatchIndependentPerExpertProjections() throws {
+        try XCTSkipUnless(Device.defaultDevice().deviceType == .gpu, "BF16 expert arithmetic requires a GPU.")
+        var object = makeBaseConfig()
+        object["hidden_size"] = 64
+        object["enable_moe_block"] = true
+        object["num_experts"] = 8
+        object["top_k_experts"] = 4
+        object["moe_intermediate_size"] = 64
+        let config = try decodeTextConfig(object)
+        let source = Gemma4SwitchGLU(config: config, quantized: false)
+        try source.update(parameters: ModuleParameters.unflattened(source.parameters().flattened().enumerated().map { index, entry in
+            (entry.0, (sin(MLXArray(0..<entry.1.size).asType(.float32) * (0.017 + Float(index) * 0.003)) * 0.07)
+                .reshaped(entry.1.shape).asType(.bfloat16))
+        }), verify: .all)
+        for groupSize in [32, 64] {
+            let packed = Gemma4SwitchGLU(packing: source, groupSize: groupSize)
+            XCTAssertNil(packed.gateProj)
+            XCTAssertNil(packed.upProj)
+            XCTAssertEqual(packed.gateUpProj?.weight.dtype, .uint32)
+            for tokens in [1, 16, 33] {
+                let x = cos(MLXArray(0..<(tokens * 64)).asType(.float32) * 0.073).reshaped(1, tokens, 64).asType(.bfloat16)
+                let routes = MLXArray((0..<(tokens * 4)).map { Int32(($0 * 3 + 1) % 8) }).reshaped(1, tokens, 4)
+                let actual = packed(x, indices: routes)
+                let pair = try XCTUnwrap(packed.gateUpProj)
+                let expected = MLX.stacked((0..<tokens).map { token in
+                    MLX.stacked((0..<4).map { slot in
+                        let expert = routes[0, token, slot].item(Int.self)
+                        func project(_ input: MLXArray, _ linear: Gemma4SwitchLinear) -> MLXArray {
+                            quantizedMM(input, linear.weight[expert], scales: linear.scales![expert], biases: linear.biases![expert],
+                                        groupSize: groupSize, bits: 8)
+                        }
+                        let projected = project(x[0, token].reshaped(1, 64), pair)
+                        return project(geluApproximate(projected[0..., ..<64]) * projected[0..., 64...], packed.downProj).squeezed(axis: 0)
+                    })
+                }).expandedDimensions(axis: 0)
+                eval(actual, expected)
+                XCTAssertEqual(actual.dtype, .bfloat16)
+                XCTAssertLessThan((abs(actual.asType(.float32) - expected.asType(.float32)).max()).item(Float.self), 0.005)
+                let reference = source(x, indices: routes).asType(.float32)
+                XCTAssertLessThan(((actual.asType(.float32) - reference).square().mean() / reference.square().mean()).sqrt().item(Float.self), 0.03)
+            }
+        }
+    }
+
+    func testExpertRepackingPreservesRoutersAndReleasesFloatingParameters() throws {
+        var object = makeBaseConfig()
+        object["hidden_size"] = 64
+        object["enable_moe_block"] = true
+        object["num_experts"] = 8
+        object["top_k_experts"] = 4
+        object["moe_intermediate_size"] = 64
+        let model = Gemma4TextCausalLM(config: try decodeTextConfig(object))
+        model.prepareForFullPrecisionExpertWeights()
+        let routers = model.parameters().flattened().filter { $0.0.contains("router") }
+        eval(model.parameters())
+        try model.prepareExperimentalExperts(groupSize: 64)
+        let parameters = Dictionary(uniqueKeysWithValues: model.parameters().flattened())
+        for (key, value) in routers {
+            XCTAssertEqual(parameters[key]?.dtype, value.dtype)
+            XCTAssertEqual(abs(try XCTUnwrap(parameters[key]) - value).max().item(Float.self), 0)
+        }
+        XCTAssertFalse(parameters.keys.contains { $0.contains("switch_glu.gate_proj") || $0.contains("switch_glu.up_proj") })
+        XCTAssertTrue(parameters.keys.contains { $0.contains("switch_glu.gate_up_proj.scales") })
+        if Gemma4TextCausalLM.supportsMetalExpertVerification {
+            try model.setMetalExpertVerification(true)
+            let kernel = try XCTUnwrap(model.languageModel.layers[0].experts?.switchGLU.gateUpProj?.metalVerification)
+            XCTAssertEqual(model.usesDistributedMetalExpertReduction, Gemma4MetalExperts.automaticDistributedReduction)
+            try model.setMetalExpertVerification(true, distributedReduction: false)
+            XCTAssertFalse(model.usesDistributedMetalExpertReduction)
+            try model.setMetalExpertVerification(true, distributedReduction: true)
+            XCTAssertTrue(model.usesDistributedMetalExpertReduction)
+            try model.setMetalExpertVerification(false)
+            XCTAssertFalse(model.usesDistributedMetalExpertReduction)
+            XCTAssertNil(model.languageModel.layers[0].experts?.switchGLU.gateUpProj?.metalVerification)
+            try model.setMetalExpertVerification(true)
+            XCTAssertEqual(model.usesDistributedMetalExpertReduction, Gemma4MetalExperts.automaticDistributedReduction)
+            try model.setMetalExpertVerification(true, fusedActivation: true)
+            XCTAssertEqual(model.usesDistributedMetalExpertReduction, Gemma4MetalExperts.automaticDistributedReduction)
+            XCTAssertTrue(kernel === model.languageModel.layers[0].experts?.switchGLU.gateUpProj?.metalVerification)
+            let changed = Dictionary(uniqueKeysWithValues: model.parameters().flattened())
+            for (key, value) in parameters {
+                let counterpart = try XCTUnwrap(changed[key])
+                XCTAssertEqual(value.dtype, counterpart.dtype)
+                if value.dtype == .uint32 {
+                    XCTAssertEqual(value.asArray(UInt32.self), counterpart.asArray(UInt32.self))
+                } else {
+                    XCTAssertEqual(abs(value.asType(.float32) - counterpart.asType(.float32)).max().item(Float.self), 0)
+                }
+            }
+        }
     }
 
     func testPrefixCacheForkMatchesFullForwardForSuffixLogits() throws {

@@ -80,25 +80,25 @@ extension MereRunCapabilityCatalog {
         options: [
             .init(flag: "--run-dir", label: "Run directory", kind: .directory, group: Group.output, tier: .expert),
             .init(flag: "--timestamps", label: "Include timestamps", kind: .boolean)
-                .scoped(SpeechTranscribeFamily.only(.parakeet, .whistle, ignoredBy: [.qwen3ASR, .nemotronTranscribe])),
+                .scoped(SpeechTranscribeFamily.only(.parakeet, .whistle, ignoredBy: [.qwen3ASR, .nemotronTranscribe, .sovTranscribe])),
             .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file, group: Group.output, tier: .standard),
             .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .standard),
             .init(
-                flag: "--backend", label: "Backend", kind: .choice, choices: ["auto", "parakeet", "qwen", "whistle", "nemotron"],
+                flag: "--backend", label: "Backend", kind: .choice, choices: ["auto", "parakeet", "qwen", "whistle", "nemotron", "sov"],
                 defaultValue: "auto", group: Group.modelAndAdapters, tier: .essential, choiceSpellings: .exact
             ).scoped(SpeechTranscribeFamily.rule(.qwen3ASR, values: ["auto", "qwen"], severity: .warning)),
             .init(
-                flag: "--provider", label: "Parakeet provider", kind: .choice, choices: ["mlx", "coreml"],
+                flag: "--provider", label: "Encoder provider", kind: .choice, choices: ["mlx", "coreml"],
                 defaultValue: "mlx", group: Group.modelAndAdapters, tier: .standard, choiceSpellings: .exact
             ).scoped(
                 // Qwen3-ASR always runs MLX: the default passes with no effect, Core ML is refused.
-                SpeechTranscribeFamily.only(.parakeet, ignoredBy: [.qwen3ASR, .whistle, .nemotronTranscribe]),
+                SpeechTranscribeFamily.only(.parakeet, .sovTranscribe, ignoredBy: [.qwen3ASR, .whistle, .nemotronTranscribe]),
                 .rule(.qwen3ASR, values: ["mlx"]), .rule(.whistle, values: ["mlx"]), .rule(.nemotronTranscribe, values: ["mlx"])
             ),
             .init(
                 flag: "--coreml-encoder", label: "Core ML artifact", kind: .directory,
                 group: Group.modelAndAdapters, tier: .expert, dependsOn: "--provider"
-            ).scoped(SpeechTranscribeFamily.only(.parakeet)),
+            ).scoped(SpeechTranscribeFamily.only(.parakeet, .sovTranscribe)),
             .init(
                 flag: "--task", label: "Task", kind: .choice, choices: ["transcribe", "translate"],
                 defaultValue: "transcribe", group: Group.prompt, tier: .essential, choiceSpellings: .exact
@@ -111,7 +111,13 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--max-tokens", label: "Max tokens", kind: .integer,
                 defaultValue: "448", group: Group.sampling, tier: .standard, range: .init(min: 1, max: 8_192, step: 1)
-            ).scoped(SpeechTranscribeFamily.only(.qwen3ASR, .whistle, .nemotronTranscribe, ignoredBy: [.parakeet])),
+            ).scoped(SpeechTranscribeFamily.only(.qwen3ASR, .whistle, .nemotronTranscribe, .sovTranscribe, ignoredBy: [.parakeet])),
+            .init(flag: "--instruction", label: "Transcription instruction", kind: .string, group: Group.prompt, tier: .standard)
+                .scoped(SpeechTranscribeFamily.only(.sovTranscribe)),
+            .init(flag: "--draft-model", label: "DFlash model", kind: .string, group: Group.modelAndAdapters, tier: .expert)
+                .scoped(SpeechTranscribeFamily.only(.sovTranscribe)),
+            .init(flag: "--sov-packed-weights", label: "Q8 packed weights", kind: .string, group: Group.modelAndAdapters, tier: .expert)
+                .scoped(SpeechTranscribeFamily.only(.sovTranscribe)),
             .init(flag: "--whistle-weights", label: "Whistle weights", kind: .choice, choices: ["cactus", "fp32"],
                   defaultValue: "cactus", group: Group.modelAndAdapters, tier: .expert, choiceSpellings: .exact)
                 .scoped(SpeechTranscribeFamily.only(.whistle)),
@@ -145,7 +151,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--jsonl", label: "JSON Lines", kind: .boolean, group: Group.output, tier: .expert, dependsOn: "--stream")
                 .scoped(SpeechTranscribeFamily.only(.parakeet, .qwen3ASR, .whistle, .nemotronTranscribe)),
             .init(flag: "--no-timestamps", label: "No timestamps", kind: .boolean, group: Group.output, tier: .standard)
-                .scoped(SpeechTranscribeFamily.only(.parakeet, .whistle, ignoredBy: [.qwen3ASR, .nemotronTranscribe])),
+                .scoped(SpeechTranscribeFamily.only(.parakeet, .whistle, ignoredBy: [.qwen3ASR, .nemotronTranscribe, .sovTranscribe])),
             .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             receiptOption
         ],

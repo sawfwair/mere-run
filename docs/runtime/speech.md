@@ -84,6 +84,11 @@ The packaged app declares `NSMicrophoneUsageDescription` and signs both the app
 and embedded CLI with the audio-input entitlement. Recording is local; granting
 microphone access does not enable a network upload path.
 
+SOV-Transcribe-1 provides native file transcription in seven European languages
+with natural-language instructions and optional DFlash decoding. Install its
+checkpoint explicitly and select `--backend sov`. See
+[native SOV-Transcribe-1](./sov-transcribe.md) for usage and qualification limits.
+
 ## Typical workflows
 
 ### Synthesize speech
@@ -315,8 +320,12 @@ an Instruments Core ML trace establishes hardware execution. Audio I/O,
 feature extraction, decoder orchestration, and transcript merging remain host
 work. Treat performance, placement, boundary merging,
 and transcript parity as unqualified until you measure them on the target Mac.
-The conversion needs at least 10 GiB of free working space and the exact Xcode
-version printed by `--plan`.
+The conversion needs at least 10 GiB of free working space and an installed
+Xcode toolchain that can compile the iOS 18 / macOS 15 Core ML deployment target.
+It records the actual compiler version for provenance. Artifact loading checks
+the model format, pinned source and conversion dependencies, and complete file
+hashes; it does not require an exact Xcode version. Qualify placement and parity
+on the target Mac after compilation.
 
 To report resident model-load, feature extraction, encoder, decoder, alignment,
 merge, and total timings, use an optimized executable:

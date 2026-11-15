@@ -75,6 +75,8 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case parakeet
     case whistle
     case nemotronTranscribe
+    case sovTranscribe
+    case sovTranscribeDFlash
     case sortformer
     case qwen3Embedding
     case embeddingGemma2

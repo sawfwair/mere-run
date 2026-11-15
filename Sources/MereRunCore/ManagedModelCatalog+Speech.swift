@@ -3,6 +3,14 @@ import Foundation
 extension ManagedModelCatalog {
     static let speechSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
+            id: SOVTranscribeResources.modelID, category: .speechASR, installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(repoId: SOVTranscribeResources.repository, revision: SOVTranscribeResources.revision,
+                                           patterns: SOVTranscribeResources.patterns),
+            upstreamRepoId: SOVTranscribeResources.repository, upstreamRevision: SOVTranscribeResources.revision,
+            validationKind: .sovTranscribe, runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 53_283_115_580, defaultCLICommands: ["speech transcribe"], apiAvailability: .cliOnly
+        ),
+        ManagedModelSpec(
             id: NemotronTranscribeResources.modelID,
             category: .speechASR,
             installShape: .directoryRoot,

@@ -42,6 +42,7 @@ public final class MelSpectrogram {
     private let fftPlan: RealFFTPlan
     private let hannWindow: [Float]
     private let melFilters: [[Float]]
+    private let melFilterRanges: [Range<Int>]
 
     public init(config: Qwen3ASRMelConfig = Qwen3ASRMelConfig()) {
         self.nMels = config.nMels
@@ -65,13 +66,19 @@ public final class MelSpectrogram {
         self.hannWindow = window
 
         // Mel filterbank
-        self.melFilters = Self.createMelFilterbank(
+        let filters = Self.createMelFilterbank(
             nMels: nMels,
             nFFT: nFFT,
             sampleRate: sampleRate,
             fMin: config.fMin,
             fMax: config.fMax
         )
+        self.melFilters = filters
+        self.melFilterRanges = filters.map { filter in
+            let start = filter.firstIndex(where: { $0 != 0 }) ?? 0
+            let end = filter.lastIndex(where: { $0 != 0 }).map { $0 + 1 } ?? 0
+            return start..<end
+        }
     }
 
     /// Extract mel spectrogram from audio samples
@@ -83,26 +90,22 @@ public final class MelSpectrogram {
         var melSpec = [[Float]](repeating: [Float](repeating: 0, count: numFrames), count: nMels)
 
         var paddedFrame = [Float](repeating: 0, count: nFFT)
-        var magnitudes = [Float](repeating: 0, count: nFFT / 2 + 1)
 
         for frameIdx in 0..<numFrames {
             let start = frameIdx * hopLength
 
             // Zero-pad and apply window
-            paddedFrame = [Float](repeating: 0, count: nFFT)
             for i in 0..<winLength {
                 let audioIdx = start + i
-                if audioIdx < paddedAudio.count {
-                    paddedFrame[i] = paddedAudio[audioIdx] * hannWindow[i]
-                }
+                paddedFrame[i] = audioIdx < paddedAudio.count ? paddedAudio[audioIdx] * hannWindow[i] : 0
             }
 
-            magnitudes = fftPlan.powerSpectrum(paddedFrame)
+            let magnitudes = fftPlan.powerSpectrum(paddedFrame)
 
             // Apply mel filterbank
             for melIdx in 0..<nMels {
                 var energy: Float = 0
-                for freqIdx in 0..<melFilters[melIdx].count {
+                for freqIdx in melFilterRanges[melIdx] {
                     energy += melFilters[melIdx][freqIdx] * magnitudes[freqIdx]
                 }
                 melSpec[melIdx][frameIdx] = energy
@@ -163,9 +166,9 @@ public final class MelSpectrogram {
         }
 
         let magnitudes = fftPlan.powerSpectrum(paddedFrame)
-        return melFilters.map { filter in
+        return melFilters.enumerated().map { melIndex, filter in
             var energy: Float = 0
-            for frequency in 0..<filter.count {
+            for frequency in melFilterRanges[melIndex] {
                 energy += filter[frequency] * magnitudes[frequency]
             }
             return log10(max(energy, 1e-10))

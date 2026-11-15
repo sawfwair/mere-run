@@ -18,7 +18,6 @@ struct ParakeetCoreMLManifest: Decodable, Sendable {
     static let torchVersion = "2.7.0"
     static let transformersVersion = "5.16.1"
     static let coreMLToolsVersion = "9.0"
-    static let xcodeVersion = "Xcode 26.4 / Build version 17E192"
     static let compiledModelDirectory = "encoder.mlmodelc"
     static let compiledDecoderModelDirectory = "decoder.mlmodelc"
 
@@ -201,7 +200,7 @@ struct ParakeetCoreMLManifest: Decodable, Sendable {
               conversion.torch == Self.torchVersion,
               conversion.transformers == Self.transformersVersion,
               conversion.coremltools == Self.coreMLToolsVersion,
-              conversion.xcode == Self.xcodeVersion else {
+              !conversion.xcode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ParakeetCoreMLError.untrustedConversion
         }
         guard encoder.compiledModelDirectory == Self.compiledModelDirectory,

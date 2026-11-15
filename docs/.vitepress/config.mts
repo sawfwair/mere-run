@@ -139,6 +139,7 @@ export default defineConfig({
           { text: 'D1 decisions', link: '/runtime/d1' },
           { text: 'Speech runtime', link: '/runtime/speech' },
           { text: 'Native Whistle', link: '/runtime/whistle' },
+          { text: 'Native SOV-Transcribe-1', link: '/runtime/sov-transcribe' },
           { text: 'Nemotron Transcribe', link: '/runtime/nemotron-transcribe' },
           { text: 'Vision runtime', link: '/runtime/vision' },
           { text: 'Unlimited-OCR-2', link: '/runtime/unlimited-ocr-2' },

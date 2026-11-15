@@ -13,9 +13,11 @@ enum SpeechBackendOption: String, ExpressibleByArgument {
     case qwen
     case whistle
     case nemotron
+    case sov
 
     var backend: ASRBackend {
         switch self {
+        case .sov: return .sov
         case .nemotron: return .nemotron
         case .whistle: return .whistle
         case .auto: return .auto
@@ -47,7 +49,8 @@ struct SpeechTranscribe: AsyncParsableCommand {
         commandName: "transcribe",
         abstract: "Transcribe or translate speech to text using native ASR backends.",
         discussion: """
-        Supports native Parakeet, Qwen, Whistle, and Nemotron Transcribe backends with policy routing.
+        Supports native Parakeet, Qwen, Whistle, Nemotron Transcribe, and SOV-Transcribe-1 backends with policy routing.
+        SOV-Transcribe-1 transcribes files in seven languages with optional instructions and DFlash decoding.
         Nemotron Transcribe defaults to 4-bit routed experts, with an explicit BF16 option. It transcribes and translates to English, and streams one utterance at a time.
         Whistle supports packed CQ2/CQ4 weights, beam search, word timestamps, and seven European languages.
         In auto mode, transcription prefers Parakeet while translation routes to Qwen.
@@ -74,18 +77,27 @@ struct SpeechTranscribe: AsyncParsableCommand {
     @Option(name: [.customShort("m"), .long], help: "Model ID or local model path override for the selected backend.")
     var model: String?
 
-    @Option(name: [.long], help: "ASR backend: auto, parakeet, qwen, whistle, or nemotron.")
+    @Option(name: [.long], help: "ASR backend: auto, parakeet, qwen, whistle, nemotron, or sov.")
     var backend: SpeechBackendOption = .auto
+
+    @Option(name: .long, help: "Natural-language transcription instruction for SOV-Transcribe-1.")
+    var instruction: String?
+
+    @Option(name: .customLong("draft-model"), help: "SOV DFlash companion model ID or local directory; omitted uses target-only decoding.")
+    var draftModel: String?
+
+    @Option(name: .customLong("sov-packed-weights"), help: "Opt-in Q8 expert pack directory; stream and save once, then reuse. Can change recognition output.")
+    var sovPackedWeights: String?
 
     @Option(
         name: [.long],
-        help: "Parakeet encoder provider: mlx or coreml. Core ML requires --backend parakeet."
+        help: "Encoder provider: mlx or coreml. Core ML supports --backend parakeet or sov."
     )
     var provider: SpeechParakeetProviderOption = .mlx
 
     @Option(
         name: [.customLong("coreml-encoder")],
-        help: "Mere-built Parakeet Core ML artifact directory (required with --provider coreml)."
+        help: "Mere-built Core ML encoder artifact directory (required with --provider coreml)."
     )
     var coremlEncoder: String?
 
@@ -162,6 +174,16 @@ struct SpeechTranscribe: AsyncParsableCommand {
         guard maxTokens > 0 else {
             throw ValidationError("--max-tokens must be positive.")
         }
+        let selected = try SpeechTranscriptionResolver.route(
+            task: task.task, language: language, preferredBackend: backend.backend, modelOverride: model)
+        if selected.decision.backend == .sov, stream {
+            throw ValidationError("SOV-Transcribe-1 supports file transcription; omit --stream.")
+        }
+        if instruction != nil || draftModel != nil || sovPackedWeights != nil {
+            guard selected.decision.backend == .sov else {
+                throw ValidationError("--instruction, --draft-model, and --sov-packed-weights require the SOV backend.")
+            }
+        }
         let readsStandardInput = audio == "-"
         if let runDirectory {
             guard !stream, !readsStandardInput else {
@@ -208,13 +230,13 @@ struct SpeechTranscribe: AsyncParsableCommand {
             throw ValidationError("--jsonl is only valid with raw streaming stdin ('-').")
         }
         // The capability gate refuses Core ML wherever the options select Qwen3-ASR, translation
-        // included; Core ML also needs Parakeet named outright and an artifact.
+        // included; Core ML requires an explicit Parakeet or SOV backend and an artifact.
         if provider == .coreml {
             guard !stream else {
                 throw ValidationError("--provider coreml is currently limited to non-streaming transcription.")
             }
-            guard backend == .parakeet else {
-                throw ValidationError("--provider coreml requires --backend parakeet.")
+            guard backend == .parakeet || backend == .sov else {
+                throw ValidationError("--provider coreml requires --backend parakeet or sov.")
             }
             guard let coremlEncoder, !coremlEncoder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw ValidationError("--provider coreml requires --coreml-encoder <artifact-directory>.")
@@ -270,7 +292,9 @@ struct SpeechTranscribe: AsyncParsableCommand {
             language: language,
             task: task.task,
             maxTokens: maxTokens,
-            whistle: requestRoute.decision.backend == .whistle ? whistleOptions : nil
+            whistle: requestRoute.decision.backend == .whistle ? whistleOptions : nil,
+            sov: instruction != nil || draftModel != nil || sovPackedWeights != nil
+                ? SOVTranscribeOptions(instruction: instruction, draftModel: draftModel, packedWeights: sovPackedWeights) : nil
         )
 
         if stream {
@@ -503,6 +527,8 @@ struct SpeechTranscribe: AsyncParsableCommand {
         let configuration = Qwen3ASRLiveConfiguration(decodeIntervalMs: streamDecodeMs)
 
         switch route.decision.backend {
+        case .sov:
+            throw ValidationError("SOV-Transcribe-1 supports file transcription; omit --stream.")
         case .nemotron:
             return try await CLINemotronLiveSession.make(model: route.modelOverride, request: request, configuration: configuration,
                                                          progressHandler: progressHandler)

@@ -428,6 +428,13 @@
     "resourceName": "handbook-qwen3-tts.md"
   },
   {
+    "topic": "handbook-sov-transcribe",
+    "title": "SOV-Transcribe-1 (Salesforce)",
+    "category": "Speech",
+    "models": ["speech-asr-sov-transcribe-1"],
+    "resourceName": "handbook-sov-transcribe.md"
+  },
+  {
     "topic": "handbook-nemotron-transcribe",
     "title": "Nemotron 3.5 Transcribe (NVIDIA)",
     "category": "Speech",

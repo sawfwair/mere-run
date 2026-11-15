@@ -82,8 +82,8 @@ private func temporaryFolder() throws -> URL {
     let translated = try report("speech", "transcribe", "a.wav", "--backend", "parakeet", "--task", "translate",
                                 "--provider", "coreml", "--coreml-encoder", "/tmp/parakeet-coreml")
     #expect(translated.violations == [
-        "--provider is not supported by Qwen3-ASR. It applies to Parakeet.",
-        "--coreml-encoder is not supported by Qwen3-ASR. It applies to Parakeet."
+        "--provider is not supported by Qwen3-ASR. It applies to SOV-Transcribe-1 and Parakeet.",
+        "--coreml-encoder is not supported by Qwen3-ASR. It applies to SOV-Transcribe-1 and Parakeet."
     ])
     #expect(throws: CLICapabilityGate.Rejection.self) {
         try CLICapabilityGate.check(arguments: ["mere.run", "speech", "transcribe", "a.wav", "--backend", "qwen",
@@ -128,14 +128,18 @@ private func temporaryFolder() throws -> URL {
                             task: task, language: language, preferredBackend: backend, modelOverride: model
                         )
                     } catch let issue as SpeechTranscriptionIssue {
-                        #expect(backend == .whistle || backend == .nemotron || backend == .auto
-                            && (model == WhistleGenerator.modelID || model.map(NemotronTranscribeResources.handles) == true), "\(context)")
+                        #expect(backend == .whistle || backend == .nemotron || backend == .sov || backend == .auto
+                            && (model == WhistleGenerator.modelID || model.map(NemotronTranscribeResources.handles) == true
+                                || model.map(SOVTranscribeResources.handles) == true), "\(context)")
                         #expect(issue.code == "unsupported_task" || issue.code == "unsupported_language", "\(context)")
                         continue
                     }
                     let family: String
                     let defaultModel: String
                     switch route.decision.backend {
+                    case .sov:
+                        family = "sov-transcribe"
+                        defaultModel = SOVTranscribeResources.modelID
                     case .nemotron:
                         family = "nemotron-transcribe"
                         defaultModel = NemotronTranscribeResources.modelID
@@ -386,7 +390,7 @@ private func temporaryFolder() throws -> URL {
 @Test func aFamilyThatRunsOneValueWarnsOnItAndRefusesTheRest() throws {
     let mlx = try report("speech", "transcribe", "a.wav", "--task", "translate", "--provider", "mlx")
     #expect(mlx.family == "qwen3-asr" && mlx.violations.isEmpty
-        && mlx.warnings == ["--provider has no effect with Qwen3-ASR. It applies to Parakeet."])
+        && mlx.warnings == ["--provider has no effect with Qwen3-ASR. It applies to SOV-Transcribe-1 and Parakeet."])
     let offline = try report("speech", "diarize", "a.wav", "--latency", "offline")
     #expect(offline.family == "sortformer" && offline.violations.isEmpty
         && offline.warnings == ["--latency has no effect with Sortformer. It applies to Nemotron 3 Diarization."])
