@@ -5,7 +5,7 @@ import CryptoKit
 import Crypto
 #endif
 import Foundation
-import MereRunCore
+@testable import MereRunCore
 import MereRunMLXTestSupport
 import MLX
 import MLXNN
@@ -140,6 +140,129 @@ final class SOVPackedWeightsTests: MLXTestCase {
         }
         if mismatches.isEmpty {
             print("SOV packed Q8 verified \(expected.count) checkpoint parameter byte digests; source \(result.sourceFingerprint)")
+        }
+    }
+
+    func testPortableBundleLoadsWithoutSourceOrOriginalTimestamps() throws {
+        let parent = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let root = parent.appendingPathComponent("source"), packed = parent.appendingPathComponent("cache")
+        let bundle = parent.appendingPathComponent("download")
+        try source(at: root)
+        let target = try model(), bits = [8, 8, 8]
+        try target.preparePackedExpertWeights(groupSize: 64, layerBits: bits)
+        _ = try SOVPackedWeights.prepare(root: root, destination: packed, model: target, groupSize: 64, layerBits: bits)
+        let expected = hashes(target)
+        try FileManager.default.copyItem(at: packed, to: bundle)
+        try FileManager.default.removeItem(at: bundle.appendingPathComponent("sov-packed.json"))
+        try configData.write(to: bundle.appendingPathComponent("config.json"))
+        try MLX.save(arrays: ["model.audio_tower.test": MLXArray.zeros([2, 2])], url: bundle.appendingPathComponent("model.safetensors"))
+        func record(_ name: String) throws -> SOVTranscribeBundleManifest.FileRecord {
+            let file = try SOVPackedWeights.FileRecord(root: bundle, name: name)
+            return .init(name: name, bytes: file.bytes, headerSHA256: file.headerSHA256,
+                         sha256: SOVPackedWeights.digest(try Data(contentsOf: bundle.appendingPathComponent(name))))
+        }
+        let manifest = try SOVTranscribeBundleManifest(formatVersion: 1, packerVersion: SOVPackedWeights.packerVersion,
+            sourceRepository: SOVTranscribeResources.repository, sourceRevision: SOVTranscribeResources.revision,
+            configSHA256: SOVPackedWeights.digest(configData), groupSize: 64, layerBits: bits,
+            audio: record("model.safetensors"), shards: [record("target-00001.safetensors")])
+        try JSONEncoder().encode(manifest).write(to: bundle.appendingPathComponent(SOVTranscribeBundleManifest.filename))
+        try FileManager.default.removeItem(at: root)
+        try FileManager.default.removeItem(at: packed)
+        for file in [manifest.audio] + manifest.shards {
+            try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1)],
+                                                  ofItemAtPath: bundle.appendingPathComponent(file.name).path)
+        }
+        let downloaded = try XCTUnwrap(SOVPortableBundle.read(root: bundle))
+        try SOVPortableBundle.validateFiles(downloaded, root: bundle, layerCount: 3)
+        let restored = try model()
+        try restored.preparePackedExpertWeights(groupSize: 64, layerBits: bits)
+        try SOVPortableBundle.load(downloaded, root: bundle, into: restored)
+        XCTAssertEqual(hashes(restored), expected)
+        let x = MLXArray([Int32(1), 2, 3]).reshaped(1, 3)
+        XCTAssertEqual(abs(target(x) - restored(x)).max().item(Float.self), 0)
+        XCTAssertThrowsError(try SOVPortableBundle.validateFiles(downloaded, root: bundle, layerCount: 2))
+        try Data("changed".utf8).write(to: bundle.appendingPathComponent("config.json"))
+        XCTAssertThrowsError(try SOVPortableBundle.validateFiles(downloaded, root: bundle, layerCount: 3))
+        try configData.write(to: bundle.appendingPathComponent("config.json"))
+        try FileManager.default.removeItem(at: bundle.appendingPathComponent(downloaded.shards[0].name))
+        XCTAssertThrowsError(try SOVPortableBundle.validateFiles(downloaded, root: bundle, layerCount: 3))
+        XCTAssertTrue(SOVTranscribeResources.missingFiles(root: bundle, draft: false, fileManager: .default)
+            .map(\.lastPathComponent).contains(downloaded.shards[0].name))
+    }
+
+    func testPortableDecoderSelectsQ8WithoutRequantizationAndRejectsOtherPrecisions() throws {
+        XCTAssertEqual(try SOVPortableBundle.decoderPolicy(requested: .bf16, metalAvailable: true), .q8Metal)
+        XCTAssertEqual(try SOVPortableBundle.decoderPolicy(requested: .bf16, metalAvailable: false), .q8)
+        XCTAssertEqual(try SOVPortableBundle.decoderPolicy(requested: .q8, metalAvailable: true), .q8)
+        for policy in SOVDecoderExperts.allCases where ![.bf16, .q8, .q8Metal].contains(policy) {
+            XCTAssertThrowsError(try SOVPortableBundle.decoderPolicy(requested: policy, metalAvailable: true))
+        }
+        let hash = String(repeating: "a", count: 64)
+        func manifest(_ name: String, version: Int = 1) -> SOVTranscribeBundleManifest {
+            .init(formatVersion: version, packerVersion: SOVPackedWeights.packerVersion,
+                sourceRepository: "source", sourceRevision: "revision", configSHA256: hash, groupSize: 64, layerBits: [8],
+                audio: .init(name: "model.safetensors", bytes: 1, headerSHA256: hash, sha256: hash),
+                shards: [.init(name: name, bytes: 1, headerSHA256: hash, sha256: hash)])
+        }
+        XCTAssertThrowsError(try manifest("../outside.safetensors").validate())
+        XCTAssertThrowsError(try manifest("/outside.safetensors").validate())
+        XCTAssertThrowsError(try manifest("model.safetensors").validate())
+        XCTAssertThrowsError(try manifest("target.safetensors", version: 2).validate())
+    }
+
+    func testInstalledPortableBundleMatchesEveryTargetAndAudioParameter() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["MERERUN_TEST_MLX_DEVICE"] == "gpu", let sourcePath = env["MERERUN_TEST_SOV_PATH"],
+              let packedPath = env["MERERUN_TEST_SOV_PACKED_PATH"], let bundlePath = env["MERERUN_TEST_SOV_BUNDLE_PATH"] else {
+            throw XCTSkip("Requires explicit original, packed, and portable SOV paths on the GPU.")
+        }
+        let source = URL(fileURLWithPath: sourcePath), bundle = URL(fileURLWithPath: bundlePath)
+        let config = try JSONDecoder().decode(SOVTranscribeConfig.self, from: Data(contentsOf: bundle.appendingPathComponent("config.json")))
+        let manifest = try XCTUnwrap(SOVPortableBundle.read(root: bundle))
+        try SOVPortableBundle.validateFiles(manifest, root: bundle, layerCount: config.textConfig.numHiddenLayers)
+        let expected: [String: String] = try autoreleasepool {
+            let target = Gemma4TextCausalLM(config: config.textConfig)
+            try target.preparePackedExpertWeights(groupSize: 64, layerBits: manifest.layerBits, metalVerification: true)
+            _ = try SOVPackedWeights.prepare(root: source, destination: URL(fileURLWithPath: packedPath),
+                model: target, groupSize: 64, layerBits: manifest.layerBits)
+            return hashes(target)
+        }
+        Memory.clearCache()
+        let actual: [String: String] = try autoreleasepool {
+            let target = Gemma4TextCausalLM(config: config.textConfig)
+            try target.preparePackedExpertWeights(groupSize: 64, layerBits: manifest.layerBits, metalVerification: true)
+            try SOVPortableBundle.load(manifest, root: bundle, into: target)
+            return hashes(target)
+        }
+        XCTAssertEqual(actual, expected)
+        var audioCounts: [Int] = []
+        for projector in [false, true] {
+            let prefix = projector ? "model.embed_audio." : "model.audio_tower."
+            func audioHashes(_ root: URL) throws -> [String: String] {
+                try autoreleasepool {
+                    let model: Module = projector ? SOVAudioProjector(config: config) : SOVAudioEncoder(config: config.audioConfig)
+                    try SOVTranscribeWeights.load(root: root, into: model, sourcePrefix: prefix)
+                    return hashes(model)
+                }
+            }
+            let original = try audioHashes(source)
+            let portable = try audioHashes(bundle)
+            XCTAssertEqual(original, portable)
+            audioCounts.append(original.count)
+            Memory.clearCache()
+        }
+        if let output = env["MERERUN_TEST_SOV_BUNDLE_RECEIPT"] {
+            struct Receipt: Encodable {
+                let sourceRevision: String
+                let target: [String: String]
+                let encoderTensorCount: Int
+                let projectorTensorCount: Int
+                let targetEqual: Bool
+            }
+            try JSONEncoder().encode(Receipt(sourceRevision: manifest.sourceRevision, target: actual,
+                encoderTensorCount: audioCounts[0], projectorTensorCount: audioCounts[1], targetEqual: actual == expected))
+                .write(to: URL(fileURLWithPath: output), options: .atomic)
         }
     }
 }

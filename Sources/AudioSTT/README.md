@@ -60,6 +60,9 @@ versioned target shards transactionally, and reloads them directly on reuse.
 The caller chooses storage, including external SSDs. Encoder/projector and draft
 loading retain their original sources. Cache validation covers source identity,
 precision, layout version, completeness, and shard metadata.
+Distributed bundles use `sov-bundle.json` instead: the native loader selects
+saved Q8 weights directly and reads original audio tensors from the bundle's
+`model.safetensors`. Portable validation excludes mtimes and source paths.
 Q4/Q6 and calibrated per-layer Q4/Q6/Q8 recipes are benchmark-only policies.
 Typed recipes are validated before weight loading, and packing occurs once
 during preparation. The paired expert benchmark retains a second Q8 Metal

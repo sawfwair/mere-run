@@ -197,6 +197,7 @@ struct ModelBenchmarkSOV: AsyncParsableCommand {
         let loadPeakMemoryBytes = Memory.peakMemory
         let loadProcessMemory = SOVBenchmarkProcessMemory.snapshot()
         let packedMeasurement = await generator.packedWeightsMeasurement
+        let preparedDecoder = await generator.preparedDecoderExperts.rawValue
         let preparedActiveBytes = Memory.activeMemory - baselineActiveBytes
         let dualResidentActiveBytes = interleaveExperts ? Memory.activeMemory : nil
         var measurements: [SOVMeasuredTranscription] = []
@@ -244,7 +245,7 @@ struct ModelBenchmarkSOV: AsyncParsableCommand {
                         measurements.append(measured)
                         let attentionEnabled = interleaveAttention ? metal : experimentalAttention
                         let referenceLabel = metalBaseline == .mlx ? "q8" : "q8-metal-" + metalBaseline.rawValue
-                        let expertLabel = interleaveExperts && !metal ? "q8-metal" : (interleaveMetal ? (metal ? "q8-metal" : referenceLabel) : experimentalDecoder.rawValue)
+                        let expertLabel = interleaveExperts && !metal ? "q8-metal" : (interleaveMetal ? (metal ? "q8-metal" : referenceLabel) : preparedDecoder)
                         let headNormEnabled = interleaveHeadNorm ? metal : experimentalHeadNorm
                         let generation = interleaveGeneration && !metal ? generationBaseline.rawValue : generationExperiment.rawValue
                         let margin = interleaveAudioTokens && !metal ? nil : audioTokenMargin
@@ -269,7 +270,7 @@ struct ModelBenchmarkSOV: AsyncParsableCommand {
                             warmups: warmups, profileDecode: profileDecode || metalCapture != nil, metalCapture: metalCapture, captureRound: captureRound, maxTokens: maxTokens, prefillChunkSize: prefillChunkSize,
                             audioTokenMargin: audioTokenMargin, interleavedAudioTokens: interleaveAudioTokens, audioTokensFirst: audioTokensFirst,
                             provider: artifact == nil ? "mlx" : "coreml", experimentalDynamicInt8: experimentalDynamicInt8,
-                            decoderExperts: experimentalDecoder.rawValue, experimentalExpertFusion: experimentalExpertFusion, experimentalExpertReduction: experimentalExpertReduction,
+                            decoderExperts: preparedDecoder, experimentalExpertFusion: experimentalExpertFusion, experimentalExpertReduction: experimentalExpertReduction,
                             interleavedExperts: interleaveExperts, expertsFirst: expertsFirst,
                             wireModels: wireModels, interleavedWired: interleaveWired, wiredFirst: wiredFirst, wiredMemoryBytes: wiredMemoryBytes,
                             expertBaselineLoadSeconds: expertBaselineLoadSeconds, dualResidentActiveBytes: dualResidentActiveBytes,

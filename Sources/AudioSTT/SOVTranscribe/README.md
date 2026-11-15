@@ -25,6 +25,13 @@ Eligible Q8 Metal projections select distributed reduction automatically on the
 qualified M5 Max GPU. Other devices and unsupported shapes keep the existing
 kernel. This selection does not change the requested expert precision.
 
+`SOVPortableBundle.swift` loads published Q8 group-64 bundles using the portable
+manifest in MereRunCore. Original BF16 source shards are unnecessary. The audio
+encoder/projector retain their original tensor names in `model.safetensors`;
+an optional draft remains an explicitly selected subdirectory. Full SHA-256
+payload verification belongs to download/release validation; preparation checks
+configuration hashes, shard sizes/headers, tensor shapes, and completeness.
+
 Use typed decoding at checkpoint, manifest, and tokenizer boundaries. Keep
 request execution inside `MLXRequestStreams`; benchmark policy switches preserve
 resident parameters and record the selected kernel. Audio-token trimming,
