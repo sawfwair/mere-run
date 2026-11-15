@@ -154,6 +154,7 @@ public enum SpeechTranscriptionResolver {
         var files = ["config.json", "tokenizer.json", "tokenizer_config.json", MereRunModelManifest.filename]
             .map { modelRoot.appendingPathComponent($0) }
         if plan.decision.backend == .sov {
+            files.append(root.appendingPathComponent(SOVTranscribeBundleManifest.filename))
             files += ["preprocessor_config.json", "processor_config.json", "generation_config.json"].map { root.appendingPathComponent($0) }
             if let draft = plan.request.sov?.draftModel {
                 let draftRoot = existingPath(from: draft) ?? MereRunModelPaths.modelDir(SOVTranscribeResources.draftModelID)

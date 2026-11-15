@@ -173,7 +173,7 @@ enum SOVPackedWeights {
         try checkComplete(model: model, loaded: loaded)
     }
 
-    private static func checkComplete(model: Module, loaded: Set<String>) throws {
+    static func checkComplete(model: Module, loaded: Set<String>) throws {
         let expected = Set(model.parameters().flattened().map(\.0).filter { !$0.contains("per_layer") && !$0.contains(".rope.") })
         let missing = expected.subtracting(loaded).sorted()
         guard missing.isEmpty else { throw SOVTranscribeError.invalid("Packed SOV checkpoint is missing tensors: \(missing.joined(separator: ", ")).") }
