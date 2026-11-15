@@ -136,6 +136,12 @@ final class HubSnapshotTests: XCTestCase {
         XCTAssertNil(HubSnapshot.nextPageURL(from: nil, relativeTo: source))
     }
 
+    func testRevisionInfoDecodesHubSha() throws {
+        let data = Data(#"{"sha":"5ecdb67327fd37bb2e042aab12ff7391903235d3","id":"org/repo"}"#.utf8)
+        let info = try JSONDecoder().decode(HubSnapshotRevisionInfo.self, from: data)
+        XCTAssertEqual(info.sha, "5ecdb67327fd37bb2e042aab12ff7391903235d3")
+    }
+
     func testPayloadIdentityAcceptsHubLFSAndGitBlobETags() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-hub-etag-\(UUID().uuidString)", isDirectory: true)
