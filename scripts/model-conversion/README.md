@@ -1,5 +1,19 @@
 # Native model conversion
 
+## Portable SOV Q8 bundle
+
+`export_sov_bundle.py` packages a previously converted Q8 group-64 decoder with
+the original audio encoder/projector, tokenizer/configuration, and optional
+DFlash checkpoint. It requires only the Python standard library, copies tensor
+bytes in bounded chunks, and writes licenses, source revisions, and checksums.
+The portable loader does not require original BF16 decoder files or timestamps.
+See [SOV usage](../../docs/runtime/sov-transcribe.md#download-a-portable-q8-bundle)
+for export and loading commands. Run the exporter tests with:
+
+```bash
+python3 scripts/model-conversion/test_export_sov_bundle.py
+```
+
 ## Parakeet Core ML/MLX package
 
 `convert_parakeet_coreml.py` builds a Mere-controlled FP16 Core ML encoder and

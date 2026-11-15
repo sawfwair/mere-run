@@ -33,6 +33,15 @@ public enum SOVTranscribeResources {
     public static func missingFiles(root: URL, draft: Bool, fileManager: FileManager) -> [URL] {
         let names = draft ? ["config.json"] : ["config.json", "tokenizer.json", "tokenizer_config.json", "preprocessor_config.json", "processor_config.json", "generation_config.json"]
         var missing = names.map { root.appendingPathComponent($0) }.filter { !fileManager.fileExists(atPath: $0.path) }
+        let bundle = root.appendingPathComponent(SOVTranscribeBundleManifest.filename)
+        if !draft, fileManager.fileExists(atPath: bundle.path) {
+            do {
+                let manifest = try JSONDecoder().decode(SOVTranscribeBundleManifest.self, from: Data(contentsOf: bundle))
+                try manifest.validate()
+                return missing + ([manifest.audio] + manifest.shards).map { root.appendingPathComponent($0.name) }
+                    .filter { !fileManager.fileExists(atPath: $0.path) }
+            } catch { return missing + [bundle] }
+        }
         let index = root.appendingPathComponent("model.safetensors.index.json")
         let weights = root.appendingPathComponent("model.safetensors")
         if fileManager.fileExists(atPath: index.path) {

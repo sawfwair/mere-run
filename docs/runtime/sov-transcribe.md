@@ -79,6 +79,35 @@ released-checkpoint transcript parity is claimed from the synthetic tests.
 
 ## Save and reuse Q8 weights
 
+### Download a portable Q8 bundle
+
+The [Sawfwair Q8 bundle](https://huggingface.co/Sawfwair/SOV-Transcribe-1-mere-run-q8)
+contains the packed target, original audio encoder/projector, tokenizer, and
+configuration. It loads directly without the original BF16 decoder, a conversion
+pass, or a local packed-weight cache. Download it to an external SSD:
+
+```bash
+hf download Sawfwair/SOV-Transcribe-1-mere-run-q8 \
+  --local-dir /Volumes/SSD/MereRunModels/sov-q8
+mere.run speech transcribe ./recording.wav \
+  --model /Volumes/SSD/MereRunModels/sov-q8 \
+  --draft-model /Volumes/SSD/MereRunModels/sov-q8/draft --max-tokens 8192
+```
+
+Omit `--draft-model` for target-only decoding. Download with `--exclude "draft/*"`
+to omit the optional draft. Selecting the bundle opts into its saved Q8 weights;
+omit `--sov-packed-weights`. The GPU selects native Q8 Metal experts, including
+the existing device qualification for distributed reduction. These artifacts
+require the bundle loader in this revision of mere.run; generic Transformers
+and mlx-lm loaders do not support this native layout.
+
+The portable manifest validates configuration hashes, shard sizes/headers,
+and tensor completeness without source directories or file timestamps. Run
+`shasum -a 256 -c SHA256SUMS` inside the downloaded directory to verify complete
+payloads. Startup does not rescan tens of gigabytes on each launch.
+
+### Convert a local BF16 checkpoint
+
 To opt into affine-Q8 MoE experts, select a packed-weight directory. The first
 request reads and quantizes one source tensor at a time and saves native shards.
 Later requests load those shards directly, without loading BF16 expert weights
@@ -91,8 +120,8 @@ mere.run speech transcribe ./recording.wav --backend sov \
   --sov-packed-weights /Volumes/SSD/MereRunModels/sov-q8-g64
 ```
 
-Q8 changes target weights and can change recognition output. Omitting
-`--sov-packed-weights` retains BF16. The source directory is still required for
+Q8 changes target weights and can change recognition output. With an original
+checkpoint, omitting `--sov-packed-weights` retains BF16. The source directory is still required for
 the encoder, projector, configuration, and tokenizer; the draft stays separate.
 The pack stores target decoder weights, affine scales and biases, source
 identity, quantization settings, and a versioned fused gate/up layout. GPU
@@ -113,6 +142,22 @@ MLX and process memory peaks. A pack depends on precision
 and group size, so `q8` and `q8-metal` share one format.
 See the [packed-weight qualification](../qualification/sov-transcribe-packed-weights-2026-11-14.md)
 for startup, peak RAM, and full-checkpoint parity measurements.
+
+To export an existing Q8 group-64 cache for distribution, use
+`scripts/model-conversion/export_sov_bundle.py`. It copies packed decoder bytes,
+extracts original audio tensors in bounded chunks, and writes a transactional
+portable bundle with licenses, source revisions, and full SHA-256 checksums:
+
+```bash
+python3 scripts/model-conversion/export_sov_bundle.py \
+  --source /path/to/sov-checkpoint --packed /path/to/sov-q8-cache \
+  --draft /path/to/sov-dflash --output /Volumes/SSD/MereRunModels/sov-bundle \
+  --runtime-revision FULL_MERE_RUN_COMMIT
+```
+
+The exporter uses the Python standard library and does not execute upstream
+model code. `--draft` is optional. The converter requires an unused destination
+and a matching, unchanged source/cache pair.
 
 ## Core ML encoder and projector
 

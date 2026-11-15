@@ -11,6 +11,7 @@ import MediaIO
 public actor SOVTranscribeGenerator {
     private let experimentalDynamicInt8: Bool
     private let decoderExperts: SOVDecoderExperts
+    package private(set) var preparedDecoderExperts: SOVDecoderExperts = .bf16
     private let expertRecipe: SOVExpertRecipe?
     private let packedWeights: URL?
     public private(set) var packedWeightsMeasurement: SOVPackedWeightsMeasurement?
@@ -79,12 +80,6 @@ public actor SOVTranscribeGenerator {
         modelID: String = SOVTranscribeResources.modelID, modelPath: String? = nil, draftModel: String? = nil,
         progressHandler: (@Sendable (ASRProgress) -> Void)? = nil
     ) async throws {
-        guard !experimentalExpertFusion || decoderExperts == .q8Metal else {
-            throw SpeechTranscriptionIssue("invalid_expert_fusion", "Expert fusion requires Q8 Metal experts.")
-        }
-        guard !experimentalExpertReduction || decoderExperts == .q8Metal else {
-            throw SpeechTranscriptionIssue("invalid_expert_reduction", "Distributed expert reduction requires Q8 Metal experts.")
-        }
         let resolved = try await ManagedModelResolver.resolveForRuntime(
             requestedModel: modelPath ?? modelID, defaultModelID: SOVTranscribeResources.modelID)
         let draftRoot: URL?
@@ -98,6 +93,19 @@ public actor SOVTranscribeGenerator {
             progressHandler?(ASRProgress(stage: .loadingModel, message: "Loading native SOV-Transcribe-1..."))
             let configuration = try JSONDecoder().decode(SOVTranscribeConfig.self, from: Data(contentsOf: resolved.url.appendingPathComponent("config.json")))
             try configuration.validate()
+            let bundle = try SOVPortableBundle.read(root: resolved.url)
+            let decoderExperts = try bundle == nil ? self.decoderExperts : SOVPortableBundle.decoderPolicy(
+                requested: self.decoderExperts, metalAvailable: Gemma4TextCausalLM.supportsMetalExpertVerification)
+            guard bundle == nil || packedWeights == nil else {
+                throw SpeechTranscriptionIssue("invalid_packed_weights", "Portable SOV bundles already contain packed weights; omit the packed-weight directory.")
+            }
+            if let bundle { try SOVPortableBundle.validateFiles(bundle, root: resolved.url, layerCount: configuration.textConfig.numHiddenLayers) }
+            guard !experimentalExpertFusion || decoderExperts == .q8Metal else {
+                throw SpeechTranscriptionIssue("invalid_expert_fusion", "Expert fusion requires Q8 Metal experts.")
+            }
+            guard !experimentalExpertReduction || decoderExperts == .q8Metal else {
+                throw SpeechTranscriptionIssue("invalid_expert_reduction", "Distributed expert reduction requires Q8 Metal experts.")
+            }
             guard (decoderExperts == .mixed) == (expertRecipe != nil) else {
                 throw SpeechTranscriptionIssue("invalid_expert_recipe", "A mixed decoder requires an expert recipe; other decoder policies do not accept one.")
             }
@@ -128,7 +136,7 @@ public actor SOVTranscribeGenerator {
             }
             try Task.checkCancellation()
             let target = Gemma4TextCausalLM(config: configuration.textConfig)
-            if packedWeights == nil { target.prepareForFullPrecisionExpertWeights() }
+            if packedWeights == nil && bundle == nil { target.prepareForFullPrecisionExpertWeights() }
             let encoder: SOVAudioEncoder?
             let projector: SOVAudioProjector?
             let coreMLEncoder: SOVCoreMLEncoder?
@@ -151,7 +159,11 @@ public actor SOVTranscribeGenerator {
                 coreMLEncoder = try SOVCoreMLEncoder(root: artifactURL)
             }
             var packedMeasurement: SOVPackedWeightsMeasurement?
-            if let packedWeights {
+            if let bundle {
+                try target.preparePackedExpertWeights(groupSize: bundle.groupSize, layerBits: bundle.layerBits,
+                    metalVerification: decoderExperts.usesMetal)
+                try SOVPortableBundle.load(bundle, root: resolved.url, into: target)
+            } else if let packedWeights {
                 let groupSize = expertRecipe?.groupSize ?? decoderExperts.groupSize!
                 let layerBits = expertRecipe?.layerBits ?? Array(repeating: decoderExperts.bits, count: configuration.textConfig.numHiddenLayers)
                 try target.preparePackedExpertWeights(groupSize: groupSize, layerBits: layerBits,
@@ -161,7 +173,7 @@ public actor SOVTranscribeGenerator {
             } else {
                 try SOVTranscribeWeights.load(root: resolved.url, into: target, target: true)
             }
-            if packedWeights == nil && decoderExperts != .bf16 {
+            if bundle == nil && packedWeights == nil && decoderExperts != .bf16 {
                 try target.prepareExperimentalExperts(groupSize: expertRecipe?.groupSize ?? decoderExperts.groupSize, bits: decoderExperts.bits, expandedPrefill: decoderExperts == .q6Matrix,
                     layerBits: expertRecipe?.layerBits, verificationGEMV: decoderExperts == .bf16GEMV,
                     metalVerification: decoderExperts.usesMetal)
@@ -199,6 +211,7 @@ public actor SOVTranscribeGenerator {
             if generationExperiment == .vocabulary32k { prepareRestrictedHead(target: target) }
             self.config = configuration
             self.packedWeightsMeasurement = packedMeasurement
+            self.preparedDecoderExperts = decoderExperts
             tokenizer = loadedTokenizer
             loadedRoot = resolved.url
             loadedDraft = draftRoot?.path
@@ -375,7 +388,7 @@ public actor SOVTranscribeGenerator {
     /// A nil reduction override selects the qualified device default.
     package func setMetalVerificationForBenchmark(_ enabled: Bool, byteLoads: Bool = true, optimizedLayout: Bool = true,
                                                  fusedActivation: Bool = false, distributedReduction: Bool? = nil) async throws {
-        guard [.q8, .q8Metal].contains(decoderExperts), let target, Gemma4TextCausalLM.supportsMetalExpertVerification else {
+        guard [.q8, .q8Metal].contains(preparedDecoderExperts), let target, Gemma4TextCausalLM.supportsMetalExpertVerification else {
             throw SpeechTranscriptionIssue("invalid_decoder_kernel", "Paired Metal comparison requires a prepared Q8 group-64 target on an Apple GPU.")
         }
         try await MLXRequestStreams.withStream(isolation: self) {
