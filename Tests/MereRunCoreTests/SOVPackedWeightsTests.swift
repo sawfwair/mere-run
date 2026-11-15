@@ -181,6 +181,14 @@ final class SOVPackedWeightsTests: MLXTestCase {
         XCTAssertEqual(hashes(restored), expected)
         let x = MLXArray([Int32(1), 2, 3]).reshaped(1, 3)
         XCTAssertEqual(abs(target(x) - restored(x)).max().item(Float.self), 0)
+        try FileManager.default.copyItem(at: bundle.appendingPathComponent(manifest.shards[0].name),
+                                         to: bundle.appendingPathComponent("duplicate.safetensors"))
+        let duplicate = try SOVTranscribeBundleManifest(formatVersion: manifest.formatVersion, packerVersion: manifest.packerVersion,
+            sourceRepository: manifest.sourceRepository, sourceRevision: manifest.sourceRevision,
+            configSHA256: manifest.configSHA256, groupSize: manifest.groupSize, layerBits: manifest.layerBits,
+            audio: manifest.audio, shards: manifest.shards + [record("duplicate.safetensors")])
+        try duplicate.validate()
+        XCTAssertThrowsError(try SOVPortableBundle.load(duplicate, root: bundle, into: restored))
         XCTAssertThrowsError(try SOVPortableBundle.validateFiles(downloaded, root: bundle, layerCount: 2))
         try Data("changed".utf8).write(to: bundle.appendingPathComponent("config.json"))
         XCTAssertThrowsError(try SOVPortableBundle.validateFiles(downloaded, root: bundle, layerCount: 3))
