@@ -1,6 +1,10 @@
 import ArgumentParser
 import AudioCodecs
+#if canImport(CryptoKit)
 import CryptoKit
+#else
+import Crypto
+#endif
 import AudioSTT
 import Foundation
 import MereRunCore

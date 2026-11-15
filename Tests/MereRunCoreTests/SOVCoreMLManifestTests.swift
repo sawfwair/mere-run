@@ -1,10 +1,23 @@
+#if canImport(CryptoKit)
 import CryptoKit
+#else
+import Crypto
+#endif
 import Foundation
+import AudioCore
 import MereRunCore
 import XCTest
 @testable import AudioSTT
 
 final class SOVCoreMLManifestTests: XCTestCase {
+    #if !canImport(CoreML)
+    func testUnavailableProviderRejectsBeforeReadingArtifacts() {
+        XCTAssertThrowsError(try SOVCoreMLEncoder(root: URL(fileURLWithPath: "/unavailable-sov-artifact"))) { error in
+            XCTAssertEqual((error as? SpeechTranscriptionIssue)?.code, "unsupported_provider")
+        }
+    }
+    #endif
+
     func testRejectsCorruptionAndUnlistedCompiledFiles() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let compiled = root.appendingPathComponent("encoder.mlmodelc")

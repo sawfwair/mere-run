@@ -1,5 +1,9 @@
 import AudioCodecs
+#if canImport(CryptoKit)
 import CryptoKit
+#else
+import Crypto
+#endif
 import Foundation
 import MLX
 import XCTest

@@ -1020,7 +1020,7 @@ targets.append(
 targets.append(
   .target(
     name: "AudioSTT",
-    dependencies: ["AudioSOVTranscribeModel"] + audioRuntimeDependencies + (hasMediaIOTarget ? ["MediaIO"] : []) + ["AudioNemotronTranscribeModel", "AudioQwen3ASRModel", "AudioSortformer", "AudioParakeetModel", "AudioWhistleModel"],
+    dependencies: ["AudioSOVTranscribeModel", .product(name: "Crypto", package: "swift-crypto")] + audioRuntimeDependencies + (hasMediaIOTarget ? ["MediaIO"] : []) + ["AudioNemotronTranscribeModel", "AudioQwen3ASRModel", "AudioSortformer", "AudioParakeetModel", "AudioWhistleModel"],
     path: "Sources/AudioSTT",
     exclude: [
       "README.md",

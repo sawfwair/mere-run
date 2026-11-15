@@ -1,8 +1,14 @@
+#if canImport(CoreML)
 import CoreML
+import os
+#endif
+#if canImport(CryptoKit)
 import CryptoKit
+#else
+import Crypto
+#endif
 import Foundation
 import MLX
-import os
 import AudioCore
 import MereRunCore
 
@@ -56,6 +62,7 @@ final class SOVCoreMLEncoder {
         }
     }
 
+    #if canImport(CoreML)
     private let signposter = OSSignposter(subsystem: "run.mere.sov", category: "encoder")
     private let model: MLModel
 
@@ -97,4 +104,14 @@ final class SOVCoreMLEncoder {
         }
         return MLXArray(result).reshaped(1, 375, 2816)
     }
+    #else
+    init(root: URL) throws {
+        throw SpeechTranscriptionIssue("unsupported_provider", "Core ML is unavailable on this platform.")
+    }
+
+    func encode(_ mel: MLXArray) throws -> MLXArray {
+        throw SpeechTranscriptionIssue("unsupported_provider", "Core ML is unavailable on this platform.")
+    }
+    #endif
+
 }
