@@ -583,6 +583,11 @@ public actor HubSnapshot {
         if let treeRevision = tree.resolvedRevision {
             return (entries, treeRevision, [:])
         }
+        // Tree responses often omit `X-Repo-Commit`; prefer the revision API over a
+        // no-redirect HEAD so Linux can stay on `URLSession.shared`.
+        if let resolved = try? await resolveRevisionCommit() {
+            return (entries, resolved, [:])
+        }
         let remote = try await resolveRemoteFile(
             source: resolveURL(for: firstEntry.path),
             relativePath: firstEntry.path
@@ -663,13 +668,38 @@ public actor HubSnapshot {
         return HubSnapshotTree(entries: entries, resolvedRevision: resolvedRevision)
     }
 
+    private func resolveRevisionCommit() async throws -> String? {
+        let url = hostURL()
+            .appending(path: "api")
+            .appending(path: options.repoType.rawValue)
+            .appending(path: options.repoId)
+            .appending(path: "revision")
+            .appending(component: options.revision)
+        var request = authorizedRequest(url: url)
+        request.httpMethod = "GET"
+        let (data, response) = try await URLSession.shared.data(for: request)
+        _ = try Self.validateHTTPResponse(
+            response,
+            data: data,
+            context: "\(options.repoId)@\(options.revision)"
+        )
+        let sha = try JSONDecoder().decode(HubSnapshotRevisionInfo.self, from: data).sha?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let sha, !sha.isEmpty else { return nil }
+        return sha
+    }
+
     private func resolveRemoteFile(source: URL, relativePath: String) async throws -> HubSnapshotRemoteFile {
         var request = authorizedRequest(url: source)
         request.httpMethod = "HEAD"
         request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
+        #if canImport(FoundationNetworking)
+        let session = HubSnapshotSessionLifetime.noRedirect
+        #else
         let delegate = HubSnapshotNoRedirectDelegate()
         let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
         defer { session.invalidateAndCancel() }
+        #endif
         let (data, response) = try await session.data(for: request)
         let http = try Self.validateHTTPResponse(response, data: data, context: "\(options.repoId)@\(options.revision)/\(relativePath)", allowsRedirect: true)
 
@@ -726,15 +756,20 @@ public actor HubSnapshot {
         }
         #endif
 
+        // A classic delegate-driven download task: the async `download(for:)`
+        // convenience never delivers `didWriteData` on iOS, so byte progress
+        // froze at zero for multi-gigabyte pulls. Reuse one session across
+        // manual redirect hops; on Linux keep it for process lifetime.
+        #if canImport(FoundationNetworking)
+        let session = HubSnapshotSessionLifetime.makeDownloadSession(delegate: delegate)
+        #else
+        let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+        defer { session.invalidateAndCancel() }
+        #endif
         var currentURL = url
         for _ in 0..<8 {
             var request = authorizedRequest(url: currentURL)
             request.httpMethod = "GET"
-            // A classic delegate-driven download task: the async
-            // `download(for:)` convenience never delivers `didWriteData` on
-            // iOS, so byte progress froze at zero for multi-gigabyte pulls.
-            let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
-            defer { session.invalidateAndCancel() }
             let (tempURL, response) = try await delegate.perform(request, in: session)
             let http = try Self.validateDownloadedResponse(
                 response,
@@ -1384,6 +1419,45 @@ private struct HubSnapshotRemoteFile: Sendable {
     let etag: String?
     let downloadURL: URL
 }
+
+package struct HubSnapshotRevisionInfo: Decodable, Sendable {
+    package let sha: String?
+}
+
+#if canImport(FoundationNetworking)
+/// FoundationNetworking on Linux (libcurl ≥ ~8.11) aborts when a short-lived
+/// `URLSession`'s `_MultiHandle` is torn down: `curl_multi_cleanup` fires
+/// callbacks that resurrect the object during `deinit`. Keep custom sessions
+/// for process lifetime and never `invalidateAndCancel` them.
+/// Upstream: swiftlang/swift-corelibs-foundation#5203 / #5491.
+private enum HubSnapshotSessionLifetime {
+    private static let lock = NSLock()
+    // Retained until process exit; guarded by `lock`.
+    nonisolated(unsafe) private static var retained: [URLSession] = []
+
+    static let noRedirect: URLSession = {
+        let session = URLSession(
+            configuration: .default,
+            delegate: HubSnapshotNoRedirectDelegate(),
+            delegateQueue: nil
+        )
+        retain(session)
+        return session
+    }()
+
+    static func makeDownloadSession(delegate: URLSessionDownloadDelegate & URLSessionTaskDelegate) -> URLSession {
+        let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+        retain(session)
+        return session
+    }
+
+    private static func retain(_ session: URLSession) {
+        lock.lock()
+        retained.append(session)
+        lock.unlock()
+    }
+}
+#endif
 
 private final class HubSnapshotNoRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     func urlSession(
