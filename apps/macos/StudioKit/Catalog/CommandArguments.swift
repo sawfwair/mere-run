@@ -44,6 +44,7 @@ package enum CommandArguments {
         case .speechTranscribe: return speechTranscribe(draft)
         case .speechDiarize: return speechDiarize(draft)
         case .speechDiarizeLive: return speechDiarizeLive(draft)
+        case .speechConverse: return speechConverse(draft)
         case .speechProfileList: return speechProfileList(draft)
         case .speechProfileCreate: return speechProfileCreate(draft)
         case .speechProfileDelete: return speechProfileDelete(draft)

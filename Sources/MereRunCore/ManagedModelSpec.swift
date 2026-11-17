@@ -69,6 +69,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case nemotronOmni
     case qwen3TTS
     case breezeTTS
+    case haru4B
     case drama3TTS
     case phononTTS
     case qwen3ASR

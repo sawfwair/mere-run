@@ -146,6 +146,7 @@ public enum MereRunCapabilityCatalog {
             speechProfileCreate,
             speechProfileDelete,
             speechListen,
+            speechConverse,
             sfxGenerate,
             sfxVideoGenerate,
             sfxAEEncode,

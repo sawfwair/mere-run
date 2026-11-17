@@ -1709,6 +1709,13 @@ extension MereRunModelManifest {
                 upstreamRepoId: "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
                 createdAt: createdAt
             )
+        case .haru4B:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .haru, family: .audio,
+                tier: .base, variant: .standard, precision: .bf16,
+                defaults: nil, supports: [.speechConversation], components: genericTextComponents,
+                upstreamRepoId: "\(HaruResources.repository)@\(HaruResources.revision)", createdAt: createdAt
+            )
         case .drama3TTS:
             return MereRunModelManifest(
                 id: modelID.rawValue, engine: .drama3TTS, family: .tts,

@@ -2176,6 +2176,28 @@ sfxVideo	videoOutputMode=video-only	sfx video generate 1 1 --negative-prompt 1 -
 sfxVideo	videoQuality=draft	sfx video generate 1 1 --negative-prompt 1 --output 1 --model 1 --duration 8.5 --steps 5 --cfg 3.5 --seed 1 --renoise 1 --synchformer-model 1 --sync-batch-size 2 --clip-batch-size 5 --preflight --json --quiet 1
 sfxVideo	videoQuality=final	sfx video generate 1 1 --negative-prompt 1 --output 1 --model 1 --duration 8.5 --steps 5 --cfg 3.5 --seed 1 --renoise 1 --synchformer-model 1 --sync-batch-size 2 --clip-batch-size 5 --preflight --json --quiet 1
 sfxVideo	voiceMode=clone	sfx video generate 1 1 --negative-prompt 1 --output 1 --model 1 --duration 8.5 --steps 5 --cfg 3.5 --seed 1 --renoise 1 --synchformer-model 1 --sync-batch-size 2 --clip-batch-size 5 --preflight --json --quiet 1
+speechConverse	default	speech converse --model speech-haru-4b --output ~/Music/mere.run/Audio/haru-conversation-<stamp>.wav
+speechConverse	maximal	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	maximal-booleans-off	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	modelRoot=video-minimax-h3-ref2va	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	modelRoot=video-wan22-ti2v-5b-mlx	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	musicLMMode=disable	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	musicLMMode=use	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	musicMIDINoteOffset=-12	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	musicTask=lego	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	musicTask=repaint	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	musicTrainingKind=lokr	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	renderProfile=quality	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	responseFormat=json_object	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	responseFormat=text	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	thinkingMode=automatic	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	thinkingMode=hide	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	thinkingMode=show	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	videoOutputMode=audio-video	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	videoOutputMode=video-only	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	videoQuality=draft	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	videoQuality=final	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
+speechConverse	voiceMode=clone	speech converse --model 1 --input 1 --output 1 --reference-audio 1 --seed 1 1
 speechDiarize	default	speech diarize '' --model speech-diarization-sortformer --format json --output ~/Documents/mere.run/Audio/diarize-speakers-<stamp>.json --threshold 0.5 --min-duration 0.25 --merge-gap 0.25 --quiet
 speechDiarize	maximal	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
 speechDiarize	maximal-booleans-off	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 1

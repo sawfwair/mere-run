@@ -260,6 +260,8 @@ public extension ManagedModelSpec {
             return Trellis2Resources.validate(rootURL: rootURL, fileManager: fileManager)
         case .qwen3TTS:
             return Self.missingQwen3TTSPaths(in: rootURL, fileManager: fileManager)
+        case .haru4B:
+            return Self.missingFiles(HaruResources.files, in: rootURL, fileManager: fileManager)
         case .drama3TTS:
             return Drama3Resources.missingFiles(root: rootURL, fileManager: fileManager)
         case .phononTTS:

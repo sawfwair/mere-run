@@ -400,6 +400,15 @@
     "resourceName": "handbook-privacy-filter.md"
   },
   {
+    "topic": "handbook-haru-4b",
+    "title": "Haru-4B",
+    "category": "Speech",
+    "models": [
+      "speech-haru-4b"
+    ],
+    "resourceName": "handbook-haru-4b.md"
+  },
+  {
     "topic": "handbook-drama-3",
     "title": "DRAMA-3 (Fish Audio)",
     "category": "Speech",

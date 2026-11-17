@@ -3,6 +3,23 @@ import Foundation
 extension ManagedModelCatalog {
     static let speechSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
+            id: HaruResources.modelID,
+            category: .audio,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: HaruResources.repository,
+                revision: HaruResources.revision,
+                patterns: HaruResources.files + ["README.md"]
+            ),
+            upstreamRepoId: HaruResources.repository,
+            upstreamRevision: HaruResources.revision,
+            validationKind: .haru4B,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 10_560_110_179,
+            defaultCLICommands: ["speech converse"],
+            apiAvailability: .cliOnly
+        ),
+        ManagedModelSpec(
             id: SOVTranscribeResources.modelID, category: .speechASR, installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(repoId: SOVTranscribeResources.repository, revision: SOVTranscribeResources.revision,
                                            patterns: SOVTranscribeResources.patterns),

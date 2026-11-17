@@ -9,14 +9,19 @@ final class Q35RMSNorm: Module {
     private let eps: Float
     private let groupSize: Int?
     private let zeroCenteredWeight: Bool
+    private let useFloat32Scale: Bool
     private var effectiveWeight: MLXArray?
 
-    init(dimensions: Int, eps: Float, groupSize: Int? = nil, zeroCenteredWeight: Bool = true) {
+    init(
+        dimensions: Int, eps: Float, groupSize: Int? = nil, zeroCenteredWeight: Bool = true,
+        useFloat32Scale: Bool = false
+    ) {
         self._weight.wrappedValue = zeroCenteredWeight
             ? MLXArray.zeros([dimensions])
             : MLXArray.ones([dimensions])
         self.eps = eps
         self.groupSize = groupSize
+        self.useFloat32Scale = useFloat32Scale
         self.zeroCenteredWeight = zeroCenteredWeight
         super.init()
     }
@@ -28,6 +33,9 @@ final class Q35RMSNorm: Module {
                 : weight
             MLX.eval(scale)
             effectiveWeight = scale
+        }
+        if useFloat32Scale {
+            return MLXFast.rmsNorm(x.asType(.float32), weight: effectiveWeight ?? weight, eps: eps).asType(x.dtype)
         }
         guard let groupSize else {
             return MLXFast.rmsNorm(x, weight: effectiveWeight ?? weight, eps: eps)

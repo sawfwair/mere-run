@@ -1,5 +1,14 @@
 # Third-Party Notices
 
+## Haru
+
+`Sources/AudioHaruModel` adapts the Haru model, MeanFlow head, VibeVoice
+acoustic codec, and conversation protocol from higurashi-ai/Haru at
+`7fe6b7665f8bf035998f401f8cb779fbe53f2751`, licensed under Apache License 2.0.
+See <https://github.com/higurashi-ai/Haru/tree/7fe6b7665f8bf035998f401f8cb779fbe53f2751>.
+The Apache License 2.0 text appears in the YuE2 notice below. Haru-4B
+checkpoint weights are distributed separately under Apache License 2.0.
+
 ## Salesforce SOV-Transcribe-1 and DFlash
 
 `Sources/AudioSOVTranscribeModel/`, `Sources/AudioSTT/SOVTranscribe/`, and
