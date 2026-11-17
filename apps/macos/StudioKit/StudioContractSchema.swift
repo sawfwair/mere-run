@@ -1116,6 +1116,7 @@ package enum StudioContractBindings {
     ]) { first, _ in first } }
 
     private static var chat: [String: StudioContractBinding<StudioDraft>] { model.merging([
+        "--model-root": .optionalText("chatCheckpointFolder", \.chatCheckpointFolder),
         "--system": .text("secondaryText", \.secondaryText),
         "--image": .text("inputPath", \.inputPath),
         "--audio": .text("chatAudioPath", \.chatAudioPathText),

@@ -1299,6 +1299,9 @@ private struct StudioWorkspaceView: View {
             studioError = nil
             refreshReadiness()
         }
+        .onChange(of: draft.chatCheckpointFolder) { _, _ in
+            studioError = nil
+        }
         .onChange(of: draft.inputPath) { _, _ in
             studioError = nil
         }

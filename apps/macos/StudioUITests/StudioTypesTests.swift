@@ -162,6 +162,35 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertTrue(args.contains("--allow-shell-exec"))
     }
 
+    func testChatUsesALocalCheckpointWithTheSelectedRuntime() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("Local Checkpoint", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder.deletingLastPathComponent()) }
+        var draft = StudioDraft.baseline(for: .chat)
+        draft.model = "vision-chat-q38-27b"
+        draft.prompt = "Hello"
+        XCTAssertEqual(
+            StudioCommandAdapter.capabilityRequirement(for: .chat, draft: draft, source: .contract),
+            .managedModel(draft.model)
+        )
+
+        draft.chatCheckpointFolder = folder.path
+        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, source: .contract)
+        let arguments = request.template.arguments(from: request.draft, source: .contract)
+        assertPair(arguments, "--model", draft.model)
+        assertPair(arguments, "--model-root", folder.path)
+        XCTAssertTrue(arguments.contains("--require-installed"))
+        XCTAssertNil(StudioCommandAdapter.capabilityRequirement(for: .chat, draft: draft, source: .contract))
+        XCTAssertNil(try StudioCommandAdapter.pullRequest(for: .chat, draft: draft, source: .contract))
+
+        let missingFolder = folder.appendingPathComponent("missing").path
+        draft.chatCheckpointFolder = missingFolder
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, source: .contract)) { error in
+            XCTAssertEqual(error as? StudioCommandError, .checkpointFolderUnavailable(missingFolder))
+        }
+    }
+
     func testChatOmitsVisionAndToolFlagsByDefault() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .textChat))
         let args = template.arguments(from: template.defaultDraft(), source: .contract)

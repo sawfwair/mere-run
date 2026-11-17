@@ -11,6 +11,7 @@ struct StudioModelPicker<Label: View>: View {
     @Binding var model: String
     let modelInventory: [StudioModelInventoryRow]
     let onShowModels: () -> Void
+    let checkpointFolder: Binding<String?>?
     @ViewBuilder let label: () -> Label
 
     init(
@@ -18,12 +19,14 @@ struct StudioModelPicker<Label: View>: View {
         model: Binding<String>,
         modelInventory: [StudioModelInventoryRow],
         onShowModels: @escaping () -> Void,
+        checkpointFolder: Binding<String?>? = nil,
         @ViewBuilder label: @escaping () -> Label
     ) {
         self.scope = scope
         _model = model
         self.modelInventory = modelInventory
         self.onShowModels = onShowModels
+        self.checkpointFolder = checkpointFolder
         self.label = label
     }
 
@@ -39,7 +42,10 @@ struct StudioModelPicker<Label: View>: View {
     }
 
     var items: some View {
-        StudioModelMenuItems(scope: scope, model: $model, modelInventory: modelInventory, onShowModels: onShowModels)
+        StudioModelMenuItems(
+            scope: scope, model: $model, modelInventory: modelInventory,
+            onShowModels: onShowModels, checkpointFolder: checkpointFolder
+        )
     }
 }
 
@@ -49,6 +55,7 @@ struct StudioModelMenuItems: View {
     @Binding var model: String
     let modelInventory: [StudioModelInventoryRow]
     let onShowModels: () -> Void
+    var checkpointFolder: Binding<String?>?
     @Environment(\.studioModelTitles) private var titles
 
     var body: some View {
@@ -58,17 +65,35 @@ struct StudioModelMenuItems: View {
         Toggle(isOn: Binding(get: { model.isBlank }, set: { _ in model = "" })) {
             Text(defaultID.isEmpty ? "Auto" : "Auto · \(StudioModelNaming.displayName(defaultID, titles: titles))")
         }
-        let choices = scope.choices(from: modelInventory)
-        let installed = choices.filter(\.isInstalled)
-        let downloadable = choices.filter { !$0.isInstalled }
-        if !installed.isEmpty {
-            Section("Installed") {
-                ForEach(installed) { row in modelRow(row) }
+        if let checkpointFolder {
+            Section("Local checkpoint") {
+                Button("Choose checkpoint folder…") {
+                    if let folder = StudioFilePanels.chooseDirectory(title: "Choose checkpoint folder") {
+                        checkpointFolder.wrappedValue = folder.path
+                    }
+                }
+                if let path = checkpointFolder.wrappedValue, !path.isBlank {
+                    Button("Clear checkpoint folder") { checkpointFolder.wrappedValue = nil }
+                }
             }
         }
-        if !downloadable.isEmpty {
-            Section("Needs download") {
-                ForEach(downloadable) { row in modelRow(row) }
+        let choices = scope.choices(from: modelInventory)
+        if hasCheckpoint, !choices.isEmpty {
+            Section("Runtime profile") {
+                ForEach(choices) { row in modelRow(row) }
+            }
+        } else {
+            let installed = choices.filter(\.isInstalled)
+            let downloadable = choices.filter { !$0.isInstalled }
+            if !installed.isEmpty {
+                Section("Installed") {
+                    ForEach(installed) { row in modelRow(row) }
+                }
+            }
+            if !downloadable.isEmpty {
+                Section("Needs download") {
+                    ForEach(downloadable) { row in modelRow(row) }
+                }
             }
         }
         if choices.isEmpty {
@@ -87,11 +112,15 @@ struct StudioModelMenuItems: View {
         Button("Browse Models…", action: onShowModels)
     }
 
+    private var hasCheckpoint: Bool {
+        checkpointFolder?.wrappedValue?.isBlank == false
+    }
+
     private func modelRow(_ row: StudioModelInventoryRow) -> some View {
         Toggle(isOn: Binding(get: { row.id == model }, set: { _ in model = row.id })) {
             SwiftUI.Label(
                 StudioModelNaming.displayName(row),
-                systemImage: row.isInstalled ? "internaldrive" : "arrow.down.circle"
+                systemImage: hasCheckpoint ? "cpu" : (row.isInstalled ? "internaldrive" : "arrow.down.circle")
             )
         }
     }
@@ -108,6 +137,7 @@ struct StudioModelChip: View {
     let modelInventory: [StudioModelInventoryRow]
     let readiness: ModelReadinessState
     let onShowModels: () -> Void
+    let checkpointFolder: Binding<String?>?
     @Environment(\.studioModelTitles) private var titles
 
     init(
@@ -115,17 +145,22 @@ struct StudioModelChip: View {
         model: Binding<String>,
         modelInventory: [StudioModelInventoryRow],
         readiness: ModelReadinessState,
-        onShowModels: @escaping () -> Void
+        onShowModels: @escaping () -> Void,
+        checkpointFolder: Binding<String?>? = nil
     ) {
         self.scope = scope
         _model = model
         self.modelInventory = modelInventory
         self.readiness = readiness
         self.onShowModels = onShowModels
+        self.checkpointFolder = checkpointFolder
     }
 
     var body: some View {
-        StudioModelPicker(scope: scope, model: $model, modelInventory: modelInventory, onShowModels: onShowModels) {
+        StudioModelPicker(
+            scope: scope, model: $model, modelInventory: modelInventory,
+            onShowModels: onShowModels, checkpointFolder: checkpointFolder
+        ) {
             StudioComposerChipLabel(title: label, leadingSystemImage: statusGlyph)
         }
         .fixedSize()
@@ -138,7 +173,15 @@ struct StudioModelChip: View {
         scope.resolvedModelID(model: model)
     }
 
+    private var checkpointPath: String? {
+        guard let path = checkpointFolder?.wrappedValue, !path.isBlank else { return nil }
+        return path
+    }
+
     private var label: String {
+        if let path = checkpointPath {
+            return "Local · \(URL(fileURLWithPath: path).lastPathComponent)"
+        }
         let name = scope.displayLabel(model: model, titles: titles)
         return "Model · \(name)"
     }
@@ -148,12 +191,13 @@ struct StudioModelChip: View {
         switch readiness {
         case .missingModel: return "arrow.down.circle"
         case .unsupported: return "exclamationmark.triangle"
-        case .notChecked, .checking, .ready, .unknown: return nil
+        case .notChecked, .checking, .ready, .unknown: return checkpointPath == nil ? nil : "folder"
         }
     }
 
     private var help: String {
-        let identity = resolvedModelID.isEmpty ? "Auto — the mode's default model" : "Model: \(resolvedModelID)"
+        let runtime = resolvedModelID.isEmpty ? "Auto — the mode's default model" : "Model: \(resolvedModelID)"
+        let identity = checkpointPath.map { "\($0) · \(runtime)" } ?? runtime
         switch readiness {
         case .ready, .unknown, .notChecked: return identity
         default: return "\(identity) · \(readiness.message(titles: titles))"
@@ -162,6 +206,9 @@ struct StudioModelChip: View {
 
     private var accessibilityValue: String {
         let identity = resolvedModelID.isEmpty ? "Automatic" : resolvedModelID
+        if let path = checkpointPath {
+            return "Local checkpoint \(URL(fileURLWithPath: path).lastPathComponent), \(identity), \(readiness.title)"
+        }
         return "\(identity), \(readiness.title)"
     }
 }

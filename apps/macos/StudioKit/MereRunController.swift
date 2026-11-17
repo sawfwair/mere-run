@@ -625,6 +625,7 @@ package final class MereRunController: ObservableObject {
         to studioDraft: inout StudioDraft, for mode: StudioMode, inventory: [StudioModelInventoryRow]
     ) {
         guard studioDraft.modelSource != .chosen else { return }
+        if mode == .chat, studioDraft.localChatCheckpointPath != nil { return }
         var scope = StudioModelScope(mode: mode, draft: studioDraft, source: scopeSource)
         var defaults = Set([scope.defaultModelID])
         if mode == .chat { defaults.insert(recommendedChatModelForStudioDefault()) }
