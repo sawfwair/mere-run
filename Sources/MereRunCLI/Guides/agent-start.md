@@ -28,6 +28,7 @@ mere.run status
 - `--pi-path`: explicit Pi executable path.
 - `--prompt`: initial prompt sent to Pi.
 - `--model`: managed agent model id.
+- `--lora`: cataloged adapter ID or local LoRA path for the server.
 - `--skip-server`: use an already-running mere.run API server.
 - `--allow-unsupported`: start even if hardware support marks the model unsupported.
 
@@ -48,6 +49,12 @@ mere.run status
 
 ```bash
 mere.run agent start --model text-agent-deepseek-v4-flash
+```
+
+```bash
+mere.run model pull vision-chat-q38-27b-4bit
+mere.run adapter pull qwen38-27b-pi
+mere.run agent start --model vision-chat-q38-27b-4bit --lora qwen38-27b-pi --inline
 ```
 
 ```bash

@@ -63,6 +63,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--pi-path", label: "Pi executable", kind: .file),
             .init(flag: "--prompt", label: "Prompt", kind: .string),
             .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--lora", label: "Adapter", kind: .string),
             .init(flag: "--skip-server", label: "Skip server", kind: .boolean),
             .init(flag: "--allow-unsupported", label: "Allow unsupported", kind: .boolean),
             .init(flag: "--no-bootstrap", label: "No bootstrap", kind: .boolean),

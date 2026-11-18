@@ -8,7 +8,8 @@ extension NativeChatRuntime {
     public static func make(
         engine: RuntimeServingEngine, modelID: String, modelPath: String?,
         gemma4KVCacheQuantization: Gemma4KVCacheQuantization = Gemma4KVCacheQuantization(),
-        prefixKVCacheEnabled: Bool? = nil, continuousBatchingEnabled: Bool? = nil
+        prefixKVCacheEnabled: Bool? = nil, continuousBatchingEnabled: Bool? = nil,
+        defaultQwenLoRA: LoRA? = nil
     ) -> Self {
         func option(_ value: Bool?, _ key: String) -> Bool {
             value ?? (ProcessInfo.processInfo.environment[key] == "1")
@@ -50,7 +51,8 @@ extension NativeChatRuntime {
                 Q35Generator(
                     modelId: modelID,
                     prefixKVCacheEnabled: option(prefixKVCacheEnabled, "MERERUN_Q35_PREFIX_KV_CACHE"),
-                    continuousBatchingEnabled: option(continuousBatchingEnabled, "MERERUN_Q35_CONTINUOUS_BATCHING")
+                    continuousBatchingEnabled: option(continuousBatchingEnabled, "MERERUN_Q35_CONTINUOUS_BATCHING"),
+                    defaultLoRA: defaultQwenLoRA
                 ), modelPath: modelPath
             )
         case .textChatLFM2:

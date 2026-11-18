@@ -95,6 +95,13 @@ public enum ChatRequestResolver {
             let profile = apiProfile ?? ManagedModelCatalog.apiProfile(for: modelID)
             thinking = thinking || profile?.thinkingLevels == [.high]
         }
+        if case .local(let path, _) = request.lora, ManagedAdapterCatalog.isQwen38PiAdapter(path: path) {
+            temperature = 0.8
+            topP = 1
+            topK = nil
+            minP = 0
+            thinking = request.reasoningEffort != nil
+        }
 
         var effective = request
         effective.temperature = sampling.temperature ?? temperature

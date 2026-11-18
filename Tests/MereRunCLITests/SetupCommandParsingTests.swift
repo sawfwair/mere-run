@@ -277,6 +277,17 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertNil(command.model)
     }
 
+    func testAgentStartResolvesLocalLoRAForItsServer() throws {
+        let arguments = ["--model", Q35Resources.q38TwentySevenB4BitModelId, "--lora", "adapter_model.safetensors"]
+        let command = try AgentStart.parse(arguments)
+        XCTAssertEqual(
+            try command.resolvedLoRAPath(baseModelID: Q35Resources.q38TwentySevenB4BitModelId),
+            URL(fileURLWithPath: "adapter_model.safetensors").standardizedFileURL.path
+        )
+        let skipServer = try AgentStart.parse(arguments + ["--skip-server"])
+        XCTAssertThrowsError(try skipServer.resolvedLoRAPath(baseModelID: Q35Resources.q38TwentySevenB4BitModelId))
+    }
+
     func testAgentServerAdmissionMarkerDetection() throws {
         let logURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-agent-server-\(UUID().uuidString).log")

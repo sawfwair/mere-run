@@ -117,8 +117,8 @@ extension MereRunCapabilityCatalog {
             ).scoped(Chat.only(
                     // LFM2.5 loads a text adapter only on the 8-bit A1B runtime and fails after
                     // loading any other checkpoint.
-                    .gemma4, .gemma4Unified, .laguna, .inkling, .lfm2A1B,
-                    ignoredBy: [.q35, .q35VL, .q38, .gguf, .psi]
+                    .gemma4, .gemma4Unified, .laguna, .inkling, .lfm2A1B, .q38,
+                    ignoredBy: [.q35, .q35VL, .gguf, .psi]
                 )),
             // Without --lora the scale does nothing anywhere, so it never fails on its own.
             .init(
@@ -126,7 +126,7 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "1.0", group: Group.modelAndAdapters, tier: .standard,
                 range: .init(min: 0, max: 2, step: 0.05), dependsOn: "--lora"
             ).scoped(Chat.only(
-                .gemma4, .gemma4Unified, .laguna, .inkling, .lfm2A1B,
+                .gemma4, .gemma4Unified, .laguna, .inkling, .lfm2A1B, .q38,
                 ignoredBy: [
                     .diffusionGemma, .museGlimmer, .nemotronH, .nemotronBolt, .nemotronOmni, .lfm2, .lfm2A2B, .lfm2VL, .q35, .q35VL, .q38, .gguf, .psi
                 ]

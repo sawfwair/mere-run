@@ -423,6 +423,9 @@ struct AgentStart: AsyncParsableCommand {
     @Option(name: [.long], help: "Managed agent model id to serve through Pi.")
     var model: String?
 
+    @Option(name: [.long], help: "Cataloged adapter id or local LoRA path for the agent's API server.")
+    var lora: String?
+
     @Flag(name: [.long], help: "Use an already-running mere.run API server instead of starting one.")
     var skipServer: Bool = false
 
@@ -439,6 +442,7 @@ struct AgentStart: AsyncParsableCommand {
         let modelID = try resolvedModelID()
         let runtime = try SetupAgentRuntime.runtime(forManagedModelID: modelID)
         let spec = runtime.spec
+        let loraPath = try resolvedLoRAPath(baseModelID: spec.id)
         let support = ManagedModelCapabilityCatalog.support(for: spec)
         if !allowUnsupported, !support.isSupported {
             throw ValidationError(
@@ -487,7 +491,9 @@ struct AgentStart: AsyncParsableCommand {
         if skipServer {
             serverProcess = nil
         } else {
-            let startedServer = try startAPIServer(modelURL: modelURL, engine: runtime.engine)
+            let startedServer = try startAPIServer(
+                model: loraPath == nil ? modelURL.path : spec.id, engine: runtime.engine, loraPath: loraPath
+            )
             serverProcess = startedServer.process
             CLIStderr.write("[agent] Loading \(runtime.providerModel.id). Server log: \(startedServer.logURL.path)\n")
             try await PiAgentIntegration.waitForHealth(
@@ -646,22 +652,37 @@ struct AgentStart: AsyncParsableCommand {
             }
     }
 
-    private func startAPIServer(modelURL: URL, engine: APIEngine) throws -> (process: Process, logURL: URL) {
+    func resolvedLoRAPath(baseModelID: String) throws -> String? {
+        let reference = lora?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let reference, !reference.isEmpty else { return nil }
+        guard !skipServer else {
+            throw ValidationError("Configure the LoRA on the running API server when using --skip-server.")
+        }
+        return try ManagedAdapterArgumentResolver.resolve(reference, baseModelID: baseModelID)
+    }
+
+    private func startAPIServer(
+        model: String, engine: APIEngine, loraPath: String?
+    ) throws -> (process: Process, logURL: URL) {
         let log = try AgentServerLog.makeLogHandle(prefix: "api-server")
         let process = Process()
         process.executableURL = Self.currentExecutableURL()
-        process.arguments = [
+        var arguments = [
             "api",
             "serve",
             "--engine",
             engine.rawValue,
             "--model",
-            modelURL.path,
+            model,
             "--host",
             host,
             "--port",
             String(port),
         ]
+        if let loraPath {
+            arguments += ["--lora", loraPath]
+        }
+        process.arguments = arguments
         process.environment = Self.apiServerEnvironment()
         process.standardInput = AgentServerLog.nullInputHandle()
         process.standardOutput = log.handle

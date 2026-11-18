@@ -613,6 +613,7 @@ actor RuntimeModelPool {
     private let lagunaContinuousBatchingEnabled: Bool
     private let q35PrefixKVCacheEnabled: Bool
     private let q35ContinuousBatchingEnabled: Bool
+    private let defaultQwenLoRA: LoRA?
     private let lfm2PrefixKVCacheEnabled: Bool
     private let lfm2ContinuousBatchingEnabled: Bool
     private let currentDate: @Sendable () -> Date
@@ -630,6 +631,7 @@ actor RuntimeModelPool {
         defaultModelID: String,
         defaultEngine: RuntimeServingEngine,
         startupModelPath: String?,
+        fallbackLoraPath: String? = nil,
         settingsStore: RuntimeModelSettingsStore = RuntimeModelSettingsStore(),
         gemma4KVCacheQuantization: Gemma4KVCacheQuantization = Gemma4KVCacheQuantization(),
         gemma4PrefixKVCacheEnabled: Bool = runtimeDefaultOnEnvironmentFlag("MERERUN_GEMMA4_PREFIX_KV_CACHE"),
@@ -663,6 +665,9 @@ actor RuntimeModelPool {
         self.defaultModelID = defaultModelID
         self.defaultEngine = defaultEngine
         self.startupModelPath = startupModelPath
+        self.defaultQwenLoRA = defaultEngine.isCompatible(with: .textChatQ35)
+            ? fallbackLoraPath.map { .local(path: $0, scale: 1) }
+            : nil
         self.settingsStore = settingsStore
         self.gemma4KVCacheQuantization = gemma4KVCacheQuantization
         self.gemma4PrefixKVCacheEnabled = gemma4PrefixKVCacheEnabled
@@ -1017,7 +1022,7 @@ actor RuntimeModelPool {
             modelID: resolved.id, engine: resolved.engine, settings: resolved.settings,
             profile: resolved.apiProfile,
             contextSize: resolved.settings.maxContextTokens ?? serverContextSize,
-            fallbackLoraPath: fallbackLoraPath
+            fallbackLoraPath: defaultQwenLoRA == nil || resolved.id == defaultModelID ? fallbackLoraPath : nil
         ))
         var chatRequest = prepared.request
         chatRequest.kvCacheMode = resolved.settings.kvCacheMode
@@ -1210,7 +1215,8 @@ actor RuntimeModelPool {
         return NativeChatRuntime.make(
             engine: resolved.engine, modelID: resolved.id, modelPath: resolved.installPath,
             gemma4KVCacheQuantization: gemma4KVCacheQuantization,
-            prefixKVCacheEnabled: prefixCache, continuousBatchingEnabled: batching
+            prefixKVCacheEnabled: prefixCache, continuousBatchingEnabled: batching,
+            defaultQwenLoRA: resolved.id == defaultModelID ? defaultQwenLoRA : nil
         )
     }
 

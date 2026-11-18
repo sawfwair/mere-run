@@ -265,7 +265,7 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(manifest.family, .qwen)
         XCTAssertEqual(manifest.precision, .bf16)
         XCTAssertNil(manifest.quantization)
-        XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration, .visionChat]))
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration, .visionChat, .loraInference]))
         XCTAssertEqual(
             manifest.upstreamRepoId,
             "\(Q35Resources.q38TwentySevenBUpstreamRepoId)@\(Q35Resources.q38TwentySevenBUpstreamRevision)"
@@ -285,7 +285,7 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(manifest.quantization?.bits, 4)
         XCTAssertEqual(manifest.quantization?.groupSize, 64)
         XCTAssertEqual(manifest.quantization?.scheme, "mlx-affine")
-        XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration, .visionChat]))
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration, .visionChat, .loraInference]))
         XCTAssertEqual(
             manifest.upstreamRepoId,
             "\(Q35Resources.q38TwentySevenB4BitUpstreamRepoId)"

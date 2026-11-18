@@ -4,6 +4,20 @@ import Testing
 
 @Suite("Managed adapter catalog")
 struct ManagedAdapterCatalogTests {
+    @Test("Qwen3.8 Pi LoRA pins its weights and PEFT configuration")
+    func qwen38PiIsPinned() throws {
+        let spec = try #require(ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.qwen38PiID))
+        #expect(spec.baseModelID == Q35Resources.q38TwentySevenBModelId)
+        #expect(spec.supports(baseModelID: Q35Resources.q38TwentySevenB4BitModelId))
+        #expect(!spec.supports(baseModelID: Q35Resources.q38FlashNext4BitModelId))
+        #expect(spec.upstreamRevision == "78eacecca691deb59f703fc270120e2e5b2e0194")
+        #expect(spec.artifact.byteCount == 637_610_624)
+        let config = try #require(spec.companionFiles.first)
+        #expect(config.artifact.filename == "adapter_config.json")
+        #expect(config.downloadURL.absoluteString.contains(spec.upstreamRevision!))
+        #expect(config.artifact.byteCount == 1_171)
+    }
+
     @Test("FLUX.2-dev Turbo is an immutable gated eight-step pin")
     func flux2DevTurboIsPinned() throws {
         let spec = try #require(

@@ -170,7 +170,7 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Serving engine: text-chat-q36 (default; serves text-chat-q36-nano), text-code, text-chat-klein, text-chat-gemma4, text-chat-diffusiongemma, text-chat-laguna, text-chat-flint, text-chat-kolibri, text-chat-lfm2, text-chat-deepseek-v4-flash, text-chat-muse-glimmer, text-chat-nemotron-h, or text-chat-nemotron-omni.")
     var engine: APIEngine = .textChatQ36
 
-    @Option(name: [.long], help: "Default cataloged adapter id or local LoRA path for all requests.")
+    @Option(name: [.long], help: "Default cataloged adapter ID or local LoRA path. Qwen LoRA applies to the startup model.")
     var lora: String?
 
     @Option(name: [.long], help: "API key accepted through bearer or x-api-key headers. Also read from MERERUN_API_KEY.")

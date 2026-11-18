@@ -34,18 +34,36 @@ extension Q35Generator {
 
     func ensureLoaded(
         rootURL: URL,
+        lora requestedLoRA: LoRA? = nil,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
-    ) async throws {
+    ) throws {
         let normalizedRoot = Q35Resources.normalizedRootURL(rootURL)
-        if loadedModelPath == normalizedRoot.path, model != nil, tokenizerAndTemplate != nil {
+        let lora = Q35Resources.isQ38ModelId(modelId) ? requestedLoRA : nil
+        if loadedModelPath == normalizedRoot.path, loadedLoRA == lora, model != nil, tokenizerAndTemplate != nil {
             return
         }
-        resetPrefixKVCache()
+        if lora != nil || loadedLoRA != nil {
+            guard activeModelUsers == 0 else {
+                throw Q35Error.generationFailed("Wait for active Qwen requests to finish before changing the LoRA or model.")
+            }
+            if let lora {
+                guard modelId == Q35Resources.q38TwentySevenBModelId
+                        || modelId == Q35Resources.q38TwentySevenB4BitModelId else {
+                    throw Q35Error.generationFailed("Qwen PEFT LoRA requires a Qwen3.8-27B base model.")
+                }
+                guard case .local = lora else {
+                    throw Q35Error.generationFailed("Use a local Qwen LoRA with adapter_config.json next to its weights.")
+                }
+            }
+            unload()
+        } else {
+            resetPrefixKVCache()
+        }
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family config"))
         let configData = try Data(contentsOf: normalizedRoot.appendingPathComponent("config.json"))
         let config = try JSONDecoder().decode(Q35Config.self, from: configData)
-        let dflash2 = try dflash2Configuration(target: config, targetRoot: normalizedRoot)
+        let dflash2 = lora == nil ? try dflash2Configuration(target: config, targetRoot: normalizedRoot) : nil
         let generationConfigURL = normalizedRoot.appendingPathComponent("generation_config.json")
         let generationEOSTokenIds: [Int]
         if FileManager.default.fileExists(atPath: generationConfigURL.path) {
@@ -79,6 +97,10 @@ extension Q35Generator {
             groupSize: groupSize,
             bits: bits
         )
+        if case .local(let path, let scale) = lora {
+            progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen3.8 LoRA"))
+            try Q35PEFTLoRA.apply(from: URL(fileURLWithPath: path), scale: scale, to: q35Model)
+        }
         if config.textConfig.isQwen4Exp {
             progressHandler?(ChatProgress(
                 stage: .loadingModel,
@@ -141,7 +163,7 @@ extension Q35Generator {
         let mtpExplicitlyEnabled = mtpPolicy == "1" || mtpPolicy == "true"
             || mtpPolicy == "yes" || mtpPolicy == "on"
         let q38Q4 = modelId == Q35Resources.q38TwentySevenB4BitModelId
-        let shouldLoadMTP = dflash2 == nil && !mtpExplicitlyDisabled
+        let shouldLoadMTP = lora == nil && dflash2 == nil && !mtpExplicitlyDisabled
             && (config.textConfig.usesMoE || q38Q4 || mtpExplicitlyEnabled)
         let loadedMTP: (any Q35MTPDraftModel)?
         let ornithMTPCompanionRoot = Q35Resources.isOrnith35BMLXModelId(modelId)
@@ -203,6 +225,7 @@ extension Q35Generator {
         loadedResources = resources
         loadedVisionResources = visionConfigAndResources?.1
         loadedModelPath = normalizedRoot.path
+        loadedLoRA = lora
     }
     func resolveModelRoot(
         modelPath: String?,

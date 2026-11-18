@@ -364,6 +364,25 @@ eight-step FLUX.2-dev recipe and can be combined with repeated local
 `--lora PATH[=SCALE]` values. The default `video animate --profile fast`
 selects the SCAIL adapter ID and its published four-step schedule automatically.
 
+#### Run Pi with the Qwen3.8-27B adapter
+
+Pull the Qwen3.8-27B base and the Harness Hub LoRA, then start Pi.
+
+```bash
+mere.run model pull vision-chat-q38-27b-4bit
+mere.run adapter pull qwen38-27b-pi
+mere.run agent start --model vision-chat-q38-27b-4bit --lora qwen38-27b-pi --inline
+```
+
+For the BF16 base, use `vision-chat-q38-27b` in both model commands. The
+publisher trained the adapter on BF16 and recommends disabling thinking for
+Pi. With the cataloged adapter, mere.run defaults to thinking off, temperature
+`0.8`, and top-p `1.0`.
+[Harness Hub model card](https://huggingface.co/harness-hub/Qwen3.8-27B-pi-adapted)
+
+The adapter also works with `text chat --lora` and `api serve --lora` on either
+base. To use a local PEFT weights file, keep `adapter_config.json` beside it.
+
 ### `mere.run setup`
 
 Guided onboarding for the shared model store and first local agent. The command

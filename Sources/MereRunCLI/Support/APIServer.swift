@@ -200,7 +200,8 @@ actor CodeGenServer {
         self.artifactCleanupScheduler = artifactCleanupScheduler
         self.services = RuntimeServingServices(
             defaultModelID: defaultModelID, modelPath: modelPath, engine: engine.runtimeServingEngine,
-            maxActiveRequests: maxActiveRequests, gemma4KVCacheQuantization: gemma4KVCacheQuantization,
+            maxActiveRequests: maxActiveRequests, fallbackLoraPath: fallbackLoraPath,
+            gemma4KVCacheQuantization: gemma4KVCacheQuantization,
             memoryPressurePolicy: memoryPressurePolicy
         )
         try await services.prepare(warmupDefaultModel: warmupDefaultModel)

@@ -66,28 +66,47 @@ struct AdapterPull: AsyncParsableCommand {
 
         let directory = spec.installDirectory()
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        for file in spec.companionFiles {
+            try await install(file.artifact, from: file.downloadURL, in: directory, adapterID: spec.id)
+        }
+        try await install(spec.artifact, from: spec.downloadURL, in: directory, adapterID: spec.id)
+        let verified = try spec.verifiedInstalledFileURL()
+        if !quiet {
+            stderr("[\(spec.id)] verified SHA-256 \(spec.artifact.sha256)")
+        }
+        print(verified.path)
+    }
+
+    private func install(
+        _ artifact: ModelArtifactPin,
+        from downloadURL: URL,
+        in directory: URL,
+        adapterID: String
+    ) async throws {
+        let fileManager = FileManager.default
+        let destination = directory.appendingPathComponent(artifact.filename)
         let partial = directory.appendingPathComponent(
-            ".\(spec.artifact.filename).partial.\(UUID().uuidString)",
+            ".\(artifact.filename).partial.\(UUID().uuidString)",
             isDirectory: false
         )
         defer { try? fileManager.removeItem(at: partial) }
 
         if !quiet {
-            stderr("[\(spec.id)] downloading \(spec.downloadURL.absoluteString)")
+            stderr("[\(adapterID)] downloading \(downloadURL.absoluteString)")
         }
-        var request = URLRequest(url: spec.downloadURL)
+        var request = URLRequest(url: downloadURL)
         request.httpMethod = "GET"
-        if spec.downloadURL.host == "huggingface.co",
+        if downloadURL.host == "huggingface.co",
            let token = huggingFaceAccessToken(), !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        let temporary = try await downloadWithTransientRetries(request, adapterID: spec.id)
+        let temporary = try await downloadWithTransientRetries(request, adapterID: adapterID)
         try fileManager.moveItem(at: temporary, to: partial)
 
         let partialPin = ModelArtifactPin(
             filename: partial.lastPathComponent,
-            byteCount: spec.artifact.byteCount,
-            sha256: spec.artifact.sha256
+            byteCount: artifact.byteCount,
+            sha256: artifact.sha256
         )
         do {
             _ = try partialPin.verify(in: directory)
@@ -100,11 +119,6 @@ struct AdapterPull: AsyncParsableCommand {
         } else {
             try fileManager.moveItem(at: partial, to: destination)
         }
-        let verified = try spec.verifiedInstalledFileURL()
-        if !quiet {
-            stderr("[\(spec.id)] verified SHA-256 \(spec.artifact.sha256)")
-        }
-        print(verified.path)
     }
 
     private func stderr(_ message: String) {

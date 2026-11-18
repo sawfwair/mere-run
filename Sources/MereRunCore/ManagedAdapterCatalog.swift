@@ -1,5 +1,10 @@
 import Foundation
 
+public struct ManagedAdapterFile: Equatable, Sendable {
+    public let downloadURL: URL
+    public let artifact: ModelArtifactPin
+}
+
 public struct ManagedAdapterSpec: Equatable, Sendable {
     public let id: String
     public let title: String
@@ -14,6 +19,7 @@ public struct ManagedAdapterSpec: Equatable, Sendable {
     public let releaseManifestURL: URL
     public let downloadURL: URL
     public let artifact: ModelArtifactPin
+    public let companionFiles: [ManagedAdapterFile]
 
     public init(
         id: String,
@@ -28,7 +34,8 @@ public struct ManagedAdapterSpec: Equatable, Sendable {
         usageRestriction: ManagedModelUsageRestriction? = nil,
         releaseManifestURL: URL,
         downloadURL: URL,
-        artifact: ModelArtifactPin
+        artifact: ModelArtifactPin,
+        companionFiles: [ManagedAdapterFile] = []
     ) {
         self.id = id
         self.title = title
@@ -43,6 +50,7 @@ public struct ManagedAdapterSpec: Equatable, Sendable {
         self.releaseManifestURL = releaseManifestURL
         self.downloadURL = downloadURL
         self.artifact = artifact
+        self.companionFiles = companionFiles
     }
 
     public func installDirectory(
@@ -68,10 +76,11 @@ public struct ManagedAdapterSpec: Equatable, Sendable {
         adaptersRoot: URL = MereRunModelPaths.adaptersDir,
         fileManager: FileManager = .default
     ) throws -> URL {
-        try artifact.verify(
-            in: installDirectory(adaptersRoot: adaptersRoot),
-            fileManager: fileManager
-        )
+        let directory = installDirectory(adaptersRoot: adaptersRoot)
+        for file in companionFiles {
+            _ = try file.artifact.verify(in: directory, fileManager: fileManager)
+        }
+        return try artifact.verify(in: directory, fileManager: fileManager)
     }
 
     public func isInstalled(
@@ -87,6 +96,10 @@ public struct ManagedAdapterSpec: Equatable, Sendable {
 
 public enum ManagedAdapterCatalog {
     public static let merePlatformAssistantID = "mere-platform-assistant"
+    public static let qwen38PiID = "qwen38-27b-pi"
+    private static let qwen38PiRepo = "https://huggingface.co/harness-hub/Qwen3.8-27B-pi-adapted"
+    private static let qwen38PiRevision = "78eacecca691deb59f703fc270120e2e5b2e0194"
+    private static let qwen38PiDownload = "\(qwen38PiRepo)/resolve/\(qwen38PiRevision)"
     public static let flux2DevTurboEightStepID = "flux2-dev-turbo-8step"
     public static let flux2DevTurboEightStepRevision = "9ee51cd87578162cf8d02355a870bc5f4570045c"
     public static let flux2DevLoRAFormat = "diffusers.flux2.transformer-lora"
@@ -128,6 +141,34 @@ public enum ManagedAdapterCatalog {
                 byteCount: 128_131_022,
                 sha256: "c4fec5979631b4031196c1e21c0b990437a26c5ebc52aec32f89338d64063290"
             )
+        ),
+        ManagedAdapterSpec(
+            id: qwen38PiID,
+            title: "Qwen3.8-27B Pi adapter",
+            version: String(qwen38PiRevision.prefix(12)),
+            summary: "Harness Hub coding LoRA for the Pi agent on dense Qwen3.8-27B.",
+            baseModelID: Q35Resources.q38TwentySevenBModelId,
+            compatibleBaseModelIDs: [Q35Resources.q38TwentySevenB4BitModelId],
+            format: "peft.lora",
+            license: "Apache-2.0",
+            upstreamRevision: qwen38PiRevision,
+            releaseManifestURL: URL(string: "\(qwen38PiRepo)/tree/\(qwen38PiRevision)")!,
+            downloadURL: URL(string: "\(qwen38PiDownload)/adapter_model.safetensors")!,
+            artifact: ModelArtifactPin(
+                filename: "adapter_model.safetensors",
+                byteCount: 637_610_624,
+                sha256: "869b2a089882c0dac4683993f11081bd70edc30b32c64a988c688d6ac26b792a"
+            ),
+            companionFiles: [
+                ManagedAdapterFile(
+                    downloadURL: URL(string: "\(qwen38PiDownload)/adapter_config.json")!,
+                    artifact: ModelArtifactPin(
+                        filename: "adapter_config.json",
+                        byteCount: 1_171,
+                        sha256: "bf046ce17e9cfb0651b1f64f0d1cf9d312c140aaaf03c2e8a3a35e846cd307db"
+                    )
+                )
+            ]
         ),
         ManagedAdapterSpec(
             id: flux2DevTurboEightStepID,
@@ -421,6 +462,10 @@ public enum ManagedAdapterCatalog {
     public static func spec(for id: String) -> ManagedAdapterSpec? {
         let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return allSpecs.first { $0.id == normalized }
+    }
+
+    public static func isQwen38PiAdapter(path: String) -> Bool {
+        spec(for: qwen38PiID)?.installedFileURL().path == path
     }
 
     /// Resolves a catalog id to its verified installed file. Returns `nil`

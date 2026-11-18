@@ -710,7 +710,7 @@ extension MereRunModelManifest {
                 variant: .standard,
                 precision: .bf16,
                 defaults: nil,
-                supports: [.chat, .codeGeneration, .visionChat],
+                supports: [.chat, .codeGeneration, .visionChat, .loraInference],
                 components: q35TextComponents,
                 upstreamRepoId: "\(Q35Resources.q38TwentySevenBUpstreamRepoId)"
                     + "@\(Q35Resources.q38TwentySevenBUpstreamRevision)",
@@ -726,7 +726,7 @@ extension MereRunModelManifest {
                 precision: .int4,
                 quantization: Quantization(bits: 4, groupSize: 64, scheme: "mlx-affine"),
                 defaults: nil,
-                supports: [.chat, .codeGeneration, .visionChat],
+                supports: [.chat, .codeGeneration, .visionChat, .loraInference],
                 components: q35TextComponents,
                 upstreamRepoId: "\(Q35Resources.q38TwentySevenB4BitUpstreamRepoId)"
                     + "@\(Q35Resources.q38TwentySevenB4BitUpstreamRevision)",
