@@ -128,7 +128,7 @@ extension MereRunCapabilityCatalog {
             ).scoped(Chat.only(
                 .gemma4, .gemma4Unified, .laguna, .inkling, .lfm2A1B, .q38,
                 ignoredBy: [
-                    .diffusionGemma, .museGlimmer, .nemotronH, .nemotronBolt, .nemotronOmni, .lfm2, .lfm2A2B, .lfm2VL, .q35, .q35VL, .q38, .gguf, .psi
+                    .diffusionGemma, .museGlimmer, .nemotronH, .nemotronBolt, .nemotronOmni, .lfm2, .lfm2A2B, .lfm2VL, .q35, .q35VL, .gguf, .psi
                 ]
             )),
             .init(flag: "--thinking", aliases: ["--show-thinking"], label: "Show thinking", kind: .boolean, group: Group.sampling, tier: .standard),
