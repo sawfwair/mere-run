@@ -955,7 +955,8 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.patterns.contains("generation_config.json"), true)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("preprocessor_config.json"), true)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("video_preprocessor_config.json"), true)
-        XCTAssertEqual(spec.apiProfile?.thinkingLevels, [.low, .medium, .xhigh])
+        XCTAssertEqual(spec.apiProfile?.thinkingLevels, [.off, .low, .medium, .xhigh])
+        XCTAssertEqual(spec.apiProfile?.supportsSeed, true)
         XCTAssertEqual(spec.apiProfile?.thinkingLevelMap[.high], .xhigh)
         XCTAssertEqual(spec.apiProfile?.compatibility.supportsReasoningEffort, true)
     }
@@ -1087,7 +1088,8 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(draft.hubFallback.patterns, Q35Resources.q38DFlash2SnapshotPatterns)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertTrue(spec.defaultCLICommands.contains("model benchmark code"))
-        XCTAssertEqual(spec.apiProfile?.thinkingLevels, [.low, .medium, .xhigh])
+        XCTAssertEqual(spec.apiProfile?.thinkingLevels, [.off, .low, .medium, .xhigh])
+        XCTAssertEqual(spec.apiProfile?.supportsSeed, true)
         XCTAssertEqual(spec.apiProfile?.thinkingLevelMap[.minimal], .low)
         XCTAssertEqual(spec.apiProfile?.thinkingLevelMap[.max], .xhigh)
     }

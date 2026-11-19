@@ -1,3 +1,4 @@
+import Foundation
 import MLX
 import MereRunTensor
 
@@ -10,6 +11,7 @@ package enum Q35DFlash2Event {
     case verificationCompleted
     case accepted(Int)
     case finished([MLXArray])
+    case targetOnlyCompleted(Double)
 }
 
 package struct Q35DFlash2Stats {
@@ -17,6 +19,11 @@ package struct Q35DFlash2Stats {
     package var draftedTokens = 0
     package var acceptedTokens = 0
     package var recoveryForwards = 0
+    package var targetOnlyRounds = 0
+    package var roundsByDepth: [Int] = []
+    package var treeRounds = 0
+    package var treeRoundsByNodeCount: [Int] = []
+    package var treeRoundSecondsByNodeCount: [Double?] = []
 }
 
 package enum Q35DFlash2Decoder {
@@ -25,10 +32,36 @@ package enum Q35DFlash2Decoder {
     package static func decode(
         model: Q35Model, draft: Q35DFlash2Model, draftCache: [Q35DFlash2Cache],
         initialLogits: MLXArray, layerCaches: [Q35LayerCache?], eosSet: Set<Int>, tokenBudget: Int,
-        sampling: Q35DFlash2Sampling? = nil,
+        sampling: Q35DFlash2Sampling? = nil, positionSampler: Q35PositionSampler? = nil,
+        costs: Q35DFlash2Costs? = nil,
+        initialHistory: [Int] = [],
         checkCancellation: () throws -> Void = {}, observer: ((Q35DFlash2Event) -> Void)? = nil,
         emit: (Int) -> Void
     ) throws -> Q35DFlash2Stats {
+        #if os(macOS)
+        if #available(macOS 26.0, *), let positionSampler, let sampling, costs == nil,
+           ProcessInfo.processInfo.environment["MERERUN_Q38_SAMPLED_CHAIN"] == "1",
+           Q35DFlash2TreePolicy.eligible(model: model, caches: layerCaches, sampled: false),
+           let stats = try decodeNativeSampledChain(model: model, draft: draft, draftCache: draftCache,
+               initialLogits: initialLogits, layerCaches: layerCaches, eosSet: eosSet, tokenBudget: tokenBudget,
+               rule: positionSampler, sampling: sampling, checkCancellation: checkCancellation, emit: emit) {
+            return stats
+        }
+        if #available(macOS 26.0, *), let positionSampler, sampling != nil,
+           positionSampler.treeMode != nil,
+           Q35DFlash2TreePolicy.eligible(model: model, caches: layerCaches, sampled: false),
+           let stats = try decodePositionTree(model: model, draft: draft, draftCache: draftCache,
+               initialLogits: initialLogits, layerCaches: layerCaches, eosSet: eosSet, tokenBudget: tokenBudget,
+               sampler: positionSampler, checkCancellation: checkCancellation, observer: observer, emit: emit) {
+            return stats
+        }
+        #endif
+        if Q35DFlash2TreePolicy.eligible(model: model, caches: layerCaches, sampled: sampling != nil) {
+            return try decodeTree(model: model, draft: draft, draftCache: draftCache,
+                initialLogits: initialLogits, layerCaches: layerCaches, eosSet: eosSet, tokenBudget: tokenBudget,
+                initialHistory: initialHistory,
+                checkCancellation: checkCancellation, observer: observer, emit: emit)
+        }
         var caches = layerCaches
         var generated = 0
         var stats = Q35DFlash2Stats()
@@ -39,6 +72,17 @@ package enum Q35DFlash2Decoder {
             Q35DFlash2Sampling.sample($0.distribution(initialLogits[0, -1, 0...], history)).item(Int.self)
         } ?? argMax(initialLogits[0, -1, 0...]).item(Int.self)
         let capture = Set(draft.config.dflash.targetLayerIDs)
+        let requestedProposals = Q35DFlash2VerificationPolicy.proposalLimit(
+            model: model, trainedBlockSize: draft.config.dflash.blockSize, sampled: sampling != nil
+        )
+        let maximumProposals = Q35DFlash2VerificationPolicy.limitForCaches(
+            requestedProposals, trainedBlockSize: draft.config.dflash.blockSize, caches: layerCaches
+        )
+        let effectiveCosts = costs?.limited(to: maximumProposals)
+        var policy = effectiveCosts.map { Q35DFlash2Policy(costs: $0) }
+        stats.roundsByDepth = Array(repeating: 0, count: maximumProposals + 1)
+        let maintainContext = policy?.supportsTargetOnlyProbes ?? false
+        var targetOnly = false
         while generated < tokenBudget {
             try checkCancellation()
             if eosSet.contains(anchor) { break }
@@ -48,7 +92,31 @@ package enum Q35DFlash2Decoder {
             }
             generated += 1
             if generated == tokenBudget { break }
-            let count = min(draft.config.dflash.blockSize - 1, tokenBudget - generated)
+            let offered = min(maximumProposals, tokenBudget - generated)
+            let count = targetOnly ? 0 : (policy?.draftDepth(offeredDepth: offered) ?? offered)
+            if count == 0 {
+                // Keep the chosen target backend. Switching to the generator's
+                // reference route here would change its numerical contract.
+                targetOnly = !maintainContext
+                let started = observer.map { _ in DispatchTime.now().uptimeNanoseconds }
+                let output = model.forward(
+                    MLXArray([Int32(anchor)]).reshaped(1, 1), cache: caches,
+                    captureLayerIndices: maintainContext ? capture : []
+                )
+                anchor = sampling.map {
+                    Q35DFlash2Sampling.sample($0.distribution(output.logits[0, -1, 0...], history)).item(Int.self)
+                } ?? argMax(output.logits[0, -1, 0...]).item(Int.self)
+                if maintainContext {
+                    draft.appendTargetContext(output.capturedHiddenStates, cache: draftCache)
+                    policy?.recordTargetOnly()
+                }
+                stats.targetOnlyRounds += 1
+                stats.roundsByDepth[0] += 1
+                if let started {
+                    observer?(.targetOnlyCompleted(Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000))
+                }
+                continue
+            }
             observer?(.beginRound(count))
             defer { observer?(.finished(draftCache.flatMap(\.state))) }
             let selection = draft.selection(
@@ -58,19 +126,19 @@ package enum Q35DFlash2Decoder {
             let proposalIDs = selection.tokens
             observer?(.drafted(proposalIDs))
             stats.rounds += 1
+            stats.roundsByDepth[count] += 1
             stats.draftedTokens += count
             let input = concatenated([MLXArray([Int32(anchor)]).reshaped(1, 1), proposalIDs], axis: 1)
             let inputCount = count + 1
             let candidateCaches = caches.map { $0?.fork() }
             let candidate = model.forward(
-                input,
-                cache: candidateCaches, targetVerify: true, captureLayerIndices: capture
+                input, cache: candidateCaches, targetVerify: true, captureLayerIndices: capture
             )
             let targetIDs: MLXArray
             let acceptance: MLXArray
             if let sampling {
                 let verification = sampling.verify(logits: candidate.logits, selection: selection, history: history)
-                targetIDs = verification.replacements
+                targetIDs = verification.nextToken
                 acceptance = verification.accepted
             } else {
                 targetIDs = argMax(candidate.logits, axis: -1).asType(.int32)
@@ -102,6 +170,7 @@ package enum Q35DFlash2Decoder {
                 history = concatenated([previous, proposalIDs[0, 0..<accepted]])
             }
             observer?(.accepted(accepted))
+            policy?.record(proposed: count, accepted: accepted)
             if generated == tokenBudget { break }
             let committed = accepted + 1
             let present = candidateCaches.compactMap { $0 }
@@ -118,7 +187,7 @@ package enum Q35DFlash2Decoder {
                 }
                 caches = candidateCaches
                 confirmed = candidate
-                anchor = targetTokens[committed - 1]
+                anchor = sampling == nil ? targetTokens[accepted] : targetTokens[0]
             } else {
                 // Quantized KV implementations without prefix rollback replay
                 // only the anchor and accepted prefix on the untouched base.
@@ -130,7 +199,7 @@ package enum Q35DFlash2Decoder {
                 stats.recoveryForwards += 1
                 anchor = sampling == nil
                     ? argMax(confirmed.logits[0, -1, 0...]).item(Int.self)
-                    : targetTokens[committed - 1]
+                    : targetTokens[0]
             }
             draft.appendTargetContext(
                 confirmed.capturedHiddenStates.mapValues { $0[0..., 0..<committed, 0...] }, cache: draftCache

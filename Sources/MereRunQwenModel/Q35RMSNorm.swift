@@ -21,7 +21,7 @@ final class Q35RMSNorm: Module {
         super.init()
     }
 
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
+    func resolvedWeight() -> MLXArray {
         if effectiveWeight == nil {
             let scale = zeroCenteredWeight
                 ? weight + MLXArray(1.0).asType(weight.dtype)
@@ -29,8 +29,13 @@ final class Q35RMSNorm: Module {
             MLX.eval(scale)
             effectiveWeight = scale
         }
+        return effectiveWeight ?? weight
+    }
+
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
+        let scale = resolvedWeight()
         guard let groupSize else {
-            return MLXFast.rmsNorm(x, weight: effectiveWeight ?? weight, eps: eps)
+            return MLXFast.rmsNorm(x, weight: scale, eps: eps)
         }
         precondition(x.dim(-1).isMultiple(of: groupSize))
         let groupCount = x.dim(-1) / groupSize
@@ -40,7 +45,7 @@ final class Q35RMSNorm: Module {
         let normalized = groupedFloat * MLX.rsqrt(
             variance + MLXArray(eps).asType(.float32)
         )
-        let groupedWeight = (effectiveWeight ?? weight)
+        let groupedWeight = scale
             .asType(.float32)
             .reshaped(groupCount, groupSize)
         return (normalized * groupedWeight).asType(x.dtype).reshaped(x.shape)

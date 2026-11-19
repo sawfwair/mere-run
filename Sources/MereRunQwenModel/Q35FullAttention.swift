@@ -32,7 +32,7 @@ final class Q35FullAttention: Module {
         FileHandle.standardError.write(Data("[q35] fused_qkv=true\n".utf8))
     }()
 
-    private func resolvedFusedQKV() -> FusedQuantizedProjection? {
+    func resolvedFusedQKV() -> FusedQuantizedProjection? {
         guard Self.fusedQKVEnabled else { return nil }
         if let fusedQKV, fusedQKV.matches([qProj, kProj, vProj]) {
             return fusedQKV
@@ -135,6 +135,8 @@ final class Q35FullAttention: Module {
             vFlat = vProj(x)
         }
 
+        Q35VerificationAttribution.observer?(.fullInput, [qFlat, kFlat, vFlat])
+
         let qProjection = qFlat.reshaped(b, s, numHeads, hasOutputGate ? headDim * 2 : headDim)
 
         let queries: MLXArray
@@ -154,7 +156,10 @@ final class Q35FullAttention: Module {
         var k = kNorm(keys).transposed(0, 2, 1, 3)
         var v = values.transposed(0, 2, 1, 3)
 
-        if let positionIds, mropeRotary != nil {
+        if let tree = Q35TreeVerificationContext.current {
+            q = treeRotary(q, tree: tree, offset: offsets[0])
+            k = treeRotary(k, tree: tree, offset: offsets[0])
+        } else if let positionIds, mropeRotary != nil {
             (q, k) = applyMRoPE(q, k, positionIds: positionIds)
         } else if let rowOffsets = cache?.rowOffsets, rowOffsets.count == b {
             q = applyRoPEByRow(q, rowOffsets: rowOffsets)
@@ -171,6 +176,8 @@ final class Q35FullAttention: Module {
             v = cached.1
         }
 
+        Q35VerificationAttribution.observer?(.fullRotaryCache, [q, k, v])
+
         let queryCount = q.dim(2)
         let keyCount = k.dim(2)
         // MLX changes the vector pass count or reduction partitioning at these
@@ -183,7 +190,9 @@ final class Q35FullAttention: Module {
             }
         let queryTileLimit = crossesReductionBoundary ? 1 : verificationQueryLimit
         let attn: MLXArray
-        if let indexer, targetVerify, b == 1, (2...32).contains(queryCount),
+        if let tree = Q35TreeVerificationContext.current {
+            attn = q35TreeAttention(q: q, k: k, v: v, tree: tree, scale: scale)
+        } else if let indexer, targetVerify, b == 1, (2...32).contains(queryCount),
            (queryCount <= 9 || Q38WideVerificationPolicy.exactSparseAttention),
            keyCount >= queryCount, case .causal = mask {
             // Flash-Next's BF16 dense attention and sparse reductions can
@@ -201,7 +210,7 @@ final class Q35FullAttention: Module {
             attn = sparse
         } else if targetVerify,
            b == 1,
-           (2...9).contains(queryCount),
+           (2...max(9, QuantizedVerificationContext.maximumM5Rows)).contains(queryCount),
            queryCount > queryTileLimit,
            keyCount >= queryCount,
            case .causal = mask {
@@ -229,11 +238,21 @@ final class Q35FullAttention: Module {
             )
         }
 
+        Q35VerificationAttribution.observer?(.fullAttention, [attn])
+
         var out = attn.transposed(0, 2, 1, 3).reshaped(b, s, numHeads * headDim)
         if let gate {
             out = out * MLX.sigmoid(gate)
         }
-        return oProj(out)
+        Q35VerificationAttribution.observer?(.fullGate, [out])
+        let result = oProj(out)
+        Q35VerificationAttribution.observer?(.fullOutput, [result])
+        return result
+    }
+
+    private func treeRotary(_ x: MLXArray, tree: Q35VerificationTree, offset: Int) -> MLXArray {
+        let positions = MLXArray(tree.depths.map { Int32(offset + $0) })
+        return rope(x.transposed(2, 1, 0, 3), offset: positions).transposed(2, 1, 0, 3)
     }
 
     private func q38VerificationAttention(

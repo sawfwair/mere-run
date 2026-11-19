@@ -3,6 +3,7 @@ import MediaIO
 import MLX
 import MLXNN
 import MereRunTensor
+import MereRunQwenModel
 #if canImport(Darwin)
 import Darwin
 #endif
@@ -145,9 +146,6 @@ extension Q35Generator {
             jsonConstrained: jsonConstrained, logprobCapture: request.logprobCapture,
             continuousBatchingEnabled: continuousBatchingEnabled
         ) ? dflash2Model : nil
-        let dflash2Cache = requestDFlash2.map { draft in
-            draft.makeCache(offset: max(0, promptTokens.count - draft.config.slidingWindow))
-        }
         let mtpSpeculationEligible = requestDFlash2 == nil && !request.logprobCapture.isEnabled
             && !generationConfig.hasActivePenalties
             && !jsonConstrained
@@ -172,7 +170,8 @@ extension Q35Generator {
         let streamMTPHistory = historyMode == .streaming
         let retainPrefillHidden = prefixKVCacheEnabled || mtpSpeculationEligible
         let effectiveKVCacheMode: RuntimeKVCacheMode
-        switch request.kvCacheMode {
+        let requestedCacheMode = request.kvCacheMode ?? .default
+        switch requestedCacheMode {
         case .affine4:
             effectiveKVCacheMode = .affine4
         case .affine8:
@@ -182,17 +181,44 @@ extension Q35Generator {
         }
 
         var layerCaches = makeLayerCaches(config: loadedConfig, kvCacheMode: effectiveKVCacheMode)
+        let cacheDFlash2 = prefixKVCacheEnabled && Self.dflash2PrefixCacheEnabled() && effectiveKVCacheMode == .default
+        let tunedDFlash = requestDFlash2 != nil && activeChatRequestCount <= 1
+            && (requestedCacheMode == .default || requestedCacheMode == .auto)
+            && useQualifiedDFlashDefaults(config: loadedConfig)
+        var dflash2Cache = requestDFlash2.map { draft in
+            draft.makeCache(offset: cacheDFlash2 ? 0 : max(0, promptTokens.count - draft.config.slidingWindow))
+        }
         let promptInput = MLXArray(promptTokens.map { Int32($0) }).reshaped(1, promptTokens.count)
 
         var prefillOutput: Q35PrefillOutput
         var prefillLength = promptTokens.count
         var mropeRopeDelta: Int?
+        var cacheReadTokens = 0
+        var cacheCreationTokens = 0
 
-        if let draft = requestDFlash2, let dflash2Cache {
-            prefillOutput = try await prefillDFlash2(
-                model: model, draft: draft, draftCache: dflash2Cache,
-                promptTokens: promptTokens, cache: layerCaches, progressHandler: progressHandler
-            )
+        if let draft = requestDFlash2, let freshDraftCache = dflash2Cache {
+            let chunkSize = Self.prefillChunkSize(modelId: modelId, activeRequestCount: activeChatRequestCount)
+            let prefix = QwenDFlashDefaults.$active.withValue(tunedDFlash) {
+                cacheDFlash2 ? prefixKVCacheSeed(
+                    modelPath: loadedModelPath ?? "", promptTokens: promptTokens, cacheMode: effectiveKVCacheMode,
+                    dflash2ChunkSize: chunkSize
+                ) : nil
+            }
+            let context = prefix?.dflash2Cache ?? freshDraftCache
+            dflash2Cache = context
+            if let prefix {
+                layerCaches = prefix.caches
+                cacheReadTokens = prefix.tokenCount
+            }
+            prefillOutput = try await QwenDFlashDefaults.$active.withValue(tunedDFlash) {
+                try await prefillDFlash2(
+                    model: model, draft: draft, draftCache: context,
+                    promptTokens: promptTokens, cache: layerCaches, chunkSize: cacheDFlash2 ? chunkSize : nil,
+                    startIndex: prefix?.tokenCount ?? 0, existingLogits: prefix?.logits, existingHidden: prefix?.hidden,
+                    modelPath: cacheDFlash2 ? loadedModelPath : nil, progressHandler: progressHandler
+                )
+            }
+            cacheCreationTokens = cacheDFlash2 ? promptTokens.count - cacheReadTokens : 0
         } else if imageURLs.isEmpty {
             let prefixSeed = retainMTPPromptHistory && !streamMTPHistory ? nil : prefixKVCacheSeed(
                 modelPath: loadedModelPath ?? "",
@@ -291,23 +317,34 @@ extension Q35Generator {
 
         progressHandler?(ChatProgress(stage: .generating, message: ""))
 
-        let outputObserver = NativeChatOutputObserver(initialReasoning:
-            tokenizerAndTemplate.decode(tokens: promptTokens).trimmingCharacters(in: .whitespacesAndNewlines)
-                .hasSuffix("<think>"), parseTools: request.tools?.isEmpty == false)
+        let initialReasoning = tokenizerAndTemplate.decode(tokens: promptTokens)
+            .trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix("<think>")
+        let outputObserver = NativeChatOutputObserver(initialReasoning: initialReasoning, parseTools: request.tools?.isEmpty == false)
         let decodeProgress: @Sendable (ChatProgress) -> Void = { progress in
             outputObserver.observe(progress, handler: progressHandler)
         }
         let decodeResult: Q35BatchedDecodeResult
         if let draft = requestDFlash2, let dflash2Cache {
-            decodeResult = try QuantizedVerificationContext.$suppressM5.withValue(false) {
-                try Q35Generator.decodeDFlash2(
-                    model: model, draft: draft, draftCache: dflash2Cache,
-                    initialLogits: prefillOutput.logits, layerCaches: layerCaches,
-                    eosSet: eosSet, tokenBudget: tokenBudget,
-                    generationConfig: generationConfig, promptTokens: promptTokens,
-                    decodeToken: { tokenizerAndTemplate.decode(token: $0) },
-                    decodeTokens: { tokenizerAndTemplate.decode(tokens: $0) }, progressHandler: decodeProgress
-                )
+            // The checkpoint template uses xhigh when the caller omits reasoning effort.
+            let automaticTree = tunedDFlash && initialReasoning && (nativeReasoningEffort ?? "xhigh") == "xhigh"
+            let treeMode = Q35SampledTreeMode.resolve(automatic: automaticTree)
+            decodeResult = try QwenDFlashDefaults.$active.withValue(tunedDFlash) {
+                try QuantizedVerificationContext.$suppressM5.withValue(false) {
+                    try Q35Generator.decodeDFlash2(
+                        model: model, draft: draft, draftCache: dflash2Cache,
+                        initialLogits: prefillOutput.logits, layerCaches: layerCaches,
+                        eosSet: eosSet, tokenBudget: tokenBudget,
+                        costs: effectiveKVCacheMode == .default && Self.adaptiveDFlash2Enabled() ? draft.decodeCosts : nil,
+                        generationConfig: generationConfig, promptTokens: promptTokens, seed: request.seed,
+                        treeMode: treeMode, thinkingLimit: initialReasoning ? Q35TreeThinkingLimit.configured(
+                            tokenBudget: tokenBudget, requestedTokens: request.maxTokens, automatic: automaticTree,
+                            mode: treeMode, encode: tokenizerAndTemplate.tokenizer.encodeRawChatText
+                        ) : nil,
+                        byteLevelProgress: tokenizerAndTemplate.tokenizer.supportsByteLevelProgress,
+                        decodeToken: { tokenizerAndTemplate.decode(token: $0) },
+                        decodeTokens: { tokenizerAndTemplate.decode(tokens: $0) }, progressHandler: decodeProgress
+                    )
+                }
             }
         } else {
             decodeResult = try await decodeTokens(
@@ -334,7 +371,7 @@ extension Q35Generator {
         }
 
         let stopSequences = TextGenerationStopSequences.merged(request.stopSequences)
-        #if DEBUG
+        #if DEBUG || MERERUN_RELEASE_REPLAY
         lastGeneratedTokenIDsForTesting = decodeResult.generatedTokens
         #endif
         let decodedRaw = tokenizerAndTemplate.decode(tokens: decodeResult.generatedTokens)
@@ -370,6 +407,8 @@ extension Q35Generator {
             acceleration: decodeResult.acceleration
         )
         response.reasoningContent = reasoning.isEmpty ? nil : reasoning
+        response.cacheReadTokens = cacheReadTokens
+        response.cacheCreationTokens = cacheCreationTokens
         response.generationEvents = events
         return response
     }

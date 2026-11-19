@@ -41,9 +41,12 @@ public actor Q35Generator: ChatGenerator {
     var loadedResources: Q35Resources?
     var loadedVisionResources: Q35Resources?
 
+    #if DEBUG || MERERUN_RELEASE_REPLAY
+    var lastGeneratedTokenIDsForTesting: [Int] = []
+    #endif
+
     #if DEBUG
     var checkpointTransformForTesting: (@Sendable (Q35Model) throws -> Void)?
-    var lastGeneratedTokenIDsForTesting: [Int] = []
 
     /// Installed-checkpoint experiments run before fusion releases source weights.
     /// This hook is absent from production builds and never changes source files.

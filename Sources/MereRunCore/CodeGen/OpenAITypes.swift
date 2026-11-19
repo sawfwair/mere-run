@@ -83,6 +83,14 @@ private struct OpenAIDynamicCodingKey: CodingKey, Hashable {
     }
 }
 
+public struct OpenAIChatTemplateKwargs: Codable, Sendable {
+    public var enable_thinking: Bool?
+
+    public init(enable_thinking: Bool? = nil) {
+        self.enable_thinking = enable_thinking
+    }
+}
+
 public struct OpenAIChatRequest: Codable, Sendable {
     public var model: String
     public var messages: [OpenAIChatMessage]
@@ -101,6 +109,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
     public var logprobs: Bool?
     public var top_logprobs: Int?
     public var reasoning_effort: String?
+    public var chat_template_kwargs: OpenAIChatTemplateKwargs?
     public var tools: [OpenAIChatTool]?
     public var tool_choice: OpenAIChatToolChoice?
     public var parallel_tool_calls: Bool?
@@ -138,6 +147,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         case logprobs
         case top_logprobs
         case reasoning_effort
+        case chat_template_kwargs
         case tools
         case tool_choice
         case parallel_tool_calls
@@ -175,6 +185,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         logprobs: Bool? = nil,
         top_logprobs: Int? = nil,
         reasoning_effort: String? = nil,
+        chat_template_kwargs: OpenAIChatTemplateKwargs? = nil,
         tools: [OpenAIChatTool]? = nil,
         tool_choice: OpenAIChatToolChoice? = nil,
         parallel_tool_calls: Bool? = nil,
@@ -210,6 +221,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         self.logprobs = logprobs
         self.top_logprobs = top_logprobs
         self.reasoning_effort = reasoning_effort
+        self.chat_template_kwargs = chat_template_kwargs
         self.tools = tools
         self.tool_choice = tool_choice
         self.parallel_tool_calls = parallel_tool_calls
@@ -249,6 +261,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         logprobs = try container.decodeIfPresent(Bool.self, forKey: .logprobs)
         top_logprobs = try container.decodeIfPresent(Int.self, forKey: .top_logprobs)
         reasoning_effort = try container.decodeIfPresent(String.self, forKey: .reasoning_effort)
+        chat_template_kwargs = try container.decodeIfPresent(OpenAIChatTemplateKwargs.self, forKey: .chat_template_kwargs)
         tools = try container.decodeIfPresent([OpenAIChatTool].self, forKey: .tools)
         tool_choice = try container.decodeIfPresent(OpenAIChatToolChoice.self, forKey: .tool_choice)
         parallel_tool_calls = try container.decodeIfPresent(Bool.self, forKey: .parallel_tool_calls)
@@ -295,6 +308,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         try container.encodeIfPresent(logprobs, forKey: .logprobs)
         try container.encodeIfPresent(top_logprobs, forKey: .top_logprobs)
         try container.encodeIfPresent(reasoning_effort, forKey: .reasoning_effort)
+        try container.encodeIfPresent(chat_template_kwargs, forKey: .chat_template_kwargs)
         try container.encodeIfPresent(tools, forKey: .tools)
         try container.encodeIfPresent(tool_choice, forKey: .tool_choice)
         try container.encodeIfPresent(parallel_tool_calls, forKey: .parallel_tool_calls)

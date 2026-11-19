@@ -542,6 +542,19 @@ public struct ChatAccelerationDiagnostics: Codable, Sendable, Hashable {
     public let rounds: Int?
     public let draftedTokens: Int?
     public let acceptedDraftTokens: Int?
+    /// Target-only advances after speculative decoding stops paying for itself.
+    public let targetOnlyRounds: Int?
+    /// Frozen calibration costs, starting with zero proposals (target-only).
+    public let roundSecondsByDraftDepth: [Double]?
+    /// Frozen rejected-prefix prices for opt-in width-aware selection.
+    public let rejectedRoundSecondsByDraftDepth: [Double]?
+    /// Counts by proposed depth; index zero is a target-only forward.
+    public let draftRoundsByDepth: [Int]?
+    /// Parent-indexed tree rounds, separate from linear proposal depths.
+    public let treeRounds: Int?
+    public let treeRoundsByNodeCount: [Int]?
+    /// Rolling online prices for tree widths; unobserved widths are null.
+    public let treeRoundSecondsByNodeCount: [Double?]?
     public let acceptanceRate: Double?
     /// Target-confirmed prompt transitions available to the drafter before decode.
     public let draftHistoryTokens: Int?
@@ -554,6 +567,13 @@ public struct ChatAccelerationDiagnostics: Codable, Sendable, Hashable {
         rounds: Int? = nil,
         draftedTokens: Int? = nil,
         acceptedDraftTokens: Int? = nil,
+        targetOnlyRounds: Int? = nil,
+        roundSecondsByDraftDepth: [Double]? = nil,
+        rejectedRoundSecondsByDraftDepth: [Double]? = nil,
+        draftRoundsByDepth: [Int]? = nil,
+        treeRounds: Int? = nil,
+        treeRoundsByNodeCount: [Int]? = nil,
+        treeRoundSecondsByNodeCount: [Double?]? = nil,
         draftHistoryTokens: Int? = nil,
         speculationProfile: ChatSpeculationProfile? = nil
     ) {
@@ -562,6 +582,13 @@ public struct ChatAccelerationDiagnostics: Codable, Sendable, Hashable {
         self.rounds = rounds
         self.draftedTokens = draftedTokens
         self.acceptedDraftTokens = acceptedDraftTokens
+        self.targetOnlyRounds = targetOnlyRounds
+        self.roundSecondsByDraftDepth = roundSecondsByDraftDepth
+        self.rejectedRoundSecondsByDraftDepth = rejectedRoundSecondsByDraftDepth
+        self.draftRoundsByDepth = draftRoundsByDepth
+        self.treeRounds = treeRounds
+        self.treeRoundsByNodeCount = treeRoundsByNodeCount
+        self.treeRoundSecondsByNodeCount = treeRoundSecondsByNodeCount
         self.draftHistoryTokens = draftHistoryTokens
         self.speculationProfile = speculationProfile
         if let draftedTokens, let acceptedDraftTokens, draftedTokens > 0 {

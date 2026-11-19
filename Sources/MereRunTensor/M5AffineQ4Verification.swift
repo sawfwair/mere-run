@@ -169,31 +169,34 @@ enum M5AffineQ4Verification {
     struct InputLayout {
         let padded: MLXArray
         let width: Int
+        let tileRows: Int
         let outputSize: Int
         let outputShape: [Int]
     }
 
     static func inputLayout(
-        _ x: MLXArray, weight: MLXArray, scales: MLXArray, biases: MLXArray, splits: Int
+        _ x: MLXArray, weight: MLXArray, scales: MLXArray, biases: MLXArray, splits: Int,
+        maximumRows: Int = 8
     ) -> InputLayout? {
         guard isSupported, x.dtype == .bfloat16, weight.dtype == .uint32,
               scales.dtype == .bfloat16, biases.dtype == .bfloat16,
               x.ndim >= 2, weight.ndim == 2 else { return nil }
         let inputSize = x.dim(-1), outputSize = weight.dim(0)
         let width = x.size / inputSize
-        guard (1...8).contains(width), x.dim(-2) == width,
+        guard (1...maximumRows).contains(width), x.dim(-2) == width,
               inputSize.isMultiple(of: 64), outputSize.isMultiple(of: 64),
               weight.dim(1) == inputSize / 8,
               scales.shape == [outputSize, inputSize / 64], biases.shape == scales.shape,
               [1, 2, 4, 8].contains(splits), inputSize.isMultiple(of: 64 * splits),
               inputSize / splits >= 512 else { return nil }
         let rows = x.reshaped(width, inputSize)
-        let padded = width == 8 ? rows : MLX.concatenated([
-            rows, MLXArray.zeros([8 - width, inputSize], dtype: .bfloat16),
+        let tileRows = width > 8 ? 16 : 8
+        let padded = width == tileRows ? rows : MLX.concatenated([
+            rows, MLXArray.zeros([tileRows - width, inputSize], dtype: .bfloat16),
         ], axis: 0)
         var shape = x.shape
         shape[shape.count - 1] = outputSize
-        return InputLayout(padded: padded, width: width, outputSize: outputSize, outputShape: shape)
+        return InputLayout(padded: padded, width: width, tileRows: tileRows, outputSize: outputSize, outputShape: shape)
     }
 }
 #endif

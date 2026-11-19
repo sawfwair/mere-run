@@ -23,6 +23,12 @@ package final class Q35DFlash2Cache {
         offset += keys.dim(2)
     }
 
+    func replaceCommittedContext(keys: MLXArray?, values: MLXArray?, offset: Int) {
+        self.keys = keys
+        self.values = values
+        self.offset = offset
+    }
+
     package var state: [MLXArray] {
         [keys, values].compactMap { $0 }
     }

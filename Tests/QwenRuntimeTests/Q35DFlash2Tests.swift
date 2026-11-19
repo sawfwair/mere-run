@@ -1,6 +1,6 @@
 import Foundation
 import MereRunKVCache
-import MereRunTensor
+@testable import MereRunTensor
 import MLX
 import MLXNN
 import MLXRandom
@@ -9,6 +9,41 @@ import MereRunMLXTestSupport
 @testable import MereRunQwenModel
 
 final class Q35DFlash2Tests: MLXTestCase {
+    #if os(macOS)
+    func testDraftMatrixFFNSuppressionPreservesReferenceAtBothWidths() throws {
+        try XCTSkipUnless(M5AffineQ4Verification.isSupported, "Requires an M5 GPU.")
+        MLXRandom.seed(581)
+        let config = try JSONDecoder().decode(Q35DFlash2Config.self, from: Data(Self.published.utf8))
+        let mlp = Q35DFlash2MLP(config: config)
+        var replacements: [(String, Module)] = []
+        for (name, input, output) in [("gate_proj", 5_120, 17_408), ("up_proj", 5_120, 17_408),
+                                      ("down_proj", 17_408, 5_120)] {
+            replacements.append((name, PortableQuantizedLinear(
+                weight: MLXRandom.randInt(0..<UInt32.max, [output, input / 8]), bias: nil,
+                scales: MLXArray.full([output, input / 64], values: MLXArray(Float(0.001))).asType(.bfloat16),
+                biases: MLXArray.full([output, input / 64], values: MLXArray(Float(-0.007))).asType(.bfloat16),
+                groupSize: 64, bits: 4, mode: .affine
+            )))
+        }
+        mlp.update(modules: ModuleChildren.unflattened(replacements))
+        let x = MLXRandom.uniform(-1..<1, [1, 16, 5_120]).asType(.bfloat16)
+        let expected = [8, 16].map { mlp(x[0..., 0..<$0, 0...]) }
+        MLX.eval(expected)
+        mlp.prepareMatrixProjections()
+        for (index, rows) in [8, 16].enumerated() {
+            let suppressed = QuantizedVerificationContext.$suppressM5.withValue(true) {
+                mlp(x[0..., 0..<rows, 0...])
+            }
+            XCTAssertEqual((suppressed.asType(.float32) - expected[index].asType(.float32)).abs().max().item(Float.self), 0)
+            let greedy = mlp(x[0..., 0..<rows, 0...])
+            XCTAssertTrue(MLX.abs(greedy).max().item(Float.self).isFinite)
+        }
+        XCTAssertEqual(QuantizedVerificationContext.maximumM5Rows, 8)
+        XCTAssertFalse(QuantizedVerificationContext.suppressM5)
+    }
+
+    #endif
+
     func testPublishedConfigurationAndParameterPaths() throws {
         let config = try JSONDecoder().decode(Q35DFlash2Config.self, from: Data(Self.published.utf8))
         XCTAssertEqual(config.dflash.targetLayerIDs, [5, 19, 33, 47, 61])
@@ -201,6 +236,11 @@ final class Q35DFlash2Tests: MLXTestCase {
     }
 
     func testSampledDecodeCommitsOnlyAcceptedHistoryAndRecoversQuantizedCaches() throws {
+        try assertSampledDecodeHistory(costs: nil)
+        try assertSampledDecodeHistory(costs: Q35DFlash2Costs(secondsByDepth: [0.001, 1, 2, 3]))
+    }
+
+    private func assertSampledDecodeHistory(costs: Q35DFlash2Costs?) throws {
         for affine in [false, true] {
             MLXRandom.seed(71)
             let (target, draft) = try constantModels(reject: true)
@@ -222,13 +262,83 @@ final class Q35DFlash2Tests: MLXTestCase {
             let stats = try Q35DFlash2Decoder.decode(
                 model: target, draft: draft, draftCache: history, initialLogits: output.logits,
                 layerCaches: cache, eosSet: [], tokenBudget: 12, sampling: sampling,
+                costs: costs,
                 emit: { generated.append($0) }
             )
             XCTAssertEqual(generated, Array(5...16))
             XCTAssertEqual(stats.acceptedTokens, 0)
             XCTAssertEqual(stats.recoveryForwards > 0, affine)
-            XCTAssertEqual(history.map(\.offset), [14])
+            XCTAssertEqual(history.map(\.offset), costs == nil ? [14] : [7])
+            XCTAssertEqual(stats.targetOnlyRounds, costs == nil ? 0 : 7)
         }
+    }
+
+    func testFallbackHonorsSampledEOSAndCancellation() throws {
+        let (target, draft) = try constantModels(reject: true)
+        let costs = Q35DFlash2Costs(secondsByDepth: [0.001, 1, 2, 3])
+        let sampling = Q35DFlash2Sampling(temperature: 0.7, history: [2, 3, 4]) { _, prefix in
+            let probabilities = MLXArray.zeros([64])
+            probabilities[(prefix![-1] + 1) % 64] = MLXArray(Float(1))
+            return probabilities
+        }
+        for cancel in [false, true] {
+            let cache = caches()
+            let output = target.forwardPrefill(
+                MLXArray([Int32(2), 3, 4]).reshaped(1, 3), cache: cache, captureLayerIndices: [0, 1]
+            )
+            let history = draft.makeCache()
+            draft.appendTargetContext(output.capturedHiddenStates, cache: history)
+            var tokens: [Int] = []
+            func run() throws -> Q35DFlash2Stats {
+                try Q35DFlash2Decoder.decode(
+                    model: target, draft: draft, draftCache: history, initialLogits: output.logits,
+                    layerCaches: cache, eosSet: [12], tokenBudget: 30, sampling: sampling, costs: costs,
+                    checkCancellation: { if cancel && tokens.count >= 6 { throw CancellationError() } },
+                    emit: { tokens.append($0) }
+                )
+            }
+            if cancel {
+                XCTAssertThrowsError(try run())
+                XCTAssertEqual(tokens, Array(5...10))
+            } else {
+                XCTAssertGreaterThan(try run().targetOnlyRounds, 0)
+                XCTAssertEqual(tokens, Array(5...11))
+            }
+        }
+    }
+
+    func testCalibrationPreservesContextAndDoesNotConsumeSamplingRandomness() throws {
+        let (target, draft) = try constantModels(reject: false)
+        let cache = caches()
+        let prompt = MLXArray([Int32(2), 3, 4]).reshaped(1, 3)
+        let output = target.forwardPrefill(prompt, cache: cache, captureLayerIndices: [0, 1])
+        let history = draft.makeCache()
+        draft.appendTargetContext(output.capturedHiddenStates, cache: history)
+        MLX.eval([output.logits] + history.flatMap(\.state))
+        let reference = history.map { $0.fork() }
+        MLXRandom.seed(123)
+        let expectedRandom = MLXRandom.uniform(0..<1, [8]).asArray(Float.self)
+        MLXRandom.seed(123)
+        let costs = try Q35DFlash2Calibration.measure(
+            model: target, draft: draft, initialLogits: output.logits, layerCaches: cache, draftCache: history
+        )
+        XCTAssertEqual(costs.secondsByDepth.count, 4)
+        XCTAssertTrue(costs.secondsByDepth.allSatisfy { $0.isFinite && $0 > 0 })
+        XCTAssertEqual(MLXRandom.uniform(0..<1, [8]).asArray(Float.self), expectedRandom)
+        XCTAssertEqual(history.map(\.offset), [3])
+        for (actual, saved) in zip(history, reference) {
+            assertClose(try XCTUnwrap(actual.keys), try XCTUnwrap(saved.keys))
+            assertClose(try XCTUnwrap(actual.values), try XCTUnwrap(saved.values))
+        }
+        let after = target.forward(MLXArray([Int32(5)]).reshaped(1, 1), cache: cache)
+        let fresh = caches()
+        _ = target.forwardPrefill(prompt, cache: fresh)
+        let expected = target.forward(MLXArray([Int32(5)]).reshaped(1, 1), cache: fresh)
+        assertClose(after.logits, expected.logits)
+        XCTAssertThrowsError(try Q35DFlash2Calibration.measure(
+            model: target, draft: draft, initialLogits: output.logits, layerCaches: fresh, draftCache: history,
+            checkCancellation: { throw CancellationError() }
+        ))
     }
 
     func testSampledDecodeAcceptsBlocksAndStopsAtSampledEOS() throws {
@@ -285,13 +395,20 @@ final class Q35DFlash2Tests: MLXTestCase {
         var generated: [Int] = []
         let stats = try Q35DFlash2Decoder.decode(
             model: target, draft: draft, draftCache: history, initialLogits: output.logits,
-            layerCaches: cache, eosSet: [], tokenBudget: 9, sampling: sampling, emit: { generated.append($0) }
+            layerCaches: cache, eosSet: [], tokenBudget: 32, sampling: sampling,
+            costs: Q35DFlash2Costs(secondsByDepth: [0.001, 1, 2, 3]), emit: { generated.append($0) }
         )
-        XCTAssertEqual(generated.count, 9)
+        XCTAssertEqual(generated.count, 32)
         XCTAssertGreaterThan(comparisons, stats.rounds)
+        XCTAssertGreaterThan(stats.targetOnlyRounds, 0)
     }
 
     func testSampledSeededRequestsRepeatWithoutHistoryLeakage() throws {
+        try assertSampledSeededRepeat(costs: nil)
+        try assertSampledSeededRepeat(costs: Q35DFlash2Costs(secondsByDepth: [0.001, 1, 2, 3]))
+    }
+
+    private func assertSampledSeededRepeat(costs: Q35DFlash2Costs?) throws {
         let (target, draft) = try constantModels(reject: false)
         let sampling = Q35DFlash2Sampling(temperature: 1, history: nil) { _, _ in
             MLXArray([Float(0.2), 0.3, 0.5] + Array(repeating: Float(0), count: 61))
@@ -308,7 +425,8 @@ final class Q35DFlash2Tests: MLXTestCase {
             var tokens: [Int] = []
             _ = try Q35DFlash2Decoder.decode(
                 model: target, draft: draft, draftCache: history, initialLogits: output.logits,
-                layerCaches: cache, eosSet: [], tokenBudget: 32, sampling: sampling, emit: { tokens.append($0) }
+                layerCaches: cache, eosSet: [], tokenBudget: 32, sampling: sampling, costs: costs,
+                emit: { tokens.append($0) }
             )
             runs.append(tokens)
         }
@@ -337,6 +455,22 @@ final class Q35DFlash2Tests: MLXTestCase {
     }
 
     func testPartialAcceptanceMatchesSerialWithNonzeroHybridState() throws {
+        try assertPartialAcceptanceMatchesSerial(costs: nil)
+        try assertPartialAcceptanceMatchesSerial(costs: Q35DFlash2Costs(secondsByDepth: [0.001, 1, 2, 3]))
+        try assertPartialAcceptanceMatchesSerial(
+            costs: Q35DFlash2Costs(secondsByDepth: [1, 1.1, 4, 8]), tokenCount: 24, expectedAdaptiveDepth: 1
+        )
+    }
+
+    func testCostAwareTargetOnlyProbesPreserveHybridAndDraftContext() throws {
+        try assertPartialAcceptanceMatchesSerial(costs: Q35DFlash2Costs(
+            secondsByDepth: [0.5, 0.99, 1.25, 1.5], rejectedSecondsByDepth: [0.5, 0.99, 1.25, 1.5]
+        ), tokenCount: 24)
+    }
+
+    private func assertPartialAcceptanceMatchesSerial(
+        costs: Q35DFlash2Costs?, tokenCount: Int = 17, expectedAdaptiveDepth: Int? = nil
+    ) throws {
         MLXRandom.seed(908)
         let target = Q35Model(config: try targetConfiguration())
         target.update(parameters: target.parameters().mapValues { MLXRandom.normal($0.shape) * 0.01 })
@@ -375,10 +509,10 @@ final class Q35DFlash2Tests: MLXTestCase {
         draft.appendTargetContext(serial.capturedHiddenStates, cache: serialHistory)
         var snapshots = [3: serialHistory[0].fork()]
         var expected: [Int] = []
-        for index in 0..<17 {
+        for index in 0..<tokenCount {
             let token = argMax(serial.logits[0, -1, 0...]).item(Int.self)
             expected.append(token)
-            if index < 16 {
+            if index < tokenCount - 1 {
                 serial = target.forward(
                     MLXArray([Int32(token)]).reshaped(1, 1), cache: serialCache, captureLayerIndices: [0, 1]
                 )
@@ -392,13 +526,17 @@ final class Q35DFlash2Tests: MLXTestCase {
         draft.appendTargetContext(initial.capturedHiddenStates, cache: history)
         var actual: [Int] = []
         var events: [String] = []
+        var depths: [Int] = []
         var observedAccepted = 0
         let stats = try Q35DFlash2Decoder.decode(
             model: target, draft: draft, draftCache: history, initialLogits: initial.logits,
-            layerCaches: candidateCache, eosSet: [], tokenBudget: 17,
+            layerCaches: candidateCache, eosSet: [], tokenBudget: tokenCount,
+            costs: costs,
             observer: { event in
                 switch event {
-                case .beginRound: events.append("begin")
+                case let .beginRound(depth):
+                    events.append("begin")
+                    depths.append(depth)
                 case let .drafted(tokens):
                     events.append("draft")
                     MLX.eval(tokens)
@@ -410,18 +548,31 @@ final class Q35DFlash2Tests: MLXTestCase {
                 case let .finished(state):
                     events.append("finish")
                     MLX.eval(state)
+                case .targetOnlyCompleted: events.append("serial")
                 }
             }, emit: { actual.append($0) }
         )
         XCTAssertEqual(actual, expected)
         XCTAssertEqual(observedAccepted, stats.acceptedTokens)
-        XCTAssertEqual(events, (0..<stats.rounds).flatMap { _ in
+        XCTAssertEqual(events.filter { $0 != "serial" }, (0..<stats.rounds).flatMap { _ in
             ["begin", "draft", "submit", "verified", "accept", "finish"]
         })
-        XCTAssertEqual(expected, Array(4...20))
+        XCTAssertEqual(expected, Array(4..<(4 + tokenCount)))
         XCTAssertGreaterThan(stats.acceptedTokens, 0)
         XCTAssertLessThan(stats.acceptedTokens, stats.draftedTokens)
         XCTAssertEqual(stats.recoveryForwards, 0)
+        XCTAssertEqual(events.filter { $0 == "serial" }.count, stats.targetOnlyRounds)
+        if let expectedAdaptiveDepth {
+            XCTAssertGreaterThan(depths.count, 4)
+            XCTAssertTrue(depths.dropFirst(4).allSatisfy { $0 == expectedAdaptiveDepth })
+            XCTAssertEqual(stats.targetOnlyRounds, 0)
+        } else if costs != nil {
+            XCTAssertGreaterThan(stats.targetOnlyRounds, 0)
+        }
+        if costs?.rejectedSecondsByDepth != nil {
+            let firstSerial = try XCTUnwrap(events.firstIndex(of: "serial"))
+            XCTAssertTrue(events.dropFirst(firstSerial + 1).contains("begin"), "Target-only execution must retry drafts")
+        }
         // Finishing the budget need not commit the final block. Compare the
         // last confirmed snapshot with independent one-token target execution.
         let reference = try XCTUnwrap(snapshots[history[0].offset])
@@ -471,7 +622,7 @@ final class Q35DFlash2Tests: MLXTestCase {
         try JSONDecoder().decode(Q35DFlash2Config.self, from: Data(Self.smallDraft.utf8))
     }
 
-    private static let smallTarget = #"""
+    static let smallTarget = #"""
     {"model_type":"qwen3_5","text_config":{
       "model_type":"qwen3_5_text","hidden_size":32,"intermediate_size":64,"num_hidden_layers":2,
       "num_attention_heads":4,"num_key_value_heads":2,"head_dim":32,
@@ -483,7 +634,7 @@ final class Q35DFlash2Tests: MLXTestCase {
       "rope_parameters":{"rope_theta":10000,"partial_rotary_factor":1}}}
     """#
 
-    private static let smallDraft = #"""
+    static let smallDraft = #"""
     {"architectures":["DFlash2DraftModel"],"model_type":"qwen3","is_causal":false,
      "attention_bias":false,"hidden_act":"silu","tie_word_embeddings":false,
      "hidden_size":32,"intermediate_size":64,"num_hidden_layers":1,"num_target_layers":2,

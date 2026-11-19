@@ -25,6 +25,7 @@ public final class QwenTokenizer {
   private let prefixTokens: [Int]
   private let suffixTokens: [Int]
   private let tokenizer: Tokenizer
+  private(set) var supportsByteLevelProgress = false
 
   public let padTokenId: Int
   public let maxLength: Int
@@ -138,8 +139,11 @@ public final class QwenTokenizer {
     }
 
     let tokenizer: Tokenizer
+    var byteLevelProgress = false
     if FileManager.default.fileExists(atPath: tokenizerDataURL.path) {
       let tokenizerData = try hubApi.configuration(fileURL: tokenizerDataURL)
+      byteLevelProgress = tokenizerData.decoder.type.string() == "ByteLevel"
+        && !tokenizerConfig.cleanUpTokenizationSpaces.boolean(or: true)
       tokenizer = try AutoTokenizer.from(tokenizerConfig: tokenizerConfig, tokenizerData: tokenizerData)
     } else {
 
@@ -170,7 +174,7 @@ public final class QwenTokenizer {
 
     let prefixTokens = tokenizer.encode(text: promptPrefix)
     let suffixTokens = tokenizer.encode(text: promptSuffix)
-    return QwenTokenizer(
+    let result = QwenTokenizer(
       padTokenId: padId,
       maxLength: resolvedMaxLength,
       prefixTokens: prefixTokens,
@@ -183,6 +187,8 @@ public final class QwenTokenizer {
     ) { text in
       tokenizer.encode(text: text)
     }
+    result.supportsByteLevelProgress = byteLevelProgress
+    return result
   }
 
   static func normalizedTokenizerConfig(

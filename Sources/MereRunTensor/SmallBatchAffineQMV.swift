@@ -55,8 +55,8 @@ enum SmallBatchAffineQMV {
         return Set(raw.split(separator: ",").map(String.init))
     }()
 
-    private static let header = """
-        template <int NA, int NR = 4>
+    static let header = """
+        template <int NA, int NR = 4, bool PrecomputedBiasSums = false>
         inline void mere_affine4_qmv_wide(
             const device uint32_t* w,
             const device bfloat16_t* scales,
@@ -67,7 +67,8 @@ enum SmallBatchAffineQMV {
             const int out_vec_size,
             int first_m,
             int out_row,
-            uint simd_lid
+            uint simd_lid,
+            const device vec<float, NA>* bias_sums = nullptr
         ) {
             typedef vec<float, NA> VF;
             constexpr int rows_per_simd = NR;
@@ -103,6 +104,10 @@ enum SmallBatchAffineQMV {
                 }
 
                 VF sums = VF(0.0f);
+                if constexpr (PrecomputedBiasSums) {
+                    const int block = (first_m / NA) * (in_vec_size / block_size) + k / block_size;
+                    sums = bias_sums[block * 32 + simd_lid];
+                }
                 VF partial[rows_per_simd];
                 for (int r = 0; r < rows_per_simd; r++) {
                     partial[r] = VF(0.0f);
@@ -120,7 +125,9 @@ enum SmallBatchAffineQMV {
                         a2[m] = static_cast<float>(xv[2]);
                         a3[m] = static_cast<float>(xv[3]);
                         // Match the FP32 bias sum in MLX's load_vector.
-                        sums[m] += a0[m] + a1[m] + a2[m] + a3[m];
+                        if constexpr (!PrecomputedBiasSums) {
+                            sums[m] += a0[m] + a1[m] + a2[m] + a3[m];
+                        }
                     }
                     for (int r = 0; r < rows_per_simd; r++) {
                         partial[r] +=
@@ -293,7 +300,7 @@ enum SmallBatchAffineQMV {
         let eightRowGrouping = requestedGrouping
             ?? (inputSize == 5_120 && outputSize == 248_320 ? headEightRowGrouping : .split)
         let selected = exactWideShapes?.contains(shape)
-            ?? (width <= 9 || q38WideExactShapes.contains(shape))
+            ?? (width <= max(9, QuantizedVerificationContext.maximumM5Rows) || q38WideExactShapes.contains(shape))
         guard selected,
               (2...32).contains(width),
               x.dim(-2) == width,

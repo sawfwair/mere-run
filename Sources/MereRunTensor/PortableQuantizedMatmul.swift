@@ -1,6 +1,9 @@
 import Foundation
 import MLX
 import MLXNN
+#if os(macOS)
+import Metal
+#endif
 
 /// Selects Linux/CUDA quantized matrix multiplication. Automatic mode probes
 /// each native MLX operation and packed layout once, promotes it when
@@ -156,8 +159,13 @@ public enum MLXCUDAQuant {
     }
 }
 
+package enum GroupAffineArithmetic: Int {
+    case standard, centered, compensated
+}
+
 public final class PortableQuantizedLinear: QuantizedLinear {
     package var verificationBackend: QuantizedVerificationBackend = .reference
+    package var groupAffineArithmetic: GroupAffineArithmetic = .standard
     package var effectiveVerificationBackend: QuantizedVerificationBackend {
         QuantizedVerificationContext.suppressM5 ? .reference : verificationBackend
     }
@@ -194,7 +202,8 @@ public final class PortableQuantizedLinear: QuantizedLinear {
               gate.mode == .affine, up.mode == .affine,
               x.dim(-1) == 5_120, gate.weight.dim(0) == 17_408,
               let gateBiases = gate.biases, let upBiases = up.biases else { return nil }
-        if m5TiledWeightsEnabled, x.dtype == .bfloat16, (1...8).contains(x.size / x.dim(-1)),
+        if m5TiledWeightsEnabled, x.dtype == .bfloat16,
+           (M5TiledAffineQ4.groupAffinePrefillEnabled || (1...QuantizedVerificationContext.maximumM5Rows).contains(x.size / x.dim(-1))),
            let packedGate = gate.preparedM5TiledWeights(), let packedUp = up.preparedM5TiledWeights() {
             return M5TiledAffineQ4.swiglu(x, gate: packedGate, up: packedUp)
         }
@@ -206,6 +215,44 @@ public final class PortableQuantizedLinear: QuantizedLinear {
         return nil
         #endif
     }
+    #if os(macOS)
+    package var supportsGroupAffineOutputGate: Bool {
+        effectiveVerificationBackend == .m5Matrix && Self.m5TiledWeightsEnabled
+            && M5TiledAffineQ4.groupAffineEnabled && M5TiledAffineQ4.groupAffinePrefillEnabled
+            && bits == 4 && groupSize == 64 && mode == .affine && bias == nil && shape == (6144, 5120)
+    }
+
+    package func groupAffineOutputGate(_ input: MLXArray) -> MLXArray? {
+        guard supportsGroupAffineOutputGate, input.dtype == .bfloat16, (1...16).contains(input.size / input.dim(-1)),
+              let packed = preparedM5TiledWeights() else { return nil }
+        return M5TiledAffineQ4.groupAffineProjection(input, weights: packed, splits: 4, arithmetic: .standard)
+    }
+
+    /// Prepare immutable buffers for a native verification program. Wrapped
+    /// projections and subclasses with additional math are deliberately ineligible.
+    @available(macOS 26.0, *)
+    package static func nativeProjectionWeights(
+        _ layer: Linear, device: any MTLDevice, backend: QuantizedVerificationBackend = .m5Matrix
+    ) throws -> M5NativeFFN.Projection? {
+        guard type(of: layer) == PortableQuantizedLinear.self, let layer = layer as? PortableQuantizedLinear,
+              M5TiledAffineQ4.groupAffineEnabled, m5TiledWeightsEnabled,
+              layer.effectiveVerificationBackend == backend,
+              layer.bias == nil, layer.bits == 4, layer.groupSize == 64, layer.mode == .affine,
+              let weights = layer.preparedM5TiledWeights() else { return nil }
+        return try M5NativeFFN.Projection(weights, device: device)
+    }
+
+    @available(macOS 26.0, *)
+    package static func nativeSmallProjectionWeights(
+        _ layer: Linear, device: any MTLDevice
+    ) throws -> M5NativeSmallProjection.Weights? {
+        guard type(of: layer) == PortableQuantizedLinear.self, let layer = layer as? PortableQuantizedLinear,
+              layer.bias == nil, layer.bits == 4, layer.groupSize == 64, layer.mode == .affine,
+              let biases = layer.biases else { return nil }
+        return try M5NativeSmallProjection.Weights(weight: layer.weight, scales: layer.scales, biases: biases, device: device)
+    }
+    #endif
+
     private var cachedDequantizedWeight: MLXArray?
     private var cachedDequantizedWeightDType: DType?
     /// Retain the dequantized CUDA fallback weight between calls. Large dense
@@ -219,11 +266,25 @@ public final class PortableQuantizedLinear: QuantizedLinear {
 
     public override func callAsFunction(_ x: MLXArray) -> MLXArray {
         #if os(macOS)
+        if M5TiledAffineQ4.groupAffineEnabled, M5TiledAffineQ4.groupAffinePrefillEnabled,
+           Self.m5TiledWeightsEnabled, effectiveVerificationBackend == .m5Matrix, bias == nil,
+           bits == 4, groupSize == 64, mode == .affine, x.dtype == .bfloat16,
+           effectiveVerificationBackend.matrixSplits(inputSize: x.dim(-1), outputSize: weight.dim(0)) != nil,
+           let prepared = preparedM5TiledWeights(),
+           let output = M5TiledAffineQ4.matmul(x, weights: prepared, arithmetic: groupAffineArithmetic) {
+            return output
+        }
+        #endif
+        if bias == nil, let output = QuantizedPrefillContext.projection(
+            x, weight: weight, scales: scales, biases: biases, groupSize: groupSize, bits: bits, mode: mode
+        ) { return output }
+        #if os(macOS)
         if effectiveVerificationBackend == .m5Matrix, bias == nil,
            bits == 4, groupSize == 64, mode == .affine, let biases,
            let splits = effectiveVerificationBackend.matrixSplits(inputSize: x.dim(-1), outputSize: weight.dim(0)) {
-            if Self.m5TiledWeightsEnabled, x.dtype == .bfloat16, (1...8).contains(x.size / x.dim(-1)),
-               let prepared = preparedM5TiledWeights(), let output = M5TiledAffineQ4.matmul(x, weights: prepared) {
+            if Self.m5TiledWeightsEnabled, x.dtype == .bfloat16, (1...QuantizedVerificationContext.maximumM5Rows).contains(x.size / x.dim(-1)),
+               let prepared = preparedM5TiledWeights(),
+               let output = M5TiledAffineQ4.matmul(x, weights: prepared, arithmetic: groupAffineArithmetic) {
                 return output
             }
             if let output = M5AffineQ4Verification.matmul(

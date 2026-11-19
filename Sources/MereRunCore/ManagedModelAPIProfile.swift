@@ -222,6 +222,7 @@ public extension ManagedModelAPIProfile {
             thinkingLevels: fixedReasoning ? [.high] : [],
             toolCall: true,
             structuredOutput: true,
+            supportsSeed: true,
             supportsPenalties: true,
             supportsLogprobs: true
         )
@@ -233,7 +234,7 @@ public extension ManagedModelAPIProfile {
             inputModalities: [.text, .image],
             contextWindow: contextWindow,
             maximumOutputTokens: 4_096,
-            thinkingLevels: [.low, .medium, .xhigh],
+            thinkingLevels: [.off, .low, .medium, .xhigh],
             thinkingLevelMap: [.minimal: .low, .high: .xhigh, .max: .xhigh],
             reasoningEffortStrengths: [
                 .minimal: 0.2,
@@ -248,6 +249,7 @@ public extension ManagedModelAPIProfile {
             compatibility: ManagedModelOpenAICompatibilityProfile(
                 supportsReasoningEffort: true
             ),
+            supportsSeed: true,
             supportsPenalties: true,
             supportsLogprobs: true
         )

@@ -9,10 +9,7 @@ package struct Q35DFlash2Sampling {
     package let history: [Int]?
     package let distribution: (MLXArray, MLXArray?) -> MLXArray
 
-    package init(
-        temperature: Float, history: [Int]?,
-        distribution: @escaping (MLXArray, MLXArray?) -> MLXArray
-    ) {
+    package init(temperature: Float, history: [Int]?, distribution: @escaping (MLXArray, MLXArray?) -> MLXArray) {
         precondition(temperature > 0)
         self.temperature = temperature
         self.history = history
@@ -41,16 +38,18 @@ package struct Q35DFlash2Sampling {
         return MLX.where(mass .> 0, residual / MLX.maximum(mass, MLXArray(Float.leastNonzeroMagnitude)), target)
     }
 
-    /// All draws are submitted with verification, then read with proposal IDs.
-    /// Only the prefix before the first rejection can reach the caller.
+    /// Reserve the original interleaved random keys, but only draw the replacement
+    /// at the first rejection (or the bonus after a fully accepted proposal).
     package func verify(
         logits: MLXArray, selection: DFlash2Selection, history: MLXArray?
-    ) -> (accepted: MLXArray, replacements: MLXArray) {
+    ) -> (accepted: MLXArray, nextToken: MLXArray) {
         let probabilities = selection.candidateProbabilities!
         var prefix = history
         var accepted: [MLXArray] = []
-        var replacements: [MLXArray] = []
-        for position in 0..<selection.tokens.dim(1) {
+        var targets: [MLXArray] = []
+        var keys: [MLXArray] = []
+        let count = selection.tokens.dim(1)
+        for position in 0..<count {
             let target = distribution(logits[0, position, 0...], prefix)
             let token = selection.tokens[0, position]
             let candidates = selection.candidateTokenIds[0, position, 0...]
@@ -58,12 +57,22 @@ package struct Q35DFlash2Sampling {
             let draftMass = MLX.where(candidates .== token, draft, MLXArray(Float(0))).sum()
             let probability = Self.acceptanceProbability(target: target[token], draft: draftMass)
             accepted.append((MLXRandom.uniform() .< probability).asType(.int32))
-            replacements.append(Self.sample(Self.correction(
-                target: target, candidateIDs: candidates, candidateProbabilities: draft
-            )))
+            targets.append(target)
+            keys.append(resolve())
             if let previous = prefix { prefix = concatenated([previous, token.reshaped(1)]) }
         }
-        replacements.append(Self.sample(distribution(logits[0, -1, 0...], prefix)))
-        return (stacked(accepted), stacked(replacements))
+        targets.append(distribution(logits[0, -1, 0...], prefix))
+        keys.append(resolve())
+        let flags = stacked(accepted)
+        let row = argMin(concatenated([flags, MLXArray([Int32(0)])])).asType(.int32)
+        let target = stacked(targets)[row]
+        let proposalRow = MLX.minimum(row, MLXArray(Int32(count - 1)))
+        let residual = Self.correction(
+            target: target, candidateIDs: selection.candidateTokenIds[0, proposalRow, 0...],
+            candidateProbabilities: probabilities[0, proposalRow, 0...]
+        )
+        let distribution = MLX.where(row .== count, target, residual)
+        let nextToken = categorical(MLX.log(distribution), key: stacked(keys)[row]).asType(.int32)
+        return (flags, nextToken)
     }
 }

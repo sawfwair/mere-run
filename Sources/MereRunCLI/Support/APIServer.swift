@@ -2151,6 +2151,7 @@ actor CodeGenServer {
             defer { heartbeatTask.cancel() }
             do {
                 let streamedContent = StreamingContentTracker()
+                let useChannels = Q35Resources.isQ38ModelId(modelID)
                 let shouldBufferForToolCalls = request.tools?.isEmpty == false
                 let result = try await session.chat { progress in
                     guard !shouldBufferForToolCalls else { return }
@@ -2176,10 +2177,7 @@ actor CodeGenServer {
                         }
                         return
                     }
-                    if progress.stage == .generating,
-                       let token = progress.message,
-                       !token.isEmpty,
-                       !APIServerContract.isStreamingStatusMessage(token) {
+                    if let delta = Self.openAIProgressDelta(progress, useChannels: useChannels, showThinking: request.showThinking) {
                         streamedContent.markStreamed()
                         let chunk = OpenAIChatResponse(
                             id: id,
@@ -2189,7 +2187,7 @@ actor CodeGenServer {
                             choices: [
                                 OpenAIChatChoice(
                                     index: 0,
-                                    delta: OpenAIChatDelta(content: token),
+                                    delta: delta,
                                     finish_reason: nil
                                 )
                             ]
@@ -2224,7 +2222,7 @@ actor CodeGenServer {
                        let json = String(data: data, encoding: .utf8) {
                         continuation.yield(ByteBuffer(string: "data: \(json)\n\n"))
                     }
-                } else if !streamedContent.didStream, !result.response.isEmpty {
+                } else if !streamedContent.didStream, !result.response.isEmpty || result.reasoningContent?.isEmpty == false {
                     let chunk = OpenAIChatResponse(
                         id: id,
                         object: "chat.completion.chunk",
@@ -2387,7 +2385,29 @@ actor CodeGenServer {
     ) -> String {
         guard !hasToolCalls else { return "" }
         guard result.reasoningContent != nil else { return result.response }
+        if let events = result.generationEvents, events.contains(where: { if case .reasoning = $0 { true } else { false } }) {
+            return events.compactMap { event in
+                if case .text(let text) = event { return text }
+                return nil
+            }.joined().trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         return ChatReasoningMarkup.splitThinkBlocks(in: result.response).visibleContent
+    }
+
+    nonisolated static func openAIProgressDelta(
+        _ progress: ChatProgress, useChannels: Bool, showThinking: Bool
+    ) -> OpenAIChatDelta? {
+        guard progress.stage == .generating else { return nil }
+        if useChannels {
+            switch progress.event {
+            case .text(let text) where !text.isEmpty: return OpenAIChatDelta(content: text)
+            case .reasoning(let text) where showThinking && !text.isEmpty: return OpenAIChatDelta(reasoning_content: text)
+            default: return nil
+            }
+        }
+        guard let token = progress.message, !token.isEmpty,
+              !APIServerContract.isStreamingStatusMessage(token) else { return nil }
+        return OpenAIChatDelta(content: token)
     }
 
     nonisolated static func openAIBufferedDelta(

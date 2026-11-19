@@ -150,3 +150,20 @@ The 9B pack uses 4096-element transforms and a separate packed output head.
 embedding rows and checks the three pinned configuration fixtures. The bounded
 upstream check passes every text and vision gate for all three packs; see the
 report above. Performance requires separate evidence for each executable.
+
+Single-request Qwen3.8 27B affine Q4/group-64 text with the installed DFlash2
+companion and default KV uses the tuned Swift path on M5 machines with at least
+64 GiB of unified memory. Prefill uses repaired GDN projections and group-affine
+weights. Greedy verification uses the native adaptive tree and state commits.
+For a single text request using xhigh thinking (the template default), temperature 1,
+top-p 0.95, top-k 20, min-p 0 and no penalties or banned tokens, sampled verification
+uses the vocabulary-indexed native tree. The target verifies the proposed tokens.
+Switching samplers can change the output for a given seed. Set
+`MERERUN_Q38_SAMPLED_TREE=0` to use the previous sampler.
+
+When the requested and available output budgets are both 16,384 tokens, the
+tree limits the open thinking block to 14,336 tokens and reserves the remaining
+2,048 for the transition and answer. Requests with other output budgets let
+the model finish thinking naturally. Set `MERERUN_Q38_THINKING_TOKEN_LIMIT=0`
+to disable the automatic transition, or use a positive integer to specify a limit.
+The cue, closing token and paragraph break count toward the total output budget.

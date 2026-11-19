@@ -4,6 +4,9 @@ import Foundation
 import MLX
 import MLXFast
 import MLXNN
+#if os(macOS)
+import Metal
+#endif
 
 enum Q35AttentionLayerType: String {
     case linear = "linear_attention"
@@ -131,7 +134,7 @@ final class Q35DecoderLayer: Module {
         self.layerType = layerTypeOverride ?? Q35AttentionLayerType(text.layerTypes[layerIndex])
         self.isMLPOnly = layerTypeOverride == nil && text.mlpOnlyLayers.contains(layerIndex)
 
-        self._linearAttention.wrappedValue = Q35LinearAttention(config: config)
+        self._linearAttention.wrappedValue = Q35LinearAttention(config: config, layerIndex: layerIndex)
         self._selfAttention.wrappedValue = Q35FullAttention(config: config)
         self._mlp.wrappedValue = Q35FeedForward(config: config)
         self._inputLayerNorm.wrappedValue = Q35RMSNorm(
@@ -233,6 +236,7 @@ final class Q35DecoderLayer: Module {
         var h = x
         if !isMLPOnly {
             let normed = inputLayerNorm(x)
+            Q35VerificationAttribution.observer?(.attentionNorm, [normed])
             let attentionOut: MLXArray
             switch layerType {
             case .linear:
@@ -263,10 +267,15 @@ final class Q35DecoderLayer: Module {
                 )
             }
             h = x + attentionOut
+            Q35VerificationAttribution.observer?(.attentionResidual, [h])
         }
 
-        let mlpOut = mlp(postAttentionLayerNorm(h), targetVerify: targetVerify)
-        return h + mlpOut
+        let mlpInput = postAttentionLayerNorm(h)
+        Q35VerificationAttribution.observer?(.feedForwardNorm, [mlpInput])
+        let mlpOut = mlp(mlpInput, targetVerify: targetVerify)
+        let result = h + mlpOut
+        Q35VerificationAttribution.observer?(.feedForwardResidual, [result])
+        return result
     }
 }
 
@@ -274,6 +283,11 @@ struct Q35TransformerOutput {
     let hidden: MLXArray
     let mtpHidden: MLXArray?
     let capturedHiddenStates: [Int: MLXArray]
+    var greedySelection: Q35GreedyTreeSelection? = nil
+    var acceptedAttention: [Int: Q35GreedyTreeKV] = [:]
+    #if os(macOS)
+    var nativeDraftTaps: [Int: Q35NativeDraftTap] = [:]
+    #endif
 }
 
 final class Q35Transformer: Module {
@@ -282,6 +296,28 @@ final class Q35Transformer: Module {
     @ModuleInfo(key: "norm") var norm: Q35RMSNorm
     @ModuleInfo(key: "hyper_connection_mixer") var hyperConnectionMixer: Q38GatedResidual?
 
+    #if os(macOS)
+    private var nativeVerification: (any Q35NativeVerificationProgram)?
+    @available(macOS 26.0, *)
+    func nativeExecutionTarget(head: Linear, capacity: Int, capture: Set<Int>,
+                               importingPrompt: Bool = false) throws -> Q35NativeVerification.Session? {
+        guard nativeVerificationGeometry, let device = MTLCreateSystemDefaultDevice() else { return nil }
+        if nativeVerification?.matches(layers: layers, norm: norm, embedding: embedTokens) != true {
+            nativeVerification = try Q35NativeVerification(layers: layers, norm: norm, embedding: embedTokens,
+                                                            epsilon: nativeVerificationEpsilon, device: device)
+        }
+        return try (nativeVerification as? Q35NativeVerification).map {
+            try Q35NativeVerification.Session(program: $0, head: head, capacity: capacity, tapIDs: capture, importingPrompt: importingPrompt)
+        }
+    }
+
+    var nativeVerificationRoundCount: Int { nativeVerification?.roundCount ?? 0 }
+    var nativeGreedyRoundCount: Int { nativeVerification?.greedyRoundCount ?? 0 }
+    var nativeStateCommitBatchCount: Int { nativeVerification?.commitBatchCount ?? 0 }
+    var nativeStateHitLayers: Int { nativeVerification?.nativeStateHitLayers ?? 0 }
+    private let nativeVerificationGeometry: Bool
+    private let nativeVerificationEpsilon: Float
+    #endif
     private let isQwen4Exp: Bool
     private let usesMoE: Bool
     private let hyperConnectionCount: Int
@@ -291,6 +327,17 @@ final class Q35Transformer: Module {
     init(config: Q35Config, asynchronousDecodeBlocks: Bool) {
         self.asynchronousDecodeBlocks = asynchronousDecodeBlocks
         let text = config.textConfig
+        #if os(macOS)
+        self.nativeVerificationGeometry = !text.isQwen4Exp && !text.usesMoE
+            && text.hiddenSize == 5120 && text.intermediateSize == 17408 && text.numHiddenLayers == 64
+            && text.linearNumKeyHeads == 16 && text.linearNumValueHeads == 48
+            && text.linearKeyHeadDim == 128 && text.linearValueHeadDim == 128 && text.linearConvKernelDim == 4
+            && text.numAttentionHeads == 24 && text.numKeyValueHeads == 4 && text.headDim == 256
+            && text.attnOutputGate && ["silu", "swish"].contains(text.outputGateType)
+            && text.ropeParameters.partialRotaryFactor == 0.25 && text.ropeParameters.ropeTheta == 10_000_000
+            && config.quantization?.bits == 4 && config.quantization?.groupSize == 64
+        self.nativeVerificationEpsilon = text.rmsNormEps
+        #endif
         self.isQwen4Exp = text.isQwen4Exp
         self.usesMoE = text.usesMoE
         self.hyperConnectionCount = text.hyperConnectionCount
@@ -341,7 +388,9 @@ final class Q35Transformer: Module {
         inputEmbeddings: MLXArray? = nil,
         positionIds: MLXArray? = nil,
         targetVerify: Bool = false,
-        captureLayerIndices: Set<Int> = []
+        captureLayerIndices: Set<Int> = [],
+        greedy: Q35GreedyTreeRequest? = nil,
+        verificationTokens: [Int]? = nil
     ) -> Q35TransformerOutput {
         var preparedPLEInputs: [Int: Q38PLELayer.PreparedInput] = [:]
         if isQwen4Exp {
@@ -368,6 +417,30 @@ final class Q35Transformer: Module {
             hidden = MLX.tiled(hidden, repetitions: [1, 1, hyperConnectionCount])
         }
 
+        #if os(macOS)
+        if #available(macOS 26.0, *), Q35NativeVerificationPolicy.enabled, nativeVerificationGeometry,
+           targetVerify, let tree = Q35TreeVerificationContext.current, let cache,
+           Device.defaultDevice().deviceType == .gpu, !QuantizedVerificationContext.suppressM5, hidden.shape == [1, tree.count, 5120], hidden.dtype == .bfloat16,
+           let device = MTLCreateSystemDefaultDevice() {
+            do {
+                if nativeVerification?.matches(layers: layers, norm: norm, embedding: embedTokens) != true {
+                    nativeVerification = try Q35NativeVerification(layers: layers, norm: norm, embedding: embedTokens,
+                        epsilon: nativeVerificationEpsilon, device: device)
+                    if nativeVerification != nil {
+                        FileHandle.standardError.write(Data("[q35] native_tree_verification=true layers=64\n".utf8))
+                    }
+                }
+                if let nativeVerification {
+                    return try nativeVerification.forward(hidden: hidden,
+                        tokens: inputEmbeddings == nil ? verificationTokens : nil, caches: cache, tree: tree,
+                        captureLayerIndices: captureLayerIndices, greedy: greedy)
+                }
+            } catch {
+                preconditionFailure("Native Qwen verification failed: \(error)")
+            }
+        }
+        #endif
+
         let fullMask = createAttentionMask(h: hidden, cache: firstFullCache(from: cache))
         Q35DebugLayerDump.record(stage: "embeddings", hidden)
 
@@ -386,6 +459,17 @@ final class Q35Transformer: Module {
             if captureLayerIndices.contains(index) {
                 capturedHiddenStates[index] = hidden
             }
+            if QuantizedPrefillContext.mode.materializesWeights, hidden.dim(1) >= 512 {
+                // Bound dequantized weight lifetimes to one layer. This scope
+                // is absent during decode and does not retain dense copies.
+                MLX.eval(hidden)
+            }
+            if !isQwen4Exp, !usesMoE, index + 1 < layers.count {
+                let decode = hidden.dim(0) == 1 && (hidden.dim(1) == 1 || (targetVerify && hidden.dim(1) <= max(9, QuantizedVerificationContext.maximumM5Rows)))
+                let stride = decode ? (asynchronousDecodeBlocks ? Q35DenseSubmissionPolicy.decodeStride : 0)
+                    : Q35DenseSubmissionPolicy.prefillStride
+                if stride > 0, (index + 1).isMultiple(of: stride) { MLX.asyncEval(hidden) }
+            }
             if preparedPLEInputs[index + 1] != nil {
                 // Start the preceding decoder block without waiting for it.
                 // Its GPU work can overlap the already-running packed PLE row
@@ -400,7 +484,7 @@ final class Q35Transformer: Module {
                 // This is also required by full-BF16 Qwen3.5 checkpoints;
                 // Qwen4Exp adds two hyper-connection projections per block.
                 if supportsAsynchronousDecodeBlocks, asynchronousDecodeBlocks,
-                   hidden.dim(0) == 1, hidden.dim(1) == 1 || (targetVerify && hidden.dim(1) <= 9) {
+                   hidden.dim(0) == 1, hidden.dim(1) == 1 || (targetVerify && hidden.dim(1) <= max(9, QuantizedVerificationContext.maximumM5Rows)) {
                     // Bound graph submission without stalling the host after
                     // every four tiny decode layers. The caller evaluates the
                     // final logits before accepting tokens or mutating caches.
@@ -814,22 +898,31 @@ public final class Q35Model: Module, @unchecked Sendable {
         inputEmbeddings: MLXArray? = nil,
         positionIds: MLXArray? = nil,
         targetVerify: Bool = false,
-        captureLayerIndices: Set<Int> = []
+        captureLayerIndices: Set<Int> = [],
+        verificationTokens: [Int]? = nil
     ) -> Q35ForwardOutput {
-        let output = model.forward(
-            inputIds,
-            cache: cache,
-            inputEmbeddings: inputEmbeddings,
-            positionIds: positionIds,
-            targetVerify: targetVerify,
-            captureLayerIndices: captureLayerIndices
-        )
-        return Q35ForwardOutput(
-            hidden: output.hidden,
-            logits: logits(from: output.hidden),
-            mtpHidden: output.mtpHidden,
-            capturedHiddenStates: output.capturedHiddenStates
-        )
+        let rows = targetVerify ? Q35DFlash2VerificationPolicy.rowLimit(
+            config: config, backend: (lmHead as? PortableQuantizedLinear)?.effectiveVerificationBackend
+        ) : 8
+        return QuantizedVerificationContext.$maximumM5Rows.withValue(rows) {
+            let output = model.forward(
+                inputIds,
+                cache: cache,
+                inputEmbeddings: inputEmbeddings,
+                positionIds: positionIds,
+                targetVerify: targetVerify,
+                captureLayerIndices: captureLayerIndices,
+                verificationTokens: verificationTokens
+            )
+            let projected = logits(from: output.hidden)
+            Q35VerificationAttribution.observer?(.head, [projected])
+            return Q35ForwardOutput(
+                hidden: output.hidden,
+                logits: projected,
+                mtpHidden: output.mtpHidden,
+                capturedHiddenStates: output.capturedHiddenStates
+            )
+        }
     }
 
     /// Forward for prefill chunks: hidden states flow through every position
@@ -847,13 +940,16 @@ public final class Q35Model: Module, @unchecked Sendable {
         retainAllHidden: Bool = false,
         captureLayerIndices: Set<Int> = []
     ) -> Q35ForwardOutput {
-        let output = model.forward(
-            inputIds,
-            cache: cache,
-            inputEmbeddings: inputEmbeddings,
-            positionIds: positionIds,
-            captureLayerIndices: captureLayerIndices
-        )
+        let policy = Q35PrefillProjectionPolicy.eligible(config) ? Q35PrefillProjectionPolicy.mode : .reference
+        let output = QuantizedPrefillContext.$mode.withValue(policy) {
+            model.forward(
+                inputIds,
+                cache: cache,
+                inputEmbeddings: inputEmbeddings,
+                positionIds: positionIds,
+                captureLayerIndices: captureLayerIndices
+            )
+        }
         let hidden = output.hidden
         let sequenceLength = hidden.dim(1)
         let lastHidden: MLXArray
