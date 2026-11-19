@@ -6,6 +6,7 @@ import XCTest
 @testable import MereRunQwenModel
 
 final class Q35TreeAttentionTests: MLXTestCase {
+    #if canImport(Metal)
     func testIndexedPrefixAndEveryPathMatchNativeSerialExactly() throws {
         try XCTSkipUnless(Device.defaultDevice().deviceType == .gpu, "Indexed tree attention requires Metal.")
         MLXRandom.seed(778)
@@ -36,6 +37,7 @@ final class Q35TreeAttentionTests: MLXTestCase {
             }
         }
     }
+    #endif
 
     func testPaddedTreeRowsMatchIndependentSerialAttentionExactly() throws {
         MLXRandom.seed(729)

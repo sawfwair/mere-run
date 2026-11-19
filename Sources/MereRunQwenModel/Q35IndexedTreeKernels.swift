@@ -1,3 +1,4 @@
+#if canImport(Metal)
 import MLX
 import MLXFast
 
@@ -478,3 +479,4 @@ enum Q35IndexedTreeKernels {
               }
             """
 }
+#endif
