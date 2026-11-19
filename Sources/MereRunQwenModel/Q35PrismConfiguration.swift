@@ -44,14 +44,7 @@ package struct Q35PrismConfiguration: Decodable {
     /// The native hybrid layer owns both attention modules, but a checkpoint
     /// contains only the selected branch. The Q/K normalization buffer is generated.
     package func checkpointParameterNames(model: Q35Model) -> Set<String> {
-        let inactive = model.config.textConfig.layerTypes.enumerated().map { index, type in
-            let branch = Q35AttentionLayerType(type) == .linear ? "self_attn" : "linear_attn"
-            return "model.layers.\(index).\(branch)."
-        }
-        return Set(model.parameters().flattened().map(\.0).filter { key in
-            !key.hasSuffix(".linear_attn.qkNormWeightBF16")
-                && !inactive.contains(where: key.hasPrefix)
-        })
+        Set(model.hybridCheckpointParameters().map(\.0))
     }
 
     /// Validate against the original dense modules before installing packed replacements.

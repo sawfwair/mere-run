@@ -93,7 +93,7 @@ public enum QuantizedModelManifestWriter {
             case .qwen3Coder, .northMiniCode: return .code
             case .lightOnOCR, .unlimitedOCR: return .ocr
             case .aceStep, .miniMaxMusic3, .yue2, .magentaRT2, .muScriptor, .sheetSage2, .roFormer: return .music
-            case .apBWE, .univerSR, .auk: return .audio
+            case .apBWE, .univerSR, .auk, .haru: return .audio
             case .woosh, .mmaudio: return .sfx
             case .ltxVideo, .wanVideo, .miniMaxH3, .cosmos3Edge: return .video
             case .psiChat: return .psi
@@ -196,6 +196,8 @@ public enum QuantizedModelManifestWriter {
                     return [.imageTo3D, .meshGeneration]
                 case .instantMesh:
                     return [.multiViewReconstruction, .meshGeneration]
+                case .haru:
+                    return [.speechConversation]
                 case .qwen3TTS, .breezeTTS, .drama3TTS, .phononTTS:
                     return [.speechSynthesis]
                 case .qwen3ASR, .parakeetASR, .whistleASR, .nemotronTranscribeASR, .sovTranscribeASR:
@@ -331,7 +333,7 @@ public enum QuantizedModelManifestWriter {
                 break
             case .laya, .clef, .d1, .gliner25Decide, .qwen3TTS, .breezeTTS, .drama3TTS, .phononTTS, .qwen3ASR, .parakeetASR, .whistleASR, .nemotronTranscribeASR, .sovTranscribeASR, .sortformer, .qwen3Embedding, .embeddingGemma2, .embeddingGemma2CoreML, .pplxEmbedV2, .openAIPrivacyFilter,
                  .qwen3Coder, .northMiniCode, .lightOnOCR, .unlimitedOCR, .woosh, .mmaudio, .psiChat, .deepseekV4Flash,
-                 .muScriptor, .sheetSage2, .roFormer, .apBWE, .univerSR, .auk, .inkling2, .inkling:
+                 .muScriptor, .sheetSage2, .roFormer, .apBWE, .univerSR, .auk, .inkling2, .inkling, .haru:
                 break
             case .aceStep, .magentaRT2, .ltxVideo:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 8, cfg: 1.0)

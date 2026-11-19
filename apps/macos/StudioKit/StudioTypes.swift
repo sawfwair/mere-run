@@ -445,6 +445,13 @@ package struct StudioDraft: Codable, Equatable, Sendable {
     package var readMaxTokens: Int?
     package var captionFocus: String?
     package var captionTriggerToken: String?
+    package var chatCheckpointFolder: String?
+
+    package var localChatCheckpointPath: String? {
+        guard let folder = chatCheckpointFolder, !folder.isBlank else { return nil }
+        return NSString(string: folder).expandingTildeInPath
+    }
+
     /// The audio and video a Chat turn carries to an omni model (`--audio`, `--video`); the
     /// image rides in `inputPath`. Optional preserves saved Studio drafts from before them.
     package var chatAudioPath: String?
@@ -596,6 +603,7 @@ package struct StudioDraft: Codable, Equatable, Sendable {
         readMaxTokens = nil
         captionFocus = nil
         captionTriggerToken = nil
+        chatCheckpointFolder = nil
         chatAudioPath = nil
         chatVideoPath = nil
     }
@@ -666,6 +674,7 @@ package enum StudioCommandError: LocalizedError, Equatable {
     /// Every drawn prompt is a negative point, which only ever refines a box or a positive point.
     case negativePointsOnly
     case missingTemplate(CommandTemplateID)
+    case checkpointFolderUnavailable(String)
     /// A per-turn attachment the chosen model does not read: the model's name, what it can't
     /// read ("audio"), and the kind of model that can ("an omni model").
     case unreadAttachment(model: String, kind: String, alternative: String)
@@ -680,6 +689,8 @@ package enum StudioCommandError: LocalizedError, Equatable {
             return "Add a box or a positive point for the negative points to refine."
         case .missingTemplate(let id):
             return "No command template found for \(id.rawValue)."
+        case .checkpointFolderUnavailable(let path):
+            return "The checkpoint folder is unavailable: \(path). Choose the folder again."
         case .unreadAttachment(let model, let kind, let alternative):
             return "\(model) can't read \(kind). Choose \(alternative) or remove the attachment."
         }
@@ -824,7 +835,8 @@ package enum StudioCommandAdapter {
                 draft.sandboxDir = studioDraft.sandboxDir
                 draft.preflight = studioDraft.preflight
                 draft.json = studioDraft.preflightJSON
-                draft.requireInstalled = studioDraft.requireInstalled
+                draft.modelRoot = studioDraft.localChatCheckpointPath ?? ""
+                draft.requireInstalled = studioDraft.requireInstalled || !draft.modelRoot.isBlank
             }
             // Conversation turns stream so the canvas renders tokens live; the reply is
             // accumulated and think-stripped app-side.
@@ -1024,6 +1036,7 @@ package enum StudioCommandAdapter {
 
     /// The managed model the composer's run needs, for its pull progress; empty when none.
     package static func requiredModel(for mode: StudioMode, draft: StudioDraft, source: StudioScopeSource) -> String {
+        if mode == .chat, draft.localChatCheckpointPath != nil { return "" }
         guard case .managedModel(let model)? = capabilityRequirement(for: mode, draft: draft, source: source) else {
             if !draft.model.isBlank { return draft.model }
             return CommandCatalog.template(id: templateID(for: mode, draft: draft))?.defaultModel ?? ""
@@ -1042,8 +1055,10 @@ package enum StudioCommandAdapter {
         draft: StudioDraft,
         source: StudioScopeSource
     ) -> StudioCapabilityRequirement? {
-        if let scope = source.scope(mode: mode, draft: draft), scope.capability.routing != nil {
-            if let reason = scope.blockingReason { return .unavailable(reason) }
+        let scope = source.scope(mode: mode, draft: draft)
+        if let reason = scope?.blockingReason { return .unavailable(reason) }
+        if mode == .chat, draft.localChatCheckpointPath != nil { return nil }
+        if let scope, scope.capability.routing != nil {
             if case .unidentified(let model) = scope.resolution {
                 return StudioTaskSchema.isLocalPath(model) ? nil : .managedModel(model)
             }
@@ -1080,6 +1095,13 @@ package enum StudioCommandAdapter {
     ) throws {
         let prompt = draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let input = draft.inputPath.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if mode == .chat, let path = draft.localChatCheckpointPath {
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else {
+                throw StudioCommandError.checkpointFolderUnavailable(path)
+            }
+        }
 
         if mode.requiresAttachment && input.isEmpty {
             throw StudioCommandError.missingInput(mode.acceptedTypes.first == .audio ? "audio" : mode.acceptedTypes.first == .movie ? "video" : "image")

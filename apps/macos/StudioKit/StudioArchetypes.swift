@@ -111,6 +111,8 @@ extension StudioTask {
 
     private static let nonVariantTemplates: Set<CommandTemplateID> = [
         .speechProfileList, .speechProfileDelete, .imageVisualizeRun,
+        // Haru's conversation controls live in the Command Console.
+        .speechConverse,
     ]
 }
 

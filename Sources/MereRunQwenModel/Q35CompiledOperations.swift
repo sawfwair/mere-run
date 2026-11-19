@@ -30,6 +30,12 @@ package final class Q35CompiledOperations: @unchecked Sendable {
         return MLX.exp(-decayBase * delta)
     }
 
+    package init() {}
+
+    package func withScope<Result>(_ operation: () -> Result) -> Result {
+        Self.$scoped.withValue(self, operation: operation)
+    }
+
     static func withNewDefaultStream<Result>(
         scoped enabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_SCOPED_COMPILE"] == "1",
         isolation _: isolated (any Actor)? = #isolation,

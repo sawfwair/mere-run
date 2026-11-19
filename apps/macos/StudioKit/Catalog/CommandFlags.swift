@@ -2726,6 +2726,31 @@ extension CommandFlags {
     }
 }
 
+// MARK: - speech converse
+
+extension CommandFlags {
+    /// `mere.run speech converse` — Full-duplex conversation
+    package enum SpeechConverse: CommandFlagNamespace {
+        package static let command = ["speech", "converse"]
+        package static let defaultValues = [
+            "--model": "speech-haru-4b",
+            "--temperature": "0.7",
+            "--max-frames": "27000"
+        ]
+
+        package static let model = "--model"
+        package static let input = "--input"
+        package static let live = "--live"
+        package static let output = "--output"
+        package static let systemPromptFile = "--system-prompt-file"
+        package static let referenceAudio = "--reference-audio"
+        package static let speakFirst = "--speak-first"
+        package static let seed = "--seed"
+        package static let temperature = "--temperature"
+        package static let maxFrames = "--max-frames"
+    }
+}
+
 // MARK: - sfx generate
 
 extension CommandFlags {

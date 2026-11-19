@@ -14,6 +14,35 @@ Two ASR backends have their own pages:
   file and per-utterance live model, its INT4 default and BF16 option, and its
   measured tradeoffs.
 
+## Haru-4B spoken conversations
+
+Haru listens and generates speech in 3,200-sample frames at 24 kHz. It can
+continue listening while it speaks. A character card sets the conversation
+context, and a reference clip sets the voice.
+
+```bash
+mere.run model pull speech-haru-4b
+mere.run speech converse --input user.wav --output reply.wav \
+  --system-prompt-file card.txt --reference-audio voice.wav --seed 42
+mere.run speech converse --live --reference-audio voice.wav --speak-first
+```
+
+`--model /path/to/Haru-4B` selects a local checkpoint directory. Use the
+[upstream character-card format](https://github.com/higurashi-ai/Haru/tree/7fe6b7665f8bf035998f401f8cb779fbe53f2751#the-system-prompt)
+for `card.txt`. Provide a clean clip of a single speaker whose voice you have
+permission to use. Haru uses up to the last three minutes of the clip.
+
+File replay writes a mono WAV containing the initial model frame and one
+response frame per user frame, up to `--max-frames`. The final user frame is
+zero-padded when needed. On macOS, `--live` uses the system microphone and
+audio output. Use headphones to keep playback out of the microphone. Press
+Ctrl-C to stop. Add `--output reply.wav` to save the model's live audio.
+
+In Studio, open **Haru conversation** in the Command Console.
+
+The command reports the frame count, sample rate, transcript, and optional
+audio path as JSON on stdout. Haru-4B downloads about 10.56 GB.
+
 ## Commands
 
 | Command | What it does |
@@ -23,6 +52,7 @@ Two ASR backends have their own pages:
 | `mere.run speech diarize` | Identify speaker time ranges as versioned JSON or RTTM using native MLX diarization. |
 | `mere.run speech diarize-live` | Emit incremental Nemotron 3 speaker activity from a microphone or PCM stdin. |
 | `mere.run speech listen` | Transcribe a macOS microphone with live Qwen3-ASR, Parakeet, Whistle, or Nemotron Transcribe. |
+| `mere.run speech converse` | Listen and respond simultaneously with Haru-4B from a file or the macOS microphone. |
 | `mere.run speech profile create` | Create a reusable voice profile from reference audio. |
 | `mere.run speech profile list` | List saved speech voice profiles. |
 | `mere.run speech profile delete` | Delete a speech profile by id. |

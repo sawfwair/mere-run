@@ -40,7 +40,7 @@ extension CommandTemplateID {
         case .visionTrackLive: return .visionLive
         case .speechTranscribe: return .audioTranscribe
         case .speechDiarize: return .audioWhoSpoke
-        case .speechDiarizeLive: return .audioLive
+        case .speechDiarizeLive, .speechConverse: return .audioLive
         case .audioEnhance: return .audioEnhance
         case .audioEdit: return .voiceEdit
         case .speechListen: return .audioLive

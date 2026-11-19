@@ -852,6 +852,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 16
             ),
             descriptor(
+                HaruResources.modelID,
+                "Haru-4B",
+                "Full-duplex spoken conversations with a character card and optional voice reference.",
+                minimum: 16,
+                recommended: 24
+            ),
+            descriptor(
                 "speech-tts-drama-3",
                 "DRAMA-3 Q4 experts",
                 "Native multilingual and multi-speaker speech, event tags, and voice cloning. Built with Fish Audio.",

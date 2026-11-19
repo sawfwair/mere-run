@@ -492,7 +492,8 @@ struct StudioComposer: View {
             model: $draft.model,
             modelInventory: modelInventory,
             readiness: readiness,
-            onShowModels: onShowModels
+            onShowModels: onShowModels,
+            checkpointFolder: mode == .chat ? $draft.chatCheckpointFolder : nil
         )
     }
 
