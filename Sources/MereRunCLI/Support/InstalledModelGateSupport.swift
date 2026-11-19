@@ -202,6 +202,10 @@ enum InstalledModelSmokePlans {
             return direct(spec, route: "text decide") { runner in
                 try await runner.installedLayaCheck(model: spec.id)
             }
+        case .clairic:
+            return direct(spec, route: "text extract") { runner in
+                try await runner.installedClairicCheck(model: spec.id)
+            }
         case .gliner25Decide:
             return direct(spec, route: "text classify and extract") { runner in
                 try await runner.installedGLiNERCheck(model: spec.id)
@@ -1149,6 +1153,18 @@ extension GateRunner {
         try JSONEncoder().encode(request).write(to: input, options: .atomic)
         let run = try await exec(["text", "decide", "--model", model, "--input", input.path], timeout: 900)
         return jsonStdoutObservation(run, label: "Laya decision JSON")
+    }
+
+    func installedClairicCheck(model: String) async throws -> GateObservation {
+        let input = workDirectory.appending(path: "clairic-request.json")
+        let request = #"{"state":"The invoice vendor is Northwind Supply.","fields":{"vendor":{"type":"text","instructions":"The invoice vendor."}}}"#
+        try Data(request.utf8).write(to: input, options: .atomic)
+        let run = try await exec(["text", "extract", "--model", model, "--input", input.path], timeout: 900)
+        let data = Data(run.stdout.utf8)
+        let answer = (try? JSONDecoder().decode(ClairicResponse.self, from: data))?.answers["vendor"]
+        let valid = answer?.complete == true && answer?.valid == true && answer?.value == .string("Northwind Supply")
+        return GateObservation(hash: Self.sha256(data), secondRunHash: nil, wallSeconds: run.wallSeconds, decodeTps: nil,
+                               semanticFailure: valid ? nil : "Clairic did not return the expected invoice vendor.")
     }
 
     func installedGLiNERCheck(model: String) async throws -> GateObservation {

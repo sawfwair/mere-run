@@ -23,8 +23,9 @@ extension MereRunCapabilityCatalog {
         case d1
     }
 
-    enum TextGLiNERFamily: String, MereRunFamilyID {
+    enum TextExtractionFamily: String, MereRunFamilyID {
         case gliner25Decide = "gliner25-decide"
+        case clairic
     }
 
     /// The code paths `text chat` runs. Where a runtime refuses images on its text-only
@@ -244,12 +245,20 @@ extension MereRunCapabilityCatalog {
         ]
     )
 
-    /// `text classify` and `text extract` run the same GLiNER2.5 Decide checkpoint.
+    /// Classification is limited to GLiNER2.5 Decide.
     static let textGLiNERRouting = MereRunCapabilityRouting(
         modelFlags: ["--model"],
         defaultModels: [.always("text-classify-gliner25-decide")],
         families: [
-            .init(TextGLiNERFamily.gliner25Decide, title: "GLiNER2.5 Decide", models: ["text-classify-gliner25-decide"])
+            .init(TextExtractionFamily.gliner25Decide, title: "GLiNER2.5 Decide", models: ["text-classify-gliner25-decide"])
+        ]
+    )
+
+    static let textExtractionRouting = MereRunCapabilityRouting(
+        modelFlags: ["--model"], defaultModels: [.always("text-classify-gliner25-decide")],
+        families: [
+            .init(TextExtractionFamily.gliner25Decide, title: "GLiNER2.5 Decide", models: ["text-classify-gliner25-decide"]),
+            .init(TextExtractionFamily.clairic, title: "Clairic", models: ["text-extract-clairic-flash-bf16", "text-extract-clairic-bf16"])
         ]
     )
 

@@ -824,6 +824,16 @@
     "resourceName": "handbook-clef.md"
   },
   {
+    "topic": "handbook-clairic",
+    "title": "Clairic document extraction (Cloudflare)",
+    "category": "Text",
+    "models": [
+      "text-extract-clairic-flash-bf16",
+      "text-extract-clairic-bf16"
+    ],
+    "resourceName": "handbook-clairic.md"
+  },
+  {
     "topic": "handbook-gliner25-decide",
     "title": "GLiNER2.5 Decide",
     "category": "Text",

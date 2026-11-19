@@ -308,6 +308,8 @@ public extension ManagedModelSpec {
             return LayaCatalog.validate(root: rootURL, modelID: id, fileManager: fileManager)
         case .d1:
             return D1Catalog.validate(root: rootURL, modelID: id, fileManager: fileManager)
+        case .clairic:
+            return ClairicCatalog.validate(root: rootURL, fileManager: fileManager)
         case .clef:
             return ClefCatalog.validate(root: rootURL, fileManager: fileManager)
         case .gliner25Decide:

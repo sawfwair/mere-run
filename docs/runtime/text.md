@@ -20,7 +20,7 @@ family. Models with their own guide are listed in
 | `mere.run text embed` | Create Qwen3, [EmbeddingGemma 2](./embeddinggemma2.md), or [PPLX Embed v2](./pplx-embed-v2.md) embeddings for text, code, images, audio, and video. |
 | `mere.run text decide` | Answer typed choice, score, and yes-or-no questions with [Laya](./laya.md), [Clef](./clef.md), or [D1](./d1.md). |
 | `mere.run text classify` | Classify text against labels you supply with [GLiNER2.5 Decide](./gliner25-decide.md). |
-| `mere.run text extract` | Extract entities, relations, and structured records with [GLiNER2.5 Decide](./gliner25-decide.md). |
+| `mere.run text extract` | Extract entities and relations with [GLiNER2.5 Decide](./gliner25-decide.md), or typed fields from text, images, and PDFs with [Clairic](./clairic.md). |
 | `mere.run text anonymize` | Detect and redact PII with OpenAI Privacy Filter. |
 | `mere.run text train-lora` | Train a text or Gemma 4 image-conditioned LoRA adapter from chat-style SFT JSONL. |
 
@@ -42,6 +42,7 @@ validation results:
 | [EmbeddingGemma 2](./embeddinggemma2.md) | `text-embed-embeddinggemma2`, `text-embed-embeddinggemma2-coreml` | Text, code, image, audio, and video embeddings in one space |
 | [PPLX Embed v2](./pplx-embed-v2.md) | `text-embed-pplx-v2-late-*`, `text-embed-pplx-v2-context-9b-preview*` | Late-interaction token vectors and contextual chunk vectors |
 | [GLiNER2.5 Decide](./gliner25-decide.md) | `text-classify-gliner25-decide` | Label classification and schema extraction |
+| [Clairic](./clairic.md) | `text-extract-clairic-flash-bf16`, `text-extract-clairic-bf16` | Typed extraction from documents |
 | [Laya](./laya.md) | `text-decide-laya`, `text-decide-laya-multilingual`, `text-decide-laya-typed-decisions` | Typed decisions over plain text; the `text decide` default |
 | [Clef](./clef.md) | `text-decide-clef-4bit`, `text-decide-clef-flash-4bit`, `text-decide-clef-omni` | Typed decisions over JSON state, images, video, and audio |
 | [D1](./d1.md) | `text-decide-d1-3b-bf16`, `text-decide-d1-omni-600m-fp32` | Typed decisions over text, JSON, images, or audio |

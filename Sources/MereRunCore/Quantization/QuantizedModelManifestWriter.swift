@@ -88,6 +88,7 @@ public enum QuantizedModelManifestWriter {
             case .laya: return .laya
             case .d1: return .d1
             case .clef: return .clef
+            case .clairic: return .clairic
             case .gliner25Decide: return .gliner
             case .openAIPrivacyFilter: return .privacy
             case .qwen3Coder, .northMiniCode: return .code
@@ -210,6 +211,8 @@ public enum QuantizedModelManifestWriter {
                     return [.textAnonymization]
                 case .laya, .clef, .d1:
                     return [.textDecision]
+                case .clairic:
+                    return [.textExtraction]
                 case .gliner25Decide:
                     return [.textClassification, .textExtraction]
                 case .qwen3Coder, .northMiniCode:
@@ -331,7 +334,7 @@ public enum QuantizedModelManifestWriter {
                  .videoDepthAnything, .depthAnything3, .marigoldV2,
                  .tripoSR, .instantMesh, .trellis2:
                 break
-            case .laya, .clef, .d1, .gliner25Decide, .qwen3TTS, .breezeTTS, .drama3TTS, .phononTTS, .qwen3ASR, .parakeetASR, .whistleASR, .nemotronTranscribeASR, .sovTranscribeASR, .sortformer, .qwen3Embedding, .embeddingGemma2, .embeddingGemma2CoreML, .pplxEmbedV2, .openAIPrivacyFilter,
+            case .laya, .clef, .clairic, .d1, .gliner25Decide, .qwen3TTS, .breezeTTS, .drama3TTS, .phononTTS, .qwen3ASR, .parakeetASR, .whistleASR, .nemotronTranscribeASR, .sovTranscribeASR, .sortformer, .qwen3Embedding, .embeddingGemma2, .embeddingGemma2CoreML, .pplxEmbedV2, .openAIPrivacyFilter,
                  .qwen3Coder, .northMiniCode, .lightOnOCR, .unlimitedOCR, .woosh, .mmaudio, .psiChat, .deepseekV4Flash,
                  .muScriptor, .sheetSage2, .roFormer, .apBWE, .univerSR, .auk, .inkling2, .inkling, .haru:
                 break

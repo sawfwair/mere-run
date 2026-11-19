@@ -1,7 +1,17 @@
 import Foundation
 
 extension ManagedModelCatalog {
-    static let textUtilitySpecs: [ManagedModelSpec] = baseTextUtilitySpecs + layaSpecs + d1Specs + clefSpecs
+    static let textUtilitySpecs: [ManagedModelSpec] = baseTextUtilitySpecs + layaSpecs + d1Specs + clefSpecs + clairicSpecs
+
+    private static let clairicSpecs = ClairicCatalog.modelIDs.map { id in
+        ManagedModelSpec(
+            id: id, category: .textExtract, installShape: .directoryRoot,
+            hubFallback: ClairicCatalog.fallback(id), upstreamRepoId: ClairicCatalog.repository(id),
+            upstreamRevision: ClairicCatalog.revision(id), validationKind: .clairic, runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: id == ClairicCatalog.flashModelID ? 19_330_000_000 : 55_590_000_000,
+            defaultCLICommands: ["text extract"], apiAvailability: .cliOnly
+        )
+    }
 
     private static let baseTextUtilitySpecs: [ManagedModelSpec] = [
         ManagedModelSpec(

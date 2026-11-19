@@ -160,6 +160,7 @@ public enum MereRunModelValidator {
             tokenizerDir = nil
         } else if spec?.validationKind == .embeddingGemma2CoreML
             || spec?.validationKind == .laya
+            || spec?.validationKind == .clairic
             || spec?.validationKind == .clef
             || spec?.validationKind == .gliner25Decide
             || spec?.validationKind == .qwenImage21

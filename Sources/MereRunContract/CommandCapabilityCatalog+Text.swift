@@ -326,7 +326,7 @@ extension MereRunCapabilityCatalog {
 
     public static let textExtract = MereRunCommandCapability(
         id: "text.extract", command: ["text", "extract"], title: "Extract",
-        summary: "Extract entities, relations, and structures with native GLiNER2.5 Decide.",
+        summary: "Run native GLiNER2.5 Decide or Clairic extraction.",
         options: [
             .init(flag: "--input", aliases: ["-i"], label: "JSON request", kind: .file),
             .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string,
@@ -334,11 +334,12 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--output", aliases: ["-o"], label: "JSON output", kind: .file),
             .init(flag: "--pretty", label: "Pretty JSON", kind: .boolean),
             .init(flag: "--preflight", label: "Inspect token usage", kind: .boolean),
-            .init(flag: "--long", label: "Process long documents", kind: .boolean),
+            .init(flag: "--long", label: "Process long documents", kind: .boolean)
+                .scoped(TextExtractionFamily.only(.gliner25Decide)),
             .init(flag: "--batch", label: "Process a request array", kind: .boolean)
         ],
         output: .init(kind: .text, fileExtension: "json", flag: "--output", optional: true),
-        routing: textGLiNERRouting
+        routing: textExtractionRouting
     )
 
     public static let textTrainLoRA = MereRunCommandCapability(

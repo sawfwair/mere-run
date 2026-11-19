@@ -1706,6 +1706,16 @@ outputs are governed by the BreezeBlue Research and Non-Commercial License,
 independently of the Swift and Python source licenses. No checkpoint weights
 are bundled here.
 
+## Clairic native extraction implementation
+
+- model and slot protocol: [Cloudflare/clairic-flash](https://huggingface.co/Cloudflare/clairic-flash/tree/36ad68b999560f56b57ef16a22180f8cb83c6d77) and [Cloudflare/clairic](https://huggingface.co/Cloudflare/clairic/tree/2c161be5cc71bacd6605b99a8c07547e58cfa434), Apache-2.0
+- local code: `Sources/MereRunCore/Clairic` and `Sources/MereRunQwenModel/ClairicGrammar.swift`
+- license text: `licenses/clairic-APACHE-2.0.txt`
+
+The Swift implementation adapts the release prompt text, the ordinary slot
+protocol, and printed date and time normalization. Model weights are downloaded
+separately.
+
 ## Clef native decision implementation
 
 - source: [mlx-community/clef-4bit reference loader](https://huggingface.co/mlx-community/clef-4bit/blob/e0a23bd4406c15075b7473616429c46f3fd130a9/clef_mlx.py), publisher-declared Apache-2.0

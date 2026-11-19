@@ -8,6 +8,7 @@ public enum ManagedModelCategory: String, CaseIterable, Hashable, Sendable {
     case textAnonymize = "text-anonymize"
     case textDecide = "text-decide"
     case textClassify = "text-classify"
+    case textExtract = "text-extract"
     case speechTTS = "speech-tts"
     case speechASR = "speech-asr"
     case speechDiarization = "speech-diarization"
@@ -87,6 +88,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case privacyFilter
     case laya
     case clef
+    case clairic
     case d1
     case gliner25Decide
     case codegenGGUF

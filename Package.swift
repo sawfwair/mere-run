@@ -973,6 +973,7 @@ targets.append(
       "PrivacyFilter/README.md",
       "Laya/README.md",
       "Clef/README.md",
+      "Clairic/README.md",
       "D1/README.md",
       "RoFormer/README.md",
       "UniverSR/README.md",

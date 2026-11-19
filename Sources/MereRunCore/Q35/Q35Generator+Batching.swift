@@ -287,7 +287,7 @@ extension Q35Generator {
         }
     }
 
-    private func makeBatchedLayerCaches(_ rowCaches: [[Q35LayerCache?]]) -> [Q35LayerCache?]? {
+    nonisolated func makeBatchedLayerCaches(_ rowCaches: [[Q35LayerCache?]]) -> [Q35LayerCache?]? {
         guard let first = rowCaches.first, !first.isEmpty else { return nil }
         guard rowCaches.allSatisfy({ $0.count == first.count }) else { return nil }
 
@@ -309,7 +309,7 @@ extension Q35Generator {
         return result
     }
 
-    private func splitBatchedLayerCaches(
+    nonisolated func splitBatchedLayerCaches(
         _ caches: [Q35LayerCache?],
         rowCount: Int
     ) -> [[Q35LayerCache?]]? {
