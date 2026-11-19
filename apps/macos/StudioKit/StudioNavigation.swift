@@ -154,7 +154,7 @@ package enum StudioDomain: String, CaseIterable, Codable, Identifiable {
              .visionTrack, .visionTrackLive, .visionFaceDetect, .visionFaceEmbed, .visionFaceCompare,
              .visionFaceBatch, .visionPose, .visionFlow:
             self = .vision
-        case .speechTranscribe, .speechDiarize, .speechDiarizeLive, .speechListen, .audioEnhance:
+        case .speechTranscribe, .speechDiarize, .speechDiarizeLive, .speechListen, .speechConverse, .audioEnhance:
             self = .audio
         case .textEmbed, .textAnonymize, .textDecide, .textClassify, .textExtract:
             self = .text

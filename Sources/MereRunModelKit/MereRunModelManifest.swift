@@ -78,6 +78,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case qwen3TTS = "qwen3-tts"
         case phononTTS = "phonon-tts"
         case breezeTTS = "breeze-tts"
+        case haru = "haru"
         case drama3TTS = "drama3-tts"
         /// Qwen3 ASR family.
         case qwen3ASR = "qwen3-asr"
@@ -242,6 +243,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case textDecision = "text_decision"
         case textClassification = "text_classification"
         case textExtraction = "text_extraction"
+        case speechConversation = "speech_conversation"
         case speechSynthesis = "speech_synthesis"
         case speechRecognition = "speech_recognition"
         case speakerDiarization = "speaker_diarization"

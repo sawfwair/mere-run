@@ -62,7 +62,8 @@ func q35GDNPreworkOps(
     keyHeadDim: Int,
     valueHeadDim: Int,
     rmsNormWeight: MLXArray? = nil,
-    normalizeInFloat32: Bool = false
+    normalizeInFloat32: Bool = false,
+    rmsNormEpsilon: Float = 1e-6
 ) -> Q35GDNPreworkOutput {
     let batch = qkv.dim(0)
     let sequence = qkv.dim(1)
@@ -92,8 +93,8 @@ func q35GDNPreworkOps(
         k = k * MLX.rsqrt(MLX.square(k).sum(axis: -1, keepDims: true) + 1e-6)
         return Q35GDNPreworkOutput(q: q, k: k, v: v.asType(.float32), convState: nextState)
     }
-    q = q35RmsNormNoWeight(q, weight: rmsNormWeight) * MLXArray(invScale * invScale).asType(q.dtype)
-    k = q35RmsNormNoWeight(k, weight: rmsNormWeight) * MLXArray(invScale).asType(k.dtype)
+    q = q35RmsNormNoWeight(q, weight: rmsNormWeight, eps: rmsNormEpsilon) * MLXArray(invScale * invScale).asType(q.dtype)
+    k = q35RmsNormNoWeight(k, weight: rmsNormWeight, eps: rmsNormEpsilon) * MLXArray(invScale).asType(k.dtype)
 
     return Q35GDNPreworkOutput(q: q, k: k, v: v, convState: nextState)
 }
@@ -738,6 +739,7 @@ final class Q35LinearAttention: Module {
     private let convKernelSize: Int
     private let qkNormWeightBF16: MLXArray
     private let isQwen4Exp: Bool
+    private let usesHaruNormalization: Bool
     private let prismQKVZ = Q35PrismFusion()
     private var fusedInProjQKVZ: Linear?
     private var fusedInProjBA: Linear?
@@ -755,6 +757,7 @@ final class Q35LinearAttention: Module {
         self.convKernelSize = max(1, text.linearConvKernelDim)
         self.qkNormWeightBF16 = MLXArray.ones([self.keyHeadDim], dtype: .bfloat16)
         self.isQwen4Exp = text.isQwen4Exp
+        self.usesHaruNormalization = config.modelType == "haru"
 
         precondition(
             self.numValueHeads % max(1, self.numKeyHeads) == 0,
@@ -832,9 +835,10 @@ final class Q35LinearAttention: Module {
             ?? MLXArray.zeros([batch, keep, convDim], dtype: x.dtype)
         let recurrentState = cache?.recurrentState
         let rmsNormWeight = qkv.dtype == .bfloat16 ? qkNormWeightBF16 : nil
+        let qkEpsilon: Float = usesHaruNormalization ? 1e-6 / Float(keyHeadDim) : 1e-6
         let prework: Q35GDNPreworkOutput
         #if os(macOS)
-        if !isQwen4Exp, cache != nil,
+        if !isQwen4Exp, !usesHaruNormalization, cache != nil,
            let fused = q35GDNPreworkMetal(
                qkv: qkv,
                convState: convState,
@@ -855,7 +859,8 @@ final class Q35LinearAttention: Module {
                 keyHeadDim: keyHeadDim,
                 valueHeadDim: valueHeadDim,
                 rmsNormWeight: rmsNormWeight,
-                normalizeInFloat32: isQwen4Exp || normalizeQKInFloat32
+                normalizeInFloat32: isQwen4Exp || normalizeQKInFloat32,
+                rmsNormEpsilon: qkEpsilon
             )
         }
         #else
@@ -868,7 +873,8 @@ final class Q35LinearAttention: Module {
             keyHeadDim: keyHeadDim,
             valueHeadDim: valueHeadDim,
             rmsNormWeight: rmsNormWeight,
-            normalizeInFloat32: isQwen4Exp || normalizeQKInFloat32
+            normalizeInFloat32: isQwen4Exp || normalizeQKInFloat32,
+            rmsNormEpsilon: qkEpsilon
         )
         #endif
         cache?.convState = prework.convState

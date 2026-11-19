@@ -659,7 +659,7 @@ package struct StudioModelScope: Equatable {
         case .visionTrackLive: return ["vision-segment"]
         case .speechDiarize, .speechDiarizeLive: return ["speech-diarization"]
         case .speechListen: return ["speech-asr"]
-        case .audioEnhance, .audioEdit: return ["audio"]
+        case .audioEnhance, .audioEdit, .speechConverse: return ["audio"]
         case .videoRetake, .videoDubIt: return ["video"]
         // Cosmos3 Super's text-to-image checkpoints are filed as image models.
         case .videoCosmos3: return ["video", "image"]

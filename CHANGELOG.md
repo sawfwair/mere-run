@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add native Haru-4B speech-to-speech inference. Use `speech converse` to
+  replay an audio file or start a live macOS conversation. The command accepts
+  a character card and voice reference and can save the reply as a WAV file.
+
 - Add a native Swift/MLX reference runtime for Inkling 2 Small text and image
   chat, reasoning, and tools through `vision-chat-inkling-2-small` and the
   `text-chat-inkling2` API engine. Read original NVFP4/MXFP8 expert weights

@@ -46,7 +46,8 @@ Many runtime targets are internal: they build as part of the package but
 aren't products. They include `MereRunCoreMLModel`, `MereRunD1Model`,
 `MereRunFlintModel`, `MereRunInkling2Model`, `MereRunGLiNERModel`, `MereRunKolibriModel`,
 `MereRunLayaModel`, `MereRunNemotronBoltModel`, `AudioBreezeTTSModel`,
-`AudioDrama3Model`, `AudioNemotronTranscribeModel`, `AudioSOVTranscribeModel`, `AudioPhononModel`, and
+`AudioDrama3Model`, `AudioHaruModel`, `AudioNemotronTranscribeModel`,
+`AudioSOVTranscribeModel`, `AudioPhononModel`, and
 `AudioWhistleModel`. Platform adapters (`llama`, `magentart`, and
 `COnnxRuntimeCoreML`), the `MediaIOSmoke` executable, and the
 `MereRunMLXTestSupport` test fixtures are internal too.

@@ -72,6 +72,7 @@ done
 "$mere_run_bin" text code --help >/dev/null
 "$mere_run_bin" text embed --help >/dev/null
 "$mere_run_bin" speech synthesize --help >/dev/null
+"$mere_run_bin" speech converse --help >/dev/null
 "$mere_run_bin" audio edit --help >/dev/null
 "$mere_run_bin" speech transcribe --help >/dev/null
 "$mere_run_bin" speech diarize --help >/dev/null

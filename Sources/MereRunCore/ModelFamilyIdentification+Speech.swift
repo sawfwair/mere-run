@@ -6,9 +6,18 @@ extension ModelFamilyIdentifier {
     /// config decoder in AudioParakeetModel, which Core does not depend on, so a local ASR folder
     /// stays unidentified and the command checks it.
     static let speechProbes: [String: Probe] = [
+        "speech.converse": speechConverseProbe,
         "speech.diarize": speechDiarizeProbe,
         "speech.synthesize": speechSynthesizeProbe
     ]
+
+    static let speechConverseProbe: Probe = { model, _ in
+        let root = URL(fileURLWithPath: (model as NSString).expandingTildeInPath)
+        guard let data = try? Data(contentsOf: root.appending(path: "config.json")),
+              let type = try? JSONDecoder().decode(SpeechModelType.self, from: data),
+              type.modelType == "haru" else { return nil }
+        return .family("haru")
+    }
 
     /// `speech diarize` loads any local folder, and runs Nemotron 3 on one that holds its NeMo
     /// archive and Sortformer on the rest (`Nemotron3DiarizationResources.isNemotron3`). Anything

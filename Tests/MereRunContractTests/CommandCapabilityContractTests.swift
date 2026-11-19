@@ -118,6 +118,7 @@ import Testing
         "speech.profile.create",
         "speech.profile.delete",
         "speech.listen",
+        "speech.converse",
         "sfx.generate",
         "sfx.video.generate",
         "sfx.ae.encode",
@@ -156,7 +157,7 @@ import Testing
         "music.yue2.cover",
         "music.yue2.serve"
     ])
-    #expect(document.commands.count == 149)
+    #expect(document.commands.count == 150)
 
     let data = try JSONEncoder().encode(document)
     let decoded = try JSONDecoder().decode(MereRunCapabilityDocument.self, from: data)

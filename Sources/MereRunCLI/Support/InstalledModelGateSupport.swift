@@ -381,6 +381,11 @@ enum InstalledModelSmokePlans {
                 try await runner.installedTextCheck(model: primary)
             }
 
+        case .haru4B:
+            return direct(spec, route: "speech converse") { runner in
+                try await runner.installedHaruCheck(model: spec.id)
+            }
+
         case .qwen3TTS, .breezeTTS, .drama3TTS, .phononTTS:
             return direct(spec, route: "speech synthesize") { runner in
                 try await runner.installedTTSCheck(model: spec.id)
@@ -905,6 +910,20 @@ extension GateRunner {
                 ? nil
                 : "edited image did not decode"
         )
+    }
+
+    func installedHaruCheck(model: String) async throws -> GateObservation {
+        let input = artifactURL("\(model)-input", extension: "wav")
+        let output = artifactURL(model, extension: "wav")
+        try MediaAudioIO.writeFloatWAV(
+            samples: Array(repeating: 0, count: HaruDuplexSession.frameSamples),
+            sampleRate: HaruDuplexSession.sampleRate, channels: 1, to: input
+        )
+        let run = try await exec([
+            "speech", "converse", "--model", model, "--input", input.path,
+            "--output", output.path, "--seed", "42", "--temperature", "0", "--max-frames", "2",
+        ], timeout: 1_800)
+        return try audioArtifactObservation(output, run: run, requireAudible: false).observation
     }
 
     func installedTTSCheck(model: String) async throws -> GateObservation {
