@@ -150,6 +150,11 @@
       "writing": "6/6 original and 2/3 separate prompts, matching the previous scores."
     },
     "LRUOracle": "Run emitted Python in a restricted subprocess. Compare cache get/put/recency/eviction against OrderedDict for 500 operations at each capacity 1, 2 and 5. Range merge has 205 valid cases and two invalid cases. Memo and retrieval use the existing fact and exact answer checks.",
+    "prompts": {
+      "cache": "Write a complete Python implementation of an LRU cache using a dictionary and a doubly linked list, with get and put operations, type hints, and a short usage example. Return the code directly without introductory prose.",
+      "prose-long": "Explain how a small community could turn an abandoned railway station into a public library. Discuss the building, accessibility, staffing, the collection, and a realistic opening-day scene. Write approximately 400 words of clear, connected prose."
+    },
+    "policySelection": "The two failing LRU seeds were development cases. After a direct close at 8192 failed, the 8192-token cue passed the implementations but seed 73 misstated two example outputs. Reserve 2048 positions inside the original 16384-token request to change fewer completed answers. Use the same 14336-token ceiling across tasks and seeds. The two additional code seeds were held back until selection.",
     "observed256TPS": {
       "tf/cache": 97.1879723942346,
       "tf/prose-long": 73.53508380365854,
