@@ -640,8 +640,17 @@ struct StudioServingConsoleView: View {
                         Text("LFM2").tag("text-chat-lfm2")
                         Text("DeepSeek V4").tag("text-chat-deepseek-v4-flash")
                     }
-                    TextField("Default model ID", text: $server.options.model)
-                        .mereField()
+                    HStack {
+                        TextField("Default model ID or path", text: $server.options.model)
+                            .mereField()
+                        Button("Choose checkpoint folder…") {
+                            if let folder = StudioFilePanels.chooseDirectory(title: "Choose checkpoint folder") {
+                                server.options.model = folder.path
+                            }
+                        }
+                        .buttonStyle(.mereSecondary)
+                        .help("Use a local checkpoint with the selected engine")
+                    }
                     TextField("Default adapter ID or LoRA path", text: $server.options.apiLoRA)
                         .mereField()
                     HStack {

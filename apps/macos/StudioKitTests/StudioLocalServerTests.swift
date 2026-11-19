@@ -64,6 +64,20 @@ final class StudioLocalServerTests: XCTestCase {
         XCTAssertEqual(controller.localServer.phase, .starting)
     }
 
+    func testStartPassesACheckpointFolderAsTheServerModel() throws {
+        let (controller, runner, restore) = makeController()
+        defer { restore() }
+        let folder = "/Volumes/Models/Local Checkpoint"
+        controller.localServer.options.engine = "text-chat-q36"
+        controller.localServer.options.model = folder
+
+        XCTAssertNil(controller.localServer.start())
+
+        let arguments = try XCTUnwrap(runner.starts.first).configuration.arguments
+        XCTAssertEqual(arguments.firstIndex(of: "--model").map { arguments[$0 + 1] }, folder)
+        XCTAssertEqual(arguments.firstIndex(of: "--engine").map { arguments[$0 + 1] }, "text-chat-q36")
+    }
+
     func testStopTerminatesStudiosServerAndSettlesStopped() async {
         let (controller, runner, restore) = makeController()
         defer { restore() }

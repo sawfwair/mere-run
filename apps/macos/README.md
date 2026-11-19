@@ -85,6 +85,13 @@ or model** menu offers both selectors together, so a missing model never hides
 other operations. Changing an operation keeps compatible model choices; an
 incompatible managed model returns to the new operation's default.
 
+In Chat, choose **Choose checkpoint folder…** from the model menu, then select a
+runtime profile that matches the checkpoint. **Clear checkpoint folder** returns
+Chat to the model selected in that menu. To serve a local checkpoint, select an
+engine under **Server > Configuration > Runtime defaults**, then choose
+**Choose checkpoint folder…**. Both flows use the folder directly, outside the
+model catalog.
+
 Every task has an editable **Command** panel. A separate **Command Console**
 window provides the complete command catalog. Both are
 rendered from the capability contract, so a capability nobody has designed a
