@@ -406,6 +406,20 @@ public struct Q35Config: Codable, Sendable, Hashable {
         }
     }
 
+    package init(haruTextConfig text: Q35TextConfig) {
+        modelType = "haru"
+        architectures = []
+        tieWordEmbeddings = true
+        eosTokenIds = text.eosTokenId.map { [$0] } ?? []
+        imageTokenId = nil
+        videoTokenId = nil
+        visionStartTokenId = nil
+        visionEndTokenId = nil
+        quantization = nil
+        textConfig = text
+        visionConfig = nil
+    }
+
     private static func decodeTokenIDsIfPresent(
         in container: KeyedDecodingContainer<CodingKeys>,
         forKey key: CodingKeys

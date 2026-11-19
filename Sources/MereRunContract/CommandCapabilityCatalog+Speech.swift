@@ -262,6 +262,33 @@ extension MereRunCapabilityCatalog {
         output: .init(kind: .text)
     )
 
+    public static let speechConverse = MereRunCommandCapability(
+        id: "speech.converse",
+        command: ["speech", "converse"],
+        title: "Full-duplex conversation",
+        summary: "Run a full-duplex spoken conversation with Haru-4B.",
+        options: [
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, defaultValue: "speech-haru-4b",
+                  group: Group.modelAndAdapters, tier: .standard),
+            .init(flag: "--input", label: "User audio", kind: .file, group: Group.inputs, tier: .essential),
+            .init(flag: "--live", label: "Microphone and playback", kind: .boolean, group: Group.inputs, tier: .essential),
+            .init(flag: "--output", aliases: ["-o"], label: "Output WAV", kind: .file, group: Group.output, tier: .essential),
+            .init(flag: "--system-prompt-file", label: "Character card", kind: .file, group: Group.prompt, tier: .standard),
+            .init(flag: "--reference-audio", label: "Voice reference", kind: .file, group: Group.inputs, tier: .standard),
+            .init(flag: "--speak-first", label: "Haru speaks first", kind: .boolean, tier: .standard),
+            .init(flag: "--seed", label: "Sampling seed", kind: .integer, group: Group.sampling, tier: .expert),
+            .init(flag: "--temperature", label: "Text temperature", kind: .number, defaultValue: "0.7",
+                  group: Group.sampling, tier: .expert),
+            .init(flag: "--max-frames", label: "Maximum output frames", kind: .integer, defaultValue: "27000", tier: .expert),
+        ],
+        output: .init(kind: .text, fileExtension: "wav", flag: "--output", optional: true),
+        routing: .init(
+            modelFlags: ["--model"],
+            defaultModels: [.always("speech-haru-4b")],
+            families: [.init(id: "haru", title: "Haru-4B", models: ["speech-haru-4b"])]
+        )
+    )
+
     public static let speechListen = MereRunCommandCapability(
         id: "speech.listen",
         command: ["speech", "listen"],

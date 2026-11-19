@@ -283,10 +283,13 @@ final class MicrophoneCapture: @unchecked Sendable {
         }
     }
 
-    init(deviceUID: String?) throws {
-        var captured: AsyncStream<[Float]>.Continuation?
-        self.samples = AsyncStream { captured = $0 }
-        self.continuation = captured!
+    init(
+        deviceUID: String?, sampleRate: Double = 16_000,
+        bufferingPolicy: AsyncStream<[Float]>.Continuation.BufferingPolicy = .unbounded
+    ) throws {
+        let stream = AsyncStream<[Float]>.makeStream(bufferingPolicy: bufferingPolicy)
+        self.samples = stream.stream
+        self.continuation = stream.continuation
         let input = engine.inputNode
         if let deviceUID {
             guard let selected = try CoreAudioInputDevice.inputs().first(where: { $0.uid == deviceUID }) else {
@@ -306,9 +309,9 @@ final class MicrophoneCapture: @unchecked Sendable {
             }
         }
         let inputFormat = input.inputFormat(forBus: 0)
-        guard let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false),
+        guard let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false),
               let converter = AVAudioConverter(from: inputFormat, to: target) else {
-            throw ValidationError("Could not configure 16 kHz mono microphone conversion.")
+            throw ValidationError("Could not configure mono microphone conversion.")
         }
         self.targetFormat = target
         self.converter = converter
@@ -353,7 +356,7 @@ final class MicrophoneCapture: @unchecked Sendable {
     }
 
     private func convert(_ input: AVAudioPCMBuffer) {
-        let capacity = AVAudioFrameCount((Double(input.frameLength) * 16_000 / input.format.sampleRate).rounded(.up)) + 1
+        let capacity = AVAudioFrameCount((Double(input.frameLength) * targetFormat.sampleRate / input.format.sampleRate).rounded(.up)) + 1
         guard let output = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: capacity) else { return }
         let inputState = MicrophoneConversionInput(buffer: input)
         var conversionError: NSError?
@@ -364,7 +367,8 @@ final class MicrophoneCapture: @unchecked Sendable {
             continuation.finish()
             return
         }
-        continuation.yield(Array(UnsafeBufferPointer(start: channel, count: Int(output.frameLength))))
+        let samples = Array(UnsafeBufferPointer(start: channel, count: Int(output.frameLength)))
+        if case .dropped = continuation.yield(samples) { continuation.finish() }
     }
 }
 
@@ -408,9 +412,11 @@ final class InterruptSignal: @unchecked Sendable {
         source.resume()
     }
 
-    func wait() async {
-        for await _ in stream { break }
-        source.cancel()
+    @discardableResult
+    func wait() async -> Bool {
+        defer { source.cancel() }
+        for await _ in stream { return true }
+        return false
     }
 }
 #endif

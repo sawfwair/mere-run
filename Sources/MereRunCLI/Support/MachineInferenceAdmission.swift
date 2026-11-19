@@ -75,6 +75,8 @@ enum CLIInferenceAdmissionClassifier {
                 || Drama3Resources.isDrama3(root: URL(fileURLWithPath: $0))
         }):
             return MachineInferenceRequest(label: label, resourceClass: .standard)
+        case "speech" where subcommand == "converse":
+            return MachineInferenceRequest(label: label, resourceClass: managedModelClass(HaruResources.modelID))
         case "speech", "audio":
             return MachineInferenceRequest(label: label, resourceClass: .small)
         case "image":

@@ -151,6 +151,7 @@ Use `mere.run guide --model text-chat-gemma4-26b-a4b-bf16` for its text workflow
 | `text-chat` | `text-chat-lfm25-2.6b-bf16` |
 | `vision-chat` | `vision-chat-lfm25-3b-8bit` |
 | `vision-chat` | `vision-chat-lfm25-3b-bf16` |
+| `audio` | `speech-haru-4b` |
 | `speech-asr` | `speech-asr-sov-transcribe-1` |
 | `speech-asr` | `speech-asr-nemotron-35-transcribe` |
 | `speech-asr` | `speech-asr-nemotron-35-transcribe-bf16` |
@@ -2124,6 +2125,7 @@ review the upstream repository's license before you use the weights.
 | `text-chat-laguna-s-2-1` | `poolside/Laguna-S-2.1-NVFP4-mlx` | 71.91 GB | Not required |
 | `text-chat-laguna-xs-2-1` | `poolside/Laguna-XS-2.1-NVFP4-mlx` | 21.57 GB | Not required |
 | `text-chat-inkling-small` | `Sawfwair/Inkling-Small-MLX-Mixed-2bit` | 84.56 GB | Not required |
+| `speech-haru-4b` | `higurashi-ai/Haru-4B` | 10.56 GB | — |
 | `speech-tts-drama-3` | `fishaudio/drama-3` | 27.41 GB | Required |
 | `speech-tts-phonon-31m` | `gradium/phonon-31m-en` | 103 MB | Not required |
 | `speech-asr-whistle` | `Cactus-Compute/whistle` | 17 MB | Not required |

@@ -65,6 +65,16 @@ extension CommandCatalog {
             systemImage: "waveform.badge.mic"
         ),
         CommandTemplate(
+            id: .speechConverse,
+            category: .speech,
+            title: "Haru conversation",
+            subtitle: "Respond to spoken audio with Haru-4B",
+            systemImage: "waveform",
+            inputKind: .audio,
+            outputKind: .file("wav"),
+            defaultModel: "speech-haru-4b"
+        ),
+        CommandTemplate(
             id: .speechDiarizeLive,
             category: .speech,
             title: "Live speakers",
@@ -207,6 +217,17 @@ extension CommandArguments {
         }
         if draft.quiet { args.flag(F.quiet) }
         if draft.speechJSONL { args.flag(F.jsonl) }
+        return args.arguments
+    }
+
+    package static func speechConverse(_ draft: CommandDraft) -> [String] {
+        typealias F = CommandFlags.SpeechConverse
+        var args = ArgumentBuilder(F.self)
+        if !draft.model.isBlank { args.option(F.model, draft.model) }
+        if !draft.inputPath.isBlank { args.option(F.input, draft.inputPath) }
+        if !draft.outputPath.isBlank { args.option(F.output, draft.outputPath) }
+        if !draft.refAudioPath.isBlank { args.option(F.referenceAudio, draft.refAudioPath) }
+        if !draft.seed.isBlank { args.option(F.seed, draft.seed) }
         return args.arguments
     }
 

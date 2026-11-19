@@ -50,12 +50,13 @@ against the CLI and fails if they disagree.
   - `mere.run text classify` — Classify text with native GLiNER2.5 Decide.
   - `mere.run text extract` — Extract entities, relations, and structures with native GLiNER2.5 Decide.
   - `mere.run text train-lora` — Train a native text or image-conditioned LoRA adapter from chat-style SFT JSONL.
-- [`mere.run speech`](/runtime/speech) — Synthesize, transcribe, diarize, and manage voice profiles.
+- [`mere.run speech`](/runtime/speech) — Synthesize, transcribe, diarize, converse, and manage voice profiles.
   - `mere.run speech synthesize` — Generate speech from text using a native TTS model.
   - `mere.run speech transcribe` — Transcribe or translate speech to text using native ASR backends.
   - `mere.run speech diarize` — Identify who spoke when in an audio file with native MLX diarization.
   - `mere.run speech diarize-live` — Stream Nemotron 3 speaker activity from a microphone or raw PCM stdin.
   - `mere.run speech listen` — Transcribe a macOS microphone with live Qwen, Parakeet, Whistle, or Nemotron ASR.
+  - `mere.run speech converse` — Run a full-duplex spoken conversation with Haru-4B.
   - `mere.run speech profile` — Manage saved voice clone profiles.
     - `mere.run speech profile list` — List saved speech voice profiles.
     - `mere.run speech profile create` — Create a speech profile from reference audio.

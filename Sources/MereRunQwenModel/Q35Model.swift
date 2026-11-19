@@ -139,11 +139,13 @@ final class Q35DecoderLayer: Module {
         self._mlp.wrappedValue = Q35FeedForward(config: config)
         self._inputLayerNorm.wrappedValue = Q35RMSNorm(
             dimensions: text.hiddenSize, eps: text.rmsNormEps,
-            zeroCenteredWeight: config.modelType != "prism_hadamard_qwen35"
+            zeroCenteredWeight: config.modelType != "prism_hadamard_qwen35",
+            useFloat32Scale: config.modelType == "haru"
         )
         self._postAttentionLayerNorm.wrappedValue = Q35RMSNorm(
             dimensions: text.hiddenSize, eps: text.rmsNormEps,
-            zeroCenteredWeight: config.modelType != "prism_hadamard_qwen35"
+            zeroCenteredWeight: config.modelType != "prism_hadamard_qwen35",
+            useFloat32Scale: config.modelType == "haru"
         )
         self._attentionHyperConnection.wrappedValue = text.isQwen4Exp
             ? Q38GatedResidual(config: config)
@@ -356,7 +358,8 @@ final class Q35Transformer: Module {
         }
         self._norm.wrappedValue = Q35RMSNorm(
             dimensions: text.hiddenSize, eps: text.rmsNormEps,
-            zeroCenteredWeight: config.modelType != "prism_hadamard_qwen35"
+            zeroCenteredWeight: config.modelType != "prism_hadamard_qwen35",
+            useFloat32Scale: config.modelType == "haru"
         )
         self._hyperConnectionMixer.wrappedValue = text.isQwen4Exp
             ? Q38GatedResidual(config: config, combinesBlockOutput: false)
@@ -640,6 +643,17 @@ public final class Q35Model: Module, @unchecked Sendable {
                 bias: false
             )
         super.init()
+    }
+
+    /// A dense hybrid checkpoint stores the active attention branch and omits generated buffers.
+    package func hybridCheckpointParameters() -> [(String, MLXArray)] {
+        let inactive = config.textConfig.layerTypes.enumerated().map { index, type in
+            let branch = Q35AttentionLayerType(type) == .linear ? "self_attn" : "linear_attn"
+            return "model.layers.\(index).\(branch)."
+        }
+        return parameters().flattened().filter { key, _ in
+            !key.hasSuffix(".linear_attn.qkNormWeightBF16") && !inactive.contains(where: key.hasPrefix)
+        }
     }
 
     public func embeddings(for inputIds: MLXArray) -> MLXArray {

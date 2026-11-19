@@ -58,6 +58,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
     case speechTranscribe
     case speechDiarize
     case speechDiarizeLive
+    case speechConverse
     case speechProfileList
     case speechProfileCreate
     case speechProfileDelete
@@ -206,6 +207,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
         case .speechTranscribe: return "speech.transcribe"
         case .speechDiarize: return "speech.diarize"
         case .speechDiarizeLive: return "speech.diarize-live"
+        case .speechConverse: return "speech.converse"
         case .speechProfileList: return "speech.profile.list"
         case .speechProfileCreate: return "speech.profile.create"
         case .speechProfileDelete: return "speech.profile.delete"
@@ -1271,7 +1273,7 @@ extension CommandTemplate {
             return .speak
         case .speechTranscribe, .speechDiarize, .speechDiarizeLive:
             return .listen
-        case .speechListen:
+        case .speechListen, .speechConverse:
             return .listen
         case .audioEnhance, .audioEdit, .audioGenerate:
             return .listen

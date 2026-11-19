@@ -210,6 +210,7 @@ mereRunCoreDependencies.append("MereRunCoreMLModel")
 mereRunCoreDependencies.append("MereRunLTXModel")
 mereRunCoreDependencies.append("AudioCodecs")
 mereRunCoreDependencies.append("AudioDrama3Model")
+mereRunCoreDependencies.append("AudioHaruModel")
 mereRunCoreDependencies.append("AudioQwen3ASRModel")
 mereRunCoreDependencies.append(.product(name: "Crypto", package: "swift-crypto"))
 mereRunCoreDependencies.append(.product(name: "Transformers", package: "swift-transformers"))
@@ -606,6 +607,27 @@ targets.append(
       + mlxDependency("MLX") + mlxDependency("MLXNN"),
     path: "Tests/KolibriRuntimeTests",
     exclude: ["Fixtures"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "AudioHaruModel",
+    dependencies: ["MereRunQwenModel", "MereRunKVCache"]
+      + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN") + mlxDependency("MLXRandom"),
+    path: "Sources/AudioHaruModel",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+targets.append(
+  .testTarget(
+    name: "HaruRuntimeTests",
+    dependencies: ["AudioHaruModel", "MereRunMLXTestSupport"]
+      + mlxDependency("MLX") + mlxDependency("MLXNN"),
+    path: "Tests/HaruRuntimeTests",
+    resources: [.copy("Fixtures")],
     swiftSettings: commonSwiftSettings
   )
 )
