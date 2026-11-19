@@ -125,6 +125,8 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case clef4Bit = "text-decide-clef-4bit"
     case clefFlash4Bit = "text-decide-clef-flash-4bit"
     case clefOmni = "text-decide-clef-omni"
+    case clairicBF16 = "text-extract-clairic-bf16"
+    case clairicFlashBF16 = "text-extract-clairic-flash-bf16"
     case gliner25Decide = "text-classify-gliner25-decide"
     case lightOnOCR = "vision-ocr-lighton"
     case unlimitedOCR2 = "vision-ocr-unlimited-2"

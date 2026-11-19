@@ -5,6 +5,18 @@
 Extract entities, relation pairs, and structured records with native
 GLiNER2.5 Decide. You can include classification tasks in the same request.
 
+For named fields from text, images, or PDFs, pull and select Clairic Flash:
+
+```bash
+mere.run model pull text-extract-clairic-flash-bf16
+mere.run text extract --model text-extract-clairic-flash-bf16 --input request.json
+```
+
+A Clairic request uses `state` and `fields`. For example,
+`{"state":"The vendor is Northwind Supply.","fields":{"vendor":{"type":"text"}}}`.
+See the [Clairic runtime guide](https://mere.run/runtime/clairic) for field and
+media formats.
+
 ## Usage
 
 Save a JSON request with `text` and at least one of `entities`, `relations`,

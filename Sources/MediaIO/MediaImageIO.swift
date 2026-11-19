@@ -58,6 +58,20 @@ public enum MediaImageIO {
         return try Data(contentsOf: temp)
     }
 
+    public static func compositeOnWhite(_ image: MediaImage) throws -> MediaImage {
+        var rgba = image.rgba8
+        for offset in stride(from: 0, to: rgba.count, by: 4) {
+            let alpha = UInt16(rgba[offset + 3])
+            let inverse = UInt16(255) - alpha
+            for channel in 0..<3 {
+                let value = UInt16(rgba[offset + channel]) * alpha + UInt16(255) * inverse
+                rgba[offset + channel] = UInt8((value + 127) / 255)
+            }
+            rgba[offset + 3] = 255
+        }
+        return try MediaImage(width: image.width, height: image.height, rgba8: rgba)
+    }
+
     public static func resized(_ image: MediaImage, width: Int, height: Int) throws -> MediaImage {
         guard width > 0, height > 0 else {
             throw MediaIOError.invalidImageDimensions(width: width, height: height)

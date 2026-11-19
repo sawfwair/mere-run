@@ -18,6 +18,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case flux3 = "flux3-klein"
         case laya
         case clef
+        case clairic
         case d1
         case gliner25Decide = "gliner25-decide"
         /// FLUX.1 Diffusers family.
@@ -155,6 +156,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case cosmos
         case laya
         case clef
+        case clairic
         case d1
         case gliner
         case flux1

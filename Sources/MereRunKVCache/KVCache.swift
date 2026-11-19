@@ -323,20 +323,13 @@ public final class KVRaggedBatchCache: KVCache {
 
     public func makeMask(n: Int) -> MLXFast.ScaledDotProductAttentionMaskMode {
         guard n > 0 else { return .none }
-        let maxLength = (offsets.max() ?? 0) + n
-        guard maxLength > 0 else { return .none }
-
-        var mask: [Float] = []
-        mask.reserveCapacity(offsets.count * n * maxLength)
-        for rowOffset in offsets {
-            for queryOffset in rowOffset..<(rowOffset + n) {
-                for keyPosition in 0..<maxLength {
-                    mask.append(keyPosition <= queryOffset ? 0 : -1e9)
-                }
-            }
-        }
-        let array = MLXArray(mask).reshaped(offsets.count, 1, n, maxLength)
-        return .array(array)
+        let keyPositions = MLXArray(0..<Int32((offsets.max() ?? 0) + n))
+        let rowOffsets = MLXArray(offsets.map(Int32.init), [offsets.count, 1, 1, 1])
+        let queryOffsets = MLXArray(0..<Int32(n)).reshaped(1, 1, n, 1)
+        let visible = (rowOffsets + queryOffsets) .>= keyPositions
+        // Preserve additive masks while keeping their dtype compatible with
+        // reduced-precision attention.
+        return .array(MLX.where(visible, MLXArray(0.0), MLXArray(-1e9)).asType(keys.dtype))
     }
 
     public func fork() -> KVCache {

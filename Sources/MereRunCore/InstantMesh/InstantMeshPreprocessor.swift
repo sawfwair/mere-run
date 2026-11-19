@@ -144,7 +144,7 @@ public enum InstantMeshPreprocessor {
         processedImages.reserveCapacity(sourceImages.count)
         imageValues.reserveCapacity(sourceImages.count * size * size * 3)
         for image in sourceImages {
-            let white = try compositeOnWhite(image)
+            let white = try MediaImageIO.compositeOnWhite(image)
             let sourceRGB = rgbFloat(white)
             let resizedRGB = if white.width == size, white.height == size {
                 sourceRGB
@@ -168,21 +168,6 @@ public enum InstantMeshPreprocessor {
             cameraValues: cameraValues,
             usedOfficialCameraRig: usedOfficialCameraRig
         )
-    }
-
-    private static func compositeOnWhite(_ image: MediaImage) throws -> MediaImage {
-        var rgba = image.rgba8
-        for pixel in 0..<(image.width * image.height) {
-            let offset = pixel * 4
-            let alpha = UInt16(rgba[offset + 3])
-            let inverse = UInt16(255) - alpha
-            for channel in 0..<3 {
-                let value = UInt16(rgba[offset + channel]) * alpha + UInt16(255) * inverse
-                rgba[offset + channel] = UInt8((value + 127) / 255)
-            }
-            rgba[offset + 3] = 255
-        }
-        return try MediaImage(width: image.width, height: image.height, rgba8: rgba)
     }
 
     private static func rgbFloat(_ image: MediaImage) -> [Float] {

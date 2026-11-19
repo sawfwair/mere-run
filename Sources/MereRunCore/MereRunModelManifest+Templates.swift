@@ -1918,6 +1918,13 @@ extension MereRunModelManifest {
                                        textEncoder: .local(path: path), transformer: .local(path: path)),
                 upstreamRepoId: LayaCatalog.repository, createdAt: createdAt
             )
+        case .clairicBF16, .clairicFlashBF16:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .clairic, family: .clairic, tier: .base,
+                variant: .standard, precision: .bf16, defaults: nil,
+                supports: [.textExtraction], components: genericTextComponents,
+                upstreamRepoId: ClairicCatalog.repository(modelID.rawValue), createdAt: createdAt
+            )
         case .gliner25Decide:
             return MereRunModelManifest(
                 id: modelID.rawValue, engine: .gliner25Decide, family: .gliner, tier: .base,

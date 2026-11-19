@@ -63,6 +63,13 @@ enum CLIInferenceAdmissionClassifier {
             return MachineInferenceRequest(label: label, resourceClass: .large)
         }
         let selectedModelIdentifiers = modelIdentifiers(in: tokens)
+        if label == "text extract", let model = selectedModelIdentifiers.first, TextExtract.isClairicModel(model) {
+            if tokens.contains("--preflight") { return nil }
+            let modelID = ManagedModelCatalog.spec(for: model)?.id
+                ?? (try? ClairicCatalog.checkpointModelID(at: URL(fileURLWithPath: model)))
+                ?? ClairicCatalog.modelID
+            return MachineInferenceRequest(label: label, resourceClass: managedModelClass(modelID))
+        }
         if selectedModelIdentifiers.contains(where: isLargeModel) {
             return MachineInferenceRequest(label: label, resourceClass: .large)
         }

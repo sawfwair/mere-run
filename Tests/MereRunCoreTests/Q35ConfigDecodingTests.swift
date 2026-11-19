@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 import MLX
+import MLXFast
 import MLXRandom
 @testable import MereRunCore
 @testable import MereRunQwenModel
@@ -2016,6 +2017,10 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
 
         let batched = try XCTUnwrap(first.batched(with: [first, second]))
         XCTAssertEqual(batched.rowOffsets, [2, 4])
+        let mask = batched.makeMask(n: 1)
+        let maskArray = try XCTUnwrap(mask.mask)
+        XCTAssertEqual(maskArray.dtype, .bfloat16)
+        XCTAssertEqual((maskArray .== 0).asArray(Bool.self), [true, true, true, false, false, true, true, true, true, true])
 
         let nextKeys = MLXRandom.uniform(0.0 ..< 1.0, [2, 1, 1, 8]).asType(.bfloat16)
         let nextValues = MLXRandom.uniform(0.0 ..< 1.0, [2, 1, 1, 8]).asType(.bfloat16)
@@ -2023,6 +2028,18 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual(batched.rowOffsets, [3, 5])
         XCTAssertEqual(updated.0.shape, [2, 1, 5, 8])
         XCTAssertEqual(updated.1.shape, [2, 1, 5, 8])
+
+        let queries = MLXRandom.uniform(0.0 ..< 1.0, [2, 1, 1, 8]).asType(.bfloat16)
+        let output = MLXFast.scaledDotProductAttention(queries: queries, keys: updated.0, values: updated.1,
+                                                       scale: 1, mask: mask)
+        for (row, length) in [3, 5].enumerated() {
+            let batch = row..<(row + 1)
+            let serial = MLXFast.scaledDotProductAttention(
+                queries: queries[batch], keys: updated.0[batch, 0..., ..<length, 0...],
+                values: updated.1[batch, 0..., ..<length, 0...], scale: 1, mask: .none)
+            let largestDifference = MLX.max(abs((output[batch] - serial).asType(.float32)))
+            XCTAssertLessThan(largestDifference.item(Float.self), 0.01)
+        }
 
         let split = try XCTUnwrap(batched.unbatchedRows(count: 2))
         XCTAssertEqual(split[0].offset, 3)
