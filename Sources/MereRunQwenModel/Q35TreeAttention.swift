@@ -6,9 +6,11 @@ import MLXFast
 func q35TreeAttention(
     q: MLXArray, k: MLXArray, v: MLXArray, tree: Q35VerificationTree, scale: Float
 ) -> MLXArray {
+    #if canImport(Metal)
     if let indexed = Q35IndexedTreeAttention.apply(q: q, k: k, v: v, tree: tree, scale: scale) {
         return indexed
     }
+    #endif
     let prefix = k.dim(2) - tree.count
     if Device.defaultDevice().deviceType == .cpu {
         // Preserve the serial CPU gather and query layout as well as its

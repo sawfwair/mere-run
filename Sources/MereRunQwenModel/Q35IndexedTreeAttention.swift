@@ -1,3 +1,4 @@
+#if canImport(Metal)
 import Foundation
 import MLX
 
@@ -81,3 +82,4 @@ enum Q35IndexedTreeAttention {
         return gqa >= 4 ? 64 : 32
     }
 }
+#endif
