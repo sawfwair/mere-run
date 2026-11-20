@@ -6,11 +6,51 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.73.0 - 2026-11-19
+
 - Add native Haru-4B speech-to-speech inference. Use `speech converse` to
   replay an audio file or start a live macOS conversation. The command accepts
   a character card and voice reference and can save the reply as a WAV file.
 
-- Enable fast sampled-tree decoding for eligible Qwen3.8 27B Q4 xhigh requests on M5. The 16,384-token profile reserves 2,048 tokens for the answer transition and generation.
+- Add native SOV-Transcribe-1 file transcription with the original BF16
+  checkpoint, language and vocabulary instructions, optional DFlash decoding,
+  and opt-in packed Q8 experts. Add a portable Q8 bundle that loads without
+  the original BF16 decoder or a conversion cache. Portable and cached Q8
+  tensors and outputs match in the recorded tests; Q8 can differ from BF16.
+  Broad multilingual accuracy and memory capacity limits remain unqualified.
+
+- Add native Clairic and Clairic Flash BF16 extraction through `text extract`
+  for text, images, and PDF pages on macOS. Return typed fields, confidence,
+  null probabilities, and source spans; support explicitly printed dates and
+  times with `source_only`. Both checkpoints passed the recorded text, image,
+  and PDF cases. Learned computation, duration, estimation, forecasting, and
+  inferred date/time heads remain unsupported; broader upstream parity is
+  unmeasured.
+
+- Register the pinned Qwen3.8-27B Pi LoRA adapter for native BF16 and MLX Q4
+  models through `agent start`, `api serve`, and `text chat`. The cataloged
+  adapter defaults to thinking off. A live Pi coding smoke passed with Q4;
+  BF16 coverage is limited to projection and catalog tests.
+
+- Enable native sampled-tree decoding for eligible single-request Qwen3.8
+  27B Q4 xhigh text generation on the qualified M5 DFlash2 path. Preserve the
+  request's sampling parameters and stream reasoning separately. A requested
+  16,384-token output budget reserves 2,048 tokens for the answer transition
+  and generation when it fits in context. Set `MERERUN_Q38_SAMPLED_TREE=0`
+  to use the previous sampler, or `MERERUN_Q38_THINKING_TOKEN_LIMIT=0` to
+  disable the transition independently. Qualification covers the recorded
+  prompts and seeds; a separate writing prompt still failed.
+
+- Clarify operation, engine, backend, and model selection throughout Studio.
+  Offer operation and model alternatives when recovering from a missing model,
+  filter incompatible choices, and preserve compatible models and local paths
+  when switching operations. Bind OCR model selection to its backend and hide
+  model menus for commands without a model argument.
+
+- Add local checkpoint folder selection to macOS Chat and Server. Check that
+  the Chat folder is available before sending, retain saved selections, and
+  pass the chosen path to the selected CLI runtime. Keep these folder choices
+  outside the managed model catalog.
 
 - Add a native Swift/MLX reference runtime for Inkling 2 Small text and image
   chat, reasoning, and tools through `vision-chat-inkling-2-small` and the
