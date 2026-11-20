@@ -126,7 +126,7 @@ extension CodeGenServer {
     }
     nonisolated static func messagesFailure(_ error: Error) -> MessagesFailure {
         if let failure = error as? MessagesFailure { return failure }
-        if let issue = error as? ChatRequestIssue, issue.field.hasPrefix("tool_use") {
+        if let issue = error as? ChatRequestIssue, (issue.field.hasPrefix("tool_use") || issue.field == "output_schema.generation") {
             return .output(issue.field, issue.message)
         }
         if error is APIRequestValidationError || error is ChatRequestIssue || error is MediaDocumentError || error is MediaIOError {

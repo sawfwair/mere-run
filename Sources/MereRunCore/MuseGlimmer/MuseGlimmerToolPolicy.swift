@@ -1,8 +1,17 @@
 import Foundation
 
 enum NativeChatToolPolicy {
+    /// The constrained schema carries names, descriptions, and parameter schemas.
+    /// Do not also inject a checkpoint's incompatible XML/tool-call format.
+    static func templateTools(_ request: ChatRequest) -> [ToolDefinition]? {
+        request.outputConstraint == nil ? request.tools : nil
+    }
+
     static func requestMessages(_ request: ChatRequest) -> [ChatMessage] {
         var instructions: [String] = []
+        if let constraint = request.outputConstraint {
+            instructions.append("Return only compact JSON matching this schema. Object keys must appear in alphabetical order. Do not use native tool markup or reasoning delimiters. Schema: " + ChatJSONValue.object(constraint.schema).jsonString)
+        }
         switch request.toolChoice {
         case .auto: break
         case .required: instructions.append("Call at least one of the supplied tools before answering.")

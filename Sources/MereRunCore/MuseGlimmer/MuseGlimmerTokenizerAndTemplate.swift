@@ -93,17 +93,24 @@ public final class MuseGlimmerTokenizerAndTemplate: @unchecked Sendable {
         messages.map { message in
             var rendered: Message = ["role": message.role.rawValue]
             if let blocks = message.contentBlocks {
-                rendered["content"] = blocks.compactMap { block -> [String: any Sendable]? in
+                rendered["content"] = blocks.flatMap { block -> [[String: any Sendable]] in
                     switch block {
-                    case .text(let text): return ["type": "text", "text": text]
-                    case .image(let reference, _): return ["type": "image", "image_url": reference]
+                    case .text(let text): return [["type": "text", "text": text]]
+                    case .image(let reference, _): return [["type": "image", "image_url": reference]]
                     case .document(let document):
-                        let text = ([document.title, document.context].compactMap { $0 } + document.pages.enumerated().map {
-                            "<page number=\"\($0.offset + 1)\">\n\($0.element)\n</page>"
-                        }).joined(separator: "\n")
-                        return ["type": "text", "text": text]
-                    case .toolReference(let name): return ["type": "text", "text": "Discovered tool: " + name]
-                    default: return nil
+                        var content: [[String: any Sendable]] = []
+                        let metadata = [document.title, document.context].compactMap { $0 }.joined(separator: "\n")
+                        if !metadata.isEmpty { content.append(["type": "text", "text": metadata]) }
+                        for (index, text) in document.pages.enumerated() {
+                            content.append(["type": "text", "text": "<page number=\"\(index + 1)\">\n\(text)"])
+                            if let images = document.pageImages, images.indices.contains(index) {
+                                content.append(["type": "image", "image_url": images[index]])
+                            }
+                            content.append(["type": "text", "text": "</page>"])
+                        }
+                        return content
+                    case .toolReference(let name): return [["type": "text", "text": "Discovered tool: " + name]]
+                    default: return []
                     }
                 }
             } else if let image = message.imageUrl, !image.isEmpty {

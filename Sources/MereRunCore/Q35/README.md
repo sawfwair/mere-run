@@ -387,3 +387,8 @@ newly generated tokens; repetition penalties cover the prompt and output.
 `SamplingPenalties.swift` applies them before filtering in the shared sampler.
 Active penalties disable MTP so draft verification cannot bypass the history
 transform. Neutral defaults preserve the accelerated path.
+
+Messages constrained output uses the shared schema grammar and final-target
+decoder on switchable-thinking adapters. Prepared prompts include the schema
+instructions. Unsupported constraints fail before generation; strict tools are
+released only after complete typed validation. This route bypasses speculation.

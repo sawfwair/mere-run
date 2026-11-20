@@ -50,7 +50,9 @@ Capability metadata describes implemented adapter behavior, not task success.
 | Tool-result and thinking clearing | Implemented | Implemented | Explicit unsupported error |
 | Native prefix reuse | Bounded marked text and image prefixes | Zero Messages cache accounting | Zero Messages cache accounting |
 | Text documents and text PDFs | Implemented | Implemented | Implemented |
-| Strict tools, constrained JSON schema, generated citations | Explicit unsupported error | Explicit unsupported error | Explicit unsupported error |
+| Strict tools and constrained JSON schema | Explicit unsupported error | Switchable-thinking adapters; bounded schema subset | Explicit unsupported error |
+| Generated citations | Explicit unsupported error | Explicit unsupported error | Explicit unsupported error |
+| PDF page images, including scans | PDFKit rendering on macOS | Text extraction only | Text extraction only |
 
 Effort selects the model's coarse reasoning strength. It does not promise an
 exact reasoning-token budget. Fixed-reasoning Qwen variants accept their single
@@ -64,7 +66,7 @@ fail explicitly.
 
 Tool schemas retain nested JSON values and local references. Completed calls
 are checked before the server releases executable tool blocks. Unsupported
-strict enforcement fails before generation. Tool names and IDs exposed to the
+strict enforcement or schema constraints fail before generation. Tool names and IDs exposed to the
 client remain unchanged. `local_capabilities.tool_schema_subset` lists supported
 schema keywords. It includes local references, nested objects and arrays, enums,
 constant values, unions, schema alternatives, bounded value constraints, and
@@ -102,12 +104,60 @@ cache read. Prefix usage reports actual retained KV reads and writes, including
 covered image expansion. Cache warming requires `max_tokens: 0` and a supported
 cache breakpoint; counting and generation apply the same prepared boundaries.
 
-Documents accept inline text and base64 text or PDF data. PDFKit extracts PDF
-text on macOS, preserving page boundaries. The local limits are 20 MiB and 100
-pages. Encrypted, unreadable, image-only, and incompatible PDFs fail explicitly.
+Documents accept inline text and base64 text or PDF data. On macOS, text-only
+adapters use PDFKit text extraction with page boundaries. Glimmer receives both
+extracted text and rendered page images, including image-only scans and diagrams.
+Page images stay inside their document's ordered page boundaries. Preparation,
+counting, generation, and cache identity include their actual image expansion.
 Document identity, title, and context remain attached to the canonical input.
-Remote document URLs, hosted web search, hosted code execution, remote MCP
-hosting, Files, Batches, account services, and billing are outside this API.
+
+Limits are 20 MiB of input, 100 pages, 64 Mi pixels, and 64 MiB of rendered PNG
+data across the request. Input bytes and page count apply per document. Each raster has a maximum edge of 1,536 pixels, at up to two
+pixels per PDF point. Encrypted, unreadable, oversized, and incompatible documents
+fail explicitly. Image-only PDFs require the Glimmer vision adapter; text-only
+adapters reject them. Remote document URLs, hosted web search, hosted code
+execution, remote MCP hosting, Files, Batches, account services, and billing are
+outside this API.
+
+## Constrained output
+
+Switchable-thinking Qwen and Gemma adapters accept `strict: true` custom tools
+and `output_config.format` with `type: "json_schema"` and an object-valued
+`schema`. Inspect `strict_tools`, `json_schema`, and `constrained_schema_subset`
+in model discovery. Glimmer and fixed-reasoning adapters reject these options.
+
+The adapter compiles the schema into a grammar and checks candidate tokens before
+committing them. Final-target decoding retains the request's sampling controls;
+MTP, DFlash, and continuous batching do not run for constrained responses.
+Generation fails explicitly if its output budget ends before completion or if
+256 candidate rejections cannot find an admissible next token. The server never
+returns a malformed executable tool as a successful response. These bounds do
+not guarantee task accuracy or a particular decode rate.
+
+Supported constraints include basic JSON types, nullable type unions, nested
+objects and arrays, `required`, `enum`, `const`, `anyOf`, and nonrecursive local
+references through `$defs` or `definitions`. Objects require
+`additionalProperties: false` and support up to 64 properties. Array bounds
+support integers from zero through 128. Grammar nesting is limited to 32 levels,
+with additional compiled-size limits. Object keys follow alphabetical order.
+Unsupported constraints, including numeric ranges, string patterns and formats,
+`oneOf`, `allOf`, and recursive references, fail during preparation. Ordinary
+non-strict tools retain their broader validation subset.
+
+Constrained requests require thinking to be omitted or disabled. They reject
+stop sequences, deferred loading, tool search, and simultaneous JSON-schema
+output and tools. Strict tools support automatic or required selection, a named
+tool, and up to 16 parallel calls; single-call mode permits one. When any active
+tool is strict, the constrained envelope enforces the schemas of all active
+tools. Client-visible tool names and argument types remain unchanged. Tool calls are buffered until the envelope is complete and validated. Automatic
+text answers stream from the text branch without exposing the envelope or tool
+arguments. JSON-schema text streams without interpreting text
+inside JSON strings as reasoning or tool markup.
+
+The additional schema instructions enter shared prompt preparation, so token
+counts include them. Changing a schema changes the prepared prefix. Existing
+checkpoint and desktop qualification reports do not qualify these added paths;
+installed-model task quality and throughput require separate evidence.
 
 Thinking progress updates (`display: "updates"`) are unsupported. Claude Code
 2.1.316 retries without that display option; native thinking remains available.

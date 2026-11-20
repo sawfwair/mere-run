@@ -22,6 +22,8 @@ struct MessagesCapabilities: Codable, Equatable, Sendable {
     let tool_search: Bool
     let context_editing: [String]
     let tool_schema_subset: [String]?
+    var constrained_schema_subset: [String]? = nil
+    var vision_documents: Bool? = nil
 
     static func adapter(_ engine: RuntimeServingEngine, profile: ManagedModelAPIProfile) -> Self {
         let native = engine != .textChatDeepseekV4Flash
@@ -31,15 +33,22 @@ struct MessagesCapabilities: Codable, Equatable, Sendable {
         let fixedHigh = [.textChatQ35, .textChatQ36].contains(engine) && profile.thinkingLevels == [.high]
         let switchableThinking = [.textChatQ35, .textChatQ36, .textChatGemma4].contains(engine)
             && (profile.thinkingLevels.isEmpty || profile.thinkingLevels.contains(.off))
-        return Self(messages: native, streaming: textCounting, tools: textCounting, token_counting: textCounting,
+        let constrained = [.textChatQ35, .textChatQ36, .textChatGemma4].contains(engine) && switchableThinking
+        var result = Self(messages: native, streaming: textCounting, tools: textCounting, token_counting: textCounting,
                     ordered_images: glimmer, thinking: glimmer ? ["adaptive"] : textCounting ? (switchableThinking ? ["adaptive", "disabled"] : ["adaptive"]) : [],
                     thinking_display: textCounting ? ["summarized"] : [],
                     effort: glimmer || nativeEffort ? ["low", "medium", "high", "xhigh"] : fixedHigh ? ["high"] : [],
-                    exact_thinking_budget: false, strict_tools: false, json_schema: false,
+                    exact_thinking_budget: false, strict_tools: constrained, json_schema: constrained,
                     documents: native, citations: false, prompt_cache: glimmer,
                     prompt_cache_max_tokens: glimmer ? MuseGlimmerGenerator.maximumCachedPrefixTokens : 0, tool_search: textCounting,
                     context_editing: textCounting ? ["clear_thinking_20251015", "clear_tool_uses_20250919"] : [],
                     tool_schema_subset: textCounting ? ChatToolValidation.schemaKeywords.sorted() : [])
+        result.constrained_schema_subset = constrained ? ChatSchemaGrammar.schemaKeywords.sorted() : []
+        result.vision_documents = false
+        #if canImport(PDFKit)
+        result.vision_documents = glimmer
+        #endif
+        return result
     }
 }
 
@@ -52,7 +61,18 @@ extension RuntimeChatRequest {
             guard caps.messages else { throw MessagesFailure.unsupported("messages", model: configuration.modelID) }
             if counting, !caps.token_counting { throw MessagesFailure.unsupported("count_tokens", model: configuration.modelID) }
             if wire.stream == true, !caps.streaming { throw MessagesFailure.unsupported("stream", model: configuration.modelID) }
-            if wire.output_config?.format != nil { throw MessagesFailure.unsupported("output_config.format", model: configuration.modelID) }
+            let format = wire.output_config?.format
+            if format != nil, !caps.json_schema { throw MessagesFailure.unsupported("output_config.format", model: configuration.modelID) }
+            let strict = wire.tools?.contains(where: { $0.strict == true }) == true
+            if strict || format != nil {
+                guard wire.thinking == nil || wire.thinking?.type == "disabled" else { throw MessagesFailure.unsupported("constrained output with thinking; set thinking.type to disabled") }
+                guard wire.stop_sequences?.isEmpty != false else { throw MessagesFailure.unsupported("constrained output with stop_sequences") }
+                guard !strict || format == nil else { throw MessagesFailure.unsupported("simultaneous strict tools and output_config.format") }
+                guard wire.tools?.allSatisfy({ $0.defer_loading != true && ($0.type == nil || $0.type == "custom") }) != false else {
+                    throw MessagesFailure.unsupported("constrained output with deferred tools or tool search")
+                }
+                guard format == nil || wire.tools?.isEmpty != false else { throw MessagesFailure.unsupported("JSON-schema output with tools") }
+            }
             let runtimeCapabilities = APIEngineCapabilities.catalog(configuration.profile)
             if wire.top_k != nil, !runtimeCapabilities.supportsTopK { throw MessagesFailure.unsupported("top_k", model: configuration.modelID) }
             if wire.stop_sequences?.isEmpty == false, !runtimeCapabilities.supportsStopSequences { throw MessagesFailure.unsupported("stop_sequences", model: configuration.modelID) }
@@ -84,6 +104,7 @@ extension RuntimeChatRequest {
                 effort = ManagedModelThinkingLevel(rawValue: label).flatMap { configuration.profile.reasoningEffortStrengths[$0] }
                     ?? ["low": 0.1, "medium": 0.5, "high": 0.8, "xhigh": 0.95][label]
             }
+            let documentBudget = MessagesDocumentBudget()
             var messages: [ChatMessage] = []
             var cacheBoundaries: [ChatCacheBoundary] = []
             if let system = wire.system {
@@ -93,7 +114,7 @@ extension RuntimeChatRequest {
                 for (index, block) in system.blocks.enumerated() {
                     if let cache = MessagesAdapter.cacheControl(block) { cacheBoundaries.append(.init(messageIndex: 0, blockCount: index + 1, ttlSeconds: cache.ttl == "1h" ? 3600 : 300)) }
                 }
-                messages.append(ChatMessage(role: .system, blocks: try MessagesAdapter.blocks(system.blocks, configuration: configuration, continuity: continuity)))
+                messages.append(ChatMessage(role: .system, blocks: try MessagesAdapter.blocks(system.blocks, configuration: configuration, continuity: continuity, documentBudget: documentBudget)))
             }
             var pending: Set<String> = []
             var used: Set<String> = []
@@ -124,7 +145,7 @@ extension RuntimeChatRequest {
                         ordinary = []
                     }
                 }
-                let converted = try MessagesAdapter.blocks(turn.content.blocks, configuration: configuration, continuity: continuity)
+                let converted = try MessagesAdapter.blocks(turn.content.blocks, configuration: configuration, continuity: continuity, documentBudget: documentBudget)
                 for (wireBlock, block) in zip(turn.content.blocks, converted) {
                     switch block {
                     case .toolUse(let call):
@@ -185,6 +206,16 @@ extension RuntimeChatRequest {
                                               topP: wire.top_p ?? configuration.settings.topP,
                                               topK: wire.top_k, thinking: thinking != nil && thinking?.type != "disabled"),
                 policy: .openAI, apiProfile: configuration.profile)
+            if let format {
+                guard let object = format.objectValue, object["type"] == .string("json_schema"),
+                      Set(object.keys) == ["type", "schema"], let schema = object["schema"]?.objectValue else {
+                    throw MessagesFailure.invalid("output_config.format", "expected type json_schema and an object schema")
+                }
+                request.outputConstraint = try ChatOutputConstraint(schema: schema)
+            } else if strict, !tools.isEmpty {
+                request.outputConstraint = try ChatOutputConstraint.tools(tools, choice: choice, parallel: request.parallelToolCalls)
+            }
+            if request.outputConstraint != nil { request.requiresJSON = true }
             let fullTTL = wire.cache_control
             let toolBoundaries = (wire.tools ?? []).compactMap { tool -> ChatToolCacheBoundary? in
                 tool.cache_control.map { .init(throughTool: tool.name, ttlSeconds: $0.ttl == "1h" ? 3600 : 300) }
@@ -235,7 +266,7 @@ enum MessagesAdapter {
             let search = ["tool_search_tool_regex_20251119", "tool_search_tool_bm25_20251119"].contains(tool.type ?? "")
             if let type = tool.type, type != "custom", !search { throw MessagesFailure.unsupported("tools.type.\(type)") }
             guard !tool.name.isEmpty, names.insert(tool.name).inserted else { throw MessagesFailure.invalid("tools.name", "must be non-empty and unique") }
-            if tool.strict == true { throw MessagesFailure.unsupported("tools.strict") }
+            if tool.strict == true, !capabilities.strict_tools { throw MessagesFailure.unsupported("tools.strict") }
             if tool.defer_loading == true, tool.cache_control != nil { throw MessagesFailure.invalid("tools.cache_control", "deferred tools cannot carry cache breakpoints") }
             if let callers = tool.allowed_callers, callers != ["direct"] { throw MessagesFailure.unsupported("tools.allowed_callers") }
             if tool.input_examples != nil { throw MessagesFailure.unsupported("tools.input_examples") }
@@ -253,6 +284,7 @@ enum MessagesAdapter {
                 throw MessagesFailure.invalid("tools.input_schema", "must be an object schema")
             }
             try ChatToolValidation.validateSchema(schema)
+            if tool.strict == true { _ = try ChatSchemaGrammar(schema: schema) }
             return ToolDefinition(name: tool.name, description: tool.description ?? "", parameterSchema: schema)
         }
     }
@@ -274,7 +306,7 @@ enum MessagesAdapter {
     }
 
     static func blocks(_ blocks: [MessagesBlock], configuration: RuntimeChatConfiguration,
-                       continuity: MessagesContinuity) throws -> [ChatContentBlock] {
+                       continuity: MessagesContinuity, documentBudget: MessagesDocumentBudget = .init()) throws -> [ChatContentBlock] {
         try blocks.map { block in
             switch block {
             case .text(let text):
@@ -286,14 +318,14 @@ enum MessagesAdapter {
             case .toolUse(let call): return .toolUse(.init(id: call.id, name: call.name, arguments: call.input))
             case .toolResult(let result):
                 return .toolResult(id: result.tool_use_id,
-                    content: try self.blocks(result.content?.blocks ?? [], configuration: configuration, continuity: continuity),
+                    content: try self.blocks(result.content?.blocks ?? [], configuration: configuration, continuity: continuity, documentBudget: documentBudget),
                     isError: result.is_error ?? false)
             case .toolReference(let reference): return .toolReference(reference.tool_name)
             case .serverToolUse(let call):
                 guard [.textChatMuseGlimmer, .textChatQ35, .textChatQ36, .textChatGemma4].contains(configuration.engine) else { throw MessagesFailure.unsupported("server_tool_use") }
                 return .toolUse(.init(id: call.id, name: call.name, arguments: call.input))
             case .toolSearchResult(let result):
-                var content = try self.blocks(result.content.tool_references ?? [], configuration: configuration, continuity: continuity)
+                var content = try self.blocks(result.content.tool_references ?? [], configuration: configuration, continuity: continuity, documentBudget: documentBudget)
                 if let code = result.content.error_code {
                     content.append(.text("Tool search error (\(code)): " + (result.content.error_message ?? "")))
                 }
@@ -316,12 +348,16 @@ enum MessagesAdapter {
                 } else if source.type == "base64", let base64 = source.data, let data = Data(base64Encoded: base64) {
                     bytes = data
                     switch source.media_type {
-                    case "application/pdf": decoded = try MediaDocumentIO.pdf(data)
+                    case "application/pdf": decoded = try MediaDocumentIO.pdf(data, renderPages: configuration.engine == .textChatMuseGlimmer, maximumRenderedPixels: documentBudget.remainingPixels)
                     case "text/plain": decoded = try MediaDocumentIO.text(data)
                     default: throw MessagesFailure.invalid("document.source.media_type", "use application/pdf or text/plain")
                     }
                 } else { throw MessagesFailure.unsupported("document.source.\(source.type)") }
-                return .document(.init(identity: digest(bytes), title: document.title, context: document.context, pages: decoded.pages))
+                documentBudget.remainingPixels -= decoded.renderedPixels
+                documentBudget.remainingBytes -= decoded.pageImages?.reduce(0, { $0 + $1.count }) ?? 0
+                guard documentBudget.remainingBytes >= 0 else { throw MediaDocumentError.oversized }
+                return .document(.init(identity: digest(bytes), title: document.title, context: document.context, pages: decoded.pages,
+                    pageImages: decoded.pageImages?.map { "data:image/png;base64," + $0.base64EncodedString() }))
             }
         }
     }
@@ -380,4 +416,9 @@ enum MessagesAdapter {
     }
 
     static func digest(_ bytes: Data) -> String { SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined() }
+}
+
+final class MessagesDocumentBudget {
+    var remainingPixels = 64 * 1024 * 1024
+    var remainingBytes = 64 * 1024 * 1024
 }

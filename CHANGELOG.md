@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add bounded schema-constrained Messages output and strict custom tools for
+  switchable-thinking Qwen and Gemma adapters. Publish the supported schema
+  subset and reject unsupported combinations before generation.
+- Render PDF pages, including image-only scans, for the native Glimmer Messages
+  adapter on macOS. Preserve page order, document metadata, and image token
+  counting with explicit rendering limits.
+
+
 ## 0.73.0 - 2026-11-19
 
 - Let unattended macOS test gates reopen synthetic run records while the

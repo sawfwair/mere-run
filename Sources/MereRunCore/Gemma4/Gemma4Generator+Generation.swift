@@ -54,7 +54,7 @@ extension Gemma4Generator {
         }
         var promptTokens = try tokenizerAndTemplate.encodeForGeneration(
             messages: messages,
-            tools: request.tools,
+            tools: NativeChatToolPolicy.templateTools(request),
             addGenerationPrompt: true,
             includeThinking: request.showThinking,
             maxLength: effectiveContext
@@ -118,7 +118,7 @@ extension Gemma4Generator {
         let prefixCheckpoints = usePrefixKVCache ? semanticPrefixCheckpoints(
             tokenizerAndTemplate: tokenizerAndTemplate,
             messages: messages,
-            tools: request.tools,
+            tools: NativeChatToolPolicy.templateTools(request),
             includeThinking: request.showThinking,
             promptTokens: promptTokens,
             maxContextLength: effectiveContext
@@ -208,29 +208,42 @@ extension Gemma4Generator {
         let decodeProgress: @Sendable (ChatProgress) -> Void = { progress in
             outputObserver.observe(progress, handler: progressHandler)
         }
-        let decodeResult = try await decodeTokens(
-            model: model,
-            tokenizerAndTemplate: tokenizerAndTemplate,
-            initialLogits: prefillResult.logits,
-            layerCaches: preparedCaches.caches,
-            eosSet: eosSet,
-            generationConfig: generationConfig,
-            tokenBudget: tokenBudget,
-            promptTokens: promptTokens,
-            mtpModel: mtpTemplate.active ? mtpModel : nil,
-            prefillHidden: mtpTemplate.active ? prefillResult.hidden : nil,
-            sharedKVStates: mtpTemplate.active ? mtpSharedKVStates : [:],
-            prefillTokenCount: promptTokens.count,
-            mtpStatsTemplate: mtpTemplate,
-            jsonConstrained: request.requiresJSON,
-            noRepeatNgramSize: request.noRepeatNgramSize,
-            progressHandler: decodeProgress
-        )
+        let decodeResult: Gemma4BatchedDecodeResult
+        if let constraint = request.outputConstraint {
+            let result = try schemaConstrainedDecode(
+                constraint: constraint, initialLogits: prefillResult.logits, sampling: generationConfig,
+                eos: eosSet, budget: tokenBudget, history: promptTokens,
+                decode: { tokenizerAndTemplate.decode(tokens: $0) },
+                forward: { model.forward(inputIds: MLXArray([Int32($0)]).reshaped(1, 1), cache: preparedCaches.caches) },
+                progress: progressHandler
+            )
+            decodeResult = Gemma4BatchedDecodeResult(generatedTokens: result.tokens, decodeSeconds: result.decodeSeconds,
+                firstTokenSeconds: result.firstTokenSeconds, mtpStats: mtpTemplate)
+        } else {
+            decodeResult = try await decodeTokens(
+                model: model,
+                tokenizerAndTemplate: tokenizerAndTemplate,
+                initialLogits: prefillResult.logits,
+                layerCaches: preparedCaches.caches,
+                eosSet: eosSet,
+                generationConfig: generationConfig,
+                tokenBudget: tokenBudget,
+                promptTokens: promptTokens,
+                mtpModel: mtpTemplate.active ? mtpModel : nil,
+                prefillHidden: mtpTemplate.active ? prefillResult.hidden : nil,
+                sharedKVStates: mtpTemplate.active ? mtpSharedKVStates : [:],
+                prefillTokenCount: promptTokens.count,
+                mtpStatsTemplate: mtpTemplate,
+                jsonConstrained: request.requiresJSON,
+                noRepeatNgramSize: request.noRepeatNgramSize,
+                progressHandler: decodeProgress
+            )
+        }
         lastMTPStats = decodeResult.mtpStats ?? mtpTemplate
         let generated = decodeResult.generatedTokens
         let decodedRaw = tokenizerAndTemplate.decode(tokens: generated)
-        let calls = hasTools ? try Gemma4ToolParser.validatedToolCalls(decodedRaw, tools: request.tools ?? [], parallel: request.parallelToolCalls) : []
-        let events = outputObserver.finish(decodedRaw, handler: progressHandler)
+        let calls = request.outputConstraint == nil && hasTools ? try Gemma4ToolParser.validatedToolCalls(decodedRaw, tools: request.tools ?? [], parallel: request.parallelToolCalls) : []
+        let events = request.outputConstraint != nil ? [] : outputObserver.finish(decodedRaw, handler: progressHandler)
         let decoded = Self.cleanedResponse(decodedRaw, showThinking: request.showThinking).trimmingCharacters(in: .whitespacesAndNewlines)
         let reasoning = events.compactMap { if case .reasoning(let text) = $0 { return text }; return nil }.joined()
 
@@ -259,6 +272,6 @@ extension Gemma4Generator {
             reasoningContent: reasoning.isEmpty ? nil : reasoning
         )
         response.generationEvents = events
-        return response
+        return try request.outputConstraint?.finish(response, raw: decodedRaw, tools: request.tools ?? []) ?? response
     }
 }

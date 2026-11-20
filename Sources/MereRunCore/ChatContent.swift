@@ -16,12 +16,15 @@ public struct ChatDocument: Codable, Hashable, Sendable {
     public let title: String?
     public let context: String?
     public let pages: [String]
+    /// Ordered, locally rendered page images; nil preserves older stored histories.
+    public let pageImages: [String]?
 
-    public init(identity: String, title: String? = nil, context: String? = nil, pages: [String]) {
+    public init(identity: String, title: String? = nil, context: String? = nil, pages: [String], pageImages: [String]? = nil) {
         self.identity = identity
         self.title = title
         self.context = context
         self.pages = pages
+        self.pageImages = pageImages
     }
 }
 

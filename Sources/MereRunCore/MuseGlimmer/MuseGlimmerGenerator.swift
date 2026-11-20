@@ -665,7 +665,13 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         )
         let imageReferences = request.messages.flatMap { message -> [String] in
             if let blocks = message.contentBlocks {
-                return blocks.compactMap { if case .image(let reference, _) = $0 { return reference }; return nil }
+                return blocks.flatMap { block -> [String] in
+                    switch block {
+                    case .image(let reference, _): return [reference]
+                    case .document(let document): return document.pageImages ?? []
+                    default: return []
+                    }
+                }
             }
             return message.imageUrl.map { [$0] } ?? []
         }
