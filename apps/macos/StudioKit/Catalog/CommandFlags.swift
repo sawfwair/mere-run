@@ -2081,6 +2081,7 @@ extension CommandFlags {
         package static let piPath = "--pi-path"
         package static let prompt = "--prompt"
         package static let model = "--model"
+        package static let lora = "--lora"
         package static let skipServer = "--skip-server"
         package static let allowUnsupported = "--allow-unsupported"
         package static let noBootstrap = "--no-bootstrap"

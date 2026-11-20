@@ -7,6 +7,35 @@ import MLXRandom
 @testable import MereRunQwenModel
 
 final class Q35ConfigDecodingTests: MereRunCoreTestCase {
+    func testQwenPEFTLoRAInstallsPublishedProjectionKeysAndScale() throws {
+        let model = Q35Model(config: try decodeConfig(makeTinyRuntimeConfig(layerTypes: ["full_attention"])))
+        let attention = model.model.layers[0].selfAttention
+        let projection = attention.qProj
+        let (outputs, inputs) = projection.shape
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let config = #"""
+        {"base_model_name_or_path":"Qwen/Qwen3.8-27B","peft_type":"LORA","r":2,
+         "lora_alpha":4,"bias":"none","fan_in_fan_out":false}
+        """#
+        try Data(config.utf8).write(to: root.appendingPathComponent("adapter_config.json"))
+        let url = root.appendingPathComponent("adapter_model.safetensors")
+        let prefix = "base_model.model.model.language_model.layers.0.self_attn.q_proj"
+        let down = MLXArray.ones([2, inputs])
+        let up = MLXArray.ones([outputs, 2])
+        try MLX.save(arrays: [prefix + ".lora_A.weight": down], url: url)
+        XCTAssertThrowsError(try Q35PEFTLoRA.apply(from: url, scale: 0.5, to: model))
+        XCTAssertTrue(attention.qProj === projection)
+
+        try MLX.save(arrays: [prefix + ".lora_A.weight": down, prefix + ".lora_B.weight": up], url: url)
+        try Q35PEFTLoRA.apply(from: url, scale: 0.5, to: model)
+        let input = MLXArray.ones([1, inputs])
+        let expected = projection(input) + Float(inputs * 2)
+        XCTAssertEqual(attention.qProj(input).asArray(Float.self), expected.asArray(Float.self))
+        XCTAssertFalse(attention.kProj is Q35LoRALinear)
+    }
+
     func testQwen4ExpFlashNextConfigDecodesPublishedArchitecture() throws {
         var object = makeBaseConfig()
         object["model_type"] = "qwen4_exp"
@@ -337,6 +366,20 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual(together.shape, separate.shape)
         let maxDiff = MLX.max(MLX.abs((together - separate).asType(.float32))).item(Float.self)
         XCTAssertLessThan(maxDiff, 1e-4)
+    }
+
+    func testQwenLoRAKeepsPackedBaseProjection() {
+        let base = PortableQuantizedLinear(
+            weight: MLXArray.ones([4, 32]), bias: nil, groupSize: 32, bits: 4, mode: .affine
+        )
+        let adapted = Q35LoRALinear(
+            base: base, down: MLXArray.ones([2, 32]), up: MLXArray.ones([4, 2]), scale: 0.5
+        )
+        let input = MLXArray.ones([1, 32])
+        let expected = base(input) + 32
+        XCTAssertTrue(adapted.weight === base.weight)
+        XCTAssertEqual(adapted.shape.1, 32)
+        XCTAssertEqual(adapted(input).asArray(Float.self), expected.asArray(Float.self))
     }
 
     #if os(macOS)

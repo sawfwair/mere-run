@@ -36,6 +36,8 @@ public actor Q35Generator: ChatGenerator {
     var mtpModel: (any Q35MTPDraftModel)?
     var dflash2Model: Q35DFlash2Model?
     var loadedModelPath: String?
+    var loadedLoRA: LoRA?
+    var activeModelUsers = 0
     var loadedConfig: Q35Config?
     var loadedGenerationEOSTokenIds: [Int] = []
     var loadedResources: Q35Resources?
@@ -58,6 +60,7 @@ public actor Q35Generator: ChatGenerator {
     let continuousBatchingEnabled: Bool
     let dflash2ModelPath: String?
     let dflash2Enabled: Bool
+    let defaultLoRA: LoRA?
     let visionMinPixels: Int
     let visionMaxPixels: Int
 
@@ -86,7 +89,8 @@ public actor Q35Generator: ChatGenerator {
         dflash2ModelPath: String? = ProcessInfo.processInfo.environment["MERERUN_Q35_DFLASH2_PATH"],
         dflash2Enabled: Bool = true,
         visionMinPixels: Int? = nil,
-        visionMaxPixels: Int? = nil
+        visionMaxPixels: Int? = nil,
+        defaultLoRA: LoRA? = nil
     ) {
         let visionPixelBounds = Q35Resources.visionPixelBounds(forModelId: modelId)
         self.modelId = modelId
@@ -94,6 +98,7 @@ public actor Q35Generator: ChatGenerator {
         self.continuousBatchingEnabled = continuousBatchingEnabled
         self.dflash2ModelPath = dflash2ModelPath
         self.dflash2Enabled = dflash2Enabled
+        self.defaultLoRA = defaultLoRA
         self.visionMinPixels = visionMinPixels ?? visionPixelBounds.minimum
         self.visionMaxPixels = visionMaxPixels ?? visionPixelBounds.maximum
     }
@@ -122,28 +127,7 @@ public actor Q35Generator: ChatGenerator {
         _ request: ChatRequest,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> ChatResponse {
-        activeChatRequestCount += 1
-        defer { activeChatRequestCount = max(0, activeChatRequestCount - 1) }
-        return try await withRequestStream {
-            let rootURL = try await resolveModelRoot(modelPath: nil, progressHandler: progressHandler)
-            let loadStart = Date()
-            try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
-            let loadSeconds = Date().timeIntervalSince(loadStart)
-
-            var response = try await generate(
-                request,
-                progressHandler: progressHandler,
-                maxContextLength: request.maxContextTokens
-                    ?? Q35Resources.defaultContextLength(forModelId: modelId)
-            )
-            if var timing = response.timing {
-                timing.loadSeconds = loadSeconds
-                response.timing = timing
-            } else {
-                response.timing = ChatTiming(loadSeconds: loadSeconds)
-            }
-            return response
-        }
+        try await chat(request, modelPath: nil, progressHandler: progressHandler)
     }
 
     public func chat(
@@ -156,9 +140,11 @@ public actor Q35Generator: ChatGenerator {
         return try await withRequestStream {
             let rootURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
             let loadStart = Date()
-            try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
+            try ensureLoaded(rootURL: rootURL, lora: request.lora ?? defaultLoRA, progressHandler: progressHandler)
             let loadSeconds = Date().timeIntervalSince(loadStart)
 
+            activeModelUsers += 1
+            defer { activeModelUsers -= 1 }
             var response = try await generate(
                 request,
                 progressHandler: progressHandler,
@@ -184,7 +170,7 @@ public actor Q35Generator: ChatGenerator {
                 modelPath: modelPath,
                 progressHandler: progressHandler
             )
-            try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
+            try ensureLoaded(rootURL: rootURL, lora: defaultLoRA, progressHandler: progressHandler)
         }
     }
 
@@ -197,6 +183,7 @@ public actor Q35Generator: ChatGenerator {
         mtpModel = nil
         dflash2Model = nil
         loadedModelPath = nil
+        loadedLoRA = nil
         loadedConfig = nil
         loadedGenerationEOSTokenIds = []
         loadedResources = nil

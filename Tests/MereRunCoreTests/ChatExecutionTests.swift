@@ -4,6 +4,24 @@ import XCTest
 @testable import MereRunCore
 
 final class ChatExecutionTests: XCTestCase {
+    func testQwenPiAdapterUsesItsPublishedSamplingDefaults() throws {
+        let spec = try XCTUnwrap(ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.qwen38PiID))
+        let request = ChatRequest(
+            messages: [.init(role: .user, content: "hello")],
+            lora: .local(path: spec.installedFileURL().path, scale: 1)
+        )
+        let defaults = try ChatRequestResolver.resolve(request, modelID: spec.baseModelID, sampling: .init(), policy: .openAI)
+        XCTAssertFalse(defaults.showThinking)
+        XCTAssertEqual(defaults.temperature, 0.8)
+        XCTAssertEqual(defaults.topP, 1)
+        XCTAssertNil(defaults.topK)
+        let overrides = try ChatRequestResolver.resolve(
+            request, modelID: spec.baseModelID, sampling: .init(temperature: 0, thinking: true), policy: .command
+        )
+        XCTAssertTrue(overrides.showThinking)
+        XCTAssertEqual(overrides.temperature, 0)
+    }
+
     func testTokenBudgetValidationMatchesShellContract() {
         for (tokens, context) in [(0, 128), (-1, 128), (129, 128), (128, 0), (128, -1), (128, 128), (1, 1)] {
             let issue = TextChatTokenBudget.issue(maxTokens: tokens, contextSize: context)
