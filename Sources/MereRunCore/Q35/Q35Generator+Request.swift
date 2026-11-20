@@ -210,14 +210,12 @@ extension Q35Generator {
                 layerCaches = prefix.caches
                 cacheReadTokens = prefix.tokenCount
             }
-            prefillOutput = try await QwenDFlashDefaults.$active.withValue(tunedDFlash) {
-                try await prefillDFlash2(
-                    model: model, draft: draft, draftCache: context,
-                    promptTokens: promptTokens, cache: layerCaches, chunkSize: cacheDFlash2 ? chunkSize : nil,
-                    startIndex: prefix?.tokenCount ?? 0, existingLogits: prefix?.logits, existingHidden: prefix?.hidden,
-                    modelPath: cacheDFlash2 ? loadedModelPath : nil, progressHandler: progressHandler
-                )
-            }
+            prefillOutput = try await prefillDFlash2(
+                model: model, draft: draft, draftCache: context,
+                promptTokens: promptTokens, cache: layerCaches, chunkSize: cacheDFlash2 ? chunkSize : nil,
+                startIndex: prefix?.tokenCount ?? 0, existingLogits: prefix?.logits, existingHidden: prefix?.hidden,
+                modelPath: cacheDFlash2 ? loadedModelPath : nil, tunedDFlash: tunedDFlash, progressHandler: progressHandler
+            )
             cacheCreationTokens = cacheDFlash2 ? promptTokens.count - cacheReadTokens : 0
         } else if imageURLs.isEmpty {
             let prefixSeed = retainMTPPromptHistory && !streamMTPHistory ? nil : prefixKVCacheSeed(

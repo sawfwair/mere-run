@@ -103,7 +103,7 @@ extension Q35Generator {
         promptTokens: [Int], cache: [Q35LayerCache?],
         chunkSize: Int? = nil, startIndex: Int = 0,
         existingLogits: MLXArray? = nil, existingHidden: MLXArray? = nil,
-        modelPath: String? = nil,
+        modelPath: String? = nil, tunedDFlash: Bool = QwenDFlashDefaults.active,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35PrefillOutput {
         let capture = Set(draft.config.dflash.targetLayerIDs)
@@ -117,35 +117,38 @@ extension Q35Generator {
             let next = chunkSize == nil ? processed + size : (processed / size + 1) * size
             let end = min(promptTokens.count, next)
             let tokens = MLXArray(promptTokens[processed..<end].map(Int32.init)).reshaped(1, end - processed)
-            // Scope the synchronous GPU work without transferring actor-owned
-            // draft state through an async task-local closure on Swift 6.1.
-            let output = QuantizedVerificationContext.$suppressM5.withValue(false) {
-                let output = model.forwardPrefill(
-                    tokens, cache: cache, captureLayerIndices: end > retainedStart ? capture : []
-                )
-                if end > retainedStart {
-                    let start = max(0, retainedStart - processed)
-                    draft.appendTargetContext(
-                        output.capturedHiddenStates.mapValues { $0[0..., start..., 0...] }, cache: draftCache
+            // Keep GPU work and cache snapshots under the same policy without
+            // sending mutable draft state through an asynchronous closure.
+            let output = QwenDFlashDefaults.$active.withValue(tunedDFlash) {
+                let output = QuantizedVerificationContext.$suppressM5.withValue(false) {
+                    let output = model.forwardPrefill(
+                        tokens, cache: cache, captureLayerIndices: end > retainedStart ? capture : []
+                    )
+                    if end > retainedStart {
+                        let start = max(0, retainedStart - processed)
+                        draft.appendTargetContext(
+                            output.capturedHiddenStates.mapValues { $0[0..., start..., 0...] }, cache: draftCache
+                        )
+                    }
+                    // Materialize the whole chunk in one submission. Individual draft
+                    // layers only build the graph; they do not synchronize separately.
+                    MLX.eval([output.logits] + draftCache.flatMap(\.state))
+                    return output
+                }
+                if let modelPath {
+                    let lastGrid = promptTokens.count / size * size
+                    storePrefixKVCache(
+                        modelPath: modelPath, promptTokens: promptTokens, tokenCount: end,
+                        cache: cache, logits: output.logits, hidden: output.hidden,
+                        dflash2Cache: draftCache, dflash2ChunkSize: size,
+                        priority: end == promptTokens.count || end == lastGrid ? .semantic : .chunk
                     )
                 }
-                // Materialize the whole chunk in one submission. Individual draft
-                // layers only build the graph; they do not synchronize separately.
-                MLX.eval([output.logits] + draftCache.flatMap(\.state))
                 return output
             }
             logits = output.logits
             hidden = output.hidden
             processed = end
-            if let modelPath {
-                let lastGrid = promptTokens.count / size * size
-                storePrefixKVCache(
-                    modelPath: modelPath, promptTokens: promptTokens, tokenCount: end,
-                    cache: cache, logits: output.logits, hidden: output.hidden,
-                    dflash2Cache: draftCache, dflash2ChunkSize: size,
-                    priority: end == promptTokens.count || end == lastGrid ? .semantic : .chunk
-                )
-            }
             progressHandler?(ChatProgress(stage: .encoding, message: "Prefilling \(end)/\(promptTokens.count) tokens"))
             clearMLXCacheUnderPressureIfNeeded()
             await Task.yield()

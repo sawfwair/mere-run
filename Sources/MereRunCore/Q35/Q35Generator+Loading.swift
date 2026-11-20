@@ -195,8 +195,8 @@ extension Q35Generator {
         let loadedDFlash2 = try loadDFlash2(configuration: dflash2, target: config, progressHandler: progressHandler)
         if let draft = loadedDFlash2, Self.dflash2CalibrationEnabled() {
             progressHandler?(ChatProgress(stage: .loadingModel, message: "Measuring Qwen DFlash 2 round costs"))
+            let caches = makeLayerCaches(config: config)
             try QuantizedVerificationContext.$suppressM5.withValue(false) {
-                let caches = makeLayerCaches(config: config)
                 let context = draft.makeCache()
                 let prompt = MLXArray([Int32](repeating: 0, count: 32)).reshaped(1, 32)
                 let output = q35Model.forwardPrefill(
