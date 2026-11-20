@@ -555,6 +555,7 @@ public actor MuseGlimmerGenerator: ChatGenerator {
             let (result, state) = try museGlimmerConstrainedDecode(request: request, initialLogits: initialLogits,
                 sampling: sampling, budget: tokenBudget, history: promptTokens,
                 decode: { tokenizerAndTemplate.decode(tokens: $0) },
+                tokenBytes: { tokenizerAndTemplate.bytes(token: $0) },
                 forward: { model(MLXArray([Int32($0)]).reshaped(1, 1), cache: cache) }, progress: progressHandler)
             var final = ChatResponse(response: state.text, tokensGenerated: result.tokens.count,
                 timing: ChatTiming(loadSeconds: 0, prefillSeconds: prefillSeconds, decodeSeconds: result.decodeSeconds,
@@ -671,7 +672,12 @@ public actor MuseGlimmerGenerator: ChatGenerator {
 
     private func preparedInput(_ request: ChatRequest) throws -> (ChatPreparedPrompt, MuseGlimmerImageBatch?) {
         guard let tokenizerAndTemplate, let loadedConfig else { throw MuseGlimmerError.modelNotLoaded }
-        if request.outputConstraint != nil { _ = try MuseGlimmerConstraint(request: request) }
+        if request.outputConstraint != nil {
+            guard tokenizerAndTemplate.constrainedBytes != nil else {
+                throw ChatRequestIssue("output_schema", "native Glimmer constraints require a ByteLevel or Fuse tokenizer decoder")
+            }
+            _ = try MuseGlimmerConstraint(request: request)
+        }
         let requestedContext = request.maxContextTokens ?? MuseGlimmerResources.defaultContextLength
         guard requestedContext > 0 else {
             throw MuseGlimmerError.generationFailed("maxContextTokens must be greater than zero.")

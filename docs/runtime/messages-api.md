@@ -129,8 +129,10 @@ in model discovery. Fixed-reasoning Qwen and Gemma adapters reject these options
 The adapter compiles the schema into a grammar and checks candidate tokens before
 committing them. Final-target decoding retains the request's sampling controls;
 MTP, DFlash, and continuous batching do not run for constrained responses.
-Generation fails explicitly if its output budget ends before completion or if
-256 candidate rejections cannot find an admissible next token. The server never
+Generation fails explicitly if its output budget ends before completion or no
+admissible token exists. After 256 rejected candidate draws, native Glimmer
+builds an exact admissible-token mask and applies the same sampling controls.
+Qwen and Gemma return an explicit error after 256 rejected candidates. The server never
 returns a malformed executable tool as a successful response. These bounds do
 not guarantee task accuracy or a particular decode rate.
 
@@ -171,17 +173,19 @@ control characters. Native recipient names `self` and `user`, names containing
 `<|`, and names containing line breaks fail during preparation with a rename
 instruction. These restrictions don't apply to JSON-schema final answers.
 
-The final-target Glimmer decoder advances grammar state only for the committed
-text suffix. Rejected candidates cannot publish reasoning, text, or executable
-calls. An incomplete native turn fails even if an inner JSON value completed.
+The final-target Glimmer decoder advances grammar state with exact tokenizer
+bytes. It retains unfinished UTF-8 scalars and rejects invalid sequences or
+partial scalars that cannot match a reachable grammar symbol. Rejected
+candidates cannot publish reasoning, text, or executable calls. An incomplete native turn fails even if an inner JSON value completed.
 DFlash is disabled for constrained requests until speculative matcher rollback
-is qualified. Synthetic model and SDK tests cover this path; full Glimmer
-Q8 checkpoint quality and throughput remain unqualified for constrained output.
+is qualified. The [Glimmer Q8 qualification record](../benchmarks/glimmer-constrained-messages-2026-11-20.md)
+reports checkpoint outcomes, failures, and per-phase timing alongside synthetic
+model and SDK coverage. This evidence covers the recorded requests and artifact.
 
 The additional schema instructions enter shared prompt preparation, so token
-counts include them. Changing a schema changes the prepared prefix. Existing
-checkpoint and desktop qualification reports do not qualify these added paths;
-installed-model task quality and throughput require separate evidence.
+counts include them. Changing a schema changes the prepared prefix. Earlier
+desktop reports cover ordinary inference. Constrained-output qualification does
+not qualify untested adapters or every combination of options.
 
 Thinking progress updates (`display: "updates"`) are unsupported. Claude Code
 2.1.316 retries without that display option; native thinking remains available.

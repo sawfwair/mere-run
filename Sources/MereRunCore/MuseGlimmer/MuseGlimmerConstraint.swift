@@ -12,6 +12,8 @@ struct MuseGlimmerConstraint {
     var grammar: ChatSchemaGrammar
     let kinds: [Int: CaptureKind]
     let answerSchema: [String: ChatJSONValue]?
+    private var pendingUTF8: [UInt8] = []
+    var isComplete: Bool { grammar.isComplete && pendingUTF8.isEmpty }
     private var raw: [Unicode.Scalar] = []
     private var body: (reasoning: Bool, offset: Int)?
     private var arguments: [String: ChatJSONValue] = [:]
@@ -64,6 +66,13 @@ struct MuseGlimmerConstraint {
         kinds = builder.kinds
     }
 
+    mutating func acceptBytes(_ bytes: [UInt8]) throws -> Bool {
+        guard !bytes.isEmpty, let split = ChatUTF8Prefix.split(pendingUTF8 + bytes),
+              try accept(split.text), split.pending.isEmpty || grammar.acceptsUTF8Prefix(split.pending) else { return false }
+        pendingUTF8 = split.pending
+        return true
+    }
+
     mutating func accept(_ delta: String) throws -> Bool {
         guard grammar.accept(delta) else { return false }
         raw.append(contentsOf: delta.unicodeScalars)
@@ -84,7 +93,7 @@ struct MuseGlimmerConstraint {
                 case .parameter(let name, let string):
                     let source = value(capture.start..<capture.end)
                     let open = "<atem:parameter name=\"" + Self.escape(name) + "\">"
-                    let inner = String(source.dropFirst(open.count).dropLast("</atem:parameter>".count))
+                    let inner = String(String.UnicodeScalarView(source.unicodeScalars.dropFirst(open.unicodeScalars.count).dropLast("</atem:parameter>".unicodeScalars.count)))
                     guard arguments[name] == nil else { throw ChatRequestIssue("output_schema.generation", "duplicate constrained parameter") }
                     arguments[name] = string ? .string(Self.unescape(inner)) : try JSONDecoder().decode(ChatJSONValue.self, from: Data(inner.utf8))
                 case .call(let tool):
@@ -240,6 +249,7 @@ private extension MuseGlimmerConstraint {
 func museGlimmerConstrainedDecode(
     request: ChatRequest, initialLogits: MLXArray, sampling: GenerationConfig,
     budget: Int, history: [Int], decode: ([Int]) -> String,
+    tokenBytes: ((Int) -> [UInt8])? = nil,
     forward: (Int) throws -> MLXArray, progress: (@Sendable (ChatProgress) -> Void)?
 ) throws -> (ChatSchemaDecodeResult, MuseGlimmerConstraint) {
     let started = Date()
@@ -254,6 +264,12 @@ func museGlimmerConstrainedDecode(
             try Task.checkCancellation()
             let token = sampleToken(logits: logits[0, -1, 0...], config: config, previousTokens: history + tokens)
             guard !config.bannedTokens.contains(token) else { break }
+            if let tokenBytes {
+                var probe = state
+                if try probe.acceptBytes(tokenBytes(token)) { accepted = (token, "", probe); break }
+                config.bannedTokens.append(token)
+                continue
+            }
             var text = decode(tokens + [token])
             let partial = text.last == "\u{FFFD}"
             while text.last == "\u{FFFD}" { text.removeLast() }
@@ -264,11 +280,39 @@ func museGlimmerConstrainedDecode(
             }
             config.bannedTokens.append(token)
         }
-        guard let (token, text, next) = accepted else { throw ChatRequestIssue("output_schema.generation", "no admissible native token within the constrained sampling limit") }
+        if accepted == nil, let tokenBytes {
+            // Rare schema literals can lie outside the model's first candidate
+            // draws. Build the exact admissible mask before applying the same
+            // sampling controls; never fall back to greedy or weaken the grammar.
+            var firstBytes = Array(repeating: false, count: 256)
+            for byte in 0..<256 {
+                var probe = state
+                firstBytes[byte] = (try? probe.acceptBytes([UInt8(byte)])) == true
+            }
+            let vocabulary = logits.shape.last!
+            var mask = Array(repeating: false, count: vocabulary)
+            let banned = Set(sampling.bannedTokens)
+            for id in 0..<vocabulary where !banned.contains(id) {
+                if id % 256 == 0 { try Task.checkCancellation() }
+                let bytes = tokenBytes(id)
+                guard let first = bytes.first, firstBytes[Int(first)] else { continue }
+                var probe = state
+                mask[id] = (try? probe.acceptBytes(bytes)) == true
+            }
+            if mask.contains(true) {
+                let filtered = MLX.where(MLXArray(mask), logits[0, -1, 0...], MLXArray(-Float.infinity))
+                let token = sampleToken(logits: filtered, config: sampling, previousTokens: history + tokens)
+                if mask.indices.contains(token), mask[token] {
+                    var probe = state
+                    if try probe.acceptBytes(tokenBytes(token)) { accepted = (token, "", probe) }
+                }
+            }
+        }
+        guard let (token, text, next) = accepted else { throw ChatRequestIssue("output_schema.generation", "no admissible native token for the requested schema and tokenizer") }
         for event in next.events.dropFirst(state.events.count) { progress?(.init(stage: .generating, event: event)) }
         state = next; committed = text; tokens.append(token)
         if first == nil { first = Date().timeIntervalSince(started) }
-        if state.grammar.isComplete { return (.init(tokens: tokens, decodeSeconds: Date().timeIntervalSince(started), firstTokenSeconds: first), state) }
+        if state.isComplete { return (.init(tokens: tokens, decodeSeconds: Date().timeIntervalSince(started), firstTokenSeconds: first), state) }
         logits = try forward(token); MLX.eval(logits)
     }
     throw ChatRequestIssue("output_schema.generation", "output budget ended before the native constrained turn completed; increase max_tokens")

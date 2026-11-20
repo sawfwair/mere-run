@@ -3,6 +3,10 @@
 This record separates transport evidence from model task outcomes. A successful
 connection preview or a model's own success statement does not qualify a model.
 
+The [November 20 constrained-output follow-up](../benchmarks/glimmer-constrained-messages-2026-11-20.md)
+records native Glimmer Q8 schemas, strict tools, documents, cache boundaries,
+and retained failures. Its fresh desktop attempt remains blocked by a locked Mac.
+
 The [November 9 unlocked qualification](../benchmarks/messages-release-qualification-2026-11-09.md)
 passes the full repository gate and all six fresh desktop cases on established
 Glimmer Q8 at high effort. It closes the latest baseline gate and desktop gaps.

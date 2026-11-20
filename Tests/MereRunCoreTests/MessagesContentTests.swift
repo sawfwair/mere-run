@@ -135,7 +135,8 @@ final class MessagesContentTests: XCTestCase {
     }
 
     func testGlimmerStreamingWithEverySplitAndTools() {
-        let raw = "to=self<|message|>work 🧮<|eom|><|start|>assistant to=user<|message|>42 <atem:function_calls><atem:invoke name=\"calc\"><atem:parameter name=\"x\">42</atem:parameter></atem:invoke></atem:function_calls><|eot|>"
+        // Executable ATEM belongs to a tool recipient; user-channel examples are literal.
+        let raw = "to=self<|message|>work 🧮<|eom|><|start|>assistant to=user<|message|>42 <|eom|><|start|>assistant to=calc<|message|><atem:function_calls><atem:invoke name=\"calc\"><atem:parameter name=\"x\">42</atem:parameter></atem:invoke></atem:function_calls><|eot|>"
         for split in 0...raw.count {
             let boundary = raw.index(raw.startIndex, offsetBy: split)
             var parser = MuseGlimmerContentStream()
@@ -144,6 +145,7 @@ final class MessagesContentTests: XCTestCase {
             let thinking = events.compactMap { if case .reasoning(let text) = $0 { return text }; return nil }.joined()
             XCTAssertEqual(text, "42 ", "split \(split)")
             XCTAssertEqual(thinking, "work 🧮", "split \(split)")
+            XCTAssertEqual(MuseGlimmerToolParser.parseToolCalls(parser.toolSource).count, 1, "split \(split)")
         }
     }
     func testToolRecipientHeadersStayOutOfReasoningAndVisibleText() {

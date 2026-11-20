@@ -11,7 +11,10 @@ The format is based on Keep a Changelog.
   channel-aware constrained JSON and ATEM tools while preserving adaptive
   reasoning. Publish the supported schema subset and reject unsupported
   combinations before generation. Constrained requests use final-target decoding;
-  Glimmer Q8 checkpoint quality and performance need separate qualification.
+  [Glimmer Q8 qualification](docs/benchmarks/glimmer-constrained-messages-2026-11-20.md)
+  records known-answer and throughput checks, retained tool-string failures, and
+  the blocked fresh desktop trials. Preserve literal ATEM examples in user
+  answers and exact incremental UTF-8 during native constrained sampling.
 - Render PDF pages, including image-only scans, for the native Glimmer Messages
   adapter on macOS. Preserve page order, document metadata, and image token
   counting with explicit rendering limits.

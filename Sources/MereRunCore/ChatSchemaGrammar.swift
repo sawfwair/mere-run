@@ -29,6 +29,12 @@ public struct ChatSchemaGrammar: Sendable {
     private var captures: [Capture] = []
     private var chart: [Set<Item>]
     private var states = 1
+    var nextTerminals: [Symbol] {
+        chart.last!.compactMap { item in
+            let rhs = productions[item.production].rhs
+            return item.dot < rhs.count ? rhs[item.dot] : nil
+        }
+    }
     public var isComplete: Bool { chart.last!.contains(Item(production: 0, dot: productions[0].rhs.count, origin: 0)) }
 
     public static let schemaKeywords: Set<String> = [

@@ -3,6 +3,7 @@ import Foundation
 @preconcurrency import Tokenizers
 
 public final class MuseGlimmerTokenizerAndTemplate: @unchecked Sendable {
+    let constrainedBytes: MuseGlimmerTokenBytes?
     public let tokenizer: any Tokenizer
     public let maxLength: Int
     public let eosTokenIds: [Int]
@@ -12,6 +13,7 @@ public final class MuseGlimmerTokenizerAndTemplate: @unchecked Sendable {
 
     private init(
         tokenizer: any Tokenizer,
+        constrainedBytes: MuseGlimmerTokenBytes?,
         maxLength: Int,
         eosTokenIds: [Int],
         imageTokenId: Int,
@@ -19,6 +21,7 @@ public final class MuseGlimmerTokenizerAndTemplate: @unchecked Sendable {
         imageEndTokenId: Int
     ) {
         self.tokenizer = tokenizer
+        self.constrainedBytes = constrainedBytes
         self.maxLength = maxLength
         self.eosTokenIds = eosTokenIds
         self.imageTokenId = imageTokenId
@@ -44,6 +47,7 @@ public final class MuseGlimmerTokenizerAndTemplate: @unchecked Sendable {
         let stopIds = Array(Set(generationConfig.eosTokenIds + [tokenizer.eosTokenId].compactMap { $0 })).sorted()
         return MuseGlimmerTokenizerAndTemplate(
             tokenizer: tokenizer,
+            constrainedBytes: try MuseGlimmerTokenBytes(data: Data(contentsOf: rootURL.appendingPathComponent("tokenizer.json"))),
             maxLength: maxLengthOverride ?? configuredMaxLength,
             eosTokenIds: stopIds,
             imageTokenId: imageTokenId,
@@ -84,6 +88,8 @@ public final class MuseGlimmerTokenizerAndTemplate: @unchecked Sendable {
     public func decode(tokens: [Int]) -> String {
         tokenizer.decode(tokens: tokens)
     }
+
+    func bytes(token: Int) -> [UInt8] { constrainedBytes?.bytes(id: token, spelling: tokenizer.convertIdToToken(token)) ?? [] }
 
     public func decode(token: Int) -> String {
         tokenizer.decode(tokens: [token])
