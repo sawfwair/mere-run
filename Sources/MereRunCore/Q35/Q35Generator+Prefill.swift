@@ -283,16 +283,15 @@ extension Q35Generator {
         hidden: MLXArray,
         mtpSession: Q35MTPDraftSession? = nil,
         dflash2Cache: [Q35DFlash2Cache]? = nil,
-        dflash2ChunkSize: Int? = nil,
+        dflash2ChunkSize: Int? = nil, tunedDFlash: Bool = QwenDFlashDefaults.active,
         priority: RuntimePrefixCacheEntryPriority
     ) {
         guard prefixKVCacheEnabled, tokenCount > 0 else { return }
-        let key = Q35PrefixKVCacheKey(
-            modelPath: modelPath,
-            cacheMode: cacheMode(for: cache),
-            tokens: Array(promptTokens.prefix(tokenCount)),
-            dflash2ChunkSize: dflash2ChunkSize
-        )
+        let mode = cacheMode(for: cache)
+        let key = QwenDFlashDefaults.$active.withValue(tunedDFlash) {
+            Q35PrefixKVCacheKey(modelPath: modelPath, cacheMode: mode,
+                                tokens: Array(promptTokens.prefix(tokenCount)), dflash2ChunkSize: dflash2ChunkSize)
+        }
         prefixKVCache[key] = Q35PrefixKVCacheEntry(
             caches: forkLayerCaches(cache),
             logits: logits,

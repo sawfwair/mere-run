@@ -120,7 +120,7 @@ extension Q35Generator {
             // Keep GPU work and cache snapshots under the same policy without
             // sending mutable draft state through an asynchronous closure.
             let output = QwenDFlashDefaults.$active.withValue(tunedDFlash) {
-                let output = QuantizedVerificationContext.$suppressM5.withValue(false) {
+                QuantizedVerificationContext.$suppressM5.withValue(false) {
                     let output = model.forwardPrefill(
                         tokens, cache: cache, captureLayerIndices: end > retainedStart ? capture : []
                     )
@@ -135,20 +135,19 @@ extension Q35Generator {
                     MLX.eval([output.logits] + draftCache.flatMap(\.state))
                     return output
                 }
-                if let modelPath {
-                    let lastGrid = promptTokens.count / size * size
-                    storePrefixKVCache(
-                        modelPath: modelPath, promptTokens: promptTokens, tokenCount: end,
-                        cache: cache, logits: output.logits, hidden: output.hidden,
-                        dflash2Cache: draftCache, dflash2ChunkSize: size,
-                        priority: end == promptTokens.count || end == lastGrid ? .semantic : .chunk
-                    )
-                }
-                return output
             }
             logits = output.logits
             hidden = output.hidden
             processed = end
+            if let modelPath {
+                let lastGrid = promptTokens.count / size * size
+                storePrefixKVCache(
+                    modelPath: modelPath, promptTokens: promptTokens, tokenCount: end,
+                    cache: cache, logits: output.logits, hidden: output.hidden,
+                    dflash2Cache: draftCache, dflash2ChunkSize: size, tunedDFlash: tunedDFlash,
+                    priority: end == promptTokens.count || end == lastGrid ? .semantic : .chunk
+                )
+            }
             progressHandler?(ChatProgress(stage: .encoding, message: "Prefilling \(end)/\(promptTokens.count) tokens"))
             clearMLXCacheUnderPressureIfNeeded()
             await Task.yield()
