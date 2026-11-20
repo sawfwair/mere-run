@@ -711,7 +711,7 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         formatter.dateFormat = "yyyy-MM-dd"
         var promptTokens = try tokenizerAndTemplate.encodeForGeneration(
             messages: MuseGlimmerTokenizerAndTemplate.requestMessages(request),
-            tools: request.tools,
+            tools: NativeChatToolPolicy.templateTools(request),
             reasoningStrength: Self.reasoningStrength(request.reasoningEffort),
             currentDate: formatter.string(from: Date()),
             maxLength: effectiveContext,

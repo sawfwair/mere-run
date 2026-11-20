@@ -1,22 +1,22 @@
 import Foundation
 import MLX
 
-/// Native recipient/ATEM grammar. Schema matching starts inside a completed
-/// channel header, never at the reasoning-to-header boundary. Captured grammar
-/// spans, rather than regexes over generated text, delimit tool arguments.
+/// Native reasoning channels with a schema-constrained JSON answer. Strict tools
+/// use the same typed JSON envelope as other adapters, avoiding a second escaping
+/// language inside JSON strings. Executable calls require a complete native turn.
 struct MuseGlimmerConstraint {
     enum CaptureKind {
         case reasoning, answer, endReasoning, endAnswer
-        case parameter(String, Bool), call(ToolDefinition)
     }
     var grammar: ChatSchemaGrammar
     let kinds: [Int: CaptureKind]
-    let answerSchema: [String: ChatJSONValue]?
+    private let constraint: ChatOutputConstraint
+    private let tools: [ToolDefinition]
     private var pendingUTF8: [UInt8] = []
     var isComplete: Bool { grammar.isComplete && pendingUTF8.isEmpty }
     private var raw: [Unicode.Scalar] = []
     private var body: (reasoning: Bool, offset: Int)?
-    private var arguments: [String: ChatJSONValue] = [:]
+    private var rawAnswer = ""
     private(set) var text = ""
     private(set) var reasoning = ""
     private(set) var reasoningBlocks = 0
@@ -26,42 +26,30 @@ struct MuseGlimmerConstraint {
     init(request: ChatRequest) throws {
         guard let constraint = request.outputConstraint else { throw ChatRequestIssue("output_schema", "missing constraint") }
         guard request.stopSequences.isEmpty else { throw ChatRequestIssue("stop_sequences", "native constrained output does not support stop sequences") }
-        answerSchema = constraint.mode == .json ? constraint.schema : nil
+        self.constraint = constraint
+        tools = request.tools ?? []
         var builder = Builder(compiler: .init(root: constraint.schema))
         let reasoningHeader = builder.capture(.reasoning, builder.header("self"))
         let answerHeader = builder.capture(.answer, builder.header("user"))
         let endReasoning = builder.capture(.endReasoning, builder.literal("<|eom|>"))
         let endAnswer = builder.capture(.endAnswer, builder.literal("<|eot|>"))
         let thinking = builder.until("<|eom|>")
-        let answer = constraint.mode == .json ? try builder.compiler.schema(constraint.schema) : builder.until("<|eot|>")
-        var packets: [Int] = []
+        let answer = try builder.compiler.schema(constraint.schema)
         if constraint.mode == .tools {
-            for tool in request.tools ?? [] {
+            for tool in tools {
                 if case .function(let name) = request.toolChoice, tool.name != name { continue }
-                packets.append(try builder.packet(tool))
-            }
-            guard !packets.isEmpty else { throw ChatRequestIssue("tools", "strict generation requires an active tool") }
-        }
-        let limit = constraint.mode == .tools ? (request.parallelToolCalls ? 16 : 1) : 0
-        let states = (0...limit).map { _ in builder.reserve() }
-        for count in 0...limit {
-            let state = states[count]
-            builder.add(state, [.rule(reasoningHeader), .rule(thinking), .rule(endReasoning)]
-                + builder.literal("<|start|>assistant") + [.rule(state)])
-            if constraint.mode == .json || request.toolChoice == .auto || count > 0 {
-                builder.add(state, [.rule(answerHeader), .rule(answer), .rule(endAnswer)])
-            }
-            if count < limit {
-                for packet in packets {
-                    // One invocation per native packet; parallel requests can emit
-                    // up to sixteen packets, preserving each recipient/name pair.
-                    builder.add(state, [.rule(packet)] + builder.literal("<|eot|>"))
-                    builder.add(state, [.rule(packet)] + builder.literal("<|eom|><|start|>assistant") + [.rule(states[count + 1])])
+                let object = try builder.resolve(tool.parametersJSONSchema, root: tool.parametersJSONSchema)
+                guard object["type"] == .string("object"), object["additionalProperties"] == .bool(false), object["anyOf"] == nil else {
+                    throw ChatRequestIssue("tools.strict", "Glimmer strict tools require a closed object parameter schema")
                 }
             }
         }
+        let state = builder.reserve()
+        builder.add(state, [.rule(reasoningHeader), .rule(thinking), .rule(endReasoning)]
+            + builder.literal("<|start|>assistant") + [.rule(state)])
+        builder.add(state, [.rule(answerHeader), .rule(answer), .rule(endAnswer)])
         let prefix = builder.compiler.rule([[], builder.literal("<|start|>assistant")])
-        builder.compiler.productions[0] = .init(lhs: 0, rhs: [.rule(prefix), .rule(states[0])])
+        builder.compiler.productions[0] = .init(lhs: 0, rhs: [.rule(prefix), .rule(state)])
         grammar = try ChatSchemaGrammar(compiler: builder.compiler, labels: builder.labels)
         kinds = builder.kinds
     }
@@ -86,20 +74,8 @@ struct MuseGlimmerConstraint {
                     emit(until: capture.start); body = nil
                 case .endAnswer:
                     emit(until: capture.start); body = nil
-                    if let answerSchema {
-                        let value = try JSONDecoder().decode(ChatJSONValue.self, from: Data(text.utf8))
-                        try ChatToolValidation.validate(value, schema: answerSchema)
-                    }
-                case .parameter(let name, let string):
-                    let source = value(capture.start..<capture.end)
-                    let open = "<atem:parameter name=\"" + Self.escape(name) + "\">"
-                    let inner = String(String.UnicodeScalarView(source.unicodeScalars.dropFirst(open.unicodeScalars.count).dropLast("</atem:parameter>".unicodeScalars.count)))
-                    guard arguments[name] == nil else { throw ChatRequestIssue("output_schema.generation", "duplicate constrained parameter") }
-                    arguments[name] = string ? .string(Self.unescape(inner)) : try JSONDecoder().decode(ChatJSONValue.self, from: Data(inner.utf8))
-                case .call(let tool):
-                    try ChatToolValidation.validate(.object(arguments), schema: tool.parametersJSONSchema)
-                    calls.append(.init(name: tool.name, jsonArguments: arguments))
-                    arguments = [:]
+                    let final = try constraint.finish(ChatResponse(response: "", tokensGenerated: 0), raw: rawAnswer, tools: tools)
+                    calls = final.toolCalls ?? []
                 }
             }
         } catch {
@@ -119,19 +95,19 @@ struct MuseGlimmerConstraint {
     private mutating func emit(until end: Int) {
         guard let current = body, end > current.offset else { return }
         let delta = value(current.offset..<end)
-        if current.reasoning { reasoning += delta; events.append(.reasoning(delta)) }
-        else { text += delta; events.append(.text(delta)) }
+        if current.reasoning {
+            reasoning += delta; events.append(.reasoning(delta))
+        } else {
+            rawAnswer += delta
+            let visible = constraint.mode == .json ? rawAnswer : constraint.visiblePrefix(rawAnswer)
+            let addition = String(decoding: visible.utf8.dropFirst(text.utf8.count), as: UTF8.self)
+            if !addition.isEmpty { events.append(.text(addition)) }
+            text = visible
+        }
         body = (current.reasoning, end)
     }
     private func value(_ range: Range<Int>) -> String { String(String.UnicodeScalarView(raw[range])) }
-    static func escape(_ text: String) -> String {
-        text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;").replacingOccurrences(of: "'", with: "&#39;")
-    }
-    private static func unescape(_ text: String) -> String {
-        text.replacingOccurrences(of: "&lt;", with: "<").replacingOccurrences(of: "&gt;", with: ">")
-            .replacingOccurrences(of: "&quot;", with: "\"").replacingOccurrences(of: "&#39;", with: "'").replacingOccurrences(of: "&amp;", with: "&")
-    }
+
 }
 
 private extension MuseGlimmerConstraint {
@@ -177,49 +153,6 @@ private extension MuseGlimmerConstraint {
             }
             return compiler.rule(states.map { [.rule($0)] })
         }
-        mutating func packet(_ tool: ToolDefinition) throws -> Int {
-            guard tool.name != "self", tool.name != "user", !tool.name.contains("<|"), !tool.name.contains("\n"), !tool.name.contains("\r") else {
-                throw ChatRequestIssue("tools.strict", "Glimmer native recipient name is reserved or contains a channel delimiter; rename tool '\(tool.name)'")
-            }
-            let root = tool.parametersJSONSchema
-            try ChatToolValidation.validateSchema(root)
-            _ = try ChatSchemaGrammar(schema: root)
-            compiler.root = root
-            let object = try resolve(root, root: root)
-            guard object["type"] == .string("object"), object["additionalProperties"] == .bool(false), object["anyOf"] == nil else {
-                throw ChatRequestIssue("tools.strict", "Glimmer strict tools require a closed object parameter schema")
-            }
-            let properties = object["properties"]?.objectValue ?? [:]
-            let required = Set(object["required"]?.arrayValue?.compactMap(\.stringValue) ?? [])
-            let space = reserve(); add(space, [])
-            for char in " \n\r\t".unicodeScalars { add(space, [.rule(space), .character(char)]) }
-            var tail = compiler.rule([[.rule(space)]])
-            for name in properties.keys.sorted().reversed() {
-                let schema = try resolve(properties[name]!.objectValue!, root: root)
-                let rawString = try isString(schema)
-                let argument: Int
-                if rawString {
-                    if let values = schema["enum"]?.arrayValue ?? schema["const"].map({ [$0] }) {
-                        guard values.allSatisfy({ value in value.stringValue!.unicodeScalars.allSatisfy {
-                            $0.value >= 32 || $0 == "\n" || $0 == "\r" || $0 == "\t"
-                        } }) else { throw ChatRequestIssue("tools.strict", "Glimmer raw string constants cannot contain XML control characters") }
-                        argument = compiler.rule(values.map { literal(MuseGlimmerConstraint.escape($0.stringValue!)) })
-                    } else {
-                        let string = reserve(); add(string, [])
-                        add(string, [.rule(string), .xmlCharacter])
-                        for entity in ["&amp;", "&lt;", "&gt;", "&quot;", "&#39;"] { add(string, [.rule(string)] + literal(entity)) }
-                        argument = string
-                    }
-                } else { argument = try compiler.schema(schema) }
-                let parameter = capture(.parameter(name, rawString), literal("<atem:parameter name=\"" + MuseGlimmerConstraint.escape(name) + "\">")
-                    + [.rule(argument)] + literal("</atem:parameter>"))
-                let field: [ChatSchemaGrammar.Symbol] = [.rule(space), .rule(parameter), .rule(tail)]
-                tail = compiler.rule(required.contains(name) ? [field] : [field, [.rule(tail)]])
-            }
-            let invocation = capture(.call(tool), literal("<atem:invoke name=\"" + MuseGlimmerConstraint.escape(tool.name) + "\">")
-                + [.rule(tail)] + literal("</atem:invoke>"))
-            return compiler.rule([header(tool.name) + [.rule(space)] + literal("<atem:function_calls>") + [.rule(space), .rule(invocation), .rule(space)] + literal("</atem:function_calls>") + [.rule(space)]])
-        }
         func resolve(_ schema: [String: ChatJSONValue], root: [String: ChatJSONValue], depth: Int = 0) throws -> [String: ChatJSONValue] {
             guard depth < 32 else { throw ChatRequestIssue("tools.strict", "schema reference nesting exceeds the native limit") }
             guard let ref = schema["$ref"]?.stringValue else { return schema }
@@ -230,17 +163,7 @@ private extension MuseGlimmerConstraint {
             guard let target = value.objectValue else { throw ChatRequestIssue("tools.strict", "invalid local schema reference") }
             return try resolve(target, root: root, depth: depth + 1)
         }
-        func isString(_ schema: [String: ChatJSONValue]) throws -> Bool {
-            if schema["anyOf"] != nil || schema["type"]?.arrayValue != nil {
-                throw ChatRequestIssue("tools.strict", "Glimmer top-level parameters require one unambiguous type; move unions inside an object or array")
-            }
-            if schema["type"] == .string("string") { return true }
-            if let values = schema["enum"]?.arrayValue ?? schema["const"].map({ [$0] }) {
-                if values.allSatisfy({ $0.stringValue != nil }) { return true }
-                if values.contains(where: { $0.stringValue != nil }) { throw ChatRequestIssue("tools.strict", "Glimmer parameter enums cannot mix raw strings and JSON types") }
-            }
-            return false
-        }
+
     }
 }
 

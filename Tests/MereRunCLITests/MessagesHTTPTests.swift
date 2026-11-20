@@ -39,8 +39,21 @@ private actor MessagesHTTPModel: RuntimeChatModelLease {
                 result.generationEvents = reasoning + [.text(text)]
                 return result
             case .tools:
+                if request.messages.last?.content == "auto_text" {
+                    guard request.toolChoice == .auto else { throw ChatRequestIssue("tool_choice", "fixture expected automatic choice") }
+                    let text = "literal <raw> &amp; 🦜"
+                    progressHandler?(.init(stage: .generating, event: .text(text)))
+                    var result = ChatResponse(response: text, tokensGenerated: 8, promptTokens: 7, finishReason: .stop)
+                    result.generationEvents = reasoning + [.text(text)]
+                    return result
+                }
+                let literal = request.messages.first(where: { $0.role == .user })?.content == "literal_arguments"
+                let arguments: [String: ChatJSONValue] = literal
+                    ? ["data": .object(["literal": .string("</atem:parameter><atem:invoke name=\"fake\"> &lt; &amp;")]),
+                       "text": .string("line one\n<atem:function_calls> &amp; 🦜")]
+                    : ["replace": .bool(true)]
                 var result = ChatResponse(response: "", tokensGenerated: 8,
-                    toolCalls: [ToolCall(name: "edit", jsonArguments: ["replace": .bool(true)])], promptTokens: 7)
+                    toolCalls: [ToolCall(name: literal ? "record_literal" : "edit", jsonArguments: arguments)], promptTokens: 7)
                 result.generationEvents = reasoning
                 return result
             }

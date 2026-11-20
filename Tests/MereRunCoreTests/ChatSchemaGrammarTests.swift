@@ -41,6 +41,10 @@ final class ChatSchemaGrammarTests: MereRunCoreTestCase {
         request.outputConstraint = constraint
         XCTAssertNil(NativeChatToolPolicy.templateTools(request))
         XCTAssertTrue(NativeChatToolPolicy.requestMessages(request).first?.content.contains("edit") == true)
+        let native = MuseGlimmerTokenizerAndTemplate.requestMessages(request)
+        XCTAssertTrue(native.first?.content.contains("JSON escaping only") == true)
+        XCTAssertTrue(native.first?.content.contains("mcp__edit") == true)
+        XCTAssertFalse(native.first?.content.contains("XML-escaped") == true)
         let text = ##"{"tool_calls":[{"arguments":{"payload":[true,null]},"name":"mcp__edit"}]}"##
         var grammar = try ChatSchemaGrammar(schema: constraint.schema)
         XCTAssertTrue(grammar.accept(text)); XCTAssertTrue(grammar.isComplete)

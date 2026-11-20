@@ -158,20 +158,24 @@ envelope or tool arguments. JSON-schema text streams without interpreting text
 inside JSON strings as reasoning or tool markup.
 
 Glimmer constrains native channel headers separately from their bodies. Its
-`to=self` reasoning streams separately; its `to=user` final answer follows the
-requested schema. Strict tools keep ATEM packets, with one invocation per packet
-and up to 16 packets when parallel calls are enabled. Parameters appear in
-alphabetical order. String parameters use XML-escaped text; other parameter
-values use compact JSON. Nested JSON strings can contain protocol-looking text
-without creating a call or changing channels.
+`to=self` reasoning streams separately; its `to=user` answer follows the requested
+schema. Strict tools use an internal JSON envelope with typed arguments and up to
+16 calls when parallel calls are enabled. Object keys appear in alphabetical
+order. The adapter validates the complete native turn before publishing calls;
+the internal envelope never appears as visible text. Automatic text answers
+stream from the envelope's text branch. The adapter explains that the `text`
+branch is a user-facing answer and `tool_calls` requests client execution.
 
-Native strict tools require a closed object parameter schema. Each top-level
-parameter must have one unambiguous encoding: raw string or JSON value.
-Top-level parameter unions and `anyOf` fail explicitly; move those alternatives
-inside an object or array. String enums and constants cannot contain XML
-control characters. Native recipient names `self` and `user`, names containing
-`<|`, and names containing line breaks fail during preparation with a rename
-instruction. These restrictions don't apply to JSON-schema final answers.
+Strict tool arguments use JSON escaping throughout. Literal tags, entity text
+such as `&amp;`, Unicode, and quoted strings retain their values. The server does
+not HTML-decode arguments. Ordinary requests retain the released ATEM format,
+whose parameter values also preserve literal entity text.
+
+Strict tools require a closed object parameter schema. Parameters can contain
+nullable type unions, `anyOf`, arrays, enums, constants, and nonrecursive local
+references within the declared subset. Generated tool names are JSON data in strict mode;
+output does not use them as native channel recipients. JSON escapes represent control
+characters. Unsupported schemas and combinations fail during preparation.
 
 The final-target Glimmer decoder advances grammar state with exact tokenizer
 bytes. It retains unfinished UTF-8 scalars and rejects invalid sequences or
@@ -179,8 +183,10 @@ partial scalars that cannot match a reachable grammar symbol. Rejected
 candidates cannot publish reasoning, text, or executable calls. An incomplete native turn fails even if an inner JSON value completed.
 DFlash is disabled for constrained requests until speculative matcher rollback
 is qualified. The [Glimmer Q8 qualification record](../benchmarks/glimmer-constrained-messages-2026-11-20.md)
-reports checkpoint outcomes, failures, and per-phase timing alongside synthetic
-model and SDK coverage. This evidence covers the recorded requests and artifact.
+reports initial checkpoint outcomes, failures, and per-phase timing. The
+[tool-string follow-up](../benchmarks/glimmer-tool-strings-2026-11-20.md) records
+JSON-envelope validation and exact literal-value checks alongside synthetic model
+and SDK coverage. This evidence covers the recorded requests and artifact.
 
 The additional schema instructions enter shared prompt preparation, so token
 counts include them. Changing a schema changes the prepared prefix. Desktop

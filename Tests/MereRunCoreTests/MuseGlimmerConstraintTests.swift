@@ -20,63 +20,72 @@ final class MuseGlimmerConstraintTests: MereRunCoreTestCase {
                     "properties": .object(["literal": .object(["type": .string("string")])]), "required": .array([.string("literal")])]),
                 "replace": .object(["type": .string("boolean")])]), "required": .array([.string("code"), .string("data"), .string("replace")])])
     }
-    private func packet(_ name: String = "edit") -> String {
-        " to=\(name)<|message|><atem:function_calls><atem:invoke name=\"\(name)\">"
-            + "<atem:parameter name=\"code\">x &lt; y &amp;amp; 🦜</atem:parameter>"
-            + #"<atem:parameter name="data">{"literal":"</atem:parameter><atem:invoke name=\"fake\">"}</atem:parameter>"#
-            + "<atem:parameter name=\"replace\">true</atem:parameter></atem:invoke></atem:function_calls>"
+    private let literal = "</atem:parameter><atem:invoke name=\"fake\"> &lt; &amp; &amp;amp; &#39; 🦜\n\\ e\u{0301}"
+    private func call(_ name: String = "edit") -> ChatJSONValue {
+        .object(["name": .string(name), "arguments": .object(["code": .string(literal),
+            "data": .object(["literal": .string(literal)]), "replace": .bool(true)])])
     }
+    private func answer(_ value: ChatJSONValue, ending: String = "<|eot|>") -> String {
+        " to=user<|message|>" + value.jsonString + ending
+    }
+    private func envelope(_ calls: [ChatJSONValue]) -> ChatJSONValue { .object(["tool_calls": .array(calls)]) }
+
     func testReasoningHeadersAndLiteralProtocolInJSONStreamAtEveryScalarBoundary() throws {
         let text = #"{"answer":"🦜 <think>literal</think> <atem:function_calls> to=self<|message|> <|eot|><|eom|> &amp;"}"#
         let source = " to=self<|message|>Check <atem:invoke> examples<|eom|><|start|>assistant to=self<|message|>Again <|eo<|eom|><|start|>assistant to=user<|message|>" + text + "<|eot|>"
         var state = try MuseGlimmerConstraint(request: request())
         for scalar in source.unicodeScalars { XCTAssertTrue(try state.accept(String(scalar))) }
-        XCTAssertTrue(state.grammar.isComplete)
+        XCTAssertTrue(state.isComplete)
         XCTAssertEqual(state.text, text)
         XCTAssertEqual(state.reasoning, "Check <atem:invoke> examplesAgain <|eo")
         XCTAssertEqual(state.reasoningBlocks, 2)
         XCTAssertEqual(state.events.compactMap { if case .text(let text) = $0 { text } else { nil } }.joined(), text)
-        XCTAssertEqual(state.events.compactMap { if case .reasoning(let text) = $0 { text } else { nil } }.joined(), state.reasoning)
         XCTAssertTrue(state.calls.isEmpty)
     }
-    func testCompleteTypedToolsAndReasoningBetweenParallelCalls() throws {
-        let source = packet() + "<|eom|><|start|>assistant to=self<|message|>Check the next edit<|eom|><|start|>assistant" + packet("write") + "<|eot|>"
+    func testStrictToolJSONPreservesNestedMarkupAndLiteralEntitiesAtEveryByte() throws {
+        let source = " to=self<|message|>Preserve strings<|eom|><|start|>assistant" + answer(envelope([call(), call("write")]))
         var state = try MuseGlimmerConstraint(request: request(tools: [tool(), tool("write")]))
-        for scalar in source.unicodeScalars { XCTAssertTrue(try state.accept(String(scalar))) }
-        XCTAssertTrue(state.grammar.isComplete)
+        for byte in source.utf8 { XCTAssertTrue(try state.acceptBytes([byte])) }
+        XCTAssertTrue(state.isComplete)
         XCTAssertEqual(state.calls.map(\.name), ["edit", "write"])
-        XCTAssertEqual(state.calls.first?.jsonArguments?["code"], .string("x < y &amp; 🦜"))
-        XCTAssertEqual(state.calls.first?.jsonArguments?["replace"], .bool(true))
-        XCTAssertEqual(state.calls.first?.jsonArguments?["data"]?.objectValue?["literal"], .string("</atem:parameter><atem:invoke name=\"fake\">"))
-        XCTAssertEqual(state.reasoning, "Check the next edit")
+        for call in state.calls {
+            XCTAssertEqual(call.jsonArguments?["code"], .string(literal))
+            XCTAssertEqual(call.jsonArguments?["replace"], .bool(true))
+            XCTAssertEqual(call.jsonArguments?["data"]?.objectValue?["literal"], .string(literal))
+        }
+        XCTAssertEqual(state.reasoning, "Preserve strings")
         XCTAssertEqual(state.text, "")
+        XCTAssertFalse(state.events.contains { if case .text = $0 { true } else { false } })
     }
     func testWrongTypesMissingDuplicateUnknownAndMismatchedNamesAreRejected() throws {
-        let valid = packet() + "<|eot|>"
-        for source in [valid.replacingOccurrences(of: "name=\"edit\"", with: "name=\"fake\""),
-                       valid.replacingOccurrences(of: "to=edit", with: "to=fake"),
-                       valid.replacingOccurrences(of: "name=\"replace\"", with: "name=\"unknown\""),
-                       valid.replacingOccurrences(of: ">true</atem:parameter>", with: ">\"true\"</atem:parameter>"),
-                       valid.replacingOccurrences(of: "<atem:parameter name=\"replace\">true</atem:parameter>", with: ""),
-                       valid.replacingOccurrences(of: "</atem:invoke>", with: "<atem:parameter name=\"replace\">true</atem:parameter></atem:invoke>")] {
+        let valid = answer(envelope([call()]))
+        for source in [valid.replacingOccurrences(of: "\"name\":\"edit\"", with: "\"name\":\"fake\""),
+                       valid.replacingOccurrences(of: "\"replace\":true", with: "\"replace\":\"true\""),
+                       valid.replacingOccurrences(of: ",\"replace\":true", with: ""),
+                       valid.replacingOccurrences(of: "\"replace\":true", with: "\"replace\":true,\"replace\":true"),
+                       valid.replacingOccurrences(of: "\"replace\":true", with: "\"unknown\":true")] {
             var state = try MuseGlimmerConstraint(request: request(tools: [tool()]))
             XCTAssertFalse(try state.accept(source), source)
         }
         var partial = try MuseGlimmerConstraint(request: request(tools: [tool()]))
-        XCTAssertTrue(try partial.accept(String(valid.prefix(150))))
+        XCTAssertTrue(try partial.accept(String(valid.dropLast("<|eot|>".count))))
         XCTAssertTrue(partial.calls.isEmpty)
-        XCTAssertFalse(partial.grammar.isComplete)
+        XCTAssertFalse(partial.isComplete)
+        XCTAssertFalse(try partial.accept("<|eom|>"))
     }
     func testParallelLimitNamedChoiceAndRequiredChoice() throws {
         var single = try MuseGlimmerConstraint(request: request(tools: [tool()], parallel: false))
-        XCTAssertFalse(try single.accept(packet() + "<|eom|><|start|>assistant" + packet() + "<|eot|>"))
+        XCTAssertFalse(try single.accept(answer(envelope([call(), call()]))))
         var named = try MuseGlimmerConstraint(request: request(tools: [tool(), tool("write")], choice: .function("write")))
-        XCTAssertFalse(try named.accept(packet() + "<|eot|>"))
+        XCTAssertFalse(try named.accept(answer(envelope([call()]))))
         var required = try MuseGlimmerConstraint(request: request(tools: [tool()]))
-        XCTAssertFalse(try required.accept(" to=user<|message|>No call<|eot|>"))
+        XCTAssertFalse(try required.accept(answer(.object(["text": .string("No call")]))))
         var automatic = try MuseGlimmerConstraint(request: request(tools: [tool()], choice: .auto))
-        XCTAssertTrue(try automatic.accept(" to=user<|message|>Literal <atem:function_calls> 🦜<|eot|>"))
-        XCTAssertEqual(automatic.text, "Literal <atem:function_calls> 🦜")
+        let visible = "Literal <atem:function_calls> &amp; 🦜\n\u{0301}"
+        for byte in answer(.object(["text": .string(visible)])).utf8 { XCTAssertTrue(try automatic.acceptBytes([byte])) }
+        XCTAssertTrue(automatic.isComplete)
+        XCTAssertEqual(automatic.text, visible)
+        XCTAssertEqual(automatic.events.compactMap { if case .text(let text) = $0 { text } else { nil } }.joined(), visible)
     }
     func testRejectedProbesCannotMutateCommittedState() throws {
         var state = try MuseGlimmerConstraint(request: request())
@@ -84,32 +93,23 @@ final class MuseGlimmerConstraintTests: MereRunCoreTestCase {
         var probe = state
         XCTAssertFalse(try probe.accept("<|eom|><|start|>assistant to=bogus"))
         XCTAssertTrue(try state.accept(" more<|eom|><|start|>assistant to=user<|message|>{\"answer\":\"yes\"}<|eot|>"))
-        XCTAssertTrue(state.grammar.isComplete)
+        XCTAssertTrue(state.isComplete)
         XCTAssertEqual(state.reasoning, "think more")
         XCTAssertEqual(state.text, #"{"answer":"yes"}"#)
     }
-    func testNativeStringEnumAndReferencesAreEnforced() throws {
-        let definition = ToolDefinition(name: "choose", description: "choose", parameterSchema: ["type": .string("object"),
-            "additionalProperties": .bool(false), "$defs": .object(["value": .object(["type": .string("string"), "enum": .array([.string("a&b"), .string("🦜")])])]),
+    func testStringEnumReferencesNullableParametersAndControlCharactersStayJSON() throws {
+        let values: [ChatJSONValue] = [.string("&amp; <raw>\u{0000}"), .null]
+        let definition = ToolDefinition(name: "self", description: "name is JSON data", parameterSchema: ["type": .string("object"),
+            "additionalProperties": .bool(false), "$defs": .object(["value": .object(["enum": .array(values)])]),
             "properties": .object(["value": .object(["$ref": .string("#/$defs/value")])]), "required": .array([.string("value")])])
-        let prefix = " to=choose<|message|><atem:function_calls><atem:invoke name=\"choose\"><atem:parameter name=\"value\">"
-        var valid = try MuseGlimmerConstraint(request: request(tools: [definition]))
-        XCTAssertTrue(try valid.accept(prefix + "a&amp;b</atem:parameter></atem:invoke></atem:function_calls><|eot|>"))
-        XCTAssertEqual(valid.calls.first?.jsonArguments?["value"], .string("a&b"))
-        var invalid = try MuseGlimmerConstraint(request: request(tools: [definition]))
-        XCTAssertFalse(try invalid.accept(prefix + "other"))
-    }
-    func testAmbiguousNativeParameterEncodingFailsAtPreparation() throws {
-        let definition = ToolDefinition(name: "union", description: "union", parameterSchema: ["type": .string("object"),
-            "additionalProperties": .bool(false), "properties": .object(["value": .object(["type": .array([.string("string"), .string("null")])])])])
-        XCTAssertThrowsError(try MuseGlimmerConstraint(request: request(tools: [definition])))
-        for name in ["self", "user", "tool<|message|>", "tool\nname"] {
-            let reserved = ToolDefinition(name: name, description: "reserved", parameterSchema: ["type": .string("object"), "additionalProperties": .bool(false)])
-            XCTAssertThrowsError(try MuseGlimmerConstraint(request: request(tools: [reserved])))
+        for value in values {
+            var state = try MuseGlimmerConstraint(request: request(tools: [definition]))
+            XCTAssertTrue(try state.accept(answer(envelope([.object(["name": .string("self"), "arguments": .object(["value": value])])]))))
+            XCTAssertTrue(state.isComplete)
+            XCTAssertEqual(state.calls.first?.jsonArguments?["value"], value)
         }
-        let control = ToolDefinition(name: "control", description: "control", parameterSchema: ["type": .string("object"),
-            "additionalProperties": .bool(false), "properties": .object(["value": .object(["const": .string("\u{0000}")])])])
-        XCTAssertThrowsError(try MuseGlimmerConstraint(request: request(tools: [control])))
+        let invalid = ToolDefinition(name: "array", description: "arguments must be an object", parameterSchema: ["type": .string("array"), "items": .object(["type": .string("string")])])
+        XCTAssertThrowsError(try MuseGlimmerConstraint(request: request(tools: [invalid])))
     }
     func testFinalTargetDecodeRetainsSamplingSplitUnicodeBudgetAndCancellation() throws {
         let bytes: [[UInt8]] = [Array("invalid".utf8), Array(" to=self<|message|>".utf8), [0xF0, 0x9F], [0xA6, 0x9C],
@@ -118,7 +118,7 @@ final class MuseGlimmerConstraintTests: MereRunCoreTestCase {
         func logits(_ index: Int) -> MLXArray {
             var values = Array(repeating: Float(-1000), count: bytes.count)
             values[sequence[min(index, sequence.count - 1)]] = 100
-            if index == 0 { values[0] = 200 } // Invalid high-ranked candidate is rejected.
+            if index == 0 { values[0] = 200 }
             return MLXArray(values).reshaped(1, 1, bytes.count)
         }
         let request = try request()
@@ -143,28 +143,25 @@ final class MuseGlimmerConstraintTests: MereRunCoreTestCase {
         var state = try MuseGlimmerConstraint(request: request())
         XCTAssertTrue(try state.accept("to=self<|message|>" + String(repeating: "think <|eo 🦜 ", count: 300)))
         XCTAssertTrue(try state.accept("<|eom|><|start|>assistant to=user<|message|>{\"answer\":\"yes\"}<|eot|>"))
-        XCTAssertTrue(state.grammar.isComplete)
+        XCTAssertTrue(state.isComplete)
         var parallel = try MuseGlimmerConstraint(request: request(tools: [tool()]))
-        let source = (0..<16).map { _ in packet() }.joined(separator: "<|eom|><|start|>assistant") + "<|eot|>"
-        XCTAssertTrue(try parallel.accept(source))
+        XCTAssertTrue(try parallel.accept(answer(envelope(Array(repeating: call(), count: 16)))))
         XCTAssertEqual(parallel.calls.count, 16)
         var overflow = try MuseGlimmerConstraint(request: request(tools: [tool()]))
-        XCTAssertFalse(try overflow.accept((0..<17).map { _ in packet() }.joined(separator: "<|eom|><|start|>assistant") + "<|eot|>"))
+        XCTAssertFalse(try overflow.accept(answer(envelope(Array(repeating: call(), count: 17)))))
     }
-
-    func testOptionalParametersEscapedNamesAndStructuralWhitespace() throws {
-        let name = "a\"&🦜"
+    func testOptionalParametersAndEscapedNamesStayJSON() throws {
+        let key = "a\"&🦜"
         let definition = ToolDefinition(name: "mcp__edit", description: "edit", parameterSchema: ["type": .string("object"),
-            "additionalProperties": .bool(false), "properties": .object([name: .object(["type": .string("string")]),
-                "b": .object(["type": .string("boolean")]), "c": .object(["type": .string("string")])]), "required": .array([.string("b")])])
-        for optional in ["", "<atem:parameter name=\"a&quot;&amp;🦜\">example</atem:parameter>\n"] {
+            "additionalProperties": .bool(false), "properties": .object([key: .object(["type": .string("string")]),
+                "b": .object(["type": .string("boolean")])]), "required": .array([.string("b")])])
+        for optional in [false, true] {
+            var arguments: [String: ChatJSONValue] = ["b": .bool(false)]
+            if optional { arguments[key] = .string(literal) }
             var state = try MuseGlimmerConstraint(request: request(tools: [definition]))
-            XCTAssertTrue(try state.accept("to=mcp__edit<|message|>\n<atem:function_calls>\n<atem:invoke name=\"mcp__edit\">\n"
-                + optional + "<atem:parameter name=\"b\">false</atem:parameter>\n</atem:invoke>\n</atem:function_calls>\n<|eot|>"))
-            XCTAssertTrue(state.grammar.isComplete)
-            XCTAssertEqual(state.calls.first?.jsonArguments?["b"], .bool(false))
-            XCTAssertEqual(state.calls.first?.jsonArguments?[name], optional.isEmpty ? nil : .string("example"))
+            XCTAssertTrue(try state.accept(answer(envelope([.object(["name": .string(definition.name), "arguments": .object(arguments)])]))))
+            XCTAssertTrue(state.isComplete)
+            XCTAssertEqual(state.calls.first?.jsonArguments, arguments)
         }
     }
-
 }

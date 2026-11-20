@@ -1,5 +1,10 @@
 # Glimmer Q8 constrained Messages qualification
 
+This record covers the initial constrained-output revision. The
+[tool-string follow-up](./glimmer-tool-strings-2026-11-20.md) replaces mixed
+strict-tool escaping with JSON and records the subsequent qualification. Earlier
+failures and the original machine-readable evidence remain in this record.
+
 Native Glimmer Q8 passed the known-answer constrained JSON suite and later
 strict tool, context-edit, and document repeats. Qualification is limited to these requests and this artifact.
 The record retains budget failures, an earlier wrong answer, and the locked

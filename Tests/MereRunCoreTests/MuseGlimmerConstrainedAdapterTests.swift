@@ -23,7 +23,7 @@ final class MuseGlimmerConstrainedAdapterTests: MereRunCoreTestCase {
         let fixture = MuseGlimmerModel(config: try JSONDecoder().decode(MuseGlimmerConfig.self, from: configData))
         fixture.update(parameters: fixture.parameters().mapValues { MLXArray.zeros(like: $0) })
         try MLX.save(arrays: Dictionary(uniqueKeysWithValues: fixture.parameters().flattened()), url: root.appendingPathComponent("model.safetensors"))
-        try Data(#"{"model":{"type":"BPE","unk_token":"[UNK]","vocab":{"[UNK]":0," to=user<|message|>":1,"<|eot|>":2,"{":3,"\"ok\"":4,":":5,"true":6,"}":7," to=edit<|message|><atem:function_calls><atem:invoke name=\"edit\"><atem:parameter name=\"replace\">":8,"</atem:parameter></atem:invoke></atem:function_calls><|eot|>":9,"<|patch|>":28,"<|image_start|>":29,"<|image_end|>":30},"merges":[]},"decoder":{"type":"Fuse"}}"#.utf8)
+        try Data(#"{"model":{"type":"BPE","unk_token":"[UNK]","vocab":{"[UNK]":0," to=user<|message|>":1,"<|eot|>":2,"{":3,"\"ok\"":4,":":5,"true":6,"}":7,"\"tool_calls\":[{\"arguments\":{\"replace\":":8,"},\"name\":\"edit\"}]}":9,",\"name\":\"edit\"}]}":10,"<|patch|>":28,"<|image_start|>":29,"<|image_end|>":30},"merges":[]},"decoder":{"type":"Fuse"}}"#.utf8)
             .write(to: root.appendingPathComponent("tokenizer.json"))
         try Data(#"{"tokenizer_class":"Qwen2Tokenizer","pad_token":"[UNK]","eos_token":"<|eot|>","model_max_length":4096,"chat_template":"{ {{ messages[0]['content'] }}{{ tools|default([])|tojson }} }"}"#.utf8)
             .write(to: root.appendingPathComponent("tokenizer_config.json"))

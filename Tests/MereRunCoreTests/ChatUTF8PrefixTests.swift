@@ -57,7 +57,9 @@ final class ChatUTF8PrefixTests: MereRunCoreTestCase {
         var request = ChatRequest(messages: [.init(role: .user, content: "test")], tools: [tool], toolChoice: .required)
         request.outputConstraint = try ChatOutputConstraint.tools([tool], choice: .required, parallel: false)
         var state = try MuseGlimmerConstraint(request: request)
-        let source = " to=record<|message|><atem:function_calls><atem:invoke name=\"record\"><atem:parameter name=\"value\">" + value + "</atem:parameter></atem:invoke></atem:function_calls><|eot|>"
+        let body = ChatJSONValue.object(["tool_calls": .array([.object([
+            "name": .string("record"), "arguments": .object(["value": .string(value)])])])]).jsonString
+        let source = " to=user<|message|>" + body + "<|eot|>"
         XCTAssertTrue(try state.acceptBytes(Array(source.utf8)))
         XCTAssertEqual(Array(state.calls.first?.jsonArguments?["value"]?.stringValue?.utf8 ?? "".utf8), Array(value.utf8))
     }

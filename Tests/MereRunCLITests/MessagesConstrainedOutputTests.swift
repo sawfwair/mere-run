@@ -23,6 +23,20 @@ final class MessagesConstrainedOutputTests: XCTestCase {
             XCTAssertEqual(tools.outputConstraint?.mode, .tools)
         }
     }
+    func testNativeAutomaticStrictToolsKeepTheTextBranch() throws {
+        let tools = #", "tools":[{"name":"edit","strict":true,"input_schema":{"type":"object","additionalProperties":false,"properties":{"replace":{"type":"boolean"}},"required":["replace"]}}]"#
+        for version in MessagesVersion.allCases {
+            for choice in ["", #", "tool_choice":{"type":"auto"}"#] {
+                let request = try prepare(tools + choice, version: version, glimmer: true)
+                XCTAssertEqual(request.toolChoice, .auto)
+                let branches = try XCTUnwrap(request.outputConstraint?.schema["anyOf"]?.arrayValue)
+                let properties = branches.compactMap { $0.objectValue?["properties"]?.objectValue }
+                XCTAssertTrue(properties.contains { $0["text"]?.objectValue?["type"] == .string("string") })
+                XCTAssertTrue(properties.contains { $0["tool_calls"] != nil })
+            }
+        }
+    }
+
     func testUnsupportedCombinationsAndSchemasFailDuringPreparation() throws {
         let format = #", "output_config":{"format":{"type":"json_schema","schema":{"type":"string"}}}"#
         for extra in [#", "thinking":{"type":"adaptive"}"#, #", "stop_sequences":["stop"]"#,
@@ -31,7 +45,7 @@ final class MessagesConstrainedOutputTests: XCTestCase {
         }
         XCTAssertThrowsError(try prepare(#", "output_config":{"format":{"type":"json_schema","schema":{"type":"number","minimum":1}}}"#))
     }
-    func testNativeGlimmerAcceptsAdaptiveConstraintsAndRejectsAmbiguousEncoding() throws {
+    func testNativeGlimmerAcceptsAdaptiveConstraintsAndTypedJSONTools() throws {
         let profile = try XCTUnwrap(ManagedModelCatalog.apiProfile(for: MuseGlimmerResources.modelId))
         let capabilities = MessagesCapabilities.adapter(.textChatMuseGlimmer, profile: profile)
         XCTAssertTrue(capabilities.strict_tools); XCTAssertTrue(capabilities.json_schema)
@@ -44,7 +58,11 @@ final class MessagesConstrainedOutputTests: XCTestCase {
             XCTAssertEqual(tools.outputConstraint?.mode, .tools)
             XCTAssertTrue(tools.showThinking)
         }
-        XCTAssertThrowsError(try prepare(#", "tools":[{"name":"edit","strict":true,"input_schema":{"type":"object","additionalProperties":false,"properties":{"value":{"type":["string","null"]}}}}]"#, glimmer: true))
+        for version in MessagesVersion.allCases {
+            let nullable = try prepare(#", "tools":[{"name":"edit","strict":true,"input_schema":{"type":"object","additionalProperties":false,"properties":{"value":{"type":["string","null"]}}}}]"#, version: version, glimmer: true)
+            XCTAssertEqual(nullable.outputConstraint?.mode, .tools)
+        }
+        XCTAssertThrowsError(try prepare(#", "tools":[{"name":"edit","strict":true,"input_schema":{"type":"array","items":{"type":"string"}}}]"#, glimmer: true))
         XCTAssertThrowsError(try prepare(#", "thinking":{"type":"disabled"}, "output_config":{"format":{"type":"json_schema","schema":{"type":"string"}}}"#, glimmer: true))
     }
 

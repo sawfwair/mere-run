@@ -3,11 +3,17 @@
 This record separates transport evidence from model task outcomes. A successful
 connection preview or a model's own success statement does not qualify a model.
 
-The [November 20 constrained-output follow-up](../benchmarks/glimmer-constrained-messages-2026-11-20.md)
+The [Glimmer tool-string follow-up](../benchmarks/glimmer-tool-strings-2026-11-20.md)
+replaces mixed XML/JSON strict arguments with a JSON envelope and records exact
+nested-string checks. The final build passed repeated automatic text/tool
+selection, real cache reuse, and a coding fixture with five independently rerun
+tests. The initial automatic-choice failure remains in the earlier matrix.
+
+The [initial November 20 constrained-output qualification](../benchmarks/glimmer-constrained-messages-2026-11-20.md)
 records native Glimmer Q8 schemas, strict tools, documents, cache boundaries,
-and retained failures. After unlocking, all six fresh desktop trials with ordinary
-tools passed independent review. Copying nested markup in strict tools remains
-unqualified despite schema enforcement.
+and earlier failures. After unlocking, all six fresh desktop trials with ordinary
+tools passed independent review. Those desktop cases do not qualify strict Cua
+tools.
 
 The [November 9 unlocked qualification](../benchmarks/messages-release-qualification-2026-11-09.md)
 passes the full repository gate and all six fresh desktop cases on established
@@ -1231,14 +1237,14 @@ failed generation's phase/token accounting is unavailable. These observations
 do not establish a speedup. The [full report](../benchmarks/messages-release-qualification-2026-11-09.md)
 retains source identity, timing scope, and remaining capability/model boundaries.
 
-## November 20 native Glimmer constrained-output follow-up
+## Initial November 20 recipient and ATEM constraint design
 
-Native Glimmer has a Swift grammar for its recipient channels and ATEM tools.
-The schema applies after a complete channel header. Reasoning can precede a
-JSON answer or occur between tool packets. Completed captures delimit parameters
+The initial implementation used a Swift grammar for recipient channels and ATEM tools.
+The schema applied after a complete channel header. Reasoning could precede a
+JSON answer or occur between tool packets. Completed captures delimited parameters
 without rescanning tool-like text inside JSON values. Rejected candidate probes
-cannot publish events or tool calls. Constrained requests use final-target
-sampling with the request's temperature, top-p, and top-k; DFlash stays off.
+could not publish events or tool calls. Constrained requests used final-target
+sampling with the request's temperature, top-p, and top-k; DFlash stayed off.
 
 The design follows the channel boundary demonstrated by
 [llama.cpp's Glimmer JSON/reasoning change](https://github.com/ggml-org/llama.cpp/pull/29615).
@@ -1247,7 +1253,7 @@ provides a reference for raw XML strings versus typed JSON parameters. Its Muse
 builder targets Spark Open, so it is not used as a Glimmer compatibility claim
 or imported dependency.
 
-Automated evidence includes:
+The initial automated evidence included:
 
 - `MuseGlimmerConstraintTests`: headers and reasoning at scalar boundaries,
   protocol-looking JSON strings, split UTF-8, rejected-probe isolation, native
@@ -1263,19 +1269,20 @@ Automated evidence includes:
   recovery. Official Anthropic SDK 2.6.0 fixtures accumulate streams, preserve
   typed tool inputs, replay locally signed thinking, and count tokens.
 
-The [API guide](../runtime/messages-api.md#constrained-output) records the bounded
-schema subset and native parameter-encoding restrictions. Top-level parameter
-unions, reserved recipient names, and unsupported combinations fail before
-inference. Generated citations remain unsupported.
+The initial design rejected top-level parameter unions and reserved recipient
+names before inference. The [tool-string follow-up](../benchmarks/glimmer-tool-strings-2026-11-20.md)
+replaces that encoding. The [API guide](../runtime/messages-api.md#constrained-output)
+documents the supported subset and remaining unsupported combinations, including
+generated citations.
 
-These tests use synthetic weights or a controlled HTTP runtime. They do not
-qualify constrained Glimmer Q8 task accuracy, decode throughput, scanned-document
-understanding, speculative rollback, or a Claude Code/Cua desktop session.
-Earlier Q8 coding and desktop reports do not qualify this decoding path. The
-repository validation rule in `AGENTS.md` requires full-checkpoint and GPU
-qualification to remain an explicit follow-up after the local gate.
+These initial tests used synthetic weights or a controlled HTTP runtime. They
+did not qualify constrained Glimmer Q8 task accuracy, decode throughput,
+scanned-document understanding, speculative rollback, or a Claude Code/Cua
+desktop session. The subsequent checkpoint trials are recorded separately in the
+[initial Q8 qualification](../benchmarks/glimmer-constrained-messages-2026-11-20.md)
+and the tool-string follow-up.
 
-The November 20 local `./scripts/check.sh` gate passes with 6,377 XCTest cases
+The initial November 20 local `./scripts/check.sh` gate passed with 6,377 XCTest cases
 (586 skipped), 199 Swift Testing cases, and zero failures. Official SDK fixtures
 are enabled. The gate also covers lint, build, CLI help, documentation checks,
 and repository hygiene. Checkpoint-dependent skips remain qualification gaps.

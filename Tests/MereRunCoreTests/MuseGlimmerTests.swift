@@ -336,6 +336,26 @@ final class MuseGlimmerTests: MereRunCoreTestCase {
         XCTAssertEqual(expanded, [1, 10, 9, 9, 11, 2, 10, 9, 9, 9, 11, 3])
     }
 
+    func testATEMLiteralEntitiesAreNotHTMLDecoded() throws {
+        let schema: [String: ChatJSONValue] = ["type": .string("object"), "additionalProperties": .bool(false),
+            "properties": .object(["code": .object(["type": .string("string")]), "&amp;": .object(["type": .string("string")]),
+                "data": .object(["type": .string("object"), "additionalProperties": .bool(false),
+                    "properties": .object(["literal": .object(["type": .string("string")])]), "required": .array([.string("literal")])])]),
+            "required": .array([.string("code"), .string("data")])]
+        let tool = ToolDefinition(name: "record", description: "record", parameterSchema: schema)
+        let literal = "&lt;not-a-tag&gt; &amp; &amp;amp; &#39; 🦜"
+        let source = " to=record<|message|><atem:function_calls><atem:invoke name=\"record\">"
+            + "<atem:parameter name=\"code\">" + literal + "</atem:parameter>"
+            + "<atem:parameter name=\"&amp;\">literal</atem:parameter>"
+            + "<atem:parameter name=\"data\">" + ChatJSONValue.object(["literal": .string(literal)]).jsonString
+            + "</atem:parameter></atem:invoke></atem:function_calls><|eot|>"
+        let calls = try MuseGlimmerToolParser.validatedToolCalls(source, tools: [tool], parallel: false)
+        XCTAssertEqual(calls.first?.jsonArguments?["code"], .string(literal))
+        XCTAssertEqual(calls.first?.jsonArguments?["&amp;"], .string("literal"))
+        XCTAssertEqual(calls.first?.jsonArguments?["data"]?.objectValue?["literal"], .string(literal))
+        XCTAssertEqual(MuseGlimmerToolParser.parseToolCalls(source).first?.arguments["code"], literal)
+    }
+
     func testATEMToolParserPreservesScalarAndJSONValues() {
         let raw = """
         <atem:function_calls>

@@ -67,6 +67,34 @@ class QualificationScoringTests(unittest.TestCase):
             self.assertEqual(row["native_timing"]["decodeTokensPerSecond"], 10)
             self.assertNotIn(run.key, (Path(root) / "report.json").read_text())
 
+    def test_schema_valid_tool_with_wrong_escaping_fails_semantics(self):
+        with tempfile.TemporaryDirectory() as root:
+            run = self.setup_run(root, "")
+            response = run.client.messages.create.return_value
+            response.content = [SimpleNamespace(type="tool_use", id="call_fixture", name="record_literal",
+                                                input={"value": "&lt;tag&gt;"})]
+            response.stop_reason = "tool_use"
+            tool = {"name": "record_literal", "strict": True, "input_schema": qualifier.closed({"value": {"type": "string"}})}
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = run.run("wrong-escaping", run.request("Copy <tag> exactly.", tools=[tool]),
+                                 tool_inputs=[{"name": "record_literal", "input": {"value": "<tag>"}}], streaming=False)
+            self.assertIsNone(result)
+            row = run.report["cases"][0]
+            self.assertTrue(row["schema_passed"])
+            self.assertFalse(row["semantic_passed"])
+            self.assertFalse(row["passed"])
+
+    def test_cli_reports_failure_to_automation(self):
+        run = mock.Mock(report={"summary": {"failed": 1}})
+        with mock.patch.object(qualifier, "Qualification", return_value=run), \
+             mock.patch.object(sys, "argv", ["qualify", "--model", "fixture", "--output", "/tmp/fixture", "--literal-tools-only"]), \
+             mock.patch.object(qualifier.signal, "signal"), mock.patch.object(qualifier.os, "umask"):
+            with self.assertRaises(SystemExit) as failure:
+                qualifier.main()
+        self.assertEqual(failure.exception.code, 1)
+        run.client.close.assert_called_once()
+        run.finish.assert_called_once()
+
     def test_fixture_oracles_are_independent_values(self):
         cases = {name: expected for name, _, _, expected in qualifier.fixtures()}
         self.assertEqual(cases["multiply42"]["result"], 6 * 7)

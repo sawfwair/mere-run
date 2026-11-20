@@ -5,12 +5,11 @@ import Foundation
 /// fail at preparation rather than weakening constraints.
 public struct ChatSchemaGrammar: Sendable {
     enum Symbol: Hashable, Sendable {
-        case rule(Int), character(Unicode.Scalar), except(Set<Unicode.Scalar>), xmlCharacter, stringCharacter, hex, digit, nonzero
+        case rule(Int), character(Unicode.Scalar), except(Set<Unicode.Scalar>), stringCharacter, hex, digit, nonzero
         func matches(_ character: Unicode.Scalar) -> Bool {
             switch self {
             case .character(let value): return value == character
             case .except(let excluded): return !excluded.contains(character)
-            case .xmlCharacter: return character != "<" && character != "&" && (character.value >= 32 || character == "\n" || character == "\r" || character == "\t")
             case .stringCharacter:
                 return character != "\"" && character != "\\" && character.value >= 32
             case .hex: return character.isASCII && "0123456789abcdefABCDEF".contains(character)

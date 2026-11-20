@@ -54,7 +54,7 @@ extension ChatSchemaGrammar {
         return nextTerminals.contains { symbol in
             switch symbol {
             case .character(let scalar): return Array(String(scalar).utf8).starts(with: prefix)
-            case .stringCharacter, .xmlCharacter: return true // Valid non-ASCII scalars.
+            case .stringCharacter: return true // Valid non-ASCII scalars.
             case .except(let excluded):
                 var value = range.lowerBound
                 for _ in 0...excluded.count {
