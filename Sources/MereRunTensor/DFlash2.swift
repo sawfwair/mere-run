@@ -49,6 +49,7 @@ package final class DFlash2GroupedDynamicCausalConv: Module {
     @ModuleInfo(key: "kernel_projection") var kernelProjection: Linear
 
     private let groupSize: Int
+    package var convolutionWeights: (base: MLXArray, projection: Linear) { (baseKernel, kernelProjection) }
 
     package init(hiddenSize: Int, kernelSize: Int, groupSize: Int) {
         self.groupSize = groupSize
@@ -98,6 +99,10 @@ package final class DFlash2CandidateSelector: Module {
     @ModuleInfo(key: "successor_codebook") var successorCodebook: Embedding
 
     private let topK: Int
+    var candidateCount: Int { topK }
+    package var scoringWeights: (projection: Linear, predecessors: MLXArray, successors: MLXArray) {
+        (hiddenProjection, predecessorCodebook.weight, successorCodebook.weight)
+    }
 
     package init(vocabularySize: Int, hiddenSize: Int, rank: Int, topK: Int) {
         self.topK = topK

@@ -665,18 +665,25 @@ Both thinking and non-thinking requests use it, with Qwen's sampled presets
 and penalties preserved. There is no prose classifier or adaptive routing gate.
 Set [`MERERUN_Q35_DFLASH2=0`](../configuration.md#mererun-q35-dflash2) to opt out.
 
+On the tuned 27B Q4 path, xhigh thinking (including the template default) uses the
+fast sampled tree at temperature 1, top-p 0.95, top-k 20 and min-p 0 with no
+active penalties or banned tokens. For a requested 16,384-token output budget
+that fits in context, the model gets up to 14,336 tokens for thinking. Longer
+requests retain their full reasoning budget. Set `MERERUN_Q38_SAMPLED_TREE=0` to
+restore the previous sampler, or `MERERUN_Q38_THINKING_TOKEN_LIMIT=0` to keep the
+tree and let the model finish thinking naturally.
+
 Without an active DFlash companion, the existing MTP policy applies: greedy
 MTP is enabled for the Q4 target and opt-in for BF16. Set
 `MERERUN_Q35_MTP_SPECULATION=0` to disable MTP. JSON-constrained, tool, image,
 log-probability, and continuous-batched requests retain their existing paths
 and reference projections under the automatic policy.
 
-Sampled DFlash verification has local distribution and cache coverage.
-The [sampled throughput measurements](../benchmarks/qwen38-sampled-dflash2-2026-11-08.md)
-show code gains with both presets and a non-thinking prose regression. The
-default accepts that roughly 4.4 TPS cost in exchange for the other measured
-gains. Broader quality and workload evaluation remain pending. The earlier
-greedy TPS results do not establish sampled speed.
+On the M5 Max, the qualified xhigh profile delivered 82.44 prose and 94.61 code
+tokens/s over 256-token streamed windows. Both previously failing LRU seeds
+produced implementations that passed 1,500 cache operations each. The
+[default-profile qualification](../benchmarks/receipts/qwen38-fast-default-2026-11-19.json)
+records the sampling settings, accuracy results, and comparison with TensorFold.
 
 The Qwen3.8 Flash Next builds (`vision-chat-q38-flash-next-*`) are large
 mixed-precision models for 96 GB and larger Macs. Their sources, quantization,

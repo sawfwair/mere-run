@@ -1007,6 +1007,7 @@ targets.append(
       "ZImageI2L/README.md",
       "ZImageI2L/Model/README.md",
       "ZImageTurbo/README.md",
+      "ZImageTurbo/Tokenizer/README.md",
       "ZImageTurbo/Util/README.md"
     ],
     resources: [

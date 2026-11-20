@@ -10,6 +10,8 @@ The format is based on Keep a Changelog.
   replay an audio file or start a live macOS conversation. The command accepts
   a character card and voice reference and can save the reply as a WAV file.
 
+- Enable fast sampled-tree decoding for eligible Qwen3.8 27B Q4 xhigh requests on M5. The 16,384-token profile reserves 2,048 tokens for the answer transition and generation.
+
 - Add a native Swift/MLX reference runtime for Inkling 2 Small text and image
   chat, reasoning, and tools through `vision-chat-inkling-2-small` and the
   `text-chat-inkling2` API engine. Read original NVFP4/MXFP8 expert weights

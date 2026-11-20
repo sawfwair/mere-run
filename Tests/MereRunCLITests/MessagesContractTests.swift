@@ -128,10 +128,11 @@ final class MessagesContractTests: XCTestCase {
         XCTAssertThrowsError(try APIAuthentication.validate(expected: nil, headers: [.authorization: "Bearer other", key: "test-key"]))
     }
     func testQwenAndGemmaExposeNativeMessagesToolsAndStreaming() throws {
-        let fixed = MessagesCapabilities.adapter(.textChatQ36, profile: .q38(contextWindow: 32768))
-        XCTAssertFalse(fixed.thinking.contains("disabled"))
-        XCTAssertEqual(fixed.effort, ["low", "medium", "high", "xhigh"])
+        let switchable = MessagesCapabilities.adapter(.textChatQ36, profile: .q38(contextWindow: 32768))
+        XCTAssertTrue(switchable.thinking.contains("disabled"))
+        XCTAssertEqual(switchable.effort, ["low", "medium", "high", "xhigh"])
         let singlePreset = MessagesCapabilities.adapter(.textChatQ36, profile: .q36(contextWindow: 32768, fixedReasoning: true))
+        XCTAssertFalse(singlePreset.thinking.contains("disabled"))
         XCTAssertEqual(singlePreset.effort, ["high"])
         XCTAssertEqual(singlePreset.thinking_display, ["summarized"])
         for model in ["text-agent-ornith-35b-mlx-4bit", "text-chat-gemma4-turbo"] {
@@ -147,6 +148,22 @@ final class MessagesContractTests: XCTestCase {
             let prepared = try request.prepare(.init(modelID: model, engine: engine, settings: .init(), profile: profile, contextSize: 32768, fallbackLoraPath: nil))
             XCTAssertEqual(prepared.request.tools?.first?.name, "read")
             XCTAssertTrue(prepared.request.showThinking)
+        }
+    }
+
+    func testQ38DiscoveryAndPreparedMessagesAgreeOnThinkingOff() throws {
+        for id in [Q35Resources.q38TwentySevenBModelId, Q35Resources.q38TwentySevenB4BitModelId] {
+            let profile = try XCTUnwrap(ManagedModelCatalog.apiProfile(for: id))
+            let model = APIServerContract.chatModel(id: id, name: id, profile: profile,
+                                                   contextWindow: 32768, maximumOutputTokens: 4096)
+            XCTAssertTrue(try XCTUnwrap(model.thinking_levels).contains("off"))
+            let json = #"{"model":"local","max_tokens":16,"thinking":{"type":"disabled"},"messages":[{"role":"user","content":"hello"}]}"#
+            let wire = try JSONDecoder().decode(MessagesRequest.self, from: Data(json.utf8))
+            let input = try RuntimeChatRequest.messages(wire, version: .original, counting: false,
+                continuity: MessagesContinuity(key: Data(repeating: 1, count: 32)))
+            let prepared = try input.prepare(.init(modelID: id, engine: .textChatQ36, settings: .init(),
+                profile: profile, contextSize: 32768, fallbackLoraPath: nil))
+            XCTAssertFalse(prepared.request.showThinking)
         }
     }
 

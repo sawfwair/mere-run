@@ -20,6 +20,8 @@ package final class Q35DFlash2Attention: Module {
     private var fusedQKV: FusedQuantizedProjection?
     private var fusedKV: FusedQuantizedProjection?
 
+    var draftProjections: (qkv: FusedQuantizedProjection?, kv: FusedQuantizedProjection?) { (fusedQKV, fusedKV) }
+
     package init(config: Q35DFlash2Config) {
         heads = config.numAttentionHeads
         kvHeads = config.numKeyValueHeads
@@ -114,6 +116,14 @@ final class Q35DFlash2MLP: Module {
     @ModuleInfo(key: "gate_proj") var gate: Linear
     @ModuleInfo(key: "up_proj") var up: Linear
     @ModuleInfo(key: "down_proj") var down: Linear
+    private var matrixPrepared = false
+
+    func prepareMatrixProjections() {
+        guard let gate = gate as? PortableQuantizedLinear, let up = up as? PortableQuantizedLinear,
+              let down = down as? PortableQuantizedLinear else { return }
+        for projection in [gate, up, down] { projection.verificationBackend = .m5Matrix }
+        matrixPrepared = true
+    }
 
     init(config: Q35DFlash2Config) {
         _gate.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
@@ -123,7 +133,14 @@ final class Q35DFlash2MLP: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        down(Q35CompiledOperations.current.swiglu(gate(x), up(x)))
+        if matrixPrepared, !QuantizedVerificationContext.suppressM5 {
+            return QuantizedVerificationContext.$maximumM5Rows.withValue(16) {
+                let activated = PortableQuantizedLinear.fusedVerificationSwiGLU(x, gate: gate, up: up)
+                    ?? Q35CompiledOperations.current.swiglu(gate(x), up(x))
+                return down(activated)
+            }
+        }
+        return down(Q35CompiledOperations.current.swiglu(gate(x), up(x)))
     }
 }
 
@@ -162,6 +179,13 @@ final class Q35DFlash2Layer: Module {
 }
 
 package final class Q35DFlash2Model: Module {
+    private var matrixFFNRequiresQualifiedRequest = false
+    private let compactTreeHead = Q35DFlash2DraftHead()
+    #if os(macOS)
+    private let nativeTreeHead = Q35DFlash2NativeDraftHead()
+    private var nativeDraftProgram: AnyObject?
+    #endif
+    package var decodeCosts: Q35DFlash2Costs?
     @ModuleInfo(key: "fc") var fc: Linear
     @ModuleInfo(key: "hidden_norm") var hiddenNorm: RMSNorm
     @ModuleInfo(key: "layers") var layers: [Q35DFlash2Layer]
@@ -189,6 +213,31 @@ package final class Q35DFlash2Model: Module {
         layers.map { _ in Q35DFlash2Cache(window: config.slidingWindow, offset: offset) }
     }
 
+    func makeNativeDraftSession(target: Q35Model, cache: [Q35DFlash2Cache]) throws -> (any Q35NativeDraftSession)? {
+        #if os(macOS)
+        if #available(macOS 26.0, *), Q35NativeDraftProgram.enabled,
+           Q35NativeVerificationPolicy.enabled, Q35NativeVerificationPolicy.greedyTail,
+           !QuantizedVerificationContext.suppressM5,
+           Device.defaultDevice().deviceType == .gpu {
+            if (nativeDraftProgram as? Q35NativeDraftProgram)?.matches(target) != true {
+                nativeDraftProgram = try Q35NativeDraftProgram(draft: self, target: target)
+            }
+            return try (nativeDraftProgram as? Q35NativeDraftProgram)?.session(cache)
+        }
+        #endif
+        return nil
+    }
+
+    #if os(macOS)
+    @available(macOS 26.0, *)
+    func nativeExecutionDraft(target: Q35Model, offset: Int) throws -> Q35NativeDraftProgram.Session? {
+        if (nativeDraftProgram as? Q35NativeDraftProgram)?.matches(target) != true {
+            nativeDraftProgram = try Q35NativeDraftProgram(draft: self, target: target)
+        }
+        return try (nativeDraftProgram as? Q35NativeDraftProgram)?.freshSession(offset: offset)
+    }
+    #endif
+
     package func quantizeProjections(groupSize: Int = 64) {
         var updates: [(String, Module)] = []
         for (path, module) in leafModules().flattened() {
@@ -209,8 +258,14 @@ package final class Q35DFlash2Model: Module {
 
     /// Prepare copies at load time, outside the generation loop. Keep the
     /// original parameter tree so checkpoint keys and replacement semantics stay intact.
-    package func prepareDrafting() {
+    package func prepareDrafting(qualifiedMatrixFFN: Bool = false) {
         for layer in layers { layer.attention.prepareProjections() }
+        if qualifiedMatrixFFN || Q35DFlash2ProjectionPolicy.matrixFFNEnabled,
+           config.hiddenSize == 5120, config.intermediateSize == 17_408,
+           QuantizedVerificationBackend.m5Supported, PortableQuantizedLinear.m5TiledWeightsEnabled {
+            matrixFFNRequiresQualifiedRequest = qualifiedMatrixFFN && !Q35DFlash2ProjectionPolicy.matrixFFNEnabled
+            for layer in layers { layer.mlp.prepareMatrixProjections() }
+        }
     }
 
     package func appendTargetContext(_ states: [Int: MLXArray], cache: [Q35DFlash2Cache]) {
@@ -229,7 +284,38 @@ package final class Q35DFlash2Model: Module {
     package func selection(
         anchor: Int, count: Int, cache: [Q35DFlash2Cache], target: Q35Model, temperature: Float
     ) -> DFlash2Selection {
-        precondition(count > 0 && count < config.dflash.blockSize && cache.count == layers.count)
+        let hidden = proposalHidden(anchor: anchor, count: count, cache: cache, target: target, temperature: temperature)
+        let values = proposalLogits(hidden: hidden, target: target)
+        return selector.select(hidden: hidden, logits: values.logits,
+            anchorTokenIds: MLXArray([Int32(anchor)]), temperature: temperature)
+    }
+
+    func tree(anchor: Int, depth: Int, nodeBudget: Int, cache: [Q35DFlash2Cache], target: Q35Model) -> DFlash2TreeProposal {
+        let hidden = proposalHidden(anchor: anchor, count: depth, cache: cache, target: target, temperature: 0,
+                                    maximumProposals: 15)
+        let calibration: DFlash2TreeCalibration = Q35DFlash2TreePolicy.calibratedScoresEnabled ? .candidate : .reference
+        let compactHead = Q35DFlash2DraftHead.enabled
+        #if os(macOS)
+        if Q35DFlash2NativeDraftHead.enabled, !compactHead, !QuantizedVerificationContext.suppressM5,
+           config.dflash.selectorTopK == 16,
+           let tree = nativeTreeHead.tree(hidden, target: target, selector: selector, anchor: anchor,
+                                          nodeBudget: nodeBudget, calibration: calibration) {
+            return tree
+        }
+        #endif
+        let values = proposalLogits(hidden: hidden, target: target, compactHead: compactHead)
+        return selector.tree(hidden: hidden, logits: values.logits, anchor: anchor, nodeBudget: nodeBudget,
+                             calibration: calibration, vocabulary: values.vocabulary)
+    }
+
+    private func proposalHidden(
+        anchor: Int, count: Int, cache: [Q35DFlash2Cache], target: Q35Model, temperature: Float,
+        maximumProposals: Int? = nil
+    ) -> MLXArray {
+        let limit = Q35DFlash2VerificationPolicy.proposalLimit(
+            model: target, trainedBlockSize: config.dflash.blockSize, sampled: false
+        )
+        precondition(count > 0 && count <= (maximumProposals ?? limit) && cache.count == layers.count)
         let tokens = [anchor] + Array(repeating: config.dflash.maskTokenID, count: count)
         var hidden = target.embeddings(for: MLXArray(tokens.map(Int32.init)).reshaped(1, tokens.count))
         let first = cache[0]
@@ -237,14 +323,27 @@ package final class Q35DFlash2Model: Module {
             offset: first.offset, length: tokens.count, contextLength: first.keys?.dim(2) ?? 0,
             window: first.window, dtype: hidden.dtype
         )
-        for (layer, entry) in zip(layers, cache) {
-            hidden = layer(hidden, cache: entry, mask: mask)
+        hidden = QuantizedVerificationContext.$suppressM5.withValue(
+            QuantizedVerificationContext.suppressM5 || temperature > 0
+                || (matrixFFNRequiresQualifiedRequest && !QwenDFlashDefaults.active)
+        ) {
+            var value = hidden
+            for (layer, entry) in zip(layers, cache) { value = layer(value, cache: entry, mask: mask) }
+            return value
         }
-        hidden = norm(hidden)[0..., 1..., 0...]
-        return selector.select(
-            hidden: hidden, logits: target.logits(from: hidden),
-            anchorTokenIds: MLXArray([Int32(anchor)]), temperature: temperature
-        )
+        return norm(hidden)[0..., 1..., 0...]
+    }
+
+    private func proposalLogits(hidden: MLXArray, target: Q35Model, compactHead: Bool = false)
+    -> (logits: MLXArray, vocabulary: MLXArray?) {
+        let rows = Q35DFlash2VerificationPolicy.rowLimit(config: target.config,
+            backend: (target.lmHead as? PortableQuantizedLinear)?.effectiveVerificationBackend)
+        return QuantizedVerificationContext.$maximumM5Rows.withValue(rows) {
+            if compactHead, let selected = compactTreeHead(hidden, target: target) {
+                return selected
+            }
+            return (target.logits(from: hidden), nil)
+        }
     }
 
     package static func weightKey(_ key: String) -> String {

@@ -1,5 +1,7 @@
 import Foundation
+import MereRunTensor
 import MediaIO
+import MereRunQwenModel
 import MLX
 import MLXNN
 #if canImport(Darwin)
@@ -12,6 +14,19 @@ struct Q35PrefixKVCacheKey: Hashable {
     let modelPath: String
     let cacheMode: RuntimeKVCacheMode
     let tokens: [Int]
+    // DFlash snapshots have a separate arithmetic/capture route and reuse
+    // only the same prefill grid. Nil identifies the existing target/MTP path.
+    let dflash2ChunkSize: Int?
+    let tunedDFlash = QwenDFlashDefaults.active
+    let prefillProjectionMode: Q35PrefillProjectionPolicy.Mode
+
+    init(modelPath: String, cacheMode: RuntimeKVCacheMode, tokens: [Int], dflash2ChunkSize: Int? = nil) {
+        self.modelPath = modelPath
+        self.cacheMode = cacheMode
+        self.tokens = tokens
+        self.dflash2ChunkSize = dflash2ChunkSize
+        self.prefillProjectionMode = Q35PrefillProjectionPolicy.mode
+    }
 }
 
 struct Q35PrefixKVCacheEntry {
@@ -19,6 +34,7 @@ struct Q35PrefixKVCacheEntry {
     let logits: MLXArray
     let hidden: MLXArray
     let mtpSession: Q35MTPDraftSession?
+    let dflash2Cache: [Q35DFlash2Cache]?
     let priority: RuntimePrefixCacheEntryPriority
     var lastAccess: Date
 }

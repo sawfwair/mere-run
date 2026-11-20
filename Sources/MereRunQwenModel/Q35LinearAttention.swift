@@ -100,14 +100,17 @@ func q35GDNPreworkOps(
 }
 
 #if os(macOS)
-private enum Q35GDNPreworkMetalKernel {
+enum Q35GDNPreworkMetalKernel {
     // Adapted under Apache-2.0 from the Qwen GDN verification prework source
     // documented in THIRD_PARTY_NOTICES.md.
     static let kernel = MLXFast.metalKernel(
         name: "q35_gdn_verify_prework",
-        inputNames: ["qkv", "conv_state", "conv_w", "q_scale", "k_scale"],
+        inputNames: ["qkv", "conv_state", "conv_w", "q_scale", "k_scale", "ancestry"],
         outputNames: ["q_out", "k_out", "v_out", "conv_out"],
-        source: """
+        source: source
+    )
+
+    static let source = """
             uint lane = thread_position_in_threadgroup.x;
             uint row = threadgroup_position_in_grid.y;
             uint logical_head = threadgroup_position_in_grid.z;
@@ -127,10 +130,10 @@ private enum Q35GDNPreworkMetalKernel {
                 uint channel = channel_base + lane * 4 + i;
                 float acc = 0.0f;
                 for (uint tap = 0; tap < 4; ++tap) {
-                    uint input_row = row + tap;
-                    const T xv = input_row < uint(NKEEP)
-                        ? conv_state[input_row * uint(C) + channel]
-                        : qkv[(input_row - uint(NKEEP)) * uint(C) + channel];
+                    int source = Tree ? ancestry[row * 4 + tap] : int(row + tap) - int(NKEEP);
+                    const T xv = source < 0
+                        ? conv_state[uint(int(NKEEP) + source) * uint(C) + channel]
+                        : qkv[uint(source) * uint(C) + channel];
                     acc += float(xv) * float(conv_w[channel * 4 + tap]);
                 }
                 const T conv = T(acc);
@@ -166,14 +169,13 @@ private enum Q35GDNPreworkMetalKernel {
                     uint state_base = state_row * uint(C) + channel_base + lane * 4;
                     for (uint i = 0; i < 4; ++i) {
                         uint channel = channel_base + lane * 4 + i;
-                        conv_out[state_base + i] = input_row < uint(NKEEP)
+                        conv_out[state_base + i] = Tree ? conv_state[state_base + i] : input_row < uint(NKEEP)
                             ? conv_state[input_row * uint(C) + channel]
                             : qkv[(input_row - uint(NKEEP)) * uint(C) + channel];
                     }
                 }
             }
             """
-    )
 }
 
 func q35GDNPreworkMetal(
@@ -183,12 +185,13 @@ func q35GDNPreworkMetal(
     numKeyHeads: Int,
     numValueHeads: Int,
     keyHeadDim: Int,
-    valueHeadDim: Int
+    valueHeadDim: Int,
+    tree: Q35VerificationTree? = nil
 ) -> Q35GDNPreworkOutput? {
     guard Device.defaultDevice().deviceType == .gpu,
           qkv.ndim == 3,
           qkv.dim(0) == 1,
-          (1...9).contains(qkv.dim(1)),
+          (1...max(9, QuantizedVerificationContext.maximumM5Rows)).contains(qkv.dim(1)),
           qkv.dtype == .bfloat16,
           convState.shape == [1, 3, qkv.dim(2)],
           convState.dtype == .bfloat16,
@@ -206,8 +209,11 @@ func q35GDNPreworkMetal(
     let qScale = MLXArray(invScale * invScale).asType(.bfloat16)
     let kScale = MLXArray(invScale).asType(.bfloat16)
     let outputs = Q35GDNPreworkMetalKernel.kernel(
-        [qkv, convState, convWeight, qScale, kScale],
+        [qkv, convState, convWeight, qScale, kScale,
+         tree?.devicePlan?.convolution3
+            ?? MLXArray((tree?.convolutionRows(keep: 3).flatMap { $0 } ?? [0]).map(Int32.init))],
         template: [
+            ("Tree", tree != nil),
             ("T", qkv.dtype),
             ("HK", numKeyHeads),
             ("HV", numValueHeads),
@@ -247,7 +253,7 @@ private func q35ConcatenatedOptional(_ lhs: MLXArray?, _ rhs: MLXArray?) -> MLXA
     }
 }
 
-func q35FusedPortableQuantizedLinear(_ lhs: Linear, _ rhs: Linear) -> PortableQuantizedLinear? {
+func q35FusedPortableQuantizedLinear(_ lhs: Linear, _ rhs: Linear, layerIndex: Int? = nil) -> PortableQuantizedLinear? {
     guard let lhs = lhs as? PortableQuantizedLinear,
           let rhs = rhs as? PortableQuantizedLinear,
           lhs.shape.1 == rhs.shape.1,
@@ -265,7 +271,7 @@ func q35FusedPortableQuantizedLinear(_ lhs: Linear, _ rhs: Linear) -> PortableQu
     if let bias { MLX.eval(bias) }
     if let biases { MLX.eval(biases) }
 
-    return PortableQuantizedLinear(
+    let fused = PortableQuantizedLinear(
         weight: weight,
         bias: bias,
         scales: scales,
@@ -274,6 +280,11 @@ func q35FusedPortableQuantizedLinear(_ lhs: Linear, _ rhs: Linear) -> PortableQu
         bits: lhs.bits,
         mode: lhs.mode
     )
+    fused.verificationBackend = Q35GDNProjectionPolicy.backend(lhs, rhs, layerIndex: layerIndex)
+    if fused.verificationBackend == .m5Matrix {
+        fused.groupAffineArithmetic = Q35GDNProjectionPolicy.matrixArithmetic
+    }
+    return fused
 }
 
 @inline(__always)
@@ -499,7 +510,9 @@ func q35GatedDeltaUpdateMetal(
         .map { $0.asType(.float32) }
         ?? MLXArray.zeros([batch, numValueHeads, valueHeadDim, keyHeadDim], dtype: .float32)
 
-    let outputs = Q35GatedDeltaMetalKernel.kernel(
+    let wide = Q35PrefillGDNRecurrence.eligible(q: q, k: k, v: v, keyHeads: numKeyHeads, valueHeads: numValueHeads)
+    let kernel = wide ? Q35PrefillGDNRecurrence.kernel : Q35GatedDeltaMetalKernel.kernel
+    let outputs = kernel(
         [q, k, v, g, beta, recurrent, sequence],
         template: [
             ("InT", q.dtype),
@@ -509,7 +522,7 @@ func q35GatedDeltaUpdateMetal(
             ("Hk", numKeyHeads),
             ("Hv", numValueHeads),
         ],
-        grid: (32, valueHeadDim, batch * numValueHeads),
+        grid: (32, wide ? valueHeadDim / 8 : valueHeadDim, batch * numValueHeads),
         threadGroup: (32, 4, 1),
         outputShapes: [
             [batch, sequence, numValueHeads, valueHeadDim],
@@ -522,7 +535,7 @@ func q35GatedDeltaUpdateMetal(
 }
 #endif
 
-fileprivate struct Q35LinearVerificationReplay {
+struct Q35LinearVerificationReplay {
     let baseConvState: MLXArray
     let baseRecurrentState: MLXArray?
     let qkv: MLXArray
@@ -540,9 +553,83 @@ fileprivate struct Q35LinearVerificationReplay {
 }
 
 public final class Q35LinearCache: @unchecked Sendable {
-    package var convState: MLXArray?
-    package var recurrentState: MLXArray?
-    fileprivate var verificationReplay: Q35LinearVerificationReplay?
+    private var storedConvState: MLXArray?
+    private var storedRecurrentState: MLXArray?
+    private var storedVerificationReplay: Q35LinearVerificationReplay?
+    private var storedVerificationGates: (g: MLXArray, beta: MLXArray)?
+    #if os(macOS)
+    var nativeState: (any Q35NativeLinearState)?
+    var nativeVerificationReplay: (any Q35NativeLinearReplay)?
+
+    private func exportNativeState() {
+        guard let nativeState else { return }
+        let exported = nativeState.exported()
+        storedConvState = exported.convolution
+        storedRecurrentState = exported.recurrent
+        self.nativeState = nil
+    }
+
+    func installNativeState(_ state: any Q35NativeLinearState) {
+        commitVerification()
+        storedConvState = nil; storedRecurrentState = nil
+        nativeState = state
+    }
+    #endif
+
+    package var convState: MLXArray? {
+        get {
+            #if os(macOS)
+            exportNativeState()
+            #endif
+            return storedConvState
+        }
+        set {
+            #if os(macOS)
+            exportNativeState(); nativeVerificationReplay = nil
+            #endif
+            storedConvState = newValue
+        }
+    }
+    package var recurrentState: MLXArray? {
+        get {
+            #if os(macOS)
+            exportNativeState()
+            #endif
+            return storedRecurrentState
+        }
+        set {
+            #if os(macOS)
+            exportNativeState(); nativeVerificationReplay = nil
+            #endif
+            storedRecurrentState = newValue
+        }
+    }
+    var verificationReplay: Q35LinearVerificationReplay? {
+        get {
+            #if os(macOS)
+            return storedVerificationReplay ?? nativeVerificationReplay?.legacy
+            #else
+            return storedVerificationReplay
+            #endif
+        }
+        set {
+            storedVerificationReplay = newValue
+            #if os(macOS)
+            if newValue != nil { nativeVerificationReplay = nil }
+            #endif
+        }
+    }
+    var verificationTree: Q35VerificationTree?
+    var verificationGates: (g: MLXArray, beta: MLXArray)? {
+        get {
+            #if os(macOS)
+            return storedVerificationGates ?? nativeVerificationReplay?.gates
+            #else
+            return storedVerificationGates
+            #endif
+        }
+        set { storedVerificationGates = newValue }
+    }
     package var pleConvState: MLXArray?
     package var pleTokenContext: MLXArray?
     var pleVerificationReplay: Q38PLEVerificationReplay?
@@ -550,9 +637,14 @@ public final class Q35LinearCache: @unchecked Sendable {
     public init() {}
 
     public func reset() {
-        convState = nil
-        recurrentState = nil
+        #if os(macOS)
+        nativeState = nil; nativeVerificationReplay = nil
+        #endif
+        storedConvState = nil
+        storedRecurrentState = nil
         verificationReplay = nil
+        verificationTree = nil
+        verificationGates = nil
         pleConvState = nil
         pleTokenContext = nil
         pleVerificationReplay = nil
@@ -560,14 +652,20 @@ public final class Q35LinearCache: @unchecked Sendable {
 
     public func fork() -> Q35LinearCache {
         let copy = Q35LinearCache()
-        copy.convState = convState
-        copy.recurrentState = recurrentState
+        #if os(macOS)
+        copy.nativeState = nativeState
+        copy.nativeVerificationReplay = nativeVerificationReplay
+        if nativeVerificationReplay != nil { copy.verificationTree = verificationTree }
+        #endif
+        copy.storedConvState = storedConvState
+        copy.storedRecurrentState = storedRecurrentState
         copy.pleConvState = pleConvState
         copy.pleTokenContext = pleTokenContext
         return copy
     }
 
     func canRestoreVerificationPrefix(tokenCount: Int) -> Bool {
+        guard verificationTree == nil else { return false }
         guard let verificationReplay else { return false }
         if pleConvState != nil || pleTokenContext != nil {
             guard let pleVerificationReplay,
@@ -633,7 +731,12 @@ public final class Q35LinearCache: @unchecked Sendable {
     }
 
     func commitVerification() {
+        #if os(macOS)
+        nativeVerificationReplay = nil
+        #endif
         verificationReplay = nil
+        verificationTree = nil
+        verificationGates = nil
         pleVerificationReplay = nil
     }
 
@@ -740,12 +843,14 @@ final class Q35LinearAttention: Module {
     private let qkNormWeightBF16: MLXArray
     private let isQwen4Exp: Bool
     private let usesHaruNormalization: Bool
+    private let layerIndex: Int?
     private let prismQKVZ = Q35PrismFusion()
     private var fusedInProjQKVZ: Linear?
     private var fusedInProjBA: Linear?
 
-    init(config: Q35Config) {
+    init(config: Q35Config, layerIndex: Int? = nil) {
         let text = config.textConfig
+        self.layerIndex = layerIndex
         self.hiddenSize = text.hiddenSize
         self.numKeyHeads = text.linearNumKeyHeads
         self.numValueHeads = text.linearNumValueHeads
@@ -790,6 +895,32 @@ final class Q35LinearAttention: Module {
         super.init()
     }
 
+    #if os(macOS)
+    private static let splitGateEnabled = ProcessInfo.processInfo.environment["MERERUN_Q38_GDN_MATRIX_Z"] == "1"
+        && !Q35NativeExecutionPolicy.enabled
+    private static let splitGateLayers = Q35GDNProjectionPolicy.parseMatrixLayers(
+        ProcessInfo.processInfo.environment["MERERUN_Q38_GDN_MATRIX_Z_LAYERS"])
+    var matrixOutputGate: PortableQuantizedLinear? {
+        guard Self.splitGateEnabled, !Q35GDNProjectionPolicy.matrixEnabled,
+              Self.splitGateLayers.map({ allowed in layerIndex.map(allowed.contains) ?? false }) ?? true,
+              let gate = inProjZ as? PortableQuantizedLinear,
+              gate.supportsGroupAffineOutputGate,
+              let state = inProjQKV as? PortableQuantizedLinear, state.shape == (10240, 5120)
+        else { return nil }
+        return gate
+    }
+    #endif
+
+    func resolvedFusedInputs() -> (qkvz: Linear?, ba: Linear?) {
+        if fusedInProjQKVZ == nil {
+            fusedInProjQKVZ = q35FusedPortableQuantizedLinear(inProjQKV, inProjZ, layerIndex: layerIndex)
+        }
+        if fusedInProjBA == nil {
+            fusedInProjBA = q35FusedPortableQuantizedLinear(inProjB, inProjA)
+        }
+        return (fusedInProjQKVZ, fusedInProjBA)
+    }
+
     func callAsFunction(
         _ x: MLXArray,
         cache: Q35LinearCache?,
@@ -802,14 +933,21 @@ final class Q35LinearAttention: Module {
 
         let qkv: MLXArray
         let z: MLXArray
-        if fusedInProjQKVZ == nil {
-            fusedInProjQKVZ = q35FusedPortableQuantizedLinear(inProjQKV, inProjZ)
-        }
-        if let parts = prismQKVZ.callSplit(x, projections: [inProjQKV, inProjZ]) {
+        let fused = resolvedFusedInputs()
+        let projectedGate: MLXArray?
+        #if os(macOS)
+        projectedGate = matrixOutputGate?.groupAffineOutputGate(x)
+        #else
+        projectedGate = nil
+        #endif
+        if let projectedGate {
+            qkv = QuantizedVerificationContext.$suppressM5.withValue(true) { inProjQKV(x) }
+            z = projectedGate.reshaped(batch, sequence, numValueHeads, valueHeadDim)
+        } else if let parts = prismQKVZ.callSplit(x, projections: [inProjQKV, inProjZ]) {
             qkv = parts[0]
             z = parts[1].reshaped(batch, sequence, numValueHeads, valueHeadDim)
-        } else if let fusedInProjQKVZ {
-            let qkvz = fusedInProjQKVZ(x)
+        } else if let qkvzProjection = fused.qkvz {
+            let qkvz = Q35GDNProjectionPolicy.project(qkvzProjection, x, layerIndex: layerIndex)
             qkv = qkvz[.ellipsis, 0..<convDim]
             z = qkvz[.ellipsis, convDim...].reshaped(batch, sequence, numValueHeads, valueHeadDim)
         } else {
@@ -819,17 +957,16 @@ final class Q35LinearAttention: Module {
 
         let b: MLXArray
         let a: MLXArray
-        if fusedInProjBA == nil {
-            fusedInProjBA = q35FusedPortableQuantizedLinear(inProjB, inProjA)
-        }
-        if let fusedInProjBA {
-            let ba = fusedInProjBA(x)
+        if let baProjection = fused.ba {
+            let ba = baProjection(x)
             b = ba[.ellipsis, 0..<numValueHeads]
             a = ba[.ellipsis, numValueHeads...]
         } else {
             b = inProjB(x)
             a = inProjA(x)
         }
+
+        Q35VerificationAttribution.observer?(.linearInput, [qkv, z, a, b])
 
         let convState = cache?.convState
             ?? MLXArray.zeros([batch, keep, convDim], dtype: x.dtype)
@@ -838,7 +975,14 @@ final class Q35LinearAttention: Module {
         let qkEpsilon: Float = usesHaruNormalization ? 1e-6 / Float(keyHeadDim) : 1e-6
         let prework: Q35GDNPreworkOutput
         #if os(macOS)
-        if !isQwen4Exp, !usesHaruNormalization, cache != nil,
+        if let tree = Q35TreeVerificationContext.current {
+            prework = q35TreePrework(
+                qkv: qkv, convState: convState, convWeight: conv1d.weight,
+                numKeyHeads: numKeyHeads, numValueHeads: numValueHeads,
+                keyHeadDim: keyHeadDim, valueHeadDim: valueHeadDim,
+                rmsNormWeight: rmsNormWeight, tree: tree
+            )
+        } else if !isQwen4Exp, !usesHaruNormalization, cache != nil,
            let fused = q35GDNPreworkMetal(
                qkv: qkv,
                convState: convState,
@@ -864,22 +1008,33 @@ final class Q35LinearAttention: Module {
             )
         }
         #else
-        prework = q35GDNPreworkOps(
-            qkv: qkv,
-            convState: convState,
-            convWeight: conv1d.weight,
-            numKeyHeads: numKeyHeads,
-            numValueHeads: numValueHeads,
-            keyHeadDim: keyHeadDim,
-            valueHeadDim: valueHeadDim,
-            rmsNormWeight: rmsNormWeight,
-            normalizeInFloat32: isQwen4Exp || normalizeQKInFloat32,
-            rmsNormEpsilon: qkEpsilon
-        )
+        if let tree = Q35TreeVerificationContext.current {
+            prework = q35TreePrework(
+                qkv: qkv, convState: convState, convWeight: conv1d.weight,
+                numKeyHeads: numKeyHeads, numValueHeads: numValueHeads,
+                keyHeadDim: keyHeadDim, valueHeadDim: valueHeadDim,
+                rmsNormWeight: rmsNormWeight, tree: tree
+            )
+        } else {
+            prework = q35GDNPreworkOps(
+                qkv: qkv,
+                convState: convState,
+                convWeight: conv1d.weight,
+                numKeyHeads: numKeyHeads,
+                numValueHeads: numValueHeads,
+                keyHeadDim: keyHeadDim,
+                valueHeadDim: valueHeadDim,
+                rmsNormWeight: rmsNormWeight,
+                normalizeInFloat32: isQwen4Exp || normalizeQKInFloat32,
+                rmsNormEpsilon: qkEpsilon
+            )
+        }
         #endif
+        Q35VerificationAttribution.observer?(.linearPrework, [prework.q, prework.k, prework.v, prework.convState])
         cache?.convState = prework.convState
 
-        let (updated, state) = q35GatedDeltaUpdate(
+        let tree = Q35TreeVerificationContext.current
+        let (updated, state) = q35TreeDeltaUpdate(
             q: prework.q,
             k: prework.k,
             v: prework.v,
@@ -890,10 +1045,12 @@ final class Q35LinearAttention: Module {
             state: recurrentState,
             numKeyHeads: numKeyHeads,
             numValueHeads: numValueHeads,
-            valueHeadDim: valueHeadDim
+            valueHeadDim: valueHeadDim, tree: tree, saveGatesIn: cache
         )
+        Q35VerificationAttribution.observer?(.linearRecurrent, [updated])
         cache?.recurrentState = state
         if targetVerify, let cache {
+            cache.verificationTree = tree
             cache.verificationReplay = Q35LinearVerificationReplay(
                 baseConvState: convState,
                 baseRecurrentState: recurrentState,
@@ -915,6 +1072,9 @@ final class Q35LinearAttention: Module {
         }
 
         let normalized = norm(updated.asType(qkv.dtype), gate: z)
-        return outProj(normalized.reshaped(batch, sequence, valueDim))
+        Q35VerificationAttribution.observer?(.linearNormGate, [normalized])
+        let result = outProj(normalized.reshaped(batch, sequence, valueDim))
+        Q35VerificationAttribution.observer?(.linearOutput, [result])
+        return result
     }
 }

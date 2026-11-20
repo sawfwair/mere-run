@@ -367,9 +367,8 @@
       "route": "chat",
       "body": "{\"model\":\"text-chat-q36-nano\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"seed\":1}",
       "main": "refuses",
-      "evidence": "APIServerContract.chatRequest: deterministic seeds are not supported by this engine (the CLI now accepts --seed; the route is unchanged).",
-      "branch": "refuses",
-      "field": "seed"
+      "evidence": "Main refused seed at the adapter despite native Qwen seed support; the corrected catalog profile now passes it to the runtime.",
+      "branch": "passes"
     },
     {
       "route": "chat",

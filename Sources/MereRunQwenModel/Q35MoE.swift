@@ -694,13 +694,18 @@ final class Q35FeedForward: Module {
         guard let gateProj, let upProj, let downProj else {
             return x
         }
+        let activated: MLXArray
         if let parts = prismGateUp.callSplit(x, projections: [gateProj, upProj]) {
-            return downProj(q35Swiglu(parts[0], parts[1]))
+            activated = q35Swiglu(parts[0], parts[1])
+        } else if let fused = PortableQuantizedLinear.fusedVerificationSwiGLU(x, gate: gateProj, up: upProj) {
+            activated = fused
+        } else {
+            activated = q35Swiglu(gateProj(x), upProj(x))
         }
-        if let activated = PortableQuantizedLinear.fusedVerificationSwiGLU(x, gate: gateProj, up: upProj) {
-            return downProj(activated)
-        }
-        return downProj(q35Swiglu(gateProj(x), upProj(x)))
+        Q35VerificationAttribution.observer?(.feedForwardGateUp, [activated])
+        let result = downProj(activated)
+        Q35VerificationAttribution.observer?(.feedForwardDown, [result])
+        return result
     }
 
     private func serialProjection(_ layer: Linear, _ input: MLXArray) -> MLXArray {

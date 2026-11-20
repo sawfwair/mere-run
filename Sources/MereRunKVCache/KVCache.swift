@@ -71,7 +71,7 @@ public class KVCacheSimple: KVCache {
             let newV = MLXArray.zeros(vShape, dtype: values.dtype)
 
             if var currentKeys = self.keys, var currentValues = self.values {
-                if previous % step != 0 {
+                if previous != currentKeys.dim(2) {
                     currentKeys = currentKeys[.ellipsis, ..<previous, 0...]
                     currentValues = currentValues[.ellipsis, ..<previous, 0...]
                 }
@@ -120,6 +120,44 @@ public class KVCacheSimple: KVCache {
     public func rollback(toOffset newOffset: Int) {
         precondition(newOffset >= 0 && newOffset <= offset)
         offset = newOffset
+    }
+
+    /// Shares only the populated prefix; native verification reads it without a gather.
+    package var committedVerificationState: (MLXArray, MLXArray)? {
+        offset == 0 ? nil : populatedState()
+    }
+
+    /// Reads an accepted verification path without exposing unused allocation rows.
+    package func verificationRows(_ rows: [Int]) -> (MLXArray, MLXArray) {
+        precondition(!rows.isEmpty && rows.allSatisfy { $0 >= 0 && $0 < offset })
+        let indices = MLXArray(rows.map(Int32.init))
+        return (MLX.take(keys!, indices, axis: 2), MLX.take(values!, indices, axis: 2))
+    }
+
+    /// Publishes a leading accepted span from a verification fork. The caller
+    /// guarantees that the fork starts with this cache's committed prefix.
+    /// Rejected rows stay beyond the logical write head and are overwritten.
+    package func adoptVerificationPrefix(from candidate: KVCacheSimple, count: Int) {
+        let nextOffset = offset + count
+        precondition(candidate !== self && count > 0 && nextOffset <= candidate.offset)
+        // Independent wrappers preserve isolation when either cache next writes.
+        keys = candidate.keys.map { $0.reshaped($0.shape) }
+        values = candidate.values.map { $0.reshaped($0.shape) }
+        offset = nextOffset
+    }
+
+    package var verificationCapacity: Int { keys!.dim(2) }
+    package var pendingVerificationState: [MLXArray] { [keys!, values!] }
+
+    /// Prepare a GPU-selected path while preserving the allocation's headroom.
+    /// The owning runtime supplies a complete capacity-sized gather index.
+    package func preparingVerificationRows(_ rows: MLXArray, stream: StreamOrDevice) -> KVCacheSimple {
+        precondition(rows.ndim == 1 && rows.dim(0) == verificationCapacity)
+        let copy = KVCacheSimple(step: step)
+        copy.keys = MLX.take(keys!, rows, axis: 2, stream: stream)
+        copy.values = MLX.take(values!, rows, axis: 2, stream: stream)
+        copy.offset = offset
+        return copy
     }
 
     public func fork() -> KVCache {

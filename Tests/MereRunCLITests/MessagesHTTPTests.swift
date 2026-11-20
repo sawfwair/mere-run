@@ -97,17 +97,17 @@ private actor MessagesHTTPModel: RuntimeChatModelLease {
 }
 
 final class MessagesHTTPTests: XCTestCase {
-    private func withServer(modelID: String = MuseGlimmerResources.modelId,
+    private func withServer(modelID: String = MuseGlimmerResources.modelId, engine: RuntimeServingEngine = .textChatMuseGlimmer,
                             _ operation: (URL, RuntimeServingServices, MessagesHTTPModel) async throws -> Void) async throws {
         let model = MessagesHTTPModel()
         let profile = ManagedModelCatalog.apiProfile(for: modelID) ?? .runtimeFallback(for: .textChatMuseGlimmer)
         let path = modelID == MuseGlimmerResources.modelId ? nil : "/fixtures/\(modelID)"
-        let services = RuntimeServingServices(defaultModelID: modelID, modelPath: path, engine: .textChatMuseGlimmer,
+        let services = RuntimeServingServices(defaultModelID: modelID, modelPath: path, engine: engine,
             maxActiveRequests: 1, chatPlanner: { input, _, context in
-                let prepared = try input.prepare(RuntimeChatConfiguration(modelID: modelID, engine: .textChatMuseGlimmer,
+                let prepared = try input.prepare(RuntimeChatConfiguration(modelID: modelID, engine: engine,
                     settings: .init(), profile: profile, contextSize: context, fallbackLoraPath: nil))
                 return RuntimeChatPlan(lease: model, request: prepared.request, modelID: modelID,
-                                       engine: .textChatMuseGlimmer, includeUsage: true, scope: prepared.scope)
+                                       engine: engine, includeUsage: true, scope: prepared.scope)
             })
         let server = CodeGenServer(services: services, apiKey: "test-key", continuity: try MessagesContinuity(key: Data(repeating: 1, count: 32)),
                                    messagesHeartbeatInterval: .milliseconds(20))
@@ -122,6 +122,31 @@ final class MessagesHTTPTests: XCTestCase {
             try await operation(URL(string: "http://127.0.0.1:\(port)")!, services, model)
             task.cancel(); _ = await task.result
         } catch { task.cancel(); _ = await task.result; throw error }
+    }
+    func testQ38HTTPAcceptsSeedAndExplicitThinkingOffOnBothAdapters() async throws {
+        let id = Q35Resources.q38TwentySevenB4BitModelId
+        try await withServer(modelID: id, engine: .textChatQ36) { url, _, _ in
+            let (messagesData, messagesResponse) = try await post(url,
+                extra: #", "thinking":{"type":"disabled"}"#)
+            XCTAssertEqual(messagesResponse.statusCode, 200)
+            let message = try JSONDecoder().decode(ChatJSONValue.self, from: messagesData)
+            XCTAssertFalse(message.objectValue?["content"]?.arrayValue?.contains {
+                $0.objectValue?["type"] == .string("thinking")
+            } ?? false)
+
+            var request = URLRequest(url: url.appendingPathComponent("v1/chat/completions"))
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("test-key", forHTTPHeaderField: "x-api-key")
+            request.httpBody = Data((#"{"model":""# + id
+                + #"","messages":[{"role":"user","content":"hello"}],"max_tokens":16,"seed":42,"reasoning_effort":"none"}"#).utf8)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+            let completion = try JSONDecoder().decode(ChatJSONValue.self, from: data)
+            let output = completion.objectValue?["choices"]?.arrayValue?.first?.objectValue?["message"]?.objectValue
+            XCTAssertEqual(output?["content"], .string("42"))
+            XCTAssertNil(output?["reasoning_content"])
+        }
     }
     func testCustomArtifactDiscoveryPublishesResolvedAdapterCapabilities() async throws {
         let id = "glimmer-q8-local"

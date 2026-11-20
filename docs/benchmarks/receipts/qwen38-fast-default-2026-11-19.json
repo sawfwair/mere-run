@@ -1,0 +1,230 @@
+{
+  "model": "Qwen3.8-27B 4-bit + DFlash2, M5 Max",
+  "upstreamComparator": {
+    "engine": "tensorfold-native 1.2.7",
+    "revision": "93a2e93ecebff8aa52b88e58c5dd222516e69c5f",
+    "binarySHA256": "69430b30010560b8dae3dcb6a71ee5978728b6fd0635db2aeb43ca047f67af04"
+  },
+  "hardware": "M5 Max, AC high-power mode",
+  "settings": {
+    "effort": "xhigh (also the model default)",
+    "temperature": 1,
+    "topP": 0.95,
+    "topK": 20,
+    "minP": 0,
+    "penalties": "inactive",
+    "contextSize": 24576,
+    "outputBudgetForLRU": 16384,
+    "thinkingLimitForLRU": 14336
+  },
+  "ordinaryReleaseSHA256": "d4a5c6db561e8f2967a193273fe831f9cfd532bdf52b97527e0eefd2eccb24bb",
+  "noFlagReleaseReplay": {
+    "clean-automatic-cache-109-16384": {
+      "answerSHA": "67420c5a15a1ec580a909670f78e881bf302cf36def358fe294bf4a3f7cc3c49",
+      "detail": "passed",
+      "matches": true,
+      "passed": true,
+      "reasonSHA": "e9898f4caf61ed32893e1263b6ac1d17ecbc59ba435f7fd8008263340009a440",
+      "tokens": 15024
+    },
+    "clean-automatic-cache-73-16384": {
+      "answerSHA": "10a83d2fb625a5c633b238679b4ce3df446789de89d0a57ceafd57a582b224a7",
+      "detail": "passed",
+      "matches": true,
+      "passed": true,
+      "reasonSHA": "91f52f340dc9e0f2a9441383caab95b0491be32ad0a76cc618f53062e4cc612a",
+      "tokens": 15067
+    },
+    "clean-automatic-cache-73-256": {
+      "deliveryTPS": 98.34201153648445,
+      "matches": true,
+      "reasonSHA": "47e1970b48d01ab9552117f6d8c85c31ba2cf69e7c4947784c6d24ad76a29f4a",
+      "tokens": 256
+    },
+    "clean-automatic-prose-long-42-256": {
+      "deliveryTPS": 75.48078205785643,
+      "matches": true,
+      "reasonSHA": "0555de1b8e04a52a8b5591fe9be23a4bcb20047a69790a8d2ff1408073fd1102",
+      "tokens": 256
+    },
+    "clean-previous-cache-109-256": {
+      "deliveryTPS": 58.92431071198087,
+      "matches": true,
+      "reasonSHA": "94dc4a82686bde6b8ddb002e3ba578535689638a5222a85b8390d89c80a6c60e",
+      "tokens": 256
+    }
+  },
+  "omittedSamplingAndEffortMatchQualified256": {
+    "answerSHA": true,
+    "finish": true,
+    "reasonSHA": true,
+    "usage": true
+  },
+  "earlierQualification": {
+    "note": "Matched timings were measured before promoting the same profile to default. Release replay checks seeded behavior. Replay timing was taken under shared machine load.",
+    "method": "Warm 32 tokens, then time 256 generated tokens, including streamed reasoning. Rate = (completion_tokens - 1) / (last content or reasoning event time - first content or reasoning event time). Median of seeds 42, 73 and 109. Machine admission and per-request exclusions as in the prior repeat study. Full-request wall seconds are diagnostic and include prefill and the final stream event.",
+    "generatedTPS": {
+      "tf/cache": 107.21583598878794,
+      "tf/prose-long": 82.7313411630927,
+      "14336/cache": 94.60655452764203,
+      "14336/prose-long": 82.43645189305947,
+      "baseline/cache": 94.83411459126448,
+      "baseline/prose-long": 82.97778866760169
+    },
+    "binarySHA256": {
+      "candidate": "299c5221208dc061da942e20738be971727c6401364ff80f77742524e87791d6",
+      "previous": "c747de6860c7b13f879fdf508939de74e0a52c8a0e239387f7a43297e77ae7f6",
+      "directTagCandidate": "f17cc4ebbf2c4f065a611665a23c5049668e8f12cdac6266a7bf94c6f253d844"
+    },
+    "LRUResults": {
+      "14336-seeds-cache-109": {
+        "passed": true,
+        "finish": "stop",
+        "usage": {
+          "completion_tokens": 15024,
+          "prompt_tokens": 94,
+          "total_tokens": 15118
+        }
+      },
+      "14336-seeds-cache-73": {
+        "passed": true,
+        "finish": "stop",
+        "usage": {
+          "completion_tokens": 15067,
+          "prompt_tokens": 94,
+          "total_tokens": 15161
+        }
+      },
+      "baseline-seeds-cache-109": {
+        "passed": false,
+        "finish": "length",
+        "usage": {
+          "completion_tokens": 16384,
+          "prompt_tokens": 94,
+          "total_tokens": 16478
+        }
+      },
+      "baseline-seeds-cache-73": {
+        "passed": false,
+        "finish": "length",
+        "usage": {
+          "completion_tokens": 16384,
+          "prompt_tokens": 94,
+          "total_tokens": 16478
+        }
+      },
+      "tf-seeds-cache-109": {
+        "passed": true,
+        "finish": "stop",
+        "usage": {
+          "completion_tokens": 9445,
+          "completion_tokens_details": {
+            "reasoning_tokens": 8806
+          },
+          "prompt_tokens": 94,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 9539
+        }
+      },
+      "tf-seeds-cache-73": {
+        "passed": false,
+        "finish": "length",
+        "usage": {
+          "completion_tokens": 16384,
+          "completion_tokens_details": {
+            "reasoning_tokens": 16384
+          },
+          "prompt_tokens": 94,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 16478
+        }
+      }
+    },
+    "accuracy": {
+      "originalAccuracy": "12/12; the ten previously passing answers, reasoning digests, token counts and finish reasons are unchanged.",
+      "newCodeSeeds": "2/2",
+      "writing": "6/6 original and 2/3 separate prompts, matching the previous scores."
+    },
+    "LRUOracle": "Run emitted Python in a restricted subprocess. Compare cache get/put/recency/eviction against OrderedDict for 500 operations at each capacity 1, 2 and 5. Range merge has 205 valid cases and two invalid cases. Memo and retrieval use the existing fact and exact answer checks.",
+    "prompts": {
+      "cache": "Write a complete Python implementation of an LRU cache using a dictionary and a doubly linked list, with get and put operations, type hints, and a short usage example. Return the code directly without introductory prose.",
+      "prose-long": "Explain how a small community could turn an abandoned railway station into a public library. Discuss the building, accessibility, staffing, the collection, and a realistic opening-day scene. Write approximately 400 words of clear, connected prose."
+    },
+    "policySelection": "The two failing LRU seeds were development cases. After a direct close at 8192 failed, the 8192-token cue passed the implementations but seed 73 misstated two example outputs. Reserve 2048 positions inside the original 16384-token request to change fewer completed answers. Use the same 14336-token ceiling across tasks and seeds. The two additional code seeds were held back until selection.",
+    "observed256TPS": {
+      "tf/cache": 97.1879723942346,
+      "tf/prose-long": 73.53508380365854,
+      "14336/cache": 92.08545109388137,
+      "14336/prose-long": 67.1253300984836,
+      "bounded/cache": 93.4967795436687,
+      "bounded/prose-long": 74.44988833123385
+    },
+    "fullLRUWallSeconds": {
+      "14336": {
+        "73": 321.1909514160361,
+        "109": 272.8743994999677
+      },
+      "tf": {
+        "73": 172.83816304104403,
+        "109": 92.56966575002298
+      },
+      "baseline": {
+        "73": 376.89944604202174,
+        "109": 419.68614212505054
+      }
+    },
+    "prefillProtocol": "Same uncached 4622-token greedy retrieval; check prompt count, cached-token count and answer on buffered and streamed requests. State admission separately.",
+    "prefill": {
+      "prefill-new-0": {
+        "admittedQuiet": false,
+        "answer": "PINE",
+        "clientExclusions": [
+          "competing GPU submissions",
+          "other CPU above 150 percent"
+        ],
+        "clientQuiet": false,
+        "clientTTFT": 6.108210750040598,
+        "exclusions": [
+          "competing GPU submissions",
+          "other CPU above 150 percent"
+        ],
+        "promptTPS": 755.9057384562874,
+        "serverTTFT": 6.129493,
+        "tokens": {
+          "completion_tokens": 2,
+          "prompt_tokens": 4622,
+          "total_tokens": 4624
+        }
+      },
+      "prefill-tf-0": {
+        "admittedQuiet": false,
+        "answer": "PINE",
+        "clientExclusions": [
+          "competing GPU submissions",
+          "other CPU above 150 percent"
+        ],
+        "clientQuiet": false,
+        "clientTTFT": 5.468952083028853,
+        "exclusions": [
+          "competing GPU submissions"
+        ],
+        "promptTPS": 884.4387293058976,
+        "tokens": {
+          "completion_tokens": 3,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          },
+          "prompt_tokens": 4622,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 4625
+        }
+      }
+    }
+  }
+}

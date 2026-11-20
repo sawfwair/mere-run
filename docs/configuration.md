@@ -635,6 +635,21 @@ download. Refresh an older install with:
 mere.run model pull vision-chat-q38-27b-4bit --force
 ```
 
+### `MERERUN_Q38_SAMPLED_TREE`
+
+The tuned Qwen3.8 27B Q4 runtime selects the vocabulary-indexed sampled tree for
+eligible xhigh text requests, including the default reasoning effort. Set this
+variable to `0` to restore the previous sampler. Changing the sampler can
+change seeded output. See [Qwen3.8](./runtime/text.md#qwen3-8) for eligibility.
+
+### `MERERUN_Q38_THINKING_TOKEN_LIMIT`
+
+The automatic fast profile reserves 2,048 tokens for the answer transition and
+generation when a 16,384-token output budget fits in context. Other output
+budgets keep model-directed reasoning. Set this variable to `0` to disable
+the automatic limit or a positive integer to choose a thinking limit on the
+vocabulary tree. The transition and answer use the request's total token budget.
+
 ### `MERERUN_Q35_DFLASH2_PATH`
 
 Override the local DFlash 2 checkpoint directory for

@@ -3037,6 +3037,20 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(delta.tool_calls?.first?.function?.name, "read")
     }
 
+    func testQwenStreamUsesNativeChannelsOnceAndHonorsHiddenReasoning() {
+        let raw = ChatProgress(stage: .generating, message: "work</think>42")
+        let reason = ChatProgress(stage: .generating, event: .reasoning("work"))
+        let answer = ChatProgress(stage: .generating, event: .text("42"))
+        XCTAssertNil(CodeGenServer.openAIProgressDelta(raw, useChannels: true, showThinking: true))
+        XCTAssertEqual(CodeGenServer.openAIProgressDelta(reason, useChannels: true, showThinking: true)?.reasoning_content, "work")
+        XCTAssertNil(CodeGenServer.openAIProgressDelta(reason, useChannels: true, showThinking: false))
+        XCTAssertEqual(CodeGenServer.openAIProgressDelta(answer, useChannels: true, showThinking: true)?.content, "42")
+        XCTAssertEqual(CodeGenServer.openAIProgressDelta(raw, useChannels: false, showThinking: true)?.content, raw.message)
+        var partial = ChatResponse(response: "work", tokensGenerated: 1, reasoningContent: "work")
+        partial.generationEvents = [.reasoning("work")]
+        XCTAssertEqual(CodeGenServer.openAIBufferedDelta(for: partial, toolCalls: []).content, "")
+    }
+
     func testBufferedAnswerSeparatesReasoningFromVisibleContent() {
         for response in ["<think>Check units.</think>42", "Check units.</think>42"] {
             let result = ChatResponse(

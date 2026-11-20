@@ -9,6 +9,61 @@ See <https://github.com/higurashi-ai/Haru/tree/7fe6b7665f8bf035998f401f8cb779fbe
 The Apache License 2.0 text appears in the YuE2 notice below. Haru-4B
 checkpoint weights are distributed separately under Apache License 2.0.
 
+## Shared attention for Qwen draft blocks
+
+`Sources/MereRunQwenModel/Q35NativeDraftAttention+Metal.swift` embeds the
+shared and split-row kernels from TensorFold 1.2.7's
+`zig/kernels/metal/core/shared_attention.metal`. Copyright 2026 TensorFold
+contributors. The Apache License 2.0 text is included in this file's YuE2 notice.
+[Pinned TensorFold source](https://github.com/ashhart/TensorFold/blob/93a2e93ecebff8aa52b88e58c5dd222516e69c5f/zig/kernels/metal/core/shared_attention.metal).
+
+## BF16 top-k for draft proposals
+
+`Sources/MereRunTensor/M5NativeTopK+Metal.swift` embeds TensorFold 1.2.7's
+wide-row top-k kernels from `zig/kernels/metal/core/bf16_topk.metal`.
+Copyright 2026 TensorFold contributors. The Apache License 2.0 text is
+included in this file's YuE2 notice.
+[Pinned TensorFold source](https://github.com/ashhart/TensorFold/blob/93a2e93ecebff8aa52b88e58c5dd222516e69c5f/zig/kernels/metal/core/bf16_topk.metal).
+
+## Group-affine Q4 register experiment
+
+`Sources/MereRunTensor/M5TiledAffineQ4+GroupAffine.swift` adapts the register
+integer-code unpack, next-group prefetch, FP32 group sums, post-product affine
+correction, and ordered split reduction from TensorFold 1.2.7,
+`zig/kernels/metal/core/lane_projection.metal`, under Apache License 2.0:
+<https://github.com/ashhart/TensorFold/tree/93a2e93ecebff8aa52b88e58c5dd222516e69c5f>.
+Its operand packer derives integer-code positions from Metal's cooperative
+tensor coordinates; separate tile-major scale/bias buffers and stacked gate/up
+output adapt that algorithm to mere.run's immutable inference parameters.
+The Apache License 2.0 text is included in this file's YuE2 notice.
+
+## Register matrix operand experiment
+
+`Sources/MereRunTensor/M5TiledAffineQ4+Register.swift` uses Metal Performance
+Primitives register operands reviewed in TensorFold 1.2.7,
+`zig/kernels/metal/core/lane_projection.metal`, under Apache License 2.0:
+<https://github.com/ashhart/TensorFold/tree/v1.2.7>.
+The experiment retains mere.run's staged FP16 dequantization and ordered
+accumulation instead of TensorFold's post-dot-product affine correction.
+The Apache License 2.0 text is included in this file's YuE2 notice.
+
+## Indexed tree attention
+
+`Sources/MereRunQwenModel/Q35IndexedTreeKernels.swift` adapts the vector SDPA
+reduction loops from Apple MLX's `sdpa_vector.h`, copyright © 2024 Apple Inc.,
+under the MIT License. Indexed reads share committed KV buffers while retaining
+the native query scaling, softmax, partial dtype, and ordered reduction.
+The MLX runtime bundle notice below reproduces the MIT permission notice.
+
+## MLX packed prefill fragments
+
+`Sources/MereRunTensor/PackedAffineQ4Prefill.swift` uses the packed QMM template,
+Q4 staging, and ordered eight-term FP32 accumulation from
+Apple MLX's `quantized.h` and `steel/gemm/mma.h`, copyright © 2023–2026
+Apple Inc., under the MIT License. The runtime bundle notice below reproduces
+the MIT permission notice. Its matrix-accelerator operand construction follows
+the existing Splash-derived matrix helpers described below.
+
 ## Salesforce SOV-Transcribe-1 and DFlash
 
 `Sources/AudioSOVTranscribeModel/`, `Sources/AudioSTT/SOVTranscribe/`, and

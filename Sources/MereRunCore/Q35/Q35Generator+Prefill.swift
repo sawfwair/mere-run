@@ -1,5 +1,7 @@
 import Foundation
+import MereRunTensor
 import MediaIO
+import MereRunQwenModel
 import MLX
 import MLXNN
 #if canImport(Darwin)
@@ -231,19 +233,26 @@ extension Q35Generator {
         modelPath: String,
         promptTokens: [Int],
         cacheMode: RuntimeKVCacheMode,
-        requiresMTPSession: Bool = false
+        requiresMTPSession: Bool = false,
+        dflash2ChunkSize: Int? = nil
     ) -> (tokenCount: Int, caches: [Q35LayerCache?], logits: MLXArray,
-          hidden: MLXArray, mtpSession: Q35MTPDraftSession?)? {
+          hidden: MLXArray, mtpSession: Q35MTPDraftSession?, dflash2Cache: [Q35DFlash2Cache]?)? {
         guard prefixKVCacheEnabled else { return nil }
-        let matchingKey = prefixKVCache.keys
-            .filter { key in
-                key.modelPath == modelPath
-                    && key.cacheMode == cacheMode
-                    && key.tokens.count <= promptTokens.count
-                    && promptTokens.starts(with: key.tokens)
-                    && (!requiresMTPSession || prefixKVCache[key]?.mtpSession != nil)
+        let candidates = prefixKVCache.compactMap { key, entry -> Q35PrefixKVCacheKey? in
+            guard key.modelPath == modelPath, key.cacheMode == cacheMode,
+                  key.dflash2ChunkSize == dflash2ChunkSize,
+                  key.tunedDFlash == QwenDFlashDefaults.active,
+                  key.prefillProjectionMode == Q35PrefillProjectionPolicy.mode else { return nil }
+            guard key.tokens.count <= promptTokens.count, promptTokens.starts(with: key.tokens),
+                  !requiresMTPSession || entry.mtpSession != nil else { return nil }
+            if let dflash2ChunkSize {
+                guard entry.dflash2Cache != nil,
+                      key.tokens.count == promptTokens.count || key.tokens.count.isMultiple(of: dflash2ChunkSize)
+                else { return nil }
             }
-            .max { $0.tokens.count < $1.tokens.count }
+            return key
+        }
+        let matchingKey = candidates.max { $0.tokens.count < $1.tokens.count }
 
         guard let matchingKey,
               var entry = prefixKVCache[matchingKey] else {
@@ -260,11 +269,12 @@ extension Q35Generator {
             forkLayerCaches(entry.caches),
             entry.logits,
             entry.hidden,
-            entry.mtpSession?.fork()
+            entry.mtpSession?.fork(),
+            entry.dflash2Cache?.map { $0.fork() }
         )
     }
 
-    private func storePrefixKVCache(
+    func storePrefixKVCache(
         modelPath: String,
         promptTokens: [Int],
         tokenCount: Int,
@@ -272,19 +282,22 @@ extension Q35Generator {
         logits: MLXArray,
         hidden: MLXArray,
         mtpSession: Q35MTPDraftSession? = nil,
+        dflash2Cache: [Q35DFlash2Cache]? = nil,
+        dflash2ChunkSize: Int? = nil, tunedDFlash: Bool = QwenDFlashDefaults.active,
         priority: RuntimePrefixCacheEntryPriority
     ) {
         guard prefixKVCacheEnabled, tokenCount > 0 else { return }
-        let key = Q35PrefixKVCacheKey(
-            modelPath: modelPath,
-            cacheMode: cacheMode(for: cache),
-            tokens: Array(promptTokens.prefix(tokenCount))
-        )
+        let mode = cacheMode(for: cache)
+        let key = QwenDFlashDefaults.$active.withValue(tunedDFlash) {
+            Q35PrefixKVCacheKey(modelPath: modelPath, cacheMode: mode,
+                                tokens: Array(promptTokens.prefix(tokenCount)), dflash2ChunkSize: dflash2ChunkSize)
+        }
         prefixKVCache[key] = Q35PrefixKVCacheEntry(
             caches: forkLayerCaches(cache),
             logits: logits,
             hidden: hidden,
             mtpSession: mtpSession?.fork(),
+            dflash2Cache: dflash2Cache?.map { $0.fork() },
             priority: priority,
             lastAccess: Date()
         )

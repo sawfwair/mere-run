@@ -214,7 +214,24 @@ extension Q35Generator {
             loadedMTP = nil
         }
 
-        let loadedDFlash2 = try loadDFlash2(configuration: dflash2, progressHandler: progressHandler)
+        let loadedDFlash2 = try loadDFlash2(configuration: dflash2, target: config, progressHandler: progressHandler)
+        if let draft = loadedDFlash2, Self.dflash2CalibrationEnabled() {
+            progressHandler?(ChatProgress(stage: .loadingModel, message: "Measuring Qwen DFlash 2 round costs"))
+            let caches = makeLayerCaches(config: config)
+            try QuantizedVerificationContext.$suppressM5.withValue(false) {
+                let context = draft.makeCache()
+                let prompt = MLXArray([Int32](repeating: 0, count: 32)).reshaped(1, 32)
+                let output = q35Model.forwardPrefill(
+                    prompt, cache: caches, captureLayerIndices: Set(draft.config.dflash.targetLayerIDs)
+                )
+                draft.appendTargetContext(output.capturedHiddenStates, cache: context)
+                MLX.eval([output.logits] + context.flatMap(\.state))
+                draft.decodeCosts = try Q35DFlash2Calibration.measure(
+                    model: q35Model, draft: draft, initialLogits: output.logits,
+                    layerCaches: caches, draftCache: context, checkCancellation: { try Task.checkCancellation() }
+                )
+            }
+        }
         model = q35Model
         tokenizerAndTemplate = tokenizer
         visionTower = tower

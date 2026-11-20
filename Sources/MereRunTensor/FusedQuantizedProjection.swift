@@ -1,5 +1,8 @@
 import MLX
 import MLXNN
+#if os(macOS)
+import Metal
+#endif
 
 /// A fused view over several `QuantizedLinear` projections that share one input,
 /// so decode issues a single quantized matmul instead of N and splits the output.
@@ -136,6 +139,18 @@ package final class FusedQuantizedProjection {
     private static func verificationBackend(_ module: Linear) -> QuantizedVerificationBackend {
         (module as? PortableQuantizedLinear)?.verificationBackend ?? .reference
     }
+
+    #if os(macOS)
+    @available(macOS 26.0, *)
+    package func nativeWeights(device: any MTLDevice) throws -> M5NativeFFN.Projection? {
+        try PortableQuantizedLinear.nativeProjectionWeights(projection, device: device)
+    }
+
+    @available(macOS 26.0, *)
+    package func nativeSerialWeights(device: any MTLDevice) throws -> M5NativeSmallProjection.Weights? {
+        try PortableQuantizedLinear.nativeSmallProjectionWeights(projection, device: device)
+    }
+    #endif
 
     /// One fused quantized matmul, split back into per-projection outputs.
     package func callSplit(_ x: MLXArray) -> [MLXArray] {

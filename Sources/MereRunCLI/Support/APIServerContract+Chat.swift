@@ -69,11 +69,18 @@ extension APIServerContract {
         let laneModelID = servedModelID ?? ""
         let resolvedAPIProfile = apiProfile
             ?? servedModelID.flatMap { ManagedModelCatalog.apiProfile(for: $0) }
-        let reasoningEffort = try reasoningEffort(
+        var reasoning = try reasoningOptions(
             from: openaiRequest.reasoning_effort,
             capabilities: capabilities,
             profile: resolvedAPIProfile
         )
+        let qwen38 = Q35Resources.isQ38ModelId(laneModelID)
+        if qwen38, let enabled = openaiRequest.chat_template_kwargs?.enable_thinking {
+            reasoning.thinking = enabled && reasoning.thinking != false
+            if reasoning.thinking == false { reasoning.strength = nil }
+        }
+        let instruct = reasoning.thinking == false
+            && [Q35Resources.q38TwentySevenBModelId, Q35Resources.q38TwentySevenB4BitModelId].contains(laneModelID)
         let logprobCapture: ChatLogprobCapture
         if openaiRequest.logprobs == true {
             if let topLogprobs = openaiRequest.top_logprobs, topLogprobs > 0 {
@@ -102,11 +109,11 @@ extension APIServerContract {
         let request = ChatRequest(
             messages: messages,
             maxTokens: maxTokens,
-            presencePenalty: openaiRequest.presence_penalty ?? 0,
+            presencePenalty: openaiRequest.presence_penalty ?? (instruct && openaiRequest.temperature != 0 ? 1.5 : 0),
             frequencyPenalty: openaiRequest.frequency_penalty ?? 0,
             repetitionPenalty: openaiRequest.repetition_penalty ?? 1,
             seed: openaiRequest.seed.map(UInt64.init),
-            reasoningEffort: reasoningEffort,
+            reasoningEffort: reasoning.strength,
             lora: lora,
             requiresJSON: requiresJSON,
             tools: tools,
@@ -121,8 +128,10 @@ extension APIServerContract {
             let resolved = try ChatRequestResolver.resolve(
                 request, modelID: laneModelID,
                 sampling: ChatSamplingOptions(
-                    temperature: openaiRequest.temperature, topP: openaiRequest.top_p,
-                    topK: openaiRequest.top_k, minP: openaiRequest.min_p
+                    temperature: openaiRequest.temperature ?? (instruct ? 0.7 : nil),
+                    topP: openaiRequest.top_p ?? (instruct ? 0.8 : nil),
+                    topK: openaiRequest.top_k, minP: openaiRequest.min_p,
+                    thinking: reasoning.thinking
                 ), policy: .openAI, apiProfile: resolvedAPIProfile
             )
             try validateSamplingCapabilities(openaiRequest, capabilities: capabilities)
@@ -572,26 +581,36 @@ extension APIServerContract {
         return maxCompletionTokens ?? maxTokens ?? defaultBudget
     }
 
-    private static func reasoningEffort(
+    private struct ReasoningOptions {
+        var strength: Double?
+        var thinking: Bool?
+    }
+
+    private static func reasoningOptions(
         from rawValue: String?,
         capabilities: APIEngineCapabilities,
         profile: ManagedModelAPIProfile?
-    ) throws -> Double? {
-        guard let rawValue else { return nil }
-        guard !capabilities.supportsRawProxy else { return nil }
+    ) throws -> ReasoningOptions {
+        guard let rawValue else { return ReasoningOptions() }
+        guard !capabilities.supportsRawProxy else { return ReasoningOptions() }
         let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard let level = ManagedModelThinkingLevel(rawValue: normalized),
+        let level: ManagedModelThinkingLevel? = normalized == "none" ? .off : ManagedModelThinkingLevel(rawValue: normalized)
+        if level == .off, profile?.thinkingLevels.contains(.off) == true {
+            return ReasoningOptions(thinking: false)
+        }
+        guard let level,
               let strength = profile?.reasoningEffortStrengths[level] else {
-            let supportedLevels = ManagedModelThinkingLevel.allCases
-                .filter { profile?.reasoningEffortStrengths[$0] != nil }
+            var supportedLevels = ManagedModelThinkingLevel.allCases
+                .filter { profile?.reasoningEffortStrengths[$0] != nil
+                    || ($0 == .off && profile?.thinkingLevels.contains(.off) == true) }
                 .map(\.rawValue)
-                .joined(separator: ", ")
+            if profile?.thinkingLevels.contains(.off) == true { supportedLevels.append("none") }
             throw APIRequestValidationError.invalidField(
                 "reasoning_effort",
-                "must be one of \(supportedLevels)"
+                "must be one of \(supportedLevels.joined(separator: ", "))"
             )
         }
-        return strength
+        return ReasoningOptions(strength: strength)
     }
 
     static func isStreamingStatusMessage(_ message: String) -> Bool {

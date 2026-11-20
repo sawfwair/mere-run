@@ -3,6 +3,21 @@ import XCTest
 @testable import MereRunCore
 
 final class Q35DFlash2DefaultTests: XCTestCase {
+    func testAdaptiveDraftingRequiresExplicitOptIn() {
+        XCTAssertFalse(Q35Generator.adaptiveDFlash2Enabled(environment: [:]))
+        XCTAssertFalse(Q35Generator.adaptiveDFlash2Enabled(environment: ["MERERUN_Q35_DFLASH2_ADAPTIVE": "0"]))
+        XCTAssertTrue(Q35Generator.adaptiveDFlash2Enabled(environment: ["MERERUN_Q35_DFLASH2_ADAPTIVE": "1"]))
+        let control = ["MERERUN_Q35_DFLASH2_ADAPTIVE": "calibrate-only"]
+        XCTAssertTrue(Q35Generator.dflash2CalibrationEnabled(environment: control))
+        XCTAssertFalse(Q35Generator.adaptiveDFlash2Enabled(environment: control))
+    }
+
+    func testDraftPrefixReuseRequiresExplicitOptIn() {
+        XCTAssertFalse(Q35Generator.dflash2PrefixCacheEnabled(environment: [:]))
+        XCTAssertFalse(Q35Generator.dflash2PrefixCacheEnabled(environment: ["MERERUN_Q35_DFLASH2_PREFIX_CACHE": "0"]))
+        XCTAssertTrue(Q35Generator.dflash2PrefixCacheEnabled(environment: ["MERERUN_Q35_DFLASH2_PREFIX_CACHE": "1"]))
+    }
+
     func testAutomaticDraftRequiresQualifiedModelHardwareAndMemory() {
         let memory: UInt64 = 64 * 1_024 * 1_024 * 1_024
         XCTAssertTrue(Q35Generator.automaticDFlash2Enabled(
