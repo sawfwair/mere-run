@@ -238,20 +238,21 @@ extension Q35Generator {
     ) -> (tokenCount: Int, caches: [Q35LayerCache?], logits: MLXArray,
           hidden: MLXArray, mtpSession: Q35MTPDraftSession?, dflash2Cache: [Q35DFlash2Cache]?)? {
         guard prefixKVCacheEnabled else { return nil }
-        let matchingKey = prefixKVCache.keys
-            .filter { key in
-                key.modelPath == modelPath
-                    && key.cacheMode == cacheMode
-                    && key.dflash2ChunkSize == dflash2ChunkSize
-                    && key.tunedDFlash == QwenDFlashDefaults.active
-                    && key.prefillProjectionMode == Q35PrefillProjectionPolicy.mode
-                    && key.tokens.count <= promptTokens.count
-                    && promptTokens.starts(with: key.tokens)
-                    && (!requiresMTPSession || prefixKVCache[key]?.mtpSession != nil)
-                    && (dflash2ChunkSize == nil || prefixKVCache[key]?.dflash2Cache != nil)
-                    && (dflash2ChunkSize.map { key.tokens.count == promptTokens.count || key.tokens.count.isMultiple(of: $0) } ?? true)
+        let candidates = prefixKVCache.compactMap { key, entry -> Q35PrefixKVCacheKey? in
+            guard key.modelPath == modelPath, key.cacheMode == cacheMode,
+                  key.dflash2ChunkSize == dflash2ChunkSize,
+                  key.tunedDFlash == QwenDFlashDefaults.active,
+                  key.prefillProjectionMode == Q35PrefillProjectionPolicy.mode else { return nil }
+            guard key.tokens.count <= promptTokens.count, promptTokens.starts(with: key.tokens),
+                  !requiresMTPSession || entry.mtpSession != nil else { return nil }
+            if let dflash2ChunkSize {
+                guard entry.dflash2Cache != nil,
+                      key.tokens.count == promptTokens.count || key.tokens.count.isMultiple(of: dflash2ChunkSize)
+                else { return nil }
             }
-            .max { $0.tokens.count < $1.tokens.count }
+            return key
+        }
+        let matchingKey = candidates.max { $0.tokens.count < $1.tokens.count }
 
         guard let matchingKey,
               var entry = prefixKVCache[matchingKey] else {
