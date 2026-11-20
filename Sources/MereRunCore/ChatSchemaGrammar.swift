@@ -5,10 +5,12 @@ import Foundation
 /// fail at preparation rather than weakening constraints.
 public struct ChatSchemaGrammar: Sendable {
     enum Symbol: Hashable, Sendable {
-        case rule(Int), character(Unicode.Scalar), stringCharacter, hex, digit, nonzero
+        case rule(Int), character(Unicode.Scalar), except(Set<Unicode.Scalar>), xmlCharacter, stringCharacter, hex, digit, nonzero
         func matches(_ character: Unicode.Scalar) -> Bool {
             switch self {
             case .character(let value): return value == character
+            case .except(let excluded): return !excluded.contains(character)
+            case .xmlCharacter: return character != "<" && character != "&" && (character.value >= 32 || character == "\n" || character == "\r" || character == "\t")
             case .stringCharacter:
                 return character != "\"" && character != "\\" && character.value >= 32
             case .hex: return character.isASCII && "0123456789abcdefABCDEF".contains(character)
@@ -22,9 +24,12 @@ public struct ChatSchemaGrammar: Sendable {
     struct Item: Hashable, Sendable { let production: Int; let dot: Int; let origin: Int }
     let productions: [Production]
     let rules: [Int: [Int]]
+    struct Capture: Hashable, Sendable { let label: Int; let start: Int; let end: Int }
+    let labels: [Int: Int]
+    private var captures: [Capture] = []
     private var chart: [Set<Item>]
     private var states = 1
-    public var isComplete: Bool { chart.last!.contains(Item(production: 0, dot: 1, origin: 0)) }
+    public var isComplete: Bool { chart.last!.contains(Item(production: 0, dot: productions[0].rhs.count, origin: 0)) }
 
     public static let schemaKeywords: Set<String> = [
         "$schema", "$id", "$defs", "definitions", "$ref", "title", "description", "default", "examples",
@@ -35,6 +40,10 @@ public struct ChatSchemaGrammar: Sendable {
         var compiler = Compiler(root: schema)
         let root = try compiler.schema(schema)
         compiler.productions[0] = Production(lhs: 0, rhs: [.rule(root)])
+        try self.init(compiler: compiler)
+    }
+
+    init(compiler: Compiler, labels: [Int: Int] = [:]) throws {
         guard compiler.productions.count <= 4096,
               compiler.productions.reduce(0, { $0 + $1.rhs.count }) <= 131_072 else {
             throw ChatRequestIssue("output_schema", "compiled grammar exceeds complexity limits")
@@ -42,9 +51,15 @@ public struct ChatSchemaGrammar: Sendable {
         productions = compiler.productions
         let compiled = compiler.productions
         rules = Dictionary(grouping: compiled.indices, by: { compiled[$0].lhs })
+        self.labels = labels
         chart = [[Item(production: 0, dot: 0, origin: 0)]]
         close()
         guard states <= 1_000_000 else { throw ChatRequestIssue("output_schema", "grammar closure exceeds state limits") }
+    }
+
+    mutating func takeCaptures() -> [Capture] {
+        defer { captures.removeAll(keepingCapacity: true) }
+        return captures
     }
 
     @discardableResult
@@ -75,6 +90,10 @@ public struct ChatSchemaGrammar: Sendable {
             let production = productions[item.production]
             var additions: [Item] = []
             if item.dot == production.rhs.count {
+                if let label = labels[production.lhs] {
+                    let capture = Capture(label: label, start: item.origin, end: position)
+                    if !captures.contains(capture) { captures.append(capture) }
+                }
                 for parent in chart[item.origin] {
                     let rhs = productions[parent.production].rhs
                     if parent.dot < rhs.count, rhs[parent.dot] == .rule(production.lhs) { additions.append(advanced(parent)) }
@@ -96,9 +115,9 @@ public struct ChatSchemaGrammar: Sendable {
     }
 }
 
-private extension ChatSchemaGrammar {
+extension ChatSchemaGrammar {
     struct Compiler {
-        let root: [String: ChatJSONValue]
+        var root: [String: ChatJSONValue]
         var productions: [Production] = [Production(lhs: 0, rhs: [])]
         var nextRule = 1
         var references: Set<String> = []

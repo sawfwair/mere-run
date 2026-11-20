@@ -38,6 +38,9 @@ public struct ChatOutputConstraint: Hashable, Sendable {
         return try Self(schema: root, mode: .tools)
     }
 
+    /// Validate native recipient/ATEM representability before admission/generation.
+    public func validateNativeRecipient(_ request: ChatRequest) throws { _ = try MuseGlimmerConstraint(request: request) }
+
     private static func rebase(_ value: ChatJSONValue, prefix: String) -> ChatJSONValue {
         guard var schema = value.objectValue else { return value }
         if let reference = schema["$ref"]?.stringValue {

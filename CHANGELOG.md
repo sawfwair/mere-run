@@ -7,8 +7,11 @@ The format is based on Keep a Changelog.
 ## Unreleased
 
 - Add bounded schema-constrained Messages output and strict custom tools for
-  switchable-thinking Qwen and Gemma adapters. Publish the supported schema
-  subset and reject unsupported combinations before generation.
+  switchable-thinking Qwen and Gemma adapters. Extend native Glimmer with
+  channel-aware constrained JSON and ATEM tools while preserving adaptive
+  reasoning. Publish the supported schema subset and reject unsupported
+  combinations before generation. Constrained requests use final-target decoding;
+  Glimmer Q8 checkpoint quality and performance need separate qualification.
 - Render PDF pages, including image-only scans, for the native Glimmer Messages
   adapter on macOS. Preserve page order, document metadata, and image token
   counting with explicit rendering limits.

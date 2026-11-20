@@ -971,7 +971,7 @@ final class MuseGlimmerTests: MereRunCoreTestCase {
     }
     """#
 
-    private static let configJSON = #"""
+    static let configJSON = #"""
     {
       "model_type":"muse_glimmer",
       "architectures":["MuseGlimmerForConditionalGeneration"],

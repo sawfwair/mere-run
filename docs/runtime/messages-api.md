@@ -50,7 +50,7 @@ Capability metadata describes implemented adapter behavior, not task success.
 | Tool-result and thinking clearing | Implemented | Implemented | Explicit unsupported error |
 | Native prefix reuse | Bounded marked text and image prefixes | Zero Messages cache accounting | Zero Messages cache accounting |
 | Text documents and text PDFs | Implemented | Implemented | Implemented |
-| Strict tools and constrained JSON schema | Explicit unsupported error | Switchable-thinking adapters; bounded schema subset | Explicit unsupported error |
+| Strict tools and constrained JSON schema | Native recipient/ATEM grammar; bounded schema subset | Switchable-thinking adapters; bounded schema subset | Explicit unsupported error |
 | Generated citations | Explicit unsupported error | Explicit unsupported error | Explicit unsupported error |
 | PDF page images, including scans | PDFKit rendering on macOS | Text extraction only | Text extraction only |
 
@@ -121,10 +121,10 @@ outside this API.
 
 ## Constrained output
 
-Switchable-thinking Qwen and Gemma adapters accept `strict: true` custom tools
-and `output_config.format` with `type: "json_schema"` and an object-valued
+Native Glimmer and switchable-thinking Qwen and Gemma adapters accept
+`strict: true` custom tools and `output_config.format` with `type: "json_schema"` and an object-valued
 `schema`. Inspect `strict_tools`, `json_schema`, and `constrained_schema_subset`
-in model discovery. Glimmer and fixed-reasoning adapters reject these options.
+in model discovery. Fixed-reasoning Qwen and Gemma adapters reject these options.
 
 The adapter compiles the schema into a grammar and checks candidate tokens before
 committing them. Final-target decoding retains the request's sampling controls;
@@ -144,15 +144,39 @@ Unsupported constraints, including numeric ranges, string patterns and formats,
 `oneOf`, `allOf`, and recursive references, fail during preparation. Ordinary
 non-strict tools retain their broader validation subset.
 
-Constrained requests require thinking to be omitted or disabled. They reject
-stop sequences, deferred loading, tool search, and simultaneous JSON-schema
-output and tools. Strict tools support automatic or required selection, a named
+Qwen and Gemma constrained requests require thinking to be omitted or disabled.
+Glimmer keeps its native reasoning channels and accepts adaptive thinking with
+constrained output. All constrained requests reject stop sequences, deferred
+loading, tool search, and simultaneous JSON-schema output and tools. Strict tools support automatic or required selection, a named
 tool, and up to 16 parallel calls; single-call mode permits one. When any active
-tool is strict, the constrained envelope enforces the schemas of all active
-tools. Client-visible tool names and argument types remain unchanged. Tool calls are buffered until the envelope is complete and validated. Automatic
-text answers stream from the text branch without exposing the envelope or tool
-arguments. JSON-schema text streams without interpreting text
+tool is strict, the grammar enforces the schemas of all active tools.
+Client-visible tool names and argument types remain unchanged. Tool calls are
+buffered until the turn is complete and validated. Qwen and Gemma automatic text answers stream from the text branch without exposing their JSON
+envelope or tool arguments. JSON-schema text streams without interpreting text
 inside JSON strings as reasoning or tool markup.
+
+Glimmer constrains native channel headers separately from their bodies. Its
+`to=self` reasoning streams separately; its `to=user` final answer follows the
+requested schema. Strict tools keep ATEM packets, with one invocation per packet
+and up to 16 packets when parallel calls are enabled. Parameters appear in
+alphabetical order. String parameters use XML-escaped text; other parameter
+values use compact JSON. Nested JSON strings can contain protocol-looking text
+without creating a call or changing channels.
+
+Native strict tools require a closed object parameter schema. Each top-level
+parameter must have one unambiguous encoding: raw string or JSON value.
+Top-level parameter unions and `anyOf` fail explicitly; move those alternatives
+inside an object or array. String enums and constants cannot contain XML
+control characters. Native recipient names `self` and `user`, names containing
+`<|`, and names containing line breaks fail during preparation with a rename
+instruction. These restrictions don't apply to JSON-schema final answers.
+
+The final-target Glimmer decoder advances grammar state only for the committed
+text suffix. Rejected candidates cannot publish reasoning, text, or executable
+calls. An incomplete native turn fails even if an inner JSON value completed.
+DFlash is disabled for constrained requests until speculative matcher rollback
+is qualified. Synthetic model and SDK tests cover this path; full Glimmer
+Q8 checkpoint quality and throughput remain unqualified for constrained output.
 
 The additional schema instructions enter shared prompt preparation, so token
 counts include them. Changing a schema changes the prepared prefix. Existing

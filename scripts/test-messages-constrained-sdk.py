@@ -12,6 +12,9 @@ client = anthropic.Anthropic(base_url=sys.argv[1], api_key="test-key", max_retri
 for version in ("2023-06-01", "2026-10-21"):
     common = dict(model="fixture", max_tokens=16, messages=[{"role": "user", "content": "answer"}],
                   extra_headers={"anthropic-version": version})
+    native = len(sys.argv) > 2 and sys.argv[2] == "native-reasoning"
+    if native:
+        common["thinking"] = {"type": "adaptive"}
     schema = {"type": "object", "additionalProperties": False,
               "properties": {"ok": {"type": "boolean"}}, "required": ["ok"]}
     output = dict(output_config={"format": {"type": "json_schema", "schema": schema}})
@@ -20,11 +23,17 @@ for version in ("2023-06-01", "2026-10-21"):
             with client.messages.stream(**common, **output) as stream:
                 streamed = "".join(stream.text_stream)
                 result = stream.get_final_message()
-                assert streamed == result.content[0].text
+                assert streamed == next(block.text for block in result.content if block.type == "text")
         else:
             result = client.messages.create(**common, **output)
-        assert json.loads(result.content[0].text) == {"ok": True}
+        assert json.loads(next(block.text for block in result.content if block.type == "text")) == {"ok": True}
         assert result.stop_reason == "end_turn"
+        if native:
+            thinking = next(block for block in result.content if block.type == "thinking")
+            assert thinking.thinking == "Check native constraints 🦜" and thinking.signature
+            replay = dict(common, messages=common["messages"] + [{"role": "assistant", "content": [
+                block.model_dump(exclude_none=True) for block in result.content]}, {"role": "user", "content": "continue"}])
+            assert client.messages.create(**replay, **output).stop_reason == "end_turn"
     tool = {"name": "edit", "strict": True, "input_schema": {
         "type": "object", "additionalProperties": False,
         "properties": {"replace": {"type": "boolean"}}, "required": ["replace"]}}
@@ -37,9 +46,12 @@ for version in ("2023-06-01", "2026-10-21"):
         else:
             result = client.messages.create(**args)
         assert result.stop_reason == "tool_use"
-        assert result.content[0].name == "edit"
-        assert result.content[0].input == {"replace": True}
-        assert result.content[0].id
+        use = next(block for block in result.content if block.type == "tool_use")
+        assert use.name == "edit"
+        assert use.input == {"replace": True}
+        assert use.id
+        if native:
+            assert next(block for block in result.content if block.type == "thinking").signature
     count = client.messages.count_tokens(model="fixture", messages=common["messages"],
                                         tools=[tool], extra_headers=common["extra_headers"])
     assert count.input_tokens == 7

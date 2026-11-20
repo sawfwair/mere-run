@@ -33,7 +33,7 @@ struct MessagesCapabilities: Codable, Equatable, Sendable {
         let fixedHigh = [.textChatQ35, .textChatQ36].contains(engine) && profile.thinkingLevels == [.high]
         let switchableThinking = [.textChatQ35, .textChatQ36, .textChatGemma4].contains(engine)
             && (profile.thinkingLevels.isEmpty || profile.thinkingLevels.contains(.off))
-        let constrained = [.textChatQ35, .textChatQ36, .textChatGemma4].contains(engine) && switchableThinking
+        let constrained = glimmer || ([.textChatQ35, .textChatQ36, .textChatGemma4].contains(engine) && switchableThinking)
         var result = Self(messages: native, streaming: textCounting, tools: textCounting, token_counting: textCounting,
                     ordered_images: glimmer, thinking: glimmer ? ["adaptive"] : textCounting ? (switchableThinking ? ["adaptive", "disabled"] : ["adaptive"]) : [],
                     thinking_display: textCounting ? ["summarized"] : [],
@@ -65,7 +65,7 @@ extension RuntimeChatRequest {
             if format != nil, !caps.json_schema { throw MessagesFailure.unsupported("output_config.format", model: configuration.modelID) }
             let strict = wire.tools?.contains(where: { $0.strict == true }) == true
             if strict || format != nil {
-                guard wire.thinking == nil || wire.thinking?.type == "disabled" else { throw MessagesFailure.unsupported("constrained output with thinking; set thinking.type to disabled") }
+                guard configuration.engine == .textChatMuseGlimmer || wire.thinking == nil || wire.thinking?.type == "disabled" else { throw MessagesFailure.unsupported("constrained output with thinking; set thinking.type to disabled") }
                 guard wire.stop_sequences?.isEmpty != false else { throw MessagesFailure.unsupported("constrained output with stop_sequences") }
                 guard !strict || format == nil else { throw MessagesFailure.unsupported("simultaneous strict tools and output_config.format") }
                 guard wire.tools?.allSatisfy({ $0.defer_loading != true && ($0.type == nil || $0.type == "custom") }) != false else {
@@ -215,7 +215,10 @@ extension RuntimeChatRequest {
             } else if strict, !tools.isEmpty {
                 request.outputConstraint = try ChatOutputConstraint.tools(tools, choice: choice, parallel: request.parallelToolCalls)
             }
-            if request.outputConstraint != nil { request.requiresJSON = true }
+            if request.outputConstraint != nil {
+                request.requiresJSON = true
+                if configuration.engine == .textChatMuseGlimmer { try request.outputConstraint?.validateNativeRecipient(request) }
+            }
             let fullTTL = wire.cache_control
             let toolBoundaries = (wire.tools ?? []).compactMap { tool -> ChatToolCacheBoundary? in
                 tool.cache_control.map { .init(throughTool: tool.name, ttlSeconds: $0.ttl == "1h" ? 3600 : 300) }

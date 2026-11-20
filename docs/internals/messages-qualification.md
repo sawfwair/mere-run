@@ -1224,3 +1224,52 @@ reasoning, tools, and client work. Native counters cover completed rounds; the
 failed generation's phase/token accounting is unavailable. These observations
 do not establish a speedup. The [full report](../benchmarks/messages-release-qualification-2026-11-09.md)
 retains source identity, timing scope, and remaining capability/model boundaries.
+
+## November 20 native Glimmer constrained-output follow-up
+
+Native Glimmer has a Swift grammar for its recipient channels and ATEM tools.
+The schema applies after a complete channel header. Reasoning can precede a
+JSON answer or occur between tool packets. Completed captures delimit parameters
+without rescanning tool-like text inside JSON values. Rejected candidate probes
+cannot publish events or tool calls. Constrained requests use final-target
+sampling with the request's temperature, top-p, and top-k; DFlash stays off.
+
+The design follows the channel boundary demonstrated by
+[llama.cpp's Glimmer JSON/reasoning change](https://github.com/ggml-org/llama.cpp/pull/29615).
+The [XGrammar Muse structural-tag implementation](https://github.com/mlc-ai/xgrammar/blob/3fe39321a6f24c90c2cc4fa4519b87e22367bcfc/python/xgrammar/builtin_structural_tag.py)
+provides a reference for raw XML strings versus typed JSON parameters. Its Muse
+builder targets Spark Open, so it is not used as a Glimmer compatibility claim
+or imported dependency.
+
+Automated evidence includes:
+
+- `MuseGlimmerConstraintTests`: headers and reasoning at scalar boundaries,
+  protocol-looking JSON strings, split UTF-8, rejected-probe isolation, native
+  string enums and local references, typed nested arguments, optional parameters,
+  XML escaping, whitespace, required/named/automatic tool choice, 16-call limits,
+  malformed calls, truncated budgets, and cancellation.
+- `MuseGlimmerConstrainedAdapterTests`: a loaded synthetic Glimmer checkpoint
+  produces schema output and strict ATEM tools through the real generator, using
+  recommended sampling parameters. Shared prompt preparation includes native
+  instructions and tool schemas; generated input counts match the prepared tokens.
+- Actual HTTP routes: both API versions, buffered and streamed JSON, strict tools,
+  adaptive reasoning, schema rejection, pre-stream and SSE output failures, and
+  recovery. Official Anthropic SDK 2.6.0 fixtures accumulate streams, preserve
+  typed tool inputs, replay locally signed thinking, and count tokens.
+
+The [API guide](../runtime/messages-api.md#constrained-output) records the bounded
+schema subset and native parameter-encoding restrictions. Top-level parameter
+unions, reserved recipient names, and unsupported combinations fail before
+inference. Generated citations remain unsupported.
+
+These tests use synthetic weights or a controlled HTTP runtime. They do not
+qualify constrained Glimmer Q8 task accuracy, decode throughput, scanned-document
+understanding, speculative rollback, or a Claude Code/Cua desktop session.
+Earlier Q8 coding and desktop reports do not qualify this decoding path. The
+repository validation rule in `AGENTS.md` requires full-checkpoint and GPU
+qualification to remain an explicit follow-up after the local gate.
+
+The November 20 local `./scripts/check.sh` gate passes with 6,377 XCTest cases
+(586 skipped), 199 Swift Testing cases, and zero failures. Official SDK fixtures
+are enabled. The gate also covers lint, build, CLI help, documentation checks,
+and repository hygiene. Checkpoint-dependent skips remain qualification gaps.
