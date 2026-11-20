@@ -183,9 +183,9 @@ reports checkpoint outcomes, failures, and per-phase timing alongside synthetic
 model and SDK coverage. This evidence covers the recorded requests and artifact.
 
 The additional schema instructions enter shared prompt preparation, so token
-counts include them. Changing a schema changes the prepared prefix. Earlier
-desktop reports cover ordinary inference. Constrained-output qualification does
-not qualify untested adapters or every combination of options.
+counts include them. Changing a schema changes the prepared prefix. Desktop
+trials in these records use ordinary tool decoding. Constrained-output
+qualification does not qualify untested adapters or every combination of options.
 
 Thinking progress updates (`display: "updates"`) are unsupported. Claude Code
 2.1.316 retries without that display option; native thinking remains available.

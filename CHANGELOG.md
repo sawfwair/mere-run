@@ -13,8 +13,8 @@ The format is based on Keep a Changelog.
   combinations before generation. Constrained requests use final-target decoding;
   [Glimmer Q8 qualification](docs/benchmarks/glimmer-constrained-messages-2026-11-20.md)
   records known-answer and throughput checks, retained tool-string failures, and
-  the blocked fresh desktop trials. Preserve literal ATEM examples in user
-  answers and exact incremental UTF-8 during native constrained sampling.
+  six independently verified fresh desktop trials. Preserve literal ATEM examples
+  in user answers and exact incremental UTF-8 during native constrained sampling.
 - Render PDF pages, including image-only scans, for the native Glimmer Messages
   adapter on macOS. Preserve page order, document metadata, and image token
   counting with explicit rendering limits.

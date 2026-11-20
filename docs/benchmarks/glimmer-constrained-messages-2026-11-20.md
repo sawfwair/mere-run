@@ -2,8 +2,9 @@
 
 Native Glimmer Q8 passed the known-answer constrained JSON suite and later
 strict tool, context-edit, and document repeats. Qualification is limited to these requests and this artifact.
-The record retains budget failures, an earlier wrong answer, and the blocked
-fresh desktop attempt. It does not establish general model accuracy.
+The record retains budget failures, an earlier wrong answer, and the locked
+desktop attempt alongside later verified trials. It does not establish general
+model accuracy.
 
 The [machine-readable results](./glimmer-constrained-messages-2026-11-20-summary.json)
 separate binary revisions, expected rejections, model outcomes, and timing.
@@ -99,7 +100,7 @@ native decoding had produced at least 32 progress updates. Each trial canceled
 a queued request, canceled the active client, observed both counts return to
 zero, and independently verified the next request returned `42`.
 
-## Claude Code and desktop boundary
+## Claude Code and desktop tasks
 
 Claude Code 2.1.316 completed a real local coding session: it inspected the files,
 reproduced four failing tests, changed multiplication from addition to a product,
@@ -108,18 +109,57 @@ runner confirmed all four tests and unchanged test contents. The session used
 eight native generation rounds and about 108 seconds of client wall time.
 Background compilation makes that wall time unsuitable as an isolated benchmark.
 
-Fresh Cua desktop qualification is blocked by a locked Mac. Cua independently
-reported `screen_locked` and refused app input before the first calculation.
-The controller stopped its client and closed only its new Calculator instance.
-This attempt counts as an environment gap, not a task pass or model failure.
-Neither Calculator product nor the website task is requalified by this run.
+Desktop trials use ordinary custom-tool decoding. After the Mac was unlocked,
+four fresh Calculator trials passed: two repeats each of `6 × 7 = 42` and `47 × 23 = 1,081`. Each trial launched a separate
+Calculator process, cleared its state, and used only Cua tools. Independent AX
+captures and reviewed screenshots confirmed the actual expression and display;
+Python multiplication supplied the separate expected result. The verifier closed
+only the trial's Calculator instance after review.
+
+| Calculator trial | Client wall seconds | Native prefill seconds | Native decode seconds |
+| --- | ---: | ---: | ---: |
+| `6 × 7`, first repeat | 220.58 | 71.56 | 113.62 |
+| `6 × 7`, second repeat | 314.14 | 98.65 | 175.60 |
+| `47 × 23`, first repeat | 214.78 | 63.04 | 115.92 |
+| `47 × 23`, second repeat | 225.44 | 61.98 | 125.59 |
+
+Summed native load time was less than 0.001 seconds per Calculator trial;
+initial server loading occurred before these trials. Client wall time also
+includes Cua and client orchestration. Requests ran sequentially, and admission
+returned to zero active and queued requests after each trial. The timing fields
+do not directly measure queue duration.
+
+Both fresh-profile website trials passed. Each client used MDN's visible
+search, opened the `URLSearchParams` interface result, followed its `getAll()`
+link, and correctly reported the repeated-value and absent-key results.
+Independent AX, reviewed screenshots, and each isolated profile's navigation
+history confirmed the page and route. Clients recovered from a refused Return
+key press by clicking the search control. Both trials completed client-side context
+compaction and resumed the task.
+
+| Website trial | Client wall seconds | Native prefill seconds | Native decode seconds |
+| --- | ---: | ---: | ---: |
+| Fresh profile 1 | 676.73 | 292.24 | 333.45 |
+| Fresh profile 2 | 933.54 | 393.72 | 471.99 |
+
+These passes establish the observed task outcomes. Large page snapshots and
+client compaction affect latency; task completion does not establish low client
+latency. Summed native load times and token counts remain in the JSON record.
+All six desktop trials ran against native `mere.run` with the audited Q8 artifact.
+
+The earlier locked attempt remains in the record as `blocked_environment` with
+no pass result. After unlocking, macOS reported an unlocked console and actual
+window captures worked, although Cua's initial `desktop_unlocked` flag remained
+false. Actual window access established readiness for these trials.
 
 The reference Claude Code version, 13-tool MCP catalog/filter, and Cua Driver
 0.38.0 were retained. The full historical launcher source was unavailable; the
-qualification controller and independent verifier were rebuilt. A signed Chrome
-158.0.8127.37 copy was prepared for isolated profiles with Playwright's
-`channel: 'chrome'` and Chromium sandbox enabled. No website trial ran while the Mac was
-locked. Personal browser profiles and permission policies were unchanged.
+qualification controller and independent verifier were rebuilt. Website trials
+use a signed Chrome 158.0.8127.37 copy, checked against the
+[Google stable release](https://chromereleases.googleblog.com/2026/11/stable-channel-update-for-desktop_01699533288.html),
+with a fresh profile per trial, Playwright's `channel: 'chrome'`, and Chromium
+sandbox enabled. The launcher checks the actual executable and process options
+before opening MDN. Personal browser profiles and permission policies are unchanged.
 
 ## Throughput
 

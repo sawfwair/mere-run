@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "date": "2026-11-20",
-  "scope": "Native Glimmer Q8 constrained Messages and rendered documents. Per-case evidence; no general model accuracy claim.",
+  "scope": "Native Glimmer Q8 constrained Messages, rendered documents, and ordinary Claude Code/Cua desktop trials. Per-case evidence; no general model accuracy claim.",
   "hardware": {
     "model": "Apple M5 Max",
     "memory_GiB": 128
@@ -10721,6 +10721,128 @@
   "client_trials": [
     {
       "task": "calculator",
+      "name": "calculator-1081-r1",
+      "expression": "47 × 23",
+      "expected": "1081",
+      "client_version": "2.1.316",
+      "model": "q8-symmetric-bf16-g64",
+      "client_exit": 0,
+      "wall_seconds": 214.78152195806615,
+      "tool_errors": 0,
+      "client_result": "Session `calculator-1081-r1` completed.\n\n**Instance**\n- App: Calculator `com.apple.calculator`\n- PID: **85685**\n- Window ID: **64849**\n- Window title: Calculator\n- Bounds: x=2488 y=421 w=230 h=408, on current Space\n\n**Verification from screen content**\n\nInitial snapshot `s0000000a`:\n- Edit field: `0`\n\nAfter AC clear and `4 → 7 → × → 2 → 3 → =` :\n\nDiff read `s0000000b` since `s0000000a`:\n```\n+ AXStaticText = \"1,081\" (Edit field)\n~ AXStaticText = \"47 × 23\" (Last Expression)\n```\n\nScreenshot shows:\n- Last expression line: `47×23`\n- Result / edit field: `1,081`\n\nObserved expression: `47×23` / `47 × 23`  \nObserved result: `1,081`\n\nThe Calculator window PID 85685 / window ID 64849 remains open for independent verification. Cua session `calculator-1081-r1` has been ended.\n",
+      "passed": true,
+      "classification": "independently_verified_task",
+      "admission_after": {
+        "active": 0,
+        "queued": 0
+      },
+      "native_generation": {
+        "completed_rounds": 13,
+        "failed_rounds": 0,
+        "generated_tokens": 2528,
+        "prefill_seconds": 63.04369604587555,
+        "decode_seconds": 115.92082917690277,
+        "load_seconds": 0.0006700754165649414
+      },
+      "independent_assessment": {
+        "fresh_launched_pid": 85685,
+        "window_id": 64849,
+        "expression": "47 × 23",
+        "displayed_result": "1,081",
+        "independent_expected_product": 1081,
+        "all_clear_clicked": true,
+        "initial_zero_observed": true,
+        "zero_observed_after_clear": false,
+        "zero_observed_before_entry": true,
+        "screenshot_reviewed": true,
+        "verification": "Independent post-client Cua AX snapshot, visually reviewed PNG, and actual action/result trace; model success statement is not the oracle."
+      },
+      "binary_sha256": "6c5b3d2ff2abc55a7bcce9a70dcbd1079f0a3364fed80cc1b5fd534c2a980b5d",
+      "verification_sha256": "c9f912c3ef27c3453f9420ca348d282607c8442968a8869e849d1f10fd575b50",
+      "trace_sha256": "c0fef3e4ef4e2c327405933381391e25746127a013d4f8a129c890d171a4ec33",
+      "tool_names": [
+        "mcp__cua-computer-use__start_session",
+        "mcp__cua-computer-use__launch_app",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__end_session"
+      ],
+      "snapshot_sha256": {
+        "verify-0.json": "3d59ca752c15f616e9a6634c5e0c8f701997c93b582bb74721981ec986c1c433",
+        "verify-0.png": "21a100241b5be133e06a1eb96a810d2032e0648c68eb35d164c3f5e940f69238"
+      },
+      "controller_sha256": "ef1f7fc4dcbaaae883f5d6695ca46fcf7eb79728b3a4229244687b82328d6b49"
+    },
+    {
+      "task": "calculator",
+      "name": "calculator-1081-r2",
+      "expression": "47 × 23",
+      "expected": "1081",
+      "client_version": "2.1.316",
+      "model": "q8-symmetric-bf16-g64",
+      "client_exit": 0,
+      "wall_seconds": 225.44016912509687,
+      "tool_errors": 0,
+      "client_result": "Session **calculator-1081-r2** completed.\n\n* Launch\n  * `com.apple.calculator` launched with `creates_new_application_instance: true`\n  * pid: **87016**\n  * window_id: **64883**\n  * windows returned: `[{\"app_name\":\"Calculator\",\"bounds\":{\"height\":408,\"width\":230,\"x\":2488,\"y\":421},...,\"pid\":87016,\"window_id\":64883,\"title\":\"Calculator\",...}]`\n\n* Initial inspection\n  * `get_window_state` pid 87016 window 64883 snapshot `s0000000d`\n  * Display: `AXStaticText = \"0\" (Edit field)`\n  * Clear performed: `AXPress` on `[2] AXButton (All Clear)` token `s0000000d:2`\n\n* Calculation 47 × 23\n  * `AXPress` `[9] AXButton (4)` token `s0000000d:9`\n  * `AXPress` `[5] AXButton (7)` token `s0000000d:5`\n  * `AXPress` `[8] AXButton (Multiply)` token `s0000000d:8`\n  * `AXPress` `[14] AXButton (2)` token `s0000000d:14`\n  * `AXPress` `[15] AXButton (3)` token `s0000000d:15`\n  * `AXPress` `[20] AXButton (Equals)` token `s0000000d:20`\n\n* Verification read\n  * `get_window_state` with `since:\"latest\"` → new snapshot `s0000000e`\n  * Diff:\n    ```\n    + AXStaticText = \"1,081\" (Edit field)\n    ~ AXStaticText = \"47 × 23\" (Last Expression)\n    ```\n  * Screenshot shows:\n    * Last Expression: **47×23**\n    * Edit field result: **1,081**\n\nObserved expression: `47×23`  \nObserved result: `1,081`  \nPID: `87016`  \nWindow ID: `64883`\n\nThe Calculator instance remains open for independent verification. Cua session `calculator-1081-r2` ended.\n",
+      "passed": true,
+      "classification": "independently_verified_task",
+      "admission_after": {
+        "active": 0,
+        "queued": 0
+      },
+      "native_generation": {
+        "completed_rounds": 13,
+        "failed_rounds": 0,
+        "generated_tokens": 2639,
+        "prefill_seconds": 61.983569741249084,
+        "decode_seconds": 125.58953964710236,
+        "load_seconds": 0.0006988048553466797
+      },
+      "independent_assessment": {
+        "fresh_launched_pid": 87016,
+        "window_id": 64883,
+        "expression": "47 × 23",
+        "displayed_result": "1,081",
+        "independent_expected_product": 1081,
+        "all_clear_clicked": true,
+        "initial_zero_observed": true,
+        "zero_observed_after_clear": false,
+        "zero_observed_before_entry": true,
+        "screenshot_reviewed": true,
+        "verification": "Independent post-client Cua AX snapshot, visually reviewed PNG, and actual action/result trace; model success statement is not the oracle."
+      },
+      "binary_sha256": "6c5b3d2ff2abc55a7bcce9a70dcbd1079f0a3364fed80cc1b5fd534c2a980b5d",
+      "verification_sha256": "16a715896b31648f22f21945d8ece2f94a9313fea115c990916a3dd24887f060",
+      "trace_sha256": "14ebde25f7bc5bac399cd34c86d1dfdbc629c5b3b7525ef8cc96cc3afb9de991",
+      "tool_names": [
+        "mcp__cua-computer-use__start_session",
+        "mcp__cua-computer-use__launch_app",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__end_session"
+      ],
+      "snapshot_sha256": {
+        "verify-0.json": "c408d8bf62cf3a44663cd351ec4d02908d355032ef38ee7ed29a495212bec433",
+        "verify-0.png": "21a100241b5be133e06a1eb96a810d2032e0648c68eb35d164c3f5e940f69238"
+      },
+      "controller_sha256": "ef1f7fc4dcbaaae883f5d6695ca46fcf7eb79728b3a4229244687b82328d6b49"
+    },
+    {
+      "task": "calculator",
       "name": "calculator-42-r1",
       "expression": "6 × 7",
       "expected": "42",
@@ -10758,6 +10880,123 @@
         "verify-0.json": "b4e60306882555b2e8ee9f8633349f5c9a0e65fc3c975d8eb4bc7b39f775c0e2",
         "verify-0.png": "d66dd46ae0b5c11f273b6f3b9e74f3a9e8ea0c662770164c998a2999f5e5c5d9"
       }
+    },
+    {
+      "task": "calculator",
+      "name": "calculator-42-r2",
+      "expression": "6 × 7",
+      "expected": "42",
+      "client_version": "2.1.316",
+      "model": "q8-symmetric-bf16-g64",
+      "client_exit": 0,
+      "wall_seconds": 220.58047316700686,
+      "tool_errors": 0,
+      "client_result": "Session `calculator-42-r2` completed.\n\n**Calculator instance**\n- PID: `70943`\n- Window ID: `64461`\n- App: Calculator `com.apple.calculator`, launched with `creates_new_application_instance: true`\n- Window ready: true, on-screen at bounds `x=2488 y=421 w=230 h=408`\n\n**Verification steps performed with Cua MCP tools**\n1. Started session `calculator-42-r2`\n2. Launched new instance → pid 70943, window 64461\n3. `get_window_state` snapshot `s00000002`:\n   - Last Expression: `280 ÷ 40`\n   - Edit field: `7`\n4. Cleared calculation via AXPress on `s00000002:2` → All Clear\n   - `get_window_state` since `s00000002` → snapshot `s00000003`\n   - Edit field changed to `0`, previous `7` removed\n5. Performed 6 × 7:\n   - AXPress `s00000003:11` → button `6`\n   - AXPress `s00000003:8` → button `Multiply`\n   - AXPress `s00000003:5` → button `7`\n   - AXPress `s00000003:20` → button `Equals`\n6. `get_window_state` since `s00000003` → snapshot `s00000004`\n   - `+ AXStaticText = \"42\" (Edit field)`\n   - `~ AXStaticText = \"6 × 7\" (Last Expression)`\n\n**Observed result from screen content**\n- Expression displayed as Last Expression: `6×7`\n- Result displayed in Edit field: `42`\n\nThe Calculator instance `pid 70943 / window_id 64461` remains open for independent verification. Cua session `calculator-42-r2` has been ended.\n",
+      "passed": true,
+      "classification": "independently_verified_task",
+      "admission_after": {
+        "active": 0,
+        "queued": 0
+      },
+      "native_generation": {
+        "completed_rounds": 12,
+        "failed_rounds": 0,
+        "generated_tokens": 2116,
+        "prefill_seconds": 71.56299018859863,
+        "decode_seconds": 113.61613702774048,
+        "load_seconds": 0.000735163688659668
+      },
+      "independent_assessment": {
+        "fresh_launched_pid": 70943,
+        "window_id": 64461,
+        "expression": "6 × 7",
+        "displayed_result": "42",
+        "independent_expected_product": 42,
+        "all_clear_clicked": true,
+        "zero_observed_after_clear": true,
+        "screenshot_reviewed": true,
+        "verification": "Independent post-client Cua AX snapshot, visually reviewed PNG, and actual action/result trace; model success statement is not the oracle."
+      },
+      "binary_sha256": "6c5b3d2ff2abc55a7bcce9a70dcbd1079f0a3364fed80cc1b5fd534c2a980b5d",
+      "verification_sha256": "34b1cf534d9ec3bbbb83f49f2df002f7228b88d572aa26af0a192d5e052e95d5",
+      "trace_sha256": "430f6bbe0e6fedfd8f032de07e9f5aac7e1f8711dc90fec79136ade5b32197dd",
+      "tool_names": [
+        "mcp__cua-computer-use__start_session",
+        "mcp__cua-computer-use__launch_app",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__end_session"
+      ],
+      "snapshot_sha256": {
+        "verify-0.json": "f10449c6f9b3b931dab9c0b23c9846b26a47f97fabce9f7dd00aaffc17d95c0f",
+        "verify-0.png": "a795e0094f887a903479c146267566f21cffe4fbb0f9de29dddb6b3aa1aae84d"
+      },
+      "controller_sha256": "2ed1e1a9de271deff512e8131567bc5658723c38f0eec4a5e1b98d5c374b2198"
+    },
+    {
+      "task": "calculator",
+      "name": "calculator-42-r3",
+      "expression": "6 × 7",
+      "expected": "42",
+      "client_version": "2.1.316",
+      "model": "q8-symmetric-bf16-g64",
+      "client_exit": 0,
+      "wall_seconds": 314.14196712500416,
+      "tool_errors": 0,
+      "client_result": "Calculator automation completed with Cua tools only.\n\n**Session**\n- Public label: `calculator-42-r3` – started and ended\n- New instance launched: `com.apple.calculator` `creates_new_application_instance: true`\n\n**Instance identified**\n- PID: 75100\n- Window ID: 64502\n- App: Calculator\n- Window title: Calculator\n- Bounds: x=2488 y=421 w=230 h=408, on current Space\n\n**Window inspection & clear**\n- Initial snapshot `s00000006` showed display `AXStaticText = \"0\" (Edit field)` with buttons:\n  - `[2]` AXButton *All Clear* `id=AllClear`\n  - `[11]` AXButton *6* `id=Six`\n  - `[8]` AXButton *Multiply* `id=Multiply`\n  - `[5]` AXButton *7* `id=Seven`\n  - `[20]` AXButton *Equals* `id=Equals`\n- Clear performed: AXPress on `s00000006:2` All Clear\n\n**Calculation 6 × 7**\nActions performed on snapshot `s00000007`:\n- AXPress `s00000007:11` 6\n- AXPress `s00000007:8` Multiply\n- AXPress `s00000007:5` 7\n- AXPress `s00000007:20` Equals\n\n**Verification read**\n- Snapshot `s00000008` diff since `s00000007`:\n  - `~ AXStaticText = \"6 × 7\" (Last Expression)`\n  - `+ AXStaticText = \"42\" (Edit field)`\n- Screenshot shows upper line `6×7` and result `42` in the display.\n\n**Observed result**\n- Expression displayed: `6×7` / `6 × 7`\n- Result displayed: `42`\n- PID: 75100\n- Window ID: 64502\n\nThe Calculator instance remains open for independent verification. Session `calculator-42-r3` has been ended.\n",
+      "passed": true,
+      "classification": "independently_verified_task",
+      "admission_after": {
+        "active": 0,
+        "queued": 0
+      },
+      "native_generation": {
+        "completed_rounds": 13,
+        "failed_rounds": 0,
+        "generated_tokens": 2737,
+        "prefill_seconds": 98.65326607227325,
+        "decode_seconds": 175.60228788852692,
+        "load_seconds": 0.0009009838104248047
+      },
+      "independent_assessment": {
+        "fresh_launched_pid": 75100,
+        "window_id": 64502,
+        "expression": "6 × 7",
+        "displayed_result": "42",
+        "independent_expected_product": 42,
+        "all_clear_clicked": true,
+        "zero_observed_after_clear": true,
+        "screenshot_reviewed": true,
+        "verification": "Independent post-client Cua AX snapshot, visually reviewed PNG, and actual action/result trace; model success statement is not the oracle."
+      },
+      "binary_sha256": "6c5b3d2ff2abc55a7bcce9a70dcbd1079f0a3364fed80cc1b5fd534c2a980b5d",
+      "verification_sha256": "5b8cc73245089123e4f6895750436c4ce8f4c448163f91c5998a19bc8c9f5d14",
+      "trace_sha256": "b2e82105c672a5dd1ae157ee58b340e00e160783870baa8ae1beeb20205b90b5",
+      "tool_names": [
+        "mcp__cua-computer-use__start_session",
+        "mcp__cua-computer-use__launch_app",
+        "mcp__cua-computer-use__list_windows",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__end_session"
+      ],
+      "snapshot_sha256": {
+        "verify-0.json": "aa56f7e462484e87bf048ce16cfd6aafc21e5dcb1b3323d3ea3f1731bf7cc131",
+        "verify-0.png": "a795e0094f887a903479c146267566f21cffe4fbb0f9de29dddb6b3aa1aae84d"
+      },
+      "controller_sha256": "ef1f7fc4dcbaaae883f5d6695ca46fcf7eb79728b3a4229244687b82328d6b49"
     },
     {
       "task": "coding",
@@ -10801,6 +11040,178 @@
         "Read"
       ],
       "snapshot_sha256": {}
+    },
+    {
+      "task": "website",
+      "name": "website-r1",
+      "expression": null,
+      "expected": null,
+      "client_version": "2.1.316",
+      "model": "q8-symmetric-bf16-g64",
+      "client_exit": 0,
+      "wall_seconds": 676.7302809159737,
+      "tool_errors": 1,
+      "passed": true,
+      "classification": "independently_verified_task",
+      "admission_after": {
+        "active": 0,
+        "queued": 0
+      },
+      "native_generation": {
+        "completed_rounds": 17,
+        "failed_rounds": 0,
+        "generated_tokens": 5246,
+        "prefill_seconds": 292.24002623558044,
+        "decode_seconds": 333.44658493995667,
+        "load_seconds": 0.0008766651153564453
+      },
+      "independent_assessment": {
+        "browser_pid": 88327,
+        "fresh_profile": true,
+        "channel": "chrome",
+        "chromiumSandbox": true,
+        "screenshot_reviewed": true,
+        "client_answer_reviewed": true,
+        "final_url": "https://developer.mozilla.org/en-US/docs/Web/API/URLSearchParams/getAll",
+        "final_title": "URLSearchParams: getAll() method - Web APIs | MDN",
+        "visible_site_search": true,
+        "interface_then_method_links": true,
+        "search_tool_index": 5,
+        "interface_tool_index": 9,
+        "method_tool_index": 12,
+        "history": [
+          {
+            "url": "https://developer.mozilla.org/en-US/",
+            "title": "MDN Web Docs"
+          },
+          {
+            "url": "https://developer.mozilla.org/en-US/docs/Web/API/URLSearchParams",
+            "title": "URLSearchParams - Web APIs | MDN"
+          },
+          {
+            "url": "https://developer.mozilla.org/en-US/docs/Web/API/URLSearchParams/getAll",
+            "title": "URLSearchParams: getAll() method - Web APIs | MDN"
+          }
+        ],
+        "answer_check": "Client correctly reported an array containing each matching value; an absent key produces an empty array.",
+        "snapshot_sha256": "5a6f29c0f9167ac630198b73b0873f9c6b1af89e3a29be9077e58f9f5bfdc3d8",
+        "screenshot_sha256": "5796aefc771898661c409a2966facee3adde1c1e53a13446a33e3f80667be522",
+        "recovered_tool_error": "Return key refused because the search element lacked keyboard focus; the client clicked the visible control and continued to the result link.",
+        "client_side_compaction_completed": true,
+        "unsupported_thinking_display_updates_fallback": "Server explicitly rejected thinking.display.updates; the unchanged client retried without that unsupported display field."
+      },
+      "binary_sha256": "6c5b3d2ff2abc55a7bcce9a70dcbd1079f0a3364fed80cc1b5fd534c2a980b5d",
+      "verification_sha256": "2b5d3b3740302c7d6829880b0abc298cb0b1bbad1374c008dde5d5ffb1188f2c",
+      "trace_sha256": "db40ec8aac75c2a3b2eeae9cedb0b43838adb047bc07f8561c3103d833781184",
+      "tool_names": [
+        "mcp__cua-computer-use__list_windows",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__type_text",
+        "mcp__cua-computer-use__press_key",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__end_session"
+      ],
+      "snapshot_sha256": {
+        "verify-0.json": "5a6f29c0f9167ac630198b73b0873f9c6b1af89e3a29be9077e58f9f5bfdc3d8",
+        "verify-0.png": "5796aefc771898661c409a2966facee3adde1c1e53a13446a33e3f80667be522"
+      },
+      "controller_sha256": "ef1f7fc4dcbaaae883f5d6695ca46fcf7eb79728b3a4229244687b82328d6b49"
+    },
+    {
+      "task": "website",
+      "name": "website-r2",
+      "expression": null,
+      "expected": null,
+      "client_version": "2.1.316",
+      "model": "q8-symmetric-bf16-g64",
+      "client_exit": 0,
+      "wall_seconds": 933.543354665977,
+      "tool_errors": 1,
+      "passed": true,
+      "classification": "independently_verified_task",
+      "admission_after": {
+        "active": 0,
+        "queued": 0
+      },
+      "native_generation": {
+        "completed_rounds": 18,
+        "failed_rounds": 0,
+        "generated_tokens": 6734,
+        "prefill_seconds": 393.71682012081146,
+        "decode_seconds": 471.9895452260971,
+        "load_seconds": 0.001095890998840332
+      },
+      "independent_assessment": {
+        "browser_pid": 96640,
+        "fresh_profile": true,
+        "channel": "chrome",
+        "chromiumSandbox": true,
+        "screenshot_reviewed": true,
+        "client_answer_reviewed": true,
+        "final_url": "https://developer.mozilla.org/en-US/docs/Web/API/URLSearchParams/getAll",
+        "final_title": "URLSearchParams: getAll() method - Web APIs | MDN",
+        "visible_site_search": true,
+        "interface_then_method_links": true,
+        "search_tool_index": 5,
+        "interface_tool_index": 9,
+        "method_tool_index": 12,
+        "history": [
+          {
+            "url": "https://developer.mozilla.org/en-US/",
+            "title": "MDN Web Docs"
+          },
+          {
+            "url": "https://developer.mozilla.org/en-US/docs/Web/API/URLSearchParams",
+            "title": "URLSearchParams - Web APIs | MDN"
+          },
+          {
+            "url": "https://developer.mozilla.org/en-US/docs/Web/API/URLSearchParams/getAll",
+            "title": "URLSearchParams: getAll() method - Web APIs | MDN"
+          }
+        ],
+        "answer_check": "Client correctly reported an array containing each matching value; an absent key produces an empty array.",
+        "snapshot_sha256": "3b4b1ba498f439b710d0547df38b1875028a070031862bd1a2acd4314700d307",
+        "screenshot_sha256": "5796aefc771898661c409a2966facee3adde1c1e53a13446a33e3f80667be522",
+        "recovered_tool_error": "Return key refused because the search element lacked keyboard focus; the client clicked the visible control and continued to the result link.",
+        "client_side_compaction_completed": true,
+        "unsupported_thinking_display_updates_fallback": "Server explicitly rejected thinking.display.updates; the unchanged client retried without that unsupported display field.",
+        "screenshot_note": "Separately captured screenshot is byte-identical to the fully reviewed first trial image; its fresh AX capture has a different snapshot ID and the second owned browser PID."
+      },
+      "binary_sha256": "6c5b3d2ff2abc55a7bcce9a70dcbd1079f0a3364fed80cc1b5fd534c2a980b5d",
+      "verification_sha256": "0753a45437335a13fa49f9862afef8d3acb92fd7ebf8b9f9b57269b4956d853c",
+      "trace_sha256": "a8cc3c9d009a65671b67d8c889d8128d037ff650e8e02c3dfba1a6d879473407",
+      "tool_names": [
+        "mcp__cua-computer-use__list_windows",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__type_text",
+        "mcp__cua-computer-use__press_key",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__click",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__get_window_state",
+        "mcp__cua-computer-use__end_session"
+      ],
+      "snapshot_sha256": {
+        "verify-0.json": "3b4b1ba498f439b710d0547df38b1875028a070031862bd1a2acd4314700d307",
+        "verify-0.png": "5796aefc771898661c409a2966facee3adde1c1e53a13446a33e3f80667be522"
+      },
+      "controller_sha256": "ef1f7fc4dcbaaae883f5d6695ca46fcf7eb79728b3a4229244687b82328d6b49"
     }
   ],
   "setup_attempts": [
@@ -10833,7 +11244,6 @@
     "earlier_failed_gate": "One legacy fixture expected an inline user-channel tool example to execute. Corrected to an actual tool-recipient packet; retained literal-example regressions."
   },
   "qualification_gaps": [
-    "Fresh Calculator and website trials blocked by screen_locked before app input.",
     "Default strict-tool nested-markup copy produced the wrong string value despite a valid schema; added guidance passed twice but a repeat exhausted 4096 tokens. No guidance change or value coercion was shipped.",
     "Other quantizations and real Qwen/Gemma constrained checkpoints are not qualified by this record.",
     "Constrained speculative decoding remains disabled; matcher rollback is not qualified.",
@@ -11303,16 +11713,47 @@
     }
   },
   "cleanup": {
-    "owned_server_pid": 51923,
-    "owned_cua_pid": 16468,
+    "reference_socket_symlink_removed": true,
+    "owned_server_pid": 70520,
+    "owned_cua_pid": 70508,
     "server_admission_before_stop": {
       "active": 0,
       "queued": 0
     },
+    "ownership_checks": [
+      {
+        "pid": 70520,
+        "expected_executable": "/private/tmp/mere-messages-followup/.build/out/Products/Release/mere.run",
+        "observed_executable": "/private/tmp/mere-messages-followup/.build/out/Products/Release/mere.run",
+        "ownership_verified": true
+      },
+      {
+        "pid": 70508,
+        "expected_executable": "/Applications/CuaDriver.app/Contents/MacOS/cua-driver",
+        "observed_executable": "/Applications/CuaDriver.app/Contents/MacOS/cua-driver",
+        "ownership_verified": true
+      }
+    ],
+    "owned_browser_contexts_closed": true,
+    "owned_calculator_instances_closed_after_review": true,
+    "temporary_caffeinate_pid": 70616,
+    "temporary_caffeinate_released": true,
     "installer_image_unmounted": true,
-    "personal_apps_untouched": true
+    "personal_apps_untouched": true,
+    "terminated_pids_verified": [
+      70520,
+      70508,
+      70616,
+      88327,
+      96640,
+      70943,
+      75100,
+      85685,
+      87016
+    ],
+    "owned_listener_closed": true
   },
-  "final_desktop_readiness": {
+  "readiness_before_user_unlock": {
     "active": true,
     "capture_scope": "auto",
     "desktop_capture_authorized": false,
@@ -11322,6 +11763,50 @@
     "escalation_reason": null,
     "revived": false,
     "session": "qualification-final-readiness"
+  },
+  "desktop_window_observation_after_unlock": {
+    "pid": 70643,
+    "window_id": 64453,
+    "element_count": 33,
+    "screenshot_frame_valid": true,
+    "degraded": null,
+    "degraded_reason": null,
+    "note": "macOS IOConsoleLocked was No; exact-window AX and screenshots worked. Cua start_session desktop_unlocked stayed false and is not used as proof of a current lock."
+  },
+  "desktop_requalification": {
+    "required_cases": [
+      "calculator-1081-r1",
+      "calculator-1081-r2",
+      "calculator-42-r2",
+      "calculator-42-r3",
+      "website-r1",
+      "website-r2"
+    ],
+    "independently_verified": [
+      "calculator-1081-r1",
+      "calculator-1081-r2",
+      "calculator-42-r2",
+      "calculator-42-r3",
+      "website-r1",
+      "website-r2"
+    ],
+    "remaining": []
+  },
+  "browser_security": {
+    "executable_version": "158.0.8127.37",
+    "primary_release_url": "https://chromereleases.googleblog.com/2026/11/stable-channel-update-for-desktop_01699533288.html",
+    "source_sha256": "e2683e23cabf592cb2e7a3b13329054a602eb31c977e4aa8ab906d42f61c3a62",
+    "signature_verification": "codesign --verify --deep --strict passed",
+    "launch_channel": "chrome",
+    "chromiumSandbox": true,
+    "isolated_profile": true
+  },
+  "reference_loop": {
+    "claude_code_version": "2.1.316",
+    "cua_driver_version": "0.38.0",
+    "cua_driver_sha256": "b4d974a9c1c92a700cd7be7ede987aea4a1e6835e37039ce3d628b71bd5f0ca8",
+    "mcp_config_sha256": "ab2625025535d1b5bfe04bffc2f36c3f5c07dc16fb2f8da66186e0677e0dfc7f",
+    "controller_note": "Trusted setup and independent verification were rebuilt; the client, driver, MCP filter/catalog, and model tool loop retain the reference versions."
   },
   "encoding_guidance_experiment": {
     "production_change": false,
