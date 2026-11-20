@@ -53,8 +53,10 @@ python3 -B -m unittest discover -s scripts/tests -p test_prepare_mlx.py
 swiftpm build
 ./scripts/build_mlx_metallib.sh \
   --verify-only vendor/mlx-swift_Cmlx.bundle
+# Synthetic run records must remain readable when an unattended Mac locks.
+# The override is compiled only into Debug builds; Release keeps its protection.
 # Numerical fixtures compare against FP32 references, as in upstream MLX tests.
-MLX_ENABLE_TF32=0 swiftpm test
+MERERUN_TEST_RUN_RECORD_PROTECTION=after-first-unlock MLX_ENABLE_TF32=0 swiftpm test
 mere_run_bin=".build/debug/mere.run"
 if [[ ! -x "$mere_run_bin" ]]; then
   echo "Expected built executable at $mere_run_bin after swift build." >&2

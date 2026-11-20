@@ -8,6 +8,10 @@ The format is based on Keep a Changelog.
 
 ## 0.73.0 - 2026-11-19
 
+- Let unattended macOS test gates reopen synthetic run records while the
+  screen is locked, using an explicit Debug-only file-protection policy.
+  Release builds retain the existing protection for users' run records.
+
 - Add native Haru-4B speech-to-speech inference. Use `speech converse` to
   replay an audio file or start a live macOS conversation. The command accepts
   a character card and voice reference and can save the reply as a WAV file.

@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-import MereRunExecution
+@testable import MereRunExecution
 
 final class RunStorageTests: XCTestCase {
     func testLeaseExcludesOtherOwnersAndReleasesOnDeinit() throws {
@@ -87,10 +87,25 @@ final class RunStorageTests: XCTestCase {
 #if canImport(Darwin)
         let volume = try file.resourceValues(forKeys: [.volumeSupportsFileProtectionKey])
         if volume.allValues[.volumeSupportsFileProtectionKey] as? Bool == true {
-            XCTAssertEqual(attributes[.protectionKey] as? FileProtectionType, .completeUnlessOpen)
+            XCTAssertEqual(attributes[.protectionKey] as? FileProtectionType, RunFileWriter.fileProtection())
         }
 #endif
     }
+
+#if canImport(Darwin)
+    func testProductionProtectionAndExplicitDebugFixturePolicy() {
+        XCTAssertEqual(RunFileWriter.fileProtection(environment: [:]), .completeUnlessOpen)
+        XCTAssertEqual(RunFileWriter.fileProtection(environment: [
+            "MERERUN_TEST_RUN_RECORD_PROTECTION": "unknown"
+        ]), .completeUnlessOpen)
+        let fixtureEnvironment = ["MERERUN_TEST_RUN_RECORD_PROTECTION": "after-first-unlock"]
+#if DEBUG
+        XCTAssertEqual(RunFileWriter.fileProtection(environment: fixtureEnvironment), .completeUntilFirstUserAuthentication)
+#else
+        XCTAssertEqual(RunFileWriter.fileProtection(environment: fixtureEnvironment), .completeUnlessOpen)
+#endif
+    }
+#endif
 
     func testFailedReplacementPreservesDestinationAndRemovesTemporaryFile() throws {
         let directory = try root()

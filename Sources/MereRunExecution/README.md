@@ -32,6 +32,19 @@ still require unlocking the device. Storage unit tests cover atomic replacement,
 permissions, protection metadata, hashes, and failure cleanup; they do not
 simulate device lock transitions.
 
+The macOS repository gate sets `MERERUN_TEST_RUN_RECORD_PROTECTION=after-first-unlock`
+for its synthetic fixtures. In Debug builds, this selects
+`completeUntilFirstUserAuthentication`, allowing tests to reopen records after
+the screen locks. The same variable has no effect in Release builds, which
+always use `completeUnlessOpen`. Atomic replacement, file permissions, hashes,
+and failure behavior are tested with either policy; the storage tests also
+check the default and explicit fixture-policy selection. To run fixture tests
+directly on a locked Mac:
+
+```bash
+MERERUN_TEST_RUN_RECORD_PROTECTION=after-first-unlock swift test
+```
+
 To exercise storage on a mounted test volume, set `MERERUN_TEST_STORAGE_ROOT`
 when running `swift test --filter RunStorageTests`. The tests create and remove
 their own directories under that path. Use a volume that supports file

@@ -27,7 +27,7 @@ enum RunFileWriter {
         let volume = try temporary.resourceValues(forKeys: [.volumeSupportsFileProtectionKey])
         if volume.allValues[.volumeSupportsFileProtectionKey] as? Bool == true {
             try FileManager.default.setAttributes(
-                [.protectionKey: FileProtectionType.completeUnlessOpen], ofItemAtPath: temporary.path
+                [.protectionKey: fileProtection()], ofItemAtPath: temporary.path
             )
         }
 #endif
@@ -46,6 +46,18 @@ enum RunFileWriter {
             byteCount: UInt64(data.count)
         )
     }
+
+#if canImport(Darwin)
+    /// Release builds always retain the production protection class.
+    static func fileProtection(environment: [String: String] = ProcessInfo.processInfo.environment) -> FileProtectionType {
+#if DEBUG
+        if environment["MERERUN_TEST_RUN_RECORD_PROTECTION"] == "after-first-unlock" {
+            return .completeUntilFirstUserAuthentication
+        }
+#endif
+        return .completeUnlessOpen
+    }
+#endif
 
     private static func posixError() -> POSIXError {
         POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
