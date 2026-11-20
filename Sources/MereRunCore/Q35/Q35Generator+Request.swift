@@ -139,12 +139,15 @@ extension Q35Generator {
             )
             : Set<Int>()
         let generationConfig = Q35Sampling.generationConfig(for: request, promptTokenCount: promptTokens.count)
+        let hasTools = request.tools?.isEmpty == false
+        let stopAtCompletedToolCall = hasTools && !request.parallelToolCalls
         let requestDFlash2 = Self.dflash2Eligible(
             generationConfig: generationConfig,
             tokenBudget: min(request.maxTokens, effectiveContext - promptTokens.count),
-            hasImages: !imageURLs.isEmpty, hasTools: request.tools?.isEmpty == false,
+            hasImages: !imageURLs.isEmpty, hasTools: hasTools,
             jsonConstrained: jsonConstrained, logprobCapture: request.logprobCapture,
-            continuousBatchingEnabled: continuousBatchingEnabled
+            continuousBatchingEnabled: continuousBatchingEnabled,
+            allowsTools: loadedLoRA != nil && dflash2Model != nil
         ) ? dflash2Model : nil
         let mtpSpeculationEligible = requestDFlash2 == nil && !request.logprobCapture.isEnabled
             && !generationConfig.hasActivePenalties
@@ -181,8 +184,9 @@ extension Q35Generator {
         }
 
         var layerCaches = makeLayerCaches(config: loadedConfig, kvCacheMode: effectiveKVCacheMode)
-        let cacheDFlash2 = prefixKVCacheEnabled && Self.dflash2PrefixCacheEnabled() && effectiveKVCacheMode == .default
-        let tunedDFlash = requestDFlash2 != nil && activeChatRequestCount <= 1
+        let cacheDFlash2 = prefixKVCacheEnabled && effectiveKVCacheMode == .default
+            && Self.dflash2PrefixCacheEnabled(hasLoRA: loadedLoRA != nil)
+        let tunedDFlash = requestDFlash2 != nil && loadedLoRA == nil && activeChatRequestCount <= 1
             && (requestedCacheMode == .default || requestedCacheMode == .auto)
             && useQualifiedDFlashDefaults(config: loadedConfig)
         var dflash2Cache = requestDFlash2.map { draft in
@@ -339,6 +343,7 @@ extension Q35Generator {
                             mode: treeMode, encode: tokenizerAndTemplate.tokenizer.encodeRawChatText
                         ) : nil,
                         byteLevelProgress: tokenizerAndTemplate.tokenizer.supportsByteLevelProgress,
+                        stopAtCompletedToolCall: stopAtCompletedToolCall,
                         decodeToken: { tokenizerAndTemplate.decode(token: $0) },
                         decodeTokens: { tokenizerAndTemplate.decode(tokens: $0) }, progressHandler: decodeProgress
                     )
@@ -361,7 +366,7 @@ extension Q35Generator {
                 promptTokens: promptTokens,
                 maxContextTokens: effectiveContext,
                 jsonConstrained: jsonConstrained,
-                stopAtCompletedToolCall: request.tools?.isEmpty == false && !request.parallelToolCalls,
+                stopAtCompletedToolCall: stopAtCompletedToolCall,
                 logprobCapture: request.logprobCapture,
                 logprobRegion: request.logprobRegionHint ?? .visible,
                 progressHandler: decodeProgress

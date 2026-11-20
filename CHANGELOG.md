@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add opt-in DFlash 2 for the 4-bit Qwen3.8 27B model with a LoRA, including
+  Pi tool calls. This mode reuses matching prompt prefixes by default when the
+  server prefix cache is enabled and the request uses default KV storage.
+
 ## 0.73.0 - 2026-11-19
 
 - Let unattended macOS test gates reopen synthetic run records while the

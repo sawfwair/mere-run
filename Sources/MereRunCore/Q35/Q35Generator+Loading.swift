@@ -63,7 +63,9 @@ extension Q35Generator {
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family config"))
         let configData = try Data(contentsOf: normalizedRoot.appendingPathComponent("config.json"))
         let config = try JSONDecoder().decode(Q35Config.self, from: configData)
-        let dflash2 = lora == nil ? try dflash2Configuration(target: config, targetRoot: normalizedRoot) : nil
+        let allowsDFlash2 = lora == nil
+            || (modelId == Q35Resources.q38TwentySevenB4BitModelId && Self.dflash2LoRAEnabled())
+        let dflash2 = allowsDFlash2 ? try dflash2Configuration(target: config, targetRoot: normalizedRoot) : nil
         let generationConfigURL = normalizedRoot.appendingPathComponent("generation_config.json")
         let generationEOSTokenIds: [Int]
         if FileManager.default.fileExists(atPath: generationConfigURL.path) {
@@ -115,7 +117,10 @@ extension Q35Generator {
         #if DEBUG
         try checkpointTransformForTesting?(q35Model)
         #endif
-        if Self.shouldUseM5Verification(modelID: modelId, draftAvailable: dflash2 != nil) {
+        // The native verifier expects bare packed projections. Verify LoRA
+        // proposals through the same MLX modules as the adapted target.
+        if !(lora != nil && dflash2 != nil),
+           Self.shouldUseM5Verification(modelID: modelId, draftAvailable: dflash2 != nil) {
             for (path, module) in q35Model.leafModules().flattened() where Self.shouldUseM5Projection(path: path) {
                 (module as? PortableQuantizedLinear)?.verificationBackend = .m5Matrix
             }

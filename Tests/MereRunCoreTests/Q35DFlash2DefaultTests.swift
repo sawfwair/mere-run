@@ -3,6 +3,11 @@ import XCTest
 @testable import MereRunCore
 
 final class Q35DFlash2DefaultTests: XCTestCase {
+    func testLoRADraftingRequiresExplicitOptIn() {
+        XCTAssertFalse(Q35Generator.dflash2LoRAEnabled(environment: [:]))
+        XCTAssertTrue(Q35Generator.dflash2LoRAEnabled(environment: ["MERERUN_Q35_DFLASH2_LORA": "1"]))
+    }
+
     func testAdaptiveDraftingRequiresExplicitOptIn() {
         XCTAssertFalse(Q35Generator.adaptiveDFlash2Enabled(environment: [:]))
         XCTAssertFalse(Q35Generator.adaptiveDFlash2Enabled(environment: ["MERERUN_Q35_DFLASH2_ADAPTIVE": "0"]))
@@ -12,10 +17,12 @@ final class Q35DFlash2DefaultTests: XCTestCase {
         XCTAssertFalse(Q35Generator.adaptiveDFlash2Enabled(environment: control))
     }
 
-    func testDraftPrefixReuseRequiresExplicitOptIn() {
-        XCTAssertFalse(Q35Generator.dflash2PrefixCacheEnabled(environment: [:]))
-        XCTAssertFalse(Q35Generator.dflash2PrefixCacheEnabled(environment: ["MERERUN_Q35_DFLASH2_PREFIX_CACHE": "0"]))
-        XCTAssertTrue(Q35Generator.dflash2PrefixCacheEnabled(environment: ["MERERUN_Q35_DFLASH2_PREFIX_CACHE": "1"]))
+    func testDraftPrefixReuseDefaultsOnWithLoRAAndRespectsOverrides() {
+        let flag = "MERERUN_Q35_DFLASH2_PREFIX_CACHE"
+        XCTAssertFalse(Q35Generator.dflash2PrefixCacheEnabled(hasLoRA: false, environment: [:]))
+        XCTAssertTrue(Q35Generator.dflash2PrefixCacheEnabled(hasLoRA: true, environment: [:]))
+        XCTAssertFalse(Q35Generator.dflash2PrefixCacheEnabled(hasLoRA: true, environment: [flag: "0"]))
+        XCTAssertTrue(Q35Generator.dflash2PrefixCacheEnabled(hasLoRA: false, environment: [flag: "1"]))
     }
 
     func testAutomaticDraftRequiresQualifiedModelHardwareAndMemory() {

@@ -36,10 +36,11 @@ package enum Q35DFlash2Decoder {
         costs: Q35DFlash2Costs? = nil,
         initialHistory: [Int] = [],
         checkCancellation: () throws -> Void = {}, observer: ((Q35DFlash2Event) -> Void)? = nil,
+        stopAfterEmission: (() -> Bool)? = nil,
         emit: (Int) -> Void
     ) throws -> Q35DFlash2Stats {
         #if os(macOS)
-        if #available(macOS 26.0, *), let positionSampler, let sampling, costs == nil,
+        if #available(macOS 26.0, *), stopAfterEmission == nil, let positionSampler, let sampling, costs == nil,
            ProcessInfo.processInfo.environment["MERERUN_Q38_SAMPLED_CHAIN"] == "1",
            Q35DFlash2TreePolicy.eligible(model: model, caches: layerCaches, sampled: false),
            let stats = try decodeNativeSampledChain(model: model, draft: draft, draftCache: draftCache,
@@ -47,7 +48,7 @@ package enum Q35DFlash2Decoder {
                rule: positionSampler, sampling: sampling, checkCancellation: checkCancellation, emit: emit) {
             return stats
         }
-        if #available(macOS 26.0, *), let positionSampler, sampling != nil,
+        if #available(macOS 26.0, *), stopAfterEmission == nil, let positionSampler, sampling != nil,
            positionSampler.treeMode != nil,
            Q35DFlash2TreePolicy.eligible(model: model, caches: layerCaches, sampled: false),
            let stats = try decodePositionTree(model: model, draft: draft, draftCache: draftCache,
@@ -56,7 +57,8 @@ package enum Q35DFlash2Decoder {
             return stats
         }
         #endif
-        if Q35DFlash2TreePolicy.eligible(model: model, caches: layerCaches, sampled: sampling != nil) {
+        if stopAfterEmission == nil,
+           Q35DFlash2TreePolicy.eligible(model: model, caches: layerCaches, sampled: sampling != nil) {
             return try decodeTree(model: model, draft: draft, draftCache: draftCache,
                 initialLogits: initialLogits, layerCaches: layerCaches, eosSet: eosSet, tokenBudget: tokenBudget,
                 initialHistory: initialHistory,
@@ -87,6 +89,7 @@ package enum Q35DFlash2Decoder {
             try checkCancellation()
             if eosSet.contains(anchor) { break }
             emit(anchor)
+            if stopAfterEmission?() == true { break }
             if let previous = history {
                 history = concatenated([previous, MLXArray([Int32(anchor)])])
             }
@@ -164,6 +167,11 @@ package enum Q35DFlash2Decoder {
                 emit(proposal)
                 generated += 1
                 accepted += 1
+                if stopAfterEmission?() == true {
+                    stats.acceptedTokens += accepted
+                    observer?(.accepted(accepted))
+                    return stats
+                }
             }
             stats.acceptedTokens += accepted
             if let previous = history, accepted > 0 {

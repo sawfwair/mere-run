@@ -5,6 +5,10 @@ import MLX
 import MLXNN
 
 extension Q35Generator {
+    static func dflash2LoRAEnabled(environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
+        environment["MERERUN_Q35_DFLASH2_LORA"] == "1"
+    }
+
     static func adaptiveDFlash2Enabled(environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
         environment["MERERUN_Q35_DFLASH2_ADAPTIVE"] == "1"
     }
@@ -13,8 +17,10 @@ extension Q35Generator {
         ["1", "calibrate-only"].contains(environment["MERERUN_Q35_DFLASH2_ADAPTIVE"] ?? "")
     }
 
-    static func dflash2PrefixCacheEnabled(environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
-        environment["MERERUN_Q35_DFLASH2_PREFIX_CACHE"] == "1"
+    static func dflash2PrefixCacheEnabled(
+        hasLoRA: Bool, environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Bool {
+        environment["MERERUN_Q35_DFLASH2_PREFIX_CACHE"].map { $0 == "1" } ?? hasLoRA
     }
 
     static func automaticDFlash2Enabled(
@@ -89,12 +95,13 @@ extension Q35Generator {
 
     static func dflash2Eligible(
         generationConfig: GenerationConfig, tokenBudget: Int, hasImages: Bool, hasTools: Bool,
-        jsonConstrained: Bool, logprobCapture: ChatLogprobCapture, continuousBatchingEnabled: Bool
+        jsonConstrained: Bool, logprobCapture: ChatLogprobCapture, continuousBatchingEnabled: Bool,
+        allowsTools: Bool = false
     ) -> Bool {
         tokenBudget > 1 && (generationConfig.temperature > 0
             || (generationConfig.temperature == 0 && !generationConfig.hasActivePenalties
                 && generationConfig.bannedTokens.isEmpty))
-            && !hasImages && !hasTools && !jsonConstrained && !logprobCapture.isEnabled
+            && !hasImages && (!hasTools || allowsTools) && !jsonConstrained && !logprobCapture.isEnabled
             && !continuousBatchingEnabled
     }
 
@@ -162,6 +169,7 @@ extension Q35Generator {
         costs: Q35DFlash2Costs? = nil,
         generationConfig: GenerationConfig, promptTokens: [Int], seed: UInt64? = nil,
         treeMode: Q35SampledTreeMode? = nil, thinkingLimit: Q35TreeThinkingLimit? = nil, byteLevelProgress: Bool = false,
+        stopAtCompletedToolCall: Bool = false,
         decodeToken: (Int) -> String, decodeTokens: ([Int]) -> String,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) throws -> Q35BatchedDecodeResult {
@@ -199,10 +207,13 @@ extension Q35Generator {
         ) : nil
         var progressText: Q35ByteLevelProgress? = byteLevelProgress && progressHandler != nil
             && ProcessInfo.processInfo.environment["MERERUN_Q38_INCREMENTAL_PROGRESS"] != "0" ? .init() : nil
+        var toolDetector = Q35ToolParser.StreamingCompletionDetector()
+        var completedToolCall = false
         func emit(_ token: Int) {
             if firstTokenSeconds == nil { firstTokenSeconds = Date().timeIntervalSince(started) }
             generated.append(token)
             let piece = decodeToken(token)
+            if stopAtCompletedToolCall { completedToolCall = toolDetector.feed(piece) }
             progressText?.append(token: token, piece: piece, decode: decodeTokens)
             if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 pendingWhitespace += piece
@@ -230,8 +241,15 @@ extension Q35Generator {
             initialHistory: promptTokens,
             checkCancellation: { try Task.checkCancellation() },
             observer: observer,
+            stopAfterEmission: stopAtCompletedToolCall ? { completedToolCall } : nil,
             emit: emit
         )
+        if Gemma4DecodeTrace.enabled {
+            Gemma4DecodeTrace.emit(
+                "[q35-decode-trace] mode=dflash2 tokens=\(generated.count) rounds=\(stats.rounds)"
+                    + " drafted=\(stats.draftedTokens) accepted=\(stats.acceptedTokens)"
+            )
+        }
         return Q35BatchedDecodeResult(
             generatedTokens: generated, decodeSeconds: Date().timeIntervalSince(started),
             firstTokenSeconds: firstTokenSeconds,

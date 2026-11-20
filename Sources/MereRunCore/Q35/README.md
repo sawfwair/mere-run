@@ -34,11 +34,11 @@ automatic for eligible text on Apple10 GPU Macs with macOS 26 or later and at
 least 64 GiB of memory. `MERERUN_Q35_DFLASH2=0` disables it;
 `MERERUN_Q35_DFLASH2_PATH` overrides the component directory. It replaces the MTP head for that generator and uses
 the draft for sampled text, including penalties and bans, or unpenalized greedy
-text. Images, tools, JSON constraints, log-probability capture, and continuous
-batching exclude speculation. Other requests use the target
-decoder. Eligible requests prefill their own target and draft context; prefix
-cache reuse is excluded until snapshots include the draft state. See
-[the configuration instructions](../../../docs/configuration.md#mererun-q35-dflash2).
+text. Images, JSON constraints, log-probability capture, and continuous batching
+use the target decoder. The opt-in LoRA path also accepts text tool requests.
+It reuses matching target and draft prefix snapshots by default when the server
+prefix cache is enabled and the request uses default KV storage. See
+[the configuration instructions](../../../docs/configuration.md#mererun-q35-dflash2-lora).
 Eligible text uses the tiled M5 projections and fused FFN by default. Other
 request types suppress M5 through a task-local scope, preserving the reference
 path without mutating projections shared by concurrent requests. There is no
