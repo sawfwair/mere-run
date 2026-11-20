@@ -112,6 +112,7 @@ private enum APISidecarImageGenerator: @unchecked Sendable {
     case ideogram4(Ideogram4Generator)
     case qwenImage21(QwenImage21Generator)
     case qwenImageEdit(QwenImageEditGenerator)
+    case cosmos3Super(Cosmos3SuperImageGenerator)
 }
 
 private enum APISidecarASRGenerator: Sendable {
@@ -271,6 +272,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                         return .qwenImage21(QwenImage21Generator())
                     case .qwenImageEdit:
                         return .qwenImageEdit(QwenImageEditGenerator())
+                    case .cosmos3Super:
+                        return .cosmos3Super(Cosmos3SuperImageGenerator())
                     }
                 },
                 unload: { generator in
@@ -288,6 +291,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                     case .krea2(let generator):
                         generator.unload()
                     case .ideogram4(let generator):
+                        generator.unload()
+                    case .cosmos3Super(let generator):
                         generator.unload()
                     case .miniMaxH3Image, .flux3, .qwenImage21:
                         break
@@ -318,6 +323,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                     case .flux3(let generator):
                         return try await generator.generate(request, progressHandler: nil)
                     case .qwenImageEdit(let generator):
+                        return try await generator.generate(request, progressHandler: nil)
+                    case .cosmos3Super(let generator):
                         return try await generator.generate(request, progressHandler: nil)
                     }
                 }
@@ -1080,6 +1087,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
             generator.unload()
         case .ideogram4(let generator):
             generator.unload()
+        case .cosmos3Super(let generator):
+            generator.unload()
         case .miniMaxH3Image, .flux3, .qwenImage21:
             break
         case .qwenImageEdit(let generator):
@@ -1189,6 +1198,9 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
             return 16 * gibibyte
         case .senseNovaU15:
             return 48 * gibibyte
+        case .cosmos3Super:
+            // A 768 x 768 four-step run peaked at 49.7 GiB; the catalog declares a 64 GB minimum.
+            return 64 * gibibyte
         }
     }
 
@@ -1207,7 +1219,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         case .miniMaxH3Image:
             let size = MiniMaxH3ImageGeometry.canvas(width: width, height: height)
             return (size.width, size.height)
-        case .flux1, .flux2Klein, .flux3, .zImageTurbo, .senseNovaU15, .krea2, .ideogram4, .qwenImageEdit, .qwenImage21:
+        case .flux1, .flux2Klein, .flux3, .zImageTurbo, .senseNovaU15, .krea2, .ideogram4, .qwenImageEdit, .qwenImage21,
+             .cosmos3Super:
             return (width, height)
         }
     }

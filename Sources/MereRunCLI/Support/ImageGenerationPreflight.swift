@@ -440,7 +440,7 @@ struct ImageGenerationPreflightAnalyzer {
                 )
                 return (modelResult(requested: requested, kind: "local_path", installed: false, path: localURL.path), nil)
             }
-            let manifest = loadManifest(at: localURL, diagnostics: &diagnostics)
+            let manifest = loadManifest(selection, at: localURL, diagnostics: &diagnostics)
             return (modelResult(
                 requested: requested,
                 kind: "local_path",
@@ -454,7 +454,7 @@ struct ImageGenerationPreflightAnalyzer {
         if case .managed(let modelID) = selection {
             let spec = ManagedModelCatalog.spec(for: modelID.rawValue)
             if let resolution = ModelResolver(fileManager: fileManager).resolveIfPresent(modelID) {
-                let manifest = loadManifest(at: resolution.rootURL, diagnostics: &diagnostics)
+                let manifest = loadManifest(selection, at: resolution.rootURL, diagnostics: &diagnostics)
                 return (modelResult(
                     requested: requested,
                     kind: "managed_model",
@@ -991,11 +991,12 @@ struct ImageGenerationPreflightAnalyzer {
     }
 
     private func loadManifest(
+        _ selection: ImageGenerationModelSelection,
         at modelRoot: URL,
         diagnostics: inout [PreflightDiagnostic]
     ) -> MereRunModelManifest? {
         do {
-            let manifest = try MereRunModelManifest.loadRequired(from: modelRoot, fileManager: fileManager)
+            let manifest = try selection.loadManifest(at: modelRoot, fileManager: fileManager)
             if (try? ImageGenerationBackend(manifest: manifest)) == nil {
                 let family = manifest.family?.rawValue ?? "unknown"
                 diagnostics.append(

@@ -195,7 +195,7 @@ struct ImageGenerate: AsyncParsableCommand {
     private func generate(options suppliedOptions: ImageGenerationOptions, outputURL: URL, recording: ImageRunSession?) async throws {
         var options = suppliedOptions
         let modelRoot = try resolveModelRoot()
-        let manifest = try MereRunModelManifest.loadRequired(from: modelRoot)
+        let manifest = try modelSelection.loadManifest(at: modelRoot)
         let initialPlan = try ImageGenerationPlan.resolve(options, modelRoot: modelRoot, manifest: manifest)
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
@@ -301,8 +301,12 @@ struct ImageGenerate: AsyncParsableCommand {
         }
     }
 
+    private var modelSelection: ImageGenerationModelSelection {
+        ImageGenerationModelSelection(model ?? Self.defaultManagedModelID.rawValue)
+    }
+
     private func resolveModelRoot() throws -> URL {
-        let selection = ImageGenerationModelSelection(model ?? Self.defaultManagedModelID.rawValue)
+        let selection = modelSelection
         switch selection {
         case .local(let url): return url
         case .managed(let id):

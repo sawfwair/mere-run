@@ -21,6 +21,7 @@ Use one installed image model:
 - `image-krea2-turbo`, `image-krea2-raw`
 - `image-qwen-21`, `image-qwen-21-turbo`
 - `image-qwen-edit-2511`, `image-qwen-edit-2511-lightning`
+- `image-cosmos3-super-t2i-4step`
 
 Each family's install terms, defaults, and prompting notes are in its model
 handbook: `mere.run guide --model <id>`, for example
@@ -98,6 +99,7 @@ both lists without running anything.
 | Qwen-Image-Edit | `--sigmas`, `--lora`, more than 3 `--ref-image` values | `--sigma-shift`, `--strength`, `--max-sequence-length` |
 | Qwen-Image-Edit Lightning | as Qwen-Image-Edit, plus `--steps` other than 4 and `--cfg` other than 1 | as Qwen-Image-Edit |
 | Ideogram 4 | `--input`, `--mask`, `--outpaint`, `--ref-image`, `--sigmas`, `--lora` | `--negative-prompt`, `--sigma-shift`, `--strength`, `--mask-feather`, `--max-sequence-length` above 2048 |
+| Cosmos3-Super 4-Step | `--input`, `--mask`, `--outpaint`, `--ref-image`, `--sigmas`, `--sigma-shift`, `--lora`, `--steps` other than 4, `--cfg` other than 1 | `--negative-prompt`, `--strength`, `--mask-feather`, `--max-sequence-length` |
 
 `--keep-original-aspect` is read only by HiDream-O1, the `--krea-*` options only
 by Krea 2 (`--krea-base-quantization-bits` is refused elsewhere), and

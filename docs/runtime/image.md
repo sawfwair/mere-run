@@ -69,6 +69,7 @@ models. Choose **Use model default** to clear it. For example, Qwen Image Edit
 | `image-krea2-turbo` | Krea 2 eight-step text-to-image and Raw-trained LoRAs | 8, 0 | 38.7 GB | 96 / 128 GB |
 | `image-krea2-raw` | Krea 2 base checkpoint for LoRA training | 52, 3.5 | 38.7 GB | 96 / 128 GB |
 | `image-ideogram4-sdnq-uint4` | Ideogram 4 typography-focused text-to-image (SDNQ uint4) | 20, 7.0 | 17.2 GB | 48 / 64 GB |
+| `image-cosmos3-super-t2i-4step` | Distilled Cosmos3-Super four-step text-to-image (MLX 4-bit) | 4, 1 | 37.0 GB | 64 / 128 GB (estimates) |
 
 The 3D reconstruction models are listed in
 [Reconstruct a 3D mesh](#reconstruct-a-3d-mesh). Several models have
@@ -213,7 +214,7 @@ apply depends on the model.
 | `--ref-image` | Ordered reference images. Repeat for more. | Klein, FLUX 3 Klein, Qwen Image 2.1, Qwen Edit, HiDream O1, SenseNova U1.5 |
 | `--mask`, `--outpaint` | Restrict changes to a region of `--input`, or extend its canvas. | Any model that accepts `--input` |
 
-Krea 2 and Ideogram 4 are text-to-image only.
+Krea 2, Ideogram 4, and Cosmos3-Super are text-to-image only.
 
 ### Transform an input image
 
@@ -679,6 +680,32 @@ seconds (1.65x slower), with the same roughly 2.94 GiB warm incremental MLX
 peak. The two paths were internally deterministic and visually close but not
 bit-exact, so the portable graph remains the default.
 
+### Cosmos3-Super 4-Step
+
+`image-cosmos3-super-t2i-4step` is the MLX 4-bit export of NVIDIA
+Cosmos3-Super-Text2Image-4Step. `image generate` runs it on the native Cosmos3
+runtime, the same one `video cosmos3 --mode text-to-image` uses:
+
+```bash
+mere.run model pull image-cosmos3-super-t2i-4step
+mere.run image generate \
+  --model image-cosmos3-super-t2i-4step \
+  --prompt "A red cube on a clean neutral background" \
+  --width 768 --height 768 --seed 7 --output cosmos3-super.png
+```
+
+The checkpoint supplies its four-step schedule and runs at CFG 1, so `--steps`
+must be 4 and `--cfg` must be 1. A negative prompt has no effect. Only
+text-to-image is supported; `--input`, `--ref-image`, `--sigma-shift`, and LoRA
+adapters are rejected. Width and height must be multiples of 16, and the output
+must be a PNG. 768 x 768 is the published qualification size; larger sizes need
+separate memory and quality checks.
+
+A folder registered with `mere.run model location bind` runs without a
+`mererun_model.json`: the runtime reads the publisher's own configuration
+files. Machine admission classes this model as large, so a run waits until no
+other mere.run inference is active.
+
 ### Z-Image
 
 `image-zimage-nano` is the default model. `image-zimage-base` can reuse the
@@ -973,6 +1000,7 @@ runs, and the decoder writes the image. The internals differ by family:
 | SenseNova U1.5 | `Sources/MereRunCore/SenseNovaU15/` |
 | Krea 2 | `Sources/MereRunCore/Krea2/` |
 | Ideogram 4 | `Sources/MereRunCore/Ideogram4/` |
+| Cosmos3-Super | `Sources/MereRunCore/Cosmos3/` |
 | LoRA training options | `Sources/MereRunCore/LoRA/` |
 | 3D reconstruction | `Sources/MereRunCore/TripoSR/`, `Trellis2/`, `InstantMesh/` |
 

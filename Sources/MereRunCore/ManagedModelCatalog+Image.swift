@@ -28,8 +28,7 @@ extension ManagedModelCatalog {
             validationKind: .cosmos3SuperTextToImage,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 37_032_673_013,
-            defaultCLICommands: ["video cosmos3 --mode text-to-image"],
-            apiAvailability: .cliOnly
+            defaultCLICommands: ["image generate", "video cosmos3 --mode text-to-image"]
         ),
         ManagedModelSpec(
             id: Flux3Resources.modelID, category: .image, installShape: .directoryRoot,

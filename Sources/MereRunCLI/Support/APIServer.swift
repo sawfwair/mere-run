@@ -1894,7 +1894,7 @@ actor CodeGenServer {
             throw APIRequestValidationError.invalidField("model", "use a mere.run image model id or a local model path")
         }
         let root = try selection.resolveRoot()
-        let manifest = try MereRunModelManifest.loadRequired(from: root)
+        let manifest = try selection.loadManifest(at: root)
         if case .managed(let id) = selection { return (id.rawValue, root, manifest) }
         return (manifest.id, root, manifest)
     }

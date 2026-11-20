@@ -4,8 +4,8 @@ extension MereRunCapabilityCatalog {
     private typealias ImageF = ImageGenerateFamily
 
     /// Families whose runtime takes an input image (`--input`, and with it `--mask` and
-    /// `--outpaint`); FLUX.1, Krea 2, and Ideogram 4 are text-to-image only.
-    private static var imageInputScope: MereRunOptionScope<ImageF> { ImageF.except(.flux1, .krea, .ideogram) }
+    /// `--outpaint`); FLUX.1, Krea 2, Ideogram 4, and Cosmos3-Super are text-to-image only.
+    private static var imageInputScope: MereRunOptionScope<ImageF> { ImageF.except(.flux1, .krea, .ideogram, .cosmos3Super) }
     /// Families that load `--lora` adapters.
     private static let imageLoRAFamilies: [ImageF] = [.flux1, .klein, .flux2Dev, .zimage, .krea]
 
@@ -22,17 +22,21 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--prompt", aliases: ["-p"], label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
             .init(flag: "--negative-prompt", aliases: ["-n"], label: "Negative prompt", kind: .string, group: Group.prompt, tier: .standard)
                 // FLUX.1 refuses a negative prompt with text in it; an empty one reads as omitted.
-                // Qwen-Image-Edit Lightning runs without guidance, so it never reads one.
-                .scoped(ImageF.except(.h3Image, .flux1, .flux3, ignoredBy: [.flux2Dev, .krea, .qwenEditLightning, .ideogram])),
+                // Qwen-Image-Edit Lightning and Cosmos3-Super run without guidance, so they never read one.
+                .scoped(ImageF.except(.h3Image, .flux1, .flux3, ignoredBy: [.flux2Dev, .krea, .qwenEditLightning, .ideogram, .cosmos3Super])),
             .init(
                 flag: "--cfg", aliases: ["--cfg-scale"], label: "CFG scale", kind: .number,
                 group: Group.sampling, tier: .standard, range: .init(min: 0, max: 20, step: 0.5)
             ).scoped(ImageF.except(ignoredBy: [.krea]), .rule(.qwenEditLightning, range: .init(min: 1, max: 1)),
-                     .rule(.flux3, range: .init(min: 1, max: 1)), .rule(.h3Image, range: .init(min: 1, max: 1))),
+                     .rule(.flux3, range: .init(min: 1, max: 1)), .rule(.h3Image, range: .init(min: 1, max: 1)),
+                     .rule(.cosmos3Super, range: .init(min: 1, max: 1))),
             .init(
                 flag: "--sigma-shift", label: "Sigma shift", kind: .number,
                 group: Group.sampling, tier: .expert, range: .init(min: 0, max: 16, step: 0.1)
-            ).scoped(ImageF.except(.h3Image, .qwen21Turbo, .flux3, ignoredBy: [.flux1, .hidream, .qwenEdit, .qwenEditLightning, .ideogram])),
+            ).scoped(ImageF.except(
+                .h3Image, .qwen21Turbo, .flux3, .cosmos3Super,
+                ignoredBy: [.flux1, .hidream, .qwenEdit, .qwenEditLightning, .ideogram]
+            )),
             .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file, group: Group.output, tier: .standard),
             .init(
                 flag: "--width", aliases: ["-W"], label: "Width", kind: .integer,
@@ -46,7 +50,8 @@ extension MereRunCapabilityCatalog {
                 flag: "--steps", aliases: ["-s"], label: "Steps", kind: .integer,
                 group: Group.sampling, tier: .essential, range: .init(min: 1, max: 100, step: 1)
             ).scoped(ImageF.rule(.qwen21, range: .init(min: 2, step: 1)),
-                     .rule(.h3Image, values: ["6"]), .rule(.qwen21Turbo, values: ["8"]), .rule(.qwenEditLightning, values: ["4"])),
+                     .rule(.h3Image, values: ["6"]), .rule(.qwen21Turbo, values: ["8"]), .rule(.qwenEditLightning, values: ["4"]),
+                     .rule(.cosmos3Super, values: ["4"])),
             .init(flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .essential, range: .init(min: 0, step: 1)),
             .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             .init(flag: "--input", aliases: ["-i"], label: "Input image", kind: .file, group: Group.inputs, tier: .standard)
@@ -60,12 +65,12 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--mask-feather", label: "Mask feather", kind: .integer,
                 defaultValue: "8", group: Group.inputs, tier: .expert, range: .init(min: 0, max: 128, step: 1), dependsOn: "--input"
-            ).scoped(ImageF.except(ignoredBy: [.flux1, .krea, .ideogram])),
+            ).scoped(ImageF.except(ignoredBy: [.flux1, .krea, .ideogram, .cosmos3Super])),
             .init(
                 flag: "--ref-image", label: "Reference image", kind: .file, repeatable: true,
                 group: Group.inputs, tier: .standard
             ).scoped(
-                ImageF.except(.flux1, .zimage, .krea, .ideogram),
+                ImageF.except(.flux1, .zimage, .krea, .ideogram, .cosmos3Super),
                 // Klein keeps the first four references, counting --input, and drops the rest.
                 .rule(.klein, maxCount: 4, severity: .warning),
                 .rule(.flux2Dev, maxCount: 4, severity: .warning),
@@ -81,7 +86,7 @@ extension MereRunCapabilityCatalog {
                 group: Group.inputs, tier: .standard, range: .init(min: 0, max: 1, step: 0.05)
             ).scoped(ImageF.except(
                 .h3Image, .qwen21, .qwen21Turbo, .flux3,
-                ignoredBy: [.flux1, .hidream, .sensenova, .krea, .qwenEdit, .qwenEditLightning, .ideogram]
+                ignoredBy: [.flux1, .hidream, .sensenova, .krea, .qwenEdit, .qwenEditLightning, .ideogram, .cosmos3Super]
             )),
             .init(
                 flag: "--max-sequence-length", label: "Max sequence length", kind: .integer,
@@ -89,7 +94,10 @@ extension MereRunCapabilityCatalog {
             ).scoped(
                 ImageF.only(
                     .flux1, .zimage, .krea, .ideogram,
-                    ignoredBy: [.h3Image, .klein, .flux2Dev, .flux3, .hidream, .sensenova, .qwen21, .qwen21Turbo, .qwenEdit, .qwenEditLightning]
+                    ignoredBy: [
+                        .h3Image, .klein, .flux2Dev, .flux3, .hidream, .sensenova, .qwen21, .qwen21Turbo, .qwenEdit,
+                        .qwenEditLightning, .cosmos3Super
+                    ]
                 ),
                 // Longer values are clamped to what the text encoder reads.
                 .rule(.flux1, range: .init(max: 512), severity: .warning),

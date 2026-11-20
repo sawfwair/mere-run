@@ -123,6 +123,7 @@ public struct ImageGenerationIssue: Codable, LocalizedError, Equatable, Sendable
 
 public enum ImageGenerationBackend: String, CaseIterable, Codable, Sendable {
     case miniMaxH3Image, flux1, flux2Klein, flux3, zImageTurbo, hiDreamO1, senseNovaU15, krea2, ideogram4, qwenImageEdit, qwenImage21
+    case cosmos3Super
 
     public init(manifest: MereRunModelManifest) throws {
         switch manifest.family {
@@ -137,9 +138,17 @@ public enum ImageGenerationBackend: String, CaseIterable, Codable, Sendable {
         case .ideogram: self = .ideogram4
         case .qwen where manifest.engine == .qwenImage21: self = .qwenImage21
         case .qwen where manifest.engine == .qwenImageEdit: self = .qwenImageEdit
+        case .cosmos where manifest.engine == .cosmos3Super: self = .cosmos3Super
         default:
             throw ImageGenerationIssue("model_family_unsupported", "Unsupported image generation model: \(manifest.id).")
         }
+    }
+
+    /// Whether a managed model's folder runs without its own `mererun_model.json`. The published
+    /// Cosmos3-Super export has none and its runtime reads the publisher's configuration files.
+    /// The other image runtimes keep requiring the manifest in the folder.
+    public var runsWithoutInstalledManifest: Bool {
+        self == .cosmos3Super
     }
 }
 
@@ -181,6 +190,22 @@ public enum ImageGenerationModelSelection: Sendable {
         } else {
             self = .unknown(selector)
         }
+    }
+
+    /// The manifest that describes the model at `root`: the folder's own, or the one a pull
+    /// writes when a managed id's backend runs without it. An existing Cosmos3-Super copy
+    /// registered with `model location bind` keeps the publisher's layout and has none.
+    public func loadManifest(at root: URL, fileManager: FileManager = .default) throws -> MereRunModelManifest {
+        if let manifest = try MereRunModelManifest.loadIfPresent(from: root, fileManager: fileManager) {
+            return manifest
+        }
+        if case .managed(let id) = self {
+            let template = MereRunModelManifest.template(for: id)
+            if (try? ImageGenerationBackend(manifest: template))?.runsWithoutInstalledManifest == true {
+                return template
+            }
+        }
+        throw MereRunModelManifest.ManifestError.missing(root)
     }
 
     public func resolveRoot(fileManager: FileManager = .default) throws -> URL {

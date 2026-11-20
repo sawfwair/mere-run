@@ -752,6 +752,8 @@ latent resident across transitions.
 The native runtime also accepts a local MLX Q4 Cosmos3-Super Text2Image 4-Step
 root for `--mode text-to-image`. It reads the fixed four-step stochastic
 schedule from the model root and disables classifier-free guidance.
+`image generate --model image-cosmos3-super-t2i-4step` runs the same
+checkpoint; see [Cosmos3-Super 4-Step](./image.md#cosmos3-super-4-step).
 
 ## Animate or replace a subject with SCAIL-2
 
