@@ -337,6 +337,8 @@ final class MicrophoneCapture: @unchecked Sendable {
         try engine.start()
     }
 
+    var isStopped: Bool { stateLock.withLock { stopped } }
+
     func stop() {
         stateLock.lock()
         guard !stopped else {

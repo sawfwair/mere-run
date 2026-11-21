@@ -363,6 +363,79 @@ final class StudioAudioVoiceTests: XCTestCase {
         )
     }
 
+    func testHaruConversationLaunchesLiveUnlessAnAudioFileWasChosen() throws {
+        let task = StudioTask.chatConversation
+        XCTAssertEqual(task.archetype, .session)
+        XCTAssertEqual(task.variantTemplates.map(\.id), [.speechConverse])
+        var draft = try XCTUnwrap(StudioTaskDraft(task: task))
+        XCTAssertTrue(StudioTaskRunner.launching(draft, source: .contract).arguments(source: .contract).contains("--live"))
+        draft.form["--input"] = .text("/tmp/clip.wav")
+        let fileArguments = StudioTaskRunner.launching(draft, source: .contract).arguments(source: .contract)
+        XCTAssertTrue(fileArguments.contains("/tmp/clip.wav"))
+        XCTAssertFalse(fileArguments.contains("--live"))
+
+        let fixture = try makeFixture()
+        defer { fixture.tearDown() }
+        fixture.controller.readinessByTask[task] = .ready
+        _ = try fixture.runner.run(draft, task: task)
+        let process = try XCTUnwrap(fixture.processRunner.processes.last)
+        fixture.runner.stop(task: task)
+        XCTAssertEqual(process.interruptCallCount, 0)
+        XCTAssertEqual(process.terminateCallCount, 1)
+    }
+
+    func testHaruConversationStreamsAndSavesItsCompleteResultAfterInterrupt() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.tearDown() }
+        let task = StudioTask.chatConversation
+        fixture.controller.readinessByTask[task] = .ready
+        var draft = try XCTUnwrap(StudioTaskDraft(task: task))
+        draft.form["--system-prompt-file"] = .text("/tmp/character.txt")
+        draft.form["--reference-audio"] = .text("/tmp/voice.wav")
+        draft.form["--speak-first"] = .flag(true)
+        let request = try fixture.runner.run(draft, task: task)
+        let job = try XCTUnwrap(fixture.runner.currentJob(for: task))
+        let start = try XCTUnwrap(fixture.processRunner.starts.last)
+        XCTAssertEqual(job.request.configuration.environment[HaruConversationEvent.environmentKey], "1")
+        let arguments = job.request.configuration.arguments
+        for value in ["--live", "--system-prompt-file", "/tmp/character.txt", "--reference-audio", "/tmp/voice.wav", "--speak-first"] {
+            XCTAssertTrue(arguments.contains(value), "Missing \(value)")
+        }
+        XCTAssertThrowsError(try fixture.runner.run(draft, task: task))
+
+        start.stdout(#"{"haruEvent":"capturing","spea"#)
+        start.stdout(#"king":false,"text":""}"# + "\n" + #"{"haruEvent":"frame","speaking":true,"text":"Hello 🌊"}"# + "\n")
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(job.haruLiveOutput?.isCapturing, true)
+        XCTAssertEqual(job.haruLiveOutput?.isSpeaking, true)
+        XCTAssertEqual(job.haruLiveOutput?.transcript, "Hello 🌊")
+        XCTAssertTrue(job.liveText.isEmpty)
+        start.stdout(#"{"haruEvent":"frame","speaking":false,"text":" again."}"# + "\n")
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(job.haruLiveOutput?.isSpeaking, false)
+        XCTAssertEqual(job.haruLiveOutput?.transcript, "Hello 🌊 again.")
+
+        fixture.runner.stop(task: task)
+        let process = try XCTUnwrap(fixture.processRunner.processes.last)
+        XCTAssertEqual(process.interruptCallCount, 1)
+        XCTAssertEqual(process.terminateCallCount, 0)
+
+        let output = try XCTUnwrap(job.expectedOutput)
+        try Data([1, 2, 3]).write(to: output)
+        let transcript = String(repeating: "Long transcript. ", count: 2_500)
+        let summary = HaruConversationSummary(output: output.path, frames: 700, sampleRate: 24_000, transcript: transcript)
+        let encoded = try JSONEncoder().encode(summary)
+        start.stdout(String(decoding: encoded, as: UTF8.self) + "\n")
+        start.termination(0)
+        let result = await fixture.controller.jobs.result(for: job.id)
+        XCTAssertEqual(result?.outputURL, output)
+        let row = try XCTUnwrap(fixture.library.items.first { $0.id == request.id })
+        XCTAssertEqual(row.status, .completed)
+        XCTAssertEqual(row.outputURL, output)
+        let recorded = try XCTUnwrap(row.outputText)
+        XCTAssertEqual(try JSONDecoder().decode(HaruConversationSummary.self, from: Data(recorded.utf8)).transcript, transcript)
+    }
+
     func testLiveListenSessionStopsWithInterruptThenCancel() async throws {
         let fixture = try makeFixture()
         defer { fixture.tearDown() }

@@ -1897,6 +1897,48 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    func testHaruConversationSnapshots() throws {
+        let model = (id: "speech-haru-4b", category: "audio", title: "Haru-4B")
+        let process = SnapshotProcessRunner(script: ModelsInventoryScript.analyzeReadinessResponses(alsoInstalling: [model]))
+        let pages = try SnapshotFixture(outputDirectory: fixture.outputDirectory, processRunner: process)
+        defer { pages.tearDown() }
+        StudioTestDefaults.redirectOutputs(under: pages.root)
+        defer { StudioTestDefaults.restore() }
+        let task = StudioTask.chatConversation
+        let navigation = NavigationModel(destination: task.destination)
+
+        func render(_ name: String, size: CGSize, appearance: StudioSnapshotAppearance) throws {
+            let view = StudioRootView()
+                .environmentObject(pages.controller)
+                .environmentObject(pages.library)
+                .environmentObject(navigation)
+                .frame(width: size.width, height: size.height)
+            try pages.write(view, size: size, appearance: appearance, name: name, settle: 1.5) { navigation.open(task: task) }
+        }
+
+        let compact = CGSize(width: 960, height: 760)
+        let wide = CGSize(width: 1_440, height: 920)
+        try render("haru-ready-light", size: compact, appearance: .light)
+
+        process.liveSessionMarkers = ["converse"]
+        pages.controller.readinessByTask[task] = .ready
+        let runner = StudioTaskRunner(controller: pages.controller, library: pages.library)
+        let request = try runner.run(try XCTUnwrap(StudioTaskDraft(task: task)), task: task)
+        let job = try XCTUnwrap(pages.controller.jobs.job(requestID: request.id))
+        let live = try XCTUnwrap(process.liveStarts.last, job.result?.outputText ?? job.status)
+        live.stdout(#"{"haruEvent":"capturing","speaking":false,"text":""}"# + "\n")
+        live.stdout(#"{"haruEvent":"frame","speaking":true,"text":"Hello! What would you like to talk about today?"}"# + "\n")
+        try render("haru-live-dark", size: wide, appearance: .dark)
+
+        XCTAssertEqual(job.haruLiveOutput?.isSpeaking, true)
+        let output = try XCTUnwrap(job.expectedOutput)
+        try SnapshotFixture.writeSilentWAV(to: output, seconds: 5)
+        live.stdout(#"{"frames":38,"sampleRate":24000,"transcript":"Hello! What would you like to talk about today?"}"# + "\n")
+        live.termination(0)
+        try render("haru-saved-light", size: wide, appearance: .light)
+        XCTAssertEqual(pages.library.items.first { $0.id == request.id }?.outputURL, output)
+    }
+
     /// The Audio and Voice pages through the root, light and dark at 1440×820 and once at
     /// 960×760: Who Spoke, Enhance, and Separate on the shared task workspace with a finished
     /// run each (the stems list plays from the manifest), Voice ▸ Voices as the Manage page with

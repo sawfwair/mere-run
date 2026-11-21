@@ -39,7 +39,7 @@ extension StudioTask {
              .earthFlood, .earthFire, .earthTessera,
              .earthOlmoEarth, .imageDatasets:
             return .analyze
-        case .musicRealtime, .audioLive, .visionLive, .serverServing, .serverMusic, .serverVision, .serverWorld:
+        case .musicRealtime, .chatConversation, .audioLive, .visionLive, .serverServing, .serverMusic, .serverVision, .serverWorld:
             return .session
         case .imageTrain, .chatTrain, .musicTrain, .videoSubjects:
             return .project
@@ -61,7 +61,7 @@ extension StudioTask {
         .textEmbeddings, .textAnonymize, .imageDatasets,
         .threeDFromImage,
         .earthFlood, .earthFire, .earthTessera, .earthOlmoEarth,
-        .imageTrain, .chatTrain, .musicTrain,
+        .imageTrain, .chatTrain, .musicTrain, .chatConversation,
     ]
 
     /// Whether this task's draft is a `StudioTaskDraft` (a contract form for its template)
@@ -111,8 +111,6 @@ extension StudioTask {
 
     private static let nonVariantTemplates: Set<CommandTemplateID> = [
         .speechProfileList, .speechProfileDelete, .imageVisualizeRun,
-        // Haru's conversation controls live in the Command Console.
-        .speechConverse,
     ]
 }
 
@@ -395,6 +393,12 @@ extension StudioTask {
                 emptyTitle: "Extend a recording's bandwidth",
                 emptyMessage: "Attach narrow-band audio to extend it to 48 kHz.",
                 requiresAttachment: true
+            )
+        case .chatConversation:
+            return StudioTaskPresentation(
+                title: title, systemImage: "waveform.and.mic",
+                emptyTitle: "Talk with Haru",
+                emptyMessage: "Haru can listen and respond at the same time. Use headphones for live conversations."
             )
         case .audioLive:
             return StudioTaskPresentation(

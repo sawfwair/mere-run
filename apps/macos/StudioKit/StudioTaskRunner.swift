@@ -58,6 +58,10 @@ package final class StudioTaskRunner {
     package static func launching(_ draft: StudioTaskDraft, source: StudioScopeSource) -> StudioTaskDraft {
         switch draft.templateID {
         case .speechListen, .speechDiarizeLive: return draft.liveListenLaunch()
+        case .speechConverse:
+            var launch = draft
+            if launch.text("--input").isBlank { launch.form["--live"] = .flag(true) }
+            return launch
         default: return StudioTrainingRun.launchDraft(draft, source: source)
         }
     }
@@ -112,6 +116,9 @@ package final class StudioTaskRunner {
 
     /// The gates a task draft clears before any of its runs is prepared.
     private func ensureRunnable(_ draft: StudioTaskDraft, task: StudioTask) throws {
+        if task == .chatConversation, currentJob(for: task) != nil {
+            throw StudioValidationError(message: "End the current Haru conversation before starting another.")
+        }
         let readiness = controller.readiness(for: task)
         if readiness.blocksRun { throw StudioValidationError(message: readiness.message(titles: controller.modelStore.titles)) }
         // The contract leaves an input optional when the command has another mode without one
@@ -266,7 +273,10 @@ package final class StudioTaskRunner {
             if let remembered, isAwaitingLaunch(remembered) { library.setStatus(.cancelled, id: remembered) }
             return
         }
-        if task.archetype == .session {
+        // Haru's CLI can flush a reply on SIGINT once the microphone has started. A file
+        // replay or a session still loading the model has no live output to flush.
+        let haruHasCapture = job.haruLiveOutput?.isCapturing == true || job.haruLegacyCaptureStarted
+        if task.archetype == .session, job.request.templateID != .speechConverse || haruHasCapture {
             controller.jobs.interruptThenCancel(job.id, after: Self.sessionStopGrace)
         } else {
             controller.jobs.cancel(job.id)
