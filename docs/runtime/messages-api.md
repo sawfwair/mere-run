@@ -50,7 +50,9 @@ Capability metadata describes implemented adapter behavior, not task success.
 | Tool-result and thinking clearing | Implemented | Implemented | Explicit unsupported error |
 | Native prefix reuse | Bounded marked text and image prefixes | Zero Messages cache accounting | Zero Messages cache accounting |
 | Text documents and text PDFs | Implemented | Implemented | Implemented |
-| Strict tools, constrained JSON schema, generated citations | Explicit unsupported error | Explicit unsupported error | Explicit unsupported error |
+| Strict tools and constrained JSON schema | Native recipient/ATEM grammar; bounded schema subset | Switchable-thinking adapters; bounded schema subset | Explicit unsupported error |
+| Generated citations | Explicit unsupported error | Explicit unsupported error | Explicit unsupported error |
+| PDF page images, including scans | PDFKit rendering on macOS | Text extraction only | Text extraction only |
 
 Effort selects the model's coarse reasoning strength. It does not promise an
 exact reasoning-token budget. Fixed-reasoning Qwen variants accept their single
@@ -64,7 +66,7 @@ fail explicitly.
 
 Tool schemas retain nested JSON values and local references. Completed calls
 are checked before the server releases executable tool blocks. Unsupported
-strict enforcement fails before generation. Tool names and IDs exposed to the
+strict enforcement or schema constraints fail before generation. Tool names and IDs exposed to the
 client remain unchanged. `local_capabilities.tool_schema_subset` lists supported
 schema keywords. It includes local references, nested objects and arrays, enums,
 constant values, unions, schema alternatives, bounded value constraints, and
@@ -102,12 +104,94 @@ cache read. Prefix usage reports actual retained KV reads and writes, including
 covered image expansion. Cache warming requires `max_tokens: 0` and a supported
 cache breakpoint; counting and generation apply the same prepared boundaries.
 
-Documents accept inline text and base64 text or PDF data. PDFKit extracts PDF
-text on macOS, preserving page boundaries. The local limits are 20 MiB and 100
-pages. Encrypted, unreadable, image-only, and incompatible PDFs fail explicitly.
+Documents accept inline text and base64 text or PDF data. On macOS, text-only
+adapters use PDFKit text extraction with page boundaries. Glimmer receives both
+extracted text and rendered page images, including image-only scans and diagrams.
+Page images stay inside their document's ordered page boundaries. Preparation,
+counting, generation, and cache identity include their actual image expansion.
 Document identity, title, and context remain attached to the canonical input.
-Remote document URLs, hosted web search, hosted code execution, remote MCP
-hosting, Files, Batches, account services, and billing are outside this API.
+
+Limits are 20 MiB of input, 100 pages, 64 Mi pixels, and 64 MiB of rendered PNG
+data across the request. Input bytes and page count apply per document. Each raster has a maximum edge of 1,536 pixels, at up to two
+pixels per PDF point. Encrypted, unreadable, oversized, and incompatible documents
+fail explicitly. Image-only PDFs require the Glimmer vision adapter; text-only
+adapters reject them. Remote document URLs, hosted web search, hosted code
+execution, remote MCP hosting, Files, Batches, account services, and billing are
+outside this API.
+
+## Constrained output
+
+Native Glimmer and switchable-thinking Qwen and Gemma adapters accept
+`strict: true` custom tools and `output_config.format` with `type: "json_schema"` and an object-valued
+`schema`. Inspect `strict_tools`, `json_schema`, and `constrained_schema_subset`
+in model discovery. Fixed-reasoning Qwen and Gemma adapters reject these options.
+
+The adapter compiles the schema into a grammar and checks candidate tokens before
+committing them. Final-target decoding retains the request's sampling controls;
+MTP, DFlash, and continuous batching do not run for constrained responses.
+Generation fails explicitly if its output budget ends before completion or no
+admissible token exists. After 256 rejected candidate draws, native Glimmer
+builds an exact admissible-token mask and applies the same sampling controls.
+Qwen and Gemma return an explicit error after 256 rejected candidates. The server never
+returns a malformed executable tool as a successful response. These bounds do
+not guarantee task accuracy or a particular decode rate.
+
+Supported constraints include basic JSON types, nullable type unions, nested
+objects and arrays, `required`, `enum`, `const`, `anyOf`, and nonrecursive local
+references through `$defs` or `definitions`. Objects require
+`additionalProperties: false` and support up to 64 properties. Array bounds
+support integers from zero through 128. Grammar nesting is limited to 32 levels,
+with additional compiled-size limits. Object keys follow alphabetical order.
+Unsupported constraints, including numeric ranges, string patterns and formats,
+`oneOf`, `allOf`, and recursive references, fail during preparation. Ordinary
+non-strict tools retain their broader validation subset.
+
+Qwen and Gemma constrained requests require thinking to be omitted or disabled.
+Glimmer keeps its native reasoning channels and accepts adaptive thinking with
+constrained output. All constrained requests reject stop sequences, deferred
+loading, tool search, and simultaneous JSON-schema output and tools. Strict tools support automatic or required selection, a named
+tool, and up to 16 parallel calls; single-call mode permits one. When any active
+tool is strict, the grammar enforces the schemas of all active tools.
+Client-visible tool names and argument types remain unchanged. Tool calls are
+buffered until the turn is complete and validated. Qwen and Gemma automatic text answers stream from the text branch without exposing their JSON
+envelope or tool arguments. JSON-schema text streams without interpreting text
+inside JSON strings as reasoning or tool markup.
+
+Glimmer constrains native channel headers separately from their bodies. Its
+`to=self` reasoning streams separately; its `to=user` answer follows the requested
+schema. Strict tools use an internal JSON envelope with typed arguments and up to
+16 calls when parallel calls are enabled. Object keys appear in alphabetical
+order. The adapter validates the complete native turn before publishing calls;
+the internal envelope never appears as visible text. Automatic text answers
+stream from the envelope's text branch. The adapter explains that the `text`
+branch is a user-facing answer and `tool_calls` requests client execution.
+
+Strict tool arguments use JSON escaping throughout. Literal tags, entity text
+such as `&amp;`, Unicode, and quoted strings retain their values. The server does
+not HTML-decode arguments. Ordinary requests retain the released ATEM format,
+whose parameter values also preserve literal entity text.
+
+Strict tools require a closed object parameter schema. Parameters can contain
+nullable type unions, `anyOf`, arrays, enums, constants, and nonrecursive local
+references within the declared subset. Generated tool names are JSON data in strict mode;
+output does not use them as native channel recipients. JSON escapes represent control
+characters. Unsupported schemas and combinations fail during preparation.
+
+The final-target Glimmer decoder advances grammar state with exact tokenizer
+bytes. It retains unfinished UTF-8 scalars and rejects invalid sequences or
+partial scalars that cannot match a reachable grammar symbol. Rejected
+candidates cannot publish reasoning, text, or executable calls. An incomplete native turn fails even if an inner JSON value completed.
+DFlash is disabled for constrained requests until speculative matcher rollback
+is qualified. The [Glimmer Q8 qualification record](../benchmarks/glimmer-constrained-messages-2026-11-20.md)
+reports initial checkpoint outcomes, failures, and per-phase timing. The
+[tool-string follow-up](../benchmarks/glimmer-tool-strings-2026-11-20.md) records
+JSON-envelope validation and exact literal-value checks alongside synthetic model
+and SDK coverage. This evidence covers the recorded requests and artifact.
+
+The additional schema instructions enter shared prompt preparation, so token
+counts include them. Changing a schema changes the prepared prefix. Desktop
+trials in these records use ordinary tool decoding. Constrained-output
+qualification does not qualify untested adapters or every combination of options.
 
 Thinking progress updates (`display: "updates"`) are unsupported. Claude Code
 2.1.316 retries without that display option; native thinking remains available.

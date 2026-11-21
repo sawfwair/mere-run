@@ -9,7 +9,7 @@ extension Q35Generator {
         guard let tokenizerAndTemplate, let loadedConfig else { throw Q35Error.modelNotLoaded }
         let context = min(request.maxContextTokens ?? loadedConfig.textConfig.maxPositionEmbeddings,
                           loadedConfig.textConfig.maxPositionEmbeddings, tokenizerAndTemplate.tokenizer.maxLength)
-        let tokens = try tokenizerAndTemplate.encodeForGeneration(messages: NativeChatToolPolicy.requestMessages(request), tools: request.tools,
+        let tokens = try tokenizerAndTemplate.encodeForGeneration(messages: NativeChatToolPolicy.requestMessages(request), tools: NativeChatToolPolicy.templateTools(request),
             includeThinking: request.showThinking && !request.requiresJSON,
             reasoningEffort: Q35Resources.isQ38ModelId(modelId) ? Q35Resources.q38ReasoningEffortLabel(for: request.reasoningEffort) : nil,
             maxLength: context, truncate: false)
@@ -26,7 +26,7 @@ extension Gemma4Generator {
         guard let tokenizerAndTemplate, let loadedConfig else { throw Gemma4Error.modelNotLoaded }
         let context = min(request.maxContextTokens ?? loadedConfig.textConfig.maxPositionEmbeddings,
                           loadedConfig.textConfig.maxPositionEmbeddings, tokenizerAndTemplate.maxLength)
-        let tokens = try tokenizerAndTemplate.encodeForGeneration(messages: NativeChatToolPolicy.requestMessages(request), tools: request.tools,
+        let tokens = try tokenizerAndTemplate.encodeForGeneration(messages: NativeChatToolPolicy.requestMessages(request), tools: NativeChatToolPolicy.templateTools(request),
             includeThinking: request.showThinking && !request.requiresJSON, maxLength: context, truncate: false)
         return try ChatPreparedPrompt(tokens: tokens, contextLimit: context)
     }

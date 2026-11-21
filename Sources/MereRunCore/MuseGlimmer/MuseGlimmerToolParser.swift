@@ -8,13 +8,13 @@ public enum MuseGlimmerToolParser {
     public static func parseToolCalls(_ text: String) -> [ToolCall] {
         matches(pattern: invokePattern, in: executableSource(text)).compactMap { match in
             guard match.count == 3 else { return nil }
-            let name = unescape(match[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = match[1].trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { return nil }
             var arguments: [String: String] = [:]
             for parameter in matches(pattern: parameterPattern, in: match[2]) where parameter.count == 3 {
-                let key = unescape(parameter[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let key = parameter[1].trimmingCharacters(in: .whitespacesAndNewlines)
                 if !key.isEmpty {
-                    arguments[key] = unescape(parameter[2])
+                    arguments[key] = parameter[2]
                 }
             }
             return ToolCall(name: name, arguments: arguments)
@@ -39,7 +39,7 @@ public enum MuseGlimmerToolParser {
         }
         guard parallel || invocations.count <= 1 else { throw ChatRequestIssue("tool_use", "model generated parallel calls when disabled") }
         return try invocations.map { match in
-            let name = unescape(match[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = match[1].trimmingCharacters(in: .whitespacesAndNewlines)
             guard let tool = tools.first(where: { $0.name == name }) else { throw ChatRequestIssue("tool_use.name", "model generated an undeclared tool '\(name)'") }
             var arguments: [String: ChatJSONValue] = [:]
             let parameters = matches(pattern: parameterPattern, in: match[2])
@@ -51,9 +51,9 @@ public enum MuseGlimmerToolParser {
                 throw ChatRequestIssue("tool_use.input", "model generated incomplete parameters")
             }
             for parameter in parameters {
-                let key = unescape(parameter[1])
+                let key = parameter[1]
                 guard arguments[key] == nil else { throw ChatRequestIssue("tool_use.input", "model repeated parameter '\(key)'") }
-                let raw = unescape(parameter[2])
+                let raw = parameter[2]
                 let property = tool.parametersJSONSchema["properties"]?.objectValue?[key]?.objectValue
                 if try ChatToolValidation.resolvedType(property ?? [:], root: tool.parametersJSONSchema) == "string" {
                     arguments[key] = .string(raw)
@@ -92,12 +92,4 @@ public enum MuseGlimmerToolParser {
         return channels.toolSource
     }
 
-    private static func unescape(_ text: String) -> String {
-        text
-            .replacingOccurrences(of: "&lt;", with: "<")
-            .replacingOccurrences(of: "&gt;", with: ">")
-            .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&#39;", with: "'")
-            .replacingOccurrences(of: "&amp;", with: "&")
-    }
 }

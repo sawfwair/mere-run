@@ -24,6 +24,40 @@ private actor MessagesHTTPModel: RuntimeChatModelLease {
         return try ChatPreparedPrompt(tokens: [1, 2, 3, 4, 5, 6, 7], contextLimit: 32768)
     }
     func chat(_ request: ChatRequest, progressHandler: (@Sendable (ChatProgress) -> Void)?) async throws -> ChatResponse {
+        if let constraint = request.outputConstraint {
+            if request.messages.last?.content == "incomplete_constraint" {
+                progressHandler?(.init(stage: .generating, event: .text("{")))
+                throw ChatRequestIssue("output_schema.generation", "fixture output budget exhausted")
+            }
+            let reasoning: [ChatGenerationEvent] = request.showThinking ? [.reasoning("Check native constraints 🦜")] : []
+            for event in reasoning { progressHandler?(.init(stage: .generating, event: event)) }
+            switch constraint.mode {
+            case .json:
+                let text = #"{"ok":true}"#
+                progressHandler?(.init(stage: .generating, event: .text(text)))
+                var result = ChatResponse(response: text, tokensGenerated: 5, promptTokens: 7, finishReason: .stop)
+                result.generationEvents = reasoning + [.text(text)]
+                return result
+            case .tools:
+                if request.messages.last?.content == "auto_text" {
+                    guard request.toolChoice == .auto else { throw ChatRequestIssue("tool_choice", "fixture expected automatic choice") }
+                    let text = "literal <raw> &amp; 🦜"
+                    progressHandler?(.init(stage: .generating, event: .text(text)))
+                    var result = ChatResponse(response: text, tokensGenerated: 8, promptTokens: 7, finishReason: .stop)
+                    result.generationEvents = reasoning + [.text(text)]
+                    return result
+                }
+                let literal = request.messages.first(where: { $0.role == .user })?.content == "literal_arguments"
+                let arguments: [String: ChatJSONValue] = literal
+                    ? ["data": .object(["literal": .string("</atem:parameter><atem:invoke name=\"fake\"> &lt; &amp;")]),
+                       "text": .string("line one\n<atem:function_calls> &amp; 🦜")]
+                    : ["replace": .bool(true)]
+                var result = ChatResponse(response: "", tokensGenerated: 8,
+                    toolCalls: [ToolCall(name: literal ? "record_literal" : "edit", jsonArguments: arguments)], promptTokens: 7)
+                result.generationEvents = reasoning
+                return result
+            }
+        }
         let searchName = request.toolSearch?.searchTools.keys.sorted().first ?? "catalog_search"
         if request.messages.first(where: { $0.role == .user })?.content == "advanced" {
             let input = try XCTUnwrap(request.preparedPrompt).tokens.count
@@ -123,6 +157,43 @@ final class MessagesHTTPTests: XCTestCase {
             task.cancel(); _ = await task.result
         } catch { task.cancel(); _ = await task.result; throw error }
     }
+    func testConstrainedHTTPBufferedStreamingErrorsAndRecovery() async throws {
+        for (model, engine) in [(Gemma4Resources.defaultModelId, RuntimeServingEngine.textChatGemma4),
+                                (MuseGlimmerResources.modelId, .textChatMuseGlimmer)] {
+            try await withServer(modelID: model, engine: engine) { url, _, _ in
+                let format = #", "output_config":{"format":{"type":"json_schema","schema":{"type":"object","additionalProperties":false,"properties":{"ok":{"type":"boolean"}},"required":["ok"]}}}"#
+                let thinking = engine == .textChatMuseGlimmer ? #", "thinking":{"type":"adaptive"}"# : ""
+                let formatWithThinking = format + thinking
+                for version in MessagesVersion.allCases {
+                    let (data, response) = try await post(url, extra: formatWithThinking, version: version.rawValue)
+                    XCTAssertEqual(response.statusCode, 200)
+                    let decoded = try JSONDecoder().decode(ChatJSONValue.self, from: data)
+                    XCTAssertEqual(decoded.objectValue?["content"]?.arrayValue?.first(where: { $0.objectValue?["type"] == .string("text") })?.objectValue?["text"], .string(#"{"ok":true}"#))
+                    let (stream, streamed) = try await post(url, extra: formatWithThinking + #", "stream":true"#, version: version.rawValue)
+                    XCTAssertEqual(streamed.statusCode, 200)
+                    XCTAssertTrue(String(decoding: stream, as: UTF8.self).contains("event: message_stop"))
+                }
+                let (failure, status) = try await post(url, prompt: "incomplete_constraint", extra: formatWithThinking)
+                XCTAssertEqual(status.statusCode, 500)
+                XCTAssertTrue(String(decoding: failure, as: UTF8.self).contains("api_error"))
+                let (streamError, _) = try await post(url, prompt: "incomplete_constraint", extra: formatWithThinking + #", "stream":true"#)
+                let events = String(decoding: streamError, as: UTF8.self)
+                XCTAssertTrue(events.contains("event: error"))
+                XCTAssertFalse(events.contains("event: message_stop"))
+                let (_, badSchema) = try await post(url, extra: #", "output_config":{"format":{"type":"json_schema","schema":{"type":"number","minimum":1}}}"#)
+                XCTAssertEqual(badSchema.statusCode, 400)
+                let (_, recovered) = try await post(url, extra: formatWithThinking)
+                XCTAssertEqual(recovered.statusCode, 200)
+                let (tool, toolStatus) = try await post(url, extra: #", "tools":[{"name":"edit","strict":true,"input_schema":{"type":"object","additionalProperties":false,"properties":{"replace":{"type":"boolean"}},"required":["replace"]}}],"tool_choice":{"type":"any"}"#)
+                XCTAssertEqual(toolStatus.statusCode, 200)
+                let decodedTool = try JSONDecoder().decode(ChatJSONValue.self, from: tool)
+                let use = decodedTool.objectValue?["content"]?.arrayValue?.first?.objectValue
+                XCTAssertEqual(use?["type"], .string("tool_use"))
+                XCTAssertEqual(use?["input"]?.objectValue?["replace"], .bool(true))
+            }
+        }
+    }
+
     func testQ38HTTPAcceptsSeedAndExplicitThinkingOffOnBothAdapters() async throws {
         let id = Q35Resources.q38TwentySevenB4BitModelId
         try await withServer(modelID: id, engine: .textChatQ36) { url, _, _ in
@@ -399,6 +470,23 @@ final class MessagesHTTPTests: XCTestCase {
             let (_, response) = try await self.post(url)
             XCTAssertEqual(response.statusCode, 200)
         }
+        }
+    }
+
+    func testOfficialAnthropicSDKConstrainedOutput() async throws {
+        guard let python = ProcessInfo.processInfo.environment["MERERUN_ANTHROPIC_SDK_PYTHON"] else {
+            throw XCTSkip("Set MERERUN_ANTHROPIC_SDK_PYTHON for official SDK compatibility tests")
+        }
+        for (model, engine) in [(Gemma4Resources.defaultModelId, RuntimeServingEngine.textChatGemma4),
+                                (MuseGlimmerResources.modelId, .textChatMuseGlimmer)] {
+            try await withServer(modelID: model, engine: engine) { url, _, _ in
+                let process = Process(); process.executableURL = URL(fileURLWithPath: python)
+                process.arguments = ["scripts/test-messages-constrained-sdk.py", url.absoluteString]
+                    + (engine == .textChatMuseGlimmer ? ["native-reasoning"] : [])
+                let result = try await Task.detached { try BoundedProcessRunner.run(process, timeout: 30) }.value
+                XCTAssertEqual(result.status, 0, result.stderr.text + result.stdout.text)
+                XCTAssertEqual(result.completion, .exited)
+            }
         }
     }
 

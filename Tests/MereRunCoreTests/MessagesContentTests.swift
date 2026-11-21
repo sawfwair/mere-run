@@ -50,6 +50,21 @@ final class MessagesContentTests: XCTestCase {
         XCTAssertEqual(content.compactMap { $0["image_url"] as? String }, ["first", "second"])
     }
 
+    func testRenderedPDFPagesStayBetweenSurroundingContent() throws {
+        let document = ChatDocument(identity: "pdf", title: "Report", context: "Read both pages",
+            pages: ["first page", ""], pageImages: ["page-one", "page-two"])
+        let rendered = MuseGlimmerTokenizerAndTemplate.renderMessages([
+            ChatMessage(role: .user, blocks: [.text("before"), .document(document), .image(reference: "after-image", identity: "after"), .text("after")])])
+        let content = try XCTUnwrap(rendered[0]["content"] as? [[String: any Sendable]])
+        XCTAssertEqual(content.compactMap { $0["image_url"] as? String }, ["page-one", "page-two", "after-image"])
+        XCTAssertEqual(content.first?["text"] as? String, "before")
+        XCTAssertEqual(content.last?["text"] as? String, "after")
+        let first = try XCTUnwrap(content.firstIndex { $0["image_url"] as? String == "page-one" })
+        let second = try XCTUnwrap(content.firstIndex { $0["image_url"] as? String == "page-two" })
+        XCTAssertTrue((content[first - 1]["text"] as? String)?.contains("number=\"1\"") == true)
+        XCTAssertTrue((content[second - 1]["text"] as? String)?.contains("number=\"2\"") == true)
+    }
+
     func testDeclaredSchemaSubsetIsValidatedBeforeGeneration() throws {
         XCTAssertThrowsError(try ChatToolValidation.validate(.number(.infinity), schema: ["type": .string("number")]))
         XCTAssertThrowsError(try ChatToolValidation.validate(.string("value"), schema: ["oneOf": .array([
@@ -120,7 +135,8 @@ final class MessagesContentTests: XCTestCase {
     }
 
     func testGlimmerStreamingWithEverySplitAndTools() {
-        let raw = "to=self<|message|>work 🧮<|eom|><|start|>assistant to=user<|message|>42 <atem:function_calls><atem:invoke name=\"calc\"><atem:parameter name=\"x\">42</atem:parameter></atem:invoke></atem:function_calls><|eot|>"
+        // Executable ATEM belongs to a tool recipient; user-channel examples are literal.
+        let raw = "to=self<|message|>work 🧮<|eom|><|start|>assistant to=user<|message|>42 <|eom|><|start|>assistant to=calc<|message|><atem:function_calls><atem:invoke name=\"calc\"><atem:parameter name=\"x\">42</atem:parameter></atem:invoke></atem:function_calls><|eot|>"
         for split in 0...raw.count {
             let boundary = raw.index(raw.startIndex, offsetBy: split)
             var parser = MuseGlimmerContentStream()
@@ -129,6 +145,7 @@ final class MessagesContentTests: XCTestCase {
             let thinking = events.compactMap { if case .reasoning(let text) = $0 { return text }; return nil }.joined()
             XCTAssertEqual(text, "42 ", "split \(split)")
             XCTAssertEqual(thinking, "work 🧮", "split \(split)")
+            XCTAssertEqual(MuseGlimmerToolParser.parseToolCalls(parser.toolSource).count, 1, "split \(split)")
         }
     }
     func testToolRecipientHeadersStayOutOfReasoningAndVisibleText() {

@@ -71,7 +71,7 @@ extension Q35Generator {
             }
             let promptWithSingleImageTokens = try tokenizerAndTemplate.encodeForGeneration(
                 messages: messages,
-                tools: request.tools,
+                tools: NativeChatToolPolicy.templateTools(request),
                 addGenerationPrompt: true,
                 includeThinking: includeThinking,
                 reasoningEffort: nativeReasoningEffort,
@@ -109,7 +109,7 @@ extension Q35Generator {
 
         var promptTokens = try tokenizerAndTemplate.encodeForGeneration(
             messages: messages,
-            tools: request.tools,
+            tools: NativeChatToolPolicy.templateTools(request),
             addGenerationPrompt: true,
             includeThinking: includeThinking,
             reasoningEffort: nativeReasoningEffort,
@@ -231,7 +231,7 @@ extension Q35Generator {
             let prefixCheckpoints = semanticPrefixCheckpoints(
                 tokenizerAndTemplate: tokenizerAndTemplate,
                 messages: messages,
-                tools: request.tools,
+                tools: NativeChatToolPolicy.templateTools(request),
                 includeThinking: includeThinking,
                 reasoningEffort: nativeReasoningEffort,
                 promptTokens: promptTokens,
@@ -326,7 +326,17 @@ extension Q35Generator {
             outputObserver.observe(progress, handler: progressHandler)
         }
         let decodeResult: Q35BatchedDecodeResult
-        if let draft = requestDFlash2, let dflash2Cache {
+        if let constraint = request.outputConstraint {
+            let result = try schemaConstrainedDecode(
+                constraint: constraint, initialLogits: prefillOutput.logits, sampling: generationConfig,
+                eos: eosSet, budget: tokenBudget, history: promptTokens,
+                decode: { tokenizerAndTemplate.decode(tokens: $0) },
+                forward: { model.forward(MLXArray([Int32($0)]).reshaped(1, 1), cache: layerCaches).logits },
+                progress: progressHandler
+            )
+            decodeResult = Q35BatchedDecodeResult(generatedTokens: result.tokens, decodeSeconds: result.decodeSeconds,
+                firstTokenSeconds: result.firstTokenSeconds)
+        } else if let draft = requestDFlash2, let dflash2Cache {
             // The checkpoint template uses xhigh when the caller omits reasoning effort.
             let automaticTree = tunedDFlash && initialReasoning && (nativeReasoningEffort ?? "xhigh") == "xhigh"
             let treeMode = Q35SampledTreeMode.resolve(automatic: automaticTree)
@@ -385,8 +395,8 @@ extension Q35Generator {
             tokenBudget: tokenBudget,
             matchedStopSequence: trimmed.matchedSequence != nil
         )
-        let calls = request.tools?.isEmpty == false ? try Q35ToolParser.validatedToolCalls(decoded, tools: request.tools ?? [], parallel: request.parallelToolCalls) : []
-        let events = outputObserver.finish(decoded, handler: progressHandler)
+        let calls = request.outputConstraint == nil && request.tools?.isEmpty == false ? try Q35ToolParser.validatedToolCalls(decoded, tools: request.tools ?? [], parallel: request.parallelToolCalls) : []
+        let events = request.outputConstraint != nil ? [] : outputObserver.finish(decoded, handler: progressHandler)
         let visibleText = calls.isEmpty ? decoded : Q35ToolParser.visibleText(decoded)
         let reasoning = events.compactMap { if case .reasoning(let text) = $0 { return text }; return nil }.joined()
 
@@ -413,6 +423,6 @@ extension Q35Generator {
         response.cacheReadTokens = cacheReadTokens
         response.cacheCreationTokens = cacheCreationTokens
         response.generationEvents = events
-        return response
+        return try request.outputConstraint?.finish(response, raw: decodedRaw, tools: request.tools ?? []) ?? response
     }
 }
