@@ -635,6 +635,22 @@ download. Refresh an older install with:
 mere.run model pull vision-chat-q38-27b-4bit --force
 ```
 
+### `MERERUN_Q35_DFLASH2_LORA`
+
+Set this variable to `1` to try DFlash 2 with a LoRA on `vision-chat-q38-27b-4bit`,
+including text tool-call requests from Pi. This experiment uses the existing
+draft with MLX verification against the adapted model. It requires the installed
+draft component or an explicit `MERERUN_Q35_DFLASH2_PATH`. Pi uses up to 4,096
+output tokens per model turn and can make multiple turns per task. Use
+`MERERUN_Q35_DFLASH2=0` to compare with target-only decoding.
+
+### `MERERUN_Q35_DFLASH2_PREFIX_CACHE`
+
+With a LoRA loaded, DFlash 2 reuses matching prompt prefixes by default when
+the server's Qwen prefix cache is enabled and the request uses default KV
+storage. The cache stores both target and draft state. Set this variable to
+`0` to disable DFlash 2 prefix reuse or to `1` to enable it for the base model.
+
 ### `MERERUN_Q38_SAMPLED_TREE`
 
 The tuned Qwen3.8 27B Q4 runtime selects the vocabulary-indexed sampled tree for

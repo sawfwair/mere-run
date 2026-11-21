@@ -156,6 +156,8 @@ To download the Gemma model and stream a response:
 The response appears in the terminal. To connect an agent, run
 `mere.run agent onboard`. For Pi installation, other agent clients, and tool
 permissions, see the [agent guide](./docs/getting-started.md#agent-commands).
+To try speculative decoding with 4-bit Qwen3.8 and the Pi LoRA, see the
+[DFlash 2 configuration](./docs/configuration.md#mererun-q35-dflash2-lora).
 
 ### Edit an image with SenseNova U1.5
 

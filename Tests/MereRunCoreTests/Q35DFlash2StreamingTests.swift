@@ -217,6 +217,36 @@ final class Q35DFlash2StreamingTests: MereRunCoreTestCase {
         XCTAssertEqual(observer.finish(String(decoding: bytes, as: UTF8.self), handler: nil), [.reasoning("work 🧮"), .text("42")])
     }
 
+    func testDFlashStopsInsideAVerifiedBlockAtTheCompletedToolCall() throws {
+        let target = Q35Model(config: try JSONDecoder().decode(Q35Config.self, from: Data(Self.target.utf8)))
+        target.update(parameters: target.parameters().mapValues { MLXArray.zeros(like: $0) })
+        let draft = Q35DFlash2Model(config: try JSONDecoder().decode(Q35DFlash2Config.self, from: Data(Self.draft.utf8)))
+        draft.update(parameters: draft.parameters().mapValues { MLXArray.zeros(like: $0) })
+        let caches: [Q35LayerCache?] = [.linear(Q35LinearCache()), .full(KVCacheSimple())]
+        let prompt = [1, 2, 3]
+        let output = target.forwardPrefill(
+            MLXArray(prompt.map(Int32.init)).reshaped(1, prompt.count), cache: caches, captureLayerIndices: [0, 1]
+        )
+        let history = draft.makeCache()
+        draft.appendTargetContext(output.capturedHiddenStates, cache: history)
+        let pieces = ["<tool_call>\n<function=read>\n</function>\n", "</tool_", "call>"]
+        var emitted = 0
+        let result = try Q35Generator.decodeDFlash2(
+            model: target, draft: draft, draftCache: history, initialLogits: output.logits,
+            layerCaches: caches, eosSet: [], tokenBudget: 8,
+            generationConfig: GenerationConfig(temperature: 0, repetitionPenalty: 1), promptTokens: prompt,
+            stopAtCompletedToolCall: true,
+            decodeToken: { _ in
+                defer { emitted += 1 }
+                return emitted < pieces.count ? pieces[emitted] : "unexpected suffix"
+            },
+            decodeTokens: { pieces.prefix($0.count).joined() },
+            progressHandler: nil
+        )
+        XCTAssertEqual(result.generatedTokens.count, pieces.count)
+        XCTAssertEqual(result.acceleration?.acceptedDraftTokens, 2)
+    }
+
     private final class RecordedEvents: @unchecked Sendable {
         private let lock = NSLock()
         private var values: [ChatGenerationEvent] = []

@@ -137,6 +137,11 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertTrue(providerModel.toolCall)
         XCTAssertTrue(providerModel.supportsReasoningEffort)
         XCTAssertEqual(
+            try SetupAgentRuntime.runtime(forManagedModelID: Q35Resources.q38TwentySevenB4BitModelId)
+                .providerModel.maxTokens,
+            4_096
+        )
+        XCTAssertEqual(
             providerModel.thinkingLevelMap?.first { $0.key == "high" }?.value,
             "xhigh"
         )

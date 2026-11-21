@@ -33,6 +33,17 @@ final class Q35DFlash2PolicyTests: MereRunCoreTestCase {
         XCTAssertFalse(eligible(greedy, batching: true))
     }
 
+    func testLoRAToolsKeepConstrainedRequestsOnTheTargetDecoder() {
+        for temperature in [Float(0), Float(1)] {
+            let config = GenerationConfig(temperature: temperature, repetitionPenalty: 1)
+            XCTAssertTrue(eligible(config, tools: true, allowsTools: true))
+            XCTAssertFalse(eligible(config, tools: true, json: true, allowsTools: true))
+            XCTAssertFalse(eligible(config, images: true, tools: true, allowsTools: true))
+            XCTAssertFalse(eligible(config, tools: true, logprobs: .tokens, allowsTools: true))
+            XCTAssertFalse(eligible(config, tools: true, batching: true, allowsTools: true))
+        }
+    }
+
     func testInstalledGreedyParityAndRepeat() async throws {
         let env = ProcessInfo.processInfo.environment
         try XCTSkipUnless(env["MERERUN_TEST_Q35_DFLASH2"] == "1", "Installed Qwen DFlash 2 qualification is opt-in.")
@@ -101,11 +112,11 @@ final class Q35DFlash2PolicyTests: MereRunCoreTestCase {
 
     private func eligible(
         _ config: GenerationConfig, tokenBudget: Int = 128, images: Bool = false, tools: Bool = false,
-        json: Bool = false, logprobs: ChatLogprobCapture = .none, batching: Bool = false
+        json: Bool = false, logprobs: ChatLogprobCapture = .none, batching: Bool = false, allowsTools: Bool = false
     ) -> Bool {
         Q35Generator.dflash2Eligible(
             generationConfig: config, tokenBudget: tokenBudget, hasImages: images, hasTools: tools,
-            jsonConstrained: json, logprobCapture: logprobs, continuousBatchingEnabled: batching
+            jsonConstrained: json, logprobCapture: logprobs, continuousBatchingEnabled: batching, allowsTools: allowsTools
         )
     }
 }

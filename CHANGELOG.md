@@ -34,6 +34,10 @@ The format is based on Keep a Changelog.
   adapter on macOS. Preserve page order, document metadata, and image token
   counting with explicit rendering limits.
 
+- Add opt-in DFlash 2 for the 4-bit Qwen3.8 27B model with a LoRA, including
+  Pi tool calls. This mode reuses matching prompt prefixes by default when the
+  server prefix cache is enabled and the request uses default KV storage.
+
 
 ## 0.73.0 - 2026-11-19
 
