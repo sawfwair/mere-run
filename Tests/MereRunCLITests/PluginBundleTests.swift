@@ -95,6 +95,23 @@ final class PluginBundleTests: XCTestCase {
         XCTAssertThrowsError(try store.rollback(package: first.package))
     }
 
+    func testUninstallRemovesTheBundleAndPreservesTheHighestSequence() throws {
+        let root = try temporary()
+        let store = testStore(root)
+        let old = try installFixture(store, sequence: 1)
+        let current = try installFixture(store, sequence: 2)
+        XCTAssertEqual(try store.entrypoints(in: current.package), ["mere-doc-tools"])
+        try store.uninstall(package: current.package)
+        XCTAssertNil(try store.state(current.package))
+        XCTAssertNil(try store.resolve("mere-doc-tools"))
+        XCTAssertThrowsError(try store.rollback(package: current.package))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: store.root
+            .appendingPathComponent("packages/\(current.package)/versions").path))
+        XCTAssertThrowsError(try installFixture(store, sequence: old.sequence))
+        XCTAssertEqual(try installFixture(store, sequence: current.sequence), current)
+        XCTAssertNil(try store.state(current.package)?.previous)
+    }
+
     func testBundleTreeRejectsSymlinkEscape() throws {
         let root = try temporary()
         try FileManager.default.createSymbolicLink(at: root.appendingPathComponent("escape"),

@@ -54,6 +54,31 @@ struct PluginRollback: ParsableCommand {
     }
 }
 
+struct PluginUninstall: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "uninstall", abstract: "Remove a managed plugin bundle and all its entrypoints."
+    )
+
+    @Argument(help: "Managed package id, for example mere-workflow-tools.") var package: String
+    @Flag(name: .long, help: "Remove the bundle. Without --yes, print the plan.") var yes = false
+
+    func run() throws {
+        let store = PluginBundleStore.standard
+        guard yes else {
+            let entrypoints = try store.entrypoints(in: package)
+            guard !entrypoints.isEmpty else {
+                throw ValidationError("No managed bundle is installed for \(package).")
+            }
+            print("Remove managed package \(package) and its retained versions.")
+            print("Affected entrypoints: \(entrypoints.joined(separator: ", ")).")
+            print("Run again with --yes to remove the bundle.")
+            return
+        }
+        try store.uninstall(package: package)
+        print("Removed managed bundle \(package).")
+    }
+}
+
 struct PluginRun: ParsableCommand {
     static let configuration = CommandConfiguration(commandName: "run", abstract: "Run an installed plugin without changing PATH.")
     @Argument(help: "Plugin entrypoint, for example mere-doc-tools.") var entrypoint: String

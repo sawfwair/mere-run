@@ -25,6 +25,7 @@ struct StudioPluginCatalogEntry: Decodable, Equatable, Identifiable {
     let installedVersion: String?
     let installedPath: String?
     let verificationError: String?
+    let managed: Bool?
     let installCommand: String?
 }
 
@@ -32,12 +33,15 @@ struct StudioPluginInstall: Decodable, Equatable {
     let manager: String
     let spec: String
     let ref: String?
+    let bundles: [String: String]?
+    let setup: Bool?
 }
 
 enum StudioPluginConfirmationKind: String {
     case install
     case update
     case rollback
+    case uninstall
 }
 
 struct StudioPluginConfirmation: Identifiable {
@@ -45,6 +49,7 @@ struct StudioPluginConfirmation: Identifiable {
     let channel: String
     let force: Bool
     var kind: StudioPluginConfirmationKind = .install
+    var source = false
 
     var id: String { "\(plugin.id):\(channel):\(force):\(kind.rawValue)" }
 }
@@ -55,6 +60,7 @@ struct StudioPluginsView: View {
     @State private var catalog: StudioPluginCatalogSnapshot?
     @State private var selectedID: String?
     @State private var selectedChannel = ""
+    @State private var sourceInstall = false
     @State private var searchText = ""
     @FocusState private var searchFocused: Bool
     @State private var catalogURL = ""
@@ -100,6 +106,7 @@ struct StudioPluginsView: View {
             selectedChannel = plugin.channels.keys.contains(catalog?.defaultChannel ?? "")
                 ? catalog?.defaultChannel ?? ""
                 : plugin.channels.keys.sorted().first ?? ""
+            sourceInstall = false
             operationOutput = plugin.verificationError ?? ""
         }
         .alert(item: $confirmation) { pending in
@@ -116,12 +123,23 @@ struct StudioPluginsView: View {
                     secondaryButton: .cancel()
                 )
             }
+            if pending.kind == .uninstall {
+                return Alert(
+                    title: Text("Remove \(pending.plugin.package)?"),
+                    message: Text("This removes every plugin in this managed package and its retained versions."),
+                    primaryButton: .destructive(Text("Remove bundle")) {
+                        Task { await uninstall(pending.plugin) }
+                    },
+                    secondaryButton: .cancel()
+                )
+            }
+            let selectedInstall = pending.plugin.channels[pending.channel]
+            let managed = !pending.source && hasMacBundle(selectedInstall)
+            let method = managed ? "Verify and install the signed Mac bundle." : "Install from source with pipx."
+            let setup = selectedInstall?.setup == true ? " Then run the plugin’s setup step." : ""
             return Alert(
                 title: Text(pending.force ? "Update \(pending.plugin.name)?" : "Install \(pending.plugin.name)?"),
-                message: Text(
-                    "mere.run runs the catalog-pinned \(pending.channel) install through pipx, "
-                        + "then verifies the plugin manifest."
-                ),
+                message: Text(method + setup),
                 primaryButton: .default(Text(pending.force ? "Update" : "Install")) {
                     Task { await install(pending) }
                 },
@@ -310,10 +328,15 @@ struct StudioPluginsView: View {
                                     plugin: plugin,
                                     channel: selectedChannel,
                                     force: plugin.installed,
-                                    kind: plugin.installed ? .update : .install
+                                    kind: plugin.installed ? .update : .install,
+                                    source: useSource(for: plugin)
                                 )
                             }
                             .buttonStyle(.merePrimary)
+                            .disabled(busyAction != nil)
+                        }
+                        if plugin.managed != true, hasMacBundle(plugin.channels[selectedChannel]) {
+                            Toggle("Install from source with pipx", isOn: $sourceInstall)
                         }
                         if let command = selectedInstallCommand(plugin) {
                             Text(command)
@@ -343,17 +366,22 @@ struct StudioPluginsView: View {
                                 }
                                 .buttonStyle(.mereSecondary)
                                 .disabled(busyAction != nil)
-                                Button("Roll back") {
-                                    confirmation = StudioPluginConfirmation(
-                                        plugin: plugin,
-                                        channel: selectedChannel,
-                                        force: false,
-                                        kind: .rollback
-                                    )
+                                if plugin.managed == true {
+                                    Button("Roll back") {
+                                        confirmation = StudioPluginConfirmation(
+                                            plugin: plugin, channel: selectedChannel, force: false, kind: .rollback
+                                        )
+                                    }
+                                    .buttonStyle(.mereSecondary)
+                                    .disabled(busyAction != nil)
+                                    Button("Remove bundle") {
+                                        confirmation = StudioPluginConfirmation(
+                                            plugin: plugin, channel: selectedChannel, force: false, kind: .uninstall
+                                        )
+                                    }
+                                    .buttonStyle(.mereSecondary)
+                                    .disabled(busyAction != nil)
                                 }
-                                .buttonStyle(.mereSecondary)
-                                .disabled(busyAction != nil)
-                                .help("Restore the retained signed bundle for this plugin")
                             }
 
                             HStack(spacing: 8) {
@@ -465,15 +493,9 @@ struct StudioPluginsView: View {
     private func install(_ pending: StudioPluginConfirmation) async {
         busyAction = pending.force ? "Updating \(pending.plugin.name)" : "Installing \(pending.plugin.name)"
         defer { busyAction = nil }
-        var args = ["plugin", "install", pending.plugin.id]
-        if !catalogURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            args += ["--catalog-url", catalogURL]
-        }
-        if !pending.channel.isEmpty {
-            args += ["--channel", pending.channel]
-        }
-        args.append("--yes")
-        if pending.force { args.append("--force") }
+        let args = installArguments(
+            pending.plugin, channel: pending.channel, source: pending.source, force: pending.force
+        )
         let result = await controller.utilityCommandResult(args: args)
         operationOutput = result.outputText
         await refresh()
@@ -541,15 +563,45 @@ struct StudioPluginsView: View {
         statusMessage = "Copied install command for \(plugin.id)"
     }
 
+    private func uninstall(_ plugin: StudioPluginCatalogEntry) async {
+        busyAction = "Removing \(plugin.package)"
+        defer { busyAction = nil }
+        let result = await controller.utilityCommandResult(args: ["plugin", "uninstall", plugin.package, "--yes"])
+        operationOutput = result.outputText
+        await refresh()
+    }
+
+    private func hasMacBundle(_ install: StudioPluginInstall?) -> Bool {
+#if arch(arm64)
+        install?.bundles?["macos-arm64"] != nil
+#else
+        false
+#endif
+    }
+
+    private func useSource(for plugin: StudioPluginCatalogEntry) -> Bool {
+        let install = plugin.channels[selectedChannel]
+        if hasMacBundle(install) { return plugin.managed != true && sourceInstall }
+        return install?.bundles?.isEmpty == false
+    }
+
+    private func installArguments(_ plugin: StudioPluginCatalogEntry, channel: String, source: Bool, force: Bool) -> [String] {
+        var args = ["plugin", "install", plugin.id]
+        let customCatalog = catalogURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !customCatalog.isEmpty { args += ["--catalog-url", customCatalog] }
+        if !channel.isEmpty { args += ["--channel", channel] }
+        if source { args.append("--source") }
+        if force { args.append("--force") }
+        args.append("--yes")
+        return args
+    }
+
     private func selectedInstallCommand(_ plugin: StudioPluginCatalogEntry) -> String? {
-        guard let install = plugin.channels[selectedChannel] else {
-            return plugin.installCommand
-        }
-        switch install.manager {
-        case "pipx":
-            return "pipx install \(plugin.installed ? "--force " : "")\(install.spec)"
-        default:
-            return "\(install.manager) \(install.spec)"
-        }
+        guard plugin.channels[selectedChannel] != nil else { return plugin.installCommand }
+        let args = installArguments(plugin, channel: selectedChannel, source: useSource(for: plugin), force: plugin.installed)
+        return "mere.run " + args.map { arg in
+            if arg.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "-._/:".contains($0)) }) { return arg }
+            return "'" + arg.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        }.joined(separator: " ")
     }
 }
