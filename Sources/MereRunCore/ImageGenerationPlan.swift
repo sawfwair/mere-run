@@ -20,7 +20,7 @@ public struct ImageGenerationSampling: Sendable, Equatable {
         let usesManifest: Bool
         switch manifest?.family {
         case .klein: usesManifest = policy.kleinUsesManifestDefaults
-        case .h3Image, .hidream, .senseNova, .krea, .ideogram, .flux1, .flux3: usesManifest = true
+        case .h3Image, .hidream, .senseNova, .krea, .ideogram, .flux1, .flux3, .cosmos: usesManifest = true
         case .qwen: usesManifest = manifest?.engine == .qwenImageEdit || manifest?.engine == .qwenImage21
         default: usesManifest = false
         }
@@ -282,6 +282,16 @@ public struct ImageGenerationPlan: Sendable {
             reject(options.strength != nil, "strength_unsupported", "FLUX 3 Klein uses reference conditioning without edit strength.")
             reject(options.outputURL.pathExtension.lowercased() != "png", "output_format_invalid", "FLUX 3 Klein requires PNG output.")
             reject(manifest.variant != .distilled || manifest.precision != .bf16, "model_variant_unsupported", "Use the original distilled BF16 FLUX 3 package.")
+        }
+        if manifest.engine == .cosmos3Super {
+            reject(options.inputImage != nil, "input_mode_unsupported", "\(manifest.id) does not support image-to-image generation.")
+            reject(!options.referenceImages.isEmpty, "references_unsupported", "\(manifest.id) does not support reference images.")
+            reject(sampling.steps != 4, "steps_invalid", "Cosmos3-Super uses its saved four-step schedule; --steps must be 4.")
+            reject(sampling.guidanceScale != 1, "cfg_invalid", "Distilled Cosmos3-Super requires CFG 1.")
+            reject(options.sigmaShift != nil, "sigma_shift_unsupported", "Cosmos3-Super uses a fixed checkpoint schedule and does not accept --sigma-shift.")
+            reject(!options.width.isMultiple(of: 16) || !options.height.isMultiple(of: 16),
+                   "dimensions_invalid", "Cosmos3-Super image dimensions must be multiples of 16.")
+            reject(options.outputURL.pathExtension.lowercased() != "png", "output_format_invalid", "Cosmos3-Super requires PNG output.")
         }
         if manifest.engine == .qwenImageEdit {
             let count = Set(([options.inputImage].compactMap { $0 } + options.referenceImages).map { $0.standardizedFileURL }).count

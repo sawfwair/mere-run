@@ -349,7 +349,8 @@ install state, run `mere.run model list`. Common managed IDs by area:
   `image-zimage-max`, `image-hidream-o1`, `image-hidream-o1-dev`,
   `image-sensenova-u1-5-8b-mot`, `image-krea2-raw`, `image-krea2-turbo`,
   `image-qwen-21`, `image-qwen-21-turbo`, `image-qwen-edit-2511`,
-  `image-qwen-edit-2511-lightning`, `image-ideogram4-sdnq-uint4`
+  `image-qwen-edit-2511-lightning`, `image-ideogram4-sdnq-uint4`,
+  `image-cosmos3-super-t2i-4step`
 - Image to 3D: `image-3d-triposr`, `image-3d-trellis2-4b`,
   `image-3d-instantmesh-base`
 - Text chat: `text-chat-gemma4`, `text-chat-gemma4-12b-4bit`,

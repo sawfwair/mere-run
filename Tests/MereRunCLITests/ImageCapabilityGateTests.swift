@@ -99,7 +99,7 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
         "--negative-prompt has no effect with Krea 2. It applies to FLUX.2 Klein, Z-Image, HiDream-O1, SenseNova U1.5, "
             + "Qwen-Image 2.1, Qwen-Image 2.1 Turbo and Qwen-Image-Edit.",
         "--cfg has no effect with Krea 2. It applies to MiniMax-H3-Image, FLUX 3 Klein, FLUX.1-dev, FLUX.2 Klein, FLUX.2-dev, Z-Image, HiDream-O1, "
-            + "SenseNova U1.5, Qwen-Image 2.1, Qwen-Image 2.1 Turbo, Qwen-Image-Edit, Qwen-Image-Edit Lightning and Ideogram 4."
+            + "SenseNova U1.5, Qwen-Image 2.1, Qwen-Image 2.1 Turbo, Qwen-Image-Edit, Qwen-Image-Edit Lightning, Ideogram 4 and Cosmos3-Super 4-Step."
     ])
     let stacked = try report(["image", "generate", "-p", "a mug", "-m", "image-zimage-nano", "-l", "a.safetensors", "-l", "b.safetensors"])
     #expect(stacked.violations == ["Z-Image takes --lora at most 1 time; got 2."])

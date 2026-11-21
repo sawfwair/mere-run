@@ -1862,18 +1862,21 @@ The managed image entry installs
 at revision `4ef3565cbc05bf3e2867ced9c2cb761df52c6105`, a 37.03 GB
 MLX affine INT4/group-64 export of NVIDIA's four-step text-to-image checkpoint.
 It includes generation assets without the Edge reasoner or vision encoder.
-Use the native Cosmos3 command:
+Use `image generate`, or the native Cosmos3 command:
 
 ```bash
 mere.run model pull image-cosmos3-super-t2i-4step
+mere.run image generate --model image-cosmos3-super-t2i-4step \
+  --prompt "A red cube on a clean neutral background" \
+  --width 768 --height 768 --output cosmos3-super.png
 mere.run video cosmos3 "A red cube on a clean neutral background" \
   --model image-cosmos3-super-t2i-4step --mode text-to-image \
   --width 768 --height 768 --steps 4 --guidance-scale 1 --output cosmos3-super.png
 mere.run guide --model image-cosmos3-super-t2i-4step
 ```
 
-The converted artifact uses OpenMDW-1.1. This entry is CLI-only; `image generate`
-and the image API do not serve it. Its four-step schedule and guidance scale 1
+The converted artifact uses OpenMDW-1.1. `image generate` and the image API
+serve this entry on the same runtime. Its four-step schedule and guidance scale 1
 come from the distilled checkpoint. Video, reference images, actions, sound,
 reasoning, and custom schedules are unsupported by this export. See the bundled
 model handbook for the published 768 × 768 qualification and memory limits.

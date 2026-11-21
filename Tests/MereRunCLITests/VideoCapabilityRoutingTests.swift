@@ -23,6 +23,17 @@ import Testing
         #expect(try report(base + ["--mode", "image-to-video"]).source == .unmatched)
     }
 
+    /// The same checkpoint is an `image generate` family with its fixed four-step recipe.
+    @Test func cosmosSuperIsAnImageGenerateFamily() throws {
+        let base = ["image", "generate", "--prompt", "A red cube", "--model", "image-cosmos3-super-t2i-4step"]
+        let image = try report(base + ["--steps", "4", "--cfg", "1", "--negative-prompt", "blurry"])
+        #expect(image.family == "cosmos3-super")
+        #expect(image.violations.isEmpty)
+        #expect(try report(base + ["--steps", "8"]).violations.isEmpty == false)
+        #expect(try report(base + ["--ref-image", "/tmp/reference.png"]).violations.isEmpty == false)
+        #expect(try report(base + ["--sigma-shift", "3"]).violations.isEmpty == false)
+    }
+
     private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionReport {
         try #require(CLICapabilityGate.evaluate(commandLine: commandLine)).report
     }

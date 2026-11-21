@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Serve Cosmos3-Super 4-Step through `image generate` and the image API.
+  `image-cosmos3-super-t2i-4step` previously ran only as
+  `video cosmos3 --mode text-to-image`, so `image generate` failed with
+  "Missing mererun_model.json" for a model the inventory listed as an installed
+  image model. Both commands now run the same runtime. The checkpoint keeps its
+  fixed four steps and CFG 1 and accepts text prompts only. A folder registered
+  with `model location bind` runs without a manifest.
+
 - Add bounded schema-constrained Messages output and strict custom tools for
   switchable-thinking Qwen and Gemma adapters. Extend native Glimmer with
   channel-aware constrained JSON and typed tools while preserving adaptive

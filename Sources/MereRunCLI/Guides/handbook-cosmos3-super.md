@@ -1,14 +1,23 @@
 # Cosmos3 Super 4-Step (NVIDIA)
 
 `image-cosmos3-super-t2i-4step` installs the published MLX affine INT4/group-64
-export of NVIDIA Cosmos3-Super-Text2Image-4Step. It generates still images through
-the native Cosmos3 command. The image API and `image generate` do not serve this
-checkpoint.
+export of NVIDIA Cosmos3-Super-Text2Image-4Step. It generates still images
+through `image generate`, the image API, and the native Cosmos3 command. All
+three run the same runtime.
 
 ## Example to adapt
 
 ```bash
 mere.run model pull image-cosmos3-super-t2i-4step
+mere.run image generate \
+  --model image-cosmos3-super-t2i-4step \
+  --prompt "A red cube on a clean neutral background" \
+  --width 768 --height 768 --seed 7 --output cosmos3-super.png
+```
+
+The native Cosmos3 command runs the same checkpoint:
+
+```bash
 mere.run video cosmos3 "A red cube on a clean neutral background" \
   --model image-cosmos3-super-t2i-4step --mode text-to-image \
   --width 768 --height 768 --steps 4 --guidance-scale 1 --seed 7 \
@@ -18,12 +27,15 @@ mere.run video cosmos3 "A red cube on a clean neutral background" \
 To use an existing copy, register its root with
 `mere.run model location bind image-cosmos3-super-t2i-4step /path/to/checkpoint`.
 The root must contain the converted transformer, VAE, scheduler, text tokenizer,
-and distilled schedule. Edge reasoner and vision assets are not required.
+and distilled schedule. Edge reasoner and vision assets are not required, and
+neither is a `mererun_model.json`.
 
 ## Controls and variants
 
-- Use `--mode text-to-image`. This export does not support video, image
-  conditioning, actions, sound, or the Edge reasoner.
+- With `video cosmos3`, use `--mode text-to-image`. This export does not support
+  video, image conditioning, actions, sound, or the Edge reasoner.
+- `image generate` rejects `--input`, `--ref-image`, `--sigma-shift`, and LoRA
+  adapters for this checkpoint, and requires PNG output.
 - Keep four steps and guidance scale 1. The checkpoint supplies its distilled
   sigma schedule; custom shifts and schedules are unsupported. Negative prompts
   have no effect at guidance scale 1.

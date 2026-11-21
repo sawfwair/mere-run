@@ -3,7 +3,8 @@ import Foundation
 extension MereRunCapabilityCatalog {
     /// `image generate` runtimes. The CLI reads the family and engine from the model's
     /// `mererun_model.json`; FLUX.2-dev shares the Klein engine but ignores negative prompts, and
-    /// Qwen-Image-Edit Lightning is the edit engine with fixed steps and guidance.
+    /// Qwen-Image-Edit Lightning is the edit engine with fixed steps and guidance. Cosmos3-Super
+    /// is the distilled text-to-image checkpoint that `video cosmos3` also runs.
     enum ImageGenerateFamily: String, MereRunFamilyID {
         case h3Image = "h3-image"
         case flux3
@@ -19,6 +20,7 @@ extension MereRunCapabilityCatalog {
         case qwenEdit = "qwen-edit"
         case qwenEditLightning = "qwen-edit-lightning"
         case ideogram
+        case cosmos3Super = "cosmos3-super"
     }
 
     /// `image train-lora` trainers: Krea 2 trains the Raw base, and every FLUX.2 Klein model goes
@@ -77,7 +79,12 @@ extension MereRunCapabilityCatalog {
                 title: "Qwen-Image-Edit Lightning",
                 models: ["image-qwen-edit-2511-lightning"]
             ),
-            .init(ImageGenerateFamily.ideogram, title: "Ideogram 4", models: ["image-ideogram4-sdnq-uint4"])
+            .init(ImageGenerateFamily.ideogram, title: "Ideogram 4", models: ["image-ideogram4-sdnq-uint4"]),
+            .init(
+                ImageGenerateFamily.cosmos3Super,
+                title: "Cosmos3-Super 4-Step",
+                models: ["image-cosmos3-super-t2i-4step"]
+            )
         ],
         excludedModels: .models(
             ["image-klein-shared"],

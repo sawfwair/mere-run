@@ -155,6 +155,10 @@ public enum ImageGenerationOperation {
             return try await generator.generate(request, progressHandler: progressHandler)
         case .qwenImage21:
             return try await QwenImage21Generator().generate(request, progressHandler: progressHandler)
+        case .cosmos3Super:
+            let generator = Cosmos3SuperImageGenerator()
+            defer { generator.unload() }
+            return try await generator.generate(request, progressHandler: progressHandler)
         case .qwenImageEdit:
             let generator = QwenImageEditGenerator()
             return try await withCleanup {

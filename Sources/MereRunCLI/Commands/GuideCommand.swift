@@ -222,6 +222,7 @@ enum GuideRegistry {
                 "image-qwen-edit-2511",
                 "image-qwen-edit-2511-lightning",
                 "image-ideogram4-sdnq-uint4",
+                "image-cosmos3-super-t2i-4step",
             ],
             resourceName: "image-generate.md"
         ),

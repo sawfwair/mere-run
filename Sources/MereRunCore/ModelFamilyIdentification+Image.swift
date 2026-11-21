@@ -44,6 +44,7 @@ extension ModelFamilyIdentifier {
         case .ideogram4: "ideogram"
         case .qwenImage21: manifest.tier == .turbo ? "qwen-21-turbo" : "qwen-21"
         case .qwenImageEdit: manifest.id == QwenImageEditRepository.lightning2511Id ? "qwen-edit-lightning" : "qwen-edit"
+        case .cosmos3Super: "cosmos3-super"
         case nil: nil
         }
     }
