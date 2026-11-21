@@ -390,6 +390,7 @@ public struct ChatRequest: Sendable, Hashable {
     public var reasoningEffort: Double?
     public var showThinking: Bool
     public var lora: LoRA?
+    public var outputConstraint: ChatOutputConstraint?
     public var requiresJSON: Bool
     public var toolSearch: ChatToolSearch?
     public var tools: [ToolDefinition]?
@@ -455,6 +456,7 @@ public struct ChatRequest: Sendable, Hashable {
         self.reasoningEffort = reasoningEffort
         self.showThinking = showThinking
         self.lora = lora
+        self.outputConstraint = nil
         self.requiresJSON = requiresJSON
         self.toolSearch = nil
         self.tools = tools

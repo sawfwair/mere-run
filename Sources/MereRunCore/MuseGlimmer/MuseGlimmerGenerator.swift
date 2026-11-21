@@ -477,9 +477,9 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         guard request.lora == nil else {
             throw MuseGlimmerError.generationFailed("Muse Glimmer LoRA loading is not yet supported.")
         }
-        guard !request.requiresJSON else {
+        guard !request.requiresJSON || request.outputConstraint != nil else {
             throw MuseGlimmerError.generationFailed(
-                "Muse Glimmer constrained JSON generation is not yet supported; use tool schemas for structured actions."
+                "Muse Glimmer JSON mode requires an explicit output schema; use Messages output_config.format with type json_schema."
             )
         }
         guard request.kvCacheMode == nil || request.kvCacheMode == .default else {
@@ -500,7 +500,7 @@ public actor MuseGlimmerGenerator: ChatGenerator {
             }) : nil
         var cacheWrites = 0
         let minimumDFlashOutput = MuseGlimmerDFlashPolicy.minimumOutputTokens()
-        let useDFlash = assistantModel != nil && tokenBudget >= minimumDFlashOutput
+        let useDFlash = request.outputConstraint == nil && assistantModel != nil && tokenBudget >= minimumDFlashOutput
         let prefillAssistant = useDFlash || !checkpoints.isEmpty ? assistantModel : nil
         let assistantCache = seed?.value.assistantCache?.map { $0.fork() } ?? prefillAssistant?.makeCache()
         let prefillStart = Date()
@@ -548,6 +548,24 @@ public actor MuseGlimmerGenerator: ChatGenerator {
                 contentEvents.append(event)
                 progressHandler?(ChatProgress(stage: .generating, event: event))
             }
+        }
+        if request.outputConstraint != nil {
+            lastDFlashStats = MuseGlimmerDFlashStats(enabled: assistantModel != nil, active: false,
+                assistantModelPath: loadedAssistantPath, speculativeTokens: 0, reason: "native constrained output uses final-target decoding")
+            let (result, state) = try museGlimmerConstrainedDecode(request: request, initialLogits: initialLogits,
+                sampling: sampling, budget: tokenBudget, history: promptTokens,
+                decode: { tokenizerAndTemplate.decode(tokens: $0) },
+                tokenBytes: { tokenizerAndTemplate.bytes(token: $0) },
+                forward: { model(MLXArray([Int32($0)]).reshaped(1, 1), cache: cache) }, progress: progressHandler)
+            var final = ChatResponse(response: state.text, tokensGenerated: result.tokens.count,
+                timing: ChatTiming(loadSeconds: 0, prefillSeconds: prefillSeconds, decodeSeconds: result.decodeSeconds,
+                    firstTokenSeconds: result.firstTokenSeconds, kvCacheMode: .default,
+                    prefillKVCache: "native-bf16", decodeKVCache: "native-bf16"),
+                toolCalls: state.calls.isEmpty ? nil : state.calls, promptTokens: promptTokens.count, finishReason: .stop,
+                reasoningContent: state.reasoning.isEmpty ? nil : state.reasoning, reasoningBlockCount: state.reasoningBlocks)
+            final.generationEvents = state.events
+            final.cacheReadTokens = seed?.tokens.count ?? 0; final.cacheCreationTokens = cacheWrites
+            return final
         }
         if let assistant = useDFlash ? assistantModel : nil,
            let assistantCache {
@@ -654,6 +672,12 @@ public actor MuseGlimmerGenerator: ChatGenerator {
 
     private func preparedInput(_ request: ChatRequest) throws -> (ChatPreparedPrompt, MuseGlimmerImageBatch?) {
         guard let tokenizerAndTemplate, let loadedConfig else { throw MuseGlimmerError.modelNotLoaded }
+        if request.outputConstraint != nil {
+            guard tokenizerAndTemplate.constrainedBytes != nil else {
+                throw ChatRequestIssue("output_schema", "native Glimmer constraints require a ByteLevel or Fuse tokenizer decoder")
+            }
+            _ = try MuseGlimmerConstraint(request: request)
+        }
         let requestedContext = request.maxContextTokens ?? MuseGlimmerResources.defaultContextLength
         guard requestedContext > 0 else {
             throw MuseGlimmerError.generationFailed("maxContextTokens must be greater than zero.")
@@ -665,7 +689,13 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         )
         let imageReferences = request.messages.flatMap { message -> [String] in
             if let blocks = message.contentBlocks {
-                return blocks.compactMap { if case .image(let reference, _) = $0 { return reference }; return nil }
+                return blocks.flatMap { block -> [String] in
+                    switch block {
+                    case .image(let reference, _): return [reference]
+                    case .document(let document): return document.pageImages ?? []
+                    default: return []
+                    }
+                }
             }
             return message.imageUrl.map { [$0] } ?? []
         }
@@ -681,7 +711,7 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         formatter.dateFormat = "yyyy-MM-dd"
         var promptTokens = try tokenizerAndTemplate.encodeForGeneration(
             messages: MuseGlimmerTokenizerAndTemplate.requestMessages(request),
-            tools: request.tools,
+            tools: NativeChatToolPolicy.templateTools(request),
             reasoningStrength: Self.reasoningStrength(request.reasoningEffort),
             currentDate: formatter.string(from: Date()),
             maxLength: effectiveContext,

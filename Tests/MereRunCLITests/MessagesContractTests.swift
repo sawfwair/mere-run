@@ -130,9 +130,11 @@ final class MessagesContractTests: XCTestCase {
     func testQwenAndGemmaExposeNativeMessagesToolsAndStreaming() throws {
         let switchable = MessagesCapabilities.adapter(.textChatQ36, profile: .q38(contextWindow: 32768))
         XCTAssertTrue(switchable.thinking.contains("disabled"))
+        XCTAssertTrue(switchable.strict_tools); XCTAssertTrue(switchable.json_schema)
         XCTAssertEqual(switchable.effort, ["low", "medium", "high", "xhigh"])
         let singlePreset = MessagesCapabilities.adapter(.textChatQ36, profile: .q36(contextWindow: 32768, fixedReasoning: true))
         XCTAssertFalse(singlePreset.thinking.contains("disabled"))
+        XCTAssertFalse(singlePreset.strict_tools); XCTAssertFalse(singlePreset.json_schema)
         XCTAssertEqual(singlePreset.effort, ["high"])
         XCTAssertEqual(singlePreset.thinking_display, ["summarized"])
         for model in ["text-agent-ornith-35b-mlx-4bit", "text-chat-gemma4-turbo"] {
@@ -141,7 +143,8 @@ final class MessagesContractTests: XCTestCase {
             let capabilities = MessagesCapabilities.adapter(engine, profile: profile)
             XCTAssertTrue(capabilities.streaming); XCTAssertTrue(capabilities.tools)
             XCTAssertTrue(capabilities.token_counting); XCTAssertTrue(capabilities.tool_search)
-            XCTAssertFalse(capabilities.strict_tools); XCTAssertFalse(capabilities.exact_thinking_budget)
+            XCTAssertEqual(capabilities.strict_tools, model == Gemma4Resources.turboModelId)
+            XCTAssertFalse(capabilities.exact_thinking_budget)
             let json = #"{"model":"local","max_tokens":16,"stream":true,"thinking":{"type":"adaptive"},"tools":[{"name":"read","input_schema":{"type":"object","properties":{}}}],"messages":[{"role":"user","content":"read"}]}"#
             let wire = try JSONDecoder().decode(MessagesRequest.self, from: Data(json.utf8))
             let request = try RuntimeChatRequest.messages(wire, version: .original, counting: false, continuity: MessagesContinuity(key: Data(repeating: 1, count: 32)))

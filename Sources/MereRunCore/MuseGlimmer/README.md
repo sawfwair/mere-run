@@ -160,6 +160,14 @@ Tool validation reads only generation outside the private reasoning channel.
 Native tool examples inside reasoning remain literal reasoning content. Actual
 duplicate tool calls keep their IDs and remain subject to parallel-call controls.
 
+Strict tools use a schema-constrained JSON envelope inside the native `to=user`
+channel. The `to=self` reasoning channel remains separate. A complete turn must
+pass schema validation before its calls become executable. JSON arguments retain
+literal markup, entity text, Unicode, and nested types; no XML decoding applies.
+Ordinary tools retain ATEM and preserve literal parameter values. Shared prompt
+preparation includes the strict schema for counting, generation, and cache
+boundaries, with a separate versioned identity for strict-tool prefixes.
+
 ## Experimental verification controls
 
 These controls are opt-in while the optimized execution paths are qualified.
