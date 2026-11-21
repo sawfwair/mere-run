@@ -12,6 +12,7 @@ private protocol QualifiedStreamOwner: Actor {
 extension Gemma4Generator: QualifiedStreamOwner {}
 extension ParakeetGenerator: QualifiedStreamOwner {}
 extension LagunaGenerator: QualifiedStreamOwner {}
+extension Flux2KleinGenerator: QualifiedStreamOwner {}
 
 /// A reusable barrier proves that every lease is active before any operation can finish.
 private actor StreamLeaseBarrier {
@@ -72,6 +73,14 @@ final class RequestStreamQualificationTests: MereRunCoreTestCase {
         try await checkReuse(LagunaGenerator(), name: "laguna")
     }
 
+    func testKleinSequentialAndOverlappingLeases() async throws {
+        try await checkReuse(Flux2KleinGenerator(), name: "klein")
+    }
+
+    func testKleinCancellationErrorsAndUnload() async throws {
+        try await checkRecovery(Flux2KleinGenerator())
+    }
+
     func testLagunaCancellationErrorsAndUnload() async throws {
         try await checkRecovery(LagunaGenerator())
     }
@@ -88,6 +97,7 @@ final class RequestStreamQualificationTests: MereRunCoreTestCase {
         var gemma: Set<Identity> = []
         var parakeet: Set<Identity> = []
         var laguna: Set<Identity> = []
+        var klein: Set<Identity> = []
         for _ in 0..<10 {
             let chat = Gemma4Generator()
             gemma.insert(await chat.withRequestStream { Identity.current() })
@@ -98,6 +108,9 @@ final class RequestStreamQualificationTests: MereRunCoreTestCase {
             let nextChat = LagunaGenerator()
             laguna.insert(await nextChat.withRequestStream { Identity.current() })
             await nextChat.unload()
+            let image = Flux2KleinGenerator()
+            klein.insert(await image.withRequestStream { Identity.current() })
+            await image.unload()
         }
         // Eviction can discard a generator. Sequential replacements must reuse
         // backend streams, including when switching between runtime families.
@@ -105,7 +118,8 @@ final class RequestStreamQualificationTests: MereRunCoreTestCase {
         XCTAssertEqual(parakeet.count, 1)
         XCTAssertEqual(gemma, parakeet)
         XCTAssertEqual(gemma, laguna)
-        try record(["gemma": Array(gemma), "parakeet": Array(parakeet), "laguna": Array(laguna)],
+        XCTAssertEqual(gemma, klein)
+        try record(["gemma": Array(gemma), "parakeet": Array(parakeet), "laguna": Array(laguna), "klein": Array(klein)],
                    name: "recreated-owner-streams")
     }
 
@@ -113,7 +127,7 @@ final class RequestStreamQualificationTests: MereRunCoreTestCase {
         var all: Set<Identity> = []
         for _ in 0..<20 {
             let owners: [any QualifiedStreamOwner] = [
-                Gemma4Generator(), ParakeetGenerator(), LagunaGenerator(), LagunaGenerator(),
+                Gemma4Generator(), ParakeetGenerator(), LagunaGenerator(), Flux2KleinGenerator(),
             ]
             let barrier = StreamLeaseBarrier(width: owners.count)
             let identities = await withTaskGroup(of: Identity.self) { group in
