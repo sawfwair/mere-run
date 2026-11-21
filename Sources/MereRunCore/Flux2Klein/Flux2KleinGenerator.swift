@@ -56,6 +56,17 @@ public actor Flux2KleinGenerator: ImageGenerator {
         Memory.clearCache()
     }
 
+    /// Scope loading and inference to reusable task-local CPU/GPU streams.
+    func withRequestStream<Result>(
+        _ operation: () async throws -> Result
+    ) async rethrows -> Result {
+        try await MLXRequestStreams.withStream(isolation: self) {
+            // Warm requests must retain the async scope even without a loading suspension.
+            await Task.yield()
+            return try await operation()
+        }
+    }
+
     // MARK: - Unified ImageGenerator API
 
     public func generate(
