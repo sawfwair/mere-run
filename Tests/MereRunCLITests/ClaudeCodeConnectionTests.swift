@@ -51,9 +51,10 @@ final class ClaudeCodeConnectionTests: XCTestCase {
         let profile = try XCTUnwrap(ManagedModelCatalog.apiProfile(for: MuseGlimmerResources.modelId))
         let current = MessagesCapabilities.adapter(.textChatMuseGlimmer, profile: profile)
         var legacy = try JSONDecoder().decode([String: ChatJSONValue].self, from: JSONEncoder().encode(current))
-        for key in ["thinking_display", "prompt_cache_max_tokens", "tool_schema_subset"] { legacy.removeValue(forKey: key) }
+        for key in ["thinking_display", "prompt_cache_max_tokens", "tool_schema_subset", "vision_documents", "constrained_schema_subset"] { legacy.removeValue(forKey: key) }
         let decoded = try JSONDecoder().decode(MessagesCapabilities.self, from: JSONEncoder().encode(legacy))
         XCTAssertTrue(decoded.messages); XCTAssertNil(decoded.thinking_display)
+        XCTAssertNil(decoded.vision_documents); XCTAssertNil(decoded.constrained_schema_subset)
         let model = ClaudeCodeServerModel(id: "local", display_name: nil, max_input_tokens: 32768, max_tokens: 4096, local_capabilities: decoded)
         let settings = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("settings.json")
         let plan = try ClaudeCodeConnection.plan(origin: URL(string: "http://127.0.0.1:8080")!, model: model, version: "2.1.316",
@@ -80,7 +81,8 @@ final class ClaudeCodeConnectionTests: XCTestCase {
                                                settings: URL(fileURLWithPath: "/tmp/project/.claude/settings.local.json"), credentialVariable: "PRIVATE_LOCAL_KEY")
         XCTAssertTrue(plan.capabilities.messages)
         XCTAssertTrue(plan.capabilities.streaming)
-        XCTAssertFalse(plan.capabilities.strict_tools)
+        XCTAssertTrue(plan.capabilities.strict_tools)
+        XCTAssertTrue(plan.capabilities.json_schema)
         let env = try XCTUnwrap(plan.patch["env"]?.objectValue)
         XCTAssertEqual(env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"], .string("8192"))
         XCTAssertEqual(env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"], .string("1024"))

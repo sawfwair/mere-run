@@ -31,7 +31,7 @@ extension MuseGlimmerGenerator {
         let context = String(request.maxContextTokens ?? 0)
         let cacheMode = request.kvCacheMode?.rawValue ?? "default"
         let components: [String] = [
-            scope, target, assistant, prefillAdapterIdentity, "atem-v2", thinking,
+            scope, target, assistant, prefillAdapterIdentity, request.outputConstraint?.mode == .tools ? "native-json-tools-v1" : "atem-v2", thinking,
             effort, context, cacheMode, media
         ]
         return components.joined(separator: "\u{0}")
@@ -47,18 +47,29 @@ extension MuseGlimmerGenerator {
         let formatter = DateFormatter(); formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.timeZone = .current; formatter.dateFormat = "yyyy-MM-dd"
         var result: [Int: Int] = [:]
-        if let ttl = policy.toolPrefixTTL {
-            let toolPrefix = try tokenizerAndTemplate.encodeForGeneration(messages: [], tools: request.tools,
+        func toolPrefix(_ tools: [ToolDefinition]?) throws -> [Int] {
+            var prefix = request
+            prefix.messages = []; prefix.tools = tools
+            if request.outputConstraint?.mode == .tools {
+                prefix.outputConstraint = try .tools(tools ?? [], choice: request.toolChoice, parallel: request.parallelToolCalls)
+            }
+            return try tokenizerAndTemplate.encodeForGeneration(
+                messages: request.outputConstraint == nil ? [] : MuseGlimmerTokenizerAndTemplate.requestMessages(prefix),
+                tools: NativeChatToolPolicy.templateTools(prefix),
                 reasoningStrength: Self.reasoningStrength(request.reasoningEffort), currentDate: formatter.string(from: Date()),
                 maxLength: Int.max, truncate: false, addGenerationPrompt: false)
+        }
+        if let ttl = policy.toolPrefixTTL {
+            let toolPrefix = try toolPrefix(request.tools)
             let count = Self.cacheBoundaryTokenCount(prepared: tokens, renderedBoundary: toolPrefix)
             if count > 0, count <= maximumPrefix { result[count] = ttl }
         }
         for boundary in policy.toolBoundaries {
             guard let tools = request.tools, let index = tools.firstIndex(where: { $0.name == boundary.throughTool }) else { continue }
-            let prefix = try tokenizerAndTemplate.encodeForGeneration(messages: [], tools: Array(tools.prefix(index + 1)),
-                reasoningStrength: Self.reasoningStrength(request.reasoningEffort), currentDate: formatter.string(from: Date()),
-                maxLength: Int.max, truncate: false, addGenerationPrompt: false)
+            let selected = Array(tools.prefix(index + 1))
+            if request.outputConstraint?.mode == .tools, case .function(let name) = request.toolChoice,
+               !selected.contains(where: { $0.name == name }) { continue }
+            let prefix = try toolPrefix(selected)
             let count = Self.cacheBoundaryTokenCount(prepared: tokens, renderedBoundary: prefix)
             if count > 0, count <= maximumPrefix { result[count] = max(result[count] ?? 0, boundary.ttlSeconds) }
         }
@@ -74,7 +85,7 @@ extension MuseGlimmerGenerator {
             var prefixRequest = request
             prefixRequest.messages = Array(request.messages.prefix(boundary.messageIndex)) + [message]
             let prefixMessages = MuseGlimmerTokenizerAndTemplate.requestMessages(prefixRequest)
-            let prefix = try tokenizerAndTemplate.encodeForGeneration(messages: prefixMessages, tools: request.tools,
+            let prefix = try tokenizerAndTemplate.encodeForGeneration(messages: prefixMessages, tools: NativeChatToolPolicy.templateTools(request),
                 reasoningStrength: Self.reasoningStrength(request.reasoningEffort), currentDate: formatter.string(from: Date()),
                 maxLength: Int.max, truncate: false, addGenerationPrompt: false)
             // Rendered image placeholders are expanded before comparing with the

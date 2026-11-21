@@ -7,6 +7,7 @@ struct MuseGlimmerContentStream {
     private var reasoning = false
     private var inTools = false
     private var toolRecipient = false
+    private var userRecipient = false
     private var atMessageBoundary = true
     private var stopped = false
     var didStop: Bool { stopped }
@@ -25,12 +26,15 @@ struct MuseGlimmerContentStream {
         let endings = ["<|eom|>", "<|eot|>"]
         let open = "<atem:function_calls>"
         let close = "</atem:function_calls>"
-        let markers = endings + [open, close] + stops
         while !pending.isEmpty {
+            // A declared user channel carries literal content, including ATEM
+            // examples. Only tool recipients (or legacy headerless packets)
+            // can contribute executable source.
+            let markers = endings + (userRecipient ? [] : [open, close]) + stops
             let eligibleHeaders: [String]
             if inTools { eligibleHeaders = [] }
             else if atMessageBoundary { eligibleHeaders = headerPrefixes }
-            else { eligibleHeaders = [headerPrefixes[0]] }
+            else { eligibleHeaders = [] }
             if let prefix = eligibleHeaders.first(where: { pending.hasPrefix($0) }) {
                 guard let end = pending.range(of: "<|message|>") else {
                     if final { pending = "" }
@@ -40,16 +44,17 @@ struct MuseGlimmerContentStream {
                 let header = String(pending[..<end.upperBound])
                 pending.removeSubrange(..<end.upperBound)
                 reasoning = recipient == "self"
+                userRecipient = recipient == "user"
                 toolRecipient = recipient != "self" && recipient != "user"
                 atMessageBoundary = false
-                if !reasoning { toolSource += header }
+                if !reasoning && !userRecipient { toolSource += header }
                 continue
             }
             if !final, eligibleHeaders.contains(where: { $0.hasPrefix(pending) }) { break }
             if let marker = markers.first(where: { pending.hasPrefix($0) }) {
                 pending.removeFirst(marker.count)
                 if stops.contains(marker) { stopped = true; break }
-                if !reasoning { toolSource += marker }
+                if !reasoning && !userRecipient { toolSource += marker }
                 if endings.contains(marker) {
                     atMessageBoundary = true
                 } else if reasoning {
@@ -61,7 +66,7 @@ struct MuseGlimmerContentStream {
             }
             if !final, markers.contains(where: { $0.hasPrefix(pending) }) { break }
             let character = String(pending.removeFirst())
-            if !reasoning { toolSource += character }
+            if !reasoning && !userRecipient { toolSource += character }
             atMessageBoundary = atMessageBoundary && character.allSatisfy(\.isWhitespace)
             if inTools || toolRecipient {
                 continue

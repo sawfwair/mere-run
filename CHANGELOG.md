@@ -6,6 +6,27 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add bounded schema-constrained Messages output and strict custom tools for
+  switchable-thinking Qwen and Gemma adapters. Extend native Glimmer with
+  channel-aware constrained JSON and typed tools while preserving adaptive
+  reasoning. Publish the supported schema subset and reject unsupported
+  combinations before generation. Constrained requests use final-target decoding;
+  [Glimmer Q8 qualification](docs/benchmarks/glimmer-constrained-messages-2026-11-20.md)
+  records known-answer and throughput checks and six independently verified fresh
+  desktop trials. Preserve literal ATEM examples in user answers and exact
+  incremental UTF-8 during native constrained sampling.
+- Use a JSON envelope for strict Glimmer tool calls to preserve nested strings
+  without mixing JSON and XML escaping. Retain native reasoning channels and
+  validate complete turns before publishing calls. Preserve literal entity text
+  in ordinary ATEM parameters, support nullable strict parameters, and version
+  the strict-tool cache identity. Publish the
+  [tool-string qualification](docs/benchmarks/glimmer-tool-strings-2026-11-20.md)
+  separately from the earlier failure record.
+- Render PDF pages, including image-only scans, for the native Glimmer Messages
+  adapter on macOS. Preserve page order, document metadata, and image token
+  counting with explicit rendering limits.
+
+
 ## 0.73.0 - 2026-11-19
 
 - Let unattended macOS test gates reopen synthetic run records while the

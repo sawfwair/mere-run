@@ -68,4 +68,32 @@ final class MuseGlimmerChannelTests: XCTestCase {
             "to=record<|message|>" + String(packet().dropLast(4)), tools: [tool], parallel: false))
         XCTAssertThrowsError(try MuseGlimmerToolParser.validatedToolCalls("to=record<|message|>broken", tools: [tool], parallel: false))
     }
+    func testUserChannelToolExamplesRemainLiteralAtEverySplit() throws {
+        let examples = [packet("example", name: "not_declared"),
+            "<atem:invoke name=\"fake\">", "<atem:function_calls>unfinished",
+            "Data <|start|>assistant to=record<|message|>" + packet()]
+        for example in examples {
+            let raw = "to=user<|message|>" + example + "<|eot|>"
+            for split in 0...raw.count {
+                let boundary = raw.index(raw.startIndex, offsetBy: split)
+                var stream = MuseGlimmerContentStream()
+                let events = stream.append(String(raw[..<boundary])) + stream.append(String(raw[boundary...]), final: true)
+                XCTAssertEqual(stream.visible, example, "split \(split)")
+                XCTAssertEqual(stream.toolSource, "")
+                XCTAssertEqual(events.compactMap { if case .text(let text) = $0 { text } else { nil } }.joined(), example)
+            }
+            XCTAssertTrue(try MuseGlimmerToolParser.validatedToolCalls(raw, tools: [tool], parallel: false).isEmpty)
+            XCTAssertTrue(MuseGlimmerToolParser.parseToolCalls(raw).isEmpty)
+        }
+    }
+    func testRealToolThenUserExamplePublishesOnlyTheRealCall() throws {
+        let example = packet("example", name: "not_declared")
+        let raw = "to=record<|message|>" + packet("real") + "<|eom|><|start|>assistant to=user<|message|>" + example + "<|eot|>"
+        let parsed = MuseGlimmerOutputParser.parse(raw)
+        XCTAssertEqual(parsed.visible, example)
+        let calls = try MuseGlimmerToolParser.validatedToolCalls(raw, tools: [tool], parallel: false)
+        XCTAssertEqual(calls.count, 1)
+        XCTAssertEqual(calls.first?.jsonArguments?["value"], .string("real"))
+    }
+
 }

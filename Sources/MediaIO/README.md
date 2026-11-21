@@ -32,3 +32,8 @@ Linux users can override executable discovery with `MERERUN_FFMPEG` and
 timestamps rather than estimating frame indices from nominal FPS. Clef Omni
 uses it for 2-fps sampling, including variable-rate video. Reaching the frame
 cap stops decoding rather than uniformly subsampling the timeline.
+
+`MediaDocumentIO.pdf` extracts text or, when explicitly requested by a vision
+adapter, renders ordered page PNGs through PDFKit. Input, page count, raster
+pixels, and encoded bytes are bounded. Image-only scans require rendering;
+text-only extraction rejects them. The facade never fetches document URLs.

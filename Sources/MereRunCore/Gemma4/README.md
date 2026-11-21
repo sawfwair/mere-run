@@ -47,3 +47,7 @@ requests cannot overwrite a retained prefix. Token-limited replies report
 Canonical templates are applied only when the package template has the exact
 known-stale SHA-256 and the decoded model profile matches a released Gemma 4
 shape. Current or custom package templates remain authoritative.
+
+Messages constrained output uses the shared schema grammar on switchable-thinking
+adapters. It retains final-target sampling and bypasses speculative and batched
+decoding. Schema instructions enter shared preparation and exact token counting.
