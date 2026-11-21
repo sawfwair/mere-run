@@ -1,39 +1,79 @@
-# Native Inkling 2 Small
+# Native Inkling 2
 
-`mere.run` runs Inkling 2 Small text and image chat through Swift/MLX. The
-native reference path reads the original checkpoint without Python, a remote
-inference service, or a conversion step. It supports reasoning and tool calls.
+`mere.run` runs text and image chat with Inkling 2 Mini and Small through
+Swift/MLX. The native runtime reads the original mixed NVFP4/MXFP8
+checkpoints and supports reasoning and tool calls.
 
-The checkpoint has 594B parameters, with 17B active per token. Its 24 weight
-shards occupy about 394 GB. Selected experts stream from disk, and ordinary
-weights stay in memory. Disk throughput limits generation speed. This path has
-no full-checkpoint throughput or answer-quality qualification.
+| Model | Managed ID | Parameters | Checkpoint disk space |
+| --- | --- | --- | --- |
+| Mini | `vision-chat-inkling-2-mini` | 26.4B total, 5.4B effective active per token | About 20 GB |
+| Small | `vision-chat-inkling-2-small` | 594B total, 17B active per token | About 394 GB |
+
+On macOS, Mini keeps its packed experts resident on Metal when the checkpoint
+fits within three quarters of unified memory. Small uses a reference path
+that streams selected experts from disk. Mini also uses that path on other
+devices, on smaller memory configurations, or when launched with
+`MERERUN_INKLING2_PACKED_EXPERTS=0`.
 
 ## Install and chat
 
 Installation is explicit; chat doesn't download the checkpoint automatically:
 
 ```bash
-mere.run model pull vision-chat-inkling-2-small
-mere.run text chat --model vision-chat-inkling-2-small \
+mere.run model pull vision-chat-inkling-2-mini
+mere.run text chat --model vision-chat-inkling-2-mini \
   --prompt "Explain block attention residuals." \
   --reasoning-effort 0.2 --max-tokens 512
 ```
 
 To describe an image, add `--image ./diagram.png`. To use an existing original
-snapshot, pass its directory to `--model`, or use the managed model ID with
-`--model-root /path/to/Inkling-2-Small`.
+snapshot, pass its directory to `--model`, or use the matching managed model ID
+with `--model-root /path/to/checkpoint`.
 
-The runtime also recognizes local original MXFP8 checkpoints whose
-`config.json` sets `model_type` to `inkling2`. It requires the original tensor
-names and index. Converted Transformers or MLX checkpoint layouts are separate
-formats.
+The runtime requires the original tensor names and index. It recognizes
+`model_type` values `inkling2_loop` for fixed-pass Mini and `inkling2` for Small,
+including the original Small MXFP8 checkpoint.
+
+## Speculative decoding on Mini
+
+Mini defaults to temperature `1` with unrestricted sampling. For text and
+image chat on Metal, Mini uses adaptive DSpark by default when the packed
+experts are resident, the draft weights are installed, and the request uses
+unrestricted sampling. DSpark uses 8-bit copies of the draft vocabulary
+projections. Target verification uses the original checkpoint weights.
+
+```bash
+mere.run text chat --model vision-chat-inkling-2-mini \
+  --prompt "Explain why the Moon looks different throughout the month." \
+  --max-tokens 256 --stats
+```
+
+Set `MERERUN_INKLING2_DSPARK=0` to disable drafting. Set it to `1` to
+enable drafting for eligible requests with greedy or filtered sampling,
+or when Mini uses the reference path.
+
+Mini starts with three proposals per round and adjusts the depth using the
+accepted prefixes from recent rounds. With resident Metal experts, adaptive
+DSpark can also propose up to 16 tokens at a time from repeated sequences in
+the generated text. The target verifies these proposals using the request's
+sampling settings. The `inkling_dspark` stats line reports
+proposed and accepted tokens and how many rounds ran at each depth. To keep
+the depth fixed, set `MERERUN_INKLING2_DSPARK_TOKENS` to a value from 1 to 7.
+DSpark requires default penalties and requests without custom stop sequences
+or logprob capture. Batched verification can change greedy tokens because
+floating-point rounding differs from single-token decode. Sampled runs can
+produce different output with the same seed because speculation consumes a
+different sequence of random draws.
+
+Mini's managed download includes `mtp.safetensors`. Older checkpoints without
+this file use standard decoding. To enable drafting for an older checkpoint,
+add the draft weights to its directory. [Official Mini draft weights](https://huggingface.co/thinkingmachines/Inkling-2-Mini/blob/ed40e7da625f594fc9c4990f5f66be24873c22d7/mtp.safetensors)
 
 ## Serve the local API
 
 ```bash
 mere.run api serve --engine text-chat-inkling2 \
-  --model vision-chat-inkling-2-small
+  --model vision-chat-inkling-2-mini
 ```
 
 The API accepts text, local image files, base64 image data, tool declarations,
@@ -47,8 +87,8 @@ Chat uses an 8,192-token context by default. Prompt and output share the limit;
 oversized prompts fail without truncating history. You can set
 `--context-size` up to the checkpoint's 1,048,576-token architectural limit.
 Global attention cache and attention workspace grow with context. The
-catalog's 32 GB minimum and 64 GB recommendation are admission estimates,
-not measured memory qualifications.
+catalog lists an estimated 32 GB minimum for both checkpoints and recommends
+64 GB for Small. Full-checkpoint memory fit remains unmeasured.
 
 `--reasoning-effort` accepts values from zero through 0.99. The default is 0.9.
 The released template supplies the effort message and intentionally appends
@@ -64,30 +104,45 @@ The decoder uses BF16 attention caches, learned sinks, clipped query and key
 heads, relative-position bias, static and dynamic short convolutions, and
 attention over residual blocks. Experts use corrected sigmoid routing, eight
 selected experts, interleaved gate/up weights, and separate activation softcaps.
-The main checkpoint stores expert layers zero through 39 in NVFP4 and layers
-40 through 47 in MXFP8.
+Mini runs the middle 12 layers three times with shared weights. Each pass
+keeps its own attention and short convolution state. Learned controllers
+inject messages from the previous pass into the query, key, value, and expert
+inputs. On Metal, Mini batches the query, key, and value controller
+projections and fuses controller gating with input normalization. Small runs
+its 48 layers once.
 
-Expert weights decode one selected expert at a time. Activations use BF16,
-with FP32 routing and expert-output accumulation. This reference path does
-not emulate the upstream NVFP4/MXFP8 activation-quantization kernels. It doesn't
-use the auxiliary `mtp.safetensors` predictor. LoRA, constrained JSON output,
-quantized attention caches, audio, and video are unavailable.
+The Metal path gathers selected NVFP4/MXFP8 experts directly from their packed
+weights. It submits the decoder and its cache updates together and fuses short
+convolution taps into one kernel. It also combines projections that read the
+same query input. Single-token decode fuses query, key, value, and relative
+head normalization, and uses fused kernels for attention over up to 1,024
+cached keys per layer and for depth residuals. The Metal path also fuses
+top-eight expert routing and combines scaling with the activation and
+weighted reduction around the expert matmuls. The reference path dequantizes
+one selected expert at a time.
+Both use BF16 activations and FP32 routing and accumulation.
+Rounding can differ between the two paths and change sampled tokens.
+LoRA, constrained JSON output, quantized attention caches, audio, and video
+are unavailable.
 
 ## Validation and provenance
 
 `Inkling2RuntimeTests` compares the decoder and vision tower against independent
 FP64 NumPy fixtures. The decoder checks one-shot, token-by-token, and chunked
 execution across convolution, residual-block, and sliding-window boundaries.
-Tests also cover packed formats, image padding and transparency, indexed
-expert reads, and all 1,770 published checkpoint tensor headers.
+Tests also cover Mini's cross-pass messages, packed formats, image padding
+and transparency, indexed expert reads, and the 1,244 Mini and 1,770 Small
+checkpoint tensor headers.
 
+Metal tests compare packed gathers, short convolution, head normalization,
+grouped decode attention, depth residuals, expert routing, and expert
+activation and reduction against the reference arithmetic.
 Core and CLI tests cover model identification, native serving selection,
 the released chat template, tool-call filtering, and local paths with mixed
-case. Real-checkpoint generation, quality, GPU behavior, and sustained
-performance remain unvalidated.
+case. Short text and image prompts have been smoke-tested with the original
+Mini checkpoint on an Apple M5 Max.
 
-The managed source is
-[`thinkingmachines/Inkling-2-Small`](https://huggingface.co/thinkingmachines/Inkling-2-Small)
-at revision `aac974122acd33ddb0d3e1f54433a9c5dd2249ce`, under Apache-2.0.
-The architecture follows the official
-[Transformers Inkling 2 implementation](https://github.com/huggingface/transformers/tree/main/src/transformers/models/inkling2).
+The [model source list](../model-sources.md#inkling-2) records the pinned
+Apache-2.0 checkpoints. The architecture follows the Transformers
+[Small implementation](https://github.com/huggingface/transformers/tree/main/src/transformers/models/inkling2)
+and the [Mini implementation](https://github.com/huggingface/transformers/pull/51050).

@@ -41,9 +41,10 @@ for key in ["embed_norm.weight", "norm.weight"]:
     add(p + key, (4,), True)
 add(p + "unembed.weight", (12, 4))
 add(p + "attn_res.output_query", (4,))
-for i in range(4):
+
+
+def add_decoder_layer(i, local):
     l = p + f"layers.{i}."
-    local = i != 2
     if i:
         add(p + f"attn_res.attn_queries.{i - 1}", (4,) if local else (3, 4))
     add(p + f"attn_res.mlp_queries.{i}", (4,))
@@ -67,6 +68,10 @@ for i in range(4):
     weights[l + "mlp.gate.bias"] = np.array([-0.4, 0.3, 0.1])
     add(l + "mlp.experts.w13_weight", (3, 8, 4))
     add(l + "mlp.experts.w2_weight", (3, 4, 4))
+
+
+for i in range(4):
+    add_decoder_layer(i, i in c["local_layer_ids"])
 
 vp = "model.visual."
 for key, shape in {"backbone.embeddings.class_embedding": (8,), "backbone.embeddings.cls_position_embedding": (8,),
@@ -131,15 +136,15 @@ def conv(x, key, dynamic=None):
     return y / np.sqrt(4 if dynamic is None else 7)
 
 
-def attention(inputs, i):
+def attention(inputs, i, local):
     a = p + f"layers.{i}.attn."
     qx, kx, vx = inputs
     n = len(qx)
     q = clip(linear(qx, a + "wq_du").reshape(n, 2, 4) * weights[a + "q_l2_clip.scale"], 0.6)
-    k = clip(conv(linear(kx, a + "wk_dv"), a + "k_sconv", kx if i == 2 else None).reshape(n, 1, 4), 0.6)
-    value = rms(conv(linear(vx, a + "wv_dv"), a + "v_sconv", vx if i == 2 else None).reshape(n, 1, 4))
+    k = clip(conv(linear(kx, a + "wk_dv"), a + "k_sconv", None if local else kx).reshape(n, 1, 4), 0.6)
+    value = rms(conv(linear(vx, a + "wv_dv"), a + "v_sconv", None if local else vx).reshape(n, 1, 4))
     relative = clip(linear(qx, a + "wr_du").reshape(n, 2, 2) * weights[a + "rel_l2_clip.scale"], 0.4)
-    if i == 2:
+    if not local:
         tau = 1 + 0.1 * np.log(np.maximum(np.arange(1, n + 1) / 2, 1))
         q *= tau[:, None, None]
         relative *= tau[:, None, None]
@@ -148,7 +153,7 @@ def attention(inputs, i):
     output = np.zeros((n, 2, 4))
     for t in range(n):
         for head in range(2):
-            allowed = list(range(0 if i == 2 else max(0, t - 2), t + 1))
+            allowed = list(range(max(0, t - 2) if local else 0, t + 1))
             logits = [q[t, head] @ k[s, 0] / 2 + (bias[t, head, t - s] if t - s < 3 else 0) for s in allowed]
             prob = softmax(np.array(logits + [sink[t, head]]))[:-1]
             output[t, head] = sum(prob[j] * value[s, 0] for j, s in enumerate(allowed))
@@ -171,27 +176,47 @@ def moe(x, key):
     return output
 
 
-tokens = [1, 4, 2, 6, 3, 5, 1]
-h = norm(weights[p + "embed.weight"][tokens], p + "embed_norm")
-blocks = []
-for i in range(4):
+def controller(destination, message, key):
+    features = np.concatenate([rms(destination), rms(message)], axis=-1)
+    hidden = features @ weights[key + ".down_weight"].T
+    forget = np.tanh(hidden @ weights[key + ".forget_weight"].T)
+    gain = np.tanh(hidden @ weights[key + ".gain_weight"].T)
+    return (1 - forget) * destination + gain * message
+
+
+def decoder_layer(h, blocks, i, local, messages=None):
     l = p + f"layers.{i}."
-    residual = h.copy()
     inputs = [h] * 3 if i == 0 else list(mix(blocks, h, p + f"attn_res.attn_queries.{i - 1}"))
-    if i != 2:
-        inputs = [norm(inputs[0], l + "attn_norm")] * 3
-    else:
-        inputs = [norm(x, l + name + "_input_norm") for x, name in zip(inputs, ["q", "k", "v"])]
-    a = conv(attention(inputs, i), l + "attn_sconv")
+    if local:
+        inputs *= 3
+    if messages is not None:
+        inputs = [controller(x, m, l + "controllers." + kind)
+                  for x, m, kind in zip(inputs, messages, ["attn", "k", "v"])]
+    norms = ["attn_norm"] * 3 if local else ["q_input_norm", "k_input_norm", "v_input_norm"]
+    inputs = [norm(x, l + name) for x, name in zip(inputs, norms)]
+    a = conv(attention(inputs, i, local), l + "attn_sconv")
     if i % 2 == 0:
-        blocks.append(residual)
+        blocks.append(h)
         partial = a
     else:
-        partial = residual + a
+        partial = h + a
     mixed = mix(blocks, partial, p + f"attn_res.mlp_queries.{i}")[0]
-    h = partial + conv(moe(norm(mixed, l + "mlp_norm"), l + "mlp."), l + "mlp_sconv")
-h = norm(mix(blocks, h, p + "attn_res.output_query")[0], p + "norm")
-logits = np.tanh(linear(h, p + "unembed") / 0.8) * 0.8
+    if messages is not None:
+        mixed = controller(mixed, messages[3], l + "controllers.mlp")
+    return partial + conv(moe(norm(mixed, l + "mlp_norm"), l + "mlp."), l + "mlp_sconv")
+
+
+def output_logits(blocks, h):
+    h = norm(mix(blocks, h, p + "attn_res.output_query")[0], p + "norm")
+    return np.tanh(linear(h, p + "unembed") / 0.8) * 0.8
+
+
+tokens = [1, 4, 2, 6, 3, 5, 1]
+embedding = norm(weights[p + "embed.weight"][tokens], p + "embed_norm")
+h, blocks = embedding, []
+for i in range(4):
+    h = decoder_layer(h, blocks, i, i in c["local_layer_ids"])
+logits = output_logits(blocks, h)
 
 
 def layer_norm(x, key):
@@ -237,3 +262,54 @@ payload = {k: {"shape": list(a.shape), "values": a.flatten().tolist()} for k, a 
 (ROOT / "weights.json").write_text(json.dumps(payload, separators=(",", ":")) + "\n")
 (ROOT / "reference.json").write_text(json.dumps({"tokens": tokens, "logits": logits[:, :11].flatten().tolist(),
     "pixels": pixels.flatten().tolist(), "imageFeatures": image_features.flatten().tolist()}, indent=2) + "\n")
+
+# Extend the same decoder with two core blocks, three passes, and both
+# attention types in the core. Reuse the non-loop fixture's first four layers.
+mini_config = {**config, "architectures": ["Inkling2LoopForConditionalGeneration"],
+               "model_type": "inkling2_loop", "vision_config": None}
+mini_text = {**c, "model_type": "inkling2_loop_text", "num_hidden_layers": 8, "local_layer_ids": [0, 1, 3, 4, 6],
+             "loop_config": {"core_start": 2, "core_end": 6, "num_passes": 3, "gate_rank": 3, "is_varloop": False}}
+mini_config["text_config"] = mini_text
+mini_text.pop("pre_norm_pre_affine")
+mini_text.pop("final_norm_pre_affine")
+local_layers = mini_text["local_layer_ids"]
+for i in range(4, 8):
+    add_decoder_layer(i, i in local_layers)
+for i in range(2, 6):
+    for side in ["attn", "k", "v", "mlp"]:
+        key = p + f"layers.{i}.controllers.{side}"
+        add(key + ".down_weight", (3, 8))
+        add(key + ".forget_weight", (4, 3))
+        add(key + ".gain_weight", (4, 3))
+cross = p + "middle_cycle_cross_pass_queries"
+cross_kv = p + "middle_cycle_cross_pass_kv_queries"
+add(cross, (8, 4))
+add(cross_kv, (8, 4))
+
+h, blocks = embedding, []
+for i in [0, 1]:
+    h = decoder_layer(h, blocks, i, i in local_layers)
+prelude, prelude_blocks = h, tuple(blocks)
+for pass_index in range(3):
+    if pass_index:
+        previous_blocks, previous_end = blocks[len(prelude_blocks) + 1:], h
+    h, blocks = prelude, list(prelude_blocks)
+    for i in range(2, 6):
+        messages = None
+        if pass_index:
+            j = 2 * (i - 2)
+            query = np.stack((weights[cross][j], weights[cross_kv][j],
+                              weights[cross_kv][j + 1], weights[cross][j + 1]))
+            bank = rms(np.stack([*previous_blocks, previous_end], axis=1))
+            messages = (softmax(query @ bank.swapaxes(-2, -1) / 2) @ bank).transpose(1, 0, 2)
+        h = decoder_layer(h, blocks, i, i in local_layers, messages)
+for i in [6, 7]:
+    h = decoder_layer(h, blocks, i, i in local_layers)
+mini_logits = output_logits(blocks, h)
+
+(ROOT / "tiny-mini-config.json").write_text(json.dumps(mini_config, indent=2) + "\n")
+added_weights = {k: {"shape": list(a.shape), "values": a.flatten().tolist()}
+                 for k, a in weights.items() if k not in payload}
+(ROOT / "mini-reference.json").write_text(json.dumps({
+    "logits": mini_logits[:, :11].flatten().tolist(), "weights": added_weights,
+}, separators=(",", ":")) + "\n")

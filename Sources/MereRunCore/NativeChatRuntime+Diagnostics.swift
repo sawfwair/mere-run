@@ -7,6 +7,7 @@ public struct NativeChatDiagnostics: Sendable {
     public var museDFlash: MuseGlimmerDFlashStats?
     public var nemotronDSpark: NemotronHDSparkStats?
     public var lfm2DSpark: LFM2DSparkStats?
+    public var inkling2DSpark: Inkling2DSparkStats?
 }
 
 extension NativeChatRuntime {
@@ -18,7 +19,8 @@ extension NativeChatRuntime {
         case .textChatMuseGlimmer(let generator, _): result.museDFlash = await generator.dflashStats()
         case .textChatNemotronH(let generator, _): result.nemotronDSpark = await generator.dsparkStats()
         case .textChatLFM2(let generator, _): result.lfm2DSpark = await generator.dsparkStats()
-        case .textChatInkling2, .textChatFlint, .textChatKolibri, .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatQ35,
+        case .textChatInkling2(let generator, _): result.inkling2DSpark = await generator.dsparkStats()
+        case .textChatFlint, .textChatKolibri, .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatQ35,
              .textChatDeepseekV4Flash, .textChatNemotronBolt, .textChatNemotronOmni, .textChatPsi, .textChatInkling:
             break
         }

@@ -21,7 +21,12 @@ enum Inkling2Math {
     }
 
     /// Values as well as keys are normalized before attending over depth.
-    static func residual(_ blocks: [MLXArray], partial: MLXArray, query: MLXArray) -> [MLXArray] {
+    static func residual(_ blocks: [MLXArray], partial: MLXArray, query: MLXArray, fusedDecode: Bool = false) -> [MLXArray] {
+        #if os(macOS)
+        if fusedDecode, blocks.count <= 4 {
+            return Inkling2DecodeResidual.apply(blocks, partial: partial, query: query)
+        }
+        #endif
         let values = rms(stacked(blocks + [partial], axis: -2))
         let q = query.asType(.float32).reshaped(-1, partial.dim(-1))
         let scores = matmul(q, values.swappedAxes(-1, -2)) / sqrt(Float(partial.dim(-1)))

@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Run Inkling 2 Mini text and image chat in Swift/MLX. Install the original
+  mixed NVFP4/MXFP8 checkpoint with `mere.run model pull vision-chat-inkling-2-mini`.
+  The decoder shares weights across three passes through its middle layers
+  and keeps separate attention and convolution state for each pass. On macOS,
+  Mini uses resident packed experts and fused short convolutions on Metal.
+- Use the bundled Inkling 2 Mini DSpark draft by default for eligible sampled
+  requests with resident Metal experts. Mini defaults to temperature `1` and
+  unrestricted sampling. Set `MERERUN_INKLING2_DSPARK=0` to disable drafting.
+
 - Serve Cosmos3-Super 4-Step through `image generate` and the image API.
   `image-cosmos3-super-t2i-4step` previously ran only as
   `video cosmos3 --mode text-to-image`, so `image generate` failed with
