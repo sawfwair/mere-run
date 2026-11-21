@@ -126,9 +126,14 @@ final class Inkling2RuntimeTests: MLXTestCase {
                 codes[($0 + $0 / packedWidth) % codes.count]
             }
             let bytes = MLXArray(data).reshaped(2, outputs, packedWidth)
-            let scales = MLXArray((0..<(2 * outputs * groupCount)).map {
-                nvfp4 ? UInt8($0 % 2 == 0 ? 0x38 : 0x40) : UInt8(126 + $0 % 3)
-            }).reshaped(2, outputs, groupCount)
+            let scaleCount = 2 * outputs * groupCount
+            let scaleBytes = (0..<scaleCount).map { position -> UInt8 in
+                if nvfp4 {
+                    return position.isMultiple(of: 2) ? 0x38 : 0x40
+                }
+                return UInt8(126 + position % 3)
+            }
+            let scales = MLXArray(scaleBytes).reshaped(2, outputs, groupCount)
             let global = MLXArray([Float(0.125), 0.375])
             let projection = Inkling2PackedExperts.Projection(
                 packed: bytes.view(dtype: .uint32), scales: scales, expertScales: nvfp4 ? global : nil
