@@ -82,6 +82,21 @@ Screen Recording access yourself in macOS System Settings.
 Use `--channel` to select a non-default catalog channel and `--force` only when
 you intentionally want to forward a forced reinstall to the package manager.
 
+### Switch a managed package to pipx
+
+On a supported Mac, the catalog install uses the signed bundle. To choose
+pipx for a fresh install, add `--source` to `mere.run plugin install`.
+To switch an active bundle to pipx, review and confirm removal first.
+
+```bash
+mere.run plugin uninstall mere-workflow-tools
+mere.run plugin uninstall mere-workflow-tools --yes
+mere.run plugin install mere-doc-tools --source --yes
+```
+
+Removal affects every plugin in the named package and its retained versions.
+Studio offers the same action under **Remove bundle** in the Plugins view.
+
 ### Update or repair a plugin
 
 To replace a plugin with the selected catalog version, preview the command and

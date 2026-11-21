@@ -217,6 +217,7 @@ let contractExemptCommandIDs: [String: String] = [
     "relay.serve": "Relay console owns the control plane. See apps/macos/README.md.",
     "executor.add.ssh": "Relay console owns executor profiles.",
     "executor.add.relay": "Relay console owns executor profiles.",
+    "plugin.uninstall": "The dedicated Studio Plugins view owns package-wide removal and confirmation.",
     "executor.list": "Relay console owns executor profiles.",
     "executor.inspect": "Relay console owns executor profiles.",
     "executor.probe": "Relay console owns executor profiles.",
