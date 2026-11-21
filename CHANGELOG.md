@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.73.1 - 2026-11-21
+
+- Show the signed Mac install method in the CLI and Studio, retain pipx as an
+  explicit source option, and support removing managed plugin packages from
+  the Plugins view or with `mere.run plugin uninstall`.
+
 ## 0.73.0 - 2026-11-19
 
 - Let unattended macOS test gates reopen synthetic run records while the
