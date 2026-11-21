@@ -2,6 +2,7 @@ import ArgumentParser
 import AudioCore
 import Foundation
 import MediaIO
+import MereRunContract
 import MereRunCore
 
 #if os(macOS)
@@ -130,9 +131,9 @@ struct SpeechConverse: AsyncParsableCommand {
         }
         defer { interrupt.cancel() }
         CLIStderr.write("Conversation started. Press Ctrl-C to stop.\n")
-        try result.append(first)
-        if !first.text.isEmpty { CLIStderr.write(first.text) }
-        try await player.play(first.audio, drain: result.frames == maxFrames)
+        var events = HaruLiveOutput()
+        try events.begin()
+        try await play(first, into: result, using: player, events: &events)
         if result.frames == maxFrames {
             CLIStderr.write("\n")
             return
@@ -144,16 +145,14 @@ struct SpeechConverse: AsyncParsableCommand {
             if result.frames == maxFrames { break }
             pending += samples
             var consumed = 0
-            while pending.count - consumed >= frameSamples, result.frames < maxFrames {
+            while !capture.isStopped, pending.count - consumed >= frameSamples, result.frames < maxFrames {
                 let end = consumed + frameSamples
                 let frame = try await session.step(Array(pending[consumed..<end]))
-                try result.append(frame)
-                if !frame.text.isEmpty { CLIStderr.write(frame.text) }
-                try await player.play(frame.audio, drain: result.frames == maxFrames)
+                try await play(frame, into: result, using: player, events: &events)
                 consumed = end
             }
             pending.removeFirst(consumed)
-            if result.frames == maxFrames { break }
+            if capture.isStopped || result.frames == maxFrames { break }
         }
         if result.frames < maxFrames {
             interrupt.cancel()
@@ -163,14 +162,15 @@ struct SpeechConverse: AsyncParsableCommand {
         }
         CLIStderr.write("\n")
     }
-    #endif
-}
 
-private struct HaruConversationSummary: Encodable {
-    let output: String?
-    let frames: Int
-    let sampleRate: Int
-    let transcript: String
+    private func play(
+        _ frame: HaruAudioFrame, into result: HaruConversationOutput, using player: HaruPlayback, events: inout HaruLiveOutput
+    ) async throws {
+        try result.append(frame)
+        try events.report(frame)
+        try await player.play(frame.audio, drain: result.frames == maxFrames)
+    }
+    #endif
 }
 
 private final class HaruConversationOutput {
@@ -190,6 +190,36 @@ private final class HaruConversationOutput {
 }
 
 #if os(macOS)
+private struct HaruLiveOutput {
+    private static let releaseFrames = 3
+    private static let speechFloorMeanSquare: Float = 0.000_032
+    private let encoder: JSONEncoder? =
+        ProcessInfo.processInfo.environment[HaruConversationEvent.environmentKey] == "1" ? JSONEncoder() : nil
+    private var quietFrames = Self.releaseFrames
+
+    func begin() throws {
+        if let encoder { try emit(.init(.capturing), with: encoder) }
+    }
+
+    mutating func report(_ frame: HaruAudioFrame) throws {
+        if !frame.text.isEmpty { CLIStderr.write(frame.text) }
+        guard let encoder else { return }
+        // PCM includes background noise even between words. A short release keeps brief gaps
+        // between syllables from flickering the playback indicator.
+        let wasSpeaking = quietFrames < Self.releaseFrames
+        let meanSquare = frame.audio.reduce(Float.zero) { $0 + $1 * $1 } / Float(frame.audio.count)
+        quietFrames = meanSquare >= Self.speechFloorMeanSquare ? 0 : min(quietFrames + 1, Self.releaseFrames)
+        let speaking = quietFrames < Self.releaseFrames
+        if speaking != wasSpeaking || !frame.text.isEmpty {
+            try emit(.init(.frame, speaking: speaking, text: frame.text), with: encoder)
+        }
+    }
+
+    private func emit(_ event: HaruConversationEvent, with encoder: JSONEncoder) throws {
+        CLIStdout.write(String(decoding: try encoder.encode(event), as: UTF8.self) + "\n")
+    }
+}
+
 private final class HaruPlayback {
     private let engine = AVAudioEngine()
     private let node = AVAudioPlayerNode()

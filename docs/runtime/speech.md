@@ -38,7 +38,13 @@ zero-padded when needed. On macOS, `--live` uses the system microphone and
 audio output. Use headphones to keep playback out of the microphone. Press
 Ctrl-C to stop. Add `--output reply.wav` to save the model's live audio.
 
-In Studio, open **Haru conversation** in the Command Console.
+In macOS Studio, open **Chat ▸ Conversation** and select **Start conversation**
+to use the system microphone. Under **Conversation setup**, you can choose an
+audio file, a character card, and a voice reference, or have Haru speak first.
+Select **End conversation** to finish a live session. Studio keeps Haru's
+transcript and reply audio in **Saved conversations**, where you can copy the
+transcript, replay the reply, or export the WAV. You can also run Haru from the
+Command Console.
 
 The command reports the frame count, sample rate, transcript, and optional
 audio path as JSON on stdout. Haru-4B downloads about 10.56 GB.
@@ -87,7 +93,7 @@ audio path as JSON on stdout. Haru-4B downloads about 10.56 GB.
 
 ## macOS Studio
 
-Speech is split across two domains. **Voice ▸ Speak** is the prompt task for
+**Voice ▸ Speak** is the prompt task for
 synthesis, styled or cloned: attaching a reference recording to its composer
 well (or picking a saved voice in the inspector) is clone mode, with streaming
 chunk controls and language selection. For Breeze TTS 2 cloning, enter the exact

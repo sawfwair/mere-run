@@ -85,7 +85,7 @@ final class StudioThreadListPresenterTests: XCTestCase {
         XCTAssertEqual(StudioTask.chatCode.mode, .code)
         XCTAssertEqual(StudioMode.code.task, .chatCode)
         XCTAssertEqual(StudioTask.chatCode.domain, .chat)
-        XCTAssertEqual(StudioDomain.chat.tasks, [.chatChat, .chatCode, .chatTrain])
+        XCTAssertEqual(StudioDomain.chat.tasks, [.chatChat, .chatConversation, .chatCode, .chatTrain])
     }
 
     // MARK: Fixtures

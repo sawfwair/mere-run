@@ -22,6 +22,16 @@ package enum StudioCommandChecks {
             return runPlanMessage(draft: draft)
         case MereRunCapabilityCatalog.imageValidate.id:
             return validateMessage(draft: draft)
+        case MereRunCapabilityCatalog.speechConverse.id:
+            let isLive = draft["--live"].flag == true
+            let hasInput = !draft.text("--input").isBlank
+            if isLive == hasInput {
+                return "Choose either the microphone or an audio file."
+            }
+            if !isLive, draft.text("--output").isBlank {
+                return "Choose where to save Haru’s reply."
+            }
+            return nil
         default:
             return nil
         }

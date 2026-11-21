@@ -122,7 +122,14 @@ package enum StudioTaskSchema {
         var optionSlots: [StudioAttachmentSlot] = []
         for option in scope?.options ?? capability.options where [.file, .directory].contains(option.kind) {
             guard StudioContractGroup(contractGroup: option.group) == .inputs, !excluded.contains(option.flag) else { continue }
-            let types: [UTType] = option.kind == .directory ? [.folder] : acceptedTypes(forFlag: option.flag)
+            let types: [UTType]
+            if option.kind == .directory {
+                types = [.folder]
+            } else if templateID == .speechConverse, option.flag == "--input" {
+                types = template.inputKind.allowedTypes
+            } else {
+                types = acceptedTypes(forFlag: option.flag)
+            }
             optionSlots.append(StudioAttachmentSlot(
                 id: option.flag,
                 label: option.label,

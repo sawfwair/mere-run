@@ -25,6 +25,7 @@ extension CommandTemplateID {
         case .speechProfileList, .speechProfileCreate, .speechProfileDelete: return .voiceVoices
         case .imageReconstruct3D, .imageReconstruct3DTrellis2, .imageReconstruct3DMultiview, .visionImageTo3DIdol: return .threeDFromImage
         case .textChat: return .chatChat
+        case .speechConverse: return .chatConversation
         case .textCode: return .chatCode
         case .textTrainLoRA: return .chatTrain
         case .visionInspect, .visionEmbed, .visionCaption: return .visionRead
@@ -40,7 +41,7 @@ extension CommandTemplateID {
         case .visionTrackLive: return .visionLive
         case .speechTranscribe: return .audioTranscribe
         case .speechDiarize: return .audioWhoSpoke
-        case .speechDiarizeLive, .speechConverse: return .audioLive
+        case .speechDiarizeLive: return .audioLive
         case .audioEnhance: return .audioEnhance
         case .audioEdit: return .voiceEdit
         case .speechListen: return .audioLive

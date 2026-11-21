@@ -3,3 +3,6 @@
 haru	console.speechConverse	emitted	--input --live --max-frames --model --output --reference-audio --seed --speak-first --system-prompt-file --temperature
 haru	console.speechConverse	shown	--input --live --max-frames --model --output --reference-audio --seed --speak-first --system-prompt-file --temperature
 haru	console.speechConverse	validated	--input --live --max-frames --model --output --reference-audio --seed --speak-first --system-prompt-file --temperature
+haru	task.speechConverse	emitted	--input --live --max-frames --model --output --reference-audio --seed --speak-first --system-prompt-file --temperature
+haru	task.speechConverse	shown	--input --live --max-frames --model --reference-audio --seed --speak-first --system-prompt-file --temperature
+haru	task.speechConverse	validated	--input --live --max-frames --model --output --reference-audio --seed --speak-first --system-prompt-file --temperature
