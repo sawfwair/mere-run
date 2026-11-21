@@ -24,7 +24,7 @@ final class PluginCommandTests: XCTestCase {
     func testPluginCommandExposesCatalogSubcommands() {
         let commandNames = Set(Plugin.configuration.subcommands.map { $0.configuration.commandName })
 
-        XCTAssertEqual(commandNames, Set(["list", "info", "install", "doctor", "run", "rollback"]))
+        XCTAssertEqual(commandNames, Set(["list", "info", "install", "doctor", "run", "rollback", "uninstall"]))
     }
 
     func testDefaultCatalogTargetsPublicPluginRepository() {
@@ -221,8 +221,11 @@ final class PluginCommandTests: XCTestCase {
         XCTAssertTrue(sourcePlan.contains("  \(PluginInstallCommand.render(install: install))"))
         XCTAssertTrue(sourcePlan.contains("  mere-computer-use setup --yes"))
 
-        XCTAssertTrue(PluginInfo.summary(plugin: plugin, install: install, channel: "main")
-            .contains("  mere-computer-use setup --yes"))
+        let supportsBundle = install.bundles?[PluginBundleInstaller.platform] != nil
+        let summary = PluginInfo.summary(plugin: plugin, install: install, channel: "main")
+        XCTAssertTrue(summary.contains(supportsBundle ? "  \(managedSetup)" : "  mere-computer-use setup --yes"))
+        XCTAssertTrue(summary.contains { $0.contains("plugin install mere-computer-use") && $0.contains("--yes") })
+        XCTAssertEqual(summary.contains { $0.contains("--source") }, !supportsBundle)
 
         var withoutSetup = install
         withoutSetup.setup = nil
