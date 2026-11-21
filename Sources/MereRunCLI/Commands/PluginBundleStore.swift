@@ -38,7 +38,8 @@ struct PluginBundleStore {
             throw ValidationError("Plugin bundle size or SHA-256 does not match the signed release. Installation stopped.")
         }
         return try locked {
-            let old = try state(package)
+            let active = try state(package)
+            let old = try active ?? readState(package, named: "inactive.json")
             if let old {
                 guard manifest.sequence >= old.highestSequence,
                       manifest.sequence != old.highestSequence || old.current == manifest.artifact.sha256
@@ -70,7 +71,7 @@ struct PluginBundleStore {
             try verifyPlatform(app, manifest)
             try smoke(app, manifest)
             let next = State(current: manifest.artifact.sha256,
-                             previous: old?.current == manifest.artifact.sha256 ? old?.previous : old?.current,
+                             previous: active?.current == manifest.artifact.sha256 ? active?.previous : active?.current,
                              highestSequence: max(old?.highestSequence ?? 0, manifest.sequence))
             try save(next, package: package)
             return manifest
@@ -116,11 +117,39 @@ struct PluginBundleStore {
         return nil
     }
 
+    func uninstall(package: String) throws {
+        try locked {
+            let directory = packageURL(package)
+            if try state(package) != nil {
+                let active = directory.appendingPathComponent("active.json")
+                let inactive = directory.appendingPathComponent("inactive.json")
+                guard rename(active.path, inactive.path) == 0 else {
+                    throw ValidationError("Could not deactivate the managed bundle for \(package).")
+                }
+            } else if try readState(package, named: "inactive.json") == nil {
+                throw ValidationError("No managed bundle is installed for \(package).")
+            }
+            let versions = directory.appendingPathComponent("versions")
+            if FileManager.default.fileExists(atPath: versions.path) {
+                try FileManager.default.removeItem(at: versions)
+            }
+        }
+    }
+
+    func entrypoints(in package: String) throws -> [String] {
+        guard let state = try state(package) else { return [] }
+        return try receipt(package, state.current).entrypoints.keys.sorted()
+    }
+
     func state(_ package: String) throws -> State? {
+        try readState(package, named: "active.json")
+    }
+
+    private func readState(_ package: String, named filename: String) throws -> State? {
         guard PluginBundleManifest.matches(package, "^mere-[a-z0-9-]+$") else {
             throw ValidationError("Invalid plugin bundle package identifier.")
         }
-        let url = packageURL(package).appendingPathComponent("active.json")
+        let url = packageURL(package).appendingPathComponent(filename)
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         let value = try JSONDecoder().decode(State.self, from: Data(contentsOf: url))
         guard PluginBundleManifest.matches(value.current, "^[0-9a-f]{64}$"),

@@ -15,6 +15,7 @@ struct Plugin: ParsableCommand {
             PluginDoctor.self,
             PluginRun.self,
             PluginRollback.self,
+            PluginUninstall.self,
         ]
     )
 }
@@ -50,7 +51,8 @@ struct PluginList: ParsableCommand {
             print("\(plugin.id) [\(status)]")
             print("  \(plugin.description)")
             print("  command: \(plugin.entrypoint)")
-            print("  install: \(PluginInstallCommand.render(install: install))")
+            let display = install.displayCommand(plugin: plugin.id, catalog: catalog.source, channel: catalog.defaultChannel)
+            print("  install: \(display)")
             if installation.installed, !installation.verified {
                 let diagnosis = PluginInstallationFailureDiagnosis.make(
                     plugin: plugin,
@@ -93,10 +95,11 @@ struct PluginInfo: ParsableCommand {
             return
         }
 
-        print(Self.summary(plugin: plugin, install: install, channel: resolvedChannel).joined(separator: "\n"))
+        print(Self.summary(plugin: plugin, install: install, channel: resolvedChannel, catalog: catalog.source).joined(separator: "\n"))
     }
 
-    static func summary(plugin: PluginCatalogEntry, install: PluginCatalogInstall, channel: String) -> [String] {
+    static func summary(plugin: PluginCatalogEntry, install: PluginCatalogInstall, channel: String,
+                        catalog: String = PluginCatalogClient.defaultCatalogURL) -> [String] {
         var lines = [
             "\(plugin.id): \(plugin.name)",
             plugin.description,
@@ -108,9 +111,10 @@ struct PluginInfo: ParsableCommand {
             "Channel: \(channel)",
             "",
             "Install command:",
-            "  \(PluginInstallCommand.render(install: install))",
+            "  \(install.displayCommand(plugin: plugin.id, catalog: catalog, channel: channel))",
         ]
-        if let setup = PluginSetupCommand.render(install: install, entrypoint: plugin.entrypoint) {
+        let managed = install.bundles?[PluginBundleInstaller.platform] != nil
+        if let setup = PluginSetupCommand.render(install: install, entrypoint: plugin.entrypoint, managed: managed) {
             lines += ["Setup command (plugin install --yes runs it after verification):", "  \(setup)"]
         }
         return lines
@@ -213,8 +217,8 @@ struct PluginInstall: ParsableCommand {
     static func installSource(plugin: PluginCatalogEntry, command: PluginInstallCommand) throws -> PluginManifest {
         guard try PluginBundleStore.standard.state(plugin.package) == nil else {
             throw ValidationError(
-                "A signed bundle is active for \(plugin.package). Supply its signed release manifest or use plugin rollback. "
-                    + "A pipx source install cannot replace an active managed bundle; existing PATH commands remain available."
+                "A signed bundle is active for \(plugin.package). To switch to pipx, run "
+                    + "mere.run plugin uninstall \(plugin.package) to review the removal, then confirm it with --yes."
             )
         }
         try command.run(package: plugin.package)
@@ -328,6 +332,16 @@ struct PluginCatalogInstall: Codable, Equatable {
     var setup: Bool?
 }
 
+extension PluginCatalogInstall {
+    func displayCommand(plugin: String, catalog: String, channel: String) -> String {
+        guard bundles?.isEmpty == false else { return PluginInstallCommand.render(install: self) }
+        let catalogArgument = catalog == PluginCatalogClient.defaultCatalogURL ? "" : " --catalog-url \(ShellCommand.quote(catalog))"
+        let sourceArgument = bundles?[PluginBundleInstaller.platform] == nil ? " --source" : ""
+        let command = "plugin install \(ShellCommand.quote(plugin)) --channel \(ShellCommand.quote(channel))"
+        return CLICommandDisplay.command(command + catalogArgument + sourceArgument + " --yes")
+    }
+}
+
 /// The optional fixed `setup --yes` verb a verified plugin runs after installation.
 enum PluginSetupCommand {
     static let arguments = ["setup", "--yes"]
@@ -398,7 +412,9 @@ struct PluginCatalogSnapshot: Codable, Equatable {
                     installedVersion: installation.version,
                     installedPath: installation.path,
                     verificationError: installation.error,
-                    installCommand: install.map(PluginInstallCommand.render)
+                    managed: (try? PluginBundleStore.standard.state(plugin.package)) != nil,
+                    installCommand: install?.displayCommand(plugin: plugin.id, catalog: catalog.source,
+                                                            channel: catalog.defaultChannel)
                 )
             }
         )
@@ -420,6 +436,7 @@ struct PluginCatalogSnapshotEntry: Codable, Equatable {
     let installedVersion: String?
     let installedPath: String?
     let verificationError: String?
+    let managed: Bool
     let installCommand: String?
 }
 
