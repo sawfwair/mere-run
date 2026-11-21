@@ -10,14 +10,16 @@ extension Flux2KleinGenerator {
         standalone: Bool,
         progressHandler: (@Sendable (ChatProgress) -> Void)? = nil
     ) async throws {
-        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading model"))
-        if loadedModelPath == modelPath, textEncoder != nil, tokenizer != nil {
-            return
-        }
-        if standalone {
-            try await loadStandaloneChatModel(from: modelPath, progressHandler: progressHandler)
-        } else {
-            try await loadTextEncoderOnly(from: modelPath, progressHandler: progressHandler)
+        try await withRequestStream {
+            progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading model"))
+            if loadedModelPath == modelPath, textEncoder != nil, tokenizer != nil {
+                return
+            }
+            if standalone {
+                try await loadStandaloneChatModel(from: modelPath, progressHandler: progressHandler)
+            } else {
+                try await loadTextEncoderOnly(from: modelPath, progressHandler: progressHandler)
+            }
         }
     }
 
@@ -27,177 +29,71 @@ extension Flux2KleinGenerator {
         modelPath: String,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> ChatResponse {
-        let debugLog = MereRunRuntimeDebug.logger(keys: ["MERERUN_FLUX2_DEBUG"], prefix: "[Flux2KleinGenerator]")
-        debugLog?("chat: starting")
-        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading model"))
+        try await withRequestStream {
+            let debugLog = MereRunRuntimeDebug.logger(keys: ["MERERUN_FLUX2_DEBUG"], prefix: "[Flux2KleinGenerator]")
+            debugLog?("chat: starting")
+            progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading model"))
 
-        // Load model if needed (only text encoder + tokenizer for chat)
-        if loadedModelPath != modelPath {
-            debugLog?("chat: loading model from \(modelPath)")
-            try await loadTextEncoderOnly(from: modelPath, progressHandler: progressHandler)
-        }
-        debugLog?("chat: model loaded")
-
-        guard let textEncoder = textEncoder,
-              let tokenizer = tokenizer else {
-            throw Flux2Error.modelsNotLoaded
-        }
-
-        // Apply text LoRA (game cartridge) if specified
-        try await applyTextLoRAIfNeeded(request.lora, modelPath: modelPath, progressHandler: progressHandler)
-
-        debugLog?("chat: encoding messages")
-        progressHandler?(ChatProgress(stage: .encoding, message: "Encoding messages"))
-
-        // Convert ChatMessage array to tokenizer format
-        let messages: [[String: Any]] = request.messages.map { msg in
-            var dict: [String: Any] = [
-                "role": msg.role.rawValue,
-                "content": msg.content
-            ]
-            if let imageUrl = msg.imageUrl {
-                dict["image_url"] = imageUrl
+            // Load model if needed (only text encoder + tokenizer for chat)
+            if loadedModelPath != modelPath {
+                debugLog?("chat: loading model from \(modelPath)")
+                try await loadTextEncoderOnly(from: modelPath, progressHandler: progressHandler)
             }
-            return dict
-        }
+            debugLog?("chat: model loaded")
 
-        // Encode messages for generation
-        debugLog?("chat: tokenizing \(messages.count) messages")
-        let tokens = try tokenizer.encodeChatForGeneration(
-            messages: messages,
-            maxLength: tokenizer.maxLength
-        )
-        debugLog?("chat: got \(tokens.count) tokens")
-        let inputIds = MLXArray(tokens.map { Int32($0) }).reshaped(1, tokens.count)
-
-        debugLog?("chat: starting generation")
-        progressHandler?(ChatProgress(stage: .generating, message: "Generating response"))
-
-        // Configure generation
-        let config = PromptEnhanceConfig(
-            maxNewTokens: request.maxTokens,
-            temperature: Float(request.temperature),
-            topP: 0.9,
-            repetitionPenalty: 1.05,
-            repetitionContextSize: 20,
-            eosTokenId: tokenizer.eosTokenId ?? 151645,
-            stopTokenIds: Set([tokenizer.eosTokenId ?? 151645, 151643])
-        )
-
-        // Retry loop for JSON validation
-        let maxRetries = request.requiresJSON ? 3 : 1
-        var lastResponse: String = ""
-
-        for attempt in 1...maxRetries {
-        // Generate response
-        debugLog?("chat: calling generate with maxTokens=\(request.maxTokens) (attempt \(attempt)/\(maxRetries))")
-        lastResponse = ""
-        let generatedTokens = textEncoder.generate(inputIds: inputIds, config: config) { token in
-            let piece = tokenizer.decode(tokens: [token])
-            if !piece.isEmpty {
-                lastResponse += piece
-                progressHandler?(ChatProgress(stage: .generating, message: piece))
+            guard let textEncoder = textEncoder,
+                  let tokenizer = tokenizer else {
+                throw Flux2Error.modelsNotLoaded
             }
-            return true
-        }
-        debugLog?("chat: generated \(generatedTokens.count) tokens")
 
-        // Preserve previous behavior of normalizing response whitespace.
-        lastResponse = lastResponse.trimmingCharacters(in: .whitespacesAndNewlines)
-            debugLog?("chat: decoded response length=\(lastResponse.count)")
-            debugLog?("chat: response=\(lastResponse)")
+            // Apply text LoRA (game cartridge) if specified
+            try await applyTextLoRAIfNeeded(request.lora, modelPath: modelPath, progressHandler: progressHandler)
 
-            // If JSON is required, validate it
-            if request.requiresJSON {
-                if isValidJSON(lastResponse) {
-                    debugLog?("chat: JSON validation passed")
-                    return ChatResponse(
-                        generatedText: lastResponse,
-                        tokensGenerated: generatedTokens.count,
-                        showThinking: request.showThinking
-                    )
-                } else {
-                    debugLog?("chat: JSON validation failed, attempt \(attempt)/\(maxRetries)")
-                    if attempt < maxRetries {
-                        progressHandler?(ChatProgress(stage: .generating, message: "Retrying generation"))
-                    }
+            debugLog?("chat: encoding messages")
+            progressHandler?(ChatProgress(stage: .encoding, message: "Encoding messages"))
+
+            // Convert ChatMessage array to tokenizer format
+            let messages: [[String: Any]] = request.messages.map { msg in
+                var dict: [String: Any] = [
+                    "role": msg.role.rawValue,
+                    "content": msg.content
+                ]
+                if let imageUrl = msg.imageUrl {
+                    dict["image_url"] = imageUrl
                 }
-            } else {
-                return ChatResponse(
-                    generatedText: lastResponse,
-                    tokensGenerated: generatedTokens.count,
-                    showThinking: request.showThinking
-                )
+                return dict
             }
-        }
 
-        // All retries exhausted - return last response anyway
-        debugLog?("chat: JSON validation failed after \(maxRetries) attempts, returning last response")
-        return ChatResponse(
-            generatedText: lastResponse,
-            tokensGenerated: 0,
-            showThinking: request.showThinking
-        )
-    }
+            // Encode messages for generation
+            debugLog?("chat: tokenizing \(messages.count) messages")
+            let tokens = try tokenizer.encodeChatForGeneration(
+                messages: messages,
+                maxLength: tokenizer.maxLength
+            )
+            debugLog?("chat: got \(tokens.count) tokens")
+            let inputIds = MLXArray(tokens.map { Int32($0) }).reshaped(1, tokens.count)
 
-    /// Chat using a standalone Qwen3-Instruct model (no FLUX text encoder).
-    public func chatStandalone(
-        _ request: ChatRequest,
-        modelPath: String,
-        progressHandler: (@Sendable (ChatProgress) -> Void)?
-    ) async throws -> ChatResponse {
-        let debugLog = MereRunRuntimeDebug.logger(keys: ["MERERUN_FLUX2_DEBUG"], prefix: "[Flux2KleinGenerator]")
-        debugLog?("chatStandalone: starting")
-        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading model"))
+            debugLog?("chat: starting generation")
+            progressHandler?(ChatProgress(stage: .generating, message: "Generating response"))
 
-        if loadedModelPath != modelPath {
-            debugLog?("chatStandalone: loading standalone model from \(modelPath)")
-            try await loadStandaloneChatModel(from: modelPath, progressHandler: progressHandler)
-        }
+            // Configure generation
+            let config = PromptEnhanceConfig(
+                maxNewTokens: request.maxTokens,
+                temperature: Float(request.temperature),
+                topP: 0.9,
+                repetitionPenalty: 1.05,
+                repetitionContextSize: 20,
+                eosTokenId: tokenizer.eosTokenId ?? 151645,
+                stopTokenIds: Set([tokenizer.eosTokenId ?? 151645, 151643])
+            )
 
-        guard let textEncoder = textEncoder,
-              let tokenizer = tokenizer else {
-            throw Flux2Error.modelsNotLoaded
-        }
+            // Retry loop for JSON validation
+            let maxRetries = request.requiresJSON ? 3 : 1
+            var lastResponse: String = ""
 
-        try await applyTextLoRAIfNeeded(request.lora, modelPath: modelPath, progressHandler: progressHandler)
-
-        debugLog?("chatStandalone: encoding messages")
-        progressHandler?(ChatProgress(stage: .encoding, message: "Encoding messages"))
-
-        let messages: [[String: Any]] = request.messages.map { msg in
-            var dict: [String: Any] = [
-                "role": msg.role.rawValue,
-                "content": msg.content
-            ]
-            if let imageUrl = msg.imageUrl {
-                dict["image_url"] = imageUrl
-            }
-            return dict
-        }
-
-        let tokens = try tokenizer.encodeChatForGeneration(
-            messages: messages,
-            maxLength: tokenizer.maxLength
-        )
-        let inputIds = MLXArray(tokens.map { Int32($0) }).reshaped(1, tokens.count)
-
-        progressHandler?(ChatProgress(stage: .generating, message: "Generating response"))
-
-        let config = PromptEnhanceConfig(
-            maxNewTokens: request.maxTokens,
-            temperature: Float(request.temperature),
-            topP: 0.9,
-            repetitionPenalty: 1.05,
-            repetitionContextSize: 20,
-            eosTokenId: tokenizer.eosTokenId ?? 151645,
-            stopTokenIds: Set([tokenizer.eosTokenId ?? 151645, 151643])
-        )
-
-        let maxRetries = request.requiresJSON ? 3 : 1
-        var lastResponse: String = ""
-
-        for attempt in 1...maxRetries {
+            for attempt in 1...maxRetries {
+            // Generate response
+            debugLog?("chat: calling generate with maxTokens=\(request.maxTokens) (attempt \(attempt)/\(maxRetries))")
             lastResponse = ""
             let generatedTokens = textEncoder.generate(inputIds: inputIds, config: config) { token in
                 let piece = tokenizer.decode(tokens: [token])
@@ -207,33 +103,143 @@ extension Flux2KleinGenerator {
                 }
                 return true
             }
+            debugLog?("chat: generated \(generatedTokens.count) tokens")
 
+            // Preserve previous behavior of normalizing response whitespace.
             lastResponse = lastResponse.trimmingCharacters(in: .whitespacesAndNewlines)
+                debugLog?("chat: decoded response length=\(lastResponse.count)")
+                debugLog?("chat: response=\(lastResponse)")
 
-            if request.requiresJSON {
-                if isValidJSON(lastResponse) {
+                // If JSON is required, validate it
+                if request.requiresJSON {
+                    if isValidJSON(lastResponse) {
+                        debugLog?("chat: JSON validation passed")
+                        return ChatResponse(
+                            generatedText: lastResponse,
+                            tokensGenerated: generatedTokens.count,
+                            showThinking: request.showThinking
+                        )
+                    } else {
+                        debugLog?("chat: JSON validation failed, attempt \(attempt)/\(maxRetries)")
+                        if attempt < maxRetries {
+                            progressHandler?(ChatProgress(stage: .generating, message: "Retrying generation"))
+                        }
+                    }
+                } else {
                     return ChatResponse(
                         generatedText: lastResponse,
                         tokensGenerated: generatedTokens.count,
                         showThinking: request.showThinking
                     )
-                } else if attempt < maxRetries {
-                    progressHandler?(ChatProgress(stage: .generating, message: "Retrying generation"))
                 }
-            } else {
-                return ChatResponse(
-                    generatedText: lastResponse,
-                    tokensGenerated: generatedTokens.count,
-                    showThinking: request.showThinking
-                )
             }
-        }
 
-        return ChatResponse(
-            generatedText: lastResponse,
-            tokensGenerated: 0,
-            showThinking: request.showThinking
-        )
+            // All retries exhausted - return last response anyway
+            debugLog?("chat: JSON validation failed after \(maxRetries) attempts, returning last response")
+            return ChatResponse(
+                generatedText: lastResponse,
+                tokensGenerated: 0,
+                showThinking: request.showThinking
+            )
+        }
+    }
+
+    /// Chat using a standalone Qwen3-Instruct model (no FLUX text encoder).
+    public func chatStandalone(
+        _ request: ChatRequest,
+        modelPath: String,
+        progressHandler: (@Sendable (ChatProgress) -> Void)?
+    ) async throws -> ChatResponse {
+        try await withRequestStream {
+            let debugLog = MereRunRuntimeDebug.logger(keys: ["MERERUN_FLUX2_DEBUG"], prefix: "[Flux2KleinGenerator]")
+            debugLog?("chatStandalone: starting")
+            progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading model"))
+
+            if loadedModelPath != modelPath {
+                debugLog?("chatStandalone: loading standalone model from \(modelPath)")
+                try await loadStandaloneChatModel(from: modelPath, progressHandler: progressHandler)
+            }
+
+            guard let textEncoder = textEncoder,
+                  let tokenizer = tokenizer else {
+                throw Flux2Error.modelsNotLoaded
+            }
+
+            try await applyTextLoRAIfNeeded(request.lora, modelPath: modelPath, progressHandler: progressHandler)
+
+            debugLog?("chatStandalone: encoding messages")
+            progressHandler?(ChatProgress(stage: .encoding, message: "Encoding messages"))
+
+            let messages: [[String: Any]] = request.messages.map { msg in
+                var dict: [String: Any] = [
+                    "role": msg.role.rawValue,
+                    "content": msg.content
+                ]
+                if let imageUrl = msg.imageUrl {
+                    dict["image_url"] = imageUrl
+                }
+                return dict
+            }
+
+            let tokens = try tokenizer.encodeChatForGeneration(
+                messages: messages,
+                maxLength: tokenizer.maxLength
+            )
+            let inputIds = MLXArray(tokens.map { Int32($0) }).reshaped(1, tokens.count)
+
+            progressHandler?(ChatProgress(stage: .generating, message: "Generating response"))
+
+            let config = PromptEnhanceConfig(
+                maxNewTokens: request.maxTokens,
+                temperature: Float(request.temperature),
+                topP: 0.9,
+                repetitionPenalty: 1.05,
+                repetitionContextSize: 20,
+                eosTokenId: tokenizer.eosTokenId ?? 151645,
+                stopTokenIds: Set([tokenizer.eosTokenId ?? 151645, 151643])
+            )
+
+            let maxRetries = request.requiresJSON ? 3 : 1
+            var lastResponse: String = ""
+
+            for attempt in 1...maxRetries {
+                lastResponse = ""
+                let generatedTokens = textEncoder.generate(inputIds: inputIds, config: config) { token in
+                    let piece = tokenizer.decode(tokens: [token])
+                    if !piece.isEmpty {
+                        lastResponse += piece
+                        progressHandler?(ChatProgress(stage: .generating, message: piece))
+                    }
+                    return true
+                }
+
+                lastResponse = lastResponse.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                if request.requiresJSON {
+                    if isValidJSON(lastResponse) {
+                        return ChatResponse(
+                            generatedText: lastResponse,
+                            tokensGenerated: generatedTokens.count,
+                            showThinking: request.showThinking
+                        )
+                    } else if attempt < maxRetries {
+                        progressHandler?(ChatProgress(stage: .generating, message: "Retrying generation"))
+                    }
+                } else {
+                    return ChatResponse(
+                        generatedText: lastResponse,
+                        tokensGenerated: generatedTokens.count,
+                        showThinking: request.showThinking
+                    )
+                }
+            }
+
+            return ChatResponse(
+                generatedText: lastResponse,
+                tokensGenerated: 0,
+                showThinking: request.showThinking
+            )
+        }
     }
 
     /// Check if the response is valid JSON (possibly wrapped in markdown code blocks)
