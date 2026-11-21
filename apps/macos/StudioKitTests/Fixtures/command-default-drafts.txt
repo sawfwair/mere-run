@@ -179,7 +179,7 @@ sfxVideo	model	sfx-woosh-dvflow-8s
 sfxVideo	outputPath	~/Music/mere.run/Sound/video-foley-<stamp>.wav
 sfxVideo	prompt	footsteps on gravel
 speechConverse	model	speech-haru-4b
-speechConverse	outputPath	~/Music/mere.run/Audio/haru-conversation-<stamp>.wav
+speechConverse	outputPath	~/Music/mere.run/Chat/haru-conversation-<stamp>.wav
 speechDiarize	model	speech-diarization-sortformer
 speechDiarize	outputPath	~/Documents/mere.run/Audio/diarize-speakers-<stamp>.json
 speechDiarize	quiet	true

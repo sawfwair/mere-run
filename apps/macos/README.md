@@ -52,8 +52,8 @@ Models ▸ Installed's Download… catalog, and the Guide. Everything else that
 interrupts is an alert or a confirmation dialog — third-party model terms,
 removals, thread rename, Library delete, and a bad `mererun://` link.
 
-The 59 tasks use six surface archetypes: 10 Generate, 2 Converse, 28 Analyze,
-7 Session, 4 Project, and 8 Manage.
+The 60 tasks use six surface archetypes: 10 Generate, 2 Converse, 28 Analyze,
+8 Session, 4 Project, and 8 Manage.
 
 - Twelve **prompt tasks** back a `StudioMode` and render the composer, a canvas,
   and the Library column: Image ▸ Generate, Video ▸ Generate, Music ▸ Compose,
@@ -73,8 +73,8 @@ The 59 tasks use six surface archetypes: 10 Generate, 2 Converse, 28 Analyze,
 - Text ▸ Decide, Classify, and Extract are Analyze tasks that keep their own
   request editors and result panes.
 - The remaining tasks use their own Session, Project, or Manage surface: the
-  three Train projects, Video ▸ Animate, Music ▸ Realtime, Audio ▸ Live,
-  Vision ▸ Live, Voice ▸ Voices, Models, Server, Runs, and Plugins.
+  three Train projects, Video ▸ Animate, Music ▸ Realtime, Chat ▸ Conversation,
+  Audio ▸ Live, Vision ▸ Live, Voice ▸ Voices, Models, Server, Runs, and Plugins.
 
 Operation, Engine, and Backend selectors have visible labels above the composer's
 setting chips and at the top of the inspector. Choose the operation first, then
@@ -768,6 +768,12 @@ it reaches the next prompt. The transcript follows new output only while the
 reader is at the bottom; scrolling up stops the following and a **Jump to
 latest** pill brings it back. Deleting a thread from its context menu asks
 first, naming the thread.
+
+**Chat ▸ Conversation** runs Haru-4B as a spoken session. Use the default
+microphone or choose an audio file in **Conversation setup**. The live workspace
+shows microphone and Haru audio activity and streams Haru's words. **End
+conversation** interrupts the CLI so it can finalize its WAV and transcript.
+Saved conversations can be replayed or exported from the workspace.
 
 ## Inspector, Command view, and Command Console
 

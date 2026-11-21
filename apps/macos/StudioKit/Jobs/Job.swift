@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import MereRunContract
 
 /// Identity of one job for the lifetime of the app session. Distinct from the durable Studio
 /// request id (`JobRequest.requestID`), which names a library row and may be re-run.
@@ -469,6 +470,9 @@ package final class Job: ObservableObject, Identifiable {
     /// far when the turn shows thinking, and whether the model is still inside a reasoning block.
     /// nil for other jobs and once finished.
     @Published package private(set) var conversationLiveReply: ConversationTranscript.Reply?
+    @Published package private(set) var haruLiveOutput: StudioHaruLiveOutput?
+    /// Older CLIs report successful capture on stderr without emitting structured events.
+    @Published package private(set) var haruLegacyCaptureStarted = false
     @Published package private(set) var result: JobResult?
     /// When the process launched; nil for jobs that never ran (queued, cancelled early, preflight).
     package private(set) var startedAt: Date?
@@ -498,6 +502,7 @@ package final class Job: ObservableObject, Identifiable {
     /// whole accumulator on every chunk (it would otherwise be O(n²) over a long reply).
     private var lastLiveStripLength = 0
     private var interactiveOutputBuffer = ""
+    private var haruEventBuffer = ""
 
     private static let stdoutBufferByteLimit = 32 * 1024
     private static let stderrBufferByteLimit = 32 * 1024
@@ -590,7 +595,9 @@ package final class Job: ObservableObject, Identifiable {
 
     /// Consumes one chunk of process output: buffers it, parses progress, updates the live pane
     /// and interactive-session status, and appends the remaining lines to the log.
-    package func consume(_ text: String, stream: LogStream, resolver: ArtifactResolver) {
+    package func consume(_ chunk: String, stream: LogStream, resolver: ArtifactResolver) {
+        let text = stream == .stdout && request.templateID == .speechConverse ? consumeHaruEvents(chunk) : chunk
+        guard !text.isEmpty else { return }
         switch stream {
         case .stdout:
             if request.templateID == .videoSession {
@@ -598,7 +605,7 @@ package final class Job: ObservableObject, Identifiable {
             }
             stdoutBuffer = Self.trimmed(stdoutBuffer + text, toByteLimit: Self.stdoutBufferByteLimit)
             liveText = stdoutBuffer.replacingOccurrences(of: "\0", with: "")
-            if isConversationTurn || isRawCommand {
+            if isConversationTurn || isRawCommand || request.templateID == .speechConverse {
                 fullOutput += text
             }
             if isConversationTurn {
@@ -628,6 +635,10 @@ package final class Job: ObservableObject, Identifiable {
             }
         case .stderr:
             stderrBuffer = Self.trimmed(stderrBuffer + text, toByteLimit: Self.stderrBufferByteLimit)
+            if request.templateID == .speechConverse, haruLiveOutput == nil, !haruLegacyCaptureStarted,
+               stderrBuffer.contains("Conversation started. Press Ctrl-C to stop.") {
+                haruLegacyCaptureStarted = true
+            }
             if isRawCommand {
                 fullErrorOutput += text
             }
@@ -661,6 +672,28 @@ package final class Job: ObservableObject, Identifiable {
             if StudioRunReceipt.isReceiptLine(line) { continue }
             log.append(LogLine(stream: stream, text: line))
         }
+    }
+
+    /// Haru writes JSON lines, but the process runner can split a line across multiple reads.
+    /// Keep transport events out of the console and preserve the final summary in full.
+    private func consumeHaruEvents(_ chunk: String) -> String {
+        haruEventBuffer += chunk
+        guard let lastNewline = haruEventBuffer.lastIndex(of: "\n") else { return "" }
+        let lines = haruEventBuffer[..<lastNewline].split(separator: "\n", omittingEmptySubsequences: false)
+        haruEventBuffer = String(haruEventBuffer[haruEventBuffer.index(after: lastNewline)...])
+        var activity = haruLiveOutput
+        var output = ""
+        let decoder = JSONDecoder()
+        for line in lines {
+            if let event = try? decoder.decode(HaruConversationEvent.self, from: Data(line.utf8)) {
+                if activity == nil { activity = StudioHaruLiveOutput() }
+                activity?.apply(event)
+            } else {
+                output += line + "\n"
+            }
+        }
+        if activity != haruLiveOutput { haruLiveOutput = activity }
+        return output
     }
 
     /// Re-runs output detection against what has been written so far. Returns true when a new
@@ -722,7 +755,9 @@ package final class Job: ObservableObject, Identifiable {
             // The receipt is the app's own transport, not part of the run's output: it must not
             // land in a library row or in a transcript the CLI printed to stdout.
             outputText = Self.capturedResultText(
-                stdout: StudioRunReceipt.strippingReceiptLines(from: stdoutBuffer),
+                stdout: StudioRunReceipt.strippingReceiptLines(
+                    from: request.templateID == .speechConverse ? fullOutput : stdoutBuffer
+                ),
                 stderr: stderrBuffer,
                 exitCode: exitCode
             )

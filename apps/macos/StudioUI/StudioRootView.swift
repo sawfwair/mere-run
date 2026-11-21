@@ -795,6 +795,8 @@ private struct StudioWorkspaceView: View {
             StudioVoicesView()
         case .visionLive:
             StudioLiveTrackSession(models: models)
+        case .chatConversation:
+            StudioHaruConversation(models: models, jobMonitor: jobMonitor)
         case .audioLive:
             StudioLiveListenSession(models: models)
         case .textDecide:

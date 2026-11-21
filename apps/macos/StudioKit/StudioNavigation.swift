@@ -74,7 +74,7 @@ package enum StudioDomain: String, CaseIterable, Codable, Identifiable {
         case .sound: return "Sound effects from prompts, Foley, and scoring"
         case .voice: return "Speech with cloned and saved voices"
         case .threeD: return "Meshes, depth, and scene geometry"
-        case .chat: return "Chat with a local model on this Mac"
+        case .chat: return "Text and spoken conversations on this Mac"
         case .vision: return "Read, find, and track in images and video"
         case .audio: return "Transcribe, identify speakers, and enhance"
         case .text: return "Embed, anonymize, classify, and extract"
@@ -148,13 +148,13 @@ package enum StudioDomain: String, CaseIterable, Codable, Identifiable {
             self = .sound
         case .speechSynthesize, .speechProfileList, .speechProfileCreate, .speechProfileDelete, .audioEdit:
             self = .voice
-        case .textChat, .textCode, .textTrainLoRA:
+        case .textChat, .textCode, .textTrainLoRA, .speechConverse:
             self = .chat
         case .visionInspect, .visionEmbed, .visionCaption, .visionOCR, .visionGround, .visionSegment,
              .visionTrack, .visionTrackLive, .visionFaceDetect, .visionFaceEmbed, .visionFaceCompare,
              .visionFaceBatch, .visionPose, .visionFlow:
             self = .vision
-        case .speechTranscribe, .speechDiarize, .speechDiarizeLive, .speechListen, .speechConverse, .audioEnhance:
+        case .speechTranscribe, .speechDiarize, .speechDiarizeLive, .speechListen, .audioEnhance:
             self = .audio
         case .textEmbed, .textAnonymize, .textDecide, .textClassify, .textExtract:
             self = .text
@@ -217,6 +217,7 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
     case visionGeometry = "vision.geometry"
 
     case chatChat = "chat.chat"
+    case chatConversation = "chat.conversation"
     case chatCode = "chat.code"
     case chatTrain = "chat.train"
 
@@ -272,7 +273,7 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
         case .soundGenerate, .soundFoley, .soundScore, .soundLatents: return .sound
         case .voiceSpeak, .voiceEdit, .voiceVoices: return .voice
         case .threeDFromImage, .visionDepth, .visionGeometry: return .threeD
-        case .chatChat, .chatCode, .chatTrain: return .chat
+        case .chatChat, .chatConversation, .chatCode, .chatTrain: return .chat
         case .visionRead, .visionFind, .visionSegment, .visionTrack, .visionDocument, .visionFaces,
              .visionPose, .visionFlow, .visionLive:
             return .vision
@@ -308,6 +309,7 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
         case .voiceVoices: return "Voices"
         case .threeDFromImage: return "From image"
         case .chatChat: return "Chat"
+        case .chatConversation: return "Conversation"
         case .chatCode: return "Code"
         case .visionRead: return "Read"
         case .visionFind: return "Find"
