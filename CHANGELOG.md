@@ -6,6 +6,18 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.74.0 - 2026-11-21
+
+- Add a Haru conversation workspace under Studio's Chat section. Start a live
+  microphone conversation or respond to an audio file, choose a character card
+  and voice reference, follow the live transcript, and replay saved replies.
+  End a conversation through the running job so cleanup and saved results stay
+  coordinated when navigating between tasks.
+
+- Lease reusable MLX request streams throughout FLUX.2 Klein generation and
+  editing. Keep execution, cache cleanup, and cancellation on the leased stream
+  and release it when the request finishes.
+
 - Run Inkling 2 Mini text and image chat in Swift/MLX. Install the original
   mixed NVFP4/MXFP8 checkpoint with `mere.run model pull vision-chat-inkling-2-mini`.
   The decoder shares weights across three passes through its middle layers
@@ -47,6 +59,11 @@ The format is based on Keep a Changelog.
   Pi tool calls. This mode reuses matching prompt prefixes by default when the
   server prefix cache is enabled and the request uses default KV storage.
 
+## 0.73.1 - 2026-11-21
+
+- Show the signed Mac install method in the CLI and Studio, retain pipx as an
+  explicit source option, and support removing managed plugin packages from
+  the Plugins view or with `mere.run plugin uninstall`.
 
 ## 0.73.0 - 2026-11-19
 
