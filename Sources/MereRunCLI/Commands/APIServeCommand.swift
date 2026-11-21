@@ -17,6 +17,7 @@ struct APIServe: AsyncParsableCommand {
     var transcriptionRunRecords: String?
 
     static let apiKeyEnvironmentKey = "MERERUN_API_KEY"
+    static let defaultContextSize = 32_768
 
     static let configuration = CommandConfiguration(
         commandName: "serve",
@@ -195,7 +196,7 @@ struct APIServe: AsyncParsableCommand {
     var memoryGuardCustomCeilingGB: Double?
 
     @Option(name: [.long], help: "Context size (default: 32768).")
-    var contextSize: Int = 32768
+    var contextSize: Int = APIServe.defaultContextSize
 
     @Flag(
         name: [.customLong("warmup")],
@@ -362,7 +363,7 @@ struct APIServe: AsyncParsableCommand {
             let requested = model ?? Inkling2Resources.modelID
             if let root = Inkling2Resources.localModelRoot(for: requested) { return root }
             guard let path = ManagedModelResolver.resolveInstalledModel(id: requested)?.path else {
-                throw ValidationError("Install Inkling 2 with 'mere.run model pull vision-chat-inkling-2-small' or pass its checkpoint directory.")
+                throw ValidationError("Install \(ManagedModelCatalog.spec(for: requested)?.id ?? requested) with 'mere.run model pull' or pass its original Inkling 2 checkpoint directory.")
             }
             return path
         case .textChatFlint:

@@ -9,8 +9,12 @@ public actor Inkling2Generator: ChatGenerator {
     var tokenizer: (any Tokenizer)?
     var template: Inkling2ChatTemplate?
     var loadedRoot: String?
+    private var dspark: Inkling2DSpark?
+    private var lastDSparkStats: Inkling2DSparkStats?
 
     public init() {}
+
+    public func dsparkStats() -> Inkling2DSparkStats? { lastDSparkStats }
 
     public func prepare(modelPath: String?, progressHandler: (@Sendable (ChatProgress) -> Void)? = nil) async throws {
         try await MLXRequestStreams.withStream(isolation: self) { try await ensureLoaded(modelPath, progress: progressHandler) }
@@ -36,6 +40,7 @@ public actor Inkling2Generator: ChatGenerator {
 
     public func unload() {
         model = nil; tokenizer = nil; template = nil; loadedRoot = nil
+        dspark = nil; lastDSparkStats = nil
         Memory.clearCache()
     }
 
@@ -46,15 +51,17 @@ public actor Inkling2Generator: ChatGenerator {
     public func chat(_ request: ChatRequest, modelPath: String?, progressHandler: (@Sendable (ChatProgress) -> Void)? = nil) async throws -> ChatResponse {
         try await MLXRequestStreams.withStream(isolation: self) {
             try ChatRequestResolver.validate(request)
+            let cacheMode = request.kvCacheMode ?? .default
             guard request.lora == nil, !request.requiresJSON, request.noRepeatNgramSize == nil,
-                  request.kvCacheMode == .default || request.kvCacheMode == .auto,
+                  cacheMode == .default || cacheMode == .auto,
                   request.messages.allSatisfy({ $0.audioUrl == nil && $0.videoUrl == nil }) else {
                 throw ChatRequestIssue("request", "Inkling 2 supports text, images and tools with native BF16 caches; LoRA, constrained JSON and audio/video are unavailable")
             }
             let loadStart = Date()
             try await ensureLoaded(modelPath, progress: progressHandler)
-            let loadSeconds = Date().timeIntervalSince(loadStart)
             guard let model, let tokenizer, let template else { throw ChatRequestIssue("model", "Inkling 2 is not loaded") }
+            let draft = try draftForRequest(request, model: model)
+            let loadSeconds = Date().timeIntervalSince(loadStart)
             if let seed = request.seed { MLXRandom.seed(seed) }
             let context = min(request.maxContextTokens ?? Inkling2Resources.defaultContextLength, model.config.textConfig.modelMaxLength)
             let prefillStart = Date()
@@ -63,11 +70,13 @@ public actor Inkling2Generator: ChatGenerator {
                 throw ChatRequestIssue("max-context-tokens", "the complete Inkling 2 prompt must fit with space for output")
             }
             let budget = min(request.maxTokens, context - prompt.tokens.count)
-            let cache = Inkling2Cache(layerCount: model.config.textConfig.numHiddenLayers)
+            let cache = model.makeCache()
+            let speculation = draft.map { Inkling2DSparkSession(draft: $0, cache: cache) }
             var initial: MLXArray?
-            for start in stride(from: 0, to: prompt.tokens.count, by: 8) {
+            let chunkSize = model.prefillChunkSize
+            for start in stride(from: 0, to: prompt.tokens.count, by: chunkSize) {
                 try Task.checkCancellation()
-                let end = min(start + 8, prompt.tokens.count)
+                let end = min(start + chunkSize, prompt.tokens.count)
                 let ids = MLXArray(prompt.tokens[start..<end].map(Int32.init)).reshaped(1, end - start)
                 let embedding = try model.embeddings(ids)
                 for image in prompt.images {
@@ -76,7 +85,7 @@ public actor Inkling2Generator: ChatGenerator {
                         embedding[0, (lo - start)..<(hi - start), 0...] = image.embeddings[(lo - image.offset)..<(hi - image.offset), 0...].asType(embedding.dtype)
                     }
                 }
-                initial = try model.forward(embeddings: embedding, cache: cache)
+                initial = try speculation?.prefill(embedding) ?? model.forward(embeddings: embedding, cache: cache)
                 if let initial { eval(initial) }
                 progressHandler?(ChatProgress(stage: .encoding, message: "Prefilled \(end)/\(prompt.tokens.count) tokens"))
                 await Task.yield()
@@ -89,16 +98,35 @@ public actor Inkling2Generator: ChatGenerator {
                 penaltyPromptTokenCount: prompt.tokens.count)
             var raw = ""
             let eos = Set([model.config.eosTokenId, tokenizer.convertTokenToId("<|content_model_end_sampling|>")].compactMap { $0 })
-            let decoded = try AutoregressiveDecodeEngine.decode(
-                .init(initialLogits: initial, generationConfig: sampling, eosTokens: request.stopOnEOS ? eos : [], tokenBudget: budget,
-                      historySeedTokens: prompt.tokens, logprobCapture: request.logprobCapture, logprobRegion: request.logprobRegionHint ?? .visible),
-                stepForward: { try model($0, cache: cache) }, decodeToken: { tokenizer.decode(tokens: [$0]) },
-                decodeTokens: { tokenizer.decode(tokens: $0) },
-                emitPiece: { _, piece in raw += piece },
-                shouldContinue: { _, _ in
-                    let parsed = Inkling2OutputParser.parse(raw)
-                    return TextGenerationStopSequences.trimming(parsed.visible, sequences: request.stopSequences).matchedSequence == nil
-                }, checkCancellation: { try Task.checkCancellation() })
+            let decoded: AutoregressiveDecodeResult
+            if let draft, let speculation {
+                let configured = ProcessInfo.processInfo.environment["MERERUN_INKLING2_DSPARK_TOKENS"].flatMap(Int.init)
+                let fixedDepth = configured.map { min(max($0, 1), draft.maxProposalCount) }
+                let distribution: ((MLXArray) -> MLXArray)? = sampling.temperature == 0 ? nil : { logits in
+                    if logits.ndim == 2, sampling.topK > 0 || sampling.topP < 1 || sampling.minP > 0 {
+                        return stacked((0..<logits.dim(0)).map {
+                            samplingDistribution(logits: logits[$0], config: sampling, previousTokenIndices: nil, banMask: nil)
+                        }, axis: 0)
+                    }
+                    return samplingDistribution(logits: logits, config: sampling, previousTokenIndices: nil, banMask: nil)
+                }
+                let result = try speculation.decode(initial: initial, budget: budget, eos: request.stopOnEOS ? eos : [],
+                                                    fixedDepth: fixedDepth, distribution: distribution)
+                lastDSparkStats = Inkling2DSparkStats(rounds: result.rounds, draftedTokens: result.drafted,
+                                                    acceptedTokens: result.accepted, depthCounts: result.depthCounts)
+                decoded = .init(generatedTokens: result.tokens, decodeSeconds: result.seconds, firstTokenSeconds: result.firstTokenSeconds)
+            } else {
+                decoded = try AutoregressiveDecodeEngine.decode(
+                    .init(initialLogits: initial, generationConfig: sampling, eosTokens: request.stopOnEOS ? eos : [], tokenBudget: budget,
+                          historySeedTokens: prompt.tokens, logprobCapture: request.logprobCapture, logprobRegion: request.logprobRegionHint ?? .visible),
+                    stepForward: { try model($0, cache: cache) }, decodeToken: { tokenizer.decode(tokens: [$0]) },
+                    decodeTokens: { tokenizer.decode(tokens: $0) },
+                    emitPiece: { _, piece in raw += piece },
+                    shouldContinue: { _, _ in
+                        let parsed = Inkling2OutputParser.parse(raw)
+                        return TextGenerationStopSequences.trimming(parsed.visible, sequences: request.stopSequences).matchedSequence == nil
+                    }, checkCancellation: { try Task.checkCancellation() })
+            }
             let parsed = Inkling2OutputParser.parse(tokenizer.decode(tokens: decoded.generatedTokens), tools: request.tools ?? [], parallel: request.parallelToolCalls)
             let trimmed = TextGenerationStopSequences.trimming(parsed.visible, sequences: request.stopSequences)
             if request.showThinking, let reasoning = parsed.reasoning {
@@ -117,4 +145,39 @@ public actor Inkling2Generator: ChatGenerator {
             return response
         }
     }
+
+    static func usesDSpark(_ request: ChatRequest, modelType: String, packedExperts: Bool, preference: String?) -> Bool {
+        guard modelType == "inkling2_loop", request.maxTokens > 1,
+              request.repetitionPenalty == 1, request.presencePenalty == 0, request.frequencyPenalty == 0,
+              !request.logprobCapture.isEnabled, request.stopSequences.isEmpty else { return false }
+        if let preference { return preference == "1" }
+        return packedExperts && request.temperature > 0 && request.topP == 1
+            && (request.topK ?? 0) == 0 && request.minP == 0
+    }
+
+    private func draftForRequest(_ request: ChatRequest, model: Inkling2Model) throws -> Inkling2DSpark? {
+        lastDSparkStats = nil
+        let preference = ProcessInfo.processInfo.environment["MERERUN_INKLING2_DSPARK"]
+        guard Self.usesDSpark(request, modelType: model.config.modelType, packedExperts: model.usePackedExperts,
+                              preference: preference),
+              let loadedRoot else { return nil }
+        if let dspark { return dspark }
+        let weightsURL = URL(fileURLWithPath: loadedRoot).appendingPathComponent("mtp.safetensors")
+        guard FileManager.default.fileExists(atPath: weightsURL.path) else {
+            if preference == "1" {
+                throw ChatRequestIssue("model", "DSpark requires mtp.safetensors in the Inkling 2 Mini checkpoint directory")
+            }
+            return nil
+        }
+        let draft = try Inkling2DSpark(target: model, weightsURL: weightsURL)
+        dspark = draft
+        return draft
+    }
+}
+
+public struct Inkling2DSparkStats: Sendable {
+    public let rounds: Int
+    public let draftedTokens: Int
+    public let acceptedTokens: Int
+    public let depthCounts: [Int: Int]
 }

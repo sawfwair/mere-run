@@ -1,19 +1,20 @@
-# Inkling 2 Small
+# Inkling 2 Mini and Small
 
 ## Example to adapt
 
-Install `vision-chat-inkling-2-small`, then start with a bounded prompt:
+Install `vision-chat-inkling-2-mini` and try an image prompt.
 
 ```bash
-mere.run model pull vision-chat-inkling-2-small
-mere.run text chat --model vision-chat-inkling-2-small \
+mere.run model pull vision-chat-inkling-2-mini
+mere.run text chat --model vision-chat-inkling-2-mini \
   --prompt "Explain the data flow in this diagram." --image ./diagram.png \
   --reasoning-effort 0.2 --max-tokens 512
 ```
 
-The original checkpoint occupies about 394 GB of disk space. The native
-reference path streams selected experts from disk. Disk speed limits
-throughput; this example has not been validated with full-checkpoint inference.
+Mini's original checkpoint occupies about 20 GB. Small
+(`vision-chat-inkling-2-small`) occupies about 394 GB. On macOS with enough
+unified memory, Mini retains the original packed weights and uses Metal
+matmuls for routed experts. Small streams selected experts from disk.
 
 ## Controls and variants
 
@@ -21,6 +22,11 @@ throughput; this example has not been validated with full-checkpoint inference.
 to an 8,192-token context shared by prompt and output. `--context-size` can
 increase the limit, subject to memory for global attention. Oversized prompts
 fail without truncation. Use local image files or base64 image data.
+
+Mini defaults to temperature `1` with unrestricted sampling. With resident
+Metal experts and the bundled draft weights, eligible sampled requests use
+adaptive DSpark. Use `--stats` to see draft acceptance and
+`MERERUN_INKLING2_DSPARK=0` to disable drafting.
 
 The runtime supports text, images, reasoning, and validated tool calls. LoRA,
 constrained JSON, quantized attention caches, audio, and video are unavailable.
@@ -32,15 +38,14 @@ After installation, serve the local API with:
 
 ```bash
 mere.run api serve --engine text-chat-inkling2 \
-  --model vision-chat-inkling-2-small
+  --model vision-chat-inkling-2-mini
 ```
 
 ## Sources and validation
 
-The [published checkpoint](https://huggingface.co/thinkingmachines/Inkling-2-Small)
-is pinned to `aac974122acd33ddb0d3e1f54433a9c5dd2249ce` under Apache-2.0.
 Native tests compare decoder and vision computation with independent NumPy
-fixtures and verify all 1,770 checkpoint tensor headers. Expert activations
-use BF16 rather than the upstream low-precision activation kernels. MTP,
-full-checkpoint quality, memory fit, and sustained throughput remain unvalidated.
-The runtime guide is `docs/runtime/inkling2.md` in the repository.
+fixtures and verify the published Mini and Small checkpoint tensor headers.
+Expert activations use BF16. Short text and image prompts have been tested
+with the original Mini checkpoint on an Apple M5 Max. See
+`docs/runtime/inkling2.md` for the pinned Apache-2.0 checkpoints and runtime
+details.

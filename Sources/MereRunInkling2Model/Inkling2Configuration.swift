@@ -22,7 +22,10 @@ public struct Inkling2Configuration: Decodable, Sendable {
     }
 
     public func validate() throws {
-        guard modelType == "inkling2" else { throw Inkling2Error.invalid("expected model_type inkling2") }
+        guard (modelType == "inkling2" && textConfig.loopConfig == nil)
+                || (modelType == "inkling2_loop" && textConfig.loopConfig != nil) else {
+            throw Inkling2Error.invalid("expected inkling2 or a fixed inkling2_loop configuration")
+        }
         try textConfig.validate()
         if let v = visionConfig {
             guard v.hiddenSize > 0, v.numHiddenLayers > 0, v.numAttentionHeads > 0,
@@ -31,6 +34,45 @@ public struct Inkling2Configuration: Decodable, Sendable {
                   v.nativePatchSize > 0, v.adapterMergeSize > 0, v.posembGridSize > 0,
                   v.projectionHiddenDim > 0, v.layerNormEps > 0, v.mlpRatio > 0,
                   !v.projectorBias else { throw Inkling2Error.invalid("unsupported vision geometry") }
+        }
+    }
+}
+
+struct Inkling2DSparkConfiguration: Decodable, Sendable {
+    let hiddenSize: Int
+    let numHiddenLayers: Int
+    let numAttentionHeads: Int
+    let numKeyValueHeads: Int
+    let headDim: Int
+    let intermediateSize: Int
+    let rmsNormEps: Float
+    let ropeTheta: Float
+    let localLayerIds: [Int]
+    let slidingWindowSize: Int
+    let blockSize: Int
+    let markovRank: Int
+    let markovHeadType: String
+    let targetLayerIds: [Int]
+    let qBias: Bool
+    let oBias: Bool
+
+    static func decode(_ data: Data) throws -> Self {
+        struct Envelope: Decodable { let mtpConfig: Inkling2DSparkConfiguration }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(Envelope.self, from: data).mtpConfig
+    }
+
+    func validate(against target: Inkling2TextConfiguration) throws {
+        guard target.loopConfig != nil, hiddenSize == target.hiddenSize, numHiddenLayers > 0,
+              numKeyValueHeads > 0, numAttentionHeads > 0, numAttentionHeads.isMultiple(of: numKeyValueHeads),
+              headDim > 0, headDim.isMultiple(of: 2), intermediateSize > 0,
+              rmsNormEps.isFinite, rmsNormEps > 0, ropeTheta.isFinite, ropeTheta > 0,
+              slidingWindowSize > 0, (2...8).contains(blockSize), markovRank > 0, markovHeadType == "rnn_hidden",
+              localLayerIds.allSatisfy({ (0..<numHiddenLayers).contains($0) }), !qBias, !oBias,
+              !targetLayerIds.isEmpty, Set(targetLayerIds).count == targetLayerIds.count,
+              targetLayerIds.allSatisfy({ (0...target.cacheLayerCount).contains($0) }) else {
+            throw Inkling2Error.invalid("unsupported DSpark draft configuration")
         }
     }
 }
@@ -68,13 +110,18 @@ public struct Inkling2TextConfiguration: Decodable, Sendable {
     public let finalLogitSoftcapping: Float
     public let attnResNormalizeValues: Bool
     public let useValueNormNoGamma: Bool
-    public let preNormPreAffine: Bool
-    public let finalNormPreAffine: Bool
+    public let preNormPreAffine: Bool?
+    public let finalNormPreAffine: Bool?
     public let qBias: Bool
     public let oBias: Bool
     public let useGateBias: Bool
+    let loopConfig: Inkling2LoopConfiguration?
 
     public func isLocal(_ index: Int) -> Bool { localLayerIds.contains(index) }
+
+    var cacheLayerCount: Int {
+        numHiddenLayers + (loopConfig.map { ($0.numPasses - 1) * $0.layers.count } ?? 0)
+    }
 
     func validate() throws {
         let dimensions = [hiddenSize, numHiddenLayers, vocabSize, unpaddedVocabSize, numAttentionHeads,
@@ -90,10 +137,28 @@ public struct Inkling2TextConfiguration: Decodable, Sendable {
                mlpUpSoftcap, routeScale, finalLogitSoftcapping].allSatisfy({ $0.isFinite && $0 > 0 }),
               logScalingAlpha.isFinite, logScalingAlpha >= 0,
               nSharedExperts == 0, attnResNormalizeValues, useValueNormNoGamma,
-              !preNormPreAffine, !finalNormPreAffine, !qBias, !oBias, useGateBias else {
+              preNormPreAffine != true, finalNormPreAffine != true, !qBias, !oBias, useGateBias else {
             throw Inkling2Error.invalid("unsupported text architecture or geometry")
         }
+        if let loop = loopConfig {
+            guard !loop.isVarloop, loop.numPasses == 3, loop.gateRank > 0,
+                  loop.coreStart > 0, loop.coreStart < loop.coreEnd, loop.coreEnd <= numHiddenLayers,
+                  loop.coreStart.isMultiple(of: nLayersPerAttnResBlock),
+                  loop.coreEnd.isMultiple(of: nLayersPerAttnResBlock) else {
+                throw Inkling2Error.invalid("unsupported fixed loop geometry")
+            }
+        }
     }
+}
+
+struct Inkling2LoopConfiguration: Decodable, Sendable {
+    let coreStart: Int
+    let coreEnd: Int
+    let numPasses: Int
+    let gateRank: Int
+    let isVarloop: Bool
+
+    var layers: Range<Int> { coreStart..<coreEnd }
 }
 
 public struct Inkling2VisionConfiguration: Decodable, Sendable {

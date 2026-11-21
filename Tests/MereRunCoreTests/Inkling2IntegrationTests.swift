@@ -9,6 +9,7 @@ final class Inkling2IntegrationTests: XCTestCase {
         XCTAssertEqual(spec.validationKind, .inkling2)
         XCTAssertEqual(spec.upstreamRepoId, "thinkingmachines/Inkling-2-Small")
         XCTAssertEqual(spec.hubFallback?.revision, Inkling2Resources.revision)
+        XCTAssertFalse(spec.hubFallback?.patterns.contains("mtp.safetensors") ?? true)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatInkling2)
         XCTAssertEqual(spec.apiProfile?.inputModalities, [.text, .image])
@@ -22,12 +23,97 @@ final class Inkling2IntegrationTests: XCTestCase {
         }
         let manifest = MereRunModelManifest.template(for: .inkling2Small)
         XCTAssertEqual(manifest.engine, .inkling2)
+        XCTAssertEqual(manifest.precision, .int4)
         XCTAssertEqual(manifest.sources?.first?.revision, Inkling2Resources.revision)
         XCTAssertTrue(manifest.supports?.contains(.visionChat) == true)
     }
 
-    private func render(_ messages: [ChatMessage], effort: Double = 0.9, tools: [ToolDefinition]? = nil) throws -> String {
-        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures/Inkling2/chat_template.jinja")
+    func testMiniManagedCheckpointAndNativeServingRouting() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Inkling2Resources.miniModelID))
+        XCTAssertEqual(spec.upstreamRepoId, "thinkingmachines/Inkling-2-Mini")
+        XCTAssertEqual(spec.hubFallback?.revision, Inkling2Resources.miniRevision)
+        XCTAssertTrue(spec.hubFallback?.patterns.contains("mtp.safetensors") ?? false)
+        XCTAssertEqual(spec.validationKind, .inkling2)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatInkling2)
+        XCTAssertEqual(spec.apiProfile?.inputModalities, [.text, .image])
+        for name in [spec.id, Inkling2Resources.miniRepository] {
+            XCTAssertEqual(NativeChatRuntime.commandFamily(modelID: name), .inkling2)
+            guard case .textChatInkling2 = try NativeChatRuntime.command(modelID: name, modelPath: nil) else {
+                return XCTFail("Expected native Inkling 2 runtime")
+            }
+        }
+        let manifest = MereRunModelManifest.template(for: .inkling2Mini)
+        XCTAssertEqual(manifest.engine, .inkling2)
+        XCTAssertEqual(manifest.precision, .int4)
+        XCTAssertEqual(manifest.quantization?.bits, 4)
+        XCTAssertEqual(manifest.quantization?.groupSize, 16)
+        XCTAssertEqual(manifest.quantization?.scheme, "mixed-nvfp4-mxfp8")
+        XCTAssertEqual(manifest.sources?.first?.revision, Inkling2Resources.miniRevision)
+    }
+
+    func testMiniSamplingDefaultsForCLIAndAPI() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("Inkling2Mini-\(UUID())")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data(#"{"model_type":"inkling2_loop"}"#.utf8).write(to: root.appendingPathComponent("config.json"))
+
+        let request = ChatRequest(messages: [ChatMessage(role: .user, content: "hello")])
+        for policy in [ChatDefaultPolicy.command, .openAI] {
+            for model in [Inkling2Resources.miniModelID, Inkling2Resources.miniRepository, root.path] {
+                let resolved = try ChatRequestResolver.resolve(request, modelID: model, sampling: .init(), policy: policy)
+                XCTAssertEqual(resolved.temperature, 1)
+                XCTAssertEqual(resolved.topP, 1)
+                XCTAssertEqual(resolved.topK ?? 0, 0)
+                XCTAssertEqual(resolved.minP, 0)
+            }
+            let explicit = ChatSamplingOptions(temperature: 0, topP: 0.8, topK: 40, minP: 0.05)
+            let resolved = try ChatRequestResolver.resolve(request, modelID: Inkling2Resources.miniModelID,
+                                                           sampling: explicit, policy: policy)
+            XCTAssertEqual(resolved.temperature, 0)
+            XCTAssertEqual(resolved.topP, 0.8)
+            XCTAssertEqual(resolved.topK, 40)
+            XCTAssertEqual(resolved.minP, 0.05)
+        }
+        let small = try ChatRequestResolver.resolve(request, modelID: Inkling2Resources.modelID, sampling: .init(), policy: .command)
+        XCTAssertEqual(small.temperature, 0.7)
+        XCTAssertEqual(small.topP, 0.9)
+    }
+
+    func testDSparkDefaultsToUnfilteredSamplingWithPackedExperts() throws {
+        let chat = ChatRequest(messages: [ChatMessage(role: .user, content: "hello")])
+        let defaults = try ChatRequestResolver.resolve(chat, modelID: Inkling2Resources.miniModelID,
+                                                       sampling: .init(), policy: .command)
+        func usesDraft(_ request: ChatRequest, packed: Bool = true, preference: String? = nil) -> Bool {
+            Inkling2Generator.usesDSpark(request, modelType: "inkling2_loop", packedExperts: packed, preference: preference)
+        }
+
+        XCTAssertTrue(usesDraft(defaults))
+        XCTAssertFalse(usesDraft(defaults, packed: false))
+        XCTAssertFalse(usesDraft(defaults, preference: "0"))
+        XCTAssertTrue(usesDraft(defaults, packed: false, preference: "1"))
+        XCTAssertFalse(Inkling2Generator.usesDSpark(defaults, modelType: "inkling2", packedExperts: true, preference: "1"))
+
+        let options = [
+            ChatSamplingOptions(temperature: 0), ChatSamplingOptions(topP: 0.9),
+            ChatSamplingOptions(topK: 20), ChatSamplingOptions(minP: 0.05),
+        ]
+        for sampling in options {
+            let request = try ChatRequestResolver.resolve(chat, modelID: Inkling2Resources.miniModelID,
+                                                          sampling: sampling, policy: .command)
+            XCTAssertFalse(usesDraft(request))
+            XCTAssertTrue(usesDraft(request, preference: "1"))
+        }
+        var incompatible = defaults
+        incompatible.stopSequences = ["END"]
+        XCTAssertFalse(usesDraft(incompatible))
+        XCTAssertFalse(usesDraft(incompatible, preference: "1"))
+    }
+
+    private func render(
+        _ messages: [ChatMessage], effort: Double = 0.9, tools: [ToolDefinition]? = nil, fixture: String = "chat_template.jinja"
+    ) throws -> String {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures/Inkling2/\(fixture)")
         return try Inkling2ChatTemplate(source: String(contentsOf: url, encoding: .utf8))
             .render(messages: messages, tools: tools, effort: effort)
     }
@@ -36,6 +122,19 @@ final class Inkling2IntegrationTests: XCTestCase {
         XCTAssertEqual(try render([ChatMessage(role: .user, content: "Hello")], effort: 0.2),
             "<|message_system|><|content_text|>Thinking effort level: 0.2<|end_message|>"
             + "<|message_user|><|content_text|>Hello<|end_message|>")
+    }
+
+    func testMiniTemplatePreservesAssistantHistoryAndImageMarker() throws {
+        let messages = [
+            ChatMessage(role: .user, content: "Hello"),
+            ChatMessage(role: .assistant, content: "Hi"),
+            ChatMessage(role: .user, content: "Describe", imageUrl: "/image.png"),
+        ]
+        let prompt = try render(messages, fixture: "mini-chat_template.jinja")
+        XCTAssertEqual(prompt, try render(messages))
+        XCTAssertTrue(prompt.contains("<|message_model|><|content_text|>Hi<|end_message|><|content_model_end_sampling|>"))
+        XCTAssertTrue(prompt.hasSuffix("<|message_user|><|content_image|><|unused_200054|><|end_message|>"
+            + "<|message_user|><|content_text|>Describe<|end_message|>"))
     }
 
     func testReleasedTemplatePreservesTypedToolArgumentsAndImageOrder() throws {
@@ -91,5 +190,17 @@ final class Inkling2IntegrationTests: XCTestCase {
             _ = try await generator.chat(request, modelPath: "/missing", progressHandler: nil)
             XCTFail("Expected refusal")
         } catch { XCTAssertEqual((error as? ChatRequestIssue)?.field, "request") }
+    }
+
+    func testDefaultCacheModesReachCheckpointLoading() async throws {
+        let generator = Inkling2Generator()
+        for mode in [nil, RuntimeKVCacheMode.default, .auto] {
+            var request = ChatRequest(messages: [ChatMessage(role: .user, content: "hello")])
+            request.kvCacheMode = mode
+            do {
+                _ = try await generator.chat(request, modelPath: nil, progressHandler: nil)
+                XCTFail("Expected missing checkpoint error")
+            } catch { XCTAssertEqual((error as? ChatRequestIssue)?.field, "model") }
+        }
     }
 }

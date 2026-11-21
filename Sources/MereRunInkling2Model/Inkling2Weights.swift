@@ -1,8 +1,8 @@
 import Foundation
 import MLX
 
-/// Original safetensors names and byte encodings. Expert slices stay on disk;
-/// only a selected expert is expanded to floating point for reference inference.
+/// Original safetensors names and byte encodings. Read an entire packed tensor
+/// for the Metal path or just the selected expert for reference inference.
 public final class Inkling2Weights {
     public struct Tensor: Decodable {
         public let dtype: String
@@ -85,6 +85,12 @@ public final class Inkling2Weights {
 
     public var names: Set<String> { Set(locations.keys).union(resident.keys) }
 
+    var storedBytes: UInt64 {
+        locations.values.reduce(0) { total, location in
+            total + UInt64(location.tensor.dataOffsets[1] - location.tensor.dataOffsets[0])
+        }
+    }
+
     func shape(_ key: String) -> [Int]? { resident[key]?.shape ?? locations[key]?.tensor.shape }
     func dtype(_ key: String) -> String? {
         if let value = resident[key] {
@@ -106,7 +112,7 @@ public final class Inkling2Weights {
         return bytes
     }
 
-    func read(_ key: String, expert: Int? = nil) throws -> MLXArray {
+    func read(_ key: String, expert: Int? = nil, retain: Bool = true) throws -> MLXArray {
         if let value = resident[key] { return expert.map { value[$0] } ?? value }
         guard let loc = locations[key] else { throw Inkling2Error.invalid("missing tensor \(key)") }
         var shape = loc.tensor.shape
@@ -117,10 +123,6 @@ public final class Inkling2Weights {
             count /= shape.removeFirst()
             offset += expert * count
         }
-        let handle = try FileHandle(forReadingFrom: loc.url)
-        defer { try? handle.close() }
-        try handle.seek(toOffset: UInt64(offset))
-        let data = try Self.readBytes(count, handle: handle)
         let type: DType
         switch loc.tensor.dtype {
         case "BF16": type = .bfloat16
@@ -128,8 +130,20 @@ public final class Inkling2Weights {
         case "F32": type = .float32
         default: type = .uint8
         }
-        let array = MLXArray(data, shape, dtype: type)
-        if expert == nil, !key.contains(".experts.") {
+        func load() throws -> MLXArray {
+            let handle = try FileHandle(forReadingFrom: loc.url)
+            defer { try? handle.close() }
+            try handle.seek(toOffset: UInt64(offset))
+            return try MLXArray(Self.readBytes(count, handle: handle), shape, dtype: type)
+        }
+        #if canImport(ObjectiveC)
+        // Decode has no suspension point between tokens. Release Foundation's
+        // autoreleased file buffers after their bytes have been copied to MLX.
+        let array = try autoreleasepool(invoking: load)
+        #else
+        let array = try load()
+        #endif
+        if retain, expert == nil, !key.contains(".experts.") {
             eval(array)
             resident[key] = array
         }

@@ -8,6 +8,19 @@ extension Inkling2Model {
             prefix + "norm.weight": [d], prefix + "unembed.weight": [c.vocabSize, d],
             prefix + "attn_res.output_query": [d]
         ]
+        if let loop = c.loopConfig {
+            let queryShape = [2 * loop.layers.count, d]
+            expected[prefix + "middle_cycle_cross_pass_queries"] = queryShape
+            expected[prefix + "middle_cycle_cross_pass_kv_queries"] = queryShape
+            for layer in loop.layers {
+                for side in ["attn", "k", "v", "mlp"] {
+                    let key = prefix + "layers.\(layer).controllers." + side
+                    expected[key + ".down_weight"] = [loop.gateRank, 2 * d]
+                    expected[key + ".forget_weight"] = [d, loop.gateRank]
+                    expected[key + ".gain_weight"] = [d, loop.gateRank]
+                }
+            }
+        }
         for i in 0..<c.numHiddenLayers {
             let p = prefix + "layers.\(i).", local = c.isLocal(i)
             let heads = local ? c.swaNumAttentionHeads : c.numAttentionHeads

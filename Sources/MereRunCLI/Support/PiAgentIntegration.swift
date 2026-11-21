@@ -62,7 +62,9 @@ struct PiProviderModel {
     init(
         id: String,
         name: String,
-        profile: ManagedModelAPIProfile
+        profile: ManagedModelAPIProfile,
+        contextLimit: Int? = nil,
+        outputLimit: Int? = nil
     ) throws {
         guard profile.task == .chatCompletions,
               let contextWindow = profile.contextWindow,
@@ -84,8 +86,8 @@ struct PiProviderModel {
         let compatibility = profile.compatibility
         self.id = id
         self.name = name
-        self.contextWindow = contextWindow
-        self.maxTokens = maxTokens
+        self.contextWindow = min(contextWindow, contextLimit ?? contextWindow)
+        self.maxTokens = min(maxTokens, outputLimit ?? maxTokens)
         self.inputModalities = profile.inputModalities.compactMap { modality in
             switch modality {
             case .text, .image:

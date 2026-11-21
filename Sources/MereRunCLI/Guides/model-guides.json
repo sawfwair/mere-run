@@ -1,9 +1,9 @@
 [
   {
     "topic": "handbook-inkling2",
-    "title": "Inkling 2 Small",
+    "title": "Inkling 2 Mini and Small",
     "category": "Vision chat",
-    "models": ["vision-chat-inkling-2-small"],
+    "models": ["vision-chat-inkling-2-mini", "vision-chat-inkling-2-small"],
     "resourceName": "handbook-inkling2.md"
   },
   {

@@ -10,6 +10,15 @@ extension ManagedModelCatalog {
             defaultCLICommands: ["text chat", "api serve"], apiProfile: .inkling2()
         ),
         ManagedModelSpec(
+            id: Inkling2Resources.miniModelID, category: .visionChat, installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: Inkling2Resources.miniRepository, revision: Inkling2Resources.miniRevision, patterns: Inkling2Resources.miniSnapshotPatterns
+            ),
+            upstreamRepoId: Inkling2Resources.miniRepository, upstreamRevision: Inkling2Resources.miniRevision,
+            validationKind: .inkling2, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 20_200_000_000,
+            defaultCLICommands: ["text chat", "api serve"], apiProfile: .inkling2()
+        ),
+        ManagedModelSpec(
             id: FlintResources.modelID, category: .textChat, installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(repoId: FlintResources.repository, revision: FlintResources.revision, patterns: FlintResources.snapshotPatterns),
             upstreamRepoId: FlintResources.repository, upstreamRevision: FlintResources.revision,

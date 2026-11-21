@@ -324,6 +324,7 @@ struct TextChat: AsyncParsableCommand {
         var lastMuseDFlashStats: MuseGlimmerDFlashStats?
         var lastNemotronDSparkStats: NemotronHDSparkStats?
         var lastLFM2DSparkStats: LFM2DSparkStats?
+        var lastInkling2DSparkStats: Inkling2DSparkStats?
         let runtime: NativeChatRuntime
         do {
             // Selection reports missing models as request issues; the command surfaces
@@ -346,6 +347,7 @@ struct TextChat: AsyncParsableCommand {
             lastMuseDFlashStats = diagnostics.museDFlash
             lastNemotronDSparkStats = diagnostics.nemotronDSpark
             lastLFM2DSparkStats = diagnostics.lfm2DSpark
+            lastInkling2DSparkStats = diagnostics.inkling2DSpark
             return response
         }
 
@@ -509,6 +511,11 @@ struct TextChat: AsyncParsableCommand {
                             CLIStderr.write(Self.formatLFM2DSparkStats(dspark) + "\n")
                         }
                     }
+                }
+
+                if stats, let dspark = lastInkling2DSparkStats {
+                    let depths = dspark.depthCounts.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: ",")
+                    CLIStderr.write("inkling_dspark rounds=\(dspark.rounds) drafted=\(dspark.draftedTokens) accepted=\(dspark.acceptedTokens) depths=\(depths)\n")
                 }
 
                 if !wroteStreamedOutput {

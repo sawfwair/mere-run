@@ -8,16 +8,18 @@ final class Inkling2CommandTests: XCTestCase {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("Inkling2-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        try Data(#"{"model_type":"inkling2"}"#.utf8).write(to: root.appendingPathComponent("config.json"))
         let image = root.appendingPathComponent("image.png")
         try Data().write(to: image)
-        let command = try TextChat.parse(["--model", root.path, "--prompt", "hello", "--image", image.path, "--reasoning-effort", "0.2"])
-        XCTAssertEqual(command.normalizedModelIdentifier, root.path)
-        XCTAssertEqual(NativeChatRuntime.commandFamily(modelID: root.path), .inkling2)
-        XCTAssertTrue(command.makePreflightReport(modelID: root.path, installedModelPath: root.path).diagnostics.isEmpty)
-        let server = try APIServe.parse(["--engine", "text-chat-inkling2", "--model", root.path])
-        XCTAssertEqual(server.engine.runtimeServingEngine, .textChatInkling2)
-        XCTAssertEqual(try server.resolveModelPath(), root.path)
+        for type in ["inkling2", "inkling2_loop"] {
+            try Data(#"{"model_type":"\#(type)"}"#.utf8).write(to: root.appendingPathComponent("config.json"))
+            let command = try TextChat.parse(["--model", root.path, "--prompt", "hello", "--image", image.path, "--reasoning-effort", "0.2"])
+            XCTAssertEqual(command.normalizedModelIdentifier, root.path)
+            XCTAssertEqual(NativeChatRuntime.commandFamily(modelID: root.path), .inkling2)
+            XCTAssertTrue(command.makePreflightReport(modelID: root.path, installedModelPath: root.path).diagnostics.isEmpty)
+            let server = try APIServe.parse(["--engine", "text-chat-inkling2", "--model", root.path])
+            XCTAssertEqual(server.engine.runtimeServingEngine, .textChatInkling2)
+            XCTAssertEqual(try server.resolveModelPath(), root.path)
+        }
     }
 
     func testServingRequiresInstalledCheckpoint() throws {

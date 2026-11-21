@@ -507,10 +507,13 @@ struct SetupAgentRuntime {
                 "\(recommendation.displayName) does not have a cataloged API profile."
             )
         }
+        let isInklingMini = modelID == Inkling2Resources.miniModelID
         return try PiProviderModel(
             id: recommendation.id,
             name: "\(recommendation.displayName) (mere.run)",
-            profile: profile
+            profile: profile,
+            contextLimit: isInklingMini ? APIServe.defaultContextSize : nil,
+            outputLimit: isInklingMini ? 4_096 : nil
         )
     }
 }
