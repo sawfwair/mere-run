@@ -134,8 +134,11 @@ To check an installed plugin, run its doctor:
 mere.run plugin doctor mere-runpod
 ```
 
-The doctor command resolves the catalog entry, verifies that its executable is
-on `PATH`, verifies its manifest, and invokes the plugin's fixed `doctor` verb.
+The doctor command resolves the catalog entry, verifies the installed plugin
+manifest, and invokes the plugin's `doctor` command. It can launch managed
+bundles and source installs on `PATH`. Plugin commands started through
+`mere.run` can find the invoking Core executable even when its directory is
+outside the caller's `PATH`.
 If the entrypoint cannot start, `mere.run` diagnoses the installation before
 delegating. A stale editable `pipx` install reports its missing source path and
 the exact forced-reinstall command instead of exposing only a Python traceback.
