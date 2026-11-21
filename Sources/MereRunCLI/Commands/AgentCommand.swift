@@ -491,8 +491,9 @@ struct AgentStart: AsyncParsableCommand {
         if skipServer {
             serverProcess = nil
         } else {
+            let usesManagedID = runtime.engine == .textChatInkling2 || loraPath != nil
             let startedServer = try startAPIServer(
-                model: loraPath == nil ? modelURL.path : spec.id, engine: runtime.engine, loraPath: loraPath
+                model: usesManagedID ? spec.id : modelURL.path, engine: runtime.engine, loraPath: loraPath
             )
             serverProcess = startedServer.process
             CLIStderr.write("[agent] Loading \(runtime.providerModel.id). Server log: \(startedServer.logURL.path)\n")
@@ -681,6 +682,9 @@ struct AgentStart: AsyncParsableCommand {
         ]
         if let loraPath {
             arguments += ["--lora", loraPath]
+        }
+        if engine == .textChatInkling2, MereRunModelPaths.modelStoreSource == .processOverride {
+            arguments.insert(contentsOf: ["--models-root", MereRunModelPaths.modelsDir.path], at: 0)
         }
         process.arguments = arguments
         process.environment = Self.apiServerEnvironment()

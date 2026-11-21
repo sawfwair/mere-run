@@ -123,6 +123,28 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertEqual(recommendation.servingEngine, .textChatGemma4)
     }
 
+    func testInklingMiniProviderUsesNativeInklingRuntime() throws {
+        let runtime = try SetupAgentRuntime.runtime(forManagedModelID: Inkling2Resources.miniModelID)
+
+        XCTAssertEqual(runtime.engine, .textChatInkling2)
+        XCTAssertEqual(runtime.recommendation.servingEngine, .textChatInkling2)
+        XCTAssertTrue(runtime.recommendation.isStartableByMereRun)
+        XCTAssertEqual(runtime.providerModel.id, Inkling2Resources.miniModelID)
+        XCTAssertEqual(runtime.providerModel.inputModalities, ["text", "image"])
+        XCTAssertEqual(runtime.providerModel.contextWindow, APIServe.defaultContextSize)
+        XCTAssertEqual(runtime.providerModel.maxTokens, 4_096)
+        XCTAssertTrue(runtime.providerModel.toolCall)
+        XCTAssertTrue(runtime.providerModel.supportsReasoningEffort)
+
+        for memory in [UInt64(24), 32] {
+            let machine = MereRunMachineProfile(physicalMemoryBytes: memory * 1_073_741_824,
+                                                processorName: "Apple Silicon", isAppleSiliconMac: true)
+            let available = MereRunAgentModelCatalog.allTierRecommendations(on: machine)
+                .contains { $0.managedModelID == Inkling2Resources.miniModelID }
+            XCTAssertEqual(available, memory >= 32)
+        }
+    }
+
     func testQ38ProviderUsesNativeQwenRuntime() throws {
         let runtime = try SetupAgentRuntime.runtime(
             forManagedModelID: Q35Resources.q38TwentySevenBModelId

@@ -56,6 +56,7 @@ public struct Ornith35BCodeResources: Sendable, Hashable {
 public enum MereRunAgentServingEngine: String, Hashable, Sendable {
     case textCode = "text-code"
     case textChatGemma4 = "text-chat-gemma4"
+    case textChatInkling2 = "text-chat-inkling2"
     case textChatQ36 = "text-chat-q36"
     case textChatQ35 = "text-chat-q35"
     case deepseekV4Flash = "text-chat-deepseek-v4-flash"
@@ -186,7 +187,7 @@ public enum MereRunAgentModelCatalog {
     public static func allTierRecommendations(
         on machine: MereRunMachineProfile = .current
     ) -> [MereRunAgentModelRecommendation] {
-        [
+        var recommendations = [
             qwen35NineB(),
             gemma12B4Bit(),
             northMiniCode(),
@@ -202,7 +203,23 @@ public enum MereRunAgentModelCatalog {
             q38TwentySevenB(),
             qwen3CoderNext(),
             deepseekV4Flash(),
-        ].filter { machine.isSupportedRuntime && machine.unifiedMemoryGB >= $0.minimumUnifiedMemoryGB }
+        ]
+        if machine.isAppleSiliconMac {
+            recommendations.append(inkling2Mini())
+        }
+        return recommendations.filter { machine.isSupportedRuntime && machine.unifiedMemoryGB >= $0.minimumUnifiedMemoryGB }
+    }
+
+    private static func inkling2Mini() -> MereRunAgentModelRecommendation {
+        MereRunAgentModelRecommendation(
+            id: Inkling2Resources.miniModelID,
+            displayName: "Inkling 2 Mini",
+            summary: "Native Metal text and image agent with tool calls and adaptive DSpark.",
+            minimumUnifiedMemoryGB: 32,
+            recommendedUnifiedMemoryGB: 32,
+            servingEngine: .textChatInkling2,
+            managedModelID: Inkling2Resources.miniModelID
+        )
     }
 
     private static func qwen35NineB() -> MereRunAgentModelRecommendation {

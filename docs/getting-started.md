@@ -275,6 +275,13 @@ both, pass `--no-bootstrap`. Other `start` options include `--model`,
 `--prompt`, `--inline`, `--skip-server`, `--allow-unsupported`, and
 `--pi-path`.
 
+To start Pi with Inkling 2 Mini on an Apple Silicon Mac with at least 32 GB
+of unified memory, select it by managed model ID.
+
+```bash
+mere.run agent start --model vision-chat-inkling-2-mini
+```
+
 ## Make something
 
 Each of the following commands runs independently, so you can start with any

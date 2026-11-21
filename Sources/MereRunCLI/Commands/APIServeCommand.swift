@@ -17,6 +17,7 @@ struct APIServe: AsyncParsableCommand {
     var transcriptionRunRecords: String?
 
     static let apiKeyEnvironmentKey = "MERERUN_API_KEY"
+    static let defaultContextSize = 32_768
 
     static let configuration = CommandConfiguration(
         commandName: "serve",
@@ -195,7 +196,7 @@ struct APIServe: AsyncParsableCommand {
     var memoryGuardCustomCeilingGB: Double?
 
     @Option(name: [.long], help: "Context size (default: 32768).")
-    var contextSize: Int = 32768
+    var contextSize: Int = APIServe.defaultContextSize
 
     @Flag(
         name: [.customLong("warmup")],

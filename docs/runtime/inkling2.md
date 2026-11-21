@@ -81,6 +81,19 @@ stop sequences, seeds, and sampling penalties. The runtime doesn't fetch remote
 image URLs. Channel parsing separates reasoning, visible text, and validated
 tool calls. Output is buffered until channel parsing finishes.
 
+## Use Mini with Pi
+
+On an Apple Silicon Mac with at least 32 GB of unified memory, start Pi with
+the managed Mini checkpoint.
+
+```bash
+mere.run agent start --model vision-chat-inkling-2-mini
+```
+
+The launcher starts the local API server and configures Pi for text, images,
+and tool calls. Pass `--no-bootstrap` to use an existing checkpoint and Pi
+installation.
+
 ## Runtime behavior
 
 Chat uses an 8,192-token context by default. Prompt and output share the limit;
