@@ -56,7 +56,7 @@ public final class Inkling2Weights {
                 throw Inkling2Error.invalid("shard ownership differs from index: \(name)")
             }
             for (key, tensor) in header.tensors {
-                let widths = ["BF16": 2, "F16": 2, "F32": 4, "U8": 1, "F8_E4M3": 1, "F8_E4M3FN": 1]
+                let widths = ["BF16": 2, "F16": 2, "F32": 4, "U32": 4, "U8": 1, "F8_E4M3": 1, "F8_E4M3FN": 1]
                 guard let width = widths[tensor.dtype], tensor.shape.allSatisfy({ $0 > 0 }), tensor.dataOffsets.count == 2 else {
                     throw Inkling2Error.invalid("unsupported tensor metadata: \(key)")
                 }
@@ -94,7 +94,12 @@ public final class Inkling2Weights {
     func shape(_ key: String) -> [Int]? { resident[key]?.shape ?? locations[key]?.tensor.shape }
     func dtype(_ key: String) -> String? {
         if let value = resident[key] {
-            switch value.dtype { case .uint8: return "U8"; case .bfloat16: return "BF16"; default: return "F32" }
+            switch value.dtype {
+            case .uint8: return "U8"
+            case .uint32: return "U32"
+            case .bfloat16: return "BF16"
+            default: return "F32"
+            }
         }
         return locations[key]?.tensor.dtype
     }
@@ -103,6 +108,12 @@ public final class Inkling2Weights {
         guard self.shape(key) == shape,
               bytes || ["BF16", "F16", "F32"].contains(dtype(key) ?? "") else {
             throw Inkling2Error.invalid("missing tensor or shape/dtype mismatch: \(key), expected \(shape)")
+        }
+    }
+
+    func require(_ key: String, shape: [Int], dtype: String) throws {
+        guard self.shape(key) == shape, self.dtype(key) == dtype else {
+            throw Inkling2Error.invalid("expected \(dtype) tensor \(key) with shape \(shape)")
         }
     }
 
@@ -128,6 +139,7 @@ public final class Inkling2Weights {
         case "BF16": type = .bfloat16
         case "F16": type = .float16
         case "F32": type = .float32
+        case "U32": type = .uint32
         default: type = .uint8
         }
         func load() throws -> MLXArray {

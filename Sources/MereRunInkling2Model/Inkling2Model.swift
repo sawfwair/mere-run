@@ -5,6 +5,7 @@ public final class Inkling2Model {
     public let config: Inkling2Configuration
     let weights: Inkling2Weights
     let prefix = "model.llm."
+    let q8OutputHead: Inkling2Q8Projection?
     package let usePackedExperts: Bool
     private var packedExperts: [Int: Inkling2PackedExperts] = [:]
     private var queryProjections: [Int: MLXArray] = [:]
@@ -32,6 +33,11 @@ public final class Inkling2Model {
         #else
         usePackedExperts = false
         #endif
+        let headKey = Inkling2Q8Projection.outputKey
+        let c = config.textConfig
+        q8OutputHead = try weights.names.contains(headKey + ".q8_weight")
+            ? Inkling2Q8Projection(weights: weights, key: headKey, rows: c.unpaddedVocabSize, columns: c.hiddenSize)
+            : nil
         try validateWeights()
     }
 
@@ -83,7 +89,7 @@ public final class Inkling2Model {
         hidden = try norm(hidden, prefix + "norm").asType(input.dtype)
         capture?.record(hidden, at: c.cacheLayerCount)
         if lastPositionOnly { hidden = hidden[0..., (hidden.dim(1) - 1)..<hidden.dim(1), 0...] }
-        let logits = try linear(hidden, prefix + "unembed").asType(.float32)
+        let logits = try (q8OutputHead?(hidden.asType(.bfloat16)) ?? linear(hidden, prefix + "unembed")).asType(.float32)
         let output = Inkling2Math.softcap(logits, c.finalLogitSoftcapping)[.ellipsis, ..<c.unpaddedVocabSize]
         if usePackedExperts {
             // Submit one graph per forward. Cache states may not be outputs of
