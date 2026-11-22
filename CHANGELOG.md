@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.74.1 - 2026-11-21
+
+- Pass the running Core executable to companion plugins launched by
+  `mere.run plugin run`, `plugin doctor`, or install setup. Restore catalog
+  installation guidance when a plugin is missing.
+
 ## 0.74.0 - 2026-11-21
 
 - Add a Haru conversation workspace under Studio's Chat section. Start a live

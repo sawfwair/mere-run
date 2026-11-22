@@ -21,6 +21,30 @@ final class PluginCommandTests: XCTestCase {
         XCTAssertTrue(commandNames.contains("plugin"))
     }
 
+    func testPluginChildCanUseTheCoreExecutableOutsideOfPath() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let helpers = root.appendingPathComponent("Mere Run.app/Contents/Helpers")
+        try FileManager.default.createDirectory(at: helpers, withIntermediateDirectories: true)
+        let executable = helpers.appendingPathComponent("mere.run")
+        try Data().write(to: executable)
+        let symlink = root.appendingPathComponent("mere.run")
+        try FileManager.default.createSymbolicLink(at: symlink, withDestinationURL: executable)
+
+        let result = PluginProcess.childEnvironment(coreExecutable: symlink, inherited: ["PATH": "/usr/bin:/bin"])
+        let resolved = executable.resolvingSymlinksInPath()
+        XCTAssertEqual(result["MERE_RUN_EXECUTABLE"], resolved.path)
+        XCTAssertEqual(result["PATH"], "\(resolved.deletingLastPathComponent().path):/usr/bin:/bin")
+        XCTAssertEqual(
+            PluginProcess.childEnvironment(coreExecutable: executable, inherited: ["MERE_RUN_EXECUTABLE": "/custom/core"]),
+            ["MERE_RUN_EXECUTABLE": "/custom/core", "PATH": "\(resolved.deletingLastPathComponent().path):/usr/bin:/bin"]
+        )
+        XCTAssertEqual(
+            PluginProcess.childEnvironment(coreExecutable: root.appendingPathComponent("other"), inherited: ["PATH": "/bin"]),
+            ["PATH": "/bin"]
+        )
+    }
+
     func testPluginCommandExposesCatalogSubcommands() {
         let commandNames = Set(Plugin.configuration.subcommands.map { $0.configuration.commandName })
 

@@ -262,10 +262,12 @@ struct PluginDoctor: ParsableCommand {
         let install = try plugin.install(channel: catalog.defaultChannel)
         let installation = PluginInstallationInspection.inspect(plugin)
         guard installation.installed else {
+            let repair = install.displayCommand(plugin: plugin.id, catalog: catalog.source,
+                                                channel: catalog.defaultChannel)
             throw ValidationError(
                 """
-                Plugin \(plugin.id) is not installed on PATH.
-                Install it with: \(PluginInstallCommand.render(install: install))
+                Plugin \(plugin.id) is not installed.
+                Install it with: \(repair)
                 """
             )
         }
@@ -710,6 +712,7 @@ enum PluginProcess {
         let process = Process()
         process.executableURL = url
         process.arguments = arguments
+        process.environment = childEnvironment()
         process.standardInput = FileHandle.standardInput
         process.standardOutput = FileHandle.standardOutput
         process.standardError = FileHandle.standardError
@@ -718,6 +721,26 @@ enum PluginProcess {
         guard process.terminationStatus == 0 else {
             throw ValidationError("\(executable) exited with status \(process.terminationStatus)")
         }
+    }
+
+    static func childEnvironment(
+        coreExecutable: URL = CurrentExecutable.url(),
+        inherited: [String: String] = ProcessInfo.processInfo.environment
+    ) -> [String: String] {
+        let core = coreExecutable.resolvingSymlinksInPath()
+        guard core.lastPathComponent == "mere.run" else {
+            return inherited
+        }
+        var environment = inherited
+        if environment["MERE_RUN_EXECUTABLE", default: ""].isEmpty {
+            environment["MERE_RUN_EXECUTABLE"] = core.path
+        }
+        // Older signed plugins look up the bare command. The app's Helpers directory
+        // is not necessarily on PATH when Studio or an absolute path launches this CLI.
+        let directory = core.deletingLastPathComponent().path
+        let path = inherited["PATH"] ?? "/usr/bin:/bin"
+        environment["PATH"] = path.isEmpty ? directory : "\(directory):\(path)"
+        return environment
     }
 
     static func captureExecutable(_ executable: String, arguments: [String]) throws -> Data {
