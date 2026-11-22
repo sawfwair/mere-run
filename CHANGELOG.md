@@ -6,6 +6,18 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.75.0 - 2026-11-21
+
+- Add the managed `vision-chat-inkling-2-mini-q8-head` checkpoint. One
+  `mere.run model pull vision-chat-inkling-2-mini-q8-head` installs the
+  18.45 GiB snapshot, including the original expert and vision weights,
+  tokenizer assets, and official DSpark weights.
+- Load a prepacked MLX affine Q8 output head shared by the target and DSpark.
+  Precomputed draft projections let the snapshot omit the original BF16
+  output head. The original Mini checkpoint retains BF16 target verification.
+  The checkpoint exporter verifies upstream weight hashes and checks saved
+  projection logits against the in-memory Q8 projections.
+
 ## 0.74.1 - 2026-11-21
 
 - Pass the running Core executable to companion plugins launched by
