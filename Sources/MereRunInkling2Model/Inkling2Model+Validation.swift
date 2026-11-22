@@ -5,9 +5,10 @@ extension Inkling2Model {
         let c = config.textConfig, d = c.hiddenSize
         var expected: [String: [Int]] = [
             prefix + "embed.weight": [c.vocabSize, d], prefix + "embed_norm.weight": [d],
-            prefix + "norm.weight": [d], prefix + "unembed.weight": [c.vocabSize, d],
+            prefix + "norm.weight": [d],
             prefix + "attn_res.output_query": [d]
         ]
+        if q8OutputHead == nil { expected[prefix + "unembed.weight"] = [c.vocabSize, d] }
         if let loop = c.loopConfig {
             let queryShape = [2 * loop.layers.count, d]
             expected[prefix + "middle_cycle_cross_pass_queries"] = queryShape
@@ -81,7 +82,10 @@ extension Inkling2Model {
             try weights.require(key, shape: shape, bytes: key.contains(".experts.") && !key.hasSuffix("_amax") && !key.hasSuffix("_denominator"))
         }
         let textKeys = weights.names.filter { $0.hasPrefix(prefix) }
-        guard Set(expected.keys) == Set(textKeys) else { throw Inkling2Error.invalid("unexpected text checkpoint tensors") }
+        let q8Keys = q8OutputHead == nil ? [] : Inkling2Q8Projection.keys(Inkling2Q8Projection.outputKey)
+        guard Set(expected.keys).union(q8Keys) == Set(textKeys) else {
+            throw Inkling2Error.invalid("unexpected text checkpoint tensors")
+        }
         if let v = config.visionConfig { try validateVision(v) }
     }
 

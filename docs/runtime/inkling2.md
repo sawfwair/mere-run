@@ -30,17 +30,37 @@ To describe an image, add `--image ./diagram.png`. To use an existing original
 snapshot, pass its directory to `--model`, or use the matching managed model ID
 with `--model-root /path/to/checkpoint`.
 
-The runtime requires the original tensor names and index. It recognizes
-`model_type` values `inkling2_loop` for fixed-pass Mini and `inkling2` for Small,
-including the original Small MXFP8 checkpoint.
+The runtime reads the checkpoint's SafeTensors index and recognizes
+`model_type` values `inkling2_loop` for fixed-pass Mini and `inkling2` for
+Small, including the original Small MXFP8 checkpoint.
+
+### Mini with a prepacked Q8 output head
+
+The managed `vision-chat-inkling-2-mini-q8-head` checkpoint keeps the original
+expert and vision weights and adds an MLX affine 8-bit output head. Pull it
+from the public Sawfwair repository. [Inkling 2 Mini Q8 Head checkpoint](https://huggingface.co/Sawfwair/Inkling-2-Mini-Q8-Head)
+
+```bash
+mere.run model pull vision-chat-inkling-2-mini-q8-head
+mere.run text chat --model vision-chat-inkling-2-mini-q8-head \
+  --prompt "Explain why the Moon changes phases." --stats
+```
+
+The same snapshot contains the tokenizer, image processor, chat template,
+and DSpark weights.
+
+The target and draft use the same packed output head. Precomputed DSpark
+projections let the draft load directly from the snapshot. The original Mini
+checkpoint continues to use its BF16 output head for target verification.
 
 ## Speculative decoding on Mini
 
 Mini defaults to temperature `1` with unrestricted sampling. For text and
 image chat on Metal, Mini uses adaptive DSpark by default when the packed
 experts are resident, the draft weights are installed, and the request uses
-unrestricted sampling. DSpark uses 8-bit copies of the draft vocabulary
-projections. Target verification uses the original checkpoint weights.
+unrestricted sampling. With the original checkpoint, DSpark uses 8-bit
+copies of the draft vocabulary projections and the target verifies with its
+BF16 head.
 
 ```bash
 mere.run text chat --model vision-chat-inkling-2-mini \

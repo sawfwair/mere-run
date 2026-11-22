@@ -410,6 +410,11 @@ public enum ManagedModelCapabilityCatalog {
                 minimum: 32, recommended: 32
             ),
             descriptor(
+                Inkling2Resources.miniQ8HeadModelID, "Inkling 2 Mini 26.4B Q8 Head",
+                "Shares a prepacked 8-bit output head between native target verification and DSpark. Includes text and vision weights in one checkpoint.",
+                minimum: 32, recommended: 32
+            ),
+            descriptor(
                 FlintResources.modelID, "Recursive Flint INT4",
                 "Runs the pinned group-64 INT4 export through native Swift/MLX with BF16 attention caches.",
                 minimum: 48, recommended: 64

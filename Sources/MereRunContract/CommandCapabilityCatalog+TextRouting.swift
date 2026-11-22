@@ -98,7 +98,9 @@ extension MereRunCapabilityCatalog {
             ),
             .init(TextChatFamily.gemma4Unified, title: "Gemma 4 12B vision", models: ["vision-chat-gemma4-12b"]),
             .init(TextChatFamily.diffusionGemma, title: "DiffusionGemma", models: ["text-chat-diffusiongemma-26b-optiq-4bit"]),
-            .init(TextChatFamily.inkling2, title: "Inkling 2", models: ["vision-chat-inkling-2-small", "vision-chat-inkling-2-mini"]),
+            .init(TextChatFamily.inkling2, title: "Inkling 2", models: [
+                "vision-chat-inkling-2-small", "vision-chat-inkling-2-mini", "vision-chat-inkling-2-mini-q8-head"
+            ]),
             .init(TextChatFamily.flint, title: "Recursive Flint", models: ["text-chat-flint-4bit", "text-chat-flint-bf16"]),
             .init(TextChatFamily.kolibri, title: "Kolibri 1", models: [], localCheckpointOnly: true),
             .init(TextChatFamily.laguna, title: "Laguna", models: ["text-chat-laguna-s-2-1", "text-chat-laguna-xs-2-1"]),

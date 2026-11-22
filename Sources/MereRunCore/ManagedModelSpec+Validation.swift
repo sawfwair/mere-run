@@ -153,7 +153,9 @@ public extension ManagedModelSpec {
         case .gemma4:
             return Gemma4Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .inkling2:
-            return Inkling2Resources.missingFiles(root: rootURL, fileManager: fileManager)
+            return Inkling2Resources.missingFiles(
+                root: rootURL, requiresDraft: id == Inkling2Resources.miniQ8HeadModelID, fileManager: fileManager
+            )
         case .flint:
             return FlintResources.missingFiles(root: rootURL, quantized: id == FlintResources.modelID, fileManager: fileManager)
         case .diffusionGemma:

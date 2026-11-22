@@ -131,13 +131,13 @@ struct Inkling2DSparkLayer {
 
 private enum Inkling2DSparkProjection {
     case dense(MLXArray)
-    case q8(weight: MLXArray, scales: MLXArray, biases: MLXArray?)
+    case q8(Inkling2Q8Projection)
 
     init(_ weight: MLXArray, useQ8: Bool) {
         if useQ8, weight.dim(-1).isMultiple(of: 64) {
             let (packed, scales, biases) = MLX.quantized(weight, groupSize: 64, bits: 8, mode: .affine)
             eval([packed, scales] + (biases.map { [$0] } ?? []))
-            self = .q8(weight: packed, scales: scales, biases: biases)
+            self = .q8(Inkling2Q8Projection(weight: packed, scales: scales, biases: biases))
         } else {
             self = .dense(weight)
         }
@@ -147,8 +147,8 @@ private enum Inkling2DSparkProjection {
         switch self {
         case let .dense(weight):
             matmul(input, weight.T)
-        case let .q8(weight, scales, biases):
-            quantizedMM(input, weight, scales: scales, biases: biases, groupSize: 64, bits: 8, mode: .affine)
+        case let .q8(projection):
+            projection(input)
         }
     }
 }
@@ -190,14 +190,24 @@ package final class Inkling2DSpark {
         recurrent = rnn[0..., ..<(2 * rank)]
         recurrentContext = rnn[0..., (2 * rank)...]
         recurrentBias = try weights.read("markov_head.rnn_proj.bias", [3 * rank]).asType(.float32)
-        let unembed = try target.weights.read(target.prefix + "unembed.weight")
-        let base = unembed[..<target.config.textConfig.unpaddedVocabSize]
-        let correction = try matmul(base, weights.read("markov_head.hidden_out.weight", [hidden, rank]))
-        headBias = try matmul(base, weights.read("markov_head.hidden_out.bias", [hidden]))
-        // Pack only the draft projections. Target verification uses the original unembedding.
-        baseHead = Inkling2DSparkProjection(base, useQ8: target.usePackedExperts)
-        head = Inkling2DSparkProjection(correction, useQ8: target.usePackedExperts)
-        eval(mixWeights, recurrent, recurrentContext, recurrentBias, correction, headBias)
+        let outputRows = target.config.textConfig.unpaddedVocabSize
+        if let q8OutputHead = target.q8OutputHead {
+            baseHead = .q8(q8OutputHead)
+            head = try .q8(Inkling2Q8Projection(weights: target.weights, key: Inkling2Q8Projection.draftKey,
+                                                rows: outputRows, columns: rank))
+            let biasKey = Inkling2Q8Projection.draftBiasKey
+            try target.weights.require(biasKey, shape: [outputRows], dtype: "BF16")
+            headBias = try target.weights.read(biasKey)
+            eval(mixWeights, recurrent, recurrentContext, recurrentBias, headBias)
+        } else {
+            let unembed = try target.weights.read(target.prefix + "unembed.weight")
+            let base = unembed[..<outputRows]
+            let correction = try matmul(base, weights.read("markov_head.hidden_out.weight", [hidden, rank]))
+            headBias = try matmul(base, weights.read("markov_head.hidden_out.bias", [hidden]))
+            baseHead = Inkling2DSparkProjection(base, useQ8: target.usePackedExperts)
+            head = Inkling2DSparkProjection(correction, useQ8: target.usePackedExperts)
+            eval(mixWeights, recurrent, recurrentContext, recurrentBias, correction, headBias)
+        }
     }
 
     private func mix(_ features: MLXArray, row: Int, norm: MLXArray) -> MLXArray {

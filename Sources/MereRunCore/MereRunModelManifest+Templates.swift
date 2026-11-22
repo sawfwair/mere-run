@@ -550,6 +550,15 @@ extension MereRunModelManifest {
                 defaults: nil, supports: [.chat, .codeGeneration, .visionChat], components: nil,
                 upstreamRepoId: "\(repository)@\(revision)", createdAt: createdAt
             )
+        case .inkling2MiniQ8Head:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .inkling2, family: .inkling, tier: .tiny, variant: .standard,
+                precision: .int4,
+                quantization: Quantization(bits: 4, groupSize: 16, scheme: "mixed-nvfp4-mxfp8-with-affine-q8-head"),
+                defaults: nil, supports: [.chat, .codeGeneration, .visionChat], components: nil,
+                upstreamRepoId: "\(Inkling2Resources.miniQ8HeadRepository)@\(Inkling2Resources.miniQ8HeadRevision)",
+                createdAt: createdAt
+            )
         case .inklingSmall:
             return MereRunModelManifest(
                 id: modelID.rawValue,

@@ -18,6 +18,10 @@ matmuls for routed experts. Small streams selected experts from disk.
 
 ## Controls and variants
 
+Use `vision-chat-inkling-2-mini-q8-head` to install Mini with a prepacked 8-bit
+output head. Its checkpoint bundles the original expert and vision weights and
+the official DSpark draft. Use this model ID with the same commands as Mini.
+
 `--reasoning-effort` accepts zero through 0.99 and defaults to 0.9. Chat defaults
 to an 8,192-token context shared by prompt and output. `--context-size` can
 increase the limit, subject to memory for global attention. Oversized prompts
@@ -31,8 +35,7 @@ adaptive DSpark. Use `--stats` to see draft acceptance and
 The runtime supports text, images, reasoning, and validated tool calls. LoRA,
 constrained JSON, quantized attention caches, audio, and video are unavailable.
 Generated output is buffered until channel parsing finishes. Local original
-MXFP8 snapshots also work through a checkpoint directory. Converted checkpoint
-layouts require a separate loader.
+MXFP8 snapshots also work through a checkpoint directory.
 
 After installation, serve the local API with:
 

@@ -52,6 +52,23 @@ final class Inkling2IntegrationTests: XCTestCase {
         XCTAssertEqual(manifest.sources?.first?.revision, Inkling2Resources.miniRevision)
     }
 
+    func testMiniQ8HeadUsesOnePinnedManagedCheckpoint() throws {
+        let modelID = Inkling2Resources.miniQ8HeadModelID
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: modelID))
+        let source = try XCTUnwrap(spec.hubFallback)
+        XCTAssertEqual(source.repoId, "Sawfwair/Inkling-2-Mini-Q8-Head")
+        XCTAssertEqual(source.revision, "6e2909a5ed4956cec636e6517d365676086f90df")
+        XCTAssertTrue(source.patterns.contains("mtp.safetensors"))
+        XCTAssertTrue(source.patterns.contains("tiktoken/tokenizer.model"))
+        XCTAssertTrue(spec.mountedHubFallbacks.isEmpty)
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatInkling2)
+        XCTAssertEqual(spec.apiProfile?.inputModalities, [.text, .image])
+        XCTAssertEqual(ManagedModelCatalog.spec(for: source.repoId)?.id, modelID)
+        let manifest = MereRunModelManifest.template(for: .inkling2MiniQ8Head)
+        XCTAssertEqual(manifest.sources?.first?.revision, source.revision)
+        XCTAssertEqual(manifest.quantization?.scheme, "mixed-nvfp4-mxfp8-with-affine-q8-head")
+    }
+
     func testMiniSamplingDefaultsForCLIAndAPI() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("Inkling2Mini-\(UUID())")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -60,7 +77,8 @@ final class Inkling2IntegrationTests: XCTestCase {
 
         let request = ChatRequest(messages: [ChatMessage(role: .user, content: "hello")])
         for policy in [ChatDefaultPolicy.command, .openAI] {
-            for model in [Inkling2Resources.miniModelID, Inkling2Resources.miniRepository, root.path] {
+            for model in [Inkling2Resources.miniModelID, Inkling2Resources.miniRepository,
+                          Inkling2Resources.miniQ8HeadModelID, Inkling2Resources.miniQ8HeadRepository, root.path] {
                 let resolved = try ChatRequestResolver.resolve(request, modelID: model, sampling: .init(), policy: policy)
                 XCTAssertEqual(resolved.temperature, 1)
                 XCTAssertEqual(resolved.topP, 1)
