@@ -397,6 +397,7 @@ final class StudioAudioVoiceTests: XCTestCase {
         let job = try XCTUnwrap(fixture.runner.currentJob(for: task))
         let start = try XCTUnwrap(fixture.processRunner.starts.last)
         XCTAssertEqual(job.request.configuration.environment[HaruConversationEvent.environmentKey], "1")
+        XCTAssertEqual(job.request.configuration.environment[HaruConversationEvent.inputTranscriptionEnvironmentKey], "1")
         let arguments = job.request.configuration.arguments
         for value in ["--live", "--system-prompt-file", "/tmp/character.txt", "--reference-audio", "/tmp/voice.wav", "--speak-first"] {
             XCTAssertTrue(arguments.contains(value), "Missing \(value)")
@@ -404,16 +405,27 @@ final class StudioAudioVoiceTests: XCTestCase {
         XCTAssertThrowsError(try fixture.runner.run(draft, task: task))
 
         start.stdout(#"{"haruEvent":"capturing","spea"#)
-        start.stdout(#"king":false,"text":""}"# + "\n" + #"{"haruEvent":"frame","speaking":true,"text":"Hello 🌊"}"# + "\n")
+        start.stdout(#"king":false,"text":""}"# + "\n" + #"{"haruEvent":"frame","speaking":true,"text":"Hello 🌊","startMs":1000}"# + "\n")
         try await Task.sleep(for: .milliseconds(50))
         XCTAssertEqual(job.haruLiveOutput?.isCapturing, true)
         XCTAssertEqual(job.haruLiveOutput?.isSpeaking, true)
         XCTAssertEqual(job.haruLiveOutput?.transcript, "Hello 🌊")
         XCTAssertTrue(job.liveText.isEmpty)
-        start.stdout(#"{"haruEvent":"frame","speaking":false,"text":" again."}"# + "\n")
+        start.stdout(#"{"haruEvent":"inputPartial","speaking":false,"text":"Hi","startMs":400}"# + "\n")
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(job.haruLiveOutput?.partialInput?.text, "Hi")
+        start.stdout(#"{"haruEvent":"inputPartial","speaking":false,"text":"Hi there","startMs":400}"# + "\n")
+        start.stdout(#"{"haruEvent":"frame","speaking":false,"text":" again.","startMs":1300}"# + "\n")
+        start.stdout(#"{"haruEvent":"inputCommit","speaking":false,"text":"Hi there.","startMs":400}"# + "\n")
         try await Task.sleep(for: .milliseconds(50))
         XCTAssertEqual(job.haruLiveOutput?.isSpeaking, false)
         XCTAssertEqual(job.haruLiveOutput?.transcript, "Hello 🌊 again.")
+        XCTAssertNil(job.haruLiveOutput?.partialInput)
+        let segments = [
+            HaruTranscriptSegment(speaker: .user, startMs: 400, text: "Hi there."),
+            HaruTranscriptSegment(speaker: .haru, startMs: 1000, text: "Hello 🌊 again."),
+        ]
+        XCTAssertEqual(job.haruLiveOutput?.segments, segments)
 
         fixture.runner.stop(task: task)
         let process = try XCTUnwrap(fixture.processRunner.processes.last)
@@ -423,7 +435,9 @@ final class StudioAudioVoiceTests: XCTestCase {
         let output = try XCTUnwrap(job.expectedOutput)
         try Data([1, 2, 3]).write(to: output)
         let transcript = String(repeating: "Long transcript. ", count: 2_500)
-        let summary = HaruConversationSummary(output: output.path, frames: 700, sampleRate: 24_000, transcript: transcript)
+        let summary = HaruConversationSummary(
+            output: output.path, frames: 700, sampleRate: 24_000, transcript: transcript, segments: segments
+        )
         let encoded = try JSONEncoder().encode(summary)
         start.stdout(String(decoding: encoded, as: UTF8.self) + "\n")
         start.termination(0)
@@ -433,7 +447,9 @@ final class StudioAudioVoiceTests: XCTestCase {
         XCTAssertEqual(row.status, .completed)
         XCTAssertEqual(row.outputURL, output)
         let recorded = try XCTUnwrap(row.outputText)
-        XCTAssertEqual(try JSONDecoder().decode(HaruConversationSummary.self, from: Data(recorded.utf8)).transcript, transcript)
+        let saved = try JSONDecoder().decode(HaruConversationSummary.self, from: Data(recorded.utf8))
+        XCTAssertEqual(saved.transcript, transcript)
+        XCTAssertEqual(saved.segments, segments)
     }
 
     func testLiveListenSessionStopsWithInterruptThenCancel() async throws {

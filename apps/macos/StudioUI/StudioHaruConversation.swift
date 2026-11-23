@@ -20,6 +20,7 @@ struct StudioHaruConversation: View {
     @State private var error: String?
 
     private static let task = StudioTask.chatConversation
+    private static let transcriptionModel = HaruConversationEvent.inputTranscriptionModelID
 
     private var draft: StudioTaskDraft {
         get { sessions?.taskDraft(for: Self.task) ?? StudioTaskDraft(templateID: .speechConverse) }
@@ -52,6 +53,9 @@ struct StudioHaruConversation: View {
                 }
                 if let error {
                     MereBanner(severity: .error, text: error, onDismiss: { self.error = nil })
+                }
+                if job == nil, draft.text("--input").isBlank {
+                    transcriptionSetup
                 }
                 setup.disabled(job != nil)
                 if job == nil,
@@ -118,6 +122,26 @@ struct StudioHaruConversation: View {
         .merePanel()
     }
 
+    @ViewBuilder
+    private var transcriptionSetup: some View {
+        if let pull = jobMonitor.pullJob(for: Self.transcriptionModel) {
+            LabeledContent("Downloading Parakeet") {
+                Text(pull.status)
+                    .foregroundStyle(MereRunTheme.textSecondary)
+                StudioSessionSecondaryButton("Cancel") { _ = jobMonitor.cancel(pull) }
+            }
+            .padding(16)
+            .merePanel()
+        } else if let row = models.rows.first(where: { $0.id == Self.transcriptionModel }),
+                  row.isMissing, row.supported != false {
+            LabeledContent("Transcribe your microphone") {
+                StudioSessionSecondaryButton("Download Parakeet") { pullModel(Self.transcriptionModel) }
+            }
+            .padding(16)
+            .merePanel()
+        }
+    }
+
     private var setup: some View {
         DisclosureGroup(isExpanded: $showsSetup) {
             VStack(alignment: .leading, spacing: 13) {
@@ -174,7 +198,7 @@ struct StudioHaruConversation: View {
             actions: StudioReadinessActions(
                 scope: StudioTaskSchema.modelScope(for: draft, source: scopeSource),
                 model: Binding(get: { draft.model }, set: { draft.model = $0 }),
-                modelInventory: models.rows, pullModel: pullModel,
+                modelInventory: models.rows, pullModel: { pullModel(modelID) },
                 openModels: { navigation.open(task: .modelsInstalled) }, recheck: refreshReadiness,
                 showsModelPicker: false
             ),
@@ -195,7 +219,7 @@ struct StudioHaruConversation: View {
         }
     }
 
-    private func pullModel() {
+    private func pullModel(_ modelID: String) {
         guard !modelID.isBlank, let template = CommandCatalog.template(id: .modelPull) else { return }
         var options = template.defaultDraft()
         options.model = modelID
@@ -259,7 +283,13 @@ private struct StudioHaruRunningConversation: View {
             .merePanel()
 
             if isLive {
-                StudioHaruTranscript(text: job.haruLiveOutput?.transcript ?? "", isLive: true)
+                StudioHaruTranscript(
+                    legacyText: job.haruLiveOutput?.transcript ?? "",
+                    segments: job.haruLiveOutput?.segments ?? [],
+                    partial: job.haruLiveOutput?.partialInput,
+                    inputError: job.haruLiveOutput?.inputTranscriptionError,
+                    isLive: true
+                )
             }
         }
     }
@@ -322,7 +352,10 @@ private struct StudioHaruSavedConversation: View {
                 .fixedSize()
                 .accessibilityLabel("Saved conversations")
             }
-            StudioHaruTranscript(text: summary?.transcript ?? "", isLive: false)
+            StudioHaruTranscript(
+                legacyText: summary?.transcript ?? "", segments: summary?.segments ?? [],
+                inputError: summary?.inputTranscriptionError, isLive: false
+            )
             if let audioURL = item.outputURL, FileManager.default.fileExists(atPath: audioURL.path) {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack {
@@ -359,30 +392,56 @@ private struct StudioHaruSavedConversation: View {
 }
 
 private struct StudioHaruTranscript: View {
-    let text: String
+    let legacyText: String
+    let segments: [HaruTranscriptSegment]
+    var partial: HaruTranscriptSegment?
+    let inputError: String?
     let isLive: Bool
 
+    private var entries: [HaruTranscriptSegment] {
+        var entries = segments
+        if !entries.contains(where: { $0.speaker == .haru }), !legacyText.isEmpty {
+            entries.append(.init(speaker: .haru, startMs: 0, text: legacyText))
+        }
+        if let partial { entries.append(partial) }
+        return HaruTranscriptSegment.chronological(entries)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let entries = self.entries
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Haru’s transcript", systemImage: "text.alignleft")
+                Label("Conversation transcript", systemImage: "text.alignleft")
                     .font(MereRunTheme.sectionFont)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
-                if !text.isEmpty {
+                if !entries.isEmpty {
                     StudioSessionSecondaryButton("Copy") {
+                        let transcript = entries.map { "\($0.speaker.title): \($0.text)" }.joined(separator: "\n")
                         NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(text, forType: .string)
+                        NSPasteboard.general.setString(transcript, forType: .string)
                     }
-                    .accessibilityLabel("Copy Haru’s transcript")
+                    .accessibilityLabel("Copy conversation transcript")
                 }
             }
-            if text.isEmpty {
-                Text(isLive ? "Haru’s words appear here as it responds." : "Haru produced no transcript.")
+            if let inputError {
+                Label(inputError, systemImage: "mic.slash")
+                    .foregroundStyle(MereRunTheme.textSecondary)
+            }
+            if entries.isEmpty {
+                Text(isLive ? "Speech appears here as the conversation unfolds." : "No transcript was captured.")
                     .foregroundStyle(MereRunTheme.textMuted)
-            } else {
-                Text(text)
-                    .textSelection(.enabled)
+            }
+            ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(entry.speaker.title)
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(entry.speaker == .user ? MereRunTheme.accent : MereRunTheme.textSecondary)
+                    Text(entry.text)
+                        .foregroundStyle(entry == partial ? MereRunTheme.textSecondary : MereRunTheme.textPrimary)
+                        .textSelection(.enabled)
+                }
+                .accessibilityElement(children: .combine)
             }
         }
         .font(.callout)
