@@ -6,7 +6,9 @@ checkpoints and supports reasoning and tool calls.
 
 | Model | Managed ID | Parameters | Checkpoint disk space |
 | --- | --- | --- | --- |
-| Mini | `vision-chat-inkling-2-mini` | 26.4B total, 5.4B effective active per token | About 20 GB |
+| Mini Speed (default) | `vision-chat-inkling-2-mini` | 26.4B total, 5.4B effective active per token | About 18.4 GB |
+| Mini Official | `vision-chat-inkling-2-mini-official` | 26.4B total, 5.4B effective active per token | About 20 GB |
+| Mini Q8 Head | `vision-chat-inkling-2-mini-q8-head` | 26.4B total, 5.4B effective active per token | About 19.8 GB |
 | Small | `vision-chat-inkling-2-small` | 594B total, 17B active per token | About 394 GB |
 
 On macOS, Mini keeps its packed experts resident on Metal when the checkpoint
@@ -17,7 +19,9 @@ devices, on smaller memory configurations, or when launched with
 
 ## Install and chat
 
-Installation is explicit; chat doesn't download the checkpoint automatically:
+Pull the default Speed checkpoint before starting chat. Its single snapshot
+includes affine 8-bit attention and output projections, the original packed
+experts and vision weights, and the DSpark draft assets. [Inkling 2 Mini Speed checkpoint](https://huggingface.co/Sawfwair/Inkling-2-Mini-Speed)
 
 ```bash
 mere.run model pull vision-chat-inkling-2-mini
@@ -26,9 +30,11 @@ mere.run text chat --model vision-chat-inkling-2-mini \
   --reasoning-effort 0.2 --max-tokens 512
 ```
 
-To describe an image, add `--image ./diagram.png`. To use an existing original
-snapshot, pass its directory to `--model`, or use the matching managed model ID
-with `--model-root /path/to/checkpoint`.
+To describe an image, add `--image ./diagram.png`. If you installed Mini before
+the default changed, run `mere.run model pull vision-chat-inkling-2-mini` to
+install Speed. To keep using the original checkpoint, pull
+`vision-chat-inkling-2-mini-official` or pass an existing checkpoint directory
+to `--model`.
 
 The runtime reads the checkpoint's SafeTensors index and recognizes
 `model_type` values `inkling2_loop` for fixed-pass Mini and `inkling2` for
@@ -56,9 +62,10 @@ checkpoint continues to use its BF16 output head for target verification.
 ## Speculative decoding on Mini
 
 Mini defaults to temperature `1` with unrestricted sampling. For text and
-image chat on Metal, Mini uses adaptive DSpark by default when the packed
-experts are resident, the draft weights are installed, and the request uses
-unrestricted sampling. With the original checkpoint, DSpark uses 8-bit
+image chat on Metal, Mini uses DSpark by default when the packed experts are
+resident, the draft weights are installed, and the request uses unrestricted
+sampling. Speed uses three proposals per round. The other Mini checkpoints use
+adaptive depth. With the original checkpoint, DSpark uses 8-bit
 copies of the draft vocabulary projections and the target verifies with its
 BF16 head.
 
@@ -72,9 +79,9 @@ Set `MERERUN_INKLING2_DSPARK=0` to disable drafting. Set it to `1` to
 enable drafting for eligible requests with greedy or filtered sampling,
 or when Mini uses the reference path.
 
-Mini starts with three proposals per round and adjusts the depth using the
-accepted prefixes from recent rounds. With resident Metal experts, adaptive
-DSpark can also propose up to 16 tokens at a time from repeated sequences in
+Adaptive DSpark starts with three proposals per round and adjusts the depth
+using the accepted prefixes from recent rounds. With resident Metal experts,
+it can also propose up to 16 tokens at a time from repeated sequences in
 the generated text. The target verifies these proposals using the request's
 sampling settings. The `inkling_dspark` stats line reports
 proposed and accepted tokens and how many rounds ran at each depth. To keep
@@ -88,6 +95,10 @@ different sequence of random draws.
 Mini's managed download includes `mtp.safetensors`. Older checkpoints without
 this file use standard decoding. To enable drafting for an older checkpoint,
 add the draft weights to its directory. [Official Mini draft weights](https://huggingface.co/thinkingmachines/Inkling-2-Mini/blob/ed40e7da625f594fc9c4990f5f66be24873c22d7/mtp.safetensors)
+
+For eligible text and image requests, Speed uses a compiled verifier for
+contexts up to 16,384 tokens, including the prompt and generation budget.
+Longer requests use the dynamic verifier.
 
 ## Serve the local API
 

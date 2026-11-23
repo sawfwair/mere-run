@@ -145,6 +145,14 @@ final class SetupCommandParsingTests: XCTestCase {
         }
     }
 
+    func testInklingMiniQ8HeadRemainsSelectableForPi() throws {
+        let runtime = try SetupAgentRuntime.runtime(forManagedModelID: Inkling2Resources.miniQ8HeadModelID)
+        XCTAssertEqual(runtime.engine, .textChatInkling2)
+        XCTAssertEqual(runtime.providerModel.id, Inkling2Resources.miniQ8HeadModelID)
+        XCTAssertEqual(runtime.providerModel.contextWindow, APIServe.defaultContextSize)
+        XCTAssertEqual(runtime.providerModel.maxTokens, 4_096)
+    }
+
     func testQ38ProviderUsesNativeQwenRuntime() throws {
         let runtime = try SetupAgentRuntime.runtime(
             forManagedModelID: Q35Resources.q38TwentySevenBModelId

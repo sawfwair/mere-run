@@ -96,10 +96,10 @@ final class Inkling2DSparkCacheTests: MLXTestCase {
         var cache = Inkling2DSparkLayerCache()
         layer.append(values([1, 6, 64], stride: 29), offset: 11, cache: &cache)
         let input = values([1, 8, 64], stride: 31)
-        let full = layer.forward(input, offset: 17, cache: cache)
+        let full = layer.forward(input, offset: 17, cache: &cache)
         for count in [1, 3, 7] {
             let rows = 1..<(count + 1)
-            let proposals = layer.forward(input, offset: 17, cache: cache, queries: rows)
+            let proposals = layer.forward(input, offset: 17, cache: &cache, queries: rows)
             XCTAssertEqual(proposals.shape, [1, count, 64])
             XCTAssertTrue(allClose(proposals, full[0..., rows, 0...], rtol: 0.005, atol: 0.005).item(Bool.self))
         }

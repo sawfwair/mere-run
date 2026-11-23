@@ -538,10 +538,10 @@ extension MereRunModelManifest {
                     "\(LagunaResources.dflashUpstreamModelID)@\(LagunaResources.dflashUpstreamRevision)",
                 createdAt: createdAt
             )
-        case .inkling2Small, .inkling2Mini:
-            let isMini = modelID == .inkling2Mini
-            let repository = isMini ? Inkling2Resources.miniRepository : Inkling2Resources.repository
-            let revision = isMini ? Inkling2Resources.miniRevision : Inkling2Resources.revision
+        case .inkling2Small, .inkling2MiniOfficial:
+            let isMini = modelID == .inkling2MiniOfficial
+            let repository = isMini ? Inkling2Resources.miniOfficialRepository : Inkling2Resources.repository
+            let revision = isMini ? Inkling2Resources.miniOfficialRevision : Inkling2Resources.revision
             return MereRunModelManifest(
                 id: modelID.rawValue, engine: .inkling2, family: .inkling,
                 tier: isMini ? .tiny : .small, variant: .standard,
@@ -550,13 +550,17 @@ extension MereRunModelManifest {
                 defaults: nil, supports: [.chat, .codeGeneration, .visionChat], components: nil,
                 upstreamRepoId: "\(repository)@\(revision)", createdAt: createdAt
             )
-        case .inkling2MiniQ8Head:
+        case .inkling2Mini, .inkling2MiniQ8Head:
+            let isSpeed = modelID == .inkling2Mini
+            let repository = isSpeed ? Inkling2Resources.miniRepository : Inkling2Resources.miniQ8HeadRepository
+            let revision = isSpeed ? Inkling2Resources.miniRevision : Inkling2Resources.miniQ8HeadRevision
+            let scheme = isSpeed ? "mixed-nvfp4-mxfp8-with-affine-q8-attention-and-head" : "mixed-nvfp4-mxfp8-with-affine-q8-head"
             return MereRunModelManifest(
                 id: modelID.rawValue, engine: .inkling2, family: .inkling, tier: .tiny, variant: .standard,
                 precision: .int4,
-                quantization: Quantization(bits: 4, groupSize: 16, scheme: "mixed-nvfp4-mxfp8-with-affine-q8-head"),
+                quantization: Quantization(bits: 4, groupSize: 16, scheme: scheme),
                 defaults: nil, supports: [.chat, .codeGeneration, .visionChat], components: nil,
-                upstreamRepoId: "\(Inkling2Resources.miniQ8HeadRepository)@\(Inkling2Resources.miniQ8HeadRevision)",
+                upstreamRepoId: "\(repository)@\(revision)",
                 createdAt: createdAt
             )
         case .inklingSmall:

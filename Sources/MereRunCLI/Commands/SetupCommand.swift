@@ -507,7 +507,7 @@ struct SetupAgentRuntime {
                 "\(recommendation.displayName) does not have a cataloged API profile."
             )
         }
-        let isInklingMini = modelID == Inkling2Resources.miniModelID
+        let isInklingMini = [Inkling2Resources.miniModelID, Inkling2Resources.miniQ8HeadModelID].contains(modelID)
         return try PiProviderModel(
             id: recommendation.id,
             name: "\(recommendation.displayName) (mere.run)",

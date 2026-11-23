@@ -41,6 +41,7 @@ extension Inkling2Model {
         var hidden = try visionNorm(concatenated([cls, embedded], axis: 0), p + "ln_pre", epsilon: v.layerNormEps)
         let headDim = d / v.numAttentionHeads
         let rope = Self.visionRoPE(coordinates: [(0, 0)] + coords.map { ($0.0 + 1, $0.1 + 1) }, headDim: headDim)
+        let fusedAttention = usePackedExperts && coords.count >= 2_048
         for i in 0..<v.numHiddenLayers {
             try Task.checkCancellation()
             let l = p + "layers.\(i)."
@@ -50,8 +51,7 @@ extension Inkling2Model {
             let value = try linear(normalized, l + "self_attn.v_proj", bias: true).reshaped(-1, v.numAttentionHeads, headDim)
             let rotatedQ = Self.rotateVision(q, cosine: rope.0, sine: rope.1).transposed(1, 0, 2)
             let rotatedK = Self.rotateVision(k, cosine: rope.0, sine: rope.1).transposed(1, 0, 2)
-            let scores = matmul(rotatedQ.asType(.float32), rotatedK.asType(.float32).swappedAxes(-1, -2)) / sqrt(Float(headDim))
-            let attended = matmul(softmax(scores, axis: -1).asType(value.dtype), value.transposed(1, 0, 2))
+            let attended = Self.visionAttention(query: rotatedQ, keys: rotatedK, values: value.transposed(1, 0, 2), fused: fusedAttention)
                 .transposed(1, 0, 2).reshaped(-1, d)
             hidden = try hidden + weights.read(l + "ls_1.gamma") * linear(attended, l + "self_attn.out_proj", bias: true)
             let mlpInput = try visionNorm(hidden, l + "ln_2", epsilon: v.layerNormEps)
@@ -61,6 +61,18 @@ extension Inkling2Model {
         }
         let merged = hidden[1..., 0...].reshaped(rows * columns, merge * merge * d)
         return try linear(Self.gelu(linear(merged, "model.visual.proj_in")), "model.visual.proj_out")
+    }
+
+    static func visionAttention(query: MLXArray, keys: MLXArray, values: MLXArray, fused: Bool) -> MLXArray {
+        let divisor = sqrt(Float(query.dim(-1)))
+        if fused, query.dtype == values.dtype, keys.dtype == values.dtype {
+            return MLXFast.scaledDotProductAttention(
+                queries: query.expandedDimensions(axis: 0), keys: keys.expandedDimensions(axis: 0),
+                values: values.expandedDimensions(axis: 0), scale: 1 / divisor, mask: .none
+            ).squeezed(axis: 0)
+        }
+        let scores = matmul(query.asType(.float32), keys.asType(.float32).swappedAxes(-1, -2)) / divisor
+        return matmul(softmax(scores, axis: -1).asType(values.dtype), values)
     }
 
     private func visionNorm(_ x: MLXArray, _ key: String, epsilon: Float) throws -> MLXArray {

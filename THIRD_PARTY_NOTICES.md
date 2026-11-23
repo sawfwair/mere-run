@@ -595,6 +595,10 @@ Flash-Next disk-backed PLE lookup and incremental QSA key caching are adapted
 from [`ddalcu/mlx-serve`](https://github.com/ddalcu/mlx-serve), revision
 `09970f9bd3051fa2f39fc03e7df3d4a937c37e2e`. License: MIT.
 
+`Sources/MereRunInkling2Model/Inkling2SplitAttention.swift` adapts the
+Inkling 2 `relsplit.metal` and `relcomb.metal` kernels from revision
+`2fe9be834a601c70ef1a597563026340f0e722fe`. License: MIT.
+
 ```text
 MIT License
 

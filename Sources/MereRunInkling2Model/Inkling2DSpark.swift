@@ -38,6 +38,18 @@ struct Inkling2DSparkWeights {
 struct Inkling2DSparkLayerCache {
     var keys: MLXArray?
     var values: MLXArray?
+    var chronologicalBank = false
+
+    mutating func write(_ k: MLXArray, _ v: MLXArray, offset: Int) -> (MLXArray, MLXArray) {
+        let range = offset..<(offset + k.dim(2))
+        let newKeys = keys!.reshaped(keys!.shape)
+        let newValues = values!.reshaped(values!.shape)
+        newKeys[0..., 0..., range, 0...] = k
+        newValues[0..., 0..., range, 0...] = v
+        keys = newKeys
+        values = newValues
+        return (newKeys[0..., 0..., ..<range.upperBound, 0...], newValues[0..., 0..., ..<range.upperBound, 0...])
+    }
 }
 
 struct Inkling2DSparkLayer {
@@ -96,6 +108,10 @@ struct Inkling2DSparkLayer {
         let kv = matmul(context, contextKeyValue.T)
         let k = rotate(kv[.ellipsis, ..<width], norm: contextKeyNorm, count: count, offset: offset)
         let v = heads(kv[.ellipsis, width...], count: count)
+        if cache.chronologicalBank {
+            _ = cache.write(k, v, offset: offset)
+            return
+        }
         let keys = cache.keys.map { concatenated([$0, k], axis: 2) } ?? k
         let values = cache.values.map { concatenated([$0, v], axis: 2) } ?? v
         let start = max(0, keys.dim(2) - (window ?? keys.dim(2)))
@@ -103,7 +119,7 @@ struct Inkling2DSparkLayer {
         cache.values = values[0..., 0..., start..., 0...]
     }
 
-    func forward(_ input: MLXArray, offset: Int, cache: Inkling2DSparkLayerCache,
+    func forward(_ input: MLXArray, offset: Int, cache: inout Inkling2DSparkLayerCache,
                  queries: Range<Int>? = nil) -> MLXArray {
         let h = config.numAttentionHeads, kv = config.numKeyValueHeads, d = config.headDim
         let qEnd = h * d, kEnd = qEnd + kv * d
@@ -113,8 +129,13 @@ struct Inkling2DSparkLayer {
         let q = rotate(query, norm: queryNorm, count: h, offset: offset + (queries?.lowerBound ?? 0))
         let k = rotate(qkv[.ellipsis, qEnd..<kEnd], norm: keyNorm, count: kv, offset: offset)
         let v = heads(qkv[.ellipsis, kEnd...], count: kv)
-        let keys = cache.keys.map { concatenated([$0, k], axis: 2) } ?? k
-        let values = cache.values.map { concatenated([$0, v], axis: 2) } ?? v
+        let keys: MLXArray, values: MLXArray
+        if cache.chronologicalBank {
+            (keys, values) = cache.write(k, v, offset: offset)
+        } else {
+            keys = cache.keys.map { concatenated([$0, k], axis: 2) } ?? k
+            values = cache.values.map { concatenated([$0, v], axis: 2) } ?? v
+        }
         let attention = MLXFast.scaledDotProductAttention(
             queries: q, keys: keys, values: values, scale: 1 / sqrt(Float(d)), mask: .none
         ).transposed(0, 2, 1, 3).reshaped(1, -1, qEnd)
@@ -132,6 +153,7 @@ struct Inkling2DSparkLayer {
 private enum Inkling2DSparkProjection {
     case dense(MLXArray)
     case q8(Inkling2Q8Projection)
+    case reference(Inkling2ReferenceAffineProjection)
 
     init(_ weight: MLXArray, useQ8: Bool) {
         if useQ8, weight.dim(-1).isMultiple(of: 64) {
@@ -148,6 +170,8 @@ private enum Inkling2DSparkProjection {
         case let .dense(weight):
             matmul(input, weight.T)
         case let .q8(projection):
+            projection(input)
+        case let .reference(projection):
             projection(input)
         }
     }
@@ -191,6 +215,7 @@ package final class Inkling2DSpark {
         recurrentContext = rnn[0..., (2 * rank)...]
         recurrentBias = try weights.read("markov_head.rnn_proj.bias", [3 * rank]).asType(.float32)
         let outputRows = target.config.textConfig.unpaddedVocabSize
+        let headKey = target.prefix + "unembed.weight"
         if let q8OutputHead = target.q8OutputHead {
             baseHead = .q8(q8OutputHead)
             head = try .q8(Inkling2Q8Projection(weights: target.weights, key: Inkling2Q8Projection.draftKey,
@@ -200,11 +225,35 @@ package final class Inkling2DSpark {
             headBias = try target.weights.read(biasKey)
             eval(mixWeights, recurrent, recurrentContext, recurrentBias, headBias)
         } else {
-            let unembed = try target.weights.read(target.prefix + "unembed.weight")
-            let base = unembed[..<outputRows]
+            let base: MLXArray
+            if let root = target.weights.speedDraftRoot {
+                let draftWeights = try Inkling2Weights(root: root.appendingPathComponent(Inkling2Weights.speedDraftHeadDirectory))
+                let foldWeights = try Inkling2Weights(root: root.appendingPathComponent(Inkling2Weights.speedDraftFoldDirectory))
+                #if os(macOS)
+                draftWeights.readsIntoOwnedBuffers = target.usePackedExperts
+                foldWeights.readsIntoOwnedBuffers = target.usePackedExperts
+                #endif
+                try draftWeights.require(headKey, shape: [vocab, hidden / 8], dtype: "U32")
+                for suffix in [".mtplx_scales", ".mtplx_biases"] {
+                    try draftWeights.require(headKey + suffix, shape: [vocab, hidden / 64], dtype: "BF16")
+                }
+                guard let projection = try draftWeights.referenceProjection(headKey),
+                      projection.spec.bits == 4, projection.spec.groupSize == 64 else {
+                    throw Inkling2Error.invalid("invalid Speed pack draft output projection")
+                }
+                try foldWeights.require(headKey, shape: [vocab, hidden], dtype: "BF16")
+                base = try foldWeights.read(headKey, retain: false)[..<outputRows]
+                baseHead = .reference(projection.slice(0..<outputRows))
+            } else if let affine = try target.weights.referenceProjection(headKey) {
+                let output = affine.slice(0..<outputRows)
+                base = output.unpacked()
+                baseHead = .reference(output)
+            } else {
+                base = try target.weights.read(headKey)[..<outputRows]
+                baseHead = Inkling2DSparkProjection(base, useQ8: target.usePackedExperts)
+            }
             let correction = try matmul(base, weights.read("markov_head.hidden_out.weight", [hidden, rank]))
             headBias = try matmul(base, weights.read("markov_head.hidden_out.bias", [hidden]))
-            baseHead = Inkling2DSparkProjection(base, useQ8: target.usePackedExperts)
             head = Inkling2DSparkProjection(correction, useQ8: target.usePackedExperts)
             eval(mixWeights, recurrent, recurrentContext, recurrentBias, correction, headBias)
         }
@@ -222,8 +271,19 @@ package final class Inkling2DSpark {
         }
     }
 
+    func prepareChronologicalBank(offset: Int, budget: Int, caches: inout [Inkling2DSparkLayerCache]) {
+        let cap = ((offset + budget + config.blockSize + 511) / 512) * 512
+        for (index, layer) in layers.enumerated() where layer.window == nil {
+            guard let keys = caches[index].keys, let values = caches[index].values, keys.dim(2) == offset else { continue }
+            let padding = MLXArray.zeros([keys.dim(0), keys.dim(1), cap - offset, keys.dim(3)], dtype: keys.dtype)
+            caches[index].keys = concatenated([keys, padding], axis: 2)
+            caches[index].values = concatenated([values, padding], axis: 2)
+            caches[index].chronologicalBank = true
+        }
+    }
+
     func propose(anchor: MLXArray, count: Int, features: MLXArray, offset: Int,
-                 caches: [Inkling2DSparkLayerCache], distribution: ((MLXArray) -> MLXArray)?) throws
+                 caches: inout [Inkling2DSparkLayerCache], distribution: ((MLXArray) -> MLXArray)?) throws
         -> (tokens: MLXArray, probabilities: [MLXArray]) {
         let embedding = try target.embeddings(anchor.reshaped(1, 1))
         let masks = broadcast(maskEmbedding, to: [1, config.blockSize - 1, config.hiddenSize])
@@ -231,7 +291,7 @@ package final class Inkling2DSpark {
         for (index, layer) in layers.enumerated() {
             // The final layer still attends to the whole block, but we only use the proposal outputs.
             let queries = index == layers.count - 1 ? 1..<(count + 1) : nil
-            x = layer.forward(x, offset: offset, cache: caches[index], queries: queries)
+            x = layer.forward(x, offset: offset, cache: &caches[index], queries: queries)
         }
         let hidden = MLXFast.rmsNorm(x, weight: norm, eps: config.rmsNormEps).asType(.bfloat16)
         let f = mix(features, row: layers.count, norm: markovNorm)[0..., -1, 0...]

@@ -30,9 +30,12 @@ final class Inkling2IntegrationTests: XCTestCase {
 
     func testMiniManagedCheckpointAndNativeServingRouting() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Inkling2Resources.miniModelID))
-        XCTAssertEqual(spec.upstreamRepoId, "thinkingmachines/Inkling-2-Mini")
+        XCTAssertEqual(spec.upstreamRepoId, "Sawfwair/Inkling-2-Mini-Speed")
         XCTAssertEqual(spec.hubFallback?.revision, Inkling2Resources.miniRevision)
-        XCTAssertTrue(spec.hubFallback?.patterns.contains("mtp.safetensors") ?? false)
+        let source = try XCTUnwrap(spec.hubFallback)
+        XCTAssertTrue(source.patterns.contains("mtp.safetensors"))
+        XCTAssertTrue(Set(Inkling2Resources.speedDraftFiles).isSubset(of: Set(source.patterns)))
+        XCTAssertTrue(spec.mountedHubFallbacks.isEmpty)
         XCTAssertEqual(spec.validationKind, .inkling2)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatInkling2)
@@ -48,8 +51,38 @@ final class Inkling2IntegrationTests: XCTestCase {
         XCTAssertEqual(manifest.precision, .int4)
         XCTAssertEqual(manifest.quantization?.bits, 4)
         XCTAssertEqual(manifest.quantization?.groupSize, 16)
-        XCTAssertEqual(manifest.quantization?.scheme, "mixed-nvfp4-mxfp8")
+        XCTAssertEqual(manifest.quantization?.scheme, "mixed-nvfp4-mxfp8-with-affine-q8-attention-and-head")
         XCTAssertEqual(manifest.sources?.first?.revision, Inkling2Resources.miniRevision)
+    }
+
+    func testMiniSpeedRequiresBothBundledDraftHeads() throws {
+        let fileManager = FileManager.default
+        let parent = fileManager.temporaryDirectory.appendingPathComponent("Inkling2MiniSpeed-\(UUID())")
+        let snapshot = parent.appendingPathComponent("snapshot")
+        let installation = parent.appendingPathComponent("install")
+        try fileManager.createDirectory(at: snapshot, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: parent) }
+        let speed = try XCTUnwrap(ManagedModelCatalog.spec(for: Inkling2Resources.miniModelID))
+        let official = try XCTUnwrap(ManagedModelCatalog.spec(for: "thinkingmachines/Inkling-2-Mini"))
+        XCTAssertEqual(official.id, Inkling2Resources.miniOfficialModelID)
+        XCTAssertEqual(official.upstreamRevision, "ed40e7da625f594fc9c4990f5f66be24873c22d7")
+        let filenames = ["config.json", "tokenizer.json", "tokenizer_config.json", "chat_template.jinja",
+                         "mtp.safetensors", "model-00001.safetensors"]
+        for filename in filenames { try Data().write(to: snapshot.appendingPathComponent(filename)) }
+        let index = #"{"weight_map":{"tensor":"model-00001.safetensors"}}"#
+        try Data(index.utf8).write(to: snapshot.appendingPathComponent("model.safetensors.index.json"))
+        XCTAssertTrue(official.missingPaths(in: snapshot, fileManager: fileManager).isEmpty)
+        XCTAssertEqual(speed.missingPaths(in: snapshot, fileManager: fileManager).count, 6)
+
+        for filename in Inkling2Resources.speedDraftFiles {
+            let file = snapshot.appendingPathComponent(filename)
+            try fileManager.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data().write(to: file)
+        }
+        _ = try ManagedModelResolver.materializeManagedInstallRoot(
+            for: speed, snapshotURL: snapshot, modelDir: installation, fileManager: fileManager
+        )
+        XCTAssertTrue(speed.isManagedRuntimeReady(installation, fileManager: fileManager))
     }
 
     func testMiniQ8HeadUsesOnePinnedManagedCheckpoint() throws {

@@ -105,6 +105,7 @@ Use `mere.run guide --model text-chat-gemma4-26b-a4b-bf16` for its text workflow
 | `image` | `image-ideogram4-sdnq-uint4` |
 | `vision-chat` | `vision-chat-inkling-2-small` |
 | `vision-chat` | `vision-chat-inkling-2-mini` |
+| `vision-chat` | `vision-chat-inkling-2-mini-official` |
 | `vision-chat` | `vision-chat-inkling-2-mini-q8-head` |
 | `text-chat` | `text-chat-flint-4bit` |
 | `text-chat` | `text-chat-flint-bf16` |
@@ -2215,7 +2216,8 @@ separately addressable for repair and inspection, appear in `model list` and
 
 | Managed ID | Upstream repository | Revision |
 | --- | --- | --- |
-| `vision-chat-inkling-2-mini` | [thinkingmachines/Inkling-2-Mini](https://huggingface.co/thinkingmachines/Inkling-2-Mini) | `ed40e7da625f594fc9c4990f5f66be24873c22d7` |
+| `vision-chat-inkling-2-mini` | [Sawfwair/Inkling-2-Mini-Speed](https://huggingface.co/Sawfwair/Inkling-2-Mini-Speed) | `54db8d3e8137dd2a7c890df7d4c1d2f862942860` |
+| `vision-chat-inkling-2-mini-official` | [thinkingmachines/Inkling-2-Mini](https://huggingface.co/thinkingmachines/Inkling-2-Mini) | `ed40e7da625f594fc9c4990f5f66be24873c22d7` |
 | `vision-chat-inkling-2-mini-q8-head` | [Sawfwair/Inkling-2-Mini-Q8-Head](https://huggingface.co/Sawfwair/Inkling-2-Mini-Q8-Head) | `6e2909a5ed4956cec636e6517d365676086f90df` |
 | `vision-chat-inkling-2-small` | [thinkingmachines/Inkling-2-Small](https://huggingface.co/thinkingmachines/Inkling-2-Small) | `aac974122acd33ddb0d3e1f54433a9c5dd2249ce` |
 

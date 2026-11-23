@@ -12,6 +12,11 @@ package struct Inkling2DSparkDecodeResult {
 }
 
 package final class Inkling2DSparkSession {
+    private struct TargetVerification {
+        let logits: MLXArray
+        let commit: (Int) throws -> MLXArray
+    }
+
     private let draft: Inkling2DSpark
     private let targetCache: Inkling2Cache
     private var draftCaches: [Inkling2DSparkLayerCache]
@@ -38,6 +43,17 @@ package final class Inkling2DSparkSession {
                         distribution: ((MLXArray) -> MLXArray)? = nil) throws -> Inkling2DSparkDecodeResult {
         guard var lastFeatures else { throw Inkling2Error.invalid("DSpark requires prefilled target features") }
         let start = Date()
+        #if os(macOS)
+        let speedPack = draft.target.usesSpeedPack && draft.target.usePackedExperts
+        if speedPack { Inkling2SpeedPackAllocator.enter() }
+        defer { if speedPack { Inkling2SpeedPackAllocator.leave() } }
+        if speedPack, budget <= Inkling2CompiledVerifier.capacityLimit - targetCache.offset {
+            draft.prepareChronologicalBank(offset: targetCache.offset, budget: budget, caches: &draftCaches)
+        }
+        var compiled = distribution == nil ? nil : Inkling2CompiledVerifier(draft: draft, cache: targetCache, budget: budget)
+        defer { compiled?.restore() }
+        let overlapsDraft = compiled != nil && GPU.deviceInfo().architecture == "applegpu_g17s"
+        #endif
         let initialRow = initial[0, -1]
         var next = distribution.map { MLXRandom.categorical(log($0(initialRow))) }
             .map { $0.item(Int.self) } ?? argMax(initialRow, axis: -1).item(Int.self)
@@ -63,7 +79,11 @@ package final class Inkling2DSparkSession {
             let count = replay?.count ?? min(controller.depth, remaining)
             if count == 0 { break }
 
+            #if os(macOS)
+            let offset = compiled?.offset ?? targetCache.offset
+            #else
             let offset = targetCache.offset
+            #endif
             let anchor = MLXArray(Int32(next))
             let proposed: (tokens: MLXArray, probabilities: [MLXArray])
             if let replay {
@@ -71,15 +91,39 @@ package final class Inkling2DSparkSession {
                 proposed = (MLXArray(sequence).reshaped(1, -1), [])
             } else {
                 proposed = try draft.propose(anchor: anchor, count: count, features: lastFeatures,
-                                              offset: offset, caches: draftCaches, distribution: distribution)
+                                              offset: offset, caches: &draftCaches, distribution: distribution)
             }
-            let embeddings = try draft.target.embeddings(proposed.tokens)
-            let capture = Inkling2DSparkFeatures(draft.config.targetLayerIds)
-            targetCache.beginVerification()
-            let logits = try draft.target.forward(embeddings: embeddings, cache: targetCache,
-                                                  lastPositionOnly: false, capture: capture)
+            var target: TargetVerification?
+            #if os(macOS)
+            if let verifier = compiled {
+                if overlapsDraft, replay == nil, Inkling2CompiledVerifier.supportedWidths.contains(proposed.tokens.dim(1)) {
+                    // Let the draft execute while the CPU builds the target graph.
+                    asyncEval(proposed.tokens)
+                }
+                if let panel = try verifier.verify(proposed.tokens) {
+                    target = TargetVerification(logits: panel.logits) { count in
+                        verifier.commit(panel, count: count)
+                        return panel.features[0..., ..<count, 0..., 0...]
+                    }
+                } else {
+                    verifier.restore()
+                    compiled = nil
+                    if proposed.tokens.dim(1) < Inkling2CompiledVerifier.supportedWidths.lowerBound {
+                        let direct = try verifyDirect(proposed.tokens)
+                        target = TargetVerification(logits: direct.logits) { count in
+                            let features = try direct.commit(count)
+                            if verifier.resumeAfterDirectCommit() {
+                                compiled = verifier
+                            }
+                            return features
+                        }
+                    }
+                }
+            }
+            #endif
+            let targetVerification = try target ?? verifyDirect(proposed.tokens)
             let verification = Inkling2DSparkVerification.check(
-                proposals: proposed.tokens[0, 1...], targetLogits: logits[0],
+                proposals: proposed.tokens[0, 1...], targetLogits: targetVerification.logits[0],
                 proposalProbabilities: proposed.probabilities, distribution: distribution, deterministic: replay != nil
             )
             let prefix = verification.proposals.prefix(verification.accepted).prefix { !eos.contains($0) }
@@ -97,8 +141,7 @@ package final class Inkling2DSparkSession {
             if acceptedThisRound < verification.accepted || tokens.count == budget || eos.contains(next) { break }
 
             let commit = 1 + acceptedThisRound
-            targetCache.commitVerification(commit)
-            let features = try capture.joined()[0..., ..<commit, 0..., 0...]
+            let features = try targetVerification.commit(commit)
             draft.append(features, offset: offset, caches: &draftCaches)
             if replay != nil {
                 // A lookup round has no neural draft to evaluate these cache updates.
@@ -106,9 +149,22 @@ package final class Inkling2DSparkSession {
             }
             lastFeatures = features[0..., (commit - 1)..<commit, 0..., 0...]
         }
-        return Inkling2DSparkDecodeResult(tokens: tokens, seconds: Date().timeIntervalSince(start),
+        let seconds = Date().timeIntervalSince(start)
+        return Inkling2DSparkDecodeResult(tokens: tokens, seconds: seconds,
                                          firstTokenSeconds: firstTokenSeconds, rounds: rounds, drafted: drafted, accepted: accepted,
                                          depthCounts: depthCounts)
+    }
+
+    private func verifyDirect(_ tokens: MLXArray) throws -> TargetVerification {
+        let embeddings = try draft.target.embeddings(tokens)
+        let capture = Inkling2DSparkFeatures(draft.config.targetLayerIds)
+        targetCache.beginVerification()
+        let logits = try draft.target.forward(embeddings: embeddings, cache: targetCache,
+                                              lastPositionOnly: false, capture: capture)
+        return TargetVerification(logits: logits) { [targetCache] count in
+            targetCache.commitVerification(count)
+            return try capture.joined()[0..., ..<count, 0..., 0...]
+        }
     }
 }
 
@@ -179,3 +235,29 @@ enum Inkling2DSparkVerification {
         return (accepted, maximum(target[accepted] - paddedDraft[accepted], 0))
     }
 }
+
+#if os(macOS)
+/// MLX's allocator is shared by sessions on the same device.
+private enum Inkling2SpeedPackAllocator {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var users = 0
+    nonisolated(unsafe) private static var originalLimit = 0
+
+    static func enter() {
+        lock.withLock {
+            if users == 0 {
+                originalLimit = Memory.cacheLimit
+                Memory.cacheLimit = min(originalLimit, 4 * 1_024 * 1_024 * 1_024)
+            }
+            users += 1
+        }
+    }
+
+    static func leave() {
+        lock.withLock {
+            users -= 1
+            if users == 0 { Memory.cacheLimit = originalLimit }
+        }
+    }
+}
+#endif

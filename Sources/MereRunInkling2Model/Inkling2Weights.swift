@@ -1,5 +1,8 @@
 import Foundation
 import MLX
+#if os(macOS)
+import Darwin
+#endif
 
 /// Original safetensors names and byte encodings. Read an entire packed tensor
 /// for the Metal path or just the selected expert for reference inference.
@@ -32,10 +35,39 @@ public final class Inkling2Weights {
         enum CodingKeys: String, CodingKey { case weightMap = "weight_map" }
     }
     private struct Location { let url: URL; let start: Int; let tensor: Tensor }
+    struct ReferenceAffineSpec: Decodable {
+        let bits: Int
+        let groupSize: Int
+        enum CodingKeys: String, CodingKey {
+            case bits
+            case groupSize = "group_size"
+        }
+    }
+    private struct ReferenceAffineConfig: Decodable {
+        let projections: [String: ReferenceAffineSpec]?
+        enum CodingKeys: String, CodingKey { case projections = "mtplx_inkling_precision" }
+    }
+    private(set) var referenceAffine: [String: ReferenceAffineSpec] = [:]
+    package static let speedDraftHeadDirectory = "draft-head"
+    package static let speedDraftFoldDirectory = "draft-fold"
+    private(set) var speedDraftRoot: URL?
     private var locations: [String: Location] = [:]
     private var resident: [String: MLXArray] = [:]
+    #if os(macOS)
+    var readsIntoOwnedBuffers = false
+    #endif
 
     public init(root: URL) throws {
+        let config = root.appendingPathComponent("config.json")
+        if FileManager.default.fileExists(atPath: config.path) {
+            referenceAffine = try JSONDecoder().decode(ReferenceAffineConfig.self, from: Data(contentsOf: config)).projections ?? [:]
+        }
+        if !referenceAffine.isEmpty,
+           FileManager.default.fileExists(
+               atPath: root.appendingPathComponent(Self.speedDraftHeadDirectory).path
+           ) {
+            speedDraftRoot = root
+        }
         let index = try JSONDecoder().decode(Index.self, from: Data(contentsOf: root.appendingPathComponent("model.safetensors.index.json")))
         for name in Set(index.weightMap.values).sorted() {
             try Task.checkCancellation()
@@ -73,6 +105,16 @@ public final class Inkling2Weights {
                 locations[key] = Location(url: url, start: Int(length) + 8 + a, tensor: tensor)
             }
         }
+    }
+
+    func referenceProjection(_ key: String, retain: Bool = true) throws -> Inkling2ReferenceAffineProjection? {
+        guard let spec = referenceAffine[key] else { return nil }
+        return Inkling2ReferenceAffineProjection(
+            weight: try read(key, retain: retain),
+            scales: try read(key + ".mtplx_scales", retain: retain),
+            biases: try read(key + ".mtplx_biases", retain: retain),
+            spec: spec
+        )
     }
 
     /// Fixture constructor uses the same original checkpoint layout.
@@ -145,6 +187,13 @@ public final class Inkling2Weights {
         func load() throws -> MLXArray {
             let handle = try FileHandle(forReadingFrom: loc.url)
             defer { try? handle.close() }
+            #if os(macOS)
+            if readsIntoOwnedBuffers, expert == nil, count >= 4 * 1_024 * 1_024,
+               count.isMultiple(of: Int(getpagesize())),
+               let array = try Self.readOwnedBuffer(handle: handle, offset: offset, count: count, shape: shape, dtype: type) {
+                return array
+            }
+            #endif
             try handle.seek(toOffset: UInt64(offset))
             return try MLXArray(Self.readBytes(count, handle: handle), shape, dtype: type)
         }
@@ -161,6 +210,31 @@ public final class Inkling2Weights {
         }
         return array
     }
+
+    #if os(macOS)
+    private static func readOwnedBuffer(
+        handle: FileHandle, offset: Int, count: Int, shape: [Int], dtype: DType
+    ) throws -> MLXArray? {
+        // Metal can adopt a page-aligned allocation. Read into anonymous pages so a
+        // later change to the checkpoint file cannot invalidate a resident tensor.
+        guard let buffer = mmap(nil, count, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0),
+              buffer != MAP_FAILED else { return nil }
+        var transferred = false
+        defer { if !transferred { munmap(buffer, count) } }
+        var done = 0
+        while done < count {
+            let bytes = pread(handle.fileDescriptor, buffer.advanced(by: done), count - done, off_t(offset + done))
+            if bytes < 0 {
+                if errno == EINTR { continue }
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
+            guard bytes > 0 else { throw Inkling2Error.invalid("truncated safetensors data") }
+            done += bytes
+        }
+        transferred = true
+        return MLXArray(rawPointer: buffer, shape, dtype: dtype) { munmap(buffer, count) }
+    }
+    #endif
 
     func expert(_ key: String, index: Int) throws -> MLXArray {
         let raw = try read(key, expert: index)
