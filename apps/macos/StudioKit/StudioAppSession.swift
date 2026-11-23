@@ -20,6 +20,9 @@ package final class StudioAppSession: ObservableObject {
         runQueue.attach(controller.jobs)
         controller.servingMonitor.start(controller: controller)
         controller.machineMonitor.start()
+        Task { [weak controller] in
+            await controller?.modelStore.restoreCachedModelsOnStartup()
+        }
         _ = controller.localServer
         _ = controller.residentServers
     }

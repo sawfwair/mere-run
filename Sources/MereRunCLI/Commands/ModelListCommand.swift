@@ -17,12 +17,24 @@ struct ModelList: ParsableCommand {
     @Flag(name: .long, help: "Print typed inventory, declared context windows, and usage terms as JSON.")
     var json = false
 
+    @Flag(name: .long, help: "Restore missing model entries from complete local Hub snapshots before listing.")
+    var restoreCache = false
+
     private struct Document: Encodable {
         let inventory: ModelInventorySnapshot
         let usageTerms: [String]
     }
 
     func run() throws {
+        if restoreCache {
+            do {
+                _ = try ManagedModelResolver.restoreCachedModels { id, error in
+                    CLIStderr.write("warning: Could not restore \(id) from cache: \(error.localizedDescription)\n")
+                }
+            } catch {
+                CLIStderr.write("warning: Could not scan the model cache: \(error.localizedDescription)\n")
+            }
+        }
         let mode: ModelInventoryMode = measureSizes ? .measured : .fast
         let snapshot = ModelInventory.snapshot(mode: mode)
         if json {

@@ -34,6 +34,11 @@ final class StatusCommandTests: XCTestCase {
         XCTAssertTrue(cmd.json)
     }
 
+    func testModelListRestoresCacheOnlyWhenRequested() throws {
+        XCTAssertFalse(try ModelList.parse([]).restoreCache)
+        XCTAssertTrue(try ModelList.parse(["--restore-cache", "--json"]).restoreCache)
+    }
+
     func testModelListMeasuresSizesOnlyWhenRequested() throws {
         XCTAssertFalse(try ModelList.parse([]).measureSizes)
         XCTAssertTrue(try ModelList.parse(["--measure-sizes"]).measureSizes)
