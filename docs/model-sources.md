@@ -24,6 +24,13 @@ The canonical local model store is:
 
 To use a different store, set `MERERUN_MODELS_DIR` or pass `--models-root`.
 
+At launch, macOS Studio scans its configured MereRun Hub cache for complete
+catalog snapshots and restores missing model entries. The scan uses local
+files only and leaves the weights in the cache, including on mounted external
+storage. It skips installed models, explicitly removed models, incomplete
+snapshots, and models whose terms require acceptance. To scan from the CLI,
+run `mere.run model list --restore-cache`.
+
 Registered locations augment the normal persisted primary store without
 copying payloads or creating symlinks. Search roots use
 `<root>/<canonical-model-id>/` and require each model's managed manifest.

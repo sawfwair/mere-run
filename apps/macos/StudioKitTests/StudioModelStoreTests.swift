@@ -40,6 +40,43 @@ final class StudioModelStoreTests: XCTestCase {
         return try XCTUnwrap(runner.starts.dropFirst(index).first, file: file, line: line)
     }
 
+    func testStartupCacheScanRefreshesInventoryAndReadiness() async throws {
+        let runner = RecordingProcessRunner()
+        let host = controller(runner)
+        defer { host.terminateAllProcesses() }
+        let model = "speech-haru-4b"
+        let task = StudioTask.chatConversation
+        host.checkReadiness(for: task, modelID: model)
+        let capabilityProbe = try await start(0, from: runner)
+        capabilityProbe.stdout(capabilities(model))
+        capabilityProbe.termination(0)
+        let oldInventory = try await start(1, from: runner)
+
+        let startup = Task { await host.modelStore.restoreCachedModelsOnStartup() }
+        let scan = try await start(2, from: runner)
+        XCTAssertEqual(Array(scan.configuration.arguments.suffix(4)), ["model", "list", "--restore-cache", "--json"])
+        scan.stdout(inventory(model))
+        scan.termination(0)
+
+        let readyProbe = try await start(3, from: runner)
+        let freshInventory = try await start(4, from: runner)
+        XCTAssertEqual(Array(readyProbe.configuration.arguments.suffix(2)), ["model", "list"])
+        XCTAssertEqual(Array(freshInventory.configuration.arguments.suffix(3)), ["model", "list", "--json"])
+        readyProbe.stdout("speech-haru-4b  audio  installed  not measured\n")
+        readyProbe.termination(0)
+        freshInventory.stdout(inventory(model))
+        freshInventory.termination(0)
+        let metadata = try await start(5, from: runner)
+        metadata.stdout(capabilities(model))
+        metadata.termination(0)
+        oldInventory.stdout("speech-haru-4b  audio  missing  —\n")
+        oldInventory.termination(0)
+
+        await startup.value
+        XCTAssertEqual(host.readiness(for: task), .ready)
+        XCTAssertEqual(host.modelStore.rows.first?.isInstalled, true)
+    }
+
     func testFailedFirstRefreshIsUnknownUntilAnEmptyInventorySucceeds() async throws {
         let runner = RecordingProcessRunner()
         let host = controller(runner)

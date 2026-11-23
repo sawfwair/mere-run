@@ -2,6 +2,82 @@ import XCTest
 @testable import MereRunCore
 
 final class ManagedModelResolverTests: XCTestCase {
+    func testCacheRestoreRegistersHaruWithoutCopyingWeights() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = root.appending(path: "hub")
+        let locations = ModelLocationSnapshot(primaryRoot: root.appending(path: "models"))
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: HaruResources.modelID))
+        let cachedWeights = try seedHaruSnapshot(cache: cache, spec: spec)
+        let restore = {
+            try ManagedModelResolver.restoreCachedModels(specs: [spec], locations: locations, hubCacheURL: cache) { id, error in
+                XCTFail("Could not restore \(id): \(error)")
+            }
+        }
+
+        XCTAssertEqual(try restore(), [spec.id])
+        let installed = try ModelResolver(locations: locations).resolve(.haru4B)
+        let weights = installed.rootURL.appending(path: "model.safetensors")
+        XCTAssertEqual(weights.resolvingSymlinksInPath(), cachedWeights.resolvingSymlinksInPath())
+        XCTAssertEqual(try MereRunModelManifest.loadIfPresent(from: installed.rootURL)?.id, spec.id)
+        XCTAssertEqual(try restore(), [])
+
+        let exclusion = ManagedModelResolver.cacheRestoreExclusion(for: installed.rootURL)
+        try FileManager.default.createDirectory(at: exclusion.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data().write(to: exclusion)
+        try FileManager.default.removeItem(at: installed.rootURL)
+        XCTAssertEqual(try restore(), [])
+        XCTAssertNil(ModelResolver(locations: locations).resolveIfPresent(.haru4B))
+    }
+
+    func testCacheRestoreSkipsTruncatedSnapshotsAndExistingDirectories() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = root.appending(path: "hub")
+        let locations = ModelLocationSnapshot(primaryRoot: root.appending(path: "models"))
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: HaruResources.modelID))
+        let cachedWeights = try seedHaruSnapshot(cache: cache, spec: spec)
+        let restore = {
+            try ManagedModelResolver.restoreCachedModels(specs: [spec], locations: locations, hubCacheURL: cache) { id, error in
+                XCTFail("Could not restore \(id): \(error)")
+            }
+        }
+
+        try Data().write(to: cachedWeights)
+        XCTAssertEqual(try restore(), [])
+        try Data([0]).write(to: cachedWeights)
+        let existing = locations.primaryRoot.appending(path: spec.id)
+        try FileManager.default.createDirectory(at: existing, withIntermediateDirectories: true)
+        try Data([1]).write(to: existing.appending(path: "model.safetensors"))
+        XCTAssertEqual(try restore(), [])
+        XCTAssertEqual(try Data(contentsOf: existing.appending(path: "model.safetensors")), Data([1]))
+        XCTAssertNil(try MereRunModelManifest.loadIfPresent(from: existing))
+    }
+
+    private func seedHaruSnapshot(cache: URL, spec: ManagedModelSpec) throws -> URL {
+        let source = try XCTUnwrap(spec.hubFallback)
+        let snapshot = cache.appending(path: "snapshots/models").appending(path: source.repoId)
+            .appending(path: HubSnapshot.revisionKey(source.revision))
+        try FileManager.default.createDirectory(at: snapshot, withIntermediateDirectories: true)
+        let weights = cache.appending(path: "external-weights")
+        try Data([0]).write(to: weights)
+        let files = try source.patterns.map { path in
+            let payload = snapshot.appending(path: path)
+            if path == "model.safetensors" {
+                try FileManager.default.createSymbolicLink(at: payload, withDestinationURL: weights)
+            } else {
+                try Data([0]).write(to: payload)
+            }
+            return HubSnapshotReceipt.File(path: path, size: 1, commit: source.revision, etag: nil)
+        }
+        let receipt = HubSnapshotReceipt(
+            schemaVersion: 1, repository: source.repoId,
+            requestedRevision: source.revision, resolvedRevision: source.revision, files: files
+        )
+        try JSONEncoder().encode(receipt).write(to: snapshot.appending(path: HubSnapshotReceipt.filename))
+        return weights
+    }
+
     func testHiddenMuseDFlash2AssistantResolvesFromManagedInstallRoot() throws {
         let modelsRoot = try makeTemporaryDirectory()
         defer {

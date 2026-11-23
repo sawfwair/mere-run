@@ -3750,10 +3750,12 @@ values follow symlinks and are not additive when models share payloads.
 swift run mere.run model list
 swift run mere.run model list --measure-sizes
 swift run mere.run model list --json
+swift run mere.run model list --restore-cache
 ```
 
 `--json` prints the typed inventory, declared context windows, and usage
-terms.
+terms. Pass `--restore-cache` to register complete local cache snapshots
+before listing. The scan uses local files and respects explicit removals.
 
 ### `mere.run model storage` and `mere.run model gc`
 

@@ -319,6 +319,21 @@ public enum ManagedModelResolver {
         )
         defer { storageLock.unlock() }
         try normalizeManagedLayoutIfNeeded(for: spec, in: snapshotURL, fileManager: fileManager)
+        return try publishManagedInstall(
+            for: spec, snapshotURL: snapshotURL, mountedSnapshots: mountedSnapshots, modelDir: modelDir,
+            usageTermsAcknowledged: usageTermsAcknowledged, fileManager: fileManager
+        )
+    }
+
+    static func publishManagedInstall(
+        for spec: ManagedModelSpec,
+        snapshotURL: URL,
+        mountedSnapshots: [(MountedHubFallbackConfig, URL)],
+        modelDir: URL,
+        usageTermsAcknowledged: Bool,
+        replaceExisting: Bool = true,
+        fileManager: FileManager
+    ) throws -> InstallResult {
         let parentURL = modelDir.deletingLastPathComponent()
         try fileManager.createDirectory(at: parentURL, withIntermediateDirectories: true)
         let transactionID = UUID().uuidString
@@ -349,6 +364,7 @@ public enum ManagedModelResolver {
         try commitStagedManagedInstall(
             stagingURL: stagingURL,
             modelDir: modelDir,
+            replaceExisting: replaceExisting,
             fileManager: fileManager
         ) { installedURL in
             let normalized = spec.normalizedRootURL(installedURL, fileManager: fileManager)
@@ -389,17 +405,26 @@ public enum ManagedModelResolver {
     static func commitStagedManagedInstall(
         stagingURL: URL,
         modelDir: URL,
+        replaceExisting: Bool = true,
         fileManager: FileManager = .default,
         finalValidation: (URL) throws -> Void
     ) throws {
+        defer { try? fileManager.removeItem(at: stagingURL) }
+        if !replaceExisting {
+            try fileManager.moveItem(at: stagingURL, to: modelDir)
+            do {
+                try finalValidation(modelDir)
+            } catch {
+                try? fileManager.removeItem(at: modelDir)
+                throw error
+            }
+            return
+        }
         let previousURL = modelDir.deletingLastPathComponent().appending(
             path: ".\(modelDir.lastPathComponent).previous.\(UUID().uuidString)",
             directoryHint: .isDirectory
         )
         let hadPreviousInstall = fileManager.fileExists(atPath: modelDir.path)
-        defer {
-            try? fileManager.removeItem(at: stagingURL)
-        }
         if hadPreviousInstall {
             try fileManager.moveItem(at: modelDir, to: previousURL)
         }

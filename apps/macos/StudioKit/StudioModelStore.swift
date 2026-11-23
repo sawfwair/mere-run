@@ -78,6 +78,16 @@ package final class StudioModelStore: ObservableObject {
         objectWillChange.send()
     }
 
+    package func restoreCachedModelsOnStartup() async {
+        guard let controller else { return }
+        let context = [controller.cliPath, controller.modelsRoot, controller.hubCache]
+        let result = await controller.utilityCommandResult(args: CommandFlags.ModelList.command + [CommandFlags.ModelList.restoreCache, CommandFlags.ModelList.json])
+        // Older custom CLI builds can still provide the ordinary inventory.
+        guard result.exitCode == 0, context == [controller.cliPath, controller.modelsRoot, controller.hubCache] else { return }
+        controller.refreshRequestedReadiness()
+        await refresh()
+    }
+
     /// A refresh publishes one complete snapshot. Older requests cannot overwrite a newer one
     /// or publish data read from a different CLI or model location.
     package func refresh(includingStorage: Bool = false) async {

@@ -2098,6 +2098,7 @@ extension CommandFlags {
 
         package static let measureSizes = "--measure-sizes"
         package static let json = "--json"
+        package static let restoreCache = "--restore-cache"
     }
 }
 

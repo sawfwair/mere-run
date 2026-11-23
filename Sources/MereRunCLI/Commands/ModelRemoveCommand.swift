@@ -97,8 +97,16 @@ struct ModelRemove: ParsableCommand {
             }
         }
 
-        try FileManager.default.removeItem(at: installURL)
-        try removeManagedAliasesIfNeeded(for: id)
+        do {
+            let lock = try ModelStorageFileLock.acquire(hubDirectory: storageManager.hubDirectory)
+            defer { lock.unlock() }
+            let modelDir = MereRunModelPaths.modelDir(id)
+            let exclusion = ManagedModelResolver.cacheRestoreExclusion(for: modelDir)
+            try FileManager.default.createDirectory(at: exclusion.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data().write(to: exclusion, options: .atomic)
+            try FileManager.default.removeItem(at: installURL)
+            try removeManagedAliasesIfNeeded(for: id)
+        }
         let garbagePlan = keepCache
             ? ModelStorageGarbagePlan(
                 hubPath: storageManager.hubDirectory.path,

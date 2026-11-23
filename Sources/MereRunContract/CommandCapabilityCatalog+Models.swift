@@ -103,7 +103,8 @@ extension MereRunCapabilityCatalog {
         summary: "List managed model install state.",
         options: [
             .init(flag: "--measure-sizes", label: "Measure referenced sizes", kind: .boolean),
-            .init(flag: "--json", label: "JSON inventory", kind: .boolean)
+            .init(flag: "--json", label: "JSON inventory", kind: .boolean),
+            .init(flag: "--restore-cache", label: "Restore cached models", kind: .boolean)
         ],
         output: .init(kind: .text)
     )

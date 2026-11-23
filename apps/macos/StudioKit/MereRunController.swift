@@ -1259,9 +1259,9 @@ package final class MereRunController: ObservableObject {
 
     /// Recheck current model requests after installation changes; never restore a captured draft.
     package func refreshRequestedReadiness() {
-        for task in readinessRequests.keys {
-            setReadiness(.checking, for: task)
-            probeModelList(for: task)
+        for (task, request) in readinessRequests {
+            cancelReadinessProbe(for: task)
+            checkReadiness(task: task, requirement: .managedModel(request.modelID))
         }
     }
 
