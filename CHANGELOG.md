@@ -6,10 +6,22 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.76.0 - 2026-11-23
+
 - Use Inkling 2 Mini Speed by default for `vision-chat-inkling-2-mini`. A single
   download includes quantized attention and output projections and the native
   DSpark draft assets. Select `vision-chat-inkling-2-mini-q8-head` for Q8 Head or
   `vision-chat-inkling-2-mini-official` for the original checkpoint.
+
+- Run eligible Inkling 2 Mini Speed requests with native packed affine
+  projections, split Metal attention, fused expert operations, and a compiled
+  DSpark verifier. Speed uses three draft proposals per round and compiles
+  verification for contexts up to 16,384 tokens; longer requests use the
+  dynamic verifier. Existing Mini installs can pull the default model again
+  to get Speed. The Q8 Head and original checkpoints remain selectable.
+- Restore cached models when macOS Studio launches. Rebuild missing managed
+  model directories from validated cache artifacts, preserve model-location
+  bindings, and expose the same recovery through `model list --restore-cache`.
 
 ## 0.75.0 - 2026-11-21
 
