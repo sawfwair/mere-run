@@ -78,12 +78,30 @@ extension Inkling2Model {
                 } else { expected[key] = [c.nRoutedExperts, output, input] }
             }
         }
+        var affineKeys = Set<String>()
         for (key, shape) in expected {
-            try weights.require(key, shape: shape, bytes: key.contains(".experts.") && !key.hasSuffix("_amax") && !key.hasSuffix("_denominator"))
+            if let spec = weights.referenceAffine[key] {
+                let permitted = key == prefix + "embed.weight" || key == prefix + "unembed.weight" || key.contains(".attn.")
+                guard permitted, shape.count == 2, spec.groupSize == 64, [4, 8].contains(spec.bits),
+                      shape[1].isMultiple(of: spec.groupSize) else {
+                    throw Inkling2Error.invalid("unsupported reference affine tensor: \(key)")
+                }
+                try weights.require(key, shape: [shape[0], shape[1] * spec.bits / 32], dtype: "U32")
+                for suffix in [".mtplx_scales", ".mtplx_biases"] {
+                    let side = key + suffix
+                    try weights.require(side, shape: [shape[0], shape[1] / spec.groupSize], dtype: "BF16")
+                    affineKeys.insert(side)
+                }
+            } else {
+                try weights.require(key, shape: shape, bytes: key.contains(".experts.") && !key.hasSuffix("_amax") && !key.hasSuffix("_denominator"))
+            }
+        }
+        guard Set(weights.referenceAffine.keys).isSubset(of: Set(expected.keys)) else {
+            throw Inkling2Error.invalid("unknown reference affine tensor name")
         }
         let textKeys = weights.names.filter { $0.hasPrefix(prefix) }
         let q8Keys = q8OutputHead == nil ? [] : Inkling2Q8Projection.keys(Inkling2Q8Projection.outputKey)
-        guard Set(expected.keys).union(q8Keys) == Set(textKeys) else {
+        guard Set(expected.keys).union(q8Keys).union(affineKeys) == Set(textKeys) else {
             throw Inkling2Error.invalid("unexpected text checkpoint tensors")
         }
         if let v = config.visionConfig { try validateVision(v) }

@@ -205,20 +205,21 @@ public enum MereRunAgentModelCatalog {
             deepseekV4Flash(),
         ]
         if machine.isAppleSiliconMac {
-            recommendations.append(inkling2Mini())
+            recommendations += [inkling2Mini(), inkling2Mini(q8Head: true)]
         }
         return recommendations.filter { machine.isSupportedRuntime && machine.unifiedMemoryGB >= $0.minimumUnifiedMemoryGB }
     }
 
-    private static func inkling2Mini() -> MereRunAgentModelRecommendation {
-        MereRunAgentModelRecommendation(
-            id: Inkling2Resources.miniModelID,
-            displayName: "Inkling 2 Mini",
-            summary: "Native Metal text and image agent with tool calls and adaptive DSpark.",
+    private static func inkling2Mini(q8Head: Bool = false) -> MereRunAgentModelRecommendation {
+        let modelID = q8Head ? Inkling2Resources.miniQ8HeadModelID : Inkling2Resources.miniModelID
+        return MereRunAgentModelRecommendation(
+            id: modelID,
+            displayName: q8Head ? "Inkling 2 Mini Q8 Head" : "Inkling 2 Mini Speed",
+            summary: "Native Metal text and image agent with tool calls and DSpark.",
             minimumUnifiedMemoryGB: 32,
             recommendedUnifiedMemoryGB: 32,
             servingEngine: .textChatInkling2,
-            managedModelID: Inkling2Resources.miniModelID
+            managedModelID: modelID
         )
     }
 

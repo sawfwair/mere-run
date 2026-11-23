@@ -1,7 +1,13 @@
 import MLX
 
+struct Inkling2VerificationPosition {
+    let committed: MLXArray
+    let queryScale: MLXArray
+}
+
 public final class Inkling2Cache {
     let layers: [Inkling2LayerCache]
+    var verificationPosition: Inkling2VerificationPosition?
     private var masks: [Inkling2AttentionGeometry: Inkling2AttentionMask] = [:]
     public var offset: Int { layers.first?.offset ?? 0 }
     var isVerifying: Bool { layers.first?.verification != nil }
@@ -56,6 +62,7 @@ final class Inkling2LayerCache {
         let offset: Int
         var convolutionContexts: [Int: (values: MLXArray, history: Int)] = [:]
         var attention: (keys: MLXArray, values: MLXArray, start: Int, window: Int?)?
+        var pendingKeysAndValues: (MLXArray, MLXArray)?
     }
 
     var offset = 0
@@ -68,9 +75,13 @@ final class Inkling2LayerCache {
     func context(_ x: MLXArray, index: Int, kernel: Int) -> MLXArray {
         let prior = convolutions[index] ?? MLXArray.zeros([x.dim(0), kernel - 1, x.dim(2)], dtype: .float32)
         let context = concatenated([prior, x.asType(.float32)], axis: 1)
-        verification?.convolutionContexts[index] = (context, kernel - 1)
-        convolutions[index] = context[0..., (context.dim(1) - kernel + 1)..., 0...]
+        storeConvolutionContext(context, index: index, history: kernel - 1)
         return context
+    }
+
+    func storeConvolutionContext(_ context: MLXArray, index: Int, history: Int) {
+        verification?.convolutionContexts[index] = (context, history)
+        convolutions[index] = context[0..., (context.dim(1) - history)..., 0...]
     }
 
     func update(keys k: MLXArray, values v: MLXArray, window: Int?) -> (MLXArray, MLXArray, Int) {

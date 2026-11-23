@@ -12,9 +12,20 @@ extension ManagedModelCatalog {
         ManagedModelSpec(
             id: Inkling2Resources.miniModelID, category: .visionChat, installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(
-                repoId: Inkling2Resources.miniRepository, revision: Inkling2Resources.miniRevision, patterns: Inkling2Resources.miniSnapshotPatterns
+                repoId: Inkling2Resources.miniRepository, revision: Inkling2Resources.miniRevision,
+                patterns: Inkling2Resources.miniSpeedSnapshotPatterns
             ),
             upstreamRepoId: Inkling2Resources.miniRepository, upstreamRevision: Inkling2Resources.miniRevision,
+            validationKind: .inkling2, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 18_430_000_000,
+            defaultCLICommands: ["text chat", "api serve"], apiProfile: .inkling2()
+        ),
+        ManagedModelSpec(
+            id: Inkling2Resources.miniOfficialModelID, category: .visionChat, installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: Inkling2Resources.miniOfficialRepository, revision: Inkling2Resources.miniOfficialRevision,
+                patterns: Inkling2Resources.miniSnapshotPatterns
+            ),
+            upstreamRepoId: Inkling2Resources.miniOfficialRepository, upstreamRevision: Inkling2Resources.miniOfficialRevision,
             validationKind: .inkling2, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 20_200_000_000,
             defaultCLICommands: ["text chat", "api serve"], apiProfile: .inkling2()
         ),

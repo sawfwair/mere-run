@@ -11,16 +11,18 @@ mere.run text chat --model vision-chat-inkling-2-mini \
   --reasoning-effort 0.2 --max-tokens 512
 ```
 
-Mini's original checkpoint occupies about 20 GB. Small
-(`vision-chat-inkling-2-small`) occupies about 394 GB. On macOS with enough
-unified memory, Mini retains the original packed weights and uses Metal
-matmuls for routed experts. Small streams selected experts from disk.
+Mini Speed is the default and occupies about 18.4 GB. One download includes
+the quantized attention and output projections, the vision weights, and the
+DSpark draft assets. On macOS with enough unified memory, Mini runs packed
+experts on Metal. Small (`vision-chat-inkling-2-small`) occupies about 394 GB
+and streams selected experts from disk.
 
 ## Controls and variants
 
 Use `vision-chat-inkling-2-mini-q8-head` to install Mini with a prepacked 8-bit
 output head. Its checkpoint bundles the original expert and vision weights and
-the official DSpark draft. Use this model ID with the same commands as Mini.
+the official DSpark draft. Use `vision-chat-inkling-2-mini-official` for the
+original checkpoint. Both variants support the same commands as Mini Speed.
 
 `--reasoning-effort` accepts zero through 0.99 and defaults to 0.9. Chat defaults
 to an 8,192-token context shared by prompt and output. `--context-size` can
@@ -29,7 +31,7 @@ fail without truncation. Use local image files or base64 image data.
 
 Mini defaults to temperature `1` with unrestricted sampling. With resident
 Metal experts and the bundled draft weights, eligible sampled requests use
-adaptive DSpark. Use `--stats` to see draft acceptance and
+DSpark. Mini Speed uses three proposals per round. Use `--stats` to see draft acceptance and
 `MERERUN_INKLING2_DSPARK=0` to disable drafting.
 
 The runtime supports text, images, reasoning, and validated tool calls. LoRA,

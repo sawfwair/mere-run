@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Use Inkling 2 Mini Speed by default for `vision-chat-inkling-2-mini`. A single
+  download includes quantized attention and output projections and the native
+  DSpark draft assets. Select `vision-chat-inkling-2-mini-q8-head` for Q8 Head or
+  `vision-chat-inkling-2-mini-official` for the original checkpoint.
+
 ## 0.75.0 - 2026-11-21
 
 - Add the managed `vision-chat-inkling-2-mini-q8-head` checkpoint. One

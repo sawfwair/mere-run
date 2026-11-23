@@ -6,6 +6,10 @@ struct Inkling2PackedExperts {
     let gateUp: Projection
     let down: Projection
 
+    #if os(macOS)
+    private static let reorderPrefill = GPU.deviceInfo().architecture == "applegpu_g17s"
+    #endif
+
     init(weights: Inkling2Weights, prefix: String) throws {
         gateUp = try Projection(weights: weights, key: prefix + "w13_weight")
         down = try Projection(weights: weights, key: prefix + "w2_weight")
@@ -15,11 +19,31 @@ struct Inkling2PackedExperts {
         _ input: MLXArray, indices: MLXArray, routing: MLXArray, gateCap: Float, upCap: Float, verifying: Bool
     ) -> MLXArray {
         #if os(macOS)
+        let fuseProjections = verifying || input.dim(0) == 1
+
+        if !fuseProjections, Self.reorderPrefill, input.dim(0) >= 64, input.dtype == .bfloat16 {
+            let routes = indices.dim(1)
+            let flat = indices.reshaped(-1)
+            // Keep reads for the same expert together. The final reduction
+            // follows the original routing order.
+            let order = argSort(flat)
+            let experts = take(flat, order, axis: 0)
+            let source = take(input, floorDivide(order, routes), axis: 0).expandedDimensions(axis: 1)
+            let projected = gateUp.rawMatmul(source, indices: experts)
+            let hidden = Inkling2ExpertEpilogues.activate(
+                projected, indices: experts, scales: gateUp.expertScales, dtype: input.dtype, gateCap: gateCap, upCap: upCap
+            )
+            let downProjection = down.rawMatmul(hidden, indices: experts)
+            return Inkling2ExpertEpilogues.reduceReorderedPrefill(
+                downProjection, indices: indices, order: order, scales: down.expertScales,
+                routing: routing, dtype: input.dtype
+            )
+        }
         let hidden: MLXArray
-        if verifying, let outer = gateUp.expertScales,
-           input.dtype == .bfloat16, input.dim(-1).isMultiple(of: 16), gateUp.packed.dim(-2).isMultiple(of: 8) {
+        if fuseProjections, input.dtype == .bfloat16,
+           input.dim(-1).isMultiple(of: gateUp.scaleGroupSize), gateUp.packed.dim(-2).isMultiple(of: 8) {
             hidden = Inkling2ExpertEpilogues.fusedGate(
-                input, packed: gateUp.packed, scales: gateUp.scales, indices: indices, outer: outer,
+                input, packed: gateUp.packed, scales: gateUp.scales, indices: indices, outer: gateUp.expertScales,
                 gateCap: gateCap, upCap: upCap
             )
         } else {
@@ -28,11 +52,10 @@ struct Inkling2PackedExperts {
             hidden = Inkling2ExpertEpilogues.activate(gates, indices: indices, scales: gateUp.expertScales,
                                                         dtype: input.dtype, gateCap: gateCap, upCap: upCap)
         }
-        if verifying, let outer = down.expertScales,
-           hidden.dtype == .bfloat16, hidden.dim(-1).isMultiple(of: 16), down.packed.dim(-2).isMultiple(of: 8),
-           indices.dim(-1) <= 8 {
+        if fuseProjections, hidden.dtype == .bfloat16, indices.dim(-1) <= 8,
+           hidden.dim(-1).isMultiple(of: down.scaleGroupSize), down.packed.dim(-2).isMultiple(of: 8) {
             return Inkling2ExpertEpilogues.fusedDown(
-                hidden, packed: down.packed, scales: down.scales, indices: indices, outer: outer, routing: routing
+                hidden, packed: down.packed, scales: down.scales, indices: indices, outer: down.expertScales, routing: routing
             )
         }
         let output = down.rawMatmul(hidden, indices: indices)
@@ -54,14 +77,15 @@ struct Inkling2PackedExperts {
         let packed: MLXArray
         let scales: MLXArray
         let expertScales: MLXArray?
+        var scaleGroupSize: Int { expertScales == nil ? 32 : 16 }
 
         func rawMatmul(_ input: MLXArray, indices: MLXArray) -> MLXArray {
             if expertScales != nil {
                 return gatherQuantizedMM(input.asType(.float32), packed, scales: scales, biases: nil,
-                                         rhsIndices: indices, groupSize: 16, bits: 4, mode: .nvfp4)
+                                         rhsIndices: indices, groupSize: scaleGroupSize, bits: 4, mode: .nvfp4)
             }
             return gatherQuantizedMM(input, packed, scales: scales, biases: nil,
-                                     rhsIndices: indices, groupSize: 32, bits: 8, mode: .mxfp8)
+                                     rhsIndices: indices, groupSize: scaleGroupSize, bits: 8, mode: .mxfp8)
         }
 
         func callAsFunction(_ input: MLXArray, indices: MLXArray) -> MLXArray {

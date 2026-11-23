@@ -7,39 +7,54 @@ enum Inkling2Router {
         inputNames: ["logits", "bias", "route_scale"],
         outputNames: ["indices", "weights"],
         source: """
-            const uint lane = thread_index_in_threadgroup;
+            const uint lane = thread_index_in_simdgroup;
+            const uint group = simdgroup_index_in_threadgroup;
+            const uint index = thread_index_in_threadgroup;
             const uint token = threadgroup_position_in_grid.x;
-            const float score = 1.0f / (1.0f + exp(-logits[token * 128 + lane]));
+            const float score = 1.0f / (1.0f + exp(-logits[token * 128 + index]));
             threadgroup float raw[128];
-            threadgroup float corrected[128];
-            threadgroup uint expert[128];
-            raw[lane] = score;
-            corrected[lane] = score + bias[lane];
-            expert[lane] = lane;
+            threadgroup float scores[32];
+            threadgroup uint experts[32];
+            raw[index] = score;
+            float corrected = score + bias[index];
+            uint expert = index;
+            mererun_inkling2_sort_routes(lane, corrected, expert);
+            if (lane < 8) {
+                scores[group * 8 + lane] = corrected;
+                experts[group * 8 + lane] = expert;
+            }
             threadgroup_barrier(mem_flags::mem_threadgroup);
-
-            for (uint size = 2; size <= 128; size <<= 1) {
-                for (uint distance = size >> 1; distance > 0; distance >>= 1) {
-                    const uint partner = lane ^ distance;
-                    if (lane < partner) {
-                        const float a = corrected[lane], b = corrected[partner];
-                        const uint first = expert[lane], second = expert[partner];
-                        const bool preferred = a > b || (a == b && first < second);
-                        if (preferred != ((lane & size) == 0)) {
-                            corrected[lane] = b;
-                            corrected[partner] = a;
-                            expert[lane] = second;
-                            expert[partner] = first;
-                        }
-                    }
-                    threadgroup_barrier(mem_flags::mem_threadgroup);
+            if (group == 0) {
+                corrected = scores[lane];
+                expert = experts[lane];
+                mererun_inkling2_sort_routes(lane, corrected, expert);
+                const float selected = raw[expert];
+                float sum = 0;
+                #pragma unroll
+                for (uint slot = 0; slot < 8; ++slot) sum += simd_shuffle(selected, slot);
+                if (lane < 8) {
+                    indices[token * 8 + lane] = expert;
+                    weights[token * 8 + lane] = selected / (sum + 1e-20f) * route_scale;
                 }
             }
-            if (lane < 8) {
-                float sum = 0;
-                for (uint slot = 0; slot < 8; ++slot) sum += raw[expert[slot]];
-                indices[token * 8 + lane] = expert[lane];
-                weights[token * 8 + lane] = raw[expert[lane]] / (sum + 1e-20f) * route_scale;
+            """,
+        header: """
+            // The global top eight must be among the top eight of each SIMD group.
+            inline void mererun_inkling2_sort_routes(uint lane, thread float& score, thread uint& expert) {
+                #pragma unroll
+                for (uint size = 2; size <= 32; size <<= 1) {
+                    #pragma unroll
+                    for (uint distance = size >> 1; distance > 0; distance >>= 1) {
+                        const float other_score = simd_shuffle_xor(score, distance);
+                        const uint other_expert = simd_shuffle_xor(expert, distance);
+                        const bool better = other_score > score || (other_score == score && other_expert < expert);
+                        const bool wants_better = ((lane & size) == 0) == ((lane & distance) == 0);
+                        if (better == wants_better) {
+                            score = other_score;
+                            expert = other_expert;
+                        }
+                    }
+                }
             }
             """
     )

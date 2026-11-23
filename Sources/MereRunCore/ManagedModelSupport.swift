@@ -405,8 +405,13 @@ public enum ManagedModelCapabilityCatalog {
                 minimum: 32, recommended: 64
             ),
             descriptor(
-                Inkling2Resources.miniModelID, "Inkling 2 Mini 26.4B",
-                "Runs three passes through the middle layers with resident packed experts on Metal. Requires about 20 GB of disk space.",
+                Inkling2Resources.miniModelID, "Inkling 2 Mini 26.4B Speed",
+                "Default Mini checkpoint with packed experts, affine 8-bit attention, and a bundled DSpark draft head.",
+                minimum: 32, recommended: 32
+            ),
+            descriptor(
+                Inkling2Resources.miniOfficialModelID, "Inkling 2 Mini 26.4B Official",
+                "Uses the original Thinking Machines Lab checkpoint with a BF16 output head.",
                 minimum: 32, recommended: 32
             ),
             descriptor(

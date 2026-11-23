@@ -20,6 +20,33 @@ enum Inkling2Math {
         return (softcap(g, gateCap) * sigmoid(g) * softcap(up.asType(.float32), upCap)).asType(gate.dtype)
     }
 
+    static func groupedAttention(
+        query: MLXArray, keys: MLXArray, values: MLXArray, bias: MLXArray, allowed: MLXArray, sinks: MLXArray
+    ) -> MLXArray {
+        let scores = groupedAttentionDots(query: query, keys: keys) / sqrt(Float(query.dim(-1))) + bias
+        let masked = MLX.where(allowed, scores, MLXArray(-Float.infinity))
+        let sink = sinks.transposed(0, 2, 1).expandedDimensions(axis: -1).asType(.float32)
+        let probabilities = softmax(concatenated([masked, sink], axis: -1), axis: -1)[.ellipsis, ..<keys.dim(2)]
+        return groupedAttentionValues(probabilities.asType(values.dtype), values: values)
+    }
+
+    static func groupedAttentionDots(query: MLXArray, keys: MLXArray) -> MLXArray {
+        let batch = query.dim(0), tokens = query.dim(1), heads = query.dim(2), width = query.dim(3)
+        let kvHeads = keys.dim(1), keyCount = keys.dim(2), rowsPerGroup = heads / kvHeads * tokens
+        // Stack the queries that share one KV head as matrix rows, so both matmuls can read the original KV cache.
+        let rows = query.transposed(0, 2, 1, 3).reshaped(batch, kvHeads, rowsPerGroup, width).asType(.float32)
+        let keyMatrix = keys.asType(.float32).swappedAxes(-1, -2)
+        return matmul(rows, keyMatrix).reshaped(batch, heads, tokens, keyCount)
+    }
+
+    static func groupedAttentionValues(_ probabilities: MLXArray, values: MLXArray) -> MLXArray {
+        let batch = probabilities.dim(0), heads = probabilities.dim(1), tokens = probabilities.dim(2)
+        let kvHeads = values.dim(1), keyCount = values.dim(2), width = values.dim(3)
+        let rows = probabilities.reshaped(batch, kvHeads, heads / kvHeads * tokens, keyCount)
+        return matmul(rows, values).reshaped(batch, heads, tokens, width)
+            .transposed(0, 2, 1, 3).reshaped(batch, tokens, heads * width)
+    }
+
     /// Values as well as keys are normalized before attending over depth.
     static func residual(_ blocks: [MLXArray], partial: MLXArray, query: MLXArray, fusedDecode: Bool = false) -> [MLXArray] {
         #if os(macOS)

@@ -73,7 +73,7 @@ public actor Inkling2Generator: ChatGenerator {
             let cache = model.makeCache()
             let speculation = draft.map { Inkling2DSparkSession(draft: $0, cache: cache) }
             var initial: MLXArray?
-            let chunkSize = model.prefillChunkSize
+            let chunkSize = model.prefillChunkSize(for: prompt.tokens.count)
             for start in stride(from: 0, to: prompt.tokens.count, by: chunkSize) {
                 try Task.checkCancellation()
                 let end = min(start + chunkSize, prompt.tokens.count)
@@ -102,6 +102,7 @@ public actor Inkling2Generator: ChatGenerator {
             if let draft, let speculation {
                 let configured = ProcessInfo.processInfo.environment["MERERUN_INKLING2_DSPARK_TOKENS"].flatMap(Int.init)
                 let fixedDepth = configured.map { min(max($0, 1), draft.maxProposalCount) }
+                    ?? (model.usesSpeedPack && model.usePackedExperts ? min(3, draft.maxProposalCount) : nil)
                 let distribution: ((MLXArray) -> MLXArray)? = sampling.temperature == 0 ? nil : { logits in
                     if logits.ndim == 2, sampling.topK > 0 || sampling.topP < 1 || sampling.minP > 0 {
                         return stacked((0..<logits.dim(0)).map {
