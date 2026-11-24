@@ -18,8 +18,9 @@ You need:
 - A mounted folder that the operator is allowed to read and index.
 - A network connection for the first index run. Image captioning downloads its
   default checkpoint the first time it runs.
-- [pipx](https://pipx.pypa.io/), which installs the plugin. If you use
-  Homebrew, run `brew install pipx`.
+- Archive Tools installed through the catalog. Supported Mac installs use a
+  signed bundle; pipx is needed only for source installation. See
+  [Set up companion workflows](./plugin-workflows.md).
 
 ## Install Archive Tools
 
@@ -33,7 +34,7 @@ mere.run model pull text-anonymize-privacy-filter
 mere.run model pull vision-embed-qwen3-vl-2b
 mere.run model pull vision-ocr-lighton
 mere.run plugin install mere-archive-tools --yes
-mere-archive-tools doctor
+mere.run plugin doctor mere-archive-tools
 ```
 
 The `doctor` command checks command availability, document conversion, and
@@ -59,7 +60,7 @@ it doesn't index a file. For model storage, see
    umask 077
    mkdir -p "$ARCHIVE_WORK_DIR"
    chmod 700 "$ARCHIVE_WORK_DIR"
-   mere-archive-tools index \
+   mere.run plugin run mere-archive-tools -- index \
      --source "$ARCHIVE_SOURCE" \
      --database "$ARCHIVE_WORK_DIR/archive.sqlite3" \
      --output-dir "$ARCHIVE_WORK_DIR/first-run" \
@@ -69,7 +70,7 @@ it doesn't index a file. For model storage, see
 3. Check coverage and file errors in the index statistics and run record:
 
    ```bash
-   mere-archive-tools stats --database "$ARCHIVE_WORK_DIR/archive.sqlite3"
+   mere.run plugin run mere-archive-tools -- stats --database "$ARCHIVE_WORK_DIR/archive.sqlite3"
    cat "$ARCHIVE_WORK_DIR/first-run/run.json"
    ```
 
@@ -84,7 +85,7 @@ Resolve file errors before you treat search results as complete. The plugin
 supports common text, Office, PDF, and image files. It rejects hosted OCR
 during document conversion, so a scanned PDF might appear as a file error. For
 source formats and storage tiers, see the
-[Archive Tools plugin guide](https://github.com/sawfwair/mere-run-plugins/blob/main/docs/plugins/archive-tools.md).
+[Archive Tools plugin guide](https://plugins-docs.mere.run/plugins/archive-tools).
 
 ## Search and check the source
 
@@ -93,7 +94,7 @@ source formats and storage tiers, see the
 
    ```bash
    ARCHIVE_QUESTION="REPLACE_WITH_A_QUESTION_ABOUT_YOUR_ARCHIVE"
-   mere-archive-tools search \
+   mere.run plugin run mere-archive-tools -- search \
      --database "$ARCHIVE_WORK_DIR/archive.sqlite3" \
      --query "$ARCHIVE_QUESTION"
    ```
@@ -113,7 +114,7 @@ Mac with too little memory.
 ```bash
 mere.run agent onboard --install-pi
 mere.run model pull text-chat-bonsai-27b-2bit
-mere-archive-tools investigate \
+mere.run plugin run mere-archive-tools -- investigate \
   --database "$ARCHIVE_WORK_DIR/archive.sqlite3" \
   --question "$ARCHIVE_QUESTION" \
   --diagnostics "$ARCHIVE_WORK_DIR/investigation-metrics.json"
@@ -130,7 +131,7 @@ model doesn't fit your Mac, use search without the investigator.
 To continue an interrupted index run, pass its manifest to `resume`:
 
 ```bash
-mere-archive-tools resume "$ARCHIVE_WORK_DIR/first-run/run.json"
+mere.run plugin run mere-archive-tools -- resume "$ARCHIVE_WORK_DIR/first-run/run.json"
 ```
 
 To refresh the index after source files change, run `index` again with the same
@@ -146,3 +147,6 @@ retention settings.
 By default, image indexing embeds reduced captions and OCR text. The
 `--image-index visual` option also embeds the source pixels, so it needs a
 separate privacy review.
+
+To collect public pages into a separate cited collection, follow
+[Collect research with traceable sources](./cited-research.md).

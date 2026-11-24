@@ -1,48 +1,69 @@
 # Use mere.run in your business
 
-These guides show a team how to route support tickets in an existing ticketing
-website, or how to search a shared document archive, with models that run on
-your own Mac. `mere.run` doesn't need an inference API key.
+Use local models and companion plugins to search records, prepare production
+media, or evaluate a task-specific adapter. These guides explain the inputs,
+setup, outputs, and checks for a small first run. Your team keeps control of
+source files, access, and the decision to use a result.
 
-## Choose a guide
+Start with [Set up companion workflows](./plugin-workflows.md). Installing a
+plugin doesn't install every model or service its workflows can use.
 
-Each guide starts with one ticket or one folder that you can check by hand.
-The following table lists the guides and the first result to check:
+## Research and records
+
+Choose a guide by the result you need:
 
 | Your task | Guide | First result to check |
 | --- | --- | --- |
-| Route support requests with GLiNER and Cua Driver | [Route tickets with GLiNER and Cua Driver](./direct-ticket-triage.md) | The selected ticket has the intended team, priority, and tags. |
-| Route requests and prepare reply drafts with Ornith | [Triage tickets and save drafts](./customer-support.md) | The selected ticket has the intended team, priority, tags, and saved draft. No reply was sent. |
-| Connect ticket triage to your own app | [Adapt the support workflow](./adapt-support-workflow.md) | A one-ticket receipt matches the ticket in the app. |
-| Find information across a shared drive | [Search your document archive](./shared-archive.md) | Search returns the expected source files, and cited claims match those files. |
+| Collect public web evidence | [Collect research with traceable sources](./cited-research.md) | Saved snapshots match citation IDs and original URLs. |
+| Find information across a shared drive | [Search your document archive](./shared-archive.md) | Search returns expected files, and cited claims match those sources. |
+| Convert documents or review named fields | [Review documents and extract fields](./document-review.md) | Markdown or CSV values match the source document. |
+| Prepare recording transcripts and subtitles | [Prepare transcripts and timed captions](./meeting-records.md) | Words, cue timing, speaker labels, and redaction survive review. |
 
-For support, GLiNER2.5 Decide suggests a team and priority from the ticket
-text. A small controller that drives Cua Driver directly can apply approved
-labels without a chat model. To also prepare reply drafts, use the Ornith model
-through the Computer Use plugin. Both support guides include a prompt that you
-can paste into Codex or Claude while your website is open.
+## Media production
 
-For documents, Archive Tools indexes an approved folder without changing its
-source files. You can search the index or ask a question that needs evidence
-from several files. Your team controls who can read the source folder and the
-derived index.
+Keep generated and processed files usable in the next stage of your edit:
 
-## Plan your first run
+| Your task | Guide | First result to check |
+| --- | --- | --- |
+| Retake a shot region and continue editing | [Export an editable timeline](./editable-media.md) | The chosen interval and separate tracks import into your editor. |
+| Extract, clean, or separate audio | [Prepare audio for an edit](./audio-post.md) | Reviewed WAVs match the intended content and delivery levels. |
+| Package World clips or a single-image splat | [Hand off World captures and 3D assets](./visual-handoffs.md) | Media opens on the receiving workstation with its recorded conventions. |
+| Cover sensitive regions before sharing images | [Review and export redacted images](./approved-media.md) | Every approved exported image covers the intended pixels. |
 
-1. Choose an operator and a small set of work that the operator is allowed to
-   process.
-2. Define the expected result and how you'll check it in the source app or
-   files.
-3. Install the models and plugin that your guide lists.
-4. Run one ticket or one folder, inspect the result, and record the elapsed
-   time.
-5. Expand the scope only after you've checked errors, access, and recovery.
+## Training and geospatial analysis
 
-Model inference runs on your Mac. Installing software and pulling models use
-the network, and a ticketing website can still send data through its own
-service. An archive index holds information derived from your files, even with
-reduced retention. Apply your organization's access and retention rules to the
-source, the index, and the run records.
+Use explicit comparisons and source lineage when adapting or analyzing data:
 
-For platform setup, see [Getting started](../getting-started.md) and
-[Model management](../runtime/model-management.md).
+| Your task | Guide | First result to check |
+| --- | --- | --- |
+| Adapt a repeatable text task | [Train and evaluate a local text adapter](./local-text-adapters.md) | Paired behavior checks and held-out loss show what improved or regressed. |
+| Run pinned satellite examples | [Review pinned satellite observations](./geospatial-review.md) | Source observations and grid match the candidate output's manifest. |
+
+## Customer support
+
+These guides work through an existing ticketing website. GLiNER2.5 Decide
+suggests labels. A controller applies them through Cua Driver, or uses Ornith
+and Computer Use when the task also needs a reply draft:
+
+| Your task | Guide | First result to check |
+| --- | --- | --- |
+| Apply team, priority, and tags | [Route tickets with GLiNER and Cua Driver](./direct-ticket-triage.md) | The selected ticket has the intended labels. |
+| Route a request and prepare a reply | [Triage tickets and save drafts](./customer-support.md) | The intended draft is saved and no reply is sent. |
+| Connect the workflow to your app | [Adapt the support workflow](./adapt-support-workflow.md) | A one-ticket receipt matches the state in your app. |
+
+## Plan a first run
+
+1. Choose one approved input and an operator authorized to process it.
+2. Define the expected result and how to compare it with the source.
+3. Check the guide's plugin, model, service, and hardware prerequisites.
+4. Run the small example, inspect artifacts, and record elapsed time and disk use.
+5. Test interruption and failure before expanding the scope.
+
+Local inference doesn't make every surrounding operation offline. Downloads,
+web research, ticketing sites, and configured external services use the
+network. Raw transcripts, document conversions, snapshots, and review previews
+can contain unredacted data. Apply access, backup, and retention rules to
+sources, derivatives, and run records. Check model terms for the intended use.
+
+For platform setup, see [Getting started](../getting-started.md). For exact
+plugin contracts and options, see the [companion plugin documentation](https://plugins-docs.mere.run/).

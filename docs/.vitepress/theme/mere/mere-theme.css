@@ -416,7 +416,7 @@ body {
 }
 
 .VPSidebarItem.is-active > .item > .link {
-  background: var(--mere-accent-soft);
+  background: transparent;
 }
 
 .VPSidebarItem.is-active > .item > .link > .text {
@@ -1609,12 +1609,6 @@ body {
 .VPSidebarItem:not(.level-0) .link > .text {
   font-size: 13px;
   font-weight: 520;
-}
-
-.VPSidebarItem.is-active > .item > .link {
-  border-radius: 4px;
-  background: transparent;
-  box-shadow: inset 2px 0 0 var(--mere-accent);
 }
 
 .VPDoc {
