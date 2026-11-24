@@ -6,11 +6,11 @@ add operational integrations and typed workflow-graph nodes, but they run
 out of process and speak one fixed protocol. A plugin manifest can't inject a
 shell command into your workflow bundle.
 
-For business setup guides, see
-[Route tickets with GLiNER and Cua Driver](./business/direct-ticket-triage.md),
-[Triage tickets and save drafts](./business/customer-support.md) with Ornith,
-and [Search your document archive](./business/shared-archive.md) with Archive
-Tools.
+For task-based setup, see [Business use cases](./business/index.md). The guides
+cover research and records, editable media, local adapter training, geospatial
+examples, and customer support. Start with
+[Set up companion workflows](./business/plugin-workflows.md) for installation
+and readiness checks.
 
 ## Discover plugins
 
