@@ -41,10 +41,15 @@ Ctrl-C to stop. Add `--output reply.wav` to save the model's live audio.
 In macOS Studio, open **Chat ▸ Conversation** and select **Start conversation**
 to use the system microphone. Under **Conversation setup**, you can choose an
 audio file, a character card, and a voice reference, or have Haru speak first.
-Select **End conversation** to finish a live session. Studio keeps Haru's
-transcript and reply audio in **Saved conversations**, where you can copy the
-transcript, replay the reply, or export the WAV. You can also run Haru from the
-Command Console.
+The live transcript labels your speech **You** and Haru’s reply **Haru**.
+Studio uses Parakeet 0.6B v3 (MLX) to transcribe the microphone locally. If you
+haven’t installed it, select **Download Parakeet** in the Conversation
+workspace. Haru remains available during sessions without Parakeet.
+
+Select **End conversation** to finish the session. Studio keeps the transcript
+and Haru’s reply audio in **Saved conversations**, where you can copy the
+transcript, replay the reply, or export the WAV. Audio-file replay shows Haru’s
+reply transcript. You can also run Haru from the Command Console.
 
 The command reports the frame count, sample rate, transcript, and optional
 audio path as JSON on stdout. Haru-4B downloads about 10.56 GB.

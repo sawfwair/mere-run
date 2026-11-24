@@ -1927,13 +1927,20 @@ final class StudioSnapshotTests: XCTestCase {
         let job = try XCTUnwrap(pages.controller.jobs.job(requestID: request.id))
         let live = try XCTUnwrap(process.liveStarts.last, job.result?.outputText ?? job.status)
         live.stdout(#"{"haruEvent":"capturing","speaking":false,"text":""}"# + "\n")
-        live.stdout(#"{"haruEvent":"frame","speaking":true,"text":"Hello! What would you like to talk about today?"}"# + "\n")
+        live.stdout(#"{"haruEvent":"frame","speaking":true,"text":"Hi! What would you like to talk about?","startMs":1300}"# + "\n")
+        live.stdout(#"{"haruEvent":"inputCommit","speaking":false,"text":"Hello, Haru.","startMs":400}"# + "\n")
+        live.stdout(#"{"haruEvent":"inputPartial","speaking":false,"text":"I have a question","startMs":2500}"# + "\n")
         try render("haru-live-dark", size: wide, appearance: .dark)
 
         XCTAssertEqual(job.haruLiveOutput?.isSpeaking, true)
         let output = try XCTUnwrap(job.expectedOutput)
         try SnapshotFixture.writeSilentWAV(to: output, seconds: 5)
-        live.stdout(#"{"frames":38,"sampleRate":24000,"transcript":"Hello! What would you like to talk about today?"}"# + "\n")
+        live.stdout("""
+        {"frames":38,"sampleRate":24000,"transcript":"Hi! What would you like to talk about?",\
+        "segments":[{"speaker":"user","startMs":400,"text":"Hello, Haru."},\
+        {"speaker":"haru","startMs":1300,"text":"Hi! What would you like to talk about?"},\
+        {"speaker":"user","startMs":2500,"text":"I have a question."}]}
+        """ + "\n")
         live.termination(0)
         try render("haru-saved-light", size: wide, appearance: .light)
         XCTAssertEqual(pages.library.items.first { $0.id == request.id }?.outputURL, output)

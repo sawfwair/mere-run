@@ -100,7 +100,8 @@ struct SpeechConverse: AsyncParsableCommand {
         let file = try writer?.finish()
         let summary = HaruConversationSummary(
             output: file?.url.path, frames: result.frames, sampleRate: HaruDuplexSession.sampleRate,
-            transcript: result.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+            transcript: result.transcript.trimmingCharacters(in: .whitespacesAndNewlines),
+            segments: result.segments, inputTranscriptionError: result.inputTranscriptionError
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
@@ -132,17 +133,17 @@ struct SpeechConverse: AsyncParsableCommand {
         defer { interrupt.cancel() }
         CLIStderr.write("Conversation started. Press Ctrl-C to stop.\n")
         var events = HaruLiveOutput()
-        try events.begin()
+        events.begin()
+        let input = events.transcribesInput ? HaruInputTranscription() : nil
+        defer { input?.cancel() }
         try await play(first, into: result, using: player, events: &events)
-        if result.frames == maxFrames {
-            CLIStderr.write("\n")
-            return
-        }
+        if result.frames == maxFrames { capture.stop() }
         var pending: [Float] = []
         let frameSamples = HaruDuplexSession.frameSamples
         for await samples in capture.samples {
             try Task.checkCancellation()
             if result.frames == maxFrames { break }
+            input?.feed(samples)
             pending += samples
             var consumed = 0
             while !capture.isStopped, pending.count - consumed >= frameSamples, result.frames < maxFrames {
@@ -160,6 +161,13 @@ struct SpeechConverse: AsyncParsableCommand {
                 throw ValidationError("Microphone capture ended or inference fell behind the input.")
             }
         }
+        // Close capture before waiting for Parakeet to commit its last utterance.
+        capture.stop()
+        if let input {
+            let final = await input.finish()
+            result.segments = HaruTranscriptSegment.chronological(final.segments + events.reply.segments)
+            result.inputTranscriptionError = final.error
+        }
         CLIStderr.write("\n")
     }
 
@@ -167,7 +175,8 @@ struct SpeechConverse: AsyncParsableCommand {
         _ frame: HaruAudioFrame, into result: HaruConversationOutput, using player: HaruPlayback, events: inout HaruLiveOutput
     ) async throws {
         try result.append(frame)
-        try events.report(frame)
+        let startMs = (result.frames - 1) * HaruDuplexSession.frameSamples * 1_000 / HaruDuplexSession.sampleRate
+        events.report(frame, at: startMs)
         try await player.play(frame.audio, drain: result.frames == maxFrames)
     }
     #endif
@@ -177,6 +186,8 @@ private final class HaruConversationOutput {
     let writer: AudioExportStream?
     private(set) var frames = 0
     private(set) var transcript = ""
+    var segments: [HaruTranscriptSegment]?
+    var inputTranscriptionError: String?
 
     init(writer: AudioExportStream?) {
         self.writer = writer
@@ -193,30 +204,30 @@ private final class HaruConversationOutput {
 private struct HaruLiveOutput {
     private static let releaseFrames = 3
     private static let speechFloorMeanSquare: Float = 0.000_032
-    private let encoder: JSONEncoder? =
-        ProcessInfo.processInfo.environment[HaruConversationEvent.environmentKey] == "1" ? JSONEncoder() : nil
+    private let streamsEvents = ProcessInfo.processInfo.environment[HaruConversationEvent.environmentKey] == "1"
+    private let inputRequested = ProcessInfo.processInfo.environment[HaruConversationEvent.inputTranscriptionEnvironmentKey] == "1"
     private var quietFrames = Self.releaseFrames
+    private(set) var reply = HaruReplyTranscript()
 
-    func begin() throws {
-        if let encoder { try emit(.init(.capturing), with: encoder) }
+    var transcribesInput: Bool { streamsEvents && inputRequested }
+
+    func begin() {
+        if streamsEvents { HaruEventWriter.write(.init(.capturing)) }
     }
 
-    mutating func report(_ frame: HaruAudioFrame) throws {
+    mutating func report(_ frame: HaruAudioFrame, at startMs: Int) {
         if !frame.text.isEmpty { CLIStderr.write(frame.text) }
-        guard let encoder else { return }
+        guard streamsEvents else { return }
         // PCM includes background noise even between words. A short release keeps brief gaps
         // between syllables from flickering the playback indicator.
         let wasSpeaking = quietFrames < Self.releaseFrames
         let meanSquare = frame.audio.reduce(Float.zero) { $0 + $1 * $1 } / Float(frame.audio.count)
         quietFrames = meanSquare >= Self.speechFloorMeanSquare ? 0 : min(quietFrames + 1, Self.releaseFrames)
         let speaking = quietFrames < Self.releaseFrames
+        if transcribesInput { reply.append(frame.text, at: startMs, speaking: speaking) }
         if speaking != wasSpeaking || !frame.text.isEmpty {
-            try emit(.init(.frame, speaking: speaking, text: frame.text), with: encoder)
+            HaruEventWriter.write(.init(.frame, speaking: speaking, text: frame.text, startMs: transcribesInput ? startMs : nil))
         }
-    }
-
-    private func emit(_ event: HaruConversationEvent, with encoder: JSONEncoder) throws {
-        CLIStdout.write(String(decoding: try encoder.encode(event), as: UTF8.self) + "\n")
     }
 }
 

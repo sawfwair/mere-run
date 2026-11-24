@@ -7,8 +7,11 @@ public actor ParakeetASRLiveSession {
     public nonisolated let events: AsyncThrowingStream<ASRLiveEvent, Error>
 
     public init(generator: ParakeetGenerator, request: ASRStreamingRequest,
-                configuration: ASRLiveConfiguration = ASRLiveConfiguration()) {
-        session = ASRUtteranceLiveSession(request: request, configuration: configuration) { samples, language in
+                configuration: ASRLiveConfiguration = ASRLiveConfiguration(),
+                redecodeWholeUtterance: Bool = false) {
+        session = ASRUtteranceLiveSession(
+            request: request, configuration: configuration, redecodeWholeUtterance: redecodeWholeUtterance
+        ) { samples, language in
             try await generator.transcribePrepared(samples: samples, language: language)
         }
         events = session.events

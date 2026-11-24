@@ -1428,7 +1428,9 @@ package enum CommandLaunchEnvironment {
     }
 
     package static func overrides(templateID: CommandTemplateID, draft: CommandDraft) -> [String: String] {
-        if templateID == .speechConverse { return [HaruConversationEvent.environmentKey: "1"] }
+        if templateID == .speechConverse {
+            return [HaruConversationEvent.environmentKey: "1", HaruConversationEvent.inputTranscriptionEnvironmentKey: "1"]
+        }
         guard templateID == .apiServe
             || templateID == .openWebui
             || templateID == .musicServe
