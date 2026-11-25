@@ -61,3 +61,29 @@ mere.run model benchmark q36-mtp --model text-chat-bonsai-2-5-27b-2bit \
 The run covers bounded cases on one Apple Silicon configuration. Maximum
 context, other hardware, and Prism ML's published benchmark suites remain
 unverified.
+
+## Interleaved decode follow-up
+
+The follow-up used the MLX debug build from `4fe4417a` and the same pinned
+checkpoint. It used two warm-ups and six 64-token greedy observations per arm
+with prefix caching disabled. Each prompt ran through target-only control,
+one-token MTP, and target-only control in that order under one machine
+admission. Decode rates exclude the first generated token and its latency.
+[Inference optimisation methodology](https://github.com/sybil-solutions/inference-optimisation-skill/blob/main/skills/inference-optimisation/references/methodology.md)
+
+| Workload | First control (tok/s) | MTP (tok/s) | Second control (tok/s) | Greedy output |
+| --- | ---: | ---: | ---: | --- |
+| Python interval merge | 7.78 | 11.91 | 13.74 | Identical across all 18 runs |
+
+A separate preliminary target-only prose run reached 15.51 tok/s. The two
+code controls differed by 76%. Concurrent local workloads made the speed
+comparison inconclusive, so it establishes output equivalence for these
+requests. The prose comparison ended at the idle-host check while another
+inference workload was active. MTP remains opt-in.
+
+The median Metal copy rate was 437.7 GB/s over seven samples, counting both
+reads and writes. The target decoder and language head account for 7.316 GB
+of weights per short-context decode step. Including estimated recurrent-state
+traffic and KV reads brings the total to about 7.63 GB, or a bandwidth-only
+estimate of 57.4 tokens/s. This estimate assumes ideal weight reads and
+excludes kernel launch and scheduling costs.
