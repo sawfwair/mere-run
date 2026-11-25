@@ -657,6 +657,18 @@ extension ManagedModelCatalog {
             )
         ),
         ManagedModelSpec(
+            id: Q35Resources.bonsai25ModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(for: Q35Resources.bonsai25ModelId)?.hubFallbackConfig,
+            upstreamRepoId: Q35Resources.bonsai25UpstreamRepoId,
+            upstreamRevision: Q35Resources.bonsai25UpstreamRevision,
+            validationKind: .q35,
+            estimatedDownloadBytes: Q35Resources.bonsai25EstimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
+            apiProfile: .q38(contextWindow: Q35Resources.bonsai2ContextLength)
+        ),
+        ManagedModelSpec(
             id: Q35Resources.ornith9BModelId,
             category: .textCode,
             installShape: .directoryRoot,

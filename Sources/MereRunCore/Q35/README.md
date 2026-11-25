@@ -59,6 +59,12 @@ short prompts. `MERERUN_Q35_MTP_SPECULATION=1` enables the BF16 target's opt-in
 path; that precision still requires separate serial-output qualification.
 Qwen3.6 hybrid MoE keeps the existing adaptive long-context threshold.
 
+Bonsai 2.5 uses the signed Hadamard target loader and FP16 vision tower.
+Its optional v2 draft head lives in `mtp/mtp-v2-head.safetensors` and uses
+affine Q4/group-32 projections and direct RMS scales. It shares the target's
+embedding and output projection. `MERERUN_Q35_MTP_SPECULATION=1` loads the
+head and enables it for eligible text, with one proposal per round by default.
+
 Ornith 1.5's official MLX quants omit the MTP tensors advertised by their
 configuration. The managed Q4 bundle contains Shisa's Ornith-distilled BF16 head
 at revision `2b19b31bfe1659c6b0d9459ec3cbd87e34a322ef`, packaged as 785 indexed

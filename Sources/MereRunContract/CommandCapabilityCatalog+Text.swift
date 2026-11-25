@@ -17,14 +17,14 @@ extension MereRunCapabilityCatalog {
             ).scoped(Chat.only(.nemotronOmni, ignoredBy: Chat.allCases.filter { ![.nemotronOmni, .diffusionGemma].contains($0) })),
             .init(
                 flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .expert
-            ).scoped(Chat.only(.inkling2, .flint, .kolibri, .diffusionGemma, .q35, .q35VL, .q38)),
+            ).scoped(Chat.only(.inkling2, .flint, .kolibri, .diffusionGemma, .q35, .q35VL, .q38, .bonsai25)),
             .init(
                 flag: "--show-unmasking", label: "Show canvas drafts", kind: .boolean, group: Group.run, tier: .expert
             ).scoped(Chat.only(.diffusionGemma)),
             .init(flag: "--prompt", aliases: ["-p"], label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
             .init(flag: "--image", label: "Image", kind: .file, group: Group.inputs, tier: .standard, blankReadsAsOmitted: true)
                 .scoped(Chat.only(
-                    .inkling2, .gemma4Unified, .museGlimmer, .nemotronBolt, .nemotronOmni, .lfm2VL, .q35VL, .q38,
+                    .inkling2, .gemma4Unified, .museGlimmer, .nemotronBolt, .nemotronOmni, .lfm2VL, .q35VL, .q38, .bonsai25,
                     ignoredBy: [.laguna, .nemotronH, .gguf, .psi]
                 )),
             .init(flag: "--system", aliases: ["-s"], label: "System prompt", kind: .string, group: Group.prompt, tier: .standard),
@@ -65,13 +65,14 @@ extension MereRunCapabilityCatalog {
                 flag: "--kv-bits", label: "KV bits", kind: .number,
                 group: Group.run, tier: .expert, range: .init(min: 2, max: 8, step: 0.5)
             ).scoped(
-                Chat.only(.gemma4, .gemma4Unified, .inkling, .lfm2, .lfm2A2B, .lfm2A1B, .lfm2VL, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring),
+                Chat.only(.gemma4, .gemma4Unified, .inkling, .lfm2, .lfm2A2B, .lfm2A1B, .lfm2VL, .q35, .q35VL, .q38, .bonsai25, ignoredBy: kvCacheIgnoring),
                 .rule(.inkling, values: ["4", "8"], severity: .warning),
                 .rule(.lfm2, values: ["4", "8"], severity: .warning),
                 .rule(.lfm2A2B, values: ["4", "8"], severity: .warning),
                 .rule(.lfm2A1B, values: ["4", "8"], severity: .warning),
                 .rule(.lfm2VL, values: ["4", "8"], severity: .warning),
-                .rule(.q35, values: ["4", "8"]), .rule(.q35VL, values: ["4", "8"]), .rule(.q38, values: ["4", "8"])
+                .rule(.q35, values: ["4", "8"]), .rule(.q35VL, values: ["4", "8"]),
+                .rule(.q38, values: ["4", "8"]), .rule(.bonsai25, values: ["4", "8"])
             ),
             // Gemma 4 Turbo quantizes its KV cache by default, so the scheme, group size, and start
             // apply there without --kv-bits. Inkling and LFM2.5 only ever use the affine scheme.
@@ -82,8 +83,9 @@ extension MereRunCapabilityCatalog {
                 choices: ["uniform", "polar", "turboquant"],
                 group: Group.run, tier: .expert, choiceSpellings: .caseInsensitive
             ).scoped(
-                Chat.only(.gemma4, .gemma4Unified, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2A2B, .lfm2A1B, .lfm2VL]),
-                .rule(.q35, values: ["uniform"]), .rule(.q35VL, values: ["uniform"]), .rule(.q38, values: ["uniform"])
+                Chat.only(.gemma4, .gemma4Unified, .q35, .q35VL, .q38, .bonsai25, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2A2B, .lfm2A1B, .lfm2VL]),
+                .rule(.q35, values: ["uniform"]), .rule(.q35VL, values: ["uniform"]),
+                .rule(.q38, values: ["uniform"]), .rule(.bonsai25, values: ["uniform"])
             ),
             // The affine runtimes choose their own group size and start; Inkling and LFM2.5 never
             // read them, and the Qwen family refuses them.
@@ -118,7 +120,7 @@ extension MereRunCapabilityCatalog {
                     // LFM2.5 loads a text adapter only on the 8-bit A1B runtime and fails after
                     // loading any other checkpoint.
                     .gemma4, .gemma4Unified, .laguna, .inkling, .lfm2A1B, .q38,
-                    ignoredBy: [.q35, .q35VL, .gguf, .psi]
+                    ignoredBy: [.q35, .q35VL, .bonsai25, .gguf, .psi]
                 )),
             // Without --lora the scale does nothing anywhere, so it never fails on its own.
             .init(
@@ -128,7 +130,7 @@ extension MereRunCapabilityCatalog {
             ).scoped(Chat.only(
                 .gemma4, .gemma4Unified, .laguna, .inkling, .lfm2A1B, .q38,
                 ignoredBy: [
-                    .diffusionGemma, .museGlimmer, .nemotronH, .nemotronBolt, .nemotronOmni, .lfm2, .lfm2A2B, .lfm2VL, .q35, .q35VL, .gguf, .psi
+                    .diffusionGemma, .museGlimmer, .nemotronH, .nemotronBolt, .nemotronOmni, .lfm2, .lfm2A2B, .lfm2VL, .q35, .q35VL, .bonsai25, .gguf, .psi
                 ]
             )),
             .init(flag: "--thinking", aliases: ["--show-thinking"], label: "Show thinking", kind: .boolean, group: Group.sampling, tier: .standard),
@@ -137,7 +139,7 @@ extension MereRunCapabilityCatalog {
                 flag: "--reasoning-effort", label: "Reasoning effort", kind: .number,
                 group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.01)
             ).scoped(
-                Chat.only(.inkling2, .inkling, .museGlimmer, .q38),
+                Chat.only(.inkling2, .inkling, .museGlimmer, .q38, .bonsai25),
                 .rule(.inkling2, range: .init(min: 0, max: 0.99, step: 0.01)),
                 .rule(.inkling, range: .init(min: 0, max: 0.99, step: 0.01)),
                 .rule(.museGlimmer, range: .init(min: 0, max: 1, step: 0.01)),

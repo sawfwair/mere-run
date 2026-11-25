@@ -103,11 +103,15 @@ extension Q35Generator {
         modelId: String = Q35Resources.q36NanoModelId,
         environment env: [String: String] = ProcessInfo.processInfo.environment
     ) -> Int {
-        let denseQ38 = modelId == Q35Resources.q38TwentySevenBModelId
-            || modelId == Q35Resources.q38TwentySevenB4BitModelId
-        let modelDefault = denseQ38
-            ? q38MTPBlockSize
-            : defaultMTPBlockSize
+        let modelDefault: Int
+        switch modelId {
+        case Q35Resources.bonsai25ModelId:
+            modelDefault = 2
+        case Q35Resources.q38TwentySevenBModelId, Q35Resources.q38TwentySevenB4BitModelId:
+            modelDefault = q38MTPBlockSize
+        default:
+            modelDefault = defaultMTPBlockSize
+        }
         guard let raw = env["MERERUN_Q35_MTP_BLOCK_SIZE"],
               let value = Int(raw), value >= 2 else {
             return modelDefault
