@@ -100,6 +100,15 @@ For eligible text and image requests, Speed uses a compiled verifier for
 contexts up to 16,384 tokens, including the prompt and generation budget.
 Longer requests use the dynamic verifier.
 
+### Try experimental LoopCD guidance
+
+Set `MERERUN_INKLING2_LOOPCD_STRENGTH=0.25` when you start `mere.run text chat`
+or `mere.run api serve` with Inkling 2 Mini. LoopCD-Hidden uses the first core
+pass as a reference to extrapolate the final core residual state before the
+coda. Mini runs all three core passes. Guidance can change the model's answers
+and how many DSpark proposals it accepts. Leave the variable unset or set it
+to `0` to use standard decoding. [LoopCD paper](https://arxiv.org/abs/2610.02185)
+
 ## Serve the local API
 
 ```bash

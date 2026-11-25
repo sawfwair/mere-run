@@ -10,6 +10,8 @@ The format is based on Keep a Changelog.
   checkpoint for native MLX text and vision chat. The model uses its published
   sampling defaults and supports tool calls, reasoning effort, and an opt-in
   MTP v2 draft head for eligible text requests.
+- Try experimental full-depth LoopCD-Hidden guidance for Inkling 2 Mini with
+  `MERERUN_INKLING2_LOOPCD_STRENGTH=0.25`. Guidance is off by default.
 
 ## 0.76.0 - 2026-11-23
 

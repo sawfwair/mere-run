@@ -6,6 +6,7 @@ public final class Inkling2Model {
     let weights: Inkling2Weights
     let prefix = "model.llm."
     let q8OutputHead: Inkling2Q8Projection?
+    let loopCDStrength: Float
     package let usePackedExperts: Bool
     private var packedExperts: [Int: Inkling2PackedExperts] = [:]
     private var queryProjections: [Int: MLXArray] = [:]
@@ -28,10 +29,18 @@ public final class Inkling2Model {
         return prefillChunkSize
     }
 
-    public init(config: Inkling2Configuration, weights: Inkling2Weights) throws {
+    public convenience init(config: Inkling2Configuration, weights: Inkling2Weights) throws {
+        try self.init(config: config, weights: weights, loopCDStrength: 0)
+    }
+
+    package init(config: Inkling2Configuration, weights: Inkling2Weights, loopCDStrength: Float) throws {
         try config.validate()
+        guard loopCDStrength.isFinite, loopCDStrength >= 0, loopCDStrength == 0 || config.textConfig.loopConfig != nil else {
+            throw Inkling2Error.invalid("LoopCD requires Inkling 2 Mini and a finite, non-negative strength")
+        }
         self.config = config
         self.weights = weights
+        self.loopCDStrength = loopCDStrength
         #if os(macOS)
         usePackedExperts = config.textConfig.loopConfig != nil && Device.defaultDevice().deviceType == .gpu
             && ProcessInfo.processInfo.environment["MERERUN_INKLING2_PACKED_EXPERTS"] != "0"
