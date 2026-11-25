@@ -44,9 +44,7 @@ extension Q35Generator {
         let messages = NativeChatToolPolicy.requestMessages(request)
         let jsonConstrained = request.requiresJSON
         let includeThinking = request.showThinking && !jsonConstrained
-        let nativeReasoningEffort = Q35Resources.isQ38ModelId(modelId)
-            ? Q35Resources.q38ReasoningEffortLabel(for: request.reasoningEffort)
-            : nil
+        let nativeReasoningEffort = Q35Resources.nativeReasoningEffort(for: request.reasoningEffort, modelId: modelId)
         let requestedContextLength = request.maxContextTokens ?? maxContextLength
         guard requestedContextLength > 0 else {
             throw Q35Error.generationFailed("maxContextTokens must be greater than zero.")

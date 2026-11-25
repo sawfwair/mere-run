@@ -665,6 +665,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 24
             ),
             descriptor(
+                Q35Resources.bonsai25ModelId,
+                "Ternary Bonsai 2.5 27B vision chat",
+                "Runs Prism ML's dense Qwen3.8 27B vision and tool-calling model from 2-bit Hadamard MLX weights.",
+                minimum: 16,
+                recommended: 24
+            ),
+            descriptor(
                 Q35Resources.ornith9BModelId,
                 "Ornith 1.0 9B OptiQ",
                 "Runs DeepReinforce's Ornith 1.0 9B agentic coding model through the native Qwen-family MLX runtime.",

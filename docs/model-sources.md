@@ -140,6 +140,7 @@ Use `mere.run guide --model text-chat-gemma4-26b-a4b-bf16` for its text workflow
 | `text-chat` | `text-chat-bonsai-2-4b-2bit` |
 | `text-chat` | `text-chat-bonsai-2-9b-2bit` |
 | `text-chat` | `text-chat-bonsai-2-27b-2bit` |
+| `text-chat` | `text-chat-bonsai-2-5-27b-2bit` |
 | `text-code` | `text-agent-ornith-9b` |
 | `vision-chat` | `text-agent-ornith-35b-mlx-4bit` |
 | `text-code` | `text-agent-ornith-35b-mlx-6bit` |
@@ -1952,6 +1953,21 @@ sequentially. The experimental FP32 path passed [trained-weight parity and
 Apple Silicon. The encoder download includes the two original shards containing
 its text and audio tensors. Read the setup and qualification scope with
 `mere.run guide --model audio-auk-base`.
+
+## Bonsai 2.5 MLX
+
+`text-chat-bonsai-2-5-27b-2bit` pins Prism ML's Apache-2.0 MLX pack at
+`aa432fd0e17612f6684e728d4d3c42b6656bcabb`. The 8.88 GB managed download
+includes group-128, 2-bit signed Hadamard language weights, the FP16 vision
+tower, and the 266 MB affine Q4/group-32 MTP v2 head. The native runtime
+loads the original safetensors. [Pinned model files](https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-mlx-2bit/tree/aa432fd0e17612f6684e728d4d3c42b6656bcabb)
+
+The checkpoint declares a 262,144-token context window. Sampling defaults are
+temperature 1.0, top-p 0.95, top-k 20, and min-p 0. The chat template supports
+`low`, `medium`, and `xhigh` reasoning, and defaults to `xhigh`. The draft head
+shares the target embedding and output projection. To opt in, set
+`MERERUN_Q35_MTP_SPECULATION=1` before running eligible text requests.
+See the [Apple Silicon qualification results](benchmarks/bonsai-25-native-qualification-2026-11-24.md).
 
 ## Bonsai 2 MLX
 

@@ -77,7 +77,7 @@ final class TextChatCommandParsingTests: XCTestCase {
     func testTextChatGateRejectsDiffusionOptionsForOtherModels() throws {
         let report = try gate("--model", Gemma4Resources.nanoModelId, "--seed", "123", "--show-unmasking")
         XCTAssertEqual(report.violations, [
-            "--seed is not supported by Gemma 4. It applies to DiffusionGemma, Recursive Flint, Inkling 2, Kolibri 1, Qwen3.6 text, Qwen3.6 vision and Qwen3.8.",
+            "--seed is not supported by Gemma 4. It applies to DiffusionGemma, Recursive Flint, Inkling 2, Kolibri 1, Qwen3.6 text, Qwen3.6 vision, Qwen3.8 and Bonsai 2.5.",
             "--show-unmasking is not supported by Gemma 4. It applies to DiffusionGemma."
         ])
     }
@@ -247,7 +247,7 @@ final class TextChatCommandParsingTests: XCTestCase {
         )
         XCTAssertEqual(
             try gate("--model", Gemma4Resources.twelveB4BitModelId, "--reasoning-effort", "0.2").violations,
-            ["--reasoning-effort is not supported by Gemma 4. It applies to Inkling 2, Inkling-Small, Muse Glimmer and Qwen3.8."]
+            ["--reasoning-effort is not supported by Gemma 4. It applies to Inkling 2, Inkling-Small, Muse Glimmer, Qwen3.8 and Bonsai 2.5."]
         )
     }
 
@@ -600,7 +600,7 @@ final class TextChatCommandParsingTests: XCTestCase {
             XCTAssertEqual(scheme.violations, [], model)
             XCTAssertEqual(scheme.warnings, [
                 "--kv-quant-scheme has no effect with \(title). It applies to Gemma 4, Gemma 4 12B vision, "
-                    + "Qwen3.6 text, Qwen3.6 vision and Qwen3.8."
+                    + "Qwen3.6 text, Qwen3.6 vision, Qwen3.8 and Bonsai 2.5."
             ])
             let schemeOnly = try TextChat.parse(["--prompt", "hello", "--model", model, "--kv-quant-scheme", "uniform"])
             XCTAssertNil(try schemeOnly.resolveKVCacheMode(for: family), model)
@@ -624,7 +624,7 @@ final class TextChatCommandParsingTests: XCTestCase {
         }
         for model in [Gemma4Resources.visionTwelveBModelId, LFM2Resources.visionModelId, Q35Resources.bonsai2ModelId,
                       Q35Resources.bonsai2TwoBModelId, Q35Resources.bonsai2FourBModelId,
-                      Q35Resources.bonsai2NineBModelId,
+                      Q35Resources.bonsai2NineBModelId, Q35Resources.bonsai25ModelId,
                       NemotronOmniResources.modelID, NemotronBoltResources.modelID] {
             let report = try gate("--model", model, "--image", "a.png")
             XCTAssertEqual(report.violations, [], model)
@@ -632,8 +632,26 @@ final class TextChatCommandParsingTests: XCTestCase {
         }
         XCTAssertEqual(
             try gate("--model", NemotronHResources.modelID, "--image", "a.png").warnings,
-            ["--image has no effect with Nemotron 3.5 Lightning. It applies to Gemma 4 12B vision, Inkling 2, Muse Glimmer, Nemotron 3.5 Bolt, Nemotron 3 Nano Omni, LFM2.5-VL, Qwen3.6 vision and Qwen3.8."]
+            ["--image has no effect with Nemotron 3.5 Lightning. It applies to Gemma 4 12B vision, Inkling 2, Muse Glimmer, Nemotron 3.5 Bolt, Nemotron 3 Nano Omni, LFM2.5-VL, Qwen3.6 vision, Qwen3.8 and Bonsai 2.5."]
         )
+    }
+
+    func testBonsai25OptionsAndPinnedSamplingDefaults() throws {
+        let model = Q35Resources.bonsai25ModelId
+        let options = ["--model", model, "--reasoning-effort", "0.5", "--seed", "7",
+                       "--kv-bits", "4", "--kv-quant-scheme", "uniform"]
+        let report = try XCTUnwrap(CLICapabilityGate.evaluate(commandLine: ["text", "chat", "--prompt", "hi"] + options)).report
+        XCTAssertTrue(report.violations.isEmpty)
+        XCTAssertFalse(try gate("--model", model, "--kv-bits", "3").violations.isEmpty)
+        let cmd = try TextChat.parse(["--prompt", "hello"] + options)
+        let request = try cmd.resolvedChatRequest(modelID: model, messages: [ChatMessage(role: .user, content: "hello")])
+        XCTAssertEqual(request.reasoningEffort, 0.5)
+        XCTAssertEqual(request.temperature, 1)
+        XCTAssertEqual(request.topP, 0.95)
+        XCTAssertEqual(request.topK, 20)
+        XCTAssertEqual(request.minP, 0)
+        XCTAssertEqual(request.kvCacheMode, .affine4)
+        XCTAssertTrue(request.showThinking)
     }
 
     func testTextChatGateDefaultsAndExcludedModels() throws {

@@ -164,8 +164,13 @@ final class Q35MTPDecoderLayer: Module {
         let text = config.textConfig
         self._selfAttention.wrappedValue = Q35FullAttention(config: config)
         self._mlp.wrappedValue = Q35MTPFeedForward(config: config)
-        self._inputLayerNorm.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
-        self._postAttentionLayerNorm.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
+        let zeroCenteredWeight = config.modelType != "prism_hadamard_qwen35"
+        self._inputLayerNorm.wrappedValue = Q35RMSNorm(
+            dimensions: text.hiddenSize, eps: text.rmsNormEps, zeroCenteredWeight: zeroCenteredWeight
+        )
+        self._postAttentionLayerNorm.wrappedValue = Q35RMSNorm(
+            dimensions: text.hiddenSize, eps: text.rmsNormEps, zeroCenteredWeight: zeroCenteredWeight
+        )
         super.init()
     }
 
@@ -218,15 +223,23 @@ package final class Q35MTPModel: Module, Q35MTPDraftModel {
 
     package var expertCount: Int { layers.first?.mlp.experts?.expertCount ?? 0 }
 
-    package let diagnosticsID = "qwen-mtp"
+    package let diagnosticsID: String
 
     package init(config: Q35Config) {
         let text = config.textConfig
-        self._preFCNormEmbedding.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
-        self._preFCNormHidden.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
+        let usesPrism = config.modelType == "prism_hadamard_qwen35"
+        diagnosticsID = usesPrism ? "bonsai-2.5-mtp-v2" : "qwen-mtp"
+        self._preFCNormEmbedding.wrappedValue = Q35RMSNorm(
+            dimensions: text.hiddenSize, eps: text.rmsNormEps, zeroCenteredWeight: !usesPrism
+        )
+        self._preFCNormHidden.wrappedValue = Q35RMSNorm(
+            dimensions: text.hiddenSize, eps: text.rmsNormEps, zeroCenteredWeight: !usesPrism
+        )
         self._fc.wrappedValue = Linear(text.hiddenSize * 2, text.hiddenSize, bias: false)
         self._layers.wrappedValue = [Q35MTPDecoderLayer(config: config)]
-        self._norm.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
+        self._norm.wrappedValue = Q35RMSNorm(
+            dimensions: text.hiddenSize, eps: text.rmsNormEps, zeroCenteredWeight: !usesPrism
+        )
         super.init()
     }
 

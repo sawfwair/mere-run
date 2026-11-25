@@ -528,7 +528,9 @@ embedded in the BF16 checkpoint; `vision-chat-q38-27b-4bit` mounts the matching
 4-bit/group-64 MLX Fast proposal head with a 2-bit shortlist readout and mounts
 its pinned official vision tower separately under `vision/`. The Q4 target
 enables serial-exact MTP by default; BF16 remains opt-in. Qwen3.6 hybrid MoE
-retains its adaptive default. Flash-Next uses its bundled
+retains its adaptive default. Bonsai 2.5 27B loads its bundled MTP v2 head
+when explicitly enabled and proposes one draft token per round by default.
+Image and single-tool requests use the target decoder. Flash-Next uses its bundled
 one-layer head by default for greedy short-prompt decode after exact target
 verification and real-checkpoint speed qualification. When continuous batching is enabled, an eligible
 MTP request takes the speculative lane only if no peer is already admitted. A

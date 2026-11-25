@@ -174,7 +174,14 @@ extension Q35Generator {
         let ornithMTPCompanionRoot = Q35Resources.isOrnith35BMLXModelId(modelId)
             ? ManagedModelResolver.resolveInstalledModel(id: Q35Resources.ornith35BMTPModelId)
             : nil
-        if shouldLoadMTP,
+        let bonsaiMTPWeights = normalizedRoot.appendingPathComponent(Q35Resources.bonsai25MTPWeightsPath)
+        if shouldLoadMTP, modelId == Q35Resources.bonsai25ModelId,
+           FileManager.default.fileExists(atPath: bonsaiMTPWeights.path) {
+            progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Bonsai 2.5 MTP v2 weights"))
+            let mtp = Q35MTPModel(config: config)
+            try Self.loadBonsai25MTPWeights(into: mtp, from: bonsaiMTPWeights)
+            loadedMTP = mtp
+        } else if shouldLoadMTP,
            let mtpResources = Self.mtpResources(
                primary: resources,
                companionRootURL: ornithMTPCompanionRoot

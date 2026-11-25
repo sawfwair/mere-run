@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add `text-chat-bonsai-2-5-27b-2bit`, Prism ML's Ternary Bonsai 2.5 27B
+  checkpoint for native MLX text and vision chat. The model uses its published
+  sampling defaults and supports tool calls, reasoning effort, and an opt-in
+  MTP v2 draft head for eligible text requests.
 - Try experimental full-depth LoopCD-Hidden guidance for Inkling 2 Mini with
   `MERERUN_INKLING2_LOOPCD_STRENGTH=0.25`. Guidance is off by default.
 

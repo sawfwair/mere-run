@@ -854,7 +854,7 @@ extension MereRunModelManifest {
                     + "@\(Q35Resources.bonsai27B2BitUpstreamRevision)",
                 createdAt: createdAt
             )
-        case .bonsai2, .bonsai2TwoB, .bonsai2FourB, .bonsai2NineB:
+        case .bonsai2, .bonsai25, .bonsai2TwoB, .bonsai2FourB, .bonsai2NineB:
             let profile = Q35Resources.profile(for: modelID.rawValue)!
             return MereRunModelManifest(
                 id: modelID.rawValue,

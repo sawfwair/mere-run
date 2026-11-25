@@ -38,6 +38,7 @@ public struct Q35Resources: Sendable, Hashable {
     public static let bonsai27B1BitModelId = "text-chat-bonsai-27b-1bit"
     public static let bonsai27B2BitModelId = "text-chat-bonsai-27b-2bit"
     public static let bonsai2ModelId = "text-chat-bonsai-2-27b-2bit"
+    public static let bonsai25ModelId = "text-chat-bonsai-2-5-27b-2bit"
     public static let bonsai2TwoBModelId = "text-chat-bonsai-2-2b-2bit"
     public static let bonsai2FourBModelId = "text-chat-bonsai-2-4b-2bit"
     public static let bonsai2NineBModelId = "text-chat-bonsai-2-9b-2bit"
@@ -66,7 +67,8 @@ public struct Q35Resources: Sendable, Hashable {
     }
 
     public static func isBonsai27BModelId(_ modelId: String) -> Bool {
-        modelId == bonsai27B1BitModelId || modelId == bonsai27B2BitModelId || modelId == bonsai2ModelId
+        modelId == bonsai27B1BitModelId || modelId == bonsai27B2BitModelId
+            || modelId == bonsai2ModelId || modelId == bonsai25ModelId
     }
 
     public static func isBonsai2SmallModelId(_ modelId: String) -> Bool {
@@ -80,6 +82,11 @@ public struct Q35Resources: Sendable, Hashable {
         if strength < 1.0 / 3.0 { return "low" }
         if strength < 2.0 / 3.0 { return "medium" }
         return "xhigh"
+    }
+
+    static func nativeReasoningEffort(for strength: Double?, modelId: String) -> String? {
+        guard isQ38ModelId(modelId) || modelId == bonsai25ModelId else { return nil }
+        return q38ReasoningEffortLabel(for: strength)
     }
 
     public struct RecommendedSampling: Sendable, Hashable {
@@ -107,7 +114,7 @@ public struct Q35Resources: Sendable, Hashable {
             return RecommendedSampling(temperature: 1.0, topP: 0.95, topK: 20)
         case bonsai27B1BitModelId, bonsai27B2BitModelId:
             return RecommendedSampling(temperature: 0.7, topP: 0.95, topK: 20)
-        case bonsai2TwoBModelId, bonsai2FourBModelId, bonsai2NineBModelId:
+        case bonsai25ModelId, bonsai2TwoBModelId, bonsai2FourBModelId, bonsai2NineBModelId:
             return RecommendedSampling(temperature: 1.0, topP: 0.95, topK: 20)
         case ornith9BModelId,
              ornith35BMLX4BitModelId,
@@ -179,6 +186,14 @@ public struct Q35Resources: Sendable, Hashable {
     public static let bonsai2UpstreamRevision = "3f926b415992eaa2ae9dd7b573706494d6bbf787"
     public static let bonsai2EstimatedDownloadBytes: Int64 = 8_620_000_000
     public static let bonsai2ContextLength = 262_144
+    public static let bonsai25UpstreamRepoId = "prism-ml/Ternary-Bonsai-2.5-27B-mlx-2bit"
+    public static let bonsai25UpstreamRevision = "aa432fd0e17612f6684e728d4d3c42b6656bcabb"
+    public static let bonsai25EstimatedDownloadBytes: Int64 = 8_881_396_566
+    static let bonsai25MTPWeightsPath = "mtp/mtp-v2-head.safetensors"
+    static let bonsai25SupplementalFiles = [
+        "hadamard.json", "generation_config.json", "preprocessor_config.json",
+        bonsai25MTPWeightsPath, "mtp/head-manifest.json",
+    ]
     public static let ornith9BUpstreamRepoId = "sahilchachra/ornith-1.0-9b-optiq-5bpw-mlx"
     public static let ornith9BUpstreamRevision = "4f9f4fc2c10ec17cbeb9dae086a7f1272c904e86"
     public static let ornith9BEstimatedDownloadBytes: Int64 = 7 * 1_073_741_824
@@ -383,6 +398,12 @@ public struct Q35Resources: Sendable, Hashable {
                 "README.md", "LICENSE", "NOTICE.txt", "PACK-RUNTIME.md",
             ]
         ),
+        bonsai25ModelId: Profile(
+            modelId: bonsai25ModelId,
+            upstreamRepoId: bonsai25UpstreamRepoId,
+            upstreamRevision: bonsai25UpstreamRevision,
+            snapshotPatterns: snapshotPatterns + bonsai25SupplementalFiles + ["README.md", "files.json"]
+        ),
         ornith9BModelId: Profile(
             modelId: ornith9BModelId,
             upstreamRepoId: ornith9BUpstreamRepoId,
@@ -461,7 +482,7 @@ public struct Q35Resources: Sendable, Hashable {
             bonsai27B1BitContextLength
         case bonsai27B2BitModelId:
             bonsai27B2BitContextLength
-        case bonsai2ModelId, bonsai2TwoBModelId, bonsai2FourBModelId, bonsai2NineBModelId:
+        case bonsai25ModelId, bonsai2ModelId, bonsai2TwoBModelId, bonsai2FourBModelId, bonsai2NineBModelId:
             bonsai2ContextLength
         case ornith35BMLX4BitModelId,
              ornith35BMLX6BitModelId,
@@ -478,7 +499,7 @@ public struct Q35Resources: Sendable, Hashable {
         if modelId == ornith35BMLX4BitModelId || modelId == ornith35BVisionModelId {
             return (q38TwentySevenBVisionMinPixels, ornith35BVisionMaxPixels)
         }
-        if isQ38ModelId(modelId) {
+        if isQ38ModelId(modelId) || modelId == bonsai25ModelId {
             return (q38TwentySevenBVisionMinPixels, q38TwentySevenBVisionMaxPixels)
         }
         if modelId == lightOnOCR3SmallModelId || modelId == lightOnOCR3FourBModelId {

@@ -131,7 +131,7 @@ extension Q35Generator {
             let missing = expectedOrdinary.subtracting(suppliedOrdinary).sorted().joined(separator: ", ")
             let unexpected = suppliedOrdinary.subtracting(expectedOrdinary).sorted().joined(separator: ", ")
             throw Q35Error.generationFailed(
-                "Bonsai 2 parameter mismatch. Missing: [\(missing)]. Unexpected: [\(unexpected)]."
+                "Prism Hadamard checkpoint parameter mismatch. Missing: [\(missing)]. Unexpected: [\(unexpected)]."
             )
         }
         model.update(modules: ModuleChildren.unflattened(replacements))

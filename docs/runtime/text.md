@@ -83,7 +83,7 @@ groups the chat model IDs by family:
 | Muse Glimmer | `vision-chat-muse-glimmer-30b` | [Muse Glimmer](#muse-glimmer) |
 | Qwen3.6 | `text-chat-q36-nano`, `text-chat-q36-nano-gguf` | MLX on Apple Silicon; the GGUF build runs through llama.cpp and is the Linux CUDA default. |
 | Qwen3.8 | `vision-chat-q38-27b`, `vision-chat-q38-27b-4bit`, `vision-chat-q38-flash-next-mixed`, `vision-chat-q38-flash-next-3bit`, `vision-chat-q38-flash-next-3bit-native-ple`, `vision-chat-q38-flash-next-4bit` | [Qwen3.8](#qwen3-8). The Flash Next builds are described in [Model sources](../model-sources.md). |
-| Bonsai | `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-chat-bonsai-2-2b-2bit`, `text-chat-bonsai-2-4b-2bit`, `text-chat-bonsai-2-9b-2bit`, `text-chat-bonsai-2-27b-2bit` | [Bonsai](#bonsai) |
+| Bonsai | `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-chat-bonsai-2-2b-2bit`, `text-chat-bonsai-2-4b-2bit`, `text-chat-bonsai-2-9b-2bit`, `text-chat-bonsai-2-27b-2bit`, `text-chat-bonsai-2-5-27b-2bit` | [Bonsai](#bonsai) |
 | Ornith | `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx-4bit`, `text-agent-ornith-35b-mlx-6bit`, `text-agent-ornith-35b-mlx-8bit`, `text-agent-ornith-35b-mlx`, `vision-chat-ornith-35b` | [Ornith](#ornith) |
 | LFM2.5 | `text-chat-lfm25-1.2b-bf16`, `text-chat-lfm25-1.2b-qad-4bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-2.6b-qad-4bit`, `text-chat-lfm25-2.6b-bf16`, `text-chat-lfm25-a1b-8bit`, `text-chat-lfm25-a1b-bf16`, `text-chat-lfm25-24b-a2b-bf16`, `vision-chat-lfm25-3b-8bit`, `vision-chat-lfm25-3b-bf16` | [LFM2.5](#lfm2-5) |
 | Laguna | `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1` | [Laguna](#laguna) |
@@ -717,6 +717,20 @@ On Linux CUDA, the pinned MLX fork runs supported 1-bit affine projections
 directly from packed weights. The runtime keeps its operation-scoped dense
 fallback for unsupported shapes, and 2-bit and wider model dispatch stays
 independent.
+
+`text-chat-bonsai-2-5-27b-2bit` runs Prism ML's Ternary Bonsai 2.5 27B
+through native Swift/MLX on Apple Silicon. It accepts images, supports tool
+calls through the API, and defaults to `xhigh` reasoning. Pass
+`--reasoning-effort 0.5` for `medium` or `--no-thinking` to disable reasoning.
+
+```bash
+mere.run model pull text-chat-bonsai-2-5-27b-2bit
+mere.run text chat --model text-chat-bonsai-2-5-27b-2bit --image ./photo.png \
+  --max-tokens 128 --no-thinking --prompt "Describe the main subject."
+```
+
+See the [Bonsai 2.5 MLX model source](../model-sources.md#bonsai-25-mlx) for
+the download contents, sampling defaults, and draft-head controls.
 
 Bonsai 2 packs use Hadamard-transformed affine 2-bit language weights, which the
 native loader applies without expanding the full model:

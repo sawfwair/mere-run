@@ -180,6 +180,11 @@ public extension ManagedModelSpec {
         case .q35:
             let resources = Q35Resources(rootURL: rootURL)
             var missing = resources.validate(fileManager: fileManager)
+            if id == Q35Resources.bonsai25ModelId {
+                missing += Q35Resources.bonsai25SupplementalFiles
+                    .map { rootURL.appendingPathComponent($0) }
+                    .filter { !fileManager.fileExists(atPath: $0.path) }
+            }
             if id == Q35Resources.q38TwentySevenB4BitModelId {
                 missing.append(contentsOf: resources.validateQ38MTPComponent(fileManager: fileManager))
                 missing.append(contentsOf: resources.validateQ38VisionComponent(fileManager: fileManager))

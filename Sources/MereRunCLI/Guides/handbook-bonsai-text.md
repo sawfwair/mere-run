@@ -76,6 +76,7 @@ This guide covers the following managed model IDs:
 
 - `text-chat-bonsai-27b-1bit`
 - `text-chat-bonsai-27b-2bit`
+- `text-chat-bonsai-2-5-27b-2bit`
 - `text-chat-bonsai-2-27b-2bit`
 
 ## Sources and validation
@@ -93,6 +94,24 @@ documentation](https://github.com/sawfwair/mere-run/blob/main/docs/runtime/text.
 
 Source links require a network connection. The complete recipe and examples are
 bundled for offline reading.
+
+## Bonsai 2.5 27B
+
+```bash
+mere.run model pull text-chat-bonsai-2-5-27b-2bit
+mere.run text chat --model text-chat-bonsai-2-5-27b-2bit --reasoning-effort 0.5 --prompt "Explain how a heat pump works."
+```
+
+The 8.88 GB Apple Silicon download includes packed 2-bit language weights,
+an FP16 vision tower, and the optional Q4 MTP v2 head. The model defaults to
+`xhigh` reasoning, temperature 1.0, top-p 0.95, top-k 20, and min-p 0.
+The CLI effort values 0.2, 0.5, and 1 select `low`, `medium`, and `xhigh`
+respectively. Use `--no-thinking` to disable reasoning and `--image` to
+supply an image. The model supports up to 262,144 context tokens.
+
+Serve this model with `mere.run api serve --model text-chat-bonsai-2-5-27b-2bit`
+to use native tool calls. Set `MERERUN_Q35_MTP_SPECULATION=1` to try the
+optional draft head on eligible text requests.
 
 ## Bonsai 2 MLX
 

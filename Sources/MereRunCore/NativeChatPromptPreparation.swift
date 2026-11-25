@@ -11,7 +11,7 @@ extension Q35Generator {
                           loadedConfig.textConfig.maxPositionEmbeddings, tokenizerAndTemplate.tokenizer.maxLength)
         let tokens = try tokenizerAndTemplate.encodeForGeneration(messages: NativeChatToolPolicy.requestMessages(request), tools: NativeChatToolPolicy.templateTools(request),
             includeThinking: request.showThinking && !request.requiresJSON,
-            reasoningEffort: Q35Resources.isQ38ModelId(modelId) ? Q35Resources.q38ReasoningEffortLabel(for: request.reasoningEffort) : nil,
+            reasoningEffort: Q35Resources.nativeReasoningEffort(for: request.reasoningEffort, modelId: modelId),
             maxLength: context, truncate: false)
         return try ChatPreparedPrompt(tokens: tokens, contextLimit: context)
     }

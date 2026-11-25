@@ -263,6 +263,7 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
             Q35Resources.bonsai2TwoBModelId,
             Q35Resources.bonsai2FourBModelId,
             Q35Resources.bonsai2NineBModelId,
+            Q35Resources.bonsai25ModelId,
             Q35Resources.q36NanoModelId,
             Q35Resources.q38TwentySevenBModelId,
             Q35Resources.q38TwentySevenB4BitModelId,
@@ -589,7 +590,9 @@ struct Q36MTPBenchmarkVariant {
                 || (Q35Resources.isQ38ModelId(modelID) && modelID != Q35Resources.q38TwentySevenBModelId) {
                 return true
             }
-            if modelID == Q35Resources.q38TwentySevenBModelId { return false }
+            if modelID == Q35Resources.q38TwentySevenBModelId || modelID == Q35Resources.bonsai25ModelId {
+                return false
+            }
             return promptTokens >= Self.adaptiveThreshold && contextSize >= Self.adaptiveThreshold
         }
     }

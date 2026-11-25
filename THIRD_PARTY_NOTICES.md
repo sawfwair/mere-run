@@ -2010,6 +2010,16 @@ Managed downloads require explicit local acceptance and Hugging Face access.
 The bundled Qwen3-VL text encoder uses Apache-2.0. The numerical test fixtures
 contain synthetic weights, not pretrained model parameters.
 
+## Bonsai 2.5 model pack
+
+The optional `text-chat-bonsai-2-5-27b-2bit` model uses Prism ML's Apache-2.0
+MLX pack at revision `aa432fd0e17612f6684e728d4d3c42b6656bcabb`. The pack
+derives from Alibaba Cloud's Apache-2.0 Qwen3.8-27B. Managed pulls retain
+Prism ML's `LICENSE` and `NOTICE.txt`.
+
+Copyright 2026-present Prism ML, Inc. Created using Bonsai by Prism ML.
+Qwen3.8-27B is copyright 2026 Alibaba Cloud.
+
 ## Bonsai 2 Small model packs
 
 The optional Bonsai 2 Small 2B, 4B, and 9B managed models use Prism ML's

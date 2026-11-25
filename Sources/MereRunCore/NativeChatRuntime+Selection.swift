@@ -122,7 +122,7 @@ extension NativeChatRuntime {
             engine = .textChatNemotronH
         case .lfm2, .lfm2A2B, .lfm2A1B, .lfm2VL:
             engine = .textChatLFM2
-        case .q35, .q35VL, .q38:
+        case .q35, .q35VL, .q38, .bonsai25:
             engine = .textChatQ35
         }
         // Gemma4 claims an empty spec, so an empty ID must fall back to the selected

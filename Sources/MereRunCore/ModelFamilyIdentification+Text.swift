@@ -46,6 +46,7 @@ extension ModelFamilyIdentifier {
         if LFM2Resources.handles(modelSpec: model) {
             return lfm2Family(folder: model) ?? .lfm2VL
         }
+        if model == Q35Resources.bonsai25ModelId { return .bonsai25 }
         return Q35Resources.isQ38ModelId(model) ? .q38 : .q35VL
     }
 
@@ -70,7 +71,7 @@ extension ModelFamilyIdentifier {
         let normalizedID = model.lowercased()
         let family = textChatFamily(matching: normalizedID)
         switch family {
-        case .q35, .q35VL, .q38:
+        case .q35, .q35VL, .q38, .bonsai25:
             return Q35Resources.profile(for: normalizedID) == nil ? nil : .family(family.rawValue)
         case .lfm2, .lfm2A1B, .lfm2VL:
             return lfm2Family(folder: model).map { .family($0.rawValue) }

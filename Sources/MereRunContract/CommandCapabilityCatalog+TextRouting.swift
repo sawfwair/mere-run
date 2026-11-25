@@ -52,6 +52,7 @@ extension MereRunCapabilityCatalog {
         case q35
         case q35VL = "q35-vl"
         case q38
+        case bonsai25
         case gguf
         case psi
 
@@ -150,6 +151,7 @@ extension MereRunCapabilityCatalog {
                     "vision-chat-q38-flash-next-4bit"
                 ]
             ),
+            .init(TextChatFamily.bonsai25, title: "Bonsai 2.5", models: ["text-chat-bonsai-2-5-27b-2bit"]),
             .init(TextChatFamily.gguf, title: "llama.cpp GGUF", models: ["text-chat-q36-nano-gguf"]),
             .init(TextChatFamily.psi, title: "Psi", models: ["text-chat-psi-agent"])
         ],

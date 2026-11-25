@@ -11,7 +11,7 @@ private func runtime(_ family: ChatFamily) -> String {
     switch family {
     case .gemma4, .gemma4Unified: "gemma4"
     case .lfm2, .lfm2A1B, .lfm2VL: "lfm2"
-    case .q35, .q35VL, .q38: "qwen"
+    case .q35, .q35VL, .q38, .bonsai25: "qwen"
     default: family.rawValue
     }
 }
@@ -38,7 +38,7 @@ private func routing(_ capability: MereRunCommandCapability) throws -> MereRunCa
                 #expect(vision == (contract == .lfm2VL), "\(model)")
                 // The one checkpoint the runtime loads a text adapter on.
                 #expect((model == LFM2Resources.defaultModelId) == (contract == .lfm2A1B), "\(model)")
-            case .q35, .q35VL, .q38:
+            case .q35, .q35VL, .q38, .bonsai25:
                 #expect(Q35Resources.profile(for: model) != nil, "\(model) has no Qwen profile")
                 #expect(Q35Resources.isQ38ModelId(model) == (contract == .q38), "\(model)")
             default:
