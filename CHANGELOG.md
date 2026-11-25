@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Try experimental full-depth LoopCD-Hidden guidance for Inkling 2 Mini with
+  `MERERUN_INKLING2_LOOPCD_STRENGTH=0.25`. Guidance is off by default.
+
 ## 0.76.0 - 2026-11-23
 
 - Use Inkling 2 Mini Speed by default for `vision-chat-inkling-2-mini`. A single

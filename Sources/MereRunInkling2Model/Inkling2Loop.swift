@@ -3,6 +3,17 @@ import MLX
 struct Inkling2ResidualState {
     var partial: MLXArray
     var blocks: [MLXArray] = []
+
+    mutating func guide(from reference: Self, strength: Float, startBlock: Int) {
+        func extrapolate(_ current: MLXArray, _ earlier: MLXArray) -> MLXArray {
+            let value = current.asType(.float32)
+            return (value + strength * (value - earlier.asType(.float32))).asType(current.dtype)
+        }
+        partial = extrapolate(partial, reference.partial)
+        for index in startBlock..<blocks.count {
+            blocks[index] = extrapolate(blocks[index], reference.blocks[index])
+        }
+    }
 }
 
 struct Inkling2LoopMessages {
@@ -32,6 +43,7 @@ extension Inkling2Model {
         try runLayers(0..<loop.coreStart, residual: &residual, cache: cache, capture: capture)
         let prelude = residual
         try runLayers(loop.layers, residual: &residual, cache: cache, capture: capture)
+        let reference = loopCDStrength > 0 ? residual : nil
 
         let queries = try weights.read(prefix + "middle_cycle_cross_pass_queries")
         let keyValueQueries = try weights.read(prefix + "middle_cycle_cross_pass_kv_queries")
@@ -52,6 +64,11 @@ extension Inkling2Model {
             let cacheOffset = layerCount + (pass - 1) * loop.layers.count - loop.coreStart
             try runLayers(loop.layers, residual: &residual, cache: cache, cacheOffset: cacheOffset, previousPass: messages,
                           visitOffset: pass * loop.layers.count, capture: capture)
+        }
+        // The coda reads the core's residual blocks and final partial state.
+        // The prelude and first core boundary are shared across passes.
+        if let reference {
+            residual.guide(from: reference, strength: loopCDStrength, startBlock: prelude.blocks.count + 1)
         }
         try runLayers(loop.coreEnd..<layerCount, residual: &residual, cache: cache,
                       visitOffset: (loop.numPasses - 1) * loop.layers.count, capture: capture)

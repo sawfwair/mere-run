@@ -27,8 +27,12 @@ public actor Inkling2Generator: ChatGenerator {
         unload()
         progress?(ChatProgress(stage: .loadingModel, message: "Opening native Inkling 2 checkpoint"))
         let config = try Inkling2Configuration.decode(Data(contentsOf: root.appendingPathComponent("config.json")))
+        let loopCDKey = "MERERUN_INKLING2_LOOPCD_STRENGTH"
+        guard let loopCDStrength = Float(ProcessInfo.processInfo.environment[loopCDKey] ?? "0") else {
+            throw Inkling2Error.invalid("invalid \(loopCDKey)")
+        }
         let weights = try Inkling2Weights(root: root)
-        let loaded = try Inkling2Model(config: config, weights: weights)
+        let loaded = try Inkling2Model(config: config, weights: weights, loopCDStrength: loopCDStrength)
         let loadedTokenizer = try await AutoTokenizer.from(modelFolder: root)
         let loadedTemplate = try Inkling2ChatTemplate(source: String(contentsOf: root.appendingPathComponent("chat_template.jinja"), encoding: .utf8))
         try Task.checkCancellation()

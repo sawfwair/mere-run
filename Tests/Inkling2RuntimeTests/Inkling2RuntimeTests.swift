@@ -93,6 +93,17 @@ final class Inkling2RuntimeTests: MLXTestCase {
                 XCTAssertEqual(layer.convolutions.count, 4)
             }
         }
+        let guided = try Inkling2Model(config: config, weights: Inkling2Weights(arrays: decoderWeights), loopCDStrength: 0.25)
+        let fullCache = guided.makeCache()
+        let full = try guided(tokens, cache: fullCache, lastPositionOnly: false)
+        let ordinary = try model(tokens, cache: model.makeCache(), lastPositionOnly: false)
+        XCTAssertFalse(arrayEqual(full, ordinary).item(Bool.self))
+        XCTAssertEqual(fullCache.layers.count, 16)
+        XCTAssertTrue(fullCache.layers.allSatisfy { $0.offset == 7 })
+        let chunkedCache = guided.makeCache()
+        let prefix = try guided(tokens[0..., ..<3], cache: chunkedCache, lastPositionOnly: false)
+        let suffix = try guided(tokens[0..., 3...], cache: chunkedCache, lastPositionOnly: false)
+        assertClose(concatenated([prefix, suffix], axis: 1), full.asArray(Float.self))
     }
 
     func testNVFP4NibblesScalesAndOuterDenominator() {
