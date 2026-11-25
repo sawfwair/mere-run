@@ -38,6 +38,7 @@ final class ModelBenchmarkCommandTests: XCTestCase {
     func testQwenBenchmarkExpectedPolicyMatchesRuntimeAdmission() {
         for (modelID, moe) in [(Q35Resources.q38TwentySevenB4BitModelId, false),
                                (Q35Resources.q38TwentySevenBModelId, false),
+                               (Q35Resources.bonsai25ModelId, false),
                                (Q35Resources.ornith35BMLX4BitModelId, true),
                                (Q35Resources.q38FlashNext3BitNativePLEModelId, true),
                                (Q35Resources.q36NanoModelId, true)] {

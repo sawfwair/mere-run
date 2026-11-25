@@ -30,6 +30,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-bonsai-27b-1bit (Bonsai 27B packed 1-bit Qwen3.6 vision/reasoning model)
           - text-chat-bonsai-2-{2b,4b,9b}-2bit (Bonsai 2 Small Hadamard 2-bit Qwen3.5 vision models)
           - text-chat-bonsai-2-27b-2bit (Bonsai 2 27B Hadamard 2-bit Qwen3.8 vision/reasoning model)
+          - text-chat-bonsai-2-5-27b-2bit (Bonsai 2.5 27B Hadamard 2-bit vision and tool-calling model)
           - text-chat-bonsai-27b-2bit (Ternary Bonsai 27B packed 2-bit Qwen3.6 vision/reasoning model)
           - text-chat-q36-nano-gguf (Qwen3.6-35B-A3B GGUF, default on Linux CUDA)
           - text-agent-ornith-9b (Ornith 1.0 9B OptiQ, experimental coding-agent target)
@@ -107,7 +108,7 @@ struct TextChat: AsyncParsableCommand {
 
     @Option(
         name: [.customLong("reasoning-effort")],
-        help: "Reasoning effort from 0 through 1 for Qwen3.8 and Muse Glimmer, or 0 through 0.99 for Inkling-Small."
+        help: "Reasoning effort from 0 through 1 for Qwen3.8, Bonsai 2.5, and Muse Glimmer, or 0 through 0.99 for Inkling-Small."
     )
     var reasoningEffort: Double?
 
@@ -827,7 +828,7 @@ struct TextChat: AsyncParsableCommand {
     /// without a width is the one cross-option mistake left to catch here.
     func resolveKVCacheMode(for family: MereRunCapabilityCatalog.TextChatFamily) throws -> RuntimeKVCacheMode? {
         switch family {
-        case .q35, .q35VL, .q38:
+        case .q35, .q35VL, .q38, .bonsai25:
             guard let kvBits else {
                 if kvQuantScheme != nil {
                     throw ValidationError("Qwen-family KV cache options require --kv-bits 4 or --kv-bits 8.")
