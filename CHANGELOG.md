@@ -6,12 +6,22 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.77.0 - 2026-11-25
+
 - Add `text-chat-bonsai-2-5-27b-2bit`, Prism ML's Ternary Bonsai 2.5 27B
   checkpoint for native MLX text and vision chat. The model uses its published
   sampling defaults and supports tool calls, reasoning effort, and an opt-in
   MTP v2 draft head for eligible text requests.
 - Try experimental full-depth LoopCD-Hidden guidance for Inkling 2 Mini with
   `MERERUN_INKLING2_LOOPCD_STRENGTH=0.25`. Guidance is off by default.
+
+- Transcribe the microphone in Studio's Haru conversation workspace with
+  Parakeet 0.6B v3 (MLX). The live transcript shows your speech and Haru's
+  replies, and Studio saves both with the conversation.
+- Expand the [For Business guides](docs/business/index.md) with setup and
+  verification steps for companion plugin workflows, including cited web
+  research, shared archives, document review, and media handoffs. Simplify
+  the selected-link highlight in the documentation sidebar.
 
 ## 0.76.0 - 2026-11-23
 
