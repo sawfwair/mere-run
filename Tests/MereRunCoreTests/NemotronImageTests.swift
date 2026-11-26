@@ -1,4 +1,5 @@
 import MLX
+import MLXNN
 import XCTest
 @testable import MereRunCore
 
@@ -47,6 +48,39 @@ final class NemotronImageTests: MereRunCoreTestCase {
         let convolution = try XCTUnwrap(weights["backbone.layers.0.mixer.conv1d.weight"])
         XCTAssertEqual(convolution.shape, [16, 3, 1])
         XCTAssertEqual(convolution[1].asType(.float32).asArray(Float.self), [3, 4, 5])
+    }
+
+    func testPackedExpertsMatchDensePrefillAndDecode() throws {
+        let config = NemotronHConfig(modelType: "nemotron_h", vocabSize: 32, hiddenSize: 64,
+            numHiddenLayers: 1, layersBlockType: ["moe"], numAttentionHeads: 2, numKeyValueHeads: 1,
+            headDim: 32, maxPositionEmbeddings: 32, normEps: 1e-5, mambaHeadDim: 4, mambaNumHeads: 2,
+            ssmStateSize: 4, nGroups: 1, convKernel: 3, timeStepMin: 0, timeStepMax: 0.1,
+            nRoutedExperts: 4, nSharedExperts: 1, numExpertsPerToken: 2, moeIntermediateSize: 64,
+            sharedExpertIntermediateSize: 64, routedScalingFactor: 2.5, normTopKProbability: true,
+            nGroup: 1, topKGroup: 1, eosTokenIDs: [2],
+            quantization: .init(bits: 4, groupSize: 16, mode: "nvfp4", globalScale: true))
+        let dense = NemotronOmniLanguageBlock(config: config, blockType: "moe")
+        let parameters = dense.parameters().flattened().map { key, parameter in
+            // Integer levels 0...15 are exactly representable by both affine formats.
+            let values = MLXArray((0..<parameter.size).map { Float($0 % 16) / 128 })
+            return (key, key == "norm.weight" ? MLXArray.ones(parameter.shape, dtype: .bfloat16)
+                    : values.reshaped(parameter.shape).asType(.bfloat16))
+        }
+        try dense.update(parameters: .unflattened(parameters), verify: .all)
+        for bits in [4, 8] {
+            let packed = NemotronOmniLanguageBlock(config: config, blockType: "moe", expertBits: bits)
+            let weights = NemotronImageQuantization.pack(parameters, bits: bits)
+            try NemotronImageQuantization.validate(weights, for: packed)
+            try packed.update(parameters: .unflattened(Array(weights)), verify: .all)
+            XCTAssertEqual(weights["mixer.experts.up_proj.weight"]?.dtype, .uint32)
+            for tokens in [1, 3] {
+                let input = MLXArray.ones([1, tokens, 64], dtype: .bfloat16)
+                let expected = dense(input, cache: nil)
+                let actual = packed(input, cache: nil)
+                XCTAssertTrue(allClose(actual, expected, rtol: 0.02).item(Bool.self),
+                    "Q\(bits), \(tokens) tokens: actual \(actual.flattened()[0].item(Float.self)), expected \(expected.flattened()[0].item(Float.self))")
+            }
+        }
     }
 
     func testUnitronBlockChecksSizeRowsAndVocabularyBeforeDecode() throws {

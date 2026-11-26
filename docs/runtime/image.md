@@ -32,6 +32,21 @@ mere.run image generate --model image-nemotron-labs-30b-a3b \
   --width 1184 --height 880 --output ./lighthouse.png
 ```
 
+For a smaller local checkpoint, pack the routed experts at 8 or 4 bits. Both
+formats use affine groups of 64 and keep the other generator weights at BF16.
+The generator weights occupy 35.1 GiB at Q8 or 21.5 GiB at Q4. Allow additional
+memory for MLX, the prompt, and the decoder.
+
+```bash
+mere.run model optimize image-nemotron-labs-30b-a3b --bits 8 --output ./nemotron-image-q8
+mere.run image generate --model ./nemotron-image-q8 --prompt "A lighthouse at dusk" \
+  --width 1024 --height 1024 --seed 42 --output ./lighthouse.png
+```
+
+To skip the FP32 download, pass a local copy of the VisualInference MLX 8-bit
+release as the input to the same Q8 export command. The importer preserves the
+packed expert tensors. [Community Q8 checkpoint](https://huggingface.co/VisualInference/Nemotron-Labs-Image-30B-A3B-MLX-8bit)
+
 Use a text prompt and dimensions divisible by 16. The model samples at
 temperature 0.9 with a budget of 4,352 tokens, including row markers and the
 size header. The recommended sizes are 1024×1024, 1184×880, 1248×832, and

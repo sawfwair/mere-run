@@ -209,6 +209,7 @@ extension MereRunCapabilityCatalog {
                 tier: .expert
             ),
             .init(flag: "--force", label: "Replace cache", kind: .boolean),
+            .init(flag: "--bits", label: "Nemotron Image expert bits", kind: .integer, tier: .expert),
             .init(flag: "--output", label: "Standalone checkpoint", kind: .directory),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],

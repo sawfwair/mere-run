@@ -245,7 +245,9 @@ public struct ImageGenerationPlan: Sendable {
                    "sampling_unsupported", "Nemotron Image samples visual tokens without diffusion steps, CFG, or a sigma schedule.")
             reject(options.negativePrompt?.isEmpty == false, "negative_prompt_unsupported", "Nemotron Image takes one positive prompt.")
             reject(options.strength != nil, "strength_unsupported", "Nemotron Image generates from text.")
-            reject(manifest.precision != .bf16, "model_precision_unsupported", "Use the original Nemotron Image checkpoint with BF16 inference.")
+            do { _ = try NemotronImageQuantization.expertBits(manifest) } catch {
+                reject(true, "model_precision_unsupported", error.localizedDescription)
+            }
             reject(!NemotronImageTokens.supports(width: options.width, height: options.height),
                    "dimensions_invalid", "Use positive multiples of 16 that fit the 4,352-token image budget.")
             reject(options.outputURL.pathExtension.lowercased() != "png", "output_format_invalid", "Nemotron Image requires PNG output.")

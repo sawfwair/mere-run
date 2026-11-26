@@ -5,11 +5,12 @@ enum NemotronImageResources {
     static let revision = "d7c2ba6a59a384080f0bdd5b1e846da03804cdd1"
     static let decoderDirectory = "Nemotron-Labs-Image-Tokenizer"
     static let shards = (1...32).map { String(format: "model-%05d-of-00032.safetensors", $0) }
-    static let files = [
+    static let supportFiles = [
         "config.json", "tokenizer.json", "tokenizer_config.json", "chat_template.jinja",
-        "unitron_extension_manifest.json", "model.safetensors.index.json",
+        "unitron_extension_manifest.json",
         "\(decoderDirectory)/config.json", "\(decoderDirectory)/model.safetensors"
-    ] + shards
+    ]
+    static let files = supportFiles + ["model.safetensors.index.json"] + shards
 
     static func read<T: Decodable>(_ type: T.Type, at url: URL) throws -> T {
         try JSONDecoder().decode(type, from: Data(contentsOf: url))

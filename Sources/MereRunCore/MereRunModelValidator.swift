@@ -140,7 +140,20 @@ public enum MereRunModelValidator {
         let vaeDir: URL?
         let tokenizerDir: URL?
 
-        if spec?.validationKind == .codegenGGUF
+        if let manifest, manifest.engine == .nemotronImage, manifest.precision != .bf16 {
+            do { _ = try NemotronImageQuantization.expertBits(manifest) } catch { errors.append(error.localizedDescription) }
+            for name in NemotronImageResources.supportFiles + NemotronImageQuantization.files {
+                let url = rootURL.appending(path: name)
+                var directory: ObjCBool = false
+                if !fileManager.fileExists(atPath: url.path, isDirectory: &directory) || directory.boolValue {
+                    errors.append("Missing Nemotron Image file: \(name).")
+                }
+            }
+            transformerDir = nil
+            textEncoderDir = nil
+            vaeDir = nil
+            tokenizerDir = nil
+        } else if spec?.validationKind == .codegenGGUF
             || spec?.validationKind == .deepseekV4FlashIMatrixGGUF {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
             transformerDir = nil

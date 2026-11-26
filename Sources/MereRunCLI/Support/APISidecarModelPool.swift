@@ -1146,7 +1146,14 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
     ) -> UInt64? {
         // Nemotron casts the generator one layer at a time. Its FP32 download size
         // overstates the resident BF16 weights; the decoder loads after generator release.
-        if kind == .nemotronImage { return Self.imageBaseLoadBytes(for: kind) }
+        if kind == .nemotronImage {
+            let manifest = try? MereRunModelManifest.loadRequired(from: URL(fileURLWithPath: modelPath))
+            switch manifest?.precision {
+            case .int4: return 32 * Self.gibibyte
+            case .int8: return 48 * Self.gibibyte
+            default: return Self.imageBaseLoadBytes(for: kind)
+            }
+        }
         // Qwen Image 2.1 releases all weights at the end of every operation.
         let needsWeights = residentNeedsLoad || kind == .qwenImage21 || kind == .flux3 || kind == .miniMaxH3Image
         let baseBytes = needsWeights
