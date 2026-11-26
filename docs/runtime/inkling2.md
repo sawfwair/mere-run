@@ -178,8 +178,29 @@ On M5 Max, packed Metal prefill uses 256-token chunks for prompts from
 1,025 through 32,768 tokens. MLX groups sorted token routes that use the same
 expert so its matmul can reuse the packed weights. Chunk size and kernel
 rounding can change sampled tokens.
-LoRA, constrained JSON output, quantized attention caches, audio, and video
-are unavailable.
+Constrained JSON output, quantized attention caches, audio, and video are unavailable.
+
+## Fine-tune Inkling 2 Mini
+
+Train an output-head LoRA from a chat JSONL file. Each record lists its sources, starts with a system message, and ends with the
+assistant reply to learn. The trainer uses Mini’s chat template and scores
+the final assistant turn, including its end-of-sampling token.
+
+```json
+{"sources":["project-handbook"],"messages":[{"role":"system","content":"Answer project questions."},{"role":"user","content":"What is the project codename?"},{"role":"assistant","content":"Juniper."}]}
+```
+
+```bash
+mere.run text train-lora --model vision-chat-inkling-2-mini \
+  --data train.jsonl --output mini.safetensors --training-steps 100
+
+mere.run text chat --model vision-chat-inkling-2-mini \
+  --lora mini.safetensors --prompt "What is the project codename?"
+```
+
+The Speed, Official, and Q8-Head Mini checkpoints support text-only training
+with the `unembed` target. The decoder and experts stay frozen. Use the same
+base checkpoint for chat. Adapter requests use ordinary autoregressive decoding.
 
 ## Validation and provenance
 

@@ -17,14 +17,14 @@ extension MereRunCapabilityCatalog {
             ).scoped(Chat.only(.nemotronOmni, ignoredBy: Chat.allCases.filter { ![.nemotronOmni, .diffusionGemma].contains($0) })),
             .init(
                 flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .expert
-            ).scoped(Chat.only(.inkling2, .flint, .kolibri, .diffusionGemma, .q35, .q35VL, .q38, .bonsai25)),
+            ).scoped(Chat.only(.inkling2, .inkling2Mini, .flint, .kolibri, .diffusionGemma, .q35, .q35VL, .q38, .bonsai25)),
             .init(
                 flag: "--show-unmasking", label: "Show canvas drafts", kind: .boolean, group: Group.run, tier: .expert
             ).scoped(Chat.only(.diffusionGemma)),
             .init(flag: "--prompt", aliases: ["-p"], label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
             .init(flag: "--image", label: "Image", kind: .file, group: Group.inputs, tier: .standard, blankReadsAsOmitted: true)
                 .scoped(Chat.only(
-                    .inkling2, .gemma4Unified, .museGlimmer, .nemotronBolt, .nemotronOmni, .lfm2VL, .q35VL, .q38, .bonsai25,
+                    .inkling2, .inkling2Mini, .gemma4Unified, .museGlimmer, .nemotronBolt, .nemotronOmni, .lfm2VL, .q35VL, .q38, .bonsai25,
                     ignoredBy: [.laguna, .nemotronH, .gguf, .psi]
                 )),
             .init(flag: "--system", aliases: ["-s"], label: "System prompt", kind: .string, group: Group.prompt, tier: .standard),
@@ -107,7 +107,7 @@ extension MereRunCapabilityCatalog {
                 choices: TextResponseFormat.allCases.map(\.rawValue),
                 defaultValue: TextResponseFormat.text.rawValue, group: Group.output, tier: .standard
             ).scoped(
-                Chat.rule(.inkling2, values: ["text"]), Chat.rule(.flint, values: ["text"]), .rule(.kolibri, values: ["text"]), Chat.rule(.diffusionGemma, values: ["text"]), .rule(.laguna, values: ["text"]),
+                Chat.rule(.inkling2, values: ["text"]), .rule(.inkling2Mini, values: ["text"]), Chat.rule(.flint, values: ["text"]), .rule(.kolibri, values: ["text"]), Chat.rule(.diffusionGemma, values: ["text"]), .rule(.laguna, values: ["text"]),
                 .rule(.inkling, values: ["text"]), .rule(.museGlimmer, values: ["text"]),
                 .rule(.nemotronBolt, values: ["text"]), .rule(.nemotronH, values: ["text"]), .rule(.nemotronOmni, values: ["text"]),
                 .rule(.lfm2, values: ["text"]), .rule(.lfm2A2B, values: ["text"]), .rule(.lfm2A1B, values: ["text"]), .rule(.lfm2VL, values: ["text"]),
@@ -119,7 +119,7 @@ extension MereRunCapabilityCatalog {
             ).scoped(Chat.only(
                     // LFM2.5 loads a text adapter only on the 8-bit A1B runtime and fails after
                     // loading any other checkpoint.
-                    .gemma4, .gemma4Unified, .laguna, .inkling, .lfm2A1B, .q38,
+                    .gemma4, .gemma4Unified, .laguna, .inkling, .inkling2Mini, .lfm2A1B, .q38,
                     ignoredBy: [.q35, .q35VL, .bonsai25, .gguf, .psi]
                 )),
             // Without --lora the scale does nothing anywhere, so it never fails on its own.
@@ -128,7 +128,7 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "1.0", group: Group.modelAndAdapters, tier: .standard,
                 range: .init(min: 0, max: 2, step: 0.05), dependsOn: "--lora"
             ).scoped(Chat.only(
-                .gemma4, .gemma4Unified, .laguna, .inkling, .lfm2A1B, .q38,
+                .gemma4, .gemma4Unified, .laguna, .inkling, .inkling2Mini, .lfm2A1B, .q38,
                 ignoredBy: [
                     .diffusionGemma, .museGlimmer, .nemotronH, .nemotronBolt, .nemotronOmni, .lfm2, .lfm2A2B, .lfm2VL, .q35, .q35VL, .bonsai25, .gguf, .psi
                 ]
@@ -139,7 +139,8 @@ extension MereRunCapabilityCatalog {
                 flag: "--reasoning-effort", label: "Reasoning effort", kind: .number,
                 group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.01)
             ).scoped(
-                Chat.only(.inkling2, .inkling, .museGlimmer, .q38, .bonsai25),
+                Chat.only(.inkling2, .inkling2Mini, .inkling, .museGlimmer, .q38, .bonsai25),
+                .rule(.inkling2Mini, range: .init(min: 0, max: 0.99, step: 0.01)),
                 .rule(.inkling2, range: .init(min: 0, max: 0.99, step: 0.01)),
                 .rule(.inkling, range: .init(min: 0, max: 0.99, step: 0.01)),
                 .rule(.museGlimmer, range: .init(min: 0, max: 1, step: 0.01)),
@@ -192,7 +193,7 @@ extension MereRunCapabilityCatalog {
 
     /// Families whose runtime keeps its own KV cache whatever the KV options say.
     private static let kvCacheIgnoring: [Chat] = [
-        .inkling2, .flint, .kolibri, .diffusionGemma, .laguna, .museGlimmer, .nemotronH, .nemotronBolt, .nemotronOmni, .gguf, .psi
+        .inkling2, .inkling2Mini, .flint, .kolibri, .diffusionGemma, .laguna, .museGlimmer, .nemotronH, .nemotronBolt, .nemotronOmni, .gguf, .psi
     ]
 
     public static let textCode = MereRunCommandCapability(
@@ -373,13 +374,14 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--reasoning-effort", label: "Inkling reasoning effort", kind: .number,
                 range: .init(min: 0, max: 0.99, step: 0.01)
-            ).scoped(Training.only(.inkling, ignoredBy: [.gemma4, .gemma4VLM, .lagunaXS, .lfm2A1B])),
+            ).scoped(Training.only(.inkling, .inkling2Mini, ignoredBy: [.gemma4, .gemma4VLM, .lagunaXS, .lfm2A1B])),
             .init(flag: "--seed", label: "Seed", kind: .integer),
             .init(flag: "--target-modules", label: "Target modules", kind: .string)
                 .scoped(
                     Training.rule(.gemma4, defaultValue: attentionTargets),
                     .rule(.gemma4VLM, defaultValue: attentionTargets),
                     .rule(.lagunaXS, defaultValue: attentionTargets),
+                    .rule(.inkling2Mini, values: ["unembed"]),
                     .rule(.inkling, defaultValue: "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj,lm_head"),
                     .rule(.lfm2A1B, defaultValue: "q_proj,k_proj,v_proj,out_proj")
                 ),

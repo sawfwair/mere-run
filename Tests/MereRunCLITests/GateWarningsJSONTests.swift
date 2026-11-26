@@ -179,7 +179,7 @@ final class GateWarningsJSONTests: XCTestCase {
             "--json",
         ]
         let gate = try CLICapabilityGate.pass(arguments: ["mere.run", "text", "train-lora"] + arguments)
-        XCTAssertEqual(gate.warnings, ["--reasoning-effort has no effect with Gemma 4 12B vision. It applies to Inkling-Small."])
+        XCTAssertEqual(gate.warnings, ["--reasoning-effort has no effect with Gemma 4 12B vision. It applies to Inkling 2 Mini and Inkling-Small."])
 
         let command = try TextTrainLoRA.parse(arguments)
         let warned = try await capturingStandardOutput {

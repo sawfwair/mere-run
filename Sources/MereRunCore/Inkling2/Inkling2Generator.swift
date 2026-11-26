@@ -65,14 +65,24 @@ public actor Inkling2Generator: ChatGenerator {
         try await MLXRequestStreams.withStream(isolation: self) {
             try ChatRequestResolver.validate(request)
             let cacheMode = request.kvCacheMode ?? .default
-            guard request.lora == nil, !request.requiresJSON, request.noRepeatNgramSize == nil,
+            guard !request.requiresJSON, request.noRepeatNgramSize == nil,
                   cacheMode == .default || cacheMode == .auto,
                   request.messages.allSatisfy({ $0.audioUrl == nil && $0.videoUrl == nil }) else {
-                throw ChatRequestIssue("request", "Inkling 2 supports text, images and tools with native BF16 caches; LoRA, constrained JSON and audio/video are unavailable")
+                throw ChatRequestIssue("request", "Inkling 2 supports text, images and tools with native BF16 caches; constrained JSON and audio/video are unavailable")
             }
             let loadStart = Date()
+            let adapterFile: (url: URL, scale: Double)?
+            if let lora = request.lora {
+                let url = try await LoRAWeightLoader.resolveURL(for: lora)
+                switch lora {
+                case .local(_, let scale), .remote(_, let scale): adapterFile = (url, scale)
+                }
+            } else {
+                adapterFile = nil
+            }
             try await ensureLoaded(modelPath, progress: progressHandler)
             guard let model, let tokenizer, let template else { throw ChatRequestIssue("model", "Inkling 2 is not loaded") }
+            let adapter = try adapterFile.map { try Inkling2MiniLoRALayer.load(from: $0.url, for: model.config, scale: $0.scale) }
             let draft = try draftForRequest(request, model: model)
             let loadSeconds = Date().timeIntervalSince(loadStart)
             if let seed = request.seed { MLXRandom.seed(seed) }
@@ -108,7 +118,7 @@ public actor Inkling2Generator: ChatGenerator {
                         embedding[0, (lo - start)..<(hi - start), 0...] = image.embeddings[(lo - image.offset)..<(hi - image.offset), 0...].asType(embedding.dtype)
                     }
                 }
-                initial = try speculation?.prefill(embedding) ?? model.forward(embeddings: embedding, cache: cache)
+                initial = try speculation?.prefill(embedding) ?? model.forward(embeddings: embedding, cache: cache, outputDelta: adapter?.callAsFunction)
                 if let initial { eval(initial) }
                 // Keep the conversation before the final message and the exact prompt, which the next
                 // agent turn extends because the template adds no generation suffix. Both rank equally,
@@ -151,7 +161,7 @@ public actor Inkling2Generator: ChatGenerator {
                 decoded = try AutoregressiveDecodeEngine.decode(
                     .init(initialLogits: initial, generationConfig: sampling, eosTokens: request.stopOnEOS ? eos : [], tokenBudget: budget,
                           historySeedTokens: prompt.tokens, logprobCapture: request.logprobCapture, logprobRegion: request.logprobRegionHint ?? .visible),
-                    stepForward: { try model($0, cache: cache) }, decodeToken: { tokenizer.decode(tokens: [$0]) },
+                    stepForward: { try model.forward(embeddings: model.embeddings($0), cache: cache, outputDelta: adapter?.callAsFunction) }, decodeToken: { tokenizer.decode(tokens: [$0]) },
                     decodeTokens: { tokenizer.decode(tokens: $0) },
                     emitPiece: { _, piece in raw += piece },
                     shouldContinue: { _, _ in
@@ -179,7 +189,7 @@ public actor Inkling2Generator: ChatGenerator {
     }
 
     static func usesDSpark(_ request: ChatRequest, modelType: String, packedExperts: Bool, preference: String?) -> Bool {
-        guard modelType == "inkling2_loop", request.maxTokens > 1,
+        guard modelType == "inkling2_loop", request.lora == nil, request.maxTokens > 1,
               request.repetitionPenalty == 1, request.presencePenalty == 0, request.frequencyPenalty == 0,
               !request.logprobCapture.isEnabled, request.stopSequences.isEmpty else { return false }
         if let preference { return preference == "1" }

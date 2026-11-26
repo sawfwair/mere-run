@@ -9,7 +9,7 @@ struct TextTrainLoRA: AsyncParsableCommand {
         discussion: """
         This is the native mere.run text fine-tuning entrypoint. It accepts OpenAI-style chat
         JSONL records with system/user/assistant messages and trains Gemma 4, Laguna XS 2.1,
-        Inkling-Small, or the LFM2.5 A1B 8-bit text model. Gemma 4 12B vision
+        Inkling-Small, Inkling 2 Mini, or the LFM2.5 A1B 8-bit text model. Gemma 4 12B vision
         fine-tuning accepts one dataset-relative local image on each user message.
         It writes a model-family-specific MereRun adapter manifest beside the safetensors file.
         Use --resume-from to continue a matching optimizer-bearing checkpoint toward the
@@ -59,7 +59,7 @@ struct TextTrainLoRA: AsyncParsableCommand {
 
     @Option(
         name: [.customLong("reasoning-effort")],
-        help: "Inkling-Small renderer effort from 0 through 0.99. Default: 0.9."
+        help: "Inkling-Small and Inkling 2 Mini renderer effort from 0 through 0.99. Default: 0.9."
     )
     var reasoningEffort: Double = 0.9
 
@@ -80,7 +80,7 @@ struct TextTrainLoRA: AsyncParsableCommand {
 
     @Option(
         name: [.customLong("target-modules")],
-        help: "Comma-separated LoRA target suffixes. Defaults to attention for Gemma, Laguna, and LFM2.5; Inkling also includes MLP, expert, and unembedding targets."
+        help: "Comma-separated LoRA target suffixes. Defaults to attention for Gemma, Laguna, and LFM2.5; Inkling 2 Mini targets unembed. Inkling-Small also includes MLP, expert, and unembedding targets."
     )
     var targetModules: String?
 

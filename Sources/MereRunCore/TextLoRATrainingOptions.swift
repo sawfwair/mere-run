@@ -90,6 +90,9 @@ public struct TextLoRATrainingOptions: Sendable {
         guard !resolvedTargetModules().isEmpty else {
             throw TextLoRATrainingIssue("--target-modules must include at least one target suffix")
         }
+        if Inkling2Resources.isMini(modelSpec: model), resolvedTargetModules() != ["unembed"] {
+            throw TextLoRATrainingIssue("Inkling 2 Mini supports --target-modules unembed")
+        }
         if let resumeStep {
             guard resumeFrom != nil else {
                 throw TextLoRATrainingIssue("--resume-step requires --resume-from")
@@ -138,7 +141,7 @@ public struct TextLoRATrainingOptions: Sendable {
                 batchSize: batchSize,
                 learningRate: learningRate,
                 maxSequenceLength: maxSequenceLength,
-                reasoningEffort: family == .inkling ? reasoningEffort : nil,
+                reasoningEffort: [.inkling, .inkling2Mini].contains(family) ? reasoningEffort : nil,
                 seed: seed,
                 dataset: datasetSummary
             ),
@@ -161,6 +164,7 @@ public struct TextLoRATrainingOptions: Sendable {
     }
 
     public static func defaultTargetModules(for model: String) -> [String] {
+        if Inkling2Resources.isMini(modelSpec: model) { return ["unembed"] }
         if InklingResources.handles(modelSpec: model) {
             return InklingTextLoRAInjector.defaultTargetSuffixes
         }
@@ -181,6 +185,7 @@ public struct TextLoRATrainingOptions: Sendable {
         if LagunaResources.managedModelID(for: model) == LagunaResources.xsModelID {
             return .lagunaXS
         }
+        if Inkling2Resources.isMini(modelSpec: model) { return .inkling2Mini }
         if InklingResources.handles(modelSpec: model) {
             return .inkling
         }
@@ -189,7 +194,7 @@ public struct TextLoRATrainingOptions: Sendable {
         }
         throw TextLoRATrainingIssue(
             "--model must be a supported Gemma 4 text or vision model, \(LagunaResources.xsModelID), "
-                + "\(InklingResources.modelID), or \(LFM2Resources.defaultModelId)."
+                + "\(InklingResources.modelID), \(Inkling2Resources.miniModelID), or \(LFM2Resources.defaultModelId)."
         )
     }
 
@@ -200,6 +205,7 @@ public enum TextLoRATrainingFamily: Sendable, Equatable {
     case gemma4VLM
     case lagunaXS
     case inkling
+    case inkling2Mini
     case lfm2A1B
 
     /// The contract family this trainer runs as.
@@ -208,6 +214,7 @@ public enum TextLoRATrainingFamily: Sendable, Equatable {
         case .gemma4: .gemma4
         case .gemma4VLM: .gemma4VLM
         case .lagunaXS: .lagunaXS
+        case .inkling2Mini: .inkling2Mini
         case .inkling: .inkling
         case .lfm2A1B: .lfm2A1B
         }
@@ -221,6 +228,8 @@ public enum TextLoRATrainingFamily: Sendable, Equatable {
             TextLoRATrainingManifest.gemma4VLMFormat
         case .lagunaXS:
             TextLoRATrainingManifest.lagunaFormat
+        case .inkling2Mini:
+            TextLoRATrainingManifest.inkling2MiniFormat
         case .inkling:
             TextLoRATrainingManifest.inklingFormat
         case .lfm2A1B:

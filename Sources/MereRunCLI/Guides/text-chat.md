@@ -189,7 +189,7 @@ model and derived adapters.
   and accept/draft counts.
 - `--stream`: stream tokens to stdout.
 - `--lora`: local `.safetensors` adapter path for supported native chat models:
-  Gemma 4, Laguna, Inkling-Small, and, among LFM2.5 checkpoints, only
+  Gemma 4, Laguna, Inkling-Small, Inkling 2 Mini, and, among LFM2.5 checkpoints, only
   `text-chat-lfm25-a1b-8bit`. A blank `--lora`, `--image`, `--audio`, or
   `--video` reads as not passed.
 - `--lora-scale`: adapter scale; defaults to `1.0`.

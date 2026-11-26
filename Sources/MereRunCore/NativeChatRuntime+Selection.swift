@@ -102,7 +102,7 @@ extension NativeChatRuntime {
             engine = .textChatDiffusionGemma
         case .gemma4, .gemma4Unified:
             engine = .textChatGemma4
-        case .inkling2:
+        case .inkling2, .inkling2Mini:
             engine = .textChatInkling2
         case .flint:
             engine = .textChatFlint

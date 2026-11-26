@@ -34,8 +34,10 @@ Metal experts and the bundled draft weights, eligible sampled requests use
 DSpark. Mini Speed uses three proposals per round. Use `--stats` to see draft acceptance and
 `MERERUN_INKLING2_DSPARK=0` to disable drafting.
 
-The runtime supports text, images, reasoning, and validated tool calls. LoRA,
-constrained JSON, quantized attention caches, audio, and video are unavailable.
+Train a Mini output-head adapter with `text train-lora --model vision-chat-inkling-2-mini`
+and load it in chat with `--lora`. Adapter requests use autoregressive decoding.
+
+The runtime supports text, images, reasoning, and validated tool calls. Constrained JSON, quantized attention caches, audio, and video are unavailable.
 Generated output is buffered until channel parsing finishes. Local original
 MXFP8 snapshots also work through a checkpoint directory.
 

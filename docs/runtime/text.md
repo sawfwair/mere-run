@@ -893,7 +893,7 @@ swift run mere.run text anonymize \
 
 `text train-lora` trains LoRA adapters for Gemma 4 text models,
 `vision-chat-gemma4-12b`, `text-chat-laguna-xs-2-1`, `text-chat-inkling-small`,
-and `text-chat-lfm25-a1b-8bit` from reviewed chat SFT data. Laguna S and its
+[Inkling 2 Mini](/runtime/inkling2#fine-tune-inkling-2-mini), and `text-chat-lfm25-a1b-8bit` from reviewed chat SFT data. Laguna S and its
 DFlash companion are inference-only. Keep local text fine-tuning in `mere.run`
 so model IDs, manifests, runtime constraints, and evaluation artifacts stay on
 the same command surface.
@@ -981,7 +981,7 @@ The defaults are tuned for local Gemma 4 SFT. Run
 | `--seed` | Random seed | `42` |
 | `--resume-from` | Optimizer-bearing text LoRA checkpoint to continue | None |
 | `--resume-step` | Verified completed step for a checkpoint without embedded step state | None |
-| `--target-modules` | Comma-separated LoRA target suffixes | Attention for Gemma, Laguna, and LFM2.5; Inkling adds MLP, expert, and `lm_head` targets |
+| `--target-modules` | Comma-separated LoRA target suffixes | Attention for Gemma, Laguna, and LFM2.5; Inkling-Small adds MLP, expert, and `lm_head` targets. Inkling 2 Mini uses `unembed` |
 | `--adapter-name` | Adapter display name | `local-assistant` |
 
 Gemma and Laguna target the q/k/v/o attention projections, and LFM2.5 targets

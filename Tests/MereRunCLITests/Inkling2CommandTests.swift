@@ -14,7 +14,7 @@ final class Inkling2CommandTests: XCTestCase {
             try Data(#"{"model_type":"\#(type)"}"#.utf8).write(to: root.appendingPathComponent("config.json"))
             let command = try TextChat.parse(["--model", root.path, "--prompt", "hello", "--image", image.path, "--reasoning-effort", "0.2"])
             XCTAssertEqual(command.normalizedModelIdentifier, root.path)
-            XCTAssertEqual(NativeChatRuntime.commandFamily(modelID: root.path), .inkling2)
+            XCTAssertEqual(NativeChatRuntime.commandFamily(modelID: root.path), type == "inkling2_loop" ? .inkling2Mini : .inkling2)
             XCTAssertTrue(command.makePreflightReport(modelID: root.path, installedModelPath: root.path).diagnostics.isEmpty)
             let server = try APIServe.parse(["--engine", "text-chat-inkling2", "--model", root.path])
             XCTAssertEqual(server.engine.runtimeServingEngine, .textChatInkling2)

@@ -110,8 +110,25 @@ public final class Inkling2Model {
         try forward(embeddings: input, cache: cache, lastPositionOnly: lastPositionOnly, capture: nil)
     }
 
+    package func forward(embeddings input: MLXArray, cache: Inkling2Cache, lastPositionOnly: Bool = true,
+                         outputDelta: ((MLXArray) -> MLXArray)?) throws -> MLXArray {
+        try forward(embeddings: input, cache: cache, lastPositionOnly: lastPositionOnly, capture: nil, outputDelta: outputDelta)
+    }
+
     func forward(embeddings input: MLXArray, cache: Inkling2Cache, lastPositionOnly: Bool,
-                 capture: Inkling2DSparkFeatures?) throws -> MLXArray {
+                 capture: Inkling2DSparkFeatures?, outputDelta: ((MLXArray) -> MLXArray)? = nil) throws -> MLXArray {
+        var hidden = try hiddenStates(embeddings: input, cache: cache, capture: capture)
+        if lastPositionOnly { hidden = hidden[0..., (hidden.dim(1) - 1)..<hidden.dim(1), 0...] }
+        let output = try makeOutputHead()(hidden, outputDelta)
+        if usePackedExperts && cache.verificationPosition == nil {
+            // Submit one graph per forward. Cache states may not be outputs of
+            // logits, so evaluate those roots too before advancing the cache.
+            asyncEval([output] + cache.layers.flatMap(\.arrays))
+        }
+        return output
+    }
+
+    func hiddenStates(embeddings input: MLXArray, cache: Inkling2Cache, capture: Inkling2DSparkFeatures? = nil) throws -> MLXArray {
         let c = config.textConfig
         guard cache.layers.count == c.cacheLayerCount else { throw Inkling2Error.invalid("cache layer count mismatch") }
         cache.beginForward()
@@ -121,20 +138,12 @@ public final class Inkling2Model {
         } else {
             try runLayers(0..<c.numHiddenLayers, residual: &residual, cache: cache)
         }
-        var hidden = Inkling2Math.residual(residual.blocks, partial: residual.partial,
+        let mixed = Inkling2Math.residual(residual.blocks, partial: residual.partial,
                                          query: try weights.read(prefix + "attn_res.output_query"),
                                          fusedDecode: usePackedExperts && (input.dim(1) == 1 || cache.isVerifying))[0]
-        hidden = try norm(hidden, prefix + "norm").asType(input.dtype)
+        let hidden = try norm(mixed, prefix + "norm").asType(input.dtype)
         capture?.record(hidden, at: c.cacheLayerCount)
-        if lastPositionOnly { hidden = hidden[0..., (hidden.dim(1) - 1)..<hidden.dim(1), 0...] }
-        let logits = try (q8OutputHead?(hidden.asType(.bfloat16)) ?? linear(hidden, prefix + "unembed")).asType(.float32)
-        let output = Inkling2Math.softcap(logits, c.finalLogitSoftcapping)[.ellipsis, ..<c.unpaddedVocabSize]
-        if usePackedExperts && cache.verificationPosition == nil {
-            // Submit one graph per forward. Cache states may not be outputs of
-            // logits, so evaluate those roots too before advancing the cache.
-            asyncEval([output] + cache.layers.flatMap(\.arrays))
-        }
-        return output
+        return hidden
     }
 
     func runLayers(
