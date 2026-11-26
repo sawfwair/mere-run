@@ -123,6 +123,13 @@
     "resourceName": "handbook-flux3-klein.md"
   },
   {
+    "topic": "handbook-nemotron-image",
+    "title": "Nemotron Labs Image 30B-A3B (NVIDIA)",
+    "category": "Image",
+    "models": ["image-nemotron-labs-30b-a3b"],
+    "resourceName": "handbook-nemotron-image.md"
+  },
+  {
     "topic": "handbook-minimax-h3-image",
     "title": "MiniMax-H3-Image (MiniMax)",
     "category": "Image",
