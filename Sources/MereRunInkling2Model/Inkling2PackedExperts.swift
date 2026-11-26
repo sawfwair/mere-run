@@ -7,7 +7,7 @@ struct Inkling2PackedExperts {
     let down: Projection
 
     #if os(macOS)
-    private static let reorderPrefill = GPU.deviceInfo().architecture == "applegpu_g17s"
+    static let reorderPrefill = GPU.deviceInfo().architecture == "applegpu_g17s"
     #endif
 
     init(weights: Inkling2Weights, prefix: String) throws {
@@ -29,11 +29,11 @@ struct Inkling2PackedExperts {
             let order = argSort(flat)
             let experts = take(flat, order, axis: 0)
             let source = take(input, floorDivide(order, routes), axis: 0).expandedDimensions(axis: 1)
-            let projected = gateUp.rawMatmul(source, indices: experts)
+            let projected = gateUp.rawMatmul(source, indices: experts, sortedIndices: true)
             let hidden = Inkling2ExpertEpilogues.activate(
                 projected, indices: experts, scales: gateUp.expertScales, dtype: input.dtype, gateCap: gateCap, upCap: upCap
             )
-            let downProjection = down.rawMatmul(hidden, indices: experts)
+            let downProjection = down.rawMatmul(hidden, indices: experts, sortedIndices: true)
             return Inkling2ExpertEpilogues.reduceReorderedPrefill(
                 downProjection, indices: indices, order: order, scales: down.expertScales,
                 routing: routing, dtype: input.dtype
@@ -79,13 +79,15 @@ struct Inkling2PackedExperts {
         let expertScales: MLXArray?
         var scaleGroupSize: Int { expertScales == nil ? 32 : 16 }
 
-        func rawMatmul(_ input: MLXArray, indices: MLXArray) -> MLXArray {
+        func rawMatmul(_ input: MLXArray, indices: MLXArray, sortedIndices: Bool = false) -> MLXArray {
             if expertScales != nil {
                 return gatherQuantizedMM(input.asType(.float32), packed, scales: scales, biases: nil,
-                                         rhsIndices: indices, groupSize: scaleGroupSize, bits: 4, mode: .nvfp4)
+                                         rhsIndices: indices, groupSize: scaleGroupSize, bits: 4, mode: .nvfp4,
+                                         sortedIndices: sortedIndices)
             }
             return gatherQuantizedMM(input, packed, scales: scales, biases: nil,
-                                     rhsIndices: indices, groupSize: scaleGroupSize, bits: 8, mode: .mxfp8)
+                                     rhsIndices: indices, groupSize: scaleGroupSize, bits: 8, mode: .mxfp8,
+                                     sortedIndices: sortedIndices)
         }
 
         func callAsFunction(_ input: MLXArray, indices: MLXArray) -> MLXArray {

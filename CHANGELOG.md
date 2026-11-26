@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Group packed Inkling 2 Mini expert matmuls during fresh prefill on M5 Max.
+  Prompts from 1,025 through 32,768 tokens use 256-token chunks.
+
 - Reuse the prompt prefix for Inkling 2 in `api serve`, as Gemma 4, Qwen-family,
   and LFM2 chat already do. An agent's next turn now prefills only its new
   messages instead of the whole conversation. Set
