@@ -5,7 +5,7 @@ extension MereRunCapabilityCatalog {
 
     /// Families whose runtime takes an input image (`--input`, and with it `--mask` and
     /// `--outpaint`); FLUX.1, Krea 2, Ideogram 4, and Cosmos3-Super are text-to-image only.
-    private static var imageInputScope: MereRunOptionScope<ImageF> { ImageF.except(.flux1, .krea, .ideogram, .cosmos3Super) }
+    private static var imageInputScope: MereRunOptionScope<ImageF> { ImageF.except(.nemotronImage, .flux1, .krea, .ideogram, .cosmos3Super) }
     /// Families that load `--lora` adapters.
     private static let imageLoRAFamilies: [ImageF] = [.flux1, .klein, .flux2Dev, .zimage, .krea]
 
@@ -23,33 +23,36 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--negative-prompt", aliases: ["-n"], label: "Negative prompt", kind: .string, group: Group.prompt, tier: .standard)
                 // FLUX.1 refuses a negative prompt with text in it; an empty one reads as omitted.
                 // Qwen-Image-Edit Lightning and Cosmos3-Super run without guidance, so they never read one.
-                .scoped(ImageF.except(.h3Image, .flux1, .flux3, ignoredBy: [.flux2Dev, .krea, .qwenEditLightning, .ideogram, .cosmos3Super])),
+                .scoped(ImageF.except(.nemotronImage, .h3Image, .flux1, .flux3, ignoredBy: [.flux2Dev, .krea, .qwenEditLightning, .ideogram, .cosmos3Super])),
             .init(
                 flag: "--cfg", aliases: ["--cfg-scale"], label: "CFG scale", kind: .number,
                 group: Group.sampling, tier: .standard, range: .init(min: 0, max: 20, step: 0.5)
-            ).scoped(ImageF.except(ignoredBy: [.krea]), .rule(.qwenEditLightning, range: .init(min: 1, max: 1)),
+            ).scoped(ImageF.except(ignoredBy: [.krea]), .rule(.nemotronImage, range: .init(min: 1, max: 1)),
+                     .rule(.qwenEditLightning, range: .init(min: 1, max: 1)),
                      .rule(.flux3, range: .init(min: 1, max: 1)), .rule(.h3Image, range: .init(min: 1, max: 1)),
                      .rule(.cosmos3Super, range: .init(min: 1, max: 1))),
             .init(
                 flag: "--sigma-shift", label: "Sigma shift", kind: .number,
                 group: Group.sampling, tier: .expert, range: .init(min: 0, max: 16, step: 0.1)
             ).scoped(ImageF.except(
-                .h3Image, .qwen21Turbo, .flux3, .cosmos3Super,
+                .nemotronImage, .h3Image, .qwen21Turbo, .flux3, .cosmos3Super,
                 ignoredBy: [.flux1, .hidream, .qwenEdit, .qwenEditLightning, .ideogram]
             )),
             .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file, group: Group.output, tier: .standard),
             .init(
                 flag: "--width", aliases: ["-W"], label: "Width", kind: .integer,
                 defaultValue: "1024", group: Group.output, tier: .essential, range: .init(min: 256, max: 2_048, step: 16)
-            ).scoped(ImageF.rule(.flux3, range: .init(min: 64, max: 4_096, step: 16)), .rule(.h3Image, range: .init(min: 32, max: 8_192, step: 1))),
+            ).scoped(ImageF.rule(.nemotronImage, range: .init(min: 16, max: 69_424, step: 16)),
+                     .rule(.flux3, range: .init(min: 64, max: 4_096, step: 16)), .rule(.h3Image, range: .init(min: 32, max: 8_192, step: 1))),
             .init(
                 flag: "--height", aliases: ["-H"], label: "Height", kind: .integer,
                 defaultValue: "1024", group: Group.output, tier: .essential, range: .init(min: 256, max: 2_048, step: 16)
-            ).scoped(ImageF.rule(.flux3, range: .init(min: 64, max: 4_096, step: 16)), .rule(.h3Image, range: .init(min: 32, max: 8_192, step: 1))),
+            ).scoped(ImageF.rule(.nemotronImage, range: .init(min: 16, max: 34_720, step: 16)),
+                     .rule(.flux3, range: .init(min: 64, max: 4_096, step: 16)), .rule(.h3Image, range: .init(min: 32, max: 8_192, step: 1))),
             .init(
                 flag: "--steps", aliases: ["-s"], label: "Steps", kind: .integer,
                 group: Group.sampling, tier: .essential, range: .init(min: 1, max: 100, step: 1)
-            ).scoped(ImageF.rule(.qwen21, range: .init(min: 2, step: 1)),
+            ).scoped(ImageF.rule(.nemotronImage, values: ["1"]), .rule(.qwen21, range: .init(min: 2, step: 1)),
                      .rule(.h3Image, values: ["6"]), .rule(.qwen21Turbo, values: ["8"]), .rule(.qwenEditLightning, values: ["4"]),
                      .rule(.cosmos3Super, values: ["4"])),
             .init(flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .essential, range: .init(min: 0, step: 1)),
@@ -65,12 +68,12 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--mask-feather", label: "Mask feather", kind: .integer,
                 defaultValue: "8", group: Group.inputs, tier: .expert, range: .init(min: 0, max: 128, step: 1), dependsOn: "--input"
-            ).scoped(ImageF.except(ignoredBy: [.flux1, .krea, .ideogram, .cosmos3Super])),
+            ).scoped(ImageF.except(ignoredBy: [.nemotronImage, .flux1, .krea, .ideogram, .cosmos3Super])),
             .init(
                 flag: "--ref-image", label: "Reference image", kind: .file, repeatable: true,
                 group: Group.inputs, tier: .standard
             ).scoped(
-                ImageF.except(.flux1, .zimage, .krea, .ideogram, .cosmos3Super),
+                ImageF.except(.nemotronImage, .flux1, .zimage, .krea, .ideogram, .cosmos3Super),
                 // Klein keeps the first four references, counting --input, and drops the rest.
                 .rule(.klein, maxCount: 4, severity: .warning),
                 .rule(.flux2Dev, maxCount: 4, severity: .warning),
@@ -85,7 +88,7 @@ extension MereRunCapabilityCatalog {
                 flag: "--strength", aliases: ["--str"], label: "Edit strength", kind: .number,
                 group: Group.inputs, tier: .standard, range: .init(min: 0, max: 1, step: 0.05)
             ).scoped(ImageF.except(
-                .h3Image, .qwen21, .qwen21Turbo, .flux3,
+                .nemotronImage, .h3Image, .qwen21, .qwen21Turbo, .flux3,
                 ignoredBy: [.flux1, .hidream, .sensenova, .krea, .qwenEdit, .qwenEditLightning, .ideogram, .cosmos3Super]
             )),
             .init(
@@ -93,7 +96,7 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "512", group: Group.sampling, tier: .expert, range: .init(min: 64, max: 4_096, step: 64)
             ).scoped(
                 ImageF.only(
-                    .flux1, .zimage, .krea, .ideogram,
+                    .nemotronImage, .flux1, .zimage, .krea, .ideogram,
                     ignoredBy: [
                         .h3Image, .klein, .flux2Dev, .flux3, .hidream, .sensenova, .qwen21, .qwen21Turbo, .qwenEdit,
                         .qwenEditLightning, .cosmos3Super

@@ -165,6 +165,7 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .gliner25Decide
             || spec?.validationKind == .qwenImage21
             || spec?.validationKind == .flux3
+            || spec?.validationKind == .nemotronImage
             || spec?.validationKind == .miniMaxH3Image
             || spec?.validationKind == .aceStep
             || spec?.validationKind == .aceStepLM
@@ -638,7 +639,7 @@ public enum MereRunModelValidator {
         }
         if supportsImagePipeline && !usesUnifiedImageTransformer && components.vae == nil { errors.append("Manifest components missing vae.") }
         if supportsImagePipeline && !usesUnifiedImageTransformer && manifest.engine != .flux3
-            && manifest.engine != .miniMaxH3Image && components.scheduler == nil {
+            && manifest.engine != .miniMaxH3Image && manifest.engine != .nemotronImage && components.scheduler == nil {
             errors.append("Manifest components missing scheduler.")
         }
     }

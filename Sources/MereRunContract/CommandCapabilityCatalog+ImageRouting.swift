@@ -6,6 +6,7 @@ extension MereRunCapabilityCatalog {
     /// Qwen-Image-Edit Lightning is the edit engine with fixed steps and guidance. Cosmos3-Super
     /// is the distilled text-to-image checkpoint that `video cosmos3` also runs.
     enum ImageGenerateFamily: String, MereRunFamilyID {
+        case nemotronImage = "nemotron-image"
         case h3Image = "h3-image"
         case flux3
         case flux1
@@ -51,6 +52,7 @@ extension MereRunCapabilityCatalog {
         modelFlags: ["--model"],
         defaultModels: [.always("image-zimage-nano")],
         families: [
+            .init(ImageGenerateFamily.nemotronImage, title: "Nemotron Labs Image 30B-A3B", models: ["image-nemotron-labs-30b-a3b"]),
             .init(ImageGenerateFamily.h3Image, title: "MiniMax-H3-Image", models: ["image-minimax-h3"]),
             .init(ImageGenerateFamily.flux3, title: "FLUX 3 Klein", models: ["image-flux3-klein"]),
             .init(ImageGenerateFamily.flux1, title: "FLUX.1-dev", models: ["image-flux1-dev"]),

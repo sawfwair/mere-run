@@ -121,6 +121,11 @@ public extension ManagedModelSpec {
         switch validationKind {
         case .flux1:
             return Flux1Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .nemotronImage:
+            return NemotronImageResources.files.map { rootURL.appending(path: $0) }.filter {
+                var directory: ObjCBool = false
+                return !fileManager.fileExists(atPath: $0.path, isDirectory: &directory) || directory.boolValue
+            }
         case .miniMaxH3Image:
             return MiniMaxH3ImageResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .flux3:

@@ -118,6 +118,8 @@ public enum ImageGenerationOperation {
         progressHandler: (@Sendable (GenerationProgress) -> Void)?
     ) async throws -> GenerationResult {
         switch backend {
+        case .nemotronImage:
+            return try await NemotronImageGenerator().generate(request, progressHandler: progressHandler)
         case .miniMaxH3Image:
             return try await MiniMaxH3ImageGenerator().generate(request, progressHandler: progressHandler)
         case .flux3:

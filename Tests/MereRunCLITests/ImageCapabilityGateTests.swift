@@ -11,6 +11,15 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
     try #require(CLICapabilityGate.evaluate(commandLine: commandLine)).report
 }
 
+@Test func nemotronImageRoutesTextPromptsAndRejectsDiffusionAndEditFlags() throws {
+    let command = ["image", "generate", "--model", "image-nemotron-labs-30b-a3b", "--prompt", "A lighthouse"]
+    #expect(try report(command).family == "nemotron-image")
+    #expect(try report(command + ["--width", "1184", "--height", "880", "--seed", "42"]).violations.isEmpty)
+    for flags in [["--steps", "4"], ["--cfg", "2"], ["--input", "/tmp/edit.png"], ["--negative-prompt", "fog"]] {
+        #expect(try report(command + flags).violations.count == 1)
+    }
+}
+
 @Test func h3ImageUsesSixPDDStepsAndSixteenReferenceLimit() throws {
     let command = ["image", "generate", "--prompt", "A camera", "--model", "image-minimax-h3"]
     #expect(try report(command).family == "h3-image")
@@ -98,7 +107,7 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
     #expect(krea.warnings == [
         "--negative-prompt has no effect with Krea 2. It applies to FLUX.2 Klein, Z-Image, HiDream-O1, SenseNova U1.5, "
             + "Qwen-Image 2.1, Qwen-Image 2.1 Turbo and Qwen-Image-Edit.",
-        "--cfg has no effect with Krea 2. It applies to MiniMax-H3-Image, FLUX 3 Klein, FLUX.1-dev, FLUX.2 Klein, FLUX.2-dev, Z-Image, HiDream-O1, "
+        "--cfg has no effect with Krea 2. It applies to Nemotron Labs Image 30B-A3B, MiniMax-H3-Image, FLUX 3 Klein, FLUX.1-dev, FLUX.2 Klein, FLUX.2-dev, Z-Image, HiDream-O1, "
             + "SenseNova U1.5, Qwen-Image 2.1, Qwen-Image 2.1 Turbo, Qwen-Image-Edit, Qwen-Image-Edit Lightning, Ideogram 4 and Cosmos3-Super 4-Step."
     ])
     let stacked = try report(["image", "generate", "-p", "a mug", "-m", "image-zimage-nano", "-l", "a.safetensors", "-l", "b.safetensors"])

@@ -1410,6 +1410,14 @@ extension MereRunModelManifest {
                 upstreamRepoId: "\(Krea2Resources.upstreamRepoId)@\(Krea2Resources.upstreamRevision)",
                 createdAt: createdAt
             )
+        case .nemotronImage:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .nemotronImage, family: .nemotronImage,
+                tier: .latest, variant: .base, precision: .bf16,
+                defaults: Defaults(steps: 1, cfg: 1), supports: [.txt2img],
+                components: Components(tokenizer: .local(path: "."), textEncoder: .local(path: "."),
+                    transformer: .local(path: "."), vae: .local(path: NemotronImageResources.decoderDirectory), scheduler: nil),
+                upstreamRepoId: "\(NemotronImageResources.repository)@\(NemotronImageResources.revision)", createdAt: createdAt)
         case .miniMaxH3Image:
             return MereRunModelManifest(
                 id: modelID.rawValue, engine: .miniMaxH3Image, family: .h3Image,

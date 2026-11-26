@@ -17,6 +17,26 @@ mere.run image generate --prompt "A ceramic mug in soft morning light" \
 The command prints the output path to stdout. Progress and diagnostics go to
 stderr.
 
+## Nemotron Labs Image 30B-A3B
+
+The native raster generator samples visual tokens with the Nemotron-H model and
+decodes them into a PNG with the bundled L24SQ tokenizer. The managed download
+is approximately 133 GB. The runtime loads the FP32 generator weights one layer
+at a time and casts them to BF16 for inference. NVIDIA licenses the checkpoint for non-commercial
+research and evaluation. [NVIDIA model card](https://huggingface.co/nvidia/Nemotron-Labs-Image-30B-A3B)
+
+```bash
+mere.run model pull image-nemotron-labs-30b-a3b --accept-model-license
+mere.run image generate --model image-nemotron-labs-30b-a3b \
+  --prompt "A lighthouse reflected in still water" --seed 42 \
+  --width 1184 --height 880 --output ./lighthouse.png
+```
+
+Use a text prompt and dimensions divisible by 16. The model samples at
+temperature 0.9 with a budget of 4,352 tokens, including row markers and the
+size header. The recommended sizes are 1024×1024, 1184×880, 1248×832, and
+880×1184. A malformed or incomplete grid produces a generation error.
+
 ## Commands
 
 | Command | What it does |
