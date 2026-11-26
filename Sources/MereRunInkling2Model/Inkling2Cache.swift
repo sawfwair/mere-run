@@ -12,6 +12,11 @@ public final class Inkling2Cache {
     public var offset: Int { layers.first?.offset ?? 0 }
     var isVerifying: Bool { layers.first?.verification != nil }
     public init(layerCount: Int) { layers = (0..<layerCount).map { _ in Inkling2LayerCache() } }
+    private init(layers: [Inkling2LayerCache]) { self.layers = layers }
+
+    /// An independent cache at the same position, for reusing a prompt prefix.
+    /// MLX arrays are immutable, so the copy shares their storage.
+    package func copy() -> Inkling2Cache { Inkling2Cache(layers: layers.map { $0.copy() }) }
 
     func beginForward() { masks.removeAll(keepingCapacity: true) }
 
@@ -71,6 +76,15 @@ final class Inkling2LayerCache {
     var convolutions: [Int: MLXArray] = [:]
     var verification: Verification?
     var arrays: [MLXArray] { Array(convolutions.values) + [keys, values].compactMap { $0 } }
+
+    func copy() -> Inkling2LayerCache {
+        let copy = Inkling2LayerCache()
+        copy.offset = offset
+        copy.keys = keys
+        copy.values = values
+        copy.convolutions = convolutions
+        return copy
+    }
 
     func context(_ x: MLXArray, index: Int, kernel: Int) -> MLXArray {
         let prior = convolutions[index] ?? MLXArray.zeros([x.dim(0), kernel - 1, x.dim(2)], dtype: .float32)

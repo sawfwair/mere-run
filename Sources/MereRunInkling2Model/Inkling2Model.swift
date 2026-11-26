@@ -22,6 +22,12 @@ public final class Inkling2Model {
 
     package func prefillChunkSize(for tokenCount: Int) -> Int {
         #if os(macOS)
+        // Larger chunks reuse routed expert weights. Keep their attention workspace
+        // within the qualified server context.
+        if usePackedExperts, Inkling2PackedExperts.reorderPrefill,
+           tokenCount > Inkling2DecodeAttention.maxKeys, tokenCount <= 32_768 {
+            return 256
+        }
         if usesSpeedPack, usePackedExperts, tokenCount > Inkling2DecodeAttention.maxKeys, tokenCount <= Inkling2MaskedAttention.maxKeys {
             return 64
         }

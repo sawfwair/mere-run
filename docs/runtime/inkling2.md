@@ -174,7 +174,10 @@ top-eight expert routing and combines scaling with the activation and
 weighted reduction around the expert matmuls. The reference path dequantizes
 one selected expert at a time.
 Both use BF16 activations and FP32 routing and accumulation.
-Rounding can differ between the two paths and change sampled tokens.
+On M5 Max, packed Metal prefill uses 256-token chunks for prompts from
+1,025 through 32,768 tokens. MLX groups sorted token routes that use the same
+expert so its matmul can reuse the packed weights. Chunk size and kernel
+rounding can change sampled tokens.
 LoRA, constrained JSON output, quantized attention caches, audio, and video
 are unavailable.
 

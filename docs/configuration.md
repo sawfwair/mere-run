@@ -155,6 +155,19 @@ only its tail. Intermediate prefill chunks are not cloned. The cache is bounded
 to 4 entries with the shared retention planner, which keeps semantic
 conversation checkpoints ahead of exact-prompt entries when pruning.
 
+### `MERERUN_INKLING2_PREFIX_KV_CACHE`
+
+In-memory prompt-prefix reuse for the Inkling 2 chat runtime is enabled by
+default in `mere.run api serve`. Set `0`, `false`, or `off` to disable it.
+One-shot CLI invocations keep it off. Like LFM2, the runtime retains exact
+prompts plus the stable conversation prefix before the final message, bounded
+to 4 entries. Both kinds rank equally, so pruning drops the least recently used
+entry and keeps the latest exact prompt, which an agent's next turn extends. Inkling 2 Mini runs its middle layers more than once, so a
+checkpoint copies the attention KV and short-convolution state of each pass.
+When DSpark prefilled the prompt, the checkpoint also holds the draft's KV and
+last target features, and only a DSpark request reuses it. A reused prefix ends
+before the first image, because image positions hold placeholder tokens.
+
 ### Continuous batching
 
 Use `MERERUN_GEMMA4_CONTINUOUS_BATCHING`,

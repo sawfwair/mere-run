@@ -540,6 +540,14 @@ swift run mere.run api serve \
   the stable conversation prefix before the final message, without cloning
   every intermediate prefill chunk. Both attention KV and short-convolution
   state are forked at those retained checkpoints.
+- Inkling 2 chat uses prefix KV reuse by default in `api serve`; set
+  `MERERUN_INKLING2_PREFIX_KV_CACHE=0` for a baseline. It retains exact prompts
+  and the stable conversation prefix before the final message. A checkpoint
+  holds the attention KV and short-convolution state of each looped layer pass,
+  plus the DSpark draft state when DSpark prefilled the prompt; a request
+  reuses only a checkpoint made the same way. Reuse stops before the first
+  image, and prefill after a reused prefix keeps the chunk boundaries of a cold
+  prefill. `/runtime/status` reports entries, hits, and reused tokens.
 - Managed Gemma4 12B text and vision installs include the
   `text-chat-gemma4-12b-mtp` assistant companion. The API server uses it only
   for greedy serial decode-tail speculation after prefill; sampled requests,

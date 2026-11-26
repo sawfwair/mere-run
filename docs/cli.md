@@ -4675,6 +4675,12 @@ Security defaults:
   the stable conversation prefix before the final message instead of cloning
   every intermediate prefill chunk. Checkpoints fork both attention KV and
   short-convolution state.
+- Inkling 2 chat uses in-memory prefix KV reuse by default in `api serve`; set
+  `MERERUN_INKLING2_PREFIX_KV_CACHE=0` for a baseline. It retains exact prompts
+  and the stable conversation prefix before the final message. Each checkpoint
+  holds the attention KV and short-convolution state of every looped layer pass,
+  and the DSpark draft state when DSpark prefilled it. A reused prefix ends
+  before the first image.
 - Managed Gemma4 12B text and vision pulls install a companion MTP assistant.
   When `MERERUN_GEMMA4_MTP` is not disabled, greedy serial decode can use that
   assistant on the decode tail after prefill; sampled requests, continuous

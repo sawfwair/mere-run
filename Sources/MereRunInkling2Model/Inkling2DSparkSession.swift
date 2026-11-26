@@ -11,6 +11,12 @@ package struct Inkling2DSparkDecodeResult {
     package let depthCounts: [Int: Int]
 }
 
+/// The draft's state after a prompt prefix, kept with the target cache for reuse.
+package struct Inkling2DSparkPrefix {
+    fileprivate let caches: [Inkling2DSparkLayerCache]
+    fileprivate let lastFeatures: MLXArray
+}
+
 package final class Inkling2DSparkSession {
     private struct TargetVerification {
         let logits: MLXArray
@@ -22,10 +28,16 @@ package final class Inkling2DSparkSession {
     private var draftCaches: [Inkling2DSparkLayerCache]
     private var lastFeatures: MLXArray?
 
-    package init(draft: Inkling2DSpark, cache: Inkling2Cache) {
+    package init(draft: Inkling2DSpark, cache: Inkling2Cache, prefix: Inkling2DSparkPrefix? = nil) {
         self.draft = draft
         targetCache = cache
-        draftCaches = Array(repeating: Inkling2DSparkLayerCache(), count: draft.config.numHiddenLayers)
+        draftCaches = prefix?.caches ?? Array(repeating: Inkling2DSparkLayerCache(), count: draft.config.numHiddenLayers)
+        lastFeatures = prefix?.lastFeatures
+    }
+
+    /// The draft state after the tokens prefilled so far.
+    package var prefix: Inkling2DSparkPrefix? {
+        lastFeatures.map { Inkling2DSparkPrefix(caches: draftCaches, lastFeatures: $0) }
     }
 
     package func prefill(_ embeddings: MLXArray) throws -> MLXArray {

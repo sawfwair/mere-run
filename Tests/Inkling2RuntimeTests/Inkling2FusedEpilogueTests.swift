@@ -150,6 +150,28 @@ final class Inkling2FusedEpilogueTests: MLXTestCase {
         }
     }
 
+    func testSortedPrefillGatherMatchesIndividualRoutes() throws {
+        try XCTSkipUnless(Device.defaultDevice().deviceType == .gpu)
+        let counts = [1, 11, 4, 22, 5, 6, 9, 6]
+        let experts = counts.count, width = 64, rows = 64
+        let routes = counts.enumerated().flatMap { index, count in Array(repeating: Int32(index), count: count) }
+        let indices = MLXArray(routes)
+        let inputs = values([routes.count, 1, width], stride: 19).asType(.bfloat16)
+        for nvfp4 in [true, false] {
+            let weightWidth = nvfp4 ? width / 2 : width
+            let scaleWidth = width / (nvfp4 ? 16 : 32)
+            let packed = MLXArray((0..<(experts * rows * weightWidth)).map { UInt8(0x31 + ($0 * 17) % 13) })
+                .reshaped(experts, rows, weightWidth).view(dtype: .uint32)
+            let scales = MLXArray(Array(repeating: UInt8(nvfp4 ? 0x38 : 127), count: experts * rows * scaleWidth))
+                .reshaped(experts, rows, scaleWidth)
+            let outer = nvfp4 ? MLXArray(Array(repeating: Float(1), count: experts)) : nil
+            let projection = Inkling2PackedExperts.Projection(packed: packed, scales: scales, expertScales: outer)
+            let expected = projection.rawMatmul(inputs, indices: indices)
+            let actual = projection.rawMatmul(inputs, indices: indices, sortedIndices: true)
+            assertClose(actual, expected, tolerance: nvfp4 ? 0.0002 : 0.032)
+        }
+    }
+
     func testExpertEpiloguesMatchScaledAndUnscaledReference() throws {
         try XCTSkipUnless(Device.defaultDevice().deviceType == .gpu)
         let indices = MLXArray([UInt32(1), 0, 1, 0, 1, 0]).reshaped(2, 3)
