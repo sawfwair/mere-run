@@ -6,14 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.78.0 - 2026-11-26
+
+- Reuse matching prompt prefixes for Inkling 2 in `api serve`. On a cache hit,
+  the next turn prefills only the tokens after the cached prefix.
+  `/runtime/status` reports cache hits and reused tokens. To disable reuse,
+  set `MERERUN_INKLING2_PREFIX_KV_CACHE=0`.
 - Group packed Inkling 2 Mini expert matmuls during fresh prefill on M5 Max.
   Prompts from 1,025 through 32,768 tokens use 256-token chunks.
-
-- Reuse the prompt prefix for Inkling 2 in `api serve`, as Gemma 4, Qwen-family,
-  and LFM2 chat already do. An agent's next turn now prefills only its new
-  messages instead of the whole conversation. Set
-  `MERERUN_INKLING2_PREFIX_KV_CACHE=0` to turn reuse off; `/runtime/status`
-  reports hits and reused tokens.
 
 ## 0.77.0 - 2026-11-25
 
