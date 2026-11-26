@@ -34,7 +34,9 @@ extension NativeChatRuntime {
         case .textChatDiffusionGemma:
             return .textChatDiffusionGemma(DiffusionGemmaGenerator(modelID: modelID), modelPath: modelPath)
         case .textChatInkling2:
-            return .textChatInkling2(Inkling2Generator(), modelPath: modelPath ?? Inkling2Resources.localModelRoot(for: modelID) ?? ManagedModelResolver.resolveInstalledModel(id: modelID)?.path)
+            return .textChatInkling2(Inkling2Generator(
+                prefixKVCacheEnabled: option(prefixKVCacheEnabled, "MERERUN_INKLING2_PREFIX_KV_CACHE")
+            ), modelPath: modelPath ?? Inkling2Resources.localModelRoot(for: modelID) ?? ManagedModelResolver.resolveInstalledModel(id: modelID)?.path)
         case .textChatFlint:
             return .textChatFlint(FlintGenerator(), modelPath: modelPath ?? FlintResources.localModelRoot(for: modelID) ?? ManagedModelResolver.resolveInstalledModel(id: modelID)?.path)
         case .textChatKolibri:

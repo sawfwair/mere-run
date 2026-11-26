@@ -117,7 +117,9 @@ public enum NativeChatRuntime: Sendable {
             return await generator.prefixKVCacheStats()
         case .textChatLFM2(let generator, _):
             return await generator.prefixKVCacheStats()
-        case .textChatInkling2, .textChatFlint, .textChatKolibri, .textChatPsi, .textChatInkling, .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatLaguna, .textChatDeepseekV4Flash,
+        case .textChatInkling2(let generator, _):
+            return await generator.prefixKVCacheStats()
+        case .textChatFlint, .textChatKolibri, .textChatPsi, .textChatInkling, .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatLaguna, .textChatDeepseekV4Flash,
              .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronBolt, .textChatNemotronOmni:
             return nil
         }

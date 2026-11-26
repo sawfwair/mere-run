@@ -190,6 +190,11 @@ download route.
   conversation prefix before the final message are retained; intermediate
   prefill chunks are not cloned. Checkpoints fork both attention KV and
   short-convolution state.
+- Inkling 2 chat uses in-memory prefix KV reuse by default; set
+  `MERERUN_INKLING2_PREFIX_KV_CACHE=0` for a baseline. Exact prompts and the
+  stable conversation prefix before the final message are retained, with every
+  looped layer pass and any DSpark draft state. Reuse stops before the first
+  image.
 - Gemma4, Qwen-family, and LFM2 decode batching engages automatically when
   `--max-active-requests` is above `1`. The corresponding
   `MERERUN_GEMMA4_CONTINUOUS_BATCHING`,

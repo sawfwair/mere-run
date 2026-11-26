@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Reuse the prompt prefix for Inkling 2 in `api serve`, as Gemma 4, Qwen-family,
+  and LFM2 chat already do. An agent's next turn now prefills only its new
+  messages instead of the whole conversation. Set
+  `MERERUN_INKLING2_PREFIX_KV_CACHE=0` to turn reuse off; `/runtime/status`
+  reports hits and reused tokens.
+
 ## 0.77.0 - 2026-11-25
 
 - Add `text-chat-bonsai-2-5-27b-2bit`, Prism ML's Ternary Bonsai 2.5 27B

@@ -350,7 +350,8 @@ final class RuntimeModelPoolTests: XCTestCase {
             settingsStore: RuntimeModelSettingsStore(modelsDir: root),
             gemma4PrefixKVCacheEnabled: false,
             q35PrefixKVCacheEnabled: false,
-            lfm2PrefixKVCacheEnabled: false
+            lfm2PrefixKVCacheEnabled: false,
+            inkling2PrefixKVCacheEnabled: false
         )
 
         let status = await pool.status()
@@ -358,6 +359,26 @@ final class RuntimeModelPoolTests: XCTestCase {
         XCTAssertTrue(status.capabilities.prefixKVReuse.available)
         XCTAssertFalse(status.capabilities.prefixKVReuse.enabled)
         XCTAssertTrue(status.capabilities.prefixKVReuse.detail.contains("disabled"))
+    }
+
+    func testStatusReportsInkling2PrefixKVCacheCapabilityWhenEnabled() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let pool = RuntimeModelPool(
+            defaultModelID: "custom.gguf",
+            defaultEngine: .textCode,
+            startupModelPath: root.appendingPathComponent("custom.gguf").path,
+            settingsStore: RuntimeModelSettingsStore(modelsDir: root),
+            gemma4PrefixKVCacheEnabled: false,
+            q35PrefixKVCacheEnabled: false,
+            lfm2PrefixKVCacheEnabled: false,
+            inkling2PrefixKVCacheEnabled: true
+        )
+
+        let status = await pool.status()
+
+        XCTAssertTrue(status.capabilities.prefixKVReuse.enabled)
+        XCTAssertTrue(status.capabilities.prefixKVReuse.detail.contains("Inkling 2"))
     }
 
     func testStatusReportsQ35PrefixKVCacheCapabilityWhenEnabled() async throws {

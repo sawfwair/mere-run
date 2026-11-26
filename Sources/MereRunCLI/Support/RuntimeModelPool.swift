@@ -130,11 +130,13 @@ struct RuntimeControlPlaneCapabilities: Codable, Equatable, Sendable {
         q35ContinuousBatchingEnabled: Bool,
         q35PrefixKVCacheEnabled: Bool,
         lfm2ContinuousBatchingEnabled: Bool = false,
-        lfm2PrefixKVCacheEnabled: Bool = false
+        lfm2PrefixKVCacheEnabled: Bool = false,
+        inkling2PrefixKVCacheEnabled: Bool = false
     ) -> RuntimeControlPlaneCapabilities {
         let prefixKVCacheEnabled = gemma4PrefixKVCacheEnabled
             || q35PrefixKVCacheEnabled
             || lfm2PrefixKVCacheEnabled
+            || inkling2PrefixKVCacheEnabled
         let continuousBatchingEnabled = gemma4ContinuousBatchingEnabled
             || lagunaContinuousBatchingEnabled
             || q35ContinuousBatchingEnabled
@@ -148,7 +150,7 @@ struct RuntimeControlPlaneCapabilities: Codable, Equatable, Sendable {
             chunkedPrefill: RuntimeCapabilityStatus(
                 available: true,
                 enabled: true,
-                detail: "Gemma4, Laguna, Qwen-family, and LFM2 models prefill long prompts in cancellable chunks."
+                detail: "Gemma4, Laguna, Qwen-family, LFM2, and Inkling 2 models prefill long prompts in cancellable chunks."
             ),
             continuousBatching: RuntimeCapabilityStatus(
                 available: true,
@@ -161,7 +163,7 @@ struct RuntimeControlPlaneCapabilities: Codable, Equatable, Sendable {
                 available: true,
                 enabled: prefixKVCacheEnabled,
                 detail: prefixKVCacheEnabled
-                    ? "In-memory prefix KV reuse is enabled for matching Gemma4, Qwen-family, or LFM2 text token prefixes."
+                    ? "In-memory prefix KV reuse is enabled for matching Gemma4, Qwen-family, LFM2, or Inkling 2 text token prefixes."
                     : "In-memory prefix KV reuse is disabled by " +
                         "the per-engine MERERUN_*_PREFIX_KV_CACHE flags."
             ),
@@ -616,6 +618,7 @@ actor RuntimeModelPool {
     private let defaultQwenLoRA: LoRA?
     private let lfm2PrefixKVCacheEnabled: Bool
     private let lfm2ContinuousBatchingEnabled: Bool
+    private let inkling2PrefixKVCacheEnabled: Bool
     private let currentDate: @Sendable () -> Date
     private let currentMemorySample: @Sendable () -> RuntimeMemorySample
     private let memoryPressurePolicy: RuntimeMemoryPressurePolicy
@@ -643,6 +646,7 @@ actor RuntimeModelPool {
         lfm2PrefixKVCacheEnabled: Bool = runtimeDefaultOnEnvironmentFlag("MERERUN_LFM2_PREFIX_KV_CACHE"),
         lfm2ContinuousBatchingEnabled: Bool =
             ProcessInfo.processInfo.environment["MERERUN_LFM2_CONTINUOUS_BATCHING"] == "1",
+        inkling2PrefixKVCacheEnabled: Bool = runtimeDefaultOnEnvironmentFlag("MERERUN_INKLING2_PREFIX_KV_CACHE"),
         currentDate: @escaping @Sendable () -> Date = { Date() },
         currentMemorySample: @escaping @Sendable () -> RuntimeMemorySample = { RuntimeMemorySample.current() },
         memoryPressurePolicy: RuntimeMemoryPressurePolicy = .default,
@@ -677,6 +681,7 @@ actor RuntimeModelPool {
         self.q35ContinuousBatchingEnabled = q35ContinuousBatchingEnabled
         self.lfm2PrefixKVCacheEnabled = lfm2PrefixKVCacheEnabled
         self.lfm2ContinuousBatchingEnabled = lfm2ContinuousBatchingEnabled
+        self.inkling2PrefixKVCacheEnabled = inkling2PrefixKVCacheEnabled
         self.currentDate = currentDate
         self.currentMemorySample = currentMemorySample
         self.memoryPressurePolicy = memoryPressurePolicy
@@ -878,7 +883,8 @@ actor RuntimeModelPool {
                 q35ContinuousBatchingEnabled: q35ContinuousBatchingEnabled,
                 q35PrefixKVCacheEnabled: q35PrefixKVCacheEnabled,
                 lfm2ContinuousBatchingEnabled: lfm2ContinuousBatchingEnabled,
-                lfm2PrefixKVCacheEnabled: lfm2PrefixKVCacheEnabled
+                lfm2PrefixKVCacheEnabled: lfm2PrefixKVCacheEnabled,
+                inkling2PrefixKVCacheEnabled: inkling2PrefixKVCacheEnabled
             ),
             memory: RuntimeMemorySnapshot(
                 physicalBytes: memorySample.physicalBytes,
@@ -1207,8 +1213,11 @@ actor RuntimeModelPool {
         case .textChatLFM2:
             prefixCache = lfm2PrefixKVCacheEnabled
             batching = lfm2ContinuousBatchingEnabled
+        case .textChatInkling2:
+            prefixCache = inkling2PrefixKVCacheEnabled
+            batching = nil
         case .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatDeepseekV4Flash,
-             .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronOmni, .textChatInkling2, .textChatFlint, .textChatKolibri:
+             .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronOmni, .textChatFlint, .textChatKolibri:
             prefixCache = nil
             batching = nil
         }

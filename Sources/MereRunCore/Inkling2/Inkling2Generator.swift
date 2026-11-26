@@ -11,8 +11,16 @@ public actor Inkling2Generator: ChatGenerator {
     var loadedRoot: String?
     private var dspark: Inkling2DSpark?
     private var lastDSparkStats: Inkling2DSparkStats?
+    let prefixKVCacheEnabled: Bool
+    var prefixKVCache: [Inkling2PrefixKVCacheKey: Inkling2PrefixKVCacheEntry] = [:]
+    var prefixKVCacheHits = 0
+    var prefixKVCacheMisses = 0
+    var prefixKVCacheStores = 0
+    var prefixKVCacheReusedTokens = 0
 
-    public init() {}
+    public init(prefixKVCacheEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_INKLING2_PREFIX_KV_CACHE"] == "1") {
+        self.prefixKVCacheEnabled = prefixKVCacheEnabled
+    }
 
     public func dsparkStats() -> Inkling2DSparkStats? { lastDSparkStats }
 
@@ -45,6 +53,7 @@ public actor Inkling2Generator: ChatGenerator {
     public func unload() {
         model = nil; tokenizer = nil; template = nil; loadedRoot = nil
         dspark = nil; lastDSparkStats = nil
+        resetPrefixKVCache()
         Memory.clearCache()
     }
 
@@ -74,13 +83,23 @@ public actor Inkling2Generator: ChatGenerator {
                 throw ChatRequestIssue("max-context-tokens", "the complete Inkling 2 prompt must fit with space for output")
             }
             let budget = min(request.maxTokens, context - prompt.tokens.count)
-            let cache = model.makeCache()
-            let speculation = draft.map { Inkling2DSparkSession(draft: $0, cache: cache) }
+            // Image positions hold placeholder tokens, so a stored prefix must end before the first image.
+            let reusable = prompt.images.map(\.offset).min() ?? prompt.tokens.count
+            let modelRoot = loadedRoot ?? ""
+            let seed = prefixKVCacheSeed(modelPath: modelRoot, speculative: draft != nil,
+                                         promptTokens: prompt.tokens, reusableTokens: reusable)
+            let checkpoints = semanticPrefixCheckpoints(request, template: template, promptTokens: prompt.tokens, reusableTokens: reusable)
+            let cache = seed?.cache ?? model.makeCache()
+            let speculation = draft.map { Inkling2DSparkSession(draft: $0, cache: cache, prefix: seed?.draft) }
             var initial: MLXArray?
             let chunkSize = model.prefillChunkSize(for: prompt.tokens.count)
-            for start in stride(from: 0, to: prompt.tokens.count, by: chunkSize) {
+            var start = seed?.tokenCount ?? 0
+            if start > 0 {
+                progressHandler?(ChatProgress(stage: .encoding, message: "Reusing \(start) prompt KV tokens"))
+            }
+            while start < prompt.tokens.count {
                 try Task.checkCancellation()
-                let end = min(start + chunkSize, prompt.tokens.count)
+                let end = Self.nextPrefillEnd(processed: start, total: prompt.tokens.count, chunkSize: chunkSize, checkpoints: checkpoints)
                 let ids = MLXArray(prompt.tokens[start..<end].map(Int32.init)).reshaped(1, end - start)
                 let embedding = try model.embeddings(ids)
                 for image in prompt.images {
@@ -91,7 +110,15 @@ public actor Inkling2Generator: ChatGenerator {
                 }
                 initial = try speculation?.prefill(embedding) ?? model.forward(embeddings: embedding, cache: cache)
                 if let initial { eval(initial) }
+                // Keep the conversation before the final message and the exact prompt, which the next
+                // agent turn extends because the template adds no generation suffix. Both rank equally,
+                // so pruning drops the least recently used and keeps the latest turn's exact prompt.
+                if end <= reusable, checkpoints.contains(end) || end == prompt.tokens.count {
+                    storePrefixKVCache(modelPath: modelRoot, speculative: speculation != nil, promptTokens: prompt.tokens,
+                                       tokenCount: end, cache: cache, draft: speculation?.prefix, priority: .semantic)
+                }
                 progressHandler?(ChatProgress(stage: .encoding, message: "Prefilled \(end)/\(prompt.tokens.count) tokens"))
+                start = end
                 await Task.yield()
             }
             guard let initial else { throw ChatRequestIssue("prompt", "empty prompt") }
