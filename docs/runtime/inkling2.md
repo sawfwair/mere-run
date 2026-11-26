@@ -175,9 +175,13 @@ weighted reduction around the expert matmuls. The reference path dequantizes
 one selected expert at a time.
 Both use BF16 activations and FP32 routing and accumulation.
 On M5 Max, packed Metal prefill uses 256-token chunks for prompts from
-1,025 through 32,768 tokens. MLX groups sorted token routes that use the same
+1,025 through 131,072 tokens. `MERERUN_INKLING2_PREFILL_CHUNK` sets another
+chunk size from 8 through 512, for benchmarks. MLX groups sorted token routes that use the same
 expert so its matmul can reuse the packed weights. Chunk size and kernel
 rounding can change sampled tokens.
+Set `MERERUN_INKLING2_NAX_PREFILL=1` to try tiled global attention during
+Inkling 2 Mini Speed prefill on M5 Max. This experimental path computes the
+relative bias and causal mask inside the Metal kernel.
 Constrained JSON output, quantized attention caches, audio, and video are unavailable.
 
 ## Fine-tune Inkling 2 Mini

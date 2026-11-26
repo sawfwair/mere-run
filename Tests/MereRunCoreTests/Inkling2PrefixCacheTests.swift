@@ -1,4 +1,5 @@
 import XCTest
+import MediaIO
 import MereRunInkling2Model
 @testable import MereRunCore
 
@@ -68,6 +69,34 @@ final class Inkling2PrefixCacheTests: XCTestCase {
         XCTAssertEqual(stats.misses, 3)
         XCTAssertEqual(stats.reusedTokens, 180)
         XCTAssertEqual(stats.storedTokens, 180)
+    }
+
+    func testKeyTokensMarkEachImageByItsPixels() throws {
+        let red = try MediaImage(width: 2, height: 1, rgba8: [255, 0, 0, 255, 255, 0, 0, 255])
+        let blue = try MediaImage(width: 2, height: 1, rgba8: [0, 0, 255, 255, 0, 0, 255, 255])
+        let redMarker = Inkling2Prompt.imageMarker(red)
+        XCTAssertEqual(redMarker, Inkling2Prompt.imageMarker(try MediaImage(width: 2, height: 1, rgba8: red.rgba8)))
+        XCTAssertNotEqual(redMarker, Inkling2Prompt.imageMarker(blue))
+        XCTAssertLessThan(redMarker, 0)
+        let image = Inkling2Prompt.imageID
+        let raw = [1, 2, image, 3, image, 4]
+        let keys = Inkling2Prompt.keyTokens(raw: raw, images: [(redMarker, 3), (redMarker, 2)])
+        XCTAssertEqual(keys, [1, 2, redMarker, redMarker, redMarker, 3, redMarker, redMarker, 4])
+        // A conversation before the final message holds the prompt's first images.
+        let earlier = Inkling2Prompt.keyTokens(raw: [1, 2, image, 3], images: [(redMarker, 3), (redMarker, 2)])
+        XCTAssertEqual(earlier.map { keys?.starts(with: $0) }, true)
+        XCTAssertNil(Inkling2Prompt.keyTokens(raw: raw, images: [(redMarker, 3)]))
+    }
+
+    func testAStoredPrefixExtendsPastAnImageOnlyForTheSameImage() async throws {
+        let generator = Inkling2Generator(prefixKVCacheEnabled: true)
+        let red = -11, blue = -12
+        let turn = [1, 2, red, red, red, 3]
+        await generator.store(turn, count: turn.count)
+        let same = await generator.seedLength(turn + [4, 5])
+        XCTAssertEqual(same, turn.count)
+        let other = await generator.seedLength([1, 2, blue, blue, blue, 3, 4, 5])
+        XCTAssertNil(other)
     }
 
     func testSeedIsACopyThatPrefillCannotChange() async {

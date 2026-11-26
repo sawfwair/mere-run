@@ -1,5 +1,15 @@
 # Third-Party Notices
 
+## oMLX banded attention
+
+The experimental Inkling 2 global prefill kernel adapts oMLX's
+[`nax_attention.py`](https://github.com/jundot/omlx/blob/633d6cf62971262149c2b2477361487958da3915/omlx/utils/nax_attention.py)
+and [`nax_tiles.py`](https://github.com/jundot/omlx/blob/633d6cf62971262149c2b2477361487958da3915/omlx/custom_kernels/nax_tiles.py)
+under the Apache License 2.0. The Swift wrapper specializes the source for
+Inkling 2's BF16 global attention. The upstream kernel incorporates Apple MLX
+Metal routines, copyright (c) 2024-25 Apple Inc., under the MIT License.
+Both license texts appear elsewhere in this file.
+
 ## Haru
 
 `Sources/AudioHaruModel` adapts the Haru model, MeanFlow head, VibeVoice

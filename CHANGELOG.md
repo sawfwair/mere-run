@@ -6,6 +6,16 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Reuse Inkling 2 prompt prefixes past images in `api serve`. A cached prefix
+  matches only a prompt with the same image pixels, and the vision features of
+  the 16 most recent images are kept, so an agent that looks at screenshots no
+  longer re-reads everything after its first image on each turn.
+- Use 256-token prefill chunks for Inkling 2 Mini prompts up to 131,072 tokens
+  on M5 Max, instead of up to 32,768. A cold 45,800-token prompt now reads at
+  about 450 tokens a second instead of about 170, a 105,000-token prompt at
+  about 310, and peak memory doesn't rise. `MERERUN_INKLING2_PREFILL_CHUNK` overrides the chunk size, from 8
+  through 512.
+
 ## 0.78.0 - 2026-11-26
 
 - Reuse matching prompt prefixes for Inkling 2 in `api serve`. On a cache hit,
