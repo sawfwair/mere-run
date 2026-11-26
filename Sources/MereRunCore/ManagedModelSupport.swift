@@ -202,6 +202,13 @@ public enum ManagedModelCapabilityCatalog {
     private static let descriptorsByID: [String: ManagedModelCapabilityDescriptor] = {
         let descriptors = [
             descriptor(
+                ManagedModelID.nemotronImage.rawValue,
+                "Image, Nemotron Labs Image 30B-A3B",
+                "Samples raster images as visual tokens with native BF16 inference. Memory requirements are estimates.",
+                minimum: 80,
+                recommended: 96
+            ),
+            descriptor(
                 MiniMaxH3ImageResources.modelID,
                 "Image, MiniMax-H3-Image",
                 "Runs native BF16 six-step generation and up to 16 reference images; checkpoint quality and peak memory remain unqualified.",

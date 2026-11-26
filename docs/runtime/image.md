@@ -75,6 +75,7 @@ models. Choose **Use model default** to clear it. For example, Qwen Image Edit
 | `image-klein-base-9b` | Undistilled FLUX.2 Klein 9B base for LoRA training | 50, 1 | 51.5 GB | 64 / 96 GB |
 | `image-bonsai-binary` | Smallest Klein deployment (1-bit) | 4, 1 | 3.4 GB | 16 / 24 GB |
 | `image-bonsai-ternary` | Compact Klein deployment (2-bit) | 4, 1 | 3.9 GB | 12 / 16 GB |
+| `image-nemotron-labs-30b-a3b` | Autoregressive text-to-image with L24SQ decoding | Visual token sampling | 133 GB | 80 / 96 GB (estimates) |
 | `image-minimax-h3` | Six-step MiniMax-H3-Image generation and up to 16 references; 2K and 4K text-to-image qualified | 6, 1 | About 135 GB | 96 / 128 GB (estimates) |
 | `image-flux3-klein` | Experimental FLUX 3 Klein generation and up to 10 references | 16, 1 | 20.3 GB | 32 / 48 GB |
 | `image-flux1-dev` | Gated FLUX.1-dev with FLUX.1 LoRAs | 28, 3.5 | 34.0 GB | 48 / 64 GB |
