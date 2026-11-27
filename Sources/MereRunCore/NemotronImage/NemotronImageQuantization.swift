@@ -6,12 +6,15 @@ import MLXNN
 public enum NemotronImageQuantization {
     public static let scheme = "nemotron-image-experts-affine-v1"
 
+    static let mixedScheme = "nemotron-image-e6d8-affine-v1"
+
     static func expertBits(_ manifest: MereRunModelManifest?) throws -> Int? {
         guard let manifest else { return nil }
         if manifest.precision == .bf16, manifest.quantization == nil { return nil }
         let precisionBits: [MereRunModelManifest.Precision: Int] = [.int4: 4, .int6: 6, .int8: 8]
         guard let precision = manifest.precision, let bits = precisionBits[precision], let quant = manifest.quantization,
-              quant.scheme == scheme, quant.groupSize == 64, quant.bits == bits else {
+              quant.groupSize == 64, quant.bits == bits,
+              quant.scheme == scheme || (quant.scheme == mixedScheme && bits == 6) else {
             throw NemotronImageResources.invalid("Expected a BF16 or group-64 affine expert checkpoint.")
         }
         return bits
@@ -31,7 +34,7 @@ public enum NemotronImageQuantization {
             throw NemotronImageResources.invalid("Unexpected tensor count in packed module.")
         }
         for (key, parameter) in parameters {
-            let packed = key.contains("mixer.experts.") && key.hasSuffix(".weight")
+            let packed = parameter.dtype == .uint32
             guard let value = weights[key], value.shape == parameter.shape, value.dtype == (packed ? .uint32 : .bfloat16) else {
                 throw NemotronImageResources.invalid("Invalid packed checkpoint tensor \(key).")
             }

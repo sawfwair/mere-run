@@ -12,6 +12,13 @@ enum NemotronImageLoader {
             try NemotronImageCommunityPack.checkRecipe(at: root, bits: bits ?? 0)
         }
         let model = NemotronOmniCausalLM(config: config, expertBits: bits)
+        if manifest?.quantization?.scheme == NemotronImageQuantization.mixedScheme {
+            // The dense recipe covers Mamba, attention, shared experts and the output head.
+            // Embeddings, router parameters and the decoder retain their baseline precision.
+            quantize(model: model, groupSize: 64, bits: 8, mode: .affine) { _, module in
+                module is Linear
+            }
+        }
         let index = try bits == nil ? releasedIndex(at: root) : nil
         try visitModules(model) { module, prefix in
             let weights: [(String, MLXArray)]

@@ -110,6 +110,23 @@ final class NemotronImageTests: MereRunCoreTestCase {
         }
     }
 
+    func testMixedRecipeRequiresSixBitExpertsAndPackedDenseWeights() throws {
+        var manifest = MereRunModelManifest.template(for: .nemotronImage)
+        manifest.precision = .int6
+        manifest.quantization = .init(bits: 6, groupSize: 64, scheme: NemotronImageQuantization.mixedScheme)
+        XCTAssertEqual(try NemotronImageQuantization.expertBits(manifest), 6)
+        manifest.precision = .int8
+        manifest.quantization = .init(bits: 8, groupSize: 64, scheme: NemotronImageQuantization.mixedScheme)
+        XCTAssertThrowsError(try NemotronImageQuantization.expertBits(manifest))
+
+        let matrix = MLXArray.ones([32, 64], dtype: .bfloat16)
+        let head = QuantizedLinear(weight: matrix, bias: nil, groupSize: 64, bits: 8)
+        var weights = Dictionary(uniqueKeysWithValues: head.parameters().flattened())
+        try NemotronImageQuantization.validate(weights, for: head)
+        weights["weight"] = matrix
+        XCTAssertThrowsError(try NemotronImageQuantization.validate(weights, for: head))
+    }
+
     func testUnitronBlockChecksSizeRowsAndVocabularyBeforeDecode() throws {
         let data = Data(#"""
         {"unitron_token_ranges":{"framing":{"<|img_start|>":131072,"<|img_end|>":131073,"<|vis_row|>":131074},
