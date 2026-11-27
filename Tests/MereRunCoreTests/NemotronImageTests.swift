@@ -20,6 +20,9 @@ final class NemotronImageTests: MereRunCoreTestCase {
             try FileManager.default.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true)
             try Data([1]).write(to: path)
         }
+        try template.write(to: root)
+        let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: id)
+        XCTAssertTrue(report.isValid, report.errors.joined(separator: "\n"))
         XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
         try FileManager.default.removeItem(at: root.appending(path: "layers-51.safetensors"))
         XCTAssertEqual(spec.missingPaths(in: root).map(\.lastPathComponent), ["layers-51.safetensors"])

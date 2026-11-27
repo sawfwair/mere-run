@@ -142,7 +142,9 @@ public enum MereRunModelValidator {
 
         if let manifest, manifest.engine == .nemotronImage, manifest.precision != .bf16 {
             do { _ = try NemotronImageQuantization.expertBits(manifest) } catch { errors.append(error.localizedDescription) }
-            for name in NemotronImageResources.supportFiles + NemotronImageQuantization.files {
+            let community = NemotronImageCommunityPack.isPresent(at: rootURL)
+            let files = community ? NemotronImageCommunityPack.files : NemotronImageResources.supportFiles + NemotronImageQuantization.files
+            for name in files {
                 let url = rootURL.appending(path: name)
                 var directory: ObjCBool = false
                 if !fileManager.fileExists(atPath: url.path, isDirectory: &directory) || directory.boolValue {
