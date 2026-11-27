@@ -17,6 +17,9 @@ public actor Inkling2Generator: ChatGenerator {
     var prefixKVCacheMisses = 0
     var prefixKVCacheStores = 0
     var prefixKVCacheReusedTokens = 0
+    /// Vision features of recent images by pixel marker, so an agent's screenshots are encoded once.
+    var imageFeatureCache: [Int: MLXArray] = [:]
+    var imageFeatureOrder: [Int] = []
 
     public init(prefixKVCacheEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_INKLING2_PREFIX_KV_CACHE"] == "1") {
         self.prefixKVCacheEnabled = prefixKVCacheEnabled
@@ -54,6 +57,7 @@ public actor Inkling2Generator: ChatGenerator {
         model = nil; tokenizer = nil; template = nil; loadedRoot = nil
         dspark = nil; lastDSparkStats = nil
         resetPrefixKVCache()
+        imageFeatureCache.removeAll(); imageFeatureOrder.removeAll()
         Memory.clearCache()
     }
 
@@ -88,17 +92,20 @@ public actor Inkling2Generator: ChatGenerator {
             if let seed = request.seed { MLXRandom.seed(seed) }
             let context = min(request.maxContextTokens ?? Inkling2Resources.defaultContextLength, model.config.textConfig.modelMaxLength)
             let prefillStart = Date()
-            let prompt = try Inkling2Prompt.prepare(request, tokenizer: tokenizer, template: template, model: model)
+            let prompt = try Inkling2Prompt.prepare(request, tokenizer: tokenizer, template: template,
+                                                    generator: self, model: model)
             guard !prompt.tokens.isEmpty, prompt.tokens.count < context else {
                 throw ChatRequestIssue("max-context-tokens", "the complete Inkling 2 prompt must fit with space for output")
             }
             let budget = min(request.maxTokens, context - prompt.tokens.count)
-            // Image positions hold placeholder tokens, so a stored prefix must end before the first image.
-            let reusable = prompt.images.map(\.offset).min() ?? prompt.tokens.count
+            // Cache keys mark each image's positions with its pixels, so a stored prefix can extend
+            // past images and matches only a prompt with the same images.
+            let keyTokens = prompt.keyTokens
             let modelRoot = loadedRoot ?? ""
             let seed = prefixKVCacheSeed(modelPath: modelRoot, speculative: draft != nil,
-                                         promptTokens: prompt.tokens, reusableTokens: reusable)
-            let checkpoints = semanticPrefixCheckpoints(request, template: template, promptTokens: prompt.tokens, reusableTokens: reusable)
+                                         promptTokens: keyTokens, reusableTokens: keyTokens.count)
+            let checkpoints = semanticPrefixCheckpoints(request, template: template, promptTokens: keyTokens,
+                                                        imageMarkers: prompt.imageMarkers, imageCounts: prompt.images.map(\.count))
             let cache = seed?.cache ?? model.makeCache()
             let speculation = draft.map { Inkling2DSparkSession(draft: $0, cache: cache, prefix: seed?.draft) }
             var initial: MLXArray?
@@ -123,8 +130,8 @@ public actor Inkling2Generator: ChatGenerator {
                 // Keep the conversation before the final message and the exact prompt, which the next
                 // agent turn extends because the template adds no generation suffix. Both rank equally,
                 // so pruning drops the least recently used and keeps the latest turn's exact prompt.
-                if end <= reusable, checkpoints.contains(end) || end == prompt.tokens.count {
-                    storePrefixKVCache(modelPath: modelRoot, speculative: speculation != nil, promptTokens: prompt.tokens,
+                if checkpoints.contains(end) || end == prompt.tokens.count {
+                    storePrefixKVCache(modelPath: modelRoot, speculative: speculation != nil, promptTokens: keyTokens,
                                        tokenCount: end, cache: cache, draft: speculation?.prefix, priority: .semantic)
                 }
                 progressHandler?(ChatProgress(stage: .encoding, message: "Prefilled \(end)/\(prompt.tokens.count) tokens"))

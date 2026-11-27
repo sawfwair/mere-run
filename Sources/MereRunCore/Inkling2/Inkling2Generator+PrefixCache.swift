@@ -1,4 +1,5 @@
 import Foundation
+import MediaIO
 import MLX
 import MereRunInkling2Model
 
@@ -25,17 +26,37 @@ struct Inkling2PrefixKVCacheSeed {
 extension Inkling2Generator {
     static let prefixKVCacheMaxEntries = 4
 
-    /// The end of every message but the last, when it is an exact token prefix of the prompt.
-    func semanticPrefixCheckpoints(_ request: ChatRequest, template: Inkling2ChatTemplate,
-                                   promptTokens: [Int], reusableTokens: Int) -> Set<Int> {
+    static let imageFeatureCacheMaxEntries = 16
+
+    /// The end of every message but the last, when it is an exact prefix of the prompt's key tokens.
+    /// Earlier messages hold the prompt's first images, in order.
+    func semanticPrefixCheckpoints(_ request: ChatRequest, template: Inkling2ChatTemplate, promptTokens: [Int],
+                                   imageMarkers: [Int], imageCounts: [Int]) -> Set<Int> {
         guard prefixKVCacheEnabled, request.messages.count > 1, let tokenizer else { return [] }
         let effort = request.reasoningEffort ?? 0.9
         guard let rendered = try? template.render(messages: Array(request.messages.dropLast()), tools: request.tools, effort: effort) else {
             return []
         }
-        let earlier = tokenizer.encode(text: rendered, addSpecialTokens: false)
-        guard earlier.count <= reusableTokens, promptTokens.starts(with: earlier) else { return [] }
+        let raw = tokenizer.encode(text: rendered, addSpecialTokens: false)
+        guard let earlier = Inkling2Prompt.keyTokens(raw: raw, images: zip(imageMarkers, imageCounts).map { ($0, $1) }),
+              promptTokens.starts(with: earlier) else { return [] }
         return RuntimePrefillCheckpointPlanner.normalizedCheckpoints([earlier.count], total: promptTokens.count)
+    }
+
+    /// The vision features of an image, encoded once while it stays among the recent images.
+    func cachedImageFeatures(_ image: MediaImage, marker: Int, model: Inkling2Model) throws -> MLXArray {
+        if let cached = imageFeatureCache[marker] {
+            imageFeatureOrder.removeAll { $0 == marker }
+            imageFeatureOrder.append(marker)
+            return cached
+        }
+        let encoded = try Inkling2Prompt.encode(image, model: model)
+        imageFeatureCache[marker] = encoded
+        imageFeatureOrder.append(marker)
+        while imageFeatureOrder.count > Self.imageFeatureCacheMaxEntries {
+            imageFeatureCache.removeValue(forKey: imageFeatureOrder.removeFirst())
+        }
+        return encoded
     }
 
     /// The longest stored prefix of this prompt, leaving at least one token to prefill.

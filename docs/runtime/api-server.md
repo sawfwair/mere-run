@@ -545,9 +545,11 @@ swift run mere.run api serve \
   and the stable conversation prefix before the final message. A checkpoint
   holds the attention KV and short-convolution state of each looped layer pass,
   plus the DSpark draft state when DSpark prefilled the prompt; a request
-  reuses only a checkpoint made the same way. Reuse stops before the first
-  image, and prefill after a reused prefix keeps the chunk boundaries of a cold
-  prefill. `/runtime/status` reports entries, hits, and reused tokens.
+  reuses only a checkpoint made the same way. A checkpoint can extend past
+  images and matches only a prompt with the same image pixels. The server also
+  keeps the vision features of the 16 most recent images, so an agent's
+  screenshots are encoded once. Prefill after a reused prefix keeps the chunk
+  boundaries of a cold prefill. `/runtime/status` reports entries, hits, and reused tokens.
 - Managed Gemma4 12B text and vision installs include the
   `text-chat-gemma4-12b-mtp` assistant companion. The API server uses it only
   for greedy serial decode-tail speculation after prefill; sampled requests,

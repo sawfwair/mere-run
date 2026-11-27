@@ -20,12 +20,19 @@ public final class Inkling2Model {
     private lazy var clipThresholds = MLXArray([config.textConfig.qkL2ClipThreshold, config.textConfig.relL2ClipThreshold])
     public var prefillChunkSize: Int { usePackedExperts ? 32 : 8 }
 
+    /// The longest prompt that prefills with 256-token chunks on M5 Max.
+    package static let longPrefillMaxTokens = 131_072
+
     package func prefillChunkSize(for tokenCount: Int) -> Int {
+        if let forced = ProcessInfo.processInfo.environment["MERERUN_INKLING2_PREFILL_CHUNK"].flatMap(Int.init),
+           (8...512).contains(forced) {
+            return forced
+        }
         #if os(macOS)
-        // Larger chunks reuse routed expert weights. Keep their attention workspace
-        // within the qualified server context.
+        // Larger chunks reuse routed expert weights. Through 131,072 tokens, 256-token chunks prefill
+        // 2.4-2.7x faster than 32-token chunks on M5 Max, and peak memory stays at MLX's cache limit.
         if usePackedExperts, Inkling2PackedExperts.reorderPrefill,
-           tokenCount > Inkling2DecodeAttention.maxKeys, tokenCount <= 32_768 {
+           tokenCount > Inkling2DecodeAttention.maxKeys, tokenCount <= Self.longPrefillMaxTokens {
             return 256
         }
         if usesSpeedPack, usePackedExperts, tokenCount > Inkling2DecodeAttention.maxKeys, tokenCount <= Inkling2MaskedAttention.maxKeys {
@@ -321,6 +328,14 @@ public final class Inkling2Model {
         #endif
         let relative = matmul(r.asType(.float32), profiles.asType(.float32))
         #if os(macOS)
+        if usesSpeedPack, usePackedExperts, !sharedCache.isVerifying, b == 1, n > 8,
+           d == 128, q.dtype == .bfloat16, stored.0.dtype == q.dtype, stored.1.dtype == q.dtype,
+           Inkling2BandedPrefill.enabled, !local || Inkling2BandedPrefill.localEnabled {
+            let attended = Inkling2BandedPrefill.apply(query: q, keys: stored.0, values: stored.1,
+                                                      relative: relative, sinks: projected.sinks, window: local ? extent : 0)
+            let gate = sigmoid(projected.gate.asType(.float32))
+            return try linear((attended.asType(.float32) * gate).asType(x.dtype), p + "wo_ud")
+        }
         if usePackedExperts, keyCount > Inkling2DecodeAttention.maxKeys, keyCount <= Inkling2MaskedAttention.maxKeys {
             let scores = Inkling2Math.groupedAttentionDots(query: q, keys: stored.0)
             let probabilities = Inkling2MaskedAttention.probabilities(
