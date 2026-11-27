@@ -66,6 +66,44 @@ public actor Inkling2Generator: ChatGenerator {
     }
 
     public func chat(_ request: ChatRequest, modelPath: String?, progressHandler: (@Sendable (ChatProgress) -> Void)? = nil) async throws -> ChatResponse {
+        var retries = 0
+        while true {
+            let attempt = try await generate(request, modelPath: modelPath, progressHandler: progressHandler)
+            if retries < Self.emptyReplyRetries(), Self.isEmptyToolReply(request, attempt) {
+                retries += 1
+                progressHandler?(ChatProgress(stage: .generating, message: "Retrying generation"))
+                continue
+            }
+            if request.showThinking, let reasoning = attempt.reasoning {
+                progressHandler?(ChatProgress(stage: .generating, event: .reasoning(reasoning)))
+            }
+            progressHandler?(ChatProgress(stage: .generating, event: .text(attempt.text)))
+            return attempt.response
+        }
+    }
+
+    /// One generated reply, before its reasoning and text are reported.
+    struct Attempt {
+        var response: ChatResponse
+        var reasoning: String?
+        var text: String
+    }
+
+    /// Inkling 2 sometimes ends a tool-using turn right after its reasoning, with no text and no tool
+    /// call. An agent reads that as the end of its task, so a sampled request with tools resamples it.
+    static func isEmptyToolReply(_ request: ChatRequest, _ attempt: Attempt) -> Bool {
+        guard request.tools?.isEmpty == false, request.temperature > 0, request.seed == nil,
+              attempt.response.finishReason == .stop else { return false }
+        return attempt.response.toolCalls?.isEmpty != false
+            && attempt.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Resamples for an empty tool reply. `MERERUN_INKLING2_EMPTY_REPLY_RETRIES` sets 0 through 5; the default is 2.
+    static func emptyReplyRetries(_ environment: [String: String] = ProcessInfo.processInfo.environment) -> Int {
+        environment["MERERUN_INKLING2_EMPTY_REPLY_RETRIES"].flatMap(Int.init).map { min(max($0, 0), 5) } ?? 2
+    }
+
+    private func generate(_ request: ChatRequest, modelPath: String?, progressHandler: (@Sendable (ChatProgress) -> Void)?) async throws -> Attempt {
         try await MLXRequestStreams.withStream(isolation: self) {
             try ChatRequestResolver.validate(request)
             let cacheMode = request.kvCacheMode ?? .default
@@ -178,10 +216,6 @@ public actor Inkling2Generator: ChatGenerator {
             }
             let parsed = Inkling2OutputParser.parse(tokenizer.decode(tokens: decoded.generatedTokens), tools: request.tools ?? [], parallel: request.parallelToolCalls)
             let trimmed = TextGenerationStopSequences.trimming(parsed.visible, sequences: request.stopSequences)
-            if request.showThinking, let reasoning = parsed.reasoning {
-                progressHandler?(ChatProgress(stage: .generating, event: .reasoning(reasoning)))
-            }
-            progressHandler?(ChatProgress(stage: .generating, event: .text(trimmed.text)))
             let visible = request.showThinking && parsed.reasoning != nil
                 ? "<think>\n\(parsed.reasoning ?? "")\n</think>\n\(trimmed.text)" : trimmed.text
             var response = ChatResponse(response: visible, tokensGenerated: decoded.generatedTokens.count,
@@ -191,7 +225,7 @@ public actor Inkling2Generator: ChatGenerator {
                 finishReason: trimmed.matchedSequence != nil ? .stopSequence : (decoded.generatedTokens.count == budget ? .length : .stop),
                 reasoningContent: parsed.reasoning, reasoningBlockCount: parsed.reasoning == nil ? 0 : 1, logprobs: decoded.logprobs)
             response.matchedStopSequence = trimmed.matchedSequence
-            return response
+            return Attempt(response: response, reasoning: parsed.reasoning, text: trimmed.text)
         }
     }
 
