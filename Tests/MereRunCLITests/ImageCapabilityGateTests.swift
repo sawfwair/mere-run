@@ -14,6 +14,8 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
 @Test func nemotronImageRoutesTextPromptsAndRejectsDiffusionAndEditFlags() throws {
     let command = ["image", "generate", "--model", "image-nemotron-labs-30b-a3b", "--prompt", "A lighthouse"]
     #expect(try report(command).family == "nemotron-image")
+    #expect(try report(["image", "generate", "--model", "image-nemotron-labs-30b-a3b-q8",
+                        "--prompt", "A lighthouse"]).family == "nemotron-image")
     #expect(try report(command + ["--width", "1184", "--height", "880", "--seed", "42"]).violations.isEmpty)
     for flags in [["--steps", "4"], ["--cfg", "2"], ["--input", "/tmp/edit.png"], ["--negative-prompt", "fog"]] {
         #expect(try report(command + flags).violations.count == 1)

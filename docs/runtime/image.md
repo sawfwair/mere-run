@@ -32,6 +32,18 @@ mere.run image generate --model image-nemotron-labs-30b-a3b \
   --width 1184 --height 880 --output ./lighthouse.png
 ```
 
+For managed Q8, review NVIDIA’s research and evaluation terms, then run:
+
+```bash
+mere.run model pull image-nemotron-labs-30b-a3b-q8 --accept-model-license
+mere.run image generate --model image-nemotron-labs-30b-a3b-q8 \
+  --prompt "A lighthouse reflected in still water" --output ./lighthouse.png
+```
+
+The pinned VisualInference download contains about 40.3 GB including the image decoder.
+The runtime reads its group-64 packed expert weights directly. Existing native Q8 exports
+also work under the same model ID.
+
 For a smaller local checkpoint, pack the routed experts at 8 or 4 bits. Both
 formats use affine groups of 64 and keep the other generator weights at BF16.
 The generator weights occupy 35.1 GiB at Q8 or 21.5 GiB at Q4. Allow additional

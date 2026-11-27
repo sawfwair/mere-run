@@ -6,6 +6,16 @@ import MLXNN
 enum NemotronImageCommunityPack {
     static let repository = "VisualInference/Nemotron-Labs-Image-30B-A3B-MLX-8bit"
 
+    static let revision = "e9ea81ae28322e58d20fd94fb3292e1fc7f36ece"
+    static let metadataFiles = ["config.json", "tokenizer.json", "tokenizer_config.json",
+                                "chat_template.jinja", "unitron_extension_manifest.json"]
+    static let files = metadataFiles + ["embed.npy", "head.safetensors", "vq/config.json", "vq/model.safetensors"]
+        + (0..<52).map { String(format: "layers-%02d.safetensors", $0) }
+
+    static func isPresent(at root: URL) -> Bool {
+        FileManager.default.fileExists(atPath: root.appending(path: "embed.npy").path)
+    }
+
     struct Config: Decodable {
         let recipe: [String: Recipe]
         enum CodingKeys: String, CodingKey { case recipe = "mlx_recipe" }

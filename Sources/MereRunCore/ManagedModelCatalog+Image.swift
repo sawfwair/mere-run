@@ -3,6 +3,16 @@ import Foundation
 extension ManagedModelCatalog {
     static let imageSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
+            id: ManagedModelID.nemotronImageQ8.rawValue, category: .image, installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(repoId: NemotronImageCommunityPack.repository, revision: NemotronImageCommunityPack.revision,
+                patterns: NemotronImageCommunityPack.files + ["LICENSE", "NOTICE", "README.md"]),
+            upstreamRepoId: NemotronImageCommunityPack.repository, upstreamRevision: NemotronImageCommunityPack.revision,
+            usageRestriction: usageRestriction(summary: "Licensed for non-commercial research and evaluation.",
+                license: "NVIDIA License", sourceRepoId: NemotronImageResources.repository, sourceRevision: NemotronImageResources.revision,
+                licenseURL: "https://huggingface.co/\(NemotronImageResources.repository)/blob/\(NemotronImageResources.revision)/LICENSE"),
+            validationKind: .nemotronImage, runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 40_317_799_235, defaultCLICommands: ["image generate"]),
+        ManagedModelSpec(
             id: ManagedModelID.nemotronImage.rawValue, category: .image, installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(repoId: NemotronImageResources.repository, revision: NemotronImageResources.revision,
                 patterns: NemotronImageResources.files + ["LICENSE", "NOTICE", "README.md"]),

@@ -4,6 +4,30 @@ import XCTest
 @testable import MereRunCore
 
 final class NemotronImageTests: MereRunCoreTestCase {
+    func testManagedQ8PinsTheCommunityPackAndRecognizesBothLayouts() throws {
+        let id = ManagedModelID.nemotronImageQ8.rawValue
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
+        XCTAssertEqual(spec.hubFallback?.revision, NemotronImageCommunityPack.revision)
+        XCTAssertNotNil(spec.usageRestriction)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        let template = MereRunModelManifest.template(for: .nemotronImageQ8)
+        XCTAssertEqual(try NemotronImageQuantization.expertBits(template), 8)
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        for file in NemotronImageCommunityPack.files {
+            let path = root.appending(path: file)
+            try FileManager.default.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data([1]).write(to: path)
+        }
+        XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
+        try FileManager.default.removeItem(at: root.appending(path: "layers-51.safetensors"))
+        XCTAssertEqual(spec.missingPaths(in: root).map(\.lastPathComponent), ["layers-51.safetensors"])
+        try FileManager.default.removeItem(at: root.appending(path: "embed.npy"))
+        try Data([1]).write(to: root.appending(path: "backbone.embeddings.safetensors"))
+        XCTAssertTrue(spec.missingPaths(in: root).contains(root.appending(path: "backbone.layers.51.safetensors")))
+    }
+
     func testLoadsSplitExpertsInNumericOrderAndTransposesDepthwiseConvolution() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

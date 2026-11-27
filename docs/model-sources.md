@@ -78,6 +78,7 @@ Use `mere.run guide --model text-chat-gemma4-26b-a4b-bf16` for its text workflow
 | Catalog category | Model ID |
 | --- | --- |
 | `image` | `image-nemotron-labs-30b-a3b` |
+| `image` | `image-nemotron-labs-30b-a3b-q8` |
 | `image` | `image-minimax-h3` |
 | `image` | `image-cosmos3-super-t2i-4step` |
 | `image` | `image-flux3-klein` |
@@ -315,6 +316,7 @@ validates all configured models before downloading any; both accept the same
 
 | Models | Upstream terms that require acceptance |
 | --- | --- |
+| `image-nemotron-labs-30b-a3b-q8` | NVIDIA License for non-commercial research and evaluation |
 | `image-nemotron-labs-30b-a3b` | NVIDIA License for non-commercial research and evaluation |
 | `image-minimax-h3` | MiniMax-H3-Image Community License; excludes the US, EU, UK, and Republic of Korea; revenue above USD 1 million or hosted services require separate authorization |
 | `image-flux3-klein` | FLUX Kommunity License v1.0; use restrictions, a Qualifying User commercial-output exception, and filtering or output-review conditions |

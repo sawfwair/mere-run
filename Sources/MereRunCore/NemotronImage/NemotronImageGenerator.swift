@@ -44,7 +44,8 @@ public struct NemotronImageGenerator: ImageGenerator {
         Memory.clearCache()
         try Task.checkCancellation()
         progress(.loadingVAE)
-        let decoder = try NemotronImageLoader.decoder(at: root.appending(path: NemotronImageResources.decoderDirectory))
+        let directory = NemotronImageCommunityPack.isPresent(at: root) ? "vq" : NemotronImageResources.decoderDirectory
+        let decoder = try NemotronImageLoader.decoder(at: root.appending(path: directory))
         progress(.decoding)
         let rgb = decoder.decode(MLXArray(codes), rows: request.height / 16, columns: request.width / 16)
         let image = try MediaImageIO.imageFromRGBHWC(rgb.asArray(UInt8.self), width: request.width, height: request.height)

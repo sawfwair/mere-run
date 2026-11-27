@@ -7,12 +7,20 @@ enum NemotronImageLoader {
     static func generator(at root: URL, config: NemotronHConfig) throws -> NemotronOmniCausalLM {
         let manifest = try MereRunModelManifest.loadIfPresent(from: root)
         let bits = try NemotronImageQuantization.expertBits(manifest)
+        let community = NemotronImageCommunityPack.isPresent(at: root)
+        if community {
+            try NemotronImageCommunityPack.checkRecipe(at: root, bits: bits ?? 0)
+        }
         let model = NemotronOmniCausalLM(config: config, expertBits: bits)
         let index = try bits == nil ? releasedIndex(at: root) : nil
         try visitModules(model) { module, prefix in
             let weights: [(String, MLXArray)]
             if let index {
                 weights = try releasedWeights(at: root, config: config, index: index, module: module, prefix: prefix)
+            } else if community {
+                let arrays = try NemotronImageCommunityPack.weights(at: root, prefix: prefix, module: module)
+                try NemotronImageQuantization.validate(arrays, for: module)
+                weights = Array(arrays)
             } else {
                 let file = NemotronImageQuantization.filename(prefix)
                 let arrays = try MLX.loadArrays(url: root.appending(path: file))

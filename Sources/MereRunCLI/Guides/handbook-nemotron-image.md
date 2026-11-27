@@ -16,6 +16,9 @@ mere.run image generate --model image-nemotron-labs-30b-a3b \
   --width 1184 --height 880 --seed 42 --output ./kayaks.png
 ```
 
+For the managed Q8 checkpoint, use `image-nemotron-labs-30b-a3b-q8` in both commands.
+It downloads about 40.3 GB including the decoder and uses the same NVIDIA license.
+
 ## Controls and variants
 
 Choose 1024×1024, 1184×880, 1248×832, or 880×1184 for a recommended canvas.
