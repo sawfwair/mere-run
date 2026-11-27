@@ -92,9 +92,8 @@ public actor Inkling2Generator: ChatGenerator {
             if let seed = request.seed { MLXRandom.seed(seed) }
             let context = min(request.maxContextTokens ?? Inkling2Resources.defaultContextLength, model.config.textConfig.modelMaxLength)
             let prefillStart = Date()
-            let prompt = try Inkling2Prompt.prepare(request, tokenizer: tokenizer, template: template) { image, marker in
-                try cachedImageFeatures(image, marker: marker, model: model)
-            }
+            let prompt = try Inkling2Prompt.prepare(request, tokenizer: tokenizer, template: template,
+                                                    generator: self, model: model)
             guard !prompt.tokens.isEmpty, prompt.tokens.count < context else {
                 throw ChatRequestIssue("max-context-tokens", "the complete Inkling 2 prompt must fit with space for output")
             }

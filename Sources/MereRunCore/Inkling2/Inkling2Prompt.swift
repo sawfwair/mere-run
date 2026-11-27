@@ -39,7 +39,7 @@ enum Inkling2Prompt {
     }
 
     static func prepare(_ request: ChatRequest, tokenizer: any Tokenizer, template: Inkling2ChatTemplate,
-                        encode: (MediaImage, Int) throws -> MLXArray) throws -> Prepared {
+                        generator: isolated Inkling2Generator, model: Inkling2Model) throws -> Prepared {
         let effort = request.reasoningEffort ?? 0.9
         guard effort.isFinite, (0...0.99).contains(effort) else { throw ChatRequestIssue("reasoning_effort", "must be between 0 and 0.99") }
         // The released template deliberately has no assistant generation suffix.
@@ -55,7 +55,7 @@ enum Inkling2Prompt {
                 guard message.role == .user || message.role == .tool else { throw ChatRequestIssue("image", "is only supported in user or tool messages") }
                 let image = try decodeImage(reference)
                 let marker = imageMarker(image)
-                features.append(try encode(image, marker))
+                features.append(try generator.cachedImageFeatures(image, marker: marker, model: model))
                 markers.append(marker)
             }
         }
