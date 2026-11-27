@@ -6,11 +6,6 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
-- Resample an Inkling 2 reply that ends a tool-using turn with neither text
-  nor a tool call. Inkling 2 sometimes stops right after its reasoning, and an
-  agent such as Pi reads that as the end of its task. Sampled requests with
-  tools retry up to twice; `MERERUN_INKLING2_EMPTY_REPLY_RETRIES` sets 0
-  through 5.
 - Extend Inkling 2 Mini Speed's compiled DSpark verifier to 131,072 tokens
   on M5 Max with 128 GiB of unified memory, including the generation budget.
   A matched 106,200-token prompt decoded at 65 tokens a second with the
@@ -24,6 +19,11 @@ The format is based on Keep a Changelog.
   about 450 tokens a second instead of about 170, a 105,000-token prompt at
   about 310, and peak memory doesn't rise. `MERERUN_INKLING2_PREFILL_CHUNK` overrides the chunk size, from 8
   through 512.
+- Resample an Inkling 2 reply that ends a tool-using turn with neither text
+  nor a tool call. Inkling 2 sometimes stops right after its reasoning, and an
+  agent such as Pi reads that as the end of its task. Sampled requests with
+  tools retry up to twice; `MERERUN_INKLING2_EMPTY_REPLY_RETRIES` sets 0
+  through 5.
 
 ## 0.78.0 - 2026-11-26
 
