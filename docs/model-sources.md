@@ -77,8 +77,8 @@ Use `mere.run guide --model text-chat-gemma4-26b-a4b-bf16` for its text workflow
 <!-- managed-model-catalog:start -->
 | Catalog category | Model ID |
 | --- | --- |
-| `image` | `image-nemotron-labs-30b-a3b` |
 | `image` | `image-nemotron-labs-30b-a3b-q8` |
+| `image` | `image-nemotron-labs-30b-a3b` |
 | `image` | `image-minimax-h3` |
 | `image` | `image-cosmos3-super-t2i-4step` |
 | `image` | `image-flux3-klein` |
