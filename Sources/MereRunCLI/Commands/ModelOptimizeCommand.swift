@@ -281,7 +281,7 @@ struct ModelOptimize: ParsableCommand {
                 || modelID == .miniMaxH3FL2VABF16MLX
                 || modelID == .miniMaxH3FL2VAQ8MLX
                 || modelID == .miniMaxH3Ref2VAMLX
-                || modelID == .nemotronImage
+                || modelID == .nemotronImage || modelID == .nemotronImageQ6 || modelID == .nemotronImageQ8
                 || modelID == .miniMaxH3Image
                 || modelID == .ltxVideo25DistilledBF16
                 || modelID == .ltxVideo25FullBF16
