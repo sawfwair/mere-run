@@ -550,6 +550,9 @@ swift run mere.run api serve \
   keeps the vision features of the 16 most recent images, so an agent's
   screenshots are encoded once. Prefill after a reused prefix keeps the chunk
   boundaries of a cold prefill. `/runtime/status` reports entries, hits, and reused tokens.
+- Inkling 2 chat accepts several images in one message and reads each image
+  after the first as its own message. `reasoning_effort: "none"` selects
+  effort level 0.
 - Managed Gemma4 12B text and vision installs include the
   `text-chat-gemma4-12b-mtp` assistant companion. The API server uses it only
   for greedy serial decode-tail speculation after prefill; sampled requests,

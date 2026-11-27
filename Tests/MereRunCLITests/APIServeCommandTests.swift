@@ -2666,6 +2666,56 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(chatRequest.messages[0].videoUrl, "file:///tmp/video.mp4")
     }
 
+    func testInkling2SplitsSeveralImagesIntoOneMessageEachAndMapsReasoningOff() throws {
+        let data = """
+        {
+          "model": "vision-chat-inkling-2-mini",
+          "reasoning_effort": "none",
+          "messages": [
+            { "role": "user", "content": "check the slides" },
+            {
+              "role": "user",
+              "content": [
+                { "type": "text", "text": "Attached image(s) from tool result:" },
+                { "type": "image_url", "image_url": { "url": "file:///tmp/one.png" } },
+                { "type": "image_url", "image_url": { "url": "file:///tmp/two.png" } },
+                { "type": "image_url", "image_url": { "url": "file:///tmp/three.png" } }
+              ]
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+        let request = try JSONDecoder().decode(OpenAIChatRequest.self, from: data)
+        let profile = ManagedModelAPIProfile.inkling2()
+        let capabilities = APIEngineCapabilities.catalog(profile)
+
+        XCTAssertTrue(capabilities.splitsImagesAcrossMessages)
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 131_072,
+            capabilities: capabilities,
+            servedModelID: "vision-chat-inkling-2-mini",
+            apiProfile: profile
+        )
+        XCTAssertEqual(chatRequest.messages.map(\.role), [.user, .user, .user, .user])
+        XCTAssertEqual(chatRequest.messages.map(\.content),
+                       ["check the slides", "Attached image(s) from tool result:", "", ""])
+        XCTAssertEqual(chatRequest.messages.map(\.imageUrl),
+                       [nil, "file:///tmp/one.png", "file:///tmp/two.png", "file:///tmp/three.png"])
+        XCTAssertEqual(chatRequest.reasoningEffort, 0)
+
+        let omni = APIEngineCapabilities.catalog(.nemotronOmni())
+        XCTAssertFalse(omni.splitsImagesAcrossMessages)
+        var plain = request
+        plain.reasoning_effort = nil
+        XCTAssertThrowsError(try APIServerContract.chatRequest(
+            from: plain, fallbackLoraPath: nil, contextSize: 131_072, capabilities: omni
+        )) { error in
+            XCTAssertTrue("\(error)".contains("only one image content part"), "\(error)")
+        }
+    }
+
     func testTextProfileRejectsAudioAndVideoContentParts() throws {
         for part in [
             "{ \"type\": \"audio_url\", \"audio_url\": { \"url\": \"file:///tmp/audio.wav\" } }",

@@ -40,8 +40,8 @@ extension APIServerContract {
             capabilities: capabilities
         )
 
-        var messages = try openaiRequest.messages.map { msg in
-            try chatMessage(from: msg, capabilities: capabilities)
+        var messages = try openaiRequest.messages.flatMap { msg in
+            try chatMessages(from: msg, capabilities: capabilities)
         }
         if let instruction = toolChoiceInstruction(
             choice: toolChoice,
@@ -158,9 +158,24 @@ extension APIServerContract {
         return true
     }
 
-    private static func chatMessage(
+    /// One message, or for an engine that splits images, one message per image: the first keeps
+    /// the text, tool fields, and first image, and each further image follows in its own message.
+    private static func chatMessages(
         from msg: OpenAIChatMessage,
         capabilities: APIEngineCapabilities
+    ) throws -> [ChatMessage] {
+        let images = msg.imageURLs
+        guard capabilities.splitsImagesAcrossMessages, capabilities.supportsVisionContentParts, images.count > 1 else {
+            return [try chatMessage(from: msg, capabilities: capabilities)]
+        }
+        let first = try chatMessage(from: msg, capabilities: capabilities, imageURL: images[0])
+        return [first] + images.dropFirst().map { ChatMessage(role: first.role, content: "", imageUrl: $0) }
+    }
+
+    private static func chatMessage(
+        from msg: OpenAIChatMessage,
+        capabilities: APIEngineCapabilities,
+        imageURL chosenImageURL: String? = nil
     ) throws -> ChatMessage {
         let normalizedRole = msg.role.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let role: ChatMessage.Role
@@ -188,7 +203,7 @@ extension APIServerContract {
             )
         }
 
-        let imageURL = try firstImageURL(from: msg, capabilities: capabilities)
+        let imageURL = try chosenImageURL ?? firstImageURL(from: msg, capabilities: capabilities)
         let audioURL = try firstAudioURL(from: msg, capabilities: capabilities)
         let videoURL = try firstVideoURL(from: msg, capabilities: capabilities)
         let content = capabilities.usesNativeToolHistory ? msg.content : renderMessageContent(msg)
@@ -596,7 +611,8 @@ extension APIServerContract {
         let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let level: ManagedModelThinkingLevel? = normalized == "none" ? .off : ManagedModelThinkingLevel(rawValue: normalized)
         if level == .off, profile?.thinkingLevels.contains(.off) == true {
-            return ReasoningOptions(thinking: false)
+            // A model whose template takes an effort level, such as Inkling 2, maps off to its own level.
+            return ReasoningOptions(strength: profile?.reasoningEffortStrengths[.off], thinking: false)
         }
         guard let level,
               let strength = profile?.reasoningEffortStrengths[level] else {

@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Accept several images in one message for Inkling 2 in `api serve`. Each
+  image after the first becomes its own message, so a Pi agent that calls
+  several screenshot tools in one turn no longer gets a 400 error.
+- Map `reasoning_effort: "none"` to Inkling 2's effort level 0 in `api serve`.
+  It previously left the effort unset, so Inkling 2 reasoned at its default
+  of 0.9.
 - Extend Inkling 2 Mini Speed's compiled DSpark verifier to 131,072 tokens
   on M5 Max with 128 GiB of unified memory, including the generation budget.
   A matched 106,200-token prompt decoded at 65 tokens a second with the

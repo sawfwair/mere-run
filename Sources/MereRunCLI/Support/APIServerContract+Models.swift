@@ -22,6 +22,9 @@ struct APIEngineCapabilities: Equatable, Sendable {
     var supportsRepetitionPenalty: Bool = false
     var supportsLogprobs: Bool = false
     var supportsProviderThinkingControls: Bool = false
+    /// Splits a message with several images into one message per image, for engines that take
+    /// one image per message but read images across messages, such as Inkling 2.
+    var splitsImagesAcrossMessages: Bool = false
 
     static func catalog(_ profile: ManagedModelAPIProfile) -> APIEngineCapabilities {
         APIEngineCapabilities(
@@ -48,7 +51,8 @@ struct APIEngineCapabilities: Equatable, Sendable {
                           .textChatDiffusionGemma].contains(profile.servingEngine),
             supportsRepetitionPenalty: [.textChatQ35, .textChatQ36, .textChatInkling2, .textChatFlint, .textChatKolibri].contains(profile.servingEngine),
             supportsLogprobs: profile.supportsLogprobs,
-            supportsProviderThinkingControls: profile.supportsProviderThinkingControls
+            supportsProviderThinkingControls: profile.supportsProviderThinkingControls,
+            splitsImagesAcrossMessages: profile.servingEngine == .textChatInkling2
         )
     }
 
