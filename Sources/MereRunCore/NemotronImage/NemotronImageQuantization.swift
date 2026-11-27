@@ -85,9 +85,11 @@ public enum NemotronImageQuantization {
             }
             manifest = .template(for: .nemotronImage)
             let metadata = source.appending(path: ".cache/huggingface/download/config.json.metadata")
-            let revision = (try? String(contentsOf: metadata, encoding: .utf8))?.split(separator: "\n").first
+            let installed = try MereRunModelManifest.loadIfPresent(from: source)
+            let revision = installed?.sources?.first { $0.repository == variant.repository }?.revision
+                ?? (try? String(contentsOf: metadata, encoding: .utf8))?.split(separator: "\n").first.map(String.init)
             manifest.sources = (manifest.sources ?? []) + [.init(role: "packed-generator-and-decoder", repository: variant.repository,
-                                      revision: revision.map(String.init) ?? "unspecified", destinationPath: ".")]
+                                      revision: revision ?? "unspecified", destinationPath: ".")]
             sourceModel = NemotronImageLoader.makeModel(config, bits: bits, mixed: variant == .mixed)
             index = nil
         } else {
