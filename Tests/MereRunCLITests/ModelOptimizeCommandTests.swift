@@ -22,6 +22,12 @@ final class ModelOptimizeCommandTests: XCTestCase {
         XCTAssertTrue(command.json)
     }
 
+    func testNemotronImageExpertPrecisionParses() throws {
+        let command = try ModelOptimize.parse(["image-nemotron-labs-30b-a3b", "--output", "/tmp/image-q4", "--bits", "4"])
+        XCTAssertEqual(command.bits, 4)
+        XCTAssertEqual(command.output, "/tmp/image-q4")
+    }
+
     func testH3ImageQ8ExportFlagsParse() throws {
         let command = try ModelOptimize.parse(["image-minimax-h3", "--output", "/tmp/image-minimax-h3-q8", "--json"])
         XCTAssertEqual(command.target, "image-minimax-h3")

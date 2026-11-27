@@ -140,7 +140,22 @@ public enum MereRunModelValidator {
         let vaeDir: URL?
         let tokenizerDir: URL?
 
-        if spec?.validationKind == .codegenGGUF
+        if let manifest, manifest.engine == .nemotronImage, manifest.precision != .bf16 {
+            do { _ = try NemotronImageQuantization.expertBits(manifest) } catch { errors.append(error.localizedDescription) }
+            let community = NemotronImageCommunityPack.isPresent(at: rootURL)
+            let files = community ? NemotronImageCommunityPack.files : NemotronImageResources.supportFiles + NemotronImageQuantization.files
+            for name in files {
+                let url = rootURL.appending(path: name)
+                var directory: ObjCBool = false
+                if !fileManager.fileExists(atPath: url.path, isDirectory: &directory) || directory.boolValue {
+                    errors.append("Missing Nemotron Image file: \(name).")
+                }
+            }
+            transformerDir = nil
+            textEncoderDir = nil
+            vaeDir = nil
+            tokenizerDir = nil
+        } else if spec?.validationKind == .codegenGGUF
             || spec?.validationKind == .deepseekV4FlashIMatrixGGUF {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
             transformerDir = nil
@@ -165,6 +180,7 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .gliner25Decide
             || spec?.validationKind == .qwenImage21
             || spec?.validationKind == .flux3
+            || spec?.validationKind == .nemotronImage
             || spec?.validationKind == .miniMaxH3Image
             || spec?.validationKind == .aceStep
             || spec?.validationKind == .aceStepLM
@@ -638,7 +654,7 @@ public enum MereRunModelValidator {
         }
         if supportsImagePipeline && !usesUnifiedImageTransformer && components.vae == nil { errors.append("Manifest components missing vae.") }
         if supportsImagePipeline && !usesUnifiedImageTransformer && manifest.engine != .flux3
-            && manifest.engine != .miniMaxH3Image && components.scheduler == nil {
+            && manifest.engine != .miniMaxH3Image && manifest.engine != .nemotronImage && components.scheduler == nil {
             errors.append("Manifest components missing scheduler.")
         }
     }

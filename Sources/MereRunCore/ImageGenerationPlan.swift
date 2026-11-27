@@ -20,7 +20,7 @@ public struct ImageGenerationSampling: Sendable, Equatable {
         let usesManifest: Bool
         switch manifest?.family {
         case .klein: usesManifest = policy.kleinUsesManifestDefaults
-        case .h3Image, .hidream, .senseNova, .krea, .ideogram, .flux1, .flux3, .cosmos: usesManifest = true
+        case .nemotronImage, .h3Image, .hidream, .senseNova, .krea, .ideogram, .flux1, .flux3, .cosmos: usesManifest = true
         case .qwen: usesManifest = manifest?.engine == .qwenImageEdit || manifest?.engine == .qwenImage21
         default: usesManifest = false
         }
@@ -220,7 +220,7 @@ public struct ImageGenerationPlan: Sendable {
             options.kreaBaseQuantizationBits != nil && manifest.family != .krea,
             "krea_quantization_unsupported", "--krea-base-quantization-bits is only supported for Krea 2 generation"
         )
-        if [.flux1, .krea, .ideogram].contains(manifest.family) {
+        if [.nemotronImage, .flux1, .krea, .ideogram].contains(manifest.family) {
             reject(options.inputImage != nil, "input_mode_unsupported", "\(manifest.id) does not support image-to-image generation.")
             reject(!options.referenceImages.isEmpty, "references_unsupported", "\(manifest.id) does not support reference images.")
         }
@@ -240,6 +240,18 @@ public struct ImageGenerationPlan: Sendable {
             manifest.family == .senseNova && (!options.width.isMultiple(of: 32) || !options.height.isMultiple(of: 32)),
             "dimensions_invalid", "SenseNova image dimensions must be multiples of 32."
         )
+        if manifest.engine == .nemotronImage {
+            reject(sampling.steps != 1 || sampling.guidanceScale != 1 || sampling.sigmaShift != nil,
+                   "sampling_unsupported", "Nemotron Image samples visual tokens without diffusion steps, CFG, or a sigma schedule.")
+            reject(options.negativePrompt?.isEmpty == false, "negative_prompt_unsupported", "Nemotron Image takes one positive prompt.")
+            reject(options.strength != nil, "strength_unsupported", "Nemotron Image generates from text.")
+            do { _ = try NemotronImageQuantization.expertBits(manifest) } catch {
+                reject(true, "model_precision_unsupported", error.localizedDescription)
+            }
+            reject(!NemotronImageTokens.supports(width: options.width, height: options.height),
+                   "dimensions_invalid", "Use positive multiples of 16 that fit the 4,352-token image budget.")
+            reject(options.outputURL.pathExtension.lowercased() != "png", "output_format_invalid", "Nemotron Image requires PNG output.")
+        }
         if manifest.engine == .miniMaxH3Image {
             reject(sampling.steps != 6, "steps_invalid", "MiniMax-H3-Image requires its fixed six-step PDD schedule.")
             reject(sampling.guidanceScale != 1, "cfg_invalid", "MiniMax-H3-Image requires CFG 1.")

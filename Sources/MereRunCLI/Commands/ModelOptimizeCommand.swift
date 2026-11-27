@@ -22,9 +22,12 @@ struct ModelOptimize: ParsableCommand {
 
     @Option(
         name: [.customLong("output")],
-        help: "For Nemotron Omni, DRAMA-3, or H3-Image Q8, write a standalone native checkpoint here."
+        help: "For Nemotron Image, Nemotron Omni, DRAMA-3, or H3-Image Q8, write a standalone native checkpoint here."
     )
     var output: String?
+
+    @Option(name: .long, help: "Nemotron Image routed expert precision (4, 6 or 8). Default: 6 with 8-bit dense projections for original weights, or the source recipe for packed weights.")
+    var bits: Int?
 
     @Flag(name: [.long], help: "Emit the result as JSON.")
     var json: Bool = false
@@ -33,7 +36,21 @@ struct ModelOptimize: ParsableCommand {
         let rootURL = try resolveRootURL()
         let artifacts: [URL]
         let optimization: String
-        if try MereRunModelManifest.loadIfPresent(from: rootURL)?.engine == .miniMaxH3Image {
+        let engine = try MereRunModelManifest.loadIfPresent(from: rootURL)?.engine
+        let isNemotronImage = engine == .nemotronImage || FileManager.default.fileExists(
+            atPath: rootURL.appending(path: "unitron_extension_manifest.json").path)
+        guard bits == nil || isNemotronImage else { throw ValidationError("--bits requires a Nemotron Image checkpoint.") }
+        if isNemotronImage {
+            guard let output, !output.isEmpty, !force, !textEncoderOnly else {
+                throw ValidationError("Nemotron Image export requires --output <new-directory>.")
+            }
+            try MLXBundleSupport.ensureAvailable(quiet: false)
+            artifacts = try NemotronImageQuantization.export(source: rootURL, destination: URL(fileURLWithPath: output),
+                bits: bits) { CLIStderr.write("Packing Nemotron Image \($0)\n") }
+            let manifest = try MereRunModelManifest.loadRequired(from: URL(fileURLWithPath: output))
+            guard let scheme = manifest.quantization?.scheme else { throw ValidationError("Missing exported quantization scheme.") }
+            optimization = scheme
+        } else if engine == .miniMaxH3Image {
             guard !textEncoderOnly, !force, let output, !output.isEmpty else {
                 throw ValidationError("H3-Image Q8 export requires --output <new-directory>; --force and --text-encoder-only are unsupported.")
             }
@@ -264,12 +281,13 @@ struct ModelOptimize: ParsableCommand {
                 || modelID == .miniMaxH3FL2VABF16MLX
                 || modelID == .miniMaxH3FL2VAQ8MLX
                 || modelID == .miniMaxH3Ref2VAMLX
+                || modelID == .nemotronImage || modelID == .nemotronImageQ6 || modelID == .nemotronImageQ8
                 || modelID == .miniMaxH3Image
                 || modelID == .ltxVideo25DistilledBF16
                 || modelID == .ltxVideo25FullBF16
                 || modelID == .nemotron3NanoOmni30BA3BBF16 else {
             throw ValidationError(
-                "Model optimization supports MiniMax-H3, H3-Image Q8, LTX 2.5, and Nemotron Omni models."
+                "Model optimization supports MiniMax-H3, H3-Image Q8, LTX 2.5, Nemotron Image, and Nemotron Omni models."
             )
         }
         do {

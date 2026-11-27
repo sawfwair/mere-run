@@ -1,7 +1,33 @@
 import Foundation
 
 extension ManagedModelCatalog {
+    private static func nemotronPack(_ id: ManagedModelID, _ variant: NemotronImageCommunityPack.Variant,
+                                     bytes: Int64) -> ManagedModelSpec {
+        ManagedModelSpec(
+            id: id.rawValue, category: .image, installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(repoId: variant.repository, revision: variant.revision,
+                patterns: NemotronImageCommunityPack.files + ["LICENSE", "NOTICE", "README.md"]),
+            upstreamRepoId: variant.repository, upstreamRevision: variant.revision,
+            usageRestriction: usageRestriction(summary: "Licensed for non-commercial research and evaluation.",
+                license: "NVIDIA License", sourceRepoId: NemotronImageResources.repository, sourceRevision: NemotronImageResources.revision,
+                licenseURL: "https://huggingface.co/\(NemotronImageResources.repository)/blob/\(NemotronImageResources.revision)/LICENSE"),
+            validationKind: .nemotronImage, runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: bytes, defaultCLICommands: ["image generate"])
+    }
+
     static let imageSpecs: [ManagedModelSpec] = [
+        nemotronPack(.nemotronImageQ6, .mixed, bytes: 30_751_843_293),
+        nemotronPack(.nemotronImageQ8, .q8, bytes: 40_317_799_235),
+        ManagedModelSpec(
+            id: ManagedModelID.nemotronImage.rawValue, category: .image, installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(repoId: NemotronImageResources.repository, revision: NemotronImageResources.revision,
+                patterns: NemotronImageResources.files + ["LICENSE", "NOTICE", "README.md"]),
+            upstreamRepoId: NemotronImageResources.repository, upstreamRevision: NemotronImageResources.revision,
+            usageRestriction: usageRestriction(summary: "Licensed for non-commercial research and evaluation.",
+                license: "NVIDIA License", sourceRepoId: NemotronImageResources.repository, sourceRevision: NemotronImageResources.revision,
+                licenseURL: "https://huggingface.co/\(NemotronImageResources.repository)/blob/\(NemotronImageResources.revision)/LICENSE"),
+            validationKind: .nemotronImage, runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 133_127_898_754, defaultCLICommands: ["image generate"]),
         ManagedModelSpec(
             id: MiniMaxH3ImageResources.modelID, category: .image, installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(repoId: MiniMaxH3ImageResources.repository,

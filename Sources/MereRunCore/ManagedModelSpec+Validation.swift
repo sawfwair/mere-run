@@ -121,6 +121,18 @@ public extension ManagedModelSpec {
         switch validationKind {
         case .flux1:
             return Flux1Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .nemotronImage:
+            let files: [String]
+            if id == ManagedModelID.nemotronImageQ6.rawValue || id == ManagedModelID.nemotronImageQ8.rawValue {
+                let native = fileManager.fileExists(atPath: rootURL.appending(path: "backbone.embeddings.safetensors").path)
+                files = native ? NemotronImageResources.supportFiles + NemotronImageQuantization.files : NemotronImageCommunityPack.files
+            } else {
+                files = NemotronImageResources.files
+            }
+            return files.map { rootURL.appending(path: $0) }.filter {
+                var directory: ObjCBool = false
+                return !fileManager.fileExists(atPath: $0.path, isDirectory: &directory) || directory.boolValue
+            }
         case .miniMaxH3Image:
             return MiniMaxH3ImageResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .flux3:

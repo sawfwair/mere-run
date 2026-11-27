@@ -75,6 +75,23 @@ extension MereRunModelManifest {
         return sources.isEmpty ? nil : sources
     }
 
+    private static func nemotronImageTemplate(for modelID: ModelResolver.ModelID, createdAt: Date) -> MereRunModelManifest {
+        var manifest = MereRunModelManifest(
+            id: modelID.rawValue, engine: .nemotronImage, family: .nemotronImage,
+            tier: .latest, variant: .base, precision: .bf16,
+            defaults: Defaults(steps: 1, cfg: 1), supports: [.txt2img],
+            components: Components(tokenizer: .local(path: "."), textEncoder: .local(path: "."),
+                transformer: .local(path: "."), vae: .local(path: NemotronImageResources.decoderDirectory), scheduler: nil),
+            upstreamRepoId: "\(NemotronImageResources.repository)@\(NemotronImageResources.revision)", createdAt: createdAt)
+        guard modelID != .nemotronImage else { return manifest }
+        let variant: NemotronImageCommunityPack.Variant = modelID == .nemotronImageQ6 ? .mixed : .q8
+        manifest.precision = variant == .mixed ? .int6 : .int8
+        manifest.quantization = Quantization(bits: variant.rawValue, groupSize: 64, scheme: variant.scheme)
+        manifest.components?.vae = .local(path: "vq")
+        manifest.upstreamRepoId = "\(variant.repository)@\(variant.revision)"
+        return manifest
+    }
+
     private static func baseTemplate(for modelID: ModelResolver.ModelID, createdAt: Date) -> MereRunModelManifest {
         let defaultComponents = Components(
             tokenizer: .local(path: "tokenizer"),
@@ -1410,6 +1427,8 @@ extension MereRunModelManifest {
                 upstreamRepoId: "\(Krea2Resources.upstreamRepoId)@\(Krea2Resources.upstreamRevision)",
                 createdAt: createdAt
             )
+        case .nemotronImage, .nemotronImageQ6, .nemotronImageQ8:
+            return nemotronImageTemplate(for: modelID, createdAt: createdAt)
         case .miniMaxH3Image:
             return MereRunModelManifest(
                 id: modelID.rawValue, engine: .miniMaxH3Image, family: .h3Image,

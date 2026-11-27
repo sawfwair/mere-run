@@ -2181,6 +2181,7 @@ extension CommandFlags {
 
         package static let textEncoderOnly = "--text-encoder-only"
         package static let force = "--force"
+        package static let bits = "--bits"
         package static let output = "--output"
         package static let json = "--json"
     }

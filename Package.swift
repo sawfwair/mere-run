@@ -956,6 +956,7 @@ targets.append(
       "MuseGlimmer/README.md",
       "NemotronH/README.md",
       "NemotronBolt/README.md",
+      "NemotronImage/README.md",
       "NemotronOmni/README.md",
       "LFM2/README.md",
       "LightOnOCR/README.md",

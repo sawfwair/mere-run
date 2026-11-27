@@ -17,6 +17,46 @@ mere.run image generate --prompt "A ceramic mug in soft morning light" \
 The command prints the output path to stdout. Progress and diagnostics go to
 stderr.
 
+## Nemotron Labs Image 30B-A3B
+
+The native raster generator samples visual tokens with the Nemotron-H model and
+decodes them into a PNG with the L24SQ decoder. The recommended checkpoint uses
+6-bit routed experts and 8-bit dense projections, including the shared experts and
+output head. It downloads 30.75 GB. Review NVIDIA’s non-commercial research and
+evaluation terms before installing it. [NVIDIA model card](https://huggingface.co/nvidia/Nemotron-Labs-Image-30B-A3B)
+
+```bash
+mere.run model pull image-nemotron-labs-30b-a3b-q6 --accept-model-license
+mere.run image generate --model image-nemotron-labs-30b-a3b-q6 \
+  --prompt "A lighthouse reflected in still water" --seed 42 --output ./lighthouse.png
+```
+
+Six matched 1024 × 1024 attempts on a 128 GiB M5 Max peaked at 26.90 GiB for Q6
+and 35.82 GiB for Q8. The Q6 result leaves an estimated 9.10 GiB on a 36 GiB Mac.
+Both checkpoints completed four renders. A blind reviewer preferred each checkpoint
+once and split its vote on the other two pairs when their positions were reversed.
+
+To use Q8, specify `image-nemotron-labs-30b-a3b-q8` when pulling and generating.
+Q8 downloads 40.32 GB and keeps dense projections in BF16. The original FP32
+download (`image-nemotron-labs-30b-a3b`, about 133 GB) runs in BF16.
+The managed quantized downloads read the publisher’s packed tensors directly.
+[Pinned Q6 checkpoint](https://huggingface.co/VisualInference/Nemotron-Labs-Image-30B-A3B-MLX-6bit/tree/42b90afa978f4a4564b72b203e7e7669dcf3f36c)
+
+To export a local mixed checkpoint from the original weights:
+
+```bash
+mere.run model optimize image-nemotron-labs-30b-a3b --output ./nemotron-image-q6
+```
+
+On original weights, `--bits 6` is the default. Use `--bits 8` or `--bits 4`
+to quantize only the routed experts. When importing a supported packed download,
+the exporter preserves its source precision.
+
+Use a text prompt and dimensions divisible by 16. The model samples at
+temperature 0.9 with a budget of 4,352 tokens, including row markers and the
+size header. The recommended sizes are 1024×1024, 1184×880, 1248×832, and
+880×1184. A malformed or incomplete grid produces a generation error.
+
 ## Commands
 
 | Command | What it does |
@@ -55,6 +95,9 @@ models. Choose **Use model default** to clear it. For example, Qwen Image Edit
 | `image-klein-base-9b` | Undistilled FLUX.2 Klein 9B base for LoRA training | 50, 1 | 51.5 GB | 64 / 96 GB |
 | `image-bonsai-binary` | Smallest Klein deployment (1-bit) | 4, 1 | 3.4 GB | 16 / 24 GB |
 | `image-bonsai-ternary` | Compact Klein deployment (2-bit) | 4, 1 | 3.9 GB | 12 / 16 GB |
+| `image-nemotron-labs-30b-a3b-q6` | Recommended Nemotron Image | 6-bit experts, 8-bit dense | 30.75 GB | 36 GB (estimated) |
+| `image-nemotron-labs-30b-a3b-q8` | Nemotron Image Q8 | 8-bit experts, BF16 dense | 40.32 GB | 48 / 64 GB (estimates) |
+| `image-nemotron-labs-30b-a3b` | Autoregressive text-to-image with L24SQ decoding | Visual token sampling | 133 GB | 80 / 96 GB (estimates) |
 | `image-minimax-h3` | Six-step MiniMax-H3-Image generation and up to 16 references; 2K and 4K text-to-image qualified | 6, 1 | About 135 GB | 96 / 128 GB (estimates) |
 | `image-flux3-klein` | Experimental FLUX 3 Klein generation and up to 10 references | 16, 1 | 20.3 GB | 32 / 48 GB |
 | `image-flux1-dev` | Gated FLUX.1-dev with FLUX.1 LoRAs | 28, 3.5 | 34.0 GB | 48 / 64 GB |

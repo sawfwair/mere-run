@@ -122,7 +122,9 @@ public struct NemotronOmniLanguageConfig: Decodable, Sendable, Hashable {
         }
     }
 
-    var runtimeConfig: NemotronHConfig {
+    var runtimeConfig: NemotronHConfig { runtimeConfig(minimumTimeStep: timeStepMin) }
+
+    func runtimeConfig(minimumTimeStep: Float) -> NemotronHConfig {
         NemotronHConfig(
             modelType: modelType,
             vocabSize: vocabSize,
@@ -139,7 +141,7 @@ public struct NemotronOmniLanguageConfig: Decodable, Sendable, Hashable {
             ssmStateSize: ssmStateSize,
             nGroups: nGroups,
             convKernel: convKernel,
-            timeStepMin: timeStepMin,
+            timeStepMin: minimumTimeStep,
             timeStepMax: timeStepMax,
             nRoutedExperts: nRoutedExperts,
             nSharedExperts: nSharedExperts,

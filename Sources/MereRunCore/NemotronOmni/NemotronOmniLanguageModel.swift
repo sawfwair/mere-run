@@ -39,7 +39,7 @@ struct NemotronOmniExpertRoutePlan: Equatable {
     }
 }
 
-/// BF16 routed experts used by the Omni checkpoint. The source checkpoint
+/// Routed experts shared by the Omni and Image checkpoints. The source checkpoint
 /// publishes one tensor per expert; the loader stacks those tensors lazily so
 /// MLX can issue gather matmuls for only the six selected experts per token.
 final class NemotronOmniExperts: Module {
@@ -64,6 +64,16 @@ final class NemotronOmniExperts: Module {
         )
     }
 
+    init(config: NemotronHConfig, bits: Int) {
+        func projection(_ input: Int, _ output: Int) -> Q35SwitchLinear {
+            Q35SwitchLinear(inputDims: input, outputDims: output, numExperts: config.nRoutedExperts,
+                            groupSize: 64, bits: bits, quantized: true, bias: false)
+        }
+        self._upProjection.wrappedValue = projection(config.hiddenSize, config.moeIntermediateSize)
+        self._downProjection.wrappedValue = projection(config.moeIntermediateSize, config.hiddenSize)
+        super.init()
+    }
+
     init(upWeight: MLXArray, downWeight: MLXArray) {
         self._upProjection.wrappedValue = Q35SwitchLinear(
             weight: upWeight,
@@ -85,8 +95,12 @@ final class NemotronOmniExperts: Module {
     }
 
     func callAsFunction(_ input: MLXArray, indices: MLXArray) -> MLXArray {
-        let projected = upProjection(input, indices: indices)
-        return downProjection(Self.activated(projected), indices: indices)
+        // MLX's CPU affine gather accumulates in the input dtype. Use FP32
+        // accumulation there and round at the same projection boundaries as Metal.
+        let dtype: DType = upProjection.scales != nil && Device.defaultDevice().deviceType == .cpu
+            ? .float32 : input.dtype
+        let projected = upProjection(input.asType(dtype), indices: indices).asType(input.dtype)
+        return downProjection(Self.activated(projected).asType(dtype), indices: indices).asType(input.dtype)
     }
 
     /// Multitoken prefill. `rows` is `[tokens, hidden]`; the result is
@@ -151,9 +165,10 @@ final class NemotronOmniMoE: NemotronHMixer {
     @ModuleInfo(key: "experts") var experts: NemotronOmniExperts
     @ModuleInfo(key: "shared_experts") var sharedExperts: NemotronOmniSharedExpert
 
-    init(config: NemotronHConfig) {
+    init(config: NemotronHConfig, expertBits: Int? = nil) {
         self._gate.wrappedValue = NemotronHRouter(config: config)
-        self._experts.wrappedValue = NemotronOmniExperts(config: config)
+        self._experts.wrappedValue = expertBits.map { NemotronOmniExperts(config: config, bits: $0) }
+            ?? NemotronOmniExperts(config: config)
         self._sharedExperts.wrappedValue = NemotronOmniSharedExpert(config: config)
         super.init()
     }
@@ -162,7 +177,7 @@ final class NemotronOmniMoE: NemotronHMixer {
         _ input: MLXArray,
         cache: NemotronHLayerCache?
     ) -> MLXArray {
-        guard input.ndim == 3, input.dim(1) > 1 else {
+        guard experts.upProjection.scales == nil, input.ndim == 3, input.dim(1) > 1 else {
             return mixedOutput(input)
         }
         return prefillOutput(input)
@@ -201,7 +216,7 @@ final class NemotronOmniLanguageBlock: Module {
     @ModuleInfo(key: "norm") var norm: RMSNorm
     @ModuleInfo(key: "mixer") var mixer: NemotronHMixer
 
-    init(config: NemotronHConfig, blockType: String) {
+    init(config: NemotronHConfig, blockType: String, expertBits: Int? = nil) {
         self._norm.wrappedValue = RMSNorm(
             dimensions: config.hiddenSize,
             eps: config.normEps
@@ -209,7 +224,7 @@ final class NemotronOmniLanguageBlock: Module {
         switch blockType {
         case "mamba": self._mixer.wrappedValue = NemotronHMamba(config: config)
         case "attention": self._mixer.wrappedValue = NemotronHAttention(config: config)
-        case "moe": self._mixer.wrappedValue = NemotronOmniMoE(config: config)
+        case "moe": self._mixer.wrappedValue = NemotronOmniMoE(config: config, expertBits: expertBits)
         default: preconditionFailure("Unknown Nemotron Omni block type: \(blockType)")
         }
         super.init()
@@ -228,13 +243,13 @@ final class NemotronOmniLanguageBackbone: Module {
     @ModuleInfo(key: "layers") var layers: [NemotronOmniLanguageBlock]
     @ModuleInfo(key: "norm_f") var finalNorm: RMSNorm
 
-    init(config: NemotronHConfig) {
+    init(config: NemotronHConfig, expertBits: Int? = nil) {
         self._embeddings.wrappedValue = Embedding(
             embeddingCount: config.vocabSize,
             dimensions: config.hiddenSize
         )
         self._layers.wrappedValue = config.layersBlockType.map {
-            NemotronOmniLanguageBlock(config: config, blockType: $0)
+            NemotronOmniLanguageBlock(config: config, blockType: $0, expertBits: expertBits)
         }
         self._finalNorm.wrappedValue = RMSNorm(
             dimensions: config.hiddenSize,
@@ -274,9 +289,9 @@ public final class NemotronOmniCausalLM: Module, @unchecked Sendable {
 
     let config: NemotronHConfig
 
-    init(config: NemotronHConfig) {
+    init(config: NemotronHConfig, expertBits: Int? = nil) {
         self.config = config
-        self._backbone.wrappedValue = NemotronOmniLanguageBackbone(config: config)
+        self._backbone.wrappedValue = NemotronOmniLanguageBackbone(config: config, expertBits: expertBits)
         self._lmHead.wrappedValue = Linear(config.hiddenSize, config.vocabSize, bias: false)
         super.init()
     }
