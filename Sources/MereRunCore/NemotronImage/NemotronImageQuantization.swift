@@ -9,8 +9,8 @@ public enum NemotronImageQuantization {
     static func expertBits(_ manifest: MereRunModelManifest?) throws -> Int? {
         guard let manifest else { return nil }
         if manifest.precision == .bf16, manifest.quantization == nil { return nil }
-        let bits = manifest.precision == .int8 ? 8 : 4
-        guard [.int8, .int4].contains(manifest.precision), let quant = manifest.quantization,
+        let precisionBits: [MereRunModelManifest.Precision: Int] = [.int4: 4, .int6: 6, .int8: 8]
+        guard let precision = manifest.precision, let bits = precisionBits[precision], let quant = manifest.quantization,
               quant.scheme == scheme, quant.groupSize == 64, quant.bits == bits else {
             throw NemotronImageResources.invalid("Expected a BF16 or group-64 affine expert checkpoint.")
         }
@@ -57,8 +57,8 @@ public enum NemotronImageQuantization {
     public static func export(source: URL, destination: URL, bits: Int,
                               progress: (String) -> Void) throws -> [URL] {
         let fm = FileManager.default
-        guard [4, 8].contains(bits), !fm.fileExists(atPath: destination.path) else {
-            throw NemotronImageResources.invalid("Choose 4 or 8 bits and a new output directory.")
+        guard [4, 6, 8].contains(bits), !fm.fileExists(atPath: destination.path) else {
+            throw NemotronImageResources.invalid("Choose 4, 6 or 8 bits and a new output directory.")
         }
         let config = try NemotronImageResources.languageConfig(at: source)
         let community = fm.fileExists(atPath: source.appending(path: "embed.npy").path)
@@ -120,7 +120,11 @@ public enum NemotronImageQuantization {
             names.append(to)
         }
         manifest.id = destination.lastPathComponent
-        manifest.precision = bits == 8 ? .int8 : .int4
+        switch bits {
+        case 8: manifest.precision = .int8
+        case 6: manifest.precision = .int6
+        default: manifest.precision = .int4
+        }
         manifest.quantization = .init(bits: bits, groupSize: 64, scheme: scheme)
         manifest.createdAt = Date()
         try manifest.write(to: staging)

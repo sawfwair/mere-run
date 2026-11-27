@@ -26,7 +26,7 @@ struct ModelOptimize: ParsableCommand {
     )
     var output: String?
 
-    @Option(name: .long, help: "Nemotron Image routed expert precision (4 or 8, default 8).")
+    @Option(name: .long, help: "Nemotron Image routed expert precision (4, 6 or 8, default 8).")
     var bits: Int?
 
     @Flag(name: [.long], help: "Emit the result as JSON.")

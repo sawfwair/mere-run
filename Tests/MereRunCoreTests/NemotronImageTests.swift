@@ -94,7 +94,7 @@ final class NemotronImageTests: MereRunCoreTestCase {
                     : values.reshaped(parameter.shape).asType(.bfloat16))
         }
         try dense.update(parameters: .unflattened(parameters), verify: .all)
-        for bits in [4, 8] {
+        for bits in [4, 6, 8] {
             let packed = NemotronOmniLanguageBlock(config: config, blockType: "moe", expertBits: bits)
             let weights = NemotronImageQuantization.pack(parameters, bits: bits)
             try NemotronImageQuantization.validate(weights, for: packed)
