@@ -328,11 +328,11 @@ public final class Inkling2Model {
         #endif
         let relative = matmul(r.asType(.float32), profiles.asType(.float32))
         #if os(macOS)
-        if usesSpeedPack, usePackedExperts, !local, !sharedCache.isVerifying, b == 1, n > 8,
+        if usesSpeedPack, usePackedExperts, !sharedCache.isVerifying, b == 1, n > 8,
            d == 128, q.dtype == .bfloat16, stored.0.dtype == q.dtype, stored.1.dtype == q.dtype,
-           Inkling2BandedPrefill.enabled {
+           Inkling2BandedPrefill.enabled, !local || Inkling2BandedPrefill.localEnabled {
             let attended = Inkling2BandedPrefill.apply(query: q, keys: stored.0, values: stored.1,
-                                                      relative: relative, sinks: projected.sinks)
+                                                      relative: relative, sinks: projected.sinks, window: local ? extent : 0)
             let gate = sigmoid(projected.gate.asType(.float32))
             return try linear((attended.asType(.float32) * gate).asType(x.dtype), p + "wo_ud")
         }

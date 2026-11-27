@@ -4,7 +4,22 @@ import MLX
 #if os(macOS)
 /// Request-local verification graphs with a fixed-shape global attention cache.
 final class Inkling2CompiledVerifier {
-    static let capacityLimit = 16_384
+    static let capacityLimit = resolveCapacityLimit(
+        override: ProcessInfo.processInfo.environment["MERERUN_INKLING2_LONG_DSPARK"],
+        architecture: GPU.deviceInfo().architecture, physicalMemory: ProcessInfo.processInfo.physicalMemory
+    )
+
+    static func resolveCapacityLimit(override: String?, architecture: String, physicalMemory: UInt64) -> Int {
+        switch override {
+        case "0": return 16_384
+        case "1": return 49_152
+        case "131072": return 131_072
+        default:
+            return architecture == "applegpu_g17s" && physicalMemory >= 128 * 1_024 * 1_024 * 1_024
+                ? 131_072 : 16_384
+        }
+    }
+
     static let supportedWidths = 4...8
     private static let convolutionCount = 4
     private static let arraysPerLayer = 2 + convolutionCount

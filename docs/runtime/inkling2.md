@@ -97,8 +97,11 @@ this file use standard decoding. To enable drafting for an older checkpoint,
 add the draft weights to its directory. [Official Mini draft weights](https://huggingface.co/thinkingmachines/Inkling-2-Mini/blob/ed40e7da625f594fc9c4990f5f66be24873c22d7/mtp.safetensors)
 
 For eligible text and image requests, Speed uses a compiled verifier for
-contexts up to 16,384 tokens, including the prompt and generation budget.
-Longer requests use the dynamic verifier.
+contexts up to 131,072 tokens on M5 Max with 128 GiB of unified memory and up
+to 16,384 tokens on other hosts. The limit includes the prompt and the
+generation budget. Set `MERERUN_INKLING2_LONG_DSPARK` to `0`, `1`, or
+`131072` to select a limit of 16,384, 49,152, or 131,072 tokens. Requests
+beyond the active limit use the dynamic verifier.
 
 ### Try experimental LoopCD guidance
 
@@ -182,6 +185,8 @@ rounding can change sampled tokens.
 Set `MERERUN_INKLING2_NAX_PREFILL=1` to try tiled global attention during
 Inkling 2 Mini Speed prefill on M5 Max. This experimental path computes the
 relative bias and causal mask inside the Metal kernel.
+With global NAX enabled, set `MERERUN_INKLING2_NAX_LOCAL_PREFILL=1` to try
+the same kernel on sliding-window layers.
 Constrained JSON output, quantized attention caches, audio, and video are unavailable.
 
 ## Fine-tune Inkling 2 Mini

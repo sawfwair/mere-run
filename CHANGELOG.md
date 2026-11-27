@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Extend Inkling 2 Mini Speed's compiled DSpark verifier to 131,072 tokens
+  on M5 Max with 128 GiB of unified memory, including the generation budget.
+  A matched 106,200-token prompt decoded at 65 tokens a second with the
+  compiled verifier and 23 with the dynamic verifier.
 - Reuse Inkling 2 prompt prefixes past images in `api serve`. A cached prefix
   matches only a prompt with the same image pixels, and the vision features of
   the 16 most recent images are kept, so an agent that looks at screenshots no

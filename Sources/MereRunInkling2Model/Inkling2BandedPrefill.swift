@@ -8,6 +8,7 @@ import MLX
 enum Inkling2BandedPrefill {
     static let enabled = ProcessInfo.processInfo.environment["MERERUN_INKLING2_NAX_PREFILL"] == "1"
         && GPU.deviceInfo().architecture == "applegpu_g17s"
+    static let localEnabled = ProcessInfo.processInfo.environment["MERERUN_INKLING2_NAX_LOCAL_PREFILL"] == "1"
 
     private static let kernel = MLXFast.metalKernel(
         name: "mererun_inkling2_nax_banded_prefill",
@@ -28,7 +29,7 @@ enum Inkling2BandedPrefill {
     )
 
     static func apply(query: MLXArray, keys: MLXArray, values: MLXArray, relative: MLXArray,
-                      sinks: MLXArray) -> MLXArray {
+                      sinks: MLXArray, window: Int = 0) -> MLXArray {
         let rows = query.dim(1), heads = query.dim(2), width = query.dim(3)
         let keyRows = keys.dim(2)
         let queryGroups = (rows + 31) / 32, keyGroups = (keyRows + 31) / 32
@@ -45,7 +46,7 @@ enum Inkling2BandedPrefill {
                 1, heads, width, rows, keyRows, heads / keys.dim(1),
                 Int(Int32(bitPattern: (1 / sqrt(Float(width))).bitPattern)),
                 queryGroups, keyGroups, rows / 32, keyRows / 32, rows % 32, keyRows % 32, keyRows - rows,
-                pass * keyGroups / passes, (pass + 1) * keyGroups / passes, relative.dim(-1), 0, 0,
+                pass * keyGroups / passes, (pass + 1) * keyGroups / passes, relative.dim(-1), window, 0,
             ]
             let params = MLXArray(scalars.map(Int32.init)).view(dtype: .uint8)
             let results = kernel(

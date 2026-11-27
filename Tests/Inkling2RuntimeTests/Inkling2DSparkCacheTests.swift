@@ -4,6 +4,22 @@ import XCTest
 @testable import MereRunInkling2Model
 
 final class Inkling2DSparkCacheTests: MLXTestCase {
+    #if os(macOS)
+    func testCompiledVerifierLimitUsesQualifiedHardwareAndExplicitOverrides() {
+        let memory: UInt64 = 128 * 1_024 * 1_024 * 1_024
+        XCTAssertEqual(Inkling2CompiledVerifier.resolveCapacityLimit(override: nil, architecture: "applegpu_g17s",
+                                                             physicalMemory: memory), 131_072)
+        XCTAssertEqual(Inkling2CompiledVerifier.resolveCapacityLimit(override: nil, architecture: "applegpu_g17s",
+                                                             physicalMemory: memory / 2), 16_384)
+        XCTAssertEqual(Inkling2CompiledVerifier.resolveCapacityLimit(override: nil, architecture: "applegpu_g16s",
+                                                             physicalMemory: memory), 16_384)
+        for (override, expected) in [("0", 16_384), ("1", 49_152), ("131072", 131_072)] {
+            XCTAssertEqual(Inkling2CompiledVerifier.resolveCapacityLimit(override: override, architecture: "applegpu_g17s",
+                                                                 physicalMemory: memory), expected)
+        }
+    }
+    #endif
+
     func testAdaptiveDepthUsesReachedPositionsAndLeavesOverridesFixed() {
         var low = Inkling2DSparkDepth(maximum: 7, fixedDepth: nil)
         for _ in 0..<4 { low.observe(proposed: 3, accepted: 0) }
