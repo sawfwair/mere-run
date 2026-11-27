@@ -189,6 +189,11 @@ With global NAX enabled, set `MERERUN_INKLING2_NAX_LOCAL_PREFILL=1` to try
 the same kernel on sliding-window layers.
 Constrained JSON output, quantized attention caches, audio, and video are unavailable.
 
+A sampled request with tools resamples a reply that has neither text nor a
+tool call, up to twice. Inkling 2 sometimes ends its turn right after its
+reasoning, which an agent would read as the end of its task. Set
+`MERERUN_INKLING2_EMPTY_REPLY_RETRIES` from 0 through 5 to change the count.
+
 ## Fine-tune Inkling 2 Mini
 
 Train an output-head LoRA from a chat JSONL file. Each record lists its sources, starts with a system message, and ends with the
