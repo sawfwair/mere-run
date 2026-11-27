@@ -20,7 +20,8 @@ Core retains resource loading and generation for these families.
 - `ChatRequestResolution.swift`: shared chat sampling defaults and numeric
   validation, with explicit CLI and OpenAI compatibility policies.
 - `NativeChatRuntime*.swift` and `ChatGenerationOperation.swift`: shared native
-  chat selection, invocation, diagnostics, and awaited operation cleanup.
+  chat selection, adapter protocol dispatch (`NativeChatRuntime+Adapters.swift`),
+  invocation, diagnostics, and awaited operation cleanup.
 - `ImageGenerationOptions.swift` and `ImageGenerationPlan.swift`: typed image
   inputs, model selection, effective sampling, conditioning, and validation.
 - `ImageGenerationOperation.swift`: image preparation, executor invocation,
@@ -47,14 +48,17 @@ Core retains resource loading and generation for these families.
   `DepthAnything3/`, and `VideoDepth/VDA/`: shared CLI/API settings, preparation,
   execution, and awaited per-request cleanup. DA3 also owns scene export.
 - `ManagedModelCatalog.swift`: ordered catalog assembly and model lookup.
-  `ManagedModelCatalog+*.swift` keeps definitions, pinned sources, and usage terms
-  with their model families. Companion models remain discoverable by lookup
-  without appearing in the public inventory.
-- `ManagedModelSpec.swift` and `ManagedModelAPIProfile.swift`: model metadata
-  and API capability profiles. `ManagedModelSpec+Validation.swift` owns installed
-  root normalization, artifact validation, conversion guidance, and runtime lookup.
+  `ManagedModelCatalog+*.swift` keeps definitions, pinned sources, usage terms,
+  manifest templates, and capability descriptors with their model families.
+  Companion models remain discoverable by lookup without appearing in the public
+  inventory.
+- `ManagedModelSpec.swift` and `ManagedModelAPIProfile.swift`: model metadata,
+  manifest template and capability metadata types, and API capability profiles.
+  `ManagedModelSpec+Validation.swift` owns installed root normalization,
+  artifact validation, conversion guidance, and runtime lookup.
 - `ModelResolver.swift`: adapts the catalog and family validators to ModelKit lookup.
-- `MereRunModelManifest+Templates.swift`: runtime-dependent manifest templates.
+- `MereRunModelManifest+Templates.swift`: shared component presets and
+  data-driven manifest materialization from `ManagedModelSpec.manifestTemplate`.
 - Runtime family directories own model-specific loading, inference, and decode
   paths.
 

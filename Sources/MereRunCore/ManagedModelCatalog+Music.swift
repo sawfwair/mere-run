@@ -13,7 +13,21 @@ extension ManagedModelCatalog {
                     sourceRepoId: YuE2Resources.legacyVAERepository, sourceRevision: YuE2Resources.legacyVAERevision,
                     licenseURL: "https://huggingface.co/m-a-p/YuE2-Vae-legacy/blob/\(YuE2Resources.legacyVAERevision)/LICENSE")]),
             validationKind: .yue2VAE, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 1_100_000_000,
-            defaultCLICommands: ["music yue2 decode"]
+            defaultCLICommands: ["music yue2 decode"],
+            manifestTemplate: .init(
+                engine: .yue2,
+                family: .music,
+                tier: .latest,
+                variant: .standard,
+                precision: .fp32,
+                supports: []
+            ),
+            capability: .init(
+                "YuE2 benchmark decoder",
+                "Decoder-only companion for replaying saved YuE2 latents with the upstream benchmark VAE.",
+                minimum: 8,
+                recommended: 16
+            )
         ),
         ManagedModelSpec(
             id: SheetSage2Resources.modelID, category: .music, installShape: .structuredRoot,
@@ -29,7 +43,21 @@ extension ManagedModelCatalog {
                     sourceRevision: SheetSage2Resources.revision,
                     licenseURL: "https://huggingface.co/m-a-p/SheetSage2/blob/\(SheetSage2Resources.revision)/LICENSE")]),
             validationKind: .sheetSage2, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 2_759_000_000,
-            defaultCLICommands: ["music yue2 transcribe"]
+            defaultCLICommands: ["music yue2 transcribe"],
+            manifestTemplate: .init(
+                engine: .sheetSage2,
+                family: .music,
+                tier: .latest,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.musicTranscription]
+            ),
+            capability: .init(
+                "SheetSage2",
+                "Experimental native MERT2 and BART audio-to-score transcription. Released-weight comparisons and bounded transcription checks passed on an M5 Max; broader recording accuracy remains unqualified.",
+                minimum: 16,
+                recommended: 24
+            )
         ),
         ManagedModelSpec(
             id: YuE2Resources.modelID,
@@ -68,7 +96,22 @@ extension ManagedModelCatalog {
             validationKind: .yue2,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: YuE2Resources.estimatedDownloadBytes,
-            defaultCLICommands: ["music generate", "music yue2 decode"]
+            defaultCLICommands: ["music generate", "music yue2 decode"],
+            manifestTemplate: .init(
+                engine: .yue2,
+                family: .music,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: .init(steps: 32, cfg: 1.0),
+                supports: [.musicGeneration]
+            ),
+            capability: .init(
+                "YuE2",
+                "Experimental native Swift/MLX song generation with ABC score planning and 48 kHz stereo decoding. Bounded checkpoint generation is verified; broader quality qualification is pending.",
+                minimum: 24,
+                recommended: 32
+            )
         ),
         ManagedModelSpec(
             id: "music-acestep",
@@ -90,7 +133,23 @@ extension ManagedModelCatalog {
             validationKind: .aceStep,
             normalizationKind: .musicACEStep,
             estimatedDownloadBytes: 10_092_095_357,
-            defaultCLICommands: ["music generate", "music analyze", "music train-adapter", "music serve"]
+            defaultCLICommands: ["music generate", "music analyze", "music train-adapter", "music serve"],
+            manifestTemplate: .init(
+                engine: .aceStep,
+                family: .music,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: .init(steps: 8, cfg: 1.0),
+                supports: [.musicGeneration],
+                upstream: .spec
+            ),
+            capability: .init(
+                "Music generation",
+                "Generates music from text prompts with the ACE-Step model stack.",
+                minimum: 24,
+                recommended: 32
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.aceStepXLBase.rawValue,
@@ -127,7 +186,23 @@ extension ManagedModelCatalog {
             validationKind: .aceStep,
             normalizationKind: .musicACEStep,
             estimatedDownloadBytes: 23 * 1_073_741_824,
-            defaultCLICommands: ["music generate", "music analyze", "music train-adapter", "music serve"]
+            defaultCLICommands: ["music generate", "music analyze", "music train-adapter", "music serve"],
+            manifestTemplate: .init(
+                engine: .aceStep,
+                family: .music,
+                tier: .max,
+                variant: .standard,
+                precision: .bf16,
+                defaults: .init(steps: 50, cfg: 7.0),
+                supports: [.musicGeneration],
+                upstream: .explicit("ACE-Step/acestep-v15-xl-base")
+            ),
+            capability: .init(
+                "ACE-Step XL Base",
+                "Runs the full ACE-Step 1.5 XL Base DiT with CFG and advanced source-audio tasks.",
+                minimum: 32,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.aceStepXLSFT.rawValue,
@@ -164,7 +239,23 @@ extension ManagedModelCatalog {
             validationKind: .aceStep,
             normalizationKind: .musicACEStep,
             estimatedDownloadBytes: 23 * 1_073_741_824,
-            defaultCLICommands: ["music generate", "music analyze", "music train-adapter", "music serve"]
+            defaultCLICommands: ["music generate", "music analyze", "music train-adapter", "music serve"],
+            manifestTemplate: .init(
+                engine: .aceStep,
+                family: .music,
+                tier: .max,
+                variant: .standard,
+                precision: .bf16,
+                defaults: .init(steps: 50, cfg: 7.0),
+                supports: [.musicGeneration],
+                upstream: .explicit("ACE-Step/acestep-v15-xl-sft")
+            ),
+            capability: .init(
+                "ACE-Step XL SFT",
+                "Runs the full ACE-Step 1.5 XL supervised checkpoint with CFG for highest-fidelity standard generation.",
+                minimum: 32,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.aceStepXLTurbo.rawValue,
@@ -200,7 +291,23 @@ extension ManagedModelCatalog {
             validationKind: .aceStep,
             normalizationKind: .musicACEStep,
             estimatedDownloadBytes: 23 * 1_073_741_824,
-            defaultCLICommands: ["music generate", "music analyze", "music train-adapter", "music serve"]
+            defaultCLICommands: ["music generate", "music analyze", "music train-adapter", "music serve"],
+            manifestTemplate: .init(
+                engine: .aceStep,
+                family: .music,
+                tier: .turbo,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: .init(steps: 8, cfg: 1.0),
+                supports: [.musicGeneration],
+                upstream: .explicit("ACE-Step/acestep-v15-xl-turbo")
+            ),
+            capability: .init(
+                "ACE-Step XL Turbo",
+                "Generates higher-quality music with the ACE-Step 1.5 XL turbo DiT.",
+                minimum: 24,
+                recommended: 32
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.aceStepXLTurboLM4B.rawValue,
@@ -250,7 +357,23 @@ extension ManagedModelCatalog {
             validationKind: .aceStep,
             normalizationKind: .musicACEStep,
             estimatedDownloadBytes: 32 * 1_073_741_824,
-            defaultCLICommands: ["music generate", "music analyze", "music train-adapter", "music serve"]
+            defaultCLICommands: ["music generate", "music analyze", "music train-adapter", "music serve"],
+            manifestTemplate: .init(
+                engine: .aceStep,
+                family: .music,
+                tier: .turbo,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: .init(steps: 8, cfg: 1.0),
+                supports: [.musicGeneration],
+                upstream: .explicit("ACE-Step/acestep-v15-xl-turbo")
+            ),
+            capability: .init(
+                "ACE-Step XL Turbo + 4B LM",
+                "Adds the optional 4B 5Hz LM to the ACE-Step 1.5 XL turbo stack.",
+                minimum: 32,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.aceStepLM17B.rawValue,
@@ -268,7 +391,22 @@ extension ManagedModelCatalog {
             validationKind: .aceStepLM,
             normalizationKind: .musicACEStepLM,
             estimatedDownloadBytes: 4 * 1_073_741_824,
-            defaultCLICommands: ["music generate", "music analyze", "music serve"]
+            defaultCLICommands: ["music generate", "music analyze", "music serve"],
+            manifestTemplate: .init(
+                engine: .aceStep,
+                family: .music,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.musicGeneration],
+                upstream: .spec
+            ),
+            capability: .init(
+                "ACE-Step 1.7B planner",
+                "Provides the upstream-default 5 Hz language model independently of the ACE-Step DiT checkpoint.",
+                minimum: 16,
+                recommended: 24
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.aceStepLM4B.rawValue,
@@ -290,7 +428,22 @@ extension ManagedModelCatalog {
             validationKind: .aceStepLM,
             normalizationKind: .musicACEStepLM,
             estimatedDownloadBytes: 9 * 1_073_741_824,
-            defaultCLICommands: ["music generate", "music analyze", "music serve"]
+            defaultCLICommands: ["music generate", "music analyze", "music serve"],
+            manifestTemplate: .init(
+                engine: .aceStep,
+                family: .music,
+                tier: .max,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.musicGeneration],
+                upstream: .spec
+            ),
+            capability: .init(
+                "ACE-Step 4B planner",
+                "Provides the optional 4B 5 Hz language model independently of the ACE-Step DiT checkpoint.",
+                minimum: 24,
+                recommended: 32
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.miniMaxMusic3.rawValue,
@@ -326,7 +479,22 @@ extension ManagedModelCatalog {
             validationKind: .miniMaxMusic3,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: MiniMaxMusic3Resources.estimatedDownloadBytes,
-            defaultCLICommands: ["music generate", "music serve"]
+            defaultCLICommands: ["music generate", "music serve"],
+            manifestTemplate: .init(
+                engine: .miniMaxMusic3,
+                family: .music,
+                tier: .max,
+                variant: .standard,
+                precision: .bf16,
+                defaults: .init(steps: 30, cfg: 1.7),
+                supports: [.musicGeneration]
+            ),
+            capability: .init(
+                "MiniMax Music 3",
+                "Generates complete lyric-driven 44.1 kHz stereo songs with the native staged Swift/MLX runtime.",
+                minimum: 32,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.magentaRT2Small.rawValue,
@@ -344,7 +512,22 @@ extension ManagedModelCatalog {
             upstreamRevision: magentaRT2UpstreamRevision,
             validationKind: .magentaRT2,
             estimatedDownloadBytes: 1_840_072_891,
-            defaultCLICommands: ["music generate", "music realtime"]
+            defaultCLICommands: ["music generate", "music realtime"],
+            manifestTemplate: .init(
+                engine: .magentaRT2,
+                family: .music,
+                tier: .small,
+                variant: .standard,
+                precision: .unknown,
+                defaults: .init(steps: 100, cfg: 3.0),
+                supports: [.musicGeneration]
+            ),
+            capability: .init(
+                "Magenta RealTime 2 small",
+                "Streams controllable Magenta RT2 music on Apple Silicon with the 230M model.",
+                minimum: 8,
+                recommended: 16
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.magentaRT2Base.rawValue,
@@ -362,7 +545,22 @@ extension ManagedModelCatalog {
             upstreamRevision: magentaRT2UpstreamRevision,
             validationKind: .magentaRT2,
             estimatedDownloadBytes: 4_164_096_058,
-            defaultCLICommands: ["music generate", "music realtime"]
+            defaultCLICommands: ["music generate", "music realtime"],
+            manifestTemplate: .init(
+                engine: .magentaRT2,
+                family: .music,
+                tier: .base,
+                variant: .standard,
+                precision: .unknown,
+                defaults: .init(steps: 100, cfg: 3.0),
+                supports: [.musicGeneration]
+            ),
+            capability: .init(
+                "Magenta RealTime 2 base",
+                "Streams higher-quality Magenta RT2 music on Pro/Max-class Apple Silicon.",
+                minimum: 32,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.muScriptorSmall.rawValue,
@@ -382,7 +580,22 @@ extension ManagedModelCatalog {
             validationKind: .muScriptor,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 412_000_000,
-            defaultCLICommands: ["music transcribe"]
+            defaultCLICommands: ["music transcribe"],
+            manifestTemplate: .init(
+                engine: .muScriptor,
+                family: .music,
+                tier: .small,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.musicTranscription],
+                upstream: .spec
+            ),
+            capability: .init(
+                "MuScriptor small",
+                "Transcribes full music mixes into instrument-separated MIDI with the 103M MuScriptor model.",
+                minimum: 8,
+                recommended: 16
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.muScriptorMedium.rawValue,
@@ -402,7 +615,22 @@ extension ManagedModelCatalog {
             validationKind: .muScriptor,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 1_230_000_000,
-            defaultCLICommands: ["music transcribe"]
+            defaultCLICommands: ["music transcribe"],
+            manifestTemplate: .init(
+                engine: .muScriptor,
+                family: .music,
+                tier: .base,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.musicTranscription],
+                upstream: .spec
+            ),
+            capability: .init(
+                "MuScriptor medium",
+                "Transcribes full music mixes with the default 307M MuScriptor quality/speed trade-off.",
+                minimum: 16,
+                recommended: 24
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.muScriptorLarge.rawValue,
@@ -422,7 +650,22 @@ extension ManagedModelCatalog {
             validationKind: .muScriptor,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 5_620_000_000,
-            defaultCLICommands: ["music transcribe"]
+            defaultCLICommands: ["music transcribe"],
+            manifestTemplate: .init(
+                engine: .muScriptor,
+                family: .music,
+                tier: .max,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.musicTranscription],
+                upstream: .spec
+            ),
+            capability: .init(
+                "MuScriptor large",
+                "Runs the highest-accuracy 1.4B MuScriptor transcription checkpoint.",
+                minimum: 32,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.roFormerViperX1297.rawValue,
@@ -442,7 +685,21 @@ extension ManagedModelCatalog {
             upstreamRevision: RoFormerResources.revision,
             validationKind: .roFormer,
             estimatedDownloadBytes: 639_114_645,
-            defaultCLICommands: ["music separate"]
+            defaultCLICommands: ["music separate"],
+            manifestTemplate: .init(
+                engine: .roFormer,
+                family: .music,
+                tier: .small,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.musicSeparation]
+            ),
+            capability: .init(
+                "ViperX vocal separation",
+                "Separates vocals and instrumental audio locally with the native MLX BS-RoFormer runtime.",
+                minimum: 8,
+                recommended: 16
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.roFormerFourStem.rawValue,
@@ -462,7 +719,21 @@ extension ManagedModelCatalog {
             upstreamRevision: RoFormerResources.revision,
             validationKind: .roFormer,
             estimatedDownloadBytes: 526_973_074,
-            defaultCLICommands: ["music separate"]
+            defaultCLICommands: ["music separate"],
+            manifestTemplate: .init(
+                engine: .roFormer,
+                family: .music,
+                tier: .small,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.musicSeparation]
+            ),
+            capability: .init(
+                "Four-stem BS-RoFormer",
+                "Separates drums, bass, other, and vocals locally with native MLX inference.",
+                minimum: 8,
+                recommended: 16
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.melRoFormerDereverb.rawValue,
@@ -482,7 +753,21 @@ extension ManagedModelCatalog {
             upstreamRevision: RoFormerResources.revision,
             validationKind: .roFormer,
             estimatedDownloadBytes: 912_891_178,
-            defaultCLICommands: ["music separate"]
+            defaultCLICommands: ["music separate"],
+            manifestTemplate: .init(
+                engine: .roFormer,
+                family: .music,
+                tier: .small,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.musicSeparation]
+            ),
+            capability: .init(
+                "MelBand RoFormer dereverb",
+                "Removes room reverberation from stereo audio locally with native MLX inference.",
+                minimum: 8,
+                recommended: 16
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.melRoFormerDenoise.rawValue,
@@ -502,7 +787,21 @@ extension ManagedModelCatalog {
             upstreamRevision: RoFormerResources.revision,
             validationKind: .roFormer,
             estimatedDownloadBytes: 912_890_953,
-            defaultCLICommands: ["music separate"]
+            defaultCLICommands: ["music separate"],
+            manifestTemplate: .init(
+                engine: .roFormer,
+                family: .music,
+                tier: .small,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.musicSeparation]
+            ),
+            capability: .init(
+                "MelBand RoFormer denoise",
+                "Removes broadband noise from stereo audio locally with native MLX inference.",
+                minimum: 8,
+                recommended: 16
+            )
         ),
     ]
 

@@ -16,7 +16,22 @@ extension ManagedModelCatalog {
             validationKind: .unlimitedOCR,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 6_700_000_000,
-            defaultCLICommands: ["vision ocr"]
+            defaultCLICommands: ["vision ocr"],
+            manifestTemplate: .init(
+                engine: .unlimitedOCR,
+                family: .ocr,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.visionOCR],
+                components: .rootText
+            ),
+            capability: .init(
+                "Unlimited-OCR-2",
+                "Native BF16 document OCR with ordered pages and learned sparse reference attention.",
+                minimum: 16,
+                recommended: 24
+            )
         ),
         ManagedModelSpec(
             id: Q35Resources.infinityParser2ProModelId,
@@ -28,7 +43,22 @@ extension ManagedModelCatalog {
             validationKind: .q35,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 131 * 1_073_741_824,
-            defaultCLICommands: ["vision ocr"]
+            defaultCLICommands: ["vision ocr"],
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .ocr,
+                tier: .max,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.chat, .visionChat, .visionOCR],
+                components: .rootText
+            ),
+            capability: .init(
+                "Infinity-Parser2 Pro OCR",
+                "Runs the heavyweight native Infinity-Parser2 Pro eval model for document parsing.",
+                minimum: 128,
+                recommended: 192
+            )
         ),
         ManagedModelSpec(
             id: Q35Resources.infinityParser2ProInt8ModelId,
@@ -40,7 +70,23 @@ extension ManagedModelCatalog {
             validationKind: .q35,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 38 * 1_073_741_824,
-            defaultCLICommands: ["vision ocr"]
+            defaultCLICommands: ["vision ocr"],
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .ocr,
+                tier: .max,
+                variant: .standard,
+                precision: .int8,
+                quantization: .init(bits: 8, groupSize: 64, scheme: "mlx-quantized-linear"),
+                supports: [.chat, .visionChat, .visionOCR],
+                components: .rootText
+            ),
+            capability: .init(
+                "Infinity-Parser2 Pro int8 OCR",
+                "Runs the quantized native Infinity-Parser2 Pro model for quality-focused OCR evals.",
+                minimum: 64,
+                recommended: 96
+            )
         ),
         ManagedModelSpec(
             id: "vision-ocr-lighton",
@@ -65,7 +111,23 @@ extension ManagedModelCatalog {
             upstreamRevision: LightOnOCRResources.oneBRevision,
             validationKind: .lightOnOCR,
             estimatedDownloadBytes: 2_022_801_518,
-            defaultCLICommands: ["vision ocr"]
+            defaultCLICommands: ["vision ocr"],
+            manifestTemplate: .init(
+                engine: .lightOnOCR,
+                family: .ocr,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.visionOCR],
+                components: .init(tokenizer: .anyOf([.local(path: "tokenizer"), .local(path: ".")]), textEncoder: .local(path: "."))
+            ),
+            capability: .init(
+                "OCR",
+                "Reads text from images and documents with the LightOn OCR runtime.",
+                minimum: 8,
+                recommended: 16,
+                setup: true
+            )
         ),
         lightOnQwenSpec(id: .lightOnOCR3Small, downloadBytes: 1_705_971_840),
         lightOnQwenSpec(id: .lightOnOCR3FourB, downloadBytes: 9_110_359_024),
@@ -115,7 +177,23 @@ extension ManagedModelCatalog {
             validationKind: .sam31,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 3_498_072_777,
-            defaultCLICommands: ["vision segment", "vision track", "vision track-live", "video prepare-masks"]
+            defaultCLICommands: ["vision segment", "vision track", "vision track-live", "video prepare-masks"],
+            manifestTemplate: .init(
+                engine: .samSegmentation,
+                family: .sam,
+                tier: .latest,
+                variant: .standard,
+                precision: .unknown,
+                supports: [.visionSegmentation, .visionTracking],
+                components: .sam,
+                upstream: .explicit("facebook/sam3.1")
+            ),
+            capability: .init(
+                "Vision segmentation",
+                "Segments and tracks objects in images or video frames with SAM 3.1.",
+                minimum: 16,
+                recommended: 24
+            )
         ),
         ManagedModelSpec(
             id: "vision-ground-falcon-perception",
@@ -140,7 +218,23 @@ extension ManagedModelCatalog {
             validationKind: .falconPerception,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 2_534_591_776,
-            defaultCLICommands: ["vision ground"]
+            defaultCLICommands: ["vision ground"],
+            manifestTemplate: .init(
+                engine: .falconPerception,
+                family: .falcon,
+                tier: .latest,
+                variant: .standard,
+                precision: .unknown,
+                supports: [.visionGrounding, .visionDetection, .visionSegmentation],
+                components: .falconPerception,
+                upstream: .spec
+            ),
+            capability: .init(
+                "Vision grounding",
+                "Finds and labels objects in images with Falcon Perception grounding.",
+                minimum: 16,
+                recommended: 24
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.visionFloodTerraMindBase.rawValue,
@@ -162,7 +256,21 @@ extension ManagedModelCatalog {
             validationKind: .terramindFlood,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 673_199_088,
-            defaultCLICommands: ["geo flood"]
+            defaultCLICommands: ["geo flood"],
+            manifestTemplate: .init(
+                engine: .terramindFlood,
+                family: .terramind,
+                tier: .base,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.floodSegmentation]
+            ),
+            capability: .init(
+                "Geospatial flood segmentation",
+                "Runs four-timestep Sentinel-2, Sentinel-1, and DEM flood segmentation with native Swift MLX.",
+                minimum: 16,
+                recommended: 24
+            )
         ),
         ManagedModelSpec(
             id: FaceAnalysisResources.modelID,
@@ -196,7 +304,21 @@ extension ManagedModelCatalog {
                 "vision face embed",
                 "vision face compare",
                 "vision face batch",
-            ]
+            ],
+            manifestTemplate: .init(
+                engine: .insightFace,
+                family: .face,
+                tier: .latest,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.faceDetection, .faceLandmarks, .faceEmbedding, .faceVerification]
+            ),
+            capability: .init(
+                "Face analysis",
+                "Detects faces and landmarks, creates identity embeddings, and compares people locally.",
+                minimum: 8,
+                recommended: 16
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue,
@@ -211,7 +333,21 @@ extension ManagedModelCatalog {
             upstreamRevision: "e50ffda41565591092adea54c6ac83d6212e1e23",
             validationKind: .moge2,
             estimatedDownloadBytes: 140_852_051,
-            defaultCLICommands: ["vision geometry"]
+            defaultCLICommands: ["vision geometry"],
+            manifestTemplate: .init(
+                engine: .moge2,
+                family: .geometry,
+                tier: .small,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.metricDepth, .surfaceNormals, .pointMap, .cameraIntrinsics, .pointCloud]
+            ),
+            capability: .init(
+                "Metric image geometry",
+                "Predicts metric depth, point maps, normals, masks, and camera intrinsics with MoGe-2 Small.",
+                minimum: 8,
+                recommended: 16
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.visionDepthVDASmall.rawValue,
@@ -227,7 +363,21 @@ extension ManagedModelCatalog {
             validationKind: .videoDepthAnything,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 116_440_756,
-            defaultCLICommands: ["vision depth-video"]
+            defaultCLICommands: ["vision depth-video"],
+            manifestTemplate: .init(
+                engine: .videoDepthAnything,
+                family: .depth,
+                tier: .small,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.relativeDepth, .temporalDepth]
+            ),
+            capability: .init(
+                "Temporal relative depth",
+                "Predicts temporally consistent affine-relative video depth with Video Depth Anything Small.",
+                minimum: 16,
+                recommended: 32
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.visionDepthVDASmallMetric.rawValue,
@@ -243,7 +393,21 @@ extension ManagedModelCatalog {
             validationKind: .videoDepthAnything,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 116_444_063,
-            defaultCLICommands: ["vision depth-video"]
+            defaultCLICommands: ["vision depth-video"],
+            manifestTemplate: .init(
+                engine: .videoDepthAnything,
+                family: .depth,
+                tier: .small,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.metricDepth, .temporalDepth]
+            ),
+            capability: .init(
+                "Temporal metric depth",
+                "Predicts temporally consistent metric video depth with Video Depth Anything Small.",
+                minimum: 16,
+                recommended: 32
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.visionGeometryDA3Small.rawValue,
@@ -258,7 +422,21 @@ extension ManagedModelCatalog {
             upstreamRevision: "e08cab65ca0ec38e7826075418411ab90cab4da3",
             validationKind: .depthAnything3,
             estimatedDownloadBytes: 137_248_940,
-            defaultCLICommands: ["vision geometry-multiview"]
+            defaultCLICommands: ["vision geometry-multiview"],
+            manifestTemplate: .init(
+                engine: .depthAnything3,
+                family: .geometry,
+                tier: .small,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.relativeDepth, .cameraIntrinsics, .cameraExtrinsics, .pointCloud]
+            ),
+            capability: .init(
+                "Multi-view scene geometry",
+                "Predicts relative depth, confidence, intrinsics, and extrinsics across multiple views with DA3 Small.",
+                minimum: 12,
+                recommended: 24
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.visionDepthMarigoldV2.rawValue,
@@ -274,7 +452,22 @@ extension ManagedModelCatalog {
             defaultCLICommands: ["vision depth"],
             // The depth API serves video depth; the still-image runtime has no API
             // adapter and must not advertise the category's video profile.
-            apiAvailability: .cliOnly
+            apiAvailability: .cliOnly,
+            manifestTemplate: .init(
+                engine: .marigoldV2,
+                family: .depth,
+                tier: .large,
+                variant: .standard,
+                precision: .int4,
+                supports: [.relativeDepth],
+                upstream: .explicit("huawei-bayerlab/marigold-v2-0@6fd6d1ca246c9d2d99a4d8ac375a4eccc87178ad")
+            ),
+            capability: .init(
+                "Single-image relative depth",
+                "Estimates relative depth with Marigold V2. Loads the BF16 base before 4-bit quantization.",
+                minimum: 64,
+                recommended: 96
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.image3DTripoSR.rawValue,
@@ -290,7 +483,21 @@ extension ManagedModelCatalog {
             validationKind: .tripoSR,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 1_677_247_729,
-            defaultCLICommands: ["image reconstruct-3d", "vision image-to-3d"]
+            defaultCLICommands: ["image reconstruct-3d", "vision image-to-3d"],
+            manifestTemplate: .init(
+                engine: .tripoSR,
+                family: .threeD,
+                tier: .small,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.imageTo3D, .meshGeneration]
+            ),
+            capability: .init(
+                "Single-image object mesh",
+                "Reconstructs a normalized object mesh and vertex colors from one image with TripoSR.",
+                minimum: 16,
+                recommended: 32
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.image3DInstantMeshBase.rawValue,
@@ -309,7 +516,21 @@ extension ManagedModelCatalog {
             defaultCLICommands: [
                 "image reconstruct-3d-multiview",
                 "vision image-to-3d-multiview",
-            ]
+            ],
+            manifestTemplate: .init(
+                engine: .instantMesh,
+                family: .threeD,
+                tier: .base,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.multiViewReconstruction, .meshGeneration]
+            ),
+            capability: .init(
+                "Multi-view object mesh",
+                "Reconstructs a FlexiCubes object mesh from licensed user-supplied views with InstantMesh Base.",
+                minimum: 24,
+                recommended: 48
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.image3DTrellis2.rawValue,
@@ -333,7 +554,21 @@ extension ManagedModelCatalog {
             defaultCLICommands: [
                 "image reconstruct-3d-trellis2",
                 "vision image-to-3d-trellis2",
-            ]
+            ],
+            manifestTemplate: .init(
+                engine: .trellis2,
+                family: .threeD,
+                tier: .max,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.imageTo3D, .meshGeneration]
+            ),
+            capability: .init(
+                "PBR O-Voxel object mesh",
+                "Reconstructs a 512-resolution PBR O-Voxel mesh with the native Swift MLX TRELLIS.2 runtime.",
+                minimum: 64,
+                recommended: 128
+            )
         ),
     ]
 
@@ -358,10 +593,68 @@ extension ManagedModelCatalog {
             validationKind: .terramindFire,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 673_193_610,
-            defaultCLICommands: ["geo fire"]
+            defaultCLICommands: ["geo fire"],
+            manifestTemplate: .init(
+                engine: .terramindFire,
+                family: .terramind,
+                tier: .base,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.fireSegmentation]
+            ),
+            capability: .init(
+                "Geospatial fire segmentation",
+                "Runs four-timestep Sentinel-2, Sentinel-1, and DEM fire segmentation with native Swift MLX.",
+                minimum: 16,
+                recommended: 24
+            )
         ),
     ] + TESSERAResources.allSpecs.map { source in
-        ManagedModelSpec(
+        let tier: MereRunModelManifest.Tier
+        let capability: ManagedModelCapabilityMetadata
+        switch source.variant {
+        case .nano:
+            tier = .nano
+            capability = .init(
+                "TESSERA v2 Nano time-series embeddings",
+                "Encodes Sentinel-1/2 observation sequences into 128-dimensional retrieval and analysis vectors.",
+                minimum: 4,
+                recommended: 6
+            )
+        case .small:
+            tier = .small
+            capability = .init(
+                "TESSERA v2 Small time-series embeddings",
+                "Adds temporal capacity for compact Sentinel-1/2 representation workflows.",
+                minimum: 6,
+                recommended: 8
+            )
+        case .medium:
+            tier = .medium
+            capability = .init(
+                "TESSERA v2 Medium time-series embeddings",
+                "Balances temporal representation quality and latency on entry Apple Silicon machines.",
+                minimum: 8,
+                recommended: 12
+            )
+        case .large:
+            tier = .large
+            capability = .init(
+                "TESSERA v2 Large time-series embeddings",
+                "Runs the strongest deployable TESSERA v2 student for Sentinel-1/2 time-series analysis.",
+                minimum: 8,
+                recommended: 16
+            )
+        case .teacher:
+            tier = .max
+            capability = .init(
+                "TESSERA v2 2B Teacher embeddings",
+                "Runs the full 2.06B research encoder for 1,024-dimensional Sentinel-1/2 time-series embeddings.",
+                minimum: 24,
+                recommended: 32
+            )
+        }
+        return ManagedModelSpec(
             id: source.modelID,
             category: .visionEmbed,
             installShape: .directoryRoot,
@@ -375,10 +668,55 @@ extension ManagedModelCatalog {
             validationKind: .tessera,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: source.sourceCheckpointByteCount,
-            defaultCLICommands: ["geo tessera"]
+            defaultCLICommands: ["geo tessera"],
+            manifestTemplate: .init(
+                engine: .tessera,
+                family: .tessera,
+                tier: tier,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.earthObservationEmbedding]
+            ),
+            capability: capability
         )
     } + OlmoEarthResources.allSpecs.map { source in
-        ManagedModelSpec(
+        let tier: MereRunModelManifest.Tier
+        let capability: ManagedModelCapabilityMetadata
+        switch source.variant {
+        case .nano:
+            tier = .nano
+            capability = .init(
+                "OlmoEarth v1.2 Nano embeddings",
+                "Creates compact multisensor spatial embeddings from Sentinel-2, Sentinel-1, or Landsat imagery.",
+                minimum: 4,
+                recommended: 8
+            )
+        case .tiny:
+            tier = .tiny
+            capability = .init(
+                "OlmoEarth v1.2 Tiny embeddings",
+                "Creates efficient multisensor spatial embeddings on entry Apple Silicon machines.",
+                minimum: 8,
+                recommended: 12
+            )
+        case .small:
+            tier = .small
+            capability = .init(
+                "OlmoEarth v1.2 Small embeddings",
+                "Increases multisensor Earth-observation representation capacity for local analysis.",
+                minimum: 12,
+                recommended: 16
+            )
+        case .base:
+            tier = .base
+            capability = .init(
+                "OlmoEarth v1.2 Base embeddings",
+                "Runs the largest OlmoEarth v1.2 encoder for multisensor humanitarian and environmental analysis.",
+                minimum: 16,
+                recommended: 24
+            )
+        }
+        return ManagedModelSpec(
             id: source.modelID,
             category: .visionEmbed,
             installShape: .directoryRoot,
@@ -404,7 +742,16 @@ extension ManagedModelCatalog {
             validationKind: .olmoEarth,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: source.sourceWeightsByteCount,
-            defaultCLICommands: ["geo olmoearth"]
+            defaultCLICommands: ["geo olmoearth"],
+            manifestTemplate: .init(
+                engine: .olmoEarth,
+                family: .olmoEarth,
+                tier: tier,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.earthObservationEmbedding]
+            ),
+            capability: capability
         )
     }
 
@@ -416,6 +763,7 @@ extension ManagedModelCatalog {
 
 private func lightOnQwenSpec(id: ModelResolver.ModelID, downloadBytes: Int64) -> ManagedModelSpec {
     let profile = Q35Resources.profile(for: id.rawValue)!
+    let isSmall = id == .lightOnOCR3Small
     return ManagedModelSpec(
         id: id.rawValue,
         category: .visionOCR,
@@ -425,6 +773,28 @@ private func lightOnQwenSpec(id: ModelResolver.ModelID, downloadBytes: Int64) ->
         upstreamRevision: profile.upstreamRevision,
         validationKind: .q35,
         estimatedDownloadBytes: downloadBytes,
-        defaultCLICommands: ["vision ocr"]
+        defaultCLICommands: ["vision ocr"],
+        manifestTemplate: .init(
+            engine: .qwen35HybridMoE,
+            family: .ocr,
+            tier: isSmall ? .nano : .max,
+            variant: .standard,
+            precision: .bf16,
+            supports: [.visionOCR],
+            components: .rootText
+        ),
+        capability: isSmall
+            ? .init(
+                "LightOnOCR 3 0.8B",
+                "Fast native Qwen3.5 OCR with optional document grounding.",
+                minimum: 8,
+                recommended: 16
+            )
+            : .init(
+                "LightOnOCR 3 4B",
+                "Quality-focused native Qwen3.5 OCR with optional document grounding.",
+                minimum: 16,
+                recommended: 24
+            )
     )
 }

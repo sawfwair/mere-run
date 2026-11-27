@@ -163,6 +163,118 @@ public enum ManagedModelAPIAvailability: String, Hashable, Sendable {
     case cliOnly
 }
 
+/// Declarative manifest metadata owned by a `ManagedModelSpec`.
+///
+/// Materialized into a `MereRunModelManifest` by `MereRunModelManifest.template(for:createdAt:)`,
+/// keeping a model's download spec, validation kind, capability metadata, and manifest template
+/// together in one catalog entry.
+public struct ManagedModelManifestTemplate: Hashable, Sendable {
+    public enum UpstreamRepoSource: Hashable, Sendable {
+        /// Inherit `spec.upstreamRepoId` verbatim.
+        case spec
+        /// Inherit `spec.upstreamRepoId` with `@<spec.upstreamRevision>` when a revision is pinned.
+        case specPinned
+        /// Use an explicit upstream string verbatim (or `nil`).
+        case explicit(String?)
+
+        func resolve(for spec: ManagedModelSpec) -> String? {
+            switch self {
+            case .spec:
+                spec.upstreamRepoId
+            case .specPinned:
+                if let repo = spec.upstreamRepoId, let rev = spec.upstreamRevision, !rev.isEmpty {
+                    "\(repo)@\(rev)"
+                } else {
+                    spec.upstreamRepoId
+                }
+            case .explicit(let value):
+                value
+            }
+        }
+    }
+
+    public let engine: MereRunModelManifest.Engine?
+    public let family: MereRunModelManifest.Family?
+    public let tier: MereRunModelManifest.Tier?
+    public let variant: MereRunModelManifest.Variant?
+    public let precision: MereRunModelManifest.Precision?
+    public let quantization: MereRunModelManifest.Quantization?
+    public let defaults: MereRunModelManifest.Defaults?
+    public let supports: [MereRunModelManifest.Capability]?
+    public let components: MereRunModelManifest.Components?
+    public let upstream: UpstreamRepoSource
+
+    public init(
+        engine: MereRunModelManifest.Engine? = nil,
+        family: MereRunModelManifest.Family? = nil,
+        tier: MereRunModelManifest.Tier? = nil,
+        variant: MereRunModelManifest.Variant? = nil,
+        precision: MereRunModelManifest.Precision? = nil,
+        quantization: MereRunModelManifest.Quantization? = nil,
+        defaults: MereRunModelManifest.Defaults? = nil,
+        supports: [MereRunModelManifest.Capability]? = nil,
+        components: MereRunModelManifest.Components? = nil,
+        upstream: UpstreamRepoSource = .specPinned
+    ) {
+        self.engine = engine
+        self.family = family
+        self.tier = tier
+        self.variant = variant
+        self.precision = precision
+        self.quantization = quantization
+        self.defaults = defaults
+        self.supports = supports
+        self.components = components
+        self.upstream = upstream
+    }
+
+    public func makeManifest(
+        for spec: ManagedModelSpec,
+        sources: [MereRunModelManifest.SourceProvenance]?,
+        createdAt: Date = Date()
+    ) -> MereRunModelManifest {
+        MereRunModelManifest(
+            id: spec.id,
+            engine: engine,
+            family: family,
+            tier: tier,
+            variant: variant,
+            precision: precision,
+            quantization: quantization,
+            defaults: defaults,
+            supports: supports,
+            components: components,
+            upstreamRepoId: upstream.resolve(for: spec),
+            sources: sources,
+            usageTerms: spec.usageRestriction?.terms,
+            createdAt: createdAt
+        )
+    }
+}
+
+/// User-facing title, summary, and unified-memory sizing owned by a `ManagedModelSpec`.
+public struct ManagedModelCapabilityMetadata: Hashable, Sendable {
+    public let title: String
+    public let summary: String
+    public let minimumUnifiedMemoryGB: Int
+    public let recommendedUnifiedMemoryGB: Int
+    public let isRecommendedForSetup: Bool
+
+    public init(
+        _ title: String,
+        _ summary: String,
+        minimum: Int,
+        recommended: Int,
+        setup: Bool = false
+    ) {
+        self.title = title
+        self.summary = summary
+        self.minimumUnifiedMemoryGB = minimum
+        self.recommendedUnifiedMemoryGB = recommended
+        self.isRecommendedForSetup = setup
+    }
+}
+
 public struct ManagedModelSpec: Hashable, Sendable {
     public let id: String
     public let category: ManagedModelCategory
@@ -182,6 +294,8 @@ public struct ManagedModelSpec: Hashable, Sendable {
     public let companionModelIDs: [String]
     public let apiAvailability: ManagedModelAPIAvailability
     public let apiProfile: ManagedModelAPIProfile?
+    public let manifestTemplate: ManagedModelManifestTemplate?
+    public let capability: ManagedModelCapabilityMetadata?
 
     public init(
         id: String,
@@ -201,7 +315,9 @@ public struct ManagedModelSpec: Hashable, Sendable {
         defaultCLICommands: [String] = [],
         companionModelIDs: [String] = [],
         apiAvailability: ManagedModelAPIAvailability = .served,
-        apiProfile: ManagedModelAPIProfile? = nil
+        apiProfile: ManagedModelAPIProfile? = nil,
+        manifestTemplate: ManagedModelManifestTemplate? = nil,
+        capability: ManagedModelCapabilityMetadata? = nil
     ) {
         self.id = id
         self.category = category
@@ -229,12 +345,27 @@ public struct ManagedModelSpec: Hashable, Sendable {
         case .cliOnly:
             self.apiProfile = nil
         }
+        self.manifestTemplate = manifestTemplate
+        self.capability = capability
     }
 }
 
 public extension ManagedModelSpec {
     var modelID: ModelResolver.ModelID? {
         ModelResolver.ModelID(rawValue: id)
+    }
+
+    var capabilityDescriptor: ManagedModelCapabilityDescriptor? {
+        capability.map {
+            ManagedModelCapabilityDescriptor(
+                modelID: id,
+                title: $0.title,
+                summary: $0.summary,
+                minimumUnifiedMemoryGB: $0.minimumUnifiedMemoryGB,
+                recommendedUnifiedMemoryGB: $0.recommendedUnifiedMemoryGB,
+                isRecommendedForSetup: $0.isRecommendedForSetup
+            )
+        }
     }
 
     var canBePulledWithoutConfiguration: Bool {

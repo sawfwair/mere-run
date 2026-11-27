@@ -27,7 +27,24 @@ extension ManagedModelCatalog {
             validationKind: .woosh,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 5 * 1_073_741_824,
-            defaultCLICommands: ["sfx generate"]
+            defaultCLICommands: ["sfx generate"],
+            manifestTemplate: .init(
+                engine: .woosh,
+                family: .sfx,
+                tier: .latest,
+                variant: .distilled,
+                precision: .fp32,
+                defaults: .init(steps: 4, cfg: 4.5),
+                supports: [.soundEffectGeneration],
+                components: .init(tokenizer: .local(path: "checkpoints/TextConditionerA/tokenizer"), textEncoder: .local(path: "checkpoints/TextConditionerA"), transformer: .local(path: "checkpoints/Woosh-DFlow"), vae: .local(path: "checkpoints/Woosh-AE")),
+                upstream: .spec
+            ),
+            capability: .init(
+                "Woosh DFlow",
+                "Generates Foley and sound effects from text prompts with Sony Research Woosh.",
+                minimum: 16,
+                recommended: 32
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.wooshFlow.rawValue,
@@ -54,7 +71,24 @@ extension ManagedModelCatalog {
             validationKind: .woosh,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 5 * 1_073_741_824,
-            defaultCLICommands: ["sfx generate"]
+            defaultCLICommands: ["sfx generate"],
+            manifestTemplate: .init(
+                engine: .woosh,
+                family: .sfx,
+                tier: .latest,
+                variant: .standard,
+                precision: .fp32,
+                defaults: .init(steps: 32, cfg: 4.5),
+                supports: [.soundEffectGeneration],
+                components: .init(tokenizer: .local(path: "checkpoints/TextConditionerA/tokenizer"), textEncoder: .local(path: "checkpoints/TextConditionerA"), transformer: .local(path: "checkpoints/Woosh-Flow"), vae: .local(path: "checkpoints/Woosh-AE")),
+                upstream: .spec
+            ),
+            capability: .init(
+                "Woosh Flow",
+                "Generates Foley and sound effects from text prompts with Sony Research Woosh's original Flow model.",
+                minimum: 16,
+                recommended: 32
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.wooshClap.rawValue,
@@ -81,7 +115,23 @@ extension ManagedModelCatalog {
             validationKind: .wooshClap,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 2 * 1_073_741_824,
-            defaultCLICommands: ["sfx clap score"]
+            defaultCLICommands: ["sfx clap score"],
+            manifestTemplate: .init(
+                engine: .woosh,
+                family: .sfx,
+                tier: .latest,
+                variant: .standard,
+                precision: .fp32,
+                supports: [.soundEffectEmbedding],
+                components: .init(tokenizer: .local(path: "checkpoints/Woosh-CLAP/tokenizer"), textEncoder: .local(path: "checkpoints/Woosh-CLAP")),
+                upstream: .spec
+            ),
+            capability: .init(
+                "Woosh CLAP",
+                "Embeds and scores sound effects against text with Sony Research Woosh-CLAP.",
+                minimum: 16,
+                recommended: 32
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.wooshSynchformer.rawValue,
@@ -98,7 +148,22 @@ extension ManagedModelCatalog {
             validationKind: .wooshSynchformer,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 475 * 1_048_576,
-            defaultCLICommands: ["sfx video generate"]
+            defaultCLICommands: ["sfx video generate"],
+            manifestTemplate: .init(
+                engine: .woosh,
+                family: .sfx,
+                tier: .latest,
+                variant: .standard,
+                precision: .fp16,
+                supports: [.videoToAudioGeneration],
+                upstream: .spec
+            ),
+            capability: .init(
+                "Woosh Synchformer",
+                "Extracts video synchronization features for Sony Research Woosh V2A generation.",
+                minimum: 16,
+                recommended: 32
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.wooshVFlow8s.rawValue,
@@ -125,7 +190,24 @@ extension ManagedModelCatalog {
             validationKind: .woosh,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 6 * 1_073_741_824,
-            defaultCLICommands: ["sfx video generate"]
+            defaultCLICommands: ["sfx video generate"],
+            manifestTemplate: .init(
+                engine: .woosh,
+                family: .sfx,
+                tier: .latest,
+                variant: .standard,
+                precision: .fp32,
+                defaults: .init(steps: 32, cfg: 4.5),
+                supports: [.videoToAudioGeneration],
+                components: .init(tokenizer: .local(path: "checkpoints/TextConditionerV/tokenizer"), textEncoder: .local(path: "checkpoints/TextConditionerV"), transformer: .local(path: "checkpoints/Woosh-VFlow-8s"), vae: .local(path: "checkpoints/Woosh-AE")),
+                upstream: .spec
+            ),
+            capability: .init(
+                "Woosh VFlow 8s",
+                "Generates 8-second sound effects from video with Sony Research Woosh VFlow.",
+                minimum: 32,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.wooshDVFlow8s.rawValue,
@@ -152,7 +234,24 @@ extension ManagedModelCatalog {
             validationKind: .woosh,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 6 * 1_073_741_824,
-            defaultCLICommands: ["sfx video generate"]
+            defaultCLICommands: ["sfx video generate"],
+            manifestTemplate: .init(
+                engine: .woosh,
+                family: .sfx,
+                tier: .latest,
+                variant: .distilled,
+                precision: .fp32,
+                defaults: .init(steps: 4, cfg: 3.0),
+                supports: [.videoToAudioGeneration],
+                components: .init(tokenizer: .local(path: "checkpoints/TextConditionerV/tokenizer"), textEncoder: .local(path: "checkpoints/TextConditionerV"), transformer: .local(path: "checkpoints/Woosh-DVFlow-8s"), vae: .local(path: "checkpoints/Woosh-AE")),
+                upstream: .spec
+            ),
+            capability: .init(
+                "Woosh DVFlow 8s",
+                "Generates 8-second sound effects from video with Sony Research Woosh distilled VFlow.",
+                minimum: 32,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.mmaudioLarge44kV2.rawValue,
@@ -187,7 +286,23 @@ extension ManagedModelCatalog {
             validationKind: .mmaudio,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 5_700_000_000,
-            defaultCLICommands: ["sfx generate", "sfx video generate"]
+            defaultCLICommands: ["sfx generate", "sfx video generate"],
+            manifestTemplate: .init(
+                engine: .mmaudio,
+                family: .sfx,
+                tier: .max,
+                variant: .standard,
+                precision: .fp16,
+                defaults: .init(steps: 25, cfg: 4.5),
+                supports: [.soundEffectGeneration, .videoToAudioGeneration],
+                upstream: .spec
+            ),
+            capability: .init(
+                "MMAudio large 44.1 kHz v2",
+                "Generates 44.1 kHz sound effects from text or synchronized video with native MMAudio.",
+                minimum: 32,
+                recommended: 64
+            )
         ),
     ]
 

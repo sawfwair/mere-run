@@ -55,7 +55,11 @@ final class ManagedModelCatalogTests: XCTestCase {
     }
 
     func testEveryCatalogSpecMapsToManifestTemplate() {
-        for spec in ManagedModelCatalog.allSpecs {
+        var seenIDs: Set<String> = []
+        for spec in ManagedModelCatalog.allKnownSpecs {
+            XCTAssertTrue(seenIDs.insert(spec.id).inserted, "Duplicate catalog spec id: \(spec.id)")
+            XCTAssertNotNil(spec.manifestTemplate, "Catalog spec is missing manifestTemplate: \(spec.id)")
+            XCTAssertNotNil(spec.capability, "Catalog spec is missing capability metadata: \(spec.id)")
             guard let modelID = ModelResolver.ModelID(rawValue: spec.id) else {
                 XCTFail("Catalog spec does not map to a canonical ModelID: \(spec.id)")
                 continue

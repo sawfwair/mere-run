@@ -21,148 +21,67 @@ public enum NativeChatRuntime: Sendable {
     case textChatNemotronBolt(NemotronBoltGenerator, modelPath: String?)
     case textChatNemotronOmni(NemotronOmniGenerator, modelPath: String?)
 
-    public func prepare(progressHandler: (@Sendable (ChatProgress) -> Void)?) async throws {
+    var adapter: any NativeChatRuntimeAdapter {
         switch self {
         case .textChatPsi(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+            BoundChatRuntimeAdapter(generator: generator, modelPath: modelPath)
         case .textChatInkling(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+            BoundChatRuntimeAdapter(generator: generator, modelPath: modelPath)
         case .textCode(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+            BoundChatRuntimeAdapter(generator: generator, modelPath: modelPath)
         case .textChatKlein(let generator, let modelPath, let useStandalone):
-            guard let modelPath else {
-                throw Flux2Error.modelNotFound(ModelResolver.ModelID.mebot.rawValue)
-            }
-            try await generator.prepareChat(
-                modelPath: modelPath,
-                standalone: useStandalone,
-                progressHandler: progressHandler
-            )
+            KleinChatRuntimeAdapter(generator: generator, modelPath: modelPath, useStandalone: useStandalone)
         case .textChatGemma4(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+            BoundChatRuntimeAdapter(generator: generator, modelPath: modelPath)
         case .textChatDiffusionGemma(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+            BoundChatRuntimeAdapter(generator: generator, modelPath: modelPath)
         case .textChatInkling2(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+            BoundChatRuntimeAdapter(generator: generator, modelPath: modelPath)
         case .textChatFlint(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+            BoundChatRuntimeAdapter(generator: generator, modelPath: modelPath)
         case .textChatKolibri(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+            BoundChatRuntimeAdapter(generator: generator, modelPath: modelPath)
         case .textChatLaguna(let generator, let modelPath):
-            guard let modelPath else {
-                throw LagunaError.modelPathRequired
-            }
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+            LagunaChatRuntimeAdapter(generator: generator, modelPath: modelPath)
         case .textChatQ35(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+            BoundChatRuntimeAdapter(generator: generator, modelPath: modelPath)
         case .textChatLFM2(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+            BoundChatRuntimeAdapter(generator: generator, modelPath: modelPath)
         case .textChatDeepseekV4Flash(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+            DeepseekChatRuntimeAdapter(generator: generator, modelPath: modelPath)
         case .textChatMuseGlimmer(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+            BoundChatRuntimeAdapter(generator: generator, modelPath: modelPath)
         case .textChatNemotronH(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+            BoundChatRuntimeAdapter(generator: generator, modelPath: modelPath)
         case .textChatNemotronBolt(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+            BoundChatRuntimeAdapter(generator: generator, modelPath: modelPath)
         case .textChatNemotronOmni(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+            BoundChatRuntimeAdapter(generator: generator, modelPath: modelPath)
         }
+    }
+
+    public func prepare(progressHandler: (@Sendable (ChatProgress) -> Void)?) async throws {
+        try await adapter.prepare(progressHandler: progressHandler)
     }
 
     public func unload() async {
-        switch self {
-        case .textChatPsi(let generator, _):
-            await generator.unload()
-        case .textChatInkling(let generator, _):
-            await generator.unload()
-        case .textCode(let generator, _):
-            await generator.unload()
-        case .textChatKlein(let generator, _, _):
-            await generator.unload()
-        case .textChatGemma4(let generator, _):
-            await generator.unload()
-        case .textChatDiffusionGemma(let generator, _):
-            await generator.unload()
-        case .textChatInkling2(let generator, _):
-            await generator.unload()
-        case .textChatFlint(let generator, _):
-            await generator.unload()
-        case .textChatKolibri(let generator, _):
-            await generator.unload()
-        case .textChatLaguna(let generator, _):
-            await generator.unload()
-        case .textChatQ35(let generator, _):
-            await generator.unload()
-        case .textChatLFM2(let generator, _):
-            await generator.unload()
-        case .textChatDeepseekV4Flash(let generator, _):
-            await generator.shutdown()
-        case .textChatMuseGlimmer(let generator, _):
-            await generator.unload()
-        case .textChatNemotronH(let generator, _):
-            await generator.unload()
-        case .textChatNemotronBolt(let generator, _):
-            await generator.unload()
-        case .textChatNemotronOmni(let generator, _):
-            await generator.unload()
-        }
+        await adapter.unload()
     }
 
     public func prefixKVCacheStats() async -> PrefixKVCacheStats? {
-        switch self {
-        case .textChatGemma4(let generator, _):
-            return await generator.prefixKVCacheStats()
-        case .textChatQ35(let generator, _):
-            return await generator.prefixKVCacheStats()
-        case .textChatLFM2(let generator, _):
-            return await generator.prefixKVCacheStats()
-        case .textChatInkling2(let generator, _):
-            return await generator.prefixKVCacheStats()
-        case .textChatFlint, .textChatKolibri, .textChatPsi, .textChatInkling, .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatLaguna, .textChatDeepseekV4Flash,
-             .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronBolt, .textChatNemotronOmni:
-            return nil
-        }
+        await adapter.prefixKVCacheStats()
     }
 
     public func continuousBatchingStats() async -> RuntimeDecodeBatchingStats? {
-        switch self {
-        case .textChatGemma4(let generator, _):
-            return await generator.continuousBatchingStats()
-        case .textChatLaguna(let generator, _):
-            return await generator.continuousBatchingStats()
-        case .textChatQ35(let generator, _):
-            return await generator.continuousBatchingStats()
-        case .textChatLFM2(let generator, _):
-            return await generator.continuousBatchingStats()
-        case .textChatInkling2, .textChatFlint, .textChatKolibri, .textChatPsi, .textChatInkling, .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatDeepseekV4Flash, .textChatMuseGlimmer,
-             .textChatNemotronH, .textChatNemotronBolt, .textChatNemotronOmni:
-            return nil
-        }
+        await adapter.continuousBatchingStats()
     }
 
     public func mtpStats() async -> Gemma4MTPStats? {
-        switch self {
-        case .textChatGemma4(let generator, _):
-            return await generator.mtpStats()
-        case .textChatInkling2, .textChatFlint, .textChatKolibri, .textChatPsi, .textChatInkling, .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatLaguna, .textChatQ35, .textChatLFM2,
-             .textChatDeepseekV4Flash, .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronBolt,
-             .textChatNemotronOmni:
-            return nil
-        }
+        await adapter.mtpStats()
     }
 
     public func preparePrompt(_ request: ChatRequest) async throws -> ChatPreparedPrompt {
-        switch self {
-        case .textChatMuseGlimmer(let generator, let modelPath):
-            return try await generator.preparePrompt(request, modelPath: modelPath)
-        case .textChatQ35(let generator, let modelPath):
-            return try await generator.preparePrompt(request, modelPath: modelPath)
-        case .textChatGemma4(let generator, let modelPath):
-            return try await generator.preparePrompt(request, modelPath: modelPath)
-        default:
-            throw ChatRequestIssue("count_tokens", "this runtime has no exact shared prompt preparation adapter")
-        }
+        try await adapter.preparePrompt(request)
     }
 
     public func chat(
@@ -170,83 +89,14 @@ public enum NativeChatRuntime: Sendable {
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> ChatResponse {
         try await ChatGenerationOperation.run(request) {
-            try await generate(request, progressHandler: progressHandler)
-        }
-    }
-
-    private func generate(
-        _ request: ChatRequest,
-        progressHandler: (@Sendable (ChatProgress) -> Void)?
-    ) async throws -> ChatResponse {
-        switch self {
-        case .textChatPsi(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatInkling(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textCode(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatKlein(let generator, let modelPath, let useStandalone):
-            guard let modelPath else {
-                throw Flux2Error.modelNotFound(ModelResolver.ModelID.mebot.rawValue)
-            }
-            if useStandalone {
-                return try await generator.chatStandalone(
-                    request,
-                    modelPath: modelPath,
-                    progressHandler: progressHandler
-                )
-            }
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatGemma4(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatDiffusionGemma(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatInkling2(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatFlint(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatKolibri(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatLaguna(let generator, let modelPath):
-            guard let modelPath else {
-                throw LagunaError.modelPathRequired
-            }
-            return try await generator.chat(
-                request,
-                modelPath: modelPath,
-                progressHandler: progressHandler
-            )
-        case .textChatQ35(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatLFM2(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatDeepseekV4Flash(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatMuseGlimmer(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatNemotronH(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatNemotronBolt(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatNemotronOmni(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
+            try await adapter.generate(request, progressHandler: progressHandler)
         }
     }
 
     public func deepseekChatCompletionsURL(
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> URL {
-        switch self {
-        case .textChatDeepseekV4Flash(let generator, let modelPath):
-            return try await generator.chatCompletionsURL(
-                modelPath: modelPath,
-                progressHandler: progressHandler
-            )
-        case .textChatInkling2, .textChatFlint, .textChatKolibri, .textChatPsi, .textChatInkling, .textCode, .textChatKlein, .textChatGemma4, .textChatDiffusionGemma, .textChatLaguna, .textChatQ35,
-             .textChatLFM2, .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronBolt,
-             .textChatNemotronOmni:
-            throw ChatRequestIssue("engine", "does not expose a raw chat proxy")
-        }
+        try await adapter.deepseekChatCompletionsURL(progressHandler: progressHandler)
     }
 }
 #endif

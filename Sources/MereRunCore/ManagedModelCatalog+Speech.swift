@@ -17,7 +17,22 @@ extension ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 10_560_110_179,
             defaultCLICommands: ["speech converse"],
-            apiAvailability: .cliOnly
+            apiAvailability: .cliOnly,
+            manifestTemplate: .init(
+                engine: .haru,
+                family: .audio,
+                tier: .base,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.speechConversation],
+                components: .rootText
+            ),
+            capability: .init(
+                "Haru-4B",
+                "Full-duplex spoken conversations with a character card and optional voice reference.",
+                minimum: 16,
+                recommended: 24
+            )
         ),
         ManagedModelSpec(
             id: SOVTranscribeResources.modelID, category: .speechASR, installShape: .directoryRoot,
@@ -25,7 +40,22 @@ extension ManagedModelCatalog {
                                            patterns: SOVTranscribeResources.patterns),
             upstreamRepoId: SOVTranscribeResources.repository, upstreamRevision: SOVTranscribeResources.revision,
             validationKind: .sovTranscribe, runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: 53_283_115_580, defaultCLICommands: ["speech transcribe"], apiAvailability: .cliOnly
+            estimatedDownloadBytes: 53_283_115_580, defaultCLICommands: ["speech transcribe"], apiAvailability: .cliOnly,
+            manifestTemplate: .init(
+                engine: .sovTranscribeASR,
+                family: .asr,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.speechRecognition],
+                components: .rootText
+            ),
+            capability: .init(
+                "SOV-Transcribe-1",
+                "Native BF16 file transcription in seven languages with instructions and optional DFlash decoding; checkpoint quality remains unqualified.",
+                minimum: 64,
+                recommended: 96
+            )
         ),
         ManagedModelSpec(
             id: NemotronTranscribeResources.modelID,
@@ -46,7 +76,23 @@ extension ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: NemotronTranscribeResources.quantizedDownloadBytes,
             defaultCLICommands: ["speech transcribe", "speech listen"],
-            apiAvailability: .cliOnly
+            apiAvailability: .cliOnly,
+            manifestTemplate: .init(
+                engine: .nemotronTranscribeASR,
+                family: .asr,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 64, scheme: "mlx-affine-routed-experts"),
+                supports: [.speechRecognition],
+                components: .rootText
+            ),
+            capability: .init(
+                "Nemotron 3.5 Transcribe",
+                "Native offline transcription and speech translation with 4-bit routed experts.",
+                minimum: 32,
+                recommended: 48
+            )
         ),
         ManagedModelSpec(
             id: NemotronTranscribeResources.bf16ModelID,
@@ -67,7 +113,22 @@ extension ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: NemotronTranscribeResources.weightBytes,
             defaultCLICommands: ["speech transcribe", "speech listen"],
-            apiAvailability: .cliOnly
+            apiAvailability: .cliOnly,
+            manifestTemplate: .init(
+                engine: .nemotronTranscribeASR,
+                family: .asr,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.speechRecognition],
+                components: .rootText
+            ),
+            capability: .init(
+                "Nemotron 3.5 Transcribe BF16",
+                "Original BF16 offline transcription and speech translation in 40 languages.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: Drama3Resources.modelID,
@@ -89,7 +150,22 @@ extension ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: Drama3Resources.quantizedDownloadBytes,
             defaultCLICommands: ["speech synthesize"],
-            apiAvailability: .cliOnly
+            apiAvailability: .cliOnly,
+            manifestTemplate: .init(
+                engine: .drama3TTS,
+                family: .tts,
+                tier: .latest,
+                variant: .standard,
+                precision: .unknown,
+                supports: [.speechSynthesis],
+                components: .rootText
+            ),
+            capability: .init(
+                "DRAMA-3 Q4 experts",
+                "Native multilingual and multi-speaker speech, event tags, and voice cloning. Built with Fish Audio.",
+                minimum: 32,
+                recommended: 36
+            )
         ),
         ManagedModelSpec(
             id: ManagedModelID.phonon31m.rawValue,
@@ -104,7 +180,22 @@ extension ManagedModelCatalog {
             upstreamRevision: PhononResources.revision,
             validationKind: .phononTTS,
             estimatedDownloadBytes: 103_400_000,
-            defaultCLICommands: ["speech synthesize"]
+            defaultCLICommands: ["speech synthesize"],
+            manifestTemplate: .init(
+                engine: .phononTTS,
+                family: .tts,
+                tier: .nano,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.speechSynthesis],
+                components: .rootText
+            ),
+            capability: .init(
+                "Phonon 31m",
+                "Synthesizes English speech locally with Gradium Phonon and a precomputed voice.",
+                minimum: 4,
+                recommended: 8
+            )
         ),
         ManagedModelSpec(
             id: ManagedModelID.whistleASR.rawValue,
@@ -120,7 +211,22 @@ extension ManagedModelCatalog {
             validationKind: .whistle,
             estimatedDownloadBytes: 17_000_000,
             defaultCLICommands: ["speech transcribe", "speech listen"],
-            apiAvailability: .cliOnly
+            apiAvailability: .cliOnly,
+            manifestTemplate: .init(
+                engine: .whistleASR,
+                family: .asr,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                supports: [.speechRecognition],
+                components: .init(tokenizer: .local(path: "whistle.cact"), transformer: .local(path: "whistle.cact"))
+            ),
+            capability: .init(
+                "Whistle speech recognition",
+                "Native packed CQ2/CQ4 transcription in seven European languages with beam search and live audio.",
+                minimum: 8,
+                recommended: 16
+            )
         ),
         ManagedModelSpec(
             id: ManagedModelID.breezeTTS2.rawValue,
@@ -146,7 +252,22 @@ extension ManagedModelCatalog {
             validationKind: .breezeTTS,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 7_648_850_000,
-            defaultCLICommands: ["speech synthesize"]
+            defaultCLICommands: ["speech synthesize"],
+            manifestTemplate: .init(
+                engine: .breezeTTS,
+                family: .tts,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.speechSynthesis],
+                components: .rootText
+            ),
+            capability: .init(
+                "Breeze TTS 2",
+                "Synthesizes English and Chinese speech with voice design, cloning, and direction. Research and non-commercial use only.",
+                minimum: 16,
+                recommended: 24
+            )
         ),
         ManagedModelSpec(
             id: "speech-tts-qwen3-nano",
@@ -171,7 +292,24 @@ extension ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .qwen3TTS,
             estimatedDownloadBytes: 4_520_158_972,
-            defaultCLICommands: ["speech synthesize"]
+            defaultCLICommands: ["speech synthesize"],
+            manifestTemplate: .init(
+                engine: .qwen3TTS,
+                family: .tts,
+                tier: .nano,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.speechSynthesis],
+                components: .rootText,
+                upstream: .spec
+            ),
+            capability: .init(
+                "Text to speech",
+                "Synthesizes speech with Qwen3 TTS, including style prompts and voice-design workflows.",
+                minimum: 8,
+                recommended: 16,
+                setup: true
+            )
         ),
         ManagedModelSpec(
             id: "speech-tts-qwen3-customvoice",
@@ -194,7 +332,23 @@ extension ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .qwen3TTS,
             estimatedDownloadBytes: 4_520_159_459,
-            defaultCLICommands: ["speech synthesize"]
+            defaultCLICommands: ["speech synthesize"],
+            manifestTemplate: .init(
+                engine: .qwen3TTS,
+                family: .tts,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.speechSynthesis],
+                components: .rootText,
+                upstream: .spec
+            ),
+            capability: .init(
+                "Custom voice TTS",
+                "Synthesizes speech as one of nine named speakers with Qwen3-TTS CustomVoice.",
+                minimum: 12,
+                recommended: 16
+            )
         ),
         ManagedModelSpec(
             id: "speech-asr-qwen3",
@@ -222,7 +376,23 @@ extension ManagedModelCatalog {
             validationKind: .qwen3ASR,
             normalizationKind: .qwen3ASRNested,
             estimatedDownloadBytes: 2_467_855_342,
-            defaultCLICommands: ["speech transcribe", "speech listen"]
+            defaultCLICommands: ["speech transcribe", "speech listen"],
+            manifestTemplate: .init(
+                engine: .qwen3ASR,
+                family: .asr,
+                tier: .latest,
+                variant: .standard,
+                precision: .int8,
+                supports: [.speechRecognition],
+                components: .rootText,
+                upstream: .spec
+            ),
+            capability: .init(
+                "Speech recognition, multilingual",
+                "Transcribes and translates speech with Qwen3 ASR.",
+                minimum: 12,
+                recommended: 16
+            )
         ),
         ManagedModelSpec(
             id: "speech-asr-parakeet",
@@ -246,7 +416,24 @@ extension ManagedModelCatalog {
             validationKind: .parakeet,
             normalizationKind: .parakeetNested,
             estimatedDownloadBytes: 2 * 1_073_741_824,
-            defaultCLICommands: ["speech transcribe", "speech listen"]
+            defaultCLICommands: ["speech transcribe", "speech listen"],
+            manifestTemplate: .init(
+                engine: .parakeetASR,
+                family: .asr,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.speechRecognition],
+                components: .rootText,
+                upstream: .spec
+            ),
+            capability: .init(
+                "Speech recognition, fast",
+                "Transcribes speech quickly with the Parakeet ASR runtime.",
+                minimum: 8,
+                recommended: 16,
+                setup: true
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.sortformerDiarization.rawValue,
@@ -266,7 +453,22 @@ extension ManagedModelCatalog {
             validationKind: .sortformer,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 236_108_132,
-            defaultCLICommands: ["speech diarize"]
+            defaultCLICommands: ["speech diarize"],
+            manifestTemplate: .init(
+                engine: .sortformer,
+                family: .asr,
+                tier: .latest,
+                variant: .standard,
+                precision: .fp16,
+                supports: [.speakerDiarization],
+                upstream: .spec
+            ),
+            capability: .init(
+                "Speaker diarization",
+                "Identifies up to four speakers and their active time ranges with native MLX Sortformer.",
+                minimum: 8,
+                recommended: 16
+            )
         ),
         ManagedModelSpec(
             id: Nemotron3DiarizationResources.modelID,
@@ -289,7 +491,22 @@ extension ManagedModelCatalog {
             validationKind: .sortformer,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 198_676_480,
-            defaultCLICommands: ["speech diarize", "speech diarize-live"]
+            defaultCLICommands: ["speech diarize", "speech diarize-live"],
+            manifestTemplate: .init(
+                engine: .sortformer,
+                family: .asr,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.speakerDiarization],
+                upstream: .spec
+            ),
+            capability: .init(
+                "Speaker diarization, eight speakers",
+                "Identifies up to eight speakers with native MLX Nemotron 3 Diarization.",
+                minimum: 8,
+                recommended: 16
+            )
         ),
     ]
 

@@ -29,9 +29,16 @@ public enum ManagedModelCatalog {
 
     public static func spec(for id: String) -> ManagedModelSpec? {
         let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return allKnownSpecs.first {
-            $0.id == normalized || $0.upstreamRepoId?.lowercased() == normalized
+        if let exact = specsByExactID[normalized] {
+            return exact
         }
+        return allKnownSpecs.first {
+            $0.upstreamRepoId?.lowercased() == normalized
+        }
+    }
+
+    public static func spec(forExactID id: String) -> ManagedModelSpec? {
+        specsByExactID[id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()]
     }
 
     public static func missingHubSourceMessage(for modelId: String) -> String {
@@ -39,4 +46,13 @@ public enum ManagedModelCatalog {
     }
 
     public static let allKnownSpecs: [ManagedModelSpec] = allSpecs + companionSpecs
+
+    private static let specsByExactID: [String: ManagedModelSpec] = {
+        var map: [String: ManagedModelSpec] = [:]
+        map.reserveCapacity(allKnownSpecs.count)
+        for spec in allKnownSpecs where map[spec.id] == nil {
+            map[spec.id] = spec
+        }
+        return map
+    }()
 }

@@ -30,7 +30,8 @@ models share an upstream repository.
 
 Companion definitions take part in model lookup without appearing in the public
 inventory. Keep source revisions, artifact patterns, mounted components, usage
-terms, and runtime download policy with their definitions. Shared source
+terms, manifest templates, capability descriptors, and runtime download policy
+with their definitions in `ManagedModelCatalog+*.swift`. Shared source
 constants and usage-term construction belong in
 `ManagedModelCatalog+Sources.swift`.
 
