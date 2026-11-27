@@ -77,9 +77,9 @@ private func routing(_ capability: MereRunCommandCapability) throws -> MereRunCa
 /// Router agreement for training: the trainer the command selects, and its default targets.
 @Test func textTrainLoRADetectorsAgreeWithTheContractForEveryListedModel() throws {
     let capability = MereRunCapabilityCatalog.textTrainLoRA
-    let targets = try #require(capability.options.first { $0.flag == "--target-modules" })
     for family in try routing(capability).families {
-        let defaultTargets = targets.familyRules.first { $0.family == family.id }?.defaultValue
+        let targets = try #require(capability.options(forFamily: family.id).first { $0.flag == "--target-modules" })
+        let defaultTargets = targets.defaultValue
         for model in family.models {
             let options = TextLoRATrainingOptions(data: "", output: "", model: model)
             #expect(try options.resolvedTrainingFamily().contractFamily.rawValue == family.id, "\(model)")

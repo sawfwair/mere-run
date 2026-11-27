@@ -17,7 +17,7 @@ extension ManagedModelCatalog {
             ),
             upstreamRepoId: Inkling2Resources.miniRepository, upstreamRevision: Inkling2Resources.miniRevision,
             validationKind: .inkling2, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 18_430_000_000,
-            defaultCLICommands: ["text chat", "api serve"], apiProfile: .inkling2()
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"], apiProfile: .inkling2()
         ),
         ManagedModelSpec(
             id: Inkling2Resources.miniOfficialModelID, category: .visionChat, installShape: .directoryRoot,
@@ -27,7 +27,7 @@ extension ManagedModelCatalog {
             ),
             upstreamRepoId: Inkling2Resources.miniOfficialRepository, upstreamRevision: Inkling2Resources.miniOfficialRevision,
             validationKind: .inkling2, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 20_200_000_000,
-            defaultCLICommands: ["text chat", "api serve"], apiProfile: .inkling2()
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"], apiProfile: .inkling2()
         ),
         ManagedModelSpec(
             id: Inkling2Resources.miniQ8HeadModelID, category: .visionChat, installShape: .directoryRoot,
@@ -37,7 +37,7 @@ extension ManagedModelCatalog {
             ),
             upstreamRepoId: Inkling2Resources.miniQ8HeadRepository, upstreamRevision: Inkling2Resources.miniQ8HeadRevision,
             validationKind: .inkling2, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 19_809_895_923,
-            defaultCLICommands: ["text chat", "api serve"], apiProfile: .inkling2()
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"], apiProfile: .inkling2()
         ),
         ManagedModelSpec(
             id: FlintResources.modelID, category: .textChat, installShape: .directoryRoot,

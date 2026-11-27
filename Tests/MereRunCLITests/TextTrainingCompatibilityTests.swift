@@ -5,6 +5,17 @@ import XCTest
 @testable import MereRunCore
 
 final class TextTrainingCompatibilityTests: XCTestCase {
+    func testMiniSelectsOutputHeadForManagedModelsAndRejectsUnsupportedTargets() throws {
+        for id in [Inkling2Resources.miniModelID, Inkling2Resources.miniOfficialModelID, Inkling2Resources.miniQ8HeadModelID] {
+            let command = try TextTrainLoRA.parse(["--model", id, "--data", "pairs.jsonl", "--output", "mini.safetensors"])
+            XCTAssertEqual(try command.trainingOptions.resolvedTrainingFamily(), .inkling2Mini)
+            XCTAssertEqual(TextLoRATrainingOptions.defaultTargetModules(for: id), ["unembed"])
+        }
+        let options = TextLoRATrainingOptions(data: "", output: "", model: Inkling2Resources.miniModelID, targetModules: "q_proj")
+        XCTAssertThrowsError(try options.validate())
+        XCTAssertThrowsError(try TextLoRATrainingOptions(data: "", output: "", model: Inkling2Resources.modelID).resolvedTrainingFamily())
+    }
+
     func testDashboardStopWaitsForServerCleanup() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

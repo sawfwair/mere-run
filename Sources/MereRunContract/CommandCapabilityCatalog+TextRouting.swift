@@ -36,6 +36,7 @@ extension MereRunCapabilityCatalog {
         case diffusionGemma = "diffusion-gemma"
         case flint
         case inkling2
+        case inkling2Mini = "inkling2-mini"
         case kolibri
         case laguna
         case inkling
@@ -70,10 +71,15 @@ extension MereRunCapabilityCatalog {
     public enum TextTrainLoRAFamily: String, CaseIterable, Sendable, MereRunFamilyID {
         case gemma4
         case gemma4VLM = "gemma4-vlm"
+        case inkling2Mini = "inkling2-mini"
         case lagunaXS = "laguna-xs"
         case inkling
         case lfm2A1B = "lfm2-a1b"
     }
+
+    private static let inkling2MiniModels = [
+        "vision-chat-inkling-2-mini", "vision-chat-inkling-2-mini-official", "vision-chat-inkling-2-mini-q8-head"
+    ]
 
     static let textChatRouting = MereRunCapabilityRouting(
         modelFlags: ["--model"],
@@ -99,9 +105,8 @@ extension MereRunCapabilityCatalog {
             ),
             .init(TextChatFamily.gemma4Unified, title: "Gemma 4 12B vision", models: ["vision-chat-gemma4-12b"]),
             .init(TextChatFamily.diffusionGemma, title: "DiffusionGemma", models: ["text-chat-diffusiongemma-26b-optiq-4bit"]),
-            .init(TextChatFamily.inkling2, title: "Inkling 2", models: [
-                "vision-chat-inkling-2-small", "vision-chat-inkling-2-mini", "vision-chat-inkling-2-mini-q8-head"
-            ]),
+            .init(TextChatFamily.inkling2, title: "Inkling 2 Small", models: ["vision-chat-inkling-2-small"]),
+            .init(TextChatFamily.inkling2Mini, title: "Inkling 2 Mini", models: inkling2MiniModels),
             .init(TextChatFamily.flint, title: "Recursive Flint", models: ["text-chat-flint-4bit", "text-chat-flint-bf16"]),
             .init(TextChatFamily.kolibri, title: "Kolibri 1", models: [], localCheckpointOnly: true),
             .init(TextChatFamily.laguna, title: "Laguna", models: ["text-chat-laguna-s-2-1", "text-chat-laguna-xs-2-1"]),
@@ -204,6 +209,7 @@ extension MereRunCapabilityCatalog {
             ),
             .init(TextTrainLoRAFamily.gemma4VLM, title: "Gemma 4 12B vision", models: ["vision-chat-gemma4-12b"]),
             .init(TextTrainLoRAFamily.lagunaXS, title: "Laguna XS 2.1", models: ["text-chat-laguna-xs-2-1"]),
+            .init(TextTrainLoRAFamily.inkling2Mini, title: "Inkling 2 Mini", models: inkling2MiniModels),
             .init(TextTrainLoRAFamily.inkling, title: "Inkling-Small", models: ["text-chat-inkling-small"]),
             .init(TextTrainLoRAFamily.lfm2A1B, title: "LFM2.5 A1B 8-bit", models: ["text-chat-lfm25-a1b-8bit"])
         ],

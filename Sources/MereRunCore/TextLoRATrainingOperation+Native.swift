@@ -77,6 +77,9 @@ extension TextLoRATrainingOperation {
                 progressHandler: progressHandler,
                 trainingProgressHandler: trainingProgressHandler
             )
+        case .inkling2Mini:
+            return try await Inkling2MiniLoRATraining.train(plan, config: config, metadata: metadata,
+                                                          progress: progressHandler, trainingProgress: trainingProgressHandler)
         case .inkling:
             return try await InklingTextLoRATrainingPipeline.train(
                 InklingTextLoRATrainingPipelineRequest(

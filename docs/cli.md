@@ -1261,7 +1261,7 @@ non-terminal rendering does not emit ANSI escapes. The `NO_COLOR` environment
 variable disables color while retaining useful typography and structure.
 
 `--lora` accepts a compatible local adapter file or cataloged adapter id.
-Native Gemma 4, Laguna XS 2.1, Inkling-Small, and LFM2.5 A1B adapters produced by
+Native Gemma 4, Laguna XS 2.1, Inkling-Small, Inkling 2 Mini, and LFM2.5 A1B adapters produced by
 `text train-lora` load directly in their matching runtime; `--lora-scale`
 scales the adapter.
 
@@ -1310,7 +1310,7 @@ on Apple Silicon.
 
 Train a LoRA from reviewed chat-style supervised fine-tuning (SFT) JSONL.
 Supported families are Gemma 4 text models, `vision-chat-gemma4-12b`,
-`text-chat-laguna-xs-2-1`, `text-chat-inkling-small`, and
+`text-chat-laguna-xs-2-1`, `text-chat-inkling-small`, the three Inkling 2 Mini checkpoints, and
 `text-chat-lfm25-a1b-8bit`.
 
 ```bash
@@ -1334,7 +1334,7 @@ tool-loop states can repeat a user question. `--dry-run --json` validates and
 fingerprints the dataset and writes the family-specific manifest without
 loading the model. Gemma 4 and Laguna default to
 `q_proj,k_proj,v_proj,o_proj`. LFM2.5 defaults to
-`q_proj,k_proj,v_proj,out_proj` under attention only. Inkling defaults to its
+`q_proj,k_proj,v_proj,out_proj` under attention only. Inkling 2 Mini trains the `unembed` output projection. Inkling-Small defaults to its
 attention projections plus `gate_proj,up_proj,down_proj,lm_head`; expert MLPs
 use shared-outer factors to keep the 256-expert adapter tractable. Inkling
 `--reasoning-effort` accepts

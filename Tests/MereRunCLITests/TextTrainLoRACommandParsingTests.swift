@@ -201,7 +201,7 @@ final class TextTrainLoRACommandParsingTests: XCTestCase {
         )
         XCTAssertEqual(
             try gate(["--reasoning-effort", "0.2"]).warnings,
-            ["--reasoning-effort has no effect with Gemma 4. It applies to Inkling-Small."]
+            ["--reasoning-effort has no effect with Gemma 4. It applies to Inkling 2 Mini and Inkling-Small."]
         )
         XCTAssertEqual(try gate(["--model", InklingResources.modelID, "--reasoning-effort", "0.2"]).warnings, [])
         XCTAssertEqual(try gate(["--model", "text-chat-laguna-s-2-1"]).source, .excluded)

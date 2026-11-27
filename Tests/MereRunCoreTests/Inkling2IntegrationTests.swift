@@ -41,7 +41,7 @@ final class Inkling2IntegrationTests: XCTestCase {
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatInkling2)
         XCTAssertEqual(spec.apiProfile?.inputModalities, [.text, .image])
         for name in [spec.id, Inkling2Resources.miniRepository] {
-            XCTAssertEqual(NativeChatRuntime.commandFamily(modelID: name), .inkling2)
+            XCTAssertEqual(NativeChatRuntime.commandFamily(modelID: name), .inkling2Mini)
             guard case .textChatInkling2 = try NativeChatRuntime.command(modelID: name, modelPath: nil) else {
                 return XCTFail("Expected native Inkling 2 runtime")
             }

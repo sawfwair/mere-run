@@ -77,7 +77,7 @@ final class TextChatCommandParsingTests: XCTestCase {
     func testTextChatGateRejectsDiffusionOptionsForOtherModels() throws {
         let report = try gate("--model", Gemma4Resources.nanoModelId, "--seed", "123", "--show-unmasking")
         XCTAssertEqual(report.violations, [
-            "--seed is not supported by Gemma 4. It applies to DiffusionGemma, Recursive Flint, Inkling 2, Kolibri 1, Qwen3.6 text, Qwen3.6 vision, Qwen3.8 and Bonsai 2.5.",
+            "--seed is not supported by Gemma 4. It applies to DiffusionGemma, Recursive Flint, Inkling 2 Small, Inkling 2 Mini, Kolibri 1, Qwen3.6 text, Qwen3.6 vision, Qwen3.8 and Bonsai 2.5.",
             "--show-unmasking is not supported by Gemma 4. It applies to DiffusionGemma."
         ])
     }
@@ -247,7 +247,7 @@ final class TextChatCommandParsingTests: XCTestCase {
         )
         XCTAssertEqual(
             try gate("--model", Gemma4Resources.twelveB4BitModelId, "--reasoning-effort", "0.2").violations,
-            ["--reasoning-effort is not supported by Gemma 4. It applies to Inkling 2, Inkling-Small, Muse Glimmer, Qwen3.8 and Bonsai 2.5."]
+            ["--reasoning-effort is not supported by Gemma 4. It applies to Inkling 2 Small, Inkling 2 Mini, Inkling-Small, Muse Glimmer, Qwen3.8 and Bonsai 2.5."]
         )
     }
 
@@ -269,7 +269,7 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertFalse(try gate("--model", command.model, "--response-format", "json_object").violations.isEmpty)
         XCTAssertEqual(
             try gate("--model", command.model, "--lora", "adapter.safetensors").violations,
-            ["--lora is not supported by Muse Glimmer. It applies to Gemma 4, Gemma 4 12B vision, Laguna, Inkling-Small, LFM2.5 A1B 8-bit and Qwen3.8."]
+            ["--lora is not supported by Muse Glimmer. It applies to Gemma 4, Gemma 4 12B vision, Inkling 2 Mini, Laguna, Inkling-Small, LFM2.5 A1B 8-bit and Qwen3.8."]
         )
     }
 
@@ -632,7 +632,7 @@ final class TextChatCommandParsingTests: XCTestCase {
         }
         XCTAssertEqual(
             try gate("--model", NemotronHResources.modelID, "--image", "a.png").warnings,
-            ["--image has no effect with Nemotron 3.5 Lightning. It applies to Gemma 4 12B vision, Inkling 2, Muse Glimmer, Nemotron 3.5 Bolt, Nemotron 3 Nano Omni, LFM2.5-VL, Qwen3.6 vision, Qwen3.8 and Bonsai 2.5."]
+            ["--image has no effect with Nemotron 3.5 Lightning. It applies to Gemma 4 12B vision, Inkling 2 Small, Inkling 2 Mini, Muse Glimmer, Nemotron 3.5 Bolt, Nemotron 3 Nano Omni, LFM2.5-VL, Qwen3.6 vision, Qwen3.8 and Bonsai 2.5."]
         )
     }
 
