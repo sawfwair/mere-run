@@ -16,6 +16,7 @@ mere.run image generate --model image-nemotron-labs-30b-a3b-q6 \
 
 For the managed Q8 checkpoint, use `image-nemotron-labs-30b-a3b-q8` in both commands.
 It downloads about 40.3 GB including the decoder and uses the same NVIDIA license.
+Use `image-nemotron-labs-30b-a3b` for the original FP32 download (about 133 GB) and BF16 inference.
 
 ## Controls and variants
 
