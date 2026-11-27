@@ -16,7 +16,7 @@ public struct NemotronImageGenerator: ImageGenerator {
             throw ImageGenerationIssue("nemotron_image_options_invalid", "Expected a text-to-image PNG request within the visual token budget.")
         }
         try Task.checkCancellation()
-        let root = try ImageGenerationModelSelection(request.model ?? ManagedModelID.nemotronImage.rawValue).resolveRoot()
+        let root = try ImageGenerationModelSelection(request.model ?? ManagedModelID.nemotronImageQ6.rawValue).resolveRoot()
         let format = try NemotronImageResources.read(NemotronImageTokens.self,
             at: root.appending(path: "unitron_extension_manifest.json"))
         try format.validate()

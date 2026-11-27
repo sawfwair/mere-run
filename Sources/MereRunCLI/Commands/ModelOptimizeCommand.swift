@@ -26,7 +26,7 @@ struct ModelOptimize: ParsableCommand {
     )
     var output: String?
 
-    @Option(name: .long, help: "Nemotron Image routed expert precision (4, 6 or 8, default 8).")
+    @Option(name: .long, help: "Nemotron Image routed expert precision (4, 6 or 8). Default: 6 with 8-bit dense projections for original weights, or the source recipe for packed weights.")
     var bits: Int?
 
     @Flag(name: [.long], help: "Emit the result as JSON.")
@@ -46,8 +46,10 @@ struct ModelOptimize: ParsableCommand {
             }
             try MLXBundleSupport.ensureAvailable(quiet: false)
             artifacts = try NemotronImageQuantization.export(source: rootURL, destination: URL(fileURLWithPath: output),
-                bits: bits ?? 8) { CLIStderr.write("Packing Nemotron Image \($0)\n") }
-            optimization = NemotronImageQuantization.scheme
+                bits: bits) { CLIStderr.write("Packing Nemotron Image \($0)\n") }
+            let manifest = try MereRunModelManifest.loadRequired(from: URL(fileURLWithPath: output))
+            guard let scheme = manifest.quantization?.scheme else { throw ValidationError("Missing exported quantization scheme.") }
+            optimization = scheme
         } else if engine == .miniMaxH3Image {
             guard !textEncoderOnly, !force, let output, !output.isEmpty else {
                 throw ValidationError("H3-Image Q8 export requires --output <new-directory>; --force and --text-encoder-only are unsupported.")

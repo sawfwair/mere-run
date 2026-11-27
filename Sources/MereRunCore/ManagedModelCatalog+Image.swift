@@ -1,17 +1,23 @@
 import Foundation
 
 extension ManagedModelCatalog {
-    static let imageSpecs: [ManagedModelSpec] = [
+    private static func nemotronPack(_ id: ManagedModelID, _ variant: NemotronImageCommunityPack.Variant,
+                                     bytes: Int64) -> ManagedModelSpec {
         ManagedModelSpec(
-            id: ManagedModelID.nemotronImageQ8.rawValue, category: .image, installShape: .directoryRoot,
-            hubFallback: HubFallbackConfig(repoId: NemotronImageCommunityPack.repository, revision: NemotronImageCommunityPack.revision,
+            id: id.rawValue, category: .image, installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(repoId: variant.repository, revision: variant.revision,
                 patterns: NemotronImageCommunityPack.files + ["LICENSE", "NOTICE", "README.md"]),
-            upstreamRepoId: NemotronImageCommunityPack.repository, upstreamRevision: NemotronImageCommunityPack.revision,
+            upstreamRepoId: variant.repository, upstreamRevision: variant.revision,
             usageRestriction: usageRestriction(summary: "Licensed for non-commercial research and evaluation.",
                 license: "NVIDIA License", sourceRepoId: NemotronImageResources.repository, sourceRevision: NemotronImageResources.revision,
                 licenseURL: "https://huggingface.co/\(NemotronImageResources.repository)/blob/\(NemotronImageResources.revision)/LICENSE"),
             validationKind: .nemotronImage, runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: 40_317_799_235, defaultCLICommands: ["image generate"]),
+            estimatedDownloadBytes: bytes, defaultCLICommands: ["image generate"])
+    }
+
+    static let imageSpecs: [ManagedModelSpec] = [
+        nemotronPack(.nemotronImageQ6, .mixed, bytes: 30_751_843_293),
+        nemotronPack(.nemotronImageQ8, .q8, bytes: 40_317_799_235),
         ManagedModelSpec(
             id: ManagedModelID.nemotronImage.rawValue, category: .image, installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(repoId: NemotronImageResources.repository, revision: NemotronImageResources.revision,

@@ -1,8 +1,6 @@
 # Nemotron Labs Image 30B-A3B (NVIDIA)
 
-Use `image-nemotron-labs-30b-a3b` to generate a PNG from a text prompt.
-The download includes about 133 GB of FP32 weights. The runtime loads the
-generator in BF16, samples the visual grid, and then loads the L24SQ decoder.
+Use `image-nemotron-labs-30b-a3b-q6` to generate a PNG from a text prompt. The recommended 30.75 GB download includes the mixed 6-bit-expert, 8-bit-dense generator and the pixel decoder.
 
 ## Example to adapt
 
@@ -10,8 +8,8 @@ For non-commercial research or evaluation, review NVIDIA's license before
 accepting it and installing the checkpoint. [NVIDIA license](https://huggingface.co/nvidia/Nemotron-Labs-Image-30B-A3B/blob/d7c2ba6a59a384080f0bdd5b1e846da03804cdd1/LICENSE)
 
 ```bash
-mere.run model pull image-nemotron-labs-30b-a3b --accept-model-license
-mere.run image generate --model image-nemotron-labs-30b-a3b \
+mere.run model pull image-nemotron-labs-30b-a3b-q6 --accept-model-license
+mere.run image generate --model image-nemotron-labs-30b-a3b-q6 \
   --prompt "Two orange kayaks on a lake, viewed from above" \
   --width 1184 --height 880 --seed 42 --output ./kayaks.png
 ```
@@ -31,5 +29,4 @@ seed or a recommended size. Use `--max-sequence-length` for longer prompts.
 
 The runtime follows the standalone raster generation protocol at revision
 `d7c2ba6a59a384080f0bdd5b1e846da03804cdd1`. Synthetic tests cover expert
-loading, grid framing, and decoding to RGB. Full-checkpoint image quality,
-latency, and peak memory still require measurement. [Model card](https://huggingface.co/nvidia/Nemotron-Labs-Image-30B-A3B) · [VisualCreation paper](https://huggingface.co/papers/2611.31358)
+loading, grid framing, and decoding to RGB. Q6 peaked at 26.90 GiB in six native 1024 × 1024 attempts on a 128 GiB M5 Max. Fit on a 36 GiB Mac is estimated. [Model card](https://huggingface.co/nvidia/Nemotron-Labs-Image-30B-A3B) · [VisualCreation paper](https://huggingface.co/papers/2611.31358)

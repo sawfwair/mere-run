@@ -10,8 +10,8 @@ with separate files for the embedding table, final norm, and output head.
 The manifest records the bit width, group size, and packing scheme.
 
 `NemotronImageQuantization` implements `model optimize` for this family.
-It packs only the routed expert matrices. Prefill and single-token decode
-both use packed expert multiplication. The VisualInference Q8 import path
-maps the existing affine weights, scales, and biases to the Swift module keys.
+The default recipe packs routed experts at six bits and dense projections at eight bits.
+The Q4 and Q8 recipes pack routed experts and keep dense weights in BF16.
+The community importer validates each recipe and maps its packed tensors to Swift module keys.
 
 For conversion and generation commands, see the [image runtime guide](../../../docs/runtime/image.md).

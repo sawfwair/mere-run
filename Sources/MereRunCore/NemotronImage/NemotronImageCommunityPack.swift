@@ -4,9 +4,17 @@ import MLXNN
 
 /// Imports the VisualInference layer layout without evaluating Python model code.
 enum NemotronImageCommunityPack {
-    static let repository = "VisualInference/Nemotron-Labs-Image-30B-A3B-MLX-8bit"
+    enum Variant: Int {
+        case mixed = 6
+        case q8 = 8
 
-    static let revision = "e9ea81ae28322e58d20fd94fb3292e1fc7f36ece"
+        var repository: String { "VisualInference/Nemotron-Labs-Image-30B-A3B-MLX-\(rawValue)bit" }
+        var revision: String {
+            self == .mixed ? "42b90afa978f4a4564b72b203e7e7669dcf3f36c" : "e9ea81ae28322e58d20fd94fb3292e1fc7f36ece"
+        }
+        var scheme: String { self == .mixed ? NemotronImageQuantization.mixedScheme : NemotronImageQuantization.scheme }
+    }
+
     static let metadataFiles = ["config.json", "tokenizer.json", "tokenizer_config.json",
                                 "chat_template.jinja", "unitron_extension_manifest.json"]
     static let files = metadataFiles + ["embed.npy", "head.safetensors", "vq/config.json", "vq/model.safetensors"]
@@ -37,12 +45,17 @@ enum NemotronImageCommunityPack {
         }
     }
 
-    static func checkRecipe(at root: URL, bits: Int) throws {
+    static func variant(at root: URL) throws -> Variant {
         let config = try NemotronImageResources.read(Config.self, at: root.appending(path: "config.json"))
-        guard bits == 8, config.recipe.count == 1, let expert = config.recipe["experts"],
-              expert.bits == bits, expert.group == 64, expert.mode == "affine" else {
-            throw NemotronImageResources.invalid("Import requires group-64 affine Q8 routed experts.")
+        guard let bits = config.recipe["experts"]?.bits, let variant = Variant(rawValue: bits) else {
+            throw NemotronImageResources.invalid("Unsupported routed-expert precision.")
         }
+        let expected = variant == .mixed ? ["experts": 6, "dense": 8, "shared": 8, "lm_head": 8] : ["experts": 8]
+        guard config.recipe.mapValues(\.bits) == expected,
+              config.recipe.values.allSatisfy({ $0.group == 64 && $0.mode == "affine" }) else {
+            throw NemotronImageResources.invalid("Unsupported Nemotron Image quantization recipe.")
+        }
+        return variant
     }
 
     static func weights(at root: URL, prefix: String, module: Module) throws -> [String: MLXArray] {
@@ -53,9 +66,11 @@ enum NemotronImageCommunityPack {
         }
         if prefix == "lm_head." || prefix == "backbone.norm_f." {
             let arrays = try MLX.loadArrays(url: root.appending(path: "head.safetensors"))
-            let key = prefix == "lm_head." ? "lm_head.weight" : "norm_f_weight"
-            guard let tensor = arrays[key] else { throw NemotronImageResources.invalid("Missing \(key).") }
-            return ["weight": tensor]
+            return try Dictionary(uniqueKeysWithValues: module.parameters().flattened().map { key, _ in
+                let name = prefix == "lm_head." ? prefix + key : "norm_f_weight"
+                guard let value = arrays[name] else { throw NemotronImageResources.invalid("Missing \(name).") }
+                return (key, value)
+            })
         }
         guard let suffix = prefix.split(separator: ".").last, let index = Int(suffix) else {
             throw NemotronImageResources.invalid("Invalid layer prefix \(prefix).")

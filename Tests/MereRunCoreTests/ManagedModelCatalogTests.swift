@@ -236,6 +236,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "image-flux3-klein",
             "image-minimax-h3",
             "image-nemotron-labs-30b-a3b",
+            "image-nemotron-labs-30b-a3b-q6",
             "image-nemotron-labs-30b-a3b-q8",
             "image-flux1-dev",
             "image-flux2-dev",

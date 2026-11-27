@@ -1410,13 +1410,14 @@ extension MereRunModelManifest {
                 upstreamRepoId: "\(Krea2Resources.upstreamRepoId)@\(Krea2Resources.upstreamRevision)",
                 createdAt: createdAt
             )
-        case .nemotronImageQ8:
+        case .nemotronImageQ6, .nemotronImageQ8:
+            let variant: NemotronImageCommunityPack.Variant = modelID == .nemotronImageQ6 ? .mixed : .q8
             var manifest = baseTemplate(for: .nemotronImage, createdAt: createdAt)
             manifest.id = modelID.rawValue
-            manifest.precision = .int8
-            manifest.quantization = Quantization(bits: 8, groupSize: 64, scheme: NemotronImageQuantization.scheme)
+            manifest.precision = variant == .mixed ? .int6 : .int8
+            manifest.quantization = Quantization(bits: variant.rawValue, groupSize: 64, scheme: variant.scheme)
             manifest.components?.vae = .local(path: "vq")
-            manifest.upstreamRepoId = "\(NemotronImageCommunityPack.repository)@\(NemotronImageCommunityPack.revision)"
+            manifest.upstreamRepoId = "\(variant.repository)@\(variant.revision)"
             return manifest
         case .nemotronImage:
             return MereRunModelManifest(

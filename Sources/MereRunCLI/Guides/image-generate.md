@@ -12,6 +12,7 @@ Use one installed image model:
 - `image-klein-max`, `image-klein-base`, `image-klein-nano`, `image-klein-9b`, `image-klein-base-9b`
 - `image-bonsai-binary`, `image-bonsai-ternary`
 - `image-nemotron-labs-30b-a3b`
+- `image-nemotron-labs-30b-a3b-q6`
 - `image-nemotron-labs-30b-a3b-q8`
 - `image-minimax-h3`
 - `image-flux3-klein`

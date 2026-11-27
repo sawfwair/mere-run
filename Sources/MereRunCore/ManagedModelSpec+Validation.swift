@@ -123,7 +123,7 @@ public extension ManagedModelSpec {
             return Flux1Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .nemotronImage:
             let files: [String]
-            if id == ManagedModelID.nemotronImageQ8.rawValue {
+            if id == ManagedModelID.nemotronImageQ6.rawValue || id == ManagedModelID.nemotronImageQ8.rawValue {
                 let native = fileManager.fileExists(atPath: rootURL.appending(path: "backbone.embeddings.safetensors").path)
                 files = native ? NemotronImageResources.supportFiles + NemotronImageQuantization.files : NemotronImageCommunityPack.files
             } else {

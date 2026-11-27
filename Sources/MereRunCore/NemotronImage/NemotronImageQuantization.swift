@@ -41,12 +41,12 @@ public enum NemotronImageQuantization {
         }
     }
 
-    static func pack(_ weights: [(String, MLXArray)], bits: Int) -> [String: MLXArray] {
+    static func pack(_ weights: [(String, MLXArray)], bits: Int, denseWeights: Set<String> = []) -> [String: MLXArray] {
         var output: [String: MLXArray] = [:]
         for (key, value) in weights {
-            if key.hasPrefix("mixer.experts."), key.hasSuffix(".weight") {
+            if (key.hasPrefix("mixer.experts.") && key.hasSuffix(".weight")) || denseWeights.contains(key) {
                 let prefix = key.dropLast("weight".count)
-                let bank = quantized(value, groupSize: 64, bits: bits)
+                let bank = quantized(value, groupSize: 64, bits: denseWeights.contains(key) ? 8 : bits)
                 output[key] = bank.wq
                 output[prefix + "scales"] = bank.scales
                 output[prefix + "biases"] = bank.biases
@@ -57,27 +57,38 @@ public enum NemotronImageQuantization {
         return output
     }
 
-    public static func export(source: URL, destination: URL, bits: Int,
+    static func denseWeightKeys(_ module: Module) -> Set<String> {
+        if module is Linear { return ["weight"] }
+        return Set(module.leafModules().flattened().compactMap { path, layer in
+            layer is Linear ? path + ".weight" : nil
+        })
+    }
+
+    public static func export(source: URL, destination: URL, bits requestedBits: Int?,
                               progress: (String) -> Void) throws -> [URL] {
         let fm = FileManager.default
+        let community = NemotronImageCommunityPack.isPresent(at: source)
+        let variant = try community ? NemotronImageCommunityPack.variant(at: source) : nil
+        let bits = requestedBits ?? variant?.rawValue ?? 6
         guard [4, 6, 8].contains(bits), !fm.fileExists(atPath: destination.path) else {
             throw NemotronImageResources.invalid("Choose 4, 6 or 8 bits and a new output directory.")
         }
         let config = try NemotronImageResources.languageConfig(at: source)
-        let community = fm.fileExists(atPath: source.appending(path: "embed.npy").path)
         let decoder = community ? "vq" : NemotronImageResources.decoderDirectory
         try NemotronImageResources.DecoderConfig.validate(at: source.appending(path: decoder))
         var manifest: MereRunModelManifest
         let sourceModel: NemotronOmniCausalLM
         let index: HFSafetensorsIndex?
-        if community {
-            try NemotronImageCommunityPack.checkRecipe(at: source, bits: bits)
+        if let variant {
+            guard variant.rawValue == bits else {
+                throw NemotronImageResources.invalid("Packed input requires --bits \(variant.rawValue).")
+            }
             manifest = .template(for: .nemotronImage)
             let metadata = source.appending(path: ".cache/huggingface/download/config.json.metadata")
             let revision = (try? String(contentsOf: metadata, encoding: .utf8))?.split(separator: "\n").first
-            manifest.sources = (manifest.sources ?? []) + [.init(role: "packed-generator-and-decoder", repository: NemotronImageCommunityPack.repository,
+            manifest.sources = (manifest.sources ?? []) + [.init(role: "packed-generator-and-decoder", repository: variant.repository,
                                       revision: revision.map(String.init) ?? "unspecified", destinationPath: ".")]
-            sourceModel = NemotronOmniCausalLM(config: config, expertBits: bits)
+            sourceModel = NemotronImageLoader.makeModel(config, bits: bits, mixed: variant == .mixed)
             index = nil
         } else {
             manifest = try MereRunModelManifest.loadRequired(from: source)
@@ -98,8 +109,9 @@ public enum NemotronImageQuantization {
             progress(prefix)
             let weights: [String: MLXArray]
             if let index {
+                let dense = bits == 6 ? denseWeightKeys(module) : []
                 weights = pack(try NemotronImageLoader.releasedWeights(at: source, config: config,
-                    index: index, module: module, prefix: prefix), bits: bits)
+                    index: index, module: module, prefix: prefix), bits: bits, denseWeights: dense)
             } else {
                 weights = try NemotronImageCommunityPack.weights(at: source, prefix: prefix, module: module)
                 try validate(weights, for: module)
@@ -128,7 +140,7 @@ public enum NemotronImageQuantization {
         case 6: manifest.precision = .int6
         default: manifest.precision = .int4
         }
-        manifest.quantization = .init(bits: bits, groupSize: 64, scheme: scheme)
+        manifest.quantization = .init(bits: bits, groupSize: 64, scheme: bits == 6 ? mixedScheme : scheme)
         manifest.createdAt = Date()
         try manifest.write(to: staging)
         try fm.moveItem(at: staging, to: destination)

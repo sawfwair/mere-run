@@ -126,7 +126,7 @@
     "topic": "handbook-nemotron-image",
     "title": "Nemotron Labs Image 30B-A3B (NVIDIA)",
     "category": "Image",
-    "models": ["image-nemotron-labs-30b-a3b", "image-nemotron-labs-30b-a3b-q8"],
+    "models": ["image-nemotron-labs-30b-a3b-q6", "image-nemotron-labs-30b-a3b-q8", "image-nemotron-labs-30b-a3b"],
     "resourceName": "handbook-nemotron-image.md"
   },
   {

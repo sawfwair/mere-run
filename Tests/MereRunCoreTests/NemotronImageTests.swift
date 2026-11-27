@@ -7,7 +7,7 @@ final class NemotronImageTests: MereRunCoreTestCase {
     func testManagedQ8PinsTheCommunityPackAndRecognizesBothLayouts() throws {
         let id = ManagedModelID.nemotronImageQ8.rawValue
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
-        XCTAssertEqual(spec.hubFallback?.revision, NemotronImageCommunityPack.revision)
+        XCTAssertEqual(spec.hubFallback?.revision, NemotronImageCommunityPack.Variant.q8.revision)
         XCTAssertNotNil(spec.usageRestriction)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         let template = MereRunModelManifest.template(for: .nemotronImageQ8)
@@ -29,6 +29,25 @@ final class NemotronImageTests: MereRunCoreTestCase {
         try FileManager.default.removeItem(at: root.appending(path: "embed.npy"))
         try Data([1]).write(to: root.appending(path: "backbone.embeddings.safetensors"))
         XCTAssertTrue(spec.missingPaths(in: root).contains(root.appending(path: "backbone.layers.51.safetensors")))
+    }
+
+    func testManagedQ6PinsAndValidatesTheMixedRecipe() throws {
+        let variant = NemotronImageCommunityPack.Variant.mixed
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: ManagedModelID.nemotronImageQ6.rawValue))
+        XCTAssertEqual(spec.hubFallback?.repoId, variant.repository)
+        XCTAssertEqual(spec.hubFallback?.revision, "42b90afa978f4a4564b72b203e7e7669dcf3f36c")
+        let template = MereRunModelManifest.template(for: .nemotronImageQ6)
+        XCTAssertEqual(try NemotronImageQuantization.expertBits(template), 6)
+        XCTAssertEqual(template.quantization?.scheme, variant.scheme)
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let json = #"{"mlx_recipe":{"experts":[6,64,"affine"],"dense":[8,64,"affine"],"shared":[8,64,"affine"],"lm_head":[8,64,"affine"]}}"#
+        let config = root.appending(path: "config.json")
+        try Data(json.utf8).write(to: config)
+        XCTAssertEqual(try NemotronImageCommunityPack.variant(at: root), .mixed)
+        try Data(json.replacingOccurrences(of: "[8,64", with: "[4,64").utf8).write(to: config)
+        XCTAssertThrowsError(try NemotronImageCommunityPack.variant(at: root))
     }
 
     func testLoadsSplitExpertsInNumericOrderAndTransposesDepthwiseConvolution() throws {
@@ -121,8 +140,11 @@ final class NemotronImageTests: MereRunCoreTestCase {
 
         let matrix = MLXArray.ones([32, 64], dtype: .bfloat16)
         let head = QuantizedLinear(weight: matrix, bias: nil, groupSize: 64, bits: 8)
-        var weights = Dictionary(uniqueKeysWithValues: head.parameters().flattened())
+        let source = Linear(weight: matrix, bias: nil)
+        var weights = NemotronImageQuantization.pack(source.parameters().flattened(), bits: 6,
+            denseWeights: NemotronImageQuantization.denseWeightKeys(source))
         try NemotronImageQuantization.validate(weights, for: head)
+        XCTAssertEqual(weights["weight"]?.shape, [32, 16])
         weights["weight"] = matrix
         XCTAssertThrowsError(try NemotronImageQuantization.validate(weights, for: head))
     }

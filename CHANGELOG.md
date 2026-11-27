@@ -8,8 +8,8 @@ The format is based on Keep a Changelog.
 
 ## 0.79.0 - 2026-11-27
 
-- Generate images on Apple Silicon with Nemotron Labs Image 30B-A3B. Pull the managed Q8
-  checkpoint with `mere.run model pull image-nemotron-labs-30b-a3b-q8 --accept-model-license`.
+- Generate images on Apple Silicon with Nemotron Labs Image 30B-A3B. Pull the recommended mixed Q6
+  checkpoint with `mere.run model pull image-nemotron-labs-30b-a3b-q6 --accept-model-license`.
   The native raster generator also supports the original checkpoint and local Q4 exports.
 - Accept several images in one message for Inkling 2 in `api serve`. Each
   image after the first becomes its own message, so a Pi agent that calls

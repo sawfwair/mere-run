@@ -9,16 +9,12 @@ enum NemotronImageLoader {
         let bits = try NemotronImageQuantization.expertBits(manifest)
         let community = NemotronImageCommunityPack.isPresent(at: root)
         if community {
-            try NemotronImageCommunityPack.checkRecipe(at: root, bits: bits ?? 0)
-        }
-        let model = NemotronOmniCausalLM(config: config, expertBits: bits)
-        if manifest?.quantization?.scheme == NemotronImageQuantization.mixedScheme {
-            // The dense recipe covers Mamba, attention, shared experts and the output head.
-            // Embeddings, router parameters and the decoder retain their baseline precision.
-            quantize(model: model, groupSize: 64, bits: 8, mode: .affine) { _, module in
-                module is Linear
+            let variant = try NemotronImageCommunityPack.variant(at: root)
+            guard bits == variant.rawValue, manifest?.quantization?.scheme == variant.scheme else {
+                throw NemotronImageResources.invalid("Checkpoint recipe differs from its manifest.")
             }
         }
+        let model = makeModel(config, bits: bits, mixed: manifest?.quantization?.scheme == NemotronImageQuantization.mixedScheme)
         let index = try bits == nil ? releasedIndex(at: root) : nil
         try visitModules(model) { module, prefix in
             let weights: [(String, MLXArray)]
@@ -35,6 +31,18 @@ enum NemotronImageLoader {
                 weights = Array(arrays)
             }
             try module.update(parameters: ModuleParameters.unflattened(weights), verify: .all)
+        }
+        return model
+    }
+
+    static func makeModel(_ config: NemotronHConfig, bits: Int?, mixed: Bool) -> NemotronOmniCausalLM {
+        let model = NemotronOmniCausalLM(config: config, expertBits: bits)
+        if mixed {
+            // The dense recipe covers Mamba, attention, shared experts and the output head.
+            // Embeddings, router parameters and the decoder retain their baseline precision.
+            quantize(model: model, groupSize: 64, bits: 8, mode: .affine) { _, module in
+                module is Linear
+            }
         }
         return model
     }
