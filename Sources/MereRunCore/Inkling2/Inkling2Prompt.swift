@@ -38,7 +38,7 @@ enum Inkling2Prompt {
         return tokens
     }
 
-    static func prepare(_ request: ChatRequest, tokenizer: any Tokenizer, template: Inkling2ChatTemplate, model: Inkling2Model,
+    static func prepare(_ request: ChatRequest, tokenizer: any Tokenizer, template: Inkling2ChatTemplate,
                         encode: (MediaImage, Int) throws -> MLXArray) throws -> Prepared {
         let effort = request.reasoningEffort ?? 0.9
         guard effort.isFinite, (0...0.99).contains(effort) else { throw ChatRequestIssue("reasoning_effort", "must be between 0 and 0.99") }
