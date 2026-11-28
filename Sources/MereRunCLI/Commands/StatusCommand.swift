@@ -3,6 +3,7 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
+import MereRunContract
 import MereRunCore
 
 struct Status: AsyncParsableCommand {
@@ -86,6 +87,7 @@ struct StatusSnapshot: Codable, Equatable {
     var capabilities: StatusCapabilitiesSnapshot = .current
     var machineAdmission: MachineInferenceAdmissionSnapshot? = nil
     var machineAdmissionDetail: String? = nil
+    var environment: MereRunEnvironmentAudit? = nil
 }
 
 struct StatusCapabilitiesSnapshot: Codable, Equatable {
@@ -159,6 +161,7 @@ struct StatusSnapshotBuilder {
             machineAdmissionDetail = error.localizedDescription
         }
 
+        let environmentAudit = CLIEnvironmentGate.audit()
         return StatusSnapshot(
             server: server,
             modelStore: StatusModelStoreSnapshot(
@@ -174,7 +177,8 @@ struct StatusSnapshotBuilder {
             inventoryDurationMs: inventory.durationMs,
             modelLocationIssues: inventory.locationIssues,
             machineAdmission: machineAdmission,
-            machineAdmissionDetail: machineAdmissionDetail
+            machineAdmissionDetail: machineAdmissionDetail,
+            environment: environmentAudit.isEmpty ? nil : environmentAudit
         )
     }
 
@@ -380,6 +384,9 @@ enum StatusFormatter {
                     guard let mtp = model.mtp else { continue }
                     lines.append("    \(model.id) MTP: \(mtpText(mtp))")
                 }
+                if let runtimeEnvironment = runtime.environment, !runtimeEnvironment.isEmpty {
+                    lines.append(contentsOf: environmentLines(label: "server environment", audit: runtimeEnvironment))
+                }
             } else if !snapshot.server.loadedModels.isEmpty {
                 lines.append("  loaded models: \(snapshot.server.loadedModels.joined(separator: ", "))")
             } else if let modelsDetail = snapshot.server.modelsDetail {
@@ -417,6 +424,9 @@ enum StatusFormatter {
             lines.append("  runtime settings: \(runtime.settingsPath)")
         } else if let detail = snapshot.server.runtimeDetail, snapshot.server.health == "up" {
             lines.append("  runtime settings: unavailable (\(detail))")
+        }
+        if let environment = snapshot.environment, !environment.isEmpty {
+            lines.append(contentsOf: environmentLines(label: "environment overrides", audit: environment))
         }
         lines.append("  installed models: \(snapshot.installedModels.count)/\(snapshot.knownModelCount)")
         let completeness = snapshot.inventoryComplete ? "complete" : "incomplete"
@@ -605,5 +615,21 @@ enum StatusFormatter {
             parts.append(String(format: "decode %.2f tok/s", decodeTokensPerSecond))
         }
         return parts.joined(separator: ", ")
+    }
+
+    private static func environmentLines(label: String, audit: MereRunEnvironmentAudit) -> [String] {
+        var lines: [String] = []
+        if audit.activeOverrides.isEmpty {
+            lines.append("  \(label): \(audit.warnings.count) warning(s)")
+        } else {
+            let summary = audit.activeOverrides
+                .map { "\($0.name)=\($0.value)" }
+                .joined(separator: ", ")
+            lines.append("  \(label): \(summary)")
+        }
+        for warning in audit.warnings {
+            lines.append("    warning: \(warning)")
+        }
+        return lines
     }
 }

@@ -52,6 +52,9 @@ struct MereRunCLI: AsyncParsableCommand {
             for line in gate.stderrLines {
                 CLIStderr.write(line)
             }
+            for line in CLIEnvironmentGate.stderrLines(arguments: CommandLine.arguments) {
+                CLIStderr.write(line)
+            }
             try await run(command, warnings: gate.warnings)
         } catch {
             exit(withError: error)

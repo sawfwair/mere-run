@@ -946,3 +946,18 @@ latents, Stage-2 input/output, representative post-LoRA weights, and per-forward
 AdaLN/RoPE plus first-block sublayer tensors. Set both
 `MERERUN_VIDEO_LTX_A2VID_*_NOISE_PATH` variables to replay `.npy` noise tensors
 exported by the pinned upstream MLX pipeline.
+
+## Environment variable validation and status reporting
+
+Every recognized `MERERUN_*` variable is registered in `MereRunEnvironmentRegistry`
+(`Sources/MereRunContract/`). At CLI startup, `mere.run` checks active `MERERUN_*`
+variables and prints a non-fatal warning on `stderr` when a variable name is unknown
+(including a closest-match suggestion for typos) or when its value does not match
+the expected syntax. Warnings stay off `stdout` and are suppressed under `--quiet`,
+`--help`, and `--version`.
+
+When any `MERERUN_*` overrides are set, `mere.run status`, `mere.run status --json`,
+and the API server's `/runtime/status` payload report the active overrides and any
+validation warnings. Sensitive variables (`MERERUN_API_KEY`, `MERERUN_RELAY_TOKEN`,
+`MERERUN_CONFIG_VALUE`, `MERERUN_OPEN_WEBUI_ADMIN_PASSWORD`, and `MERERUN_SECRET_*`)
+are always reported as `[redacted]`.

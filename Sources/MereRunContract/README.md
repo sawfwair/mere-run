@@ -15,6 +15,15 @@ second copy of the command surface.
 Studio validation. Numeric capability ranges remain display hints; they do not
 replace runtime constraints.
 
+`MereRunEnvironmentRegistry` (`MereRunEnvironmentRegistry.swift`,
+`MereRunEnvironmentCatalog.swift`, and `MereRunEnvironmentCatalog+Qwen.swift`)
+holds the canonical registry of `MERERUN_*` environment variables and dynamic
+prefixes (`MERERUN_SECRET_*`, `MERERUN_TEST_*`), their categories, expected
+value kinds, and secret redaction rules. The CLI audits process environments at
+startup to warn on typos or invalid values and surfaces active overrides in
+`mere.run status` and `/runtime/status`. `MereRunEnvironmentRegistryTests`
+enforces that every production `MERERUN_*` variable literal stays registered.
+
 To change a capability, open its `CommandCapabilityCatalog+<family>.swift` file.
 Model benchmark definitions have their own file. Shared receipt and progress
 options belong to `CommandCapabilityCatalog+Options.swift`; typed text and video
