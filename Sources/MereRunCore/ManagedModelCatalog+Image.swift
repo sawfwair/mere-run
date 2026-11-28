@@ -1,8 +1,24 @@
 import Foundation
 
 extension ManagedModelCatalog {
+    private static func nemotronImageManifest(
+        precision: MereRunModelManifest.Precision,
+        quantization: MereRunModelManifest.Quantization? = nil,
+        decoderPath: String
+    ) -> ManagedModelManifestTemplate {
+        .init(
+            engine: .nemotronImage, family: .nemotronImage, tier: .latest, variant: .base,
+            precision: precision, quantization: quantization,
+            defaults: .init(steps: 1, cfg: 1), supports: [.txt2img],
+            components: .init(
+                tokenizer: .local(path: "."), textEncoder: .local(path: "."),
+                transformer: .local(path: "."), vae: .local(path: decoderPath), scheduler: nil
+            )
+        )
+    }
+
     private static func nemotronPack(_ id: ManagedModelID, _ variant: NemotronImageCommunityPack.Variant,
-                                     bytes: Int64) -> ManagedModelSpec {
+                                     bytes: Int64, capability: ManagedModelCapabilityMetadata) -> ManagedModelSpec {
         ManagedModelSpec(
             id: id.rawValue, category: .image, installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(repoId: variant.repository, revision: variant.revision,
@@ -12,12 +28,28 @@ extension ManagedModelCatalog {
                 license: "NVIDIA License", sourceRepoId: NemotronImageResources.repository, sourceRevision: NemotronImageResources.revision,
                 licenseURL: "https://huggingface.co/\(NemotronImageResources.repository)/blob/\(NemotronImageResources.revision)/LICENSE"),
             validationKind: .nemotronImage, runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: bytes, defaultCLICommands: ["image generate"])
+            estimatedDownloadBytes: bytes, defaultCLICommands: ["image generate"],
+            manifestTemplate: nemotronImageManifest(
+                precision: variant == .mixed ? .int6 : .int8,
+                quantization: .init(bits: variant.rawValue, groupSize: 64, scheme: variant.scheme),
+                decoderPath: "vq"
+            ),
+            capability: capability)
     }
 
     static let imageSpecs: [ManagedModelSpec] = [
-        nemotronPack(.nemotronImageQ6, .mixed, bytes: 30_751_843_293),
-        nemotronPack(.nemotronImageQ8, .q8, bytes: 40_317_799_235),
+        nemotronPack(.nemotronImageQ6, .mixed, bytes: 30_751_843_293, capability: .init(
+            "Image, Nemotron Labs Image 30B-A3B Q6",
+            "Recommended Nemotron Image checkpoint with 6-bit routed experts and 8-bit dense projections. The 36 GB fit is estimated.",
+            minimum: 36,
+            recommended: 36
+        )),
+        nemotronPack(.nemotronImageQ8, .q8, bytes: 40_317_799_235, capability: .init(
+            "Image, Nemotron Labs Image 30B-A3B Q8",
+            "Native raster generation with 8-bit routed experts. Memory requirements are estimates.",
+            minimum: 48,
+            recommended: 64
+        )),
         ManagedModelSpec(
             id: ManagedModelID.nemotronImage.rawValue, category: .image, installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(repoId: NemotronImageResources.repository, revision: NemotronImageResources.revision,
@@ -27,7 +59,16 @@ extension ManagedModelCatalog {
                 license: "NVIDIA License", sourceRepoId: NemotronImageResources.repository, sourceRevision: NemotronImageResources.revision,
                 licenseURL: "https://huggingface.co/\(NemotronImageResources.repository)/blob/\(NemotronImageResources.revision)/LICENSE"),
             validationKind: .nemotronImage, runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: 133_127_898_754, defaultCLICommands: ["image generate"]),
+            estimatedDownloadBytes: 133_127_898_754, defaultCLICommands: ["image generate"],
+            manifestTemplate: nemotronImageManifest(
+                precision: .bf16, decoderPath: NemotronImageResources.decoderDirectory
+            ),
+            capability: .init(
+                "Image, Nemotron Labs Image 30B-A3B",
+                "Samples raster images as visual tokens with native BF16 inference. Memory requirements are estimates.",
+                minimum: 80,
+                recommended: 96
+            )),
         ManagedModelSpec(
             id: MiniMaxH3ImageResources.modelID, category: .image, installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(repoId: MiniMaxH3ImageResources.repository,
@@ -39,7 +80,24 @@ extension ManagedModelCatalog {
                 sourceRepoId: MiniMaxH3ImageResources.repository, sourceRevision: MiniMaxH3ImageResources.revision,
                 licenseURL: "https://huggingface.co/\(MiniMaxH3ImageResources.repository)/blob/\(MiniMaxH3ImageResources.revision)/LICENSE"),
             validationKind: .miniMaxH3Image, runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: 135_400_000_000, defaultCLICommands: ["image generate"]),
+            estimatedDownloadBytes: 135_400_000_000, defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .miniMaxH3Image,
+                family: .h3Image,
+                tier: .latest,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: .init(steps: 6, cfg: 1.0),
+                supports: [.txt2img, .referenceEdit],
+                components: .init(tokenizer: .local(path: "tokenizer"), textEncoder: .local(path: "text_encoder"), transformer: .local(path: "transformer"), vae: .local(path: "vae"))
+            ),
+            capability: .init(
+                "Image, MiniMax-H3-Image",
+                "Runs native BF16 six-step generation and up to 16 reference images; checkpoint quality and peak memory remain unqualified.",
+                minimum: 96,
+                recommended: 128
+            )
+        ),
         ManagedModelSpec(
             id: Cosmos3Resources.superTextToImageModelID,
             category: .image,
@@ -54,7 +112,24 @@ extension ManagedModelCatalog {
             validationKind: .cosmos3SuperTextToImage,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 37_032_673_013,
-            defaultCLICommands: ["image generate", "video cosmos3 --mode text-to-image"]
+            defaultCLICommands: ["image generate", "video cosmos3 --mode text-to-image"],
+            manifestTemplate: .init(
+                engine: .cosmos3Super,
+                family: .cosmos,
+                tier: .max,
+                variant: .distilled,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 64, scheme: "mlx-affine"),
+                defaults: .init(steps: 4, cfg: 1.0),
+                supports: [.txt2img],
+                components: .init(tokenizer: .local(path: "text_tokenizer"), textEncoder: .local(path: "."), transformer: .local(path: "transformer"), vae: .local(path: "vae"), scheduler: .local(path: "scheduler"))
+            ),
+            capability: .init(
+                "Cosmos3-Super 4-Step MLX 4-bit",
+                "Generates images with the distilled four-step Cosmos3-Super export through video cosmos3 text-to-image mode.",
+                minimum: 64,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: Flux3Resources.modelID, category: .image, installShape: .directoryRoot,
@@ -67,7 +142,24 @@ extension ManagedModelCatalog {
                 sourceRevision: Flux3Resources.revision,
                 licenseURL: "https://huggingface.co/\(Flux3Resources.repoID)/blob/\(Flux3Resources.revision)/LICENSE.md"),
             validationKind: .flux3, runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: 20_320_953_181, defaultCLICommands: ["image generate"]),
+            estimatedDownloadBytes: 20_320_953_181, defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .flux3,
+                family: .flux3,
+                tier: .latest,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: .init(steps: 16, cfg: 1.0),
+                supports: [.txt2img, .referenceEdit],
+                components: .init(tokenizer: .local(path: "text_encoder"), textEncoder: .local(path: "text_encoder"), transformer: .local(path: "."), vae: .local(path: "."))
+            ),
+            capability: .init(
+                "Image, FLUX 3 Klein",
+                "Installs experimental native BF16 FLUX 3 Klein generation and reference editing; released-checkpoint quality and memory remain unqualified.",
+                minimum: 32,
+                recommended: 48
+            )
+        ),
         ManagedModelSpec(
             id: "image-klein-nano",
             category: .image,
@@ -80,7 +172,25 @@ extension ManagedModelCatalog {
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 4_627_979_498,
-            defaultCLICommands: ["image generate"]
+            defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .flux2Klein,
+                family: .klein,
+                tier: .nano,
+                variant: .distilled,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 64, scheme: "mlx-quantized-linear"),
+                defaults: .init(steps: 4, cfg: 1.0),
+                supports: [.txt2img, .referenceEdit, .loraInference],
+                components: .diffusers
+            ),
+            capability: .init(
+                "Image, fast artistic",
+                "Creates fast FLUX.2 Klein images for prompts, drafts, and lightweight image workflows.",
+                minimum: 8,
+                recommended: 16,
+                setup: true
+            )
         ),
         ManagedModelSpec(
             id: "image-klein-max",
@@ -94,7 +204,23 @@ extension ManagedModelCatalog {
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 15_980_131_745,
-            defaultCLICommands: ["image generate"]
+            defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .flux2Klein,
+                family: .klein,
+                tier: .max,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: .init(steps: 4, cfg: 1.0),
+                supports: [.txt2img, .referenceEdit, .loraInference],
+                components: .kleinHybrid
+            ),
+            capability: .init(
+                "Image, artistic quality",
+                "Creates higher-fidelity FLUX.2 Klein images when the machine has enough memory for the larger stack.",
+                minimum: 24,
+                recommended: 32
+            )
         ),
         ManagedModelSpec(
             // FLUX.2 [klein] 9B — 9B flow + 8B Qwen3 text embedder, step-distilled to 4 steps,
@@ -119,7 +245,24 @@ extension ManagedModelCatalog {
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 34_722_771_551,
-            defaultCLICommands: ["image generate"]
+            defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .flux2Klein,
+                family: .klein,
+                tier: .max,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: .init(steps: 4, cfg: 1.0),
+                supports: [.txt2img, .referenceEdit, .loraInference],
+                components: .kleinHybrid,
+                upstream: .explicit("black-forest-labs/FLUX.2-klein-9B")
+            ),
+            capability: .init(
+                "Image, large artistic quality",
+                "Installs the license-restricted FLUX.2 Klein 9B image model for higher-capacity prompt and reference-image workflows.",
+                minimum: 48,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: "image-klein-base",
@@ -133,7 +276,23 @@ extension ManagedModelCatalog {
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 15_980_131_711,
-            defaultCLICommands: ["image generate", "image train-lora"]
+            defaultCLICommands: ["image generate", "image train-lora"],
+            manifestTemplate: .init(
+                engine: .flux2Klein,
+                family: .klein,
+                tier: .base,
+                variant: .base,
+                precision: .unknown,
+                defaults: .init(steps: 50, cfg: 1.0),
+                supports: [.txt2img, .referenceEdit, .loraInference, .loraTraining],
+                components: .kleinHybrid
+            ),
+            capability: .init(
+                "Image training base",
+                "Installs the FLUX.2 Klein base layout used by image-training and compatibility workflows.",
+                minimum: 24,
+                recommended: 32
+            )
         ),
         ManagedModelSpec(
             // FLUX.2 [klein] Base 9B — undistilled bf16 9B transformer for LoRA/fine-tuning.
@@ -203,14 +362,44 @@ extension ManagedModelCatalog {
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 48 * 1_073_741_824,
-            defaultCLICommands: ["image generate", "image train-lora"]
+            defaultCLICommands: ["image generate", "image train-lora"],
+            manifestTemplate: .init(
+                engine: .flux2Klein,
+                family: .klein,
+                tier: .max,
+                variant: .base,
+                precision: .bf16,
+                defaults: .init(steps: 50, cfg: 1.0),
+                supports: [.txt2img, .referenceEdit, .loraInference, .loraTraining],
+                components: .kleinHybrid,
+                upstream: .spec
+            ),
+            capability: .init(
+                "Image LoRA training base",
+                "Installs the undistilled FLUX.2 Klein Base 9B checkpoint for higher-capacity LoRA training and research workflows.",
+                minimum: 64,
+                recommended: 96
+            )
         ),
         ManagedModelSpec(
             id: "image-klein-shared",
             category: .image,
             installShape: .directoryRoot,
             validationKind: .flux2Klein,
-            runtimeAutoDownloadAllowed: false
+            runtimeAutoDownloadAllowed: false,
+            manifestTemplate: .init(
+                engine: .flux2Klein,
+                family: .klein,
+                precision: .unknown,
+                supports: [.txt2img, .referenceEdit, .loraInference],
+                components: .kleinShared
+            ),
+            capability: .init(
+                "Shared Klein components",
+                "Represents shared FLUX.2 Klein components resolved from another installed Klein image model.",
+                minimum: 8,
+                recommended: 16
+            )
         ),
         ManagedModelSpec(
             // Keep the gated, LoRA-compatible FLUX.2-dev image stack authoritative while
@@ -246,7 +435,24 @@ extension ManagedModelCatalog {
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 78_100_000_000,
-            defaultCLICommands: ["image generate"]
+            defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .flux2Klein,
+                family: .klein,
+                tier: .max,
+                variant: .standard,
+                precision: .bf16,
+                defaults: .init(steps: 50, cfg: 4.0),
+                supports: [.txt2img, .referenceEdit, .loraInference],
+                components: .diffusers,
+                upstream: .spec
+            ),
+            capability: .init(
+                "Image, FLUX.2-dev LoRA",
+                "Installs gated FLUX.2-dev with a compatible 4-bit Mistral conditioner for high-quality generation and existing Dev LoRAs.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: Flux1Resources.modelID,
@@ -263,7 +469,23 @@ extension ManagedModelCatalog {
             validationKind: .flux1,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: Flux1Resources.estimatedDownloadBytes,
-            defaultCLICommands: ["image generate"]
+            defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .flux1,
+                family: .flux1,
+                tier: .max,
+                variant: .standard,
+                precision: .bf16,
+                defaults: .init(steps: 28, cfg: 3.5),
+                supports: [.txt2img, .loraInference],
+                components: .diffusers
+            ),
+            capability: .init(
+                "Image, FLUX.1-dev LoRA",
+                "Installs gated FLUX.1-dev for native text-to-image generation and existing FLUX.1 adapters.",
+                minimum: 48,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: "image-bonsai-binary",
@@ -286,7 +508,24 @@ extension ManagedModelCatalog {
             validationKind: .bonsaiImage,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 3_428_210_775,
-            defaultCLICommands: ["image generate"]
+            defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .flux2Klein,
+                family: .klein,
+                tier: .nano,
+                variant: .distilled,
+                precision: .int1,
+                quantization: .init(bits: 1, groupSize: 128, scheme: "prism-packed-affine-binary"),
+                defaults: .init(steps: 4, cfg: 1.0, sigmaShift: 3.0),
+                supports: [.txt2img],
+                components: .bonsaiImage
+            ),
+            capability: .init(
+                "Image, binary Klein",
+                "Runs the Bonsai Image binary FLUX.2 Klein deployment through the native Swift MLX image runtime.",
+                minimum: 16,
+                recommended: 24
+            )
         ),
         ManagedModelSpec(
             id: "image-bonsai-ternary",
@@ -309,7 +548,24 @@ extension ManagedModelCatalog {
             validationKind: .bonsaiImage,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 3_888_274_558,
-            defaultCLICommands: ["image generate"]
+            defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .flux2Klein,
+                family: .klein,
+                tier: .nano,
+                variant: .distilled,
+                precision: .int2,
+                quantization: .init(bits: 2, groupSize: 128, scheme: "mlx-packed-affine-ternary"),
+                defaults: .init(steps: 4, cfg: 1.0, sigmaShift: 3.0),
+                supports: [.txt2img],
+                components: .bonsaiImage
+            ),
+            capability: .init(
+                "Image, compact Klein",
+                "Runs the Bonsai Image ternary FLUX.2 Klein deployment through the native Swift MLX image runtime.",
+                minimum: 12,
+                recommended: 16
+            )
         ),
         ManagedModelSpec(
             id: "image-zimage-nano",
@@ -325,7 +581,25 @@ extension ManagedModelCatalog {
             validationKind: .zimageTurbo,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 20_538_488_559,
-            defaultCLICommands: ["image generate"]
+            defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .zimageTurbo,
+                family: .zimage,
+                tier: .nano,
+                variant: .distilled,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 64, scheme: "mlx-quantized-linear"),
+                defaults: .init(steps: 4, cfg: 1.0),
+                supports: [.txt2img, .img2img, .loraInference],
+                components: .diffusers
+            ),
+            capability: .init(
+                "Image Nano",
+                "Creates fast 4-bit Z-Image Turbo outputs for photorealistic and general image generation.",
+                minimum: 12,
+                recommended: 16,
+                setup: true
+            )
         ),
         ManagedModelSpec(
             id: "image-zimage-max",
@@ -341,7 +615,24 @@ extension ManagedModelCatalog {
             validationKind: .zimageTurbo,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 32_848_305_533,
-            defaultCLICommands: ["image generate"]
+            defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .zimageTurbo,
+                family: .zimage,
+                tier: .max,
+                variant: .distilled,
+                precision: .unknown,
+                defaults: .init(steps: 4, cfg: 1.0),
+                supports: [.txt2img, .img2img, .loraInference],
+                components: .diffusers,
+                upstream: .spec
+            ),
+            capability: .init(
+                "Image, realistic quality",
+                "Creates higher-fidelity Z-Image outputs from the larger Z-Image Turbo model.",
+                minimum: 48,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: "image-zimage-base",
@@ -357,7 +648,22 @@ extension ManagedModelCatalog {
             validationKind: .zimageTurbo,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 5_907_438_792,
-            defaultCLICommands: ["image generate"]
+            defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .zimageTurbo,
+                family: .zimage,
+                tier: .base,
+                variant: .base,
+                precision: .unknown,
+                supports: [.txt2img, .img2img, .loraInference, .loraTraining],
+                components: .zetaBaseHybrid
+            ),
+            capability: .init(
+                "Image realistic base",
+                "Installs the larger Z-Image base layout for advanced image workflows.",
+                minimum: 48,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: "image-hidream-o1",
@@ -386,7 +692,24 @@ extension ManagedModelCatalog {
             validationKind: .hidreamO1,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 35_231_213_079,
-            defaultCLICommands: ["image generate"]
+            defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .hidreamO1,
+                family: .hidream,
+                tier: .max,
+                variant: .base,
+                precision: .bf16,
+                defaults: .init(steps: 50, cfg: 5.0),
+                supports: [.txt2img, .referenceEdit, .subjectPersonalization],
+                components: .rootTextTransformer,
+                upstream: .spec
+            ),
+            capability: .init(
+                "Image, HiDream full",
+                "Runs the full HiDream O1 image model for high-quality text, reference editing, and personalization workflows.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: "image-hidream-o1-dev",
@@ -415,7 +738,24 @@ extension ManagedModelCatalog {
             validationKind: .hidreamO1,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 35_231_213_079,
-            defaultCLICommands: ["image generate"]
+            defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .hidreamO1,
+                family: .hidream,
+                tier: .max,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: .init(steps: 28, cfg: 0.0),
+                supports: [.txt2img, .referenceEdit, .subjectPersonalization],
+                components: .rootTextTransformer,
+                upstream: .spec
+            ),
+            capability: .init(
+                "Image, HiDream dev",
+                "Runs the distilled HiDream O1 image model for text, reference editing, and subject personalization.",
+                minimum: 48,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: SenseNovaU15Resources.modelID,
@@ -444,7 +784,24 @@ extension ManagedModelCatalog {
             validationKind: .senseNovaU15,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 50_227_451_138,
-            defaultCLICommands: ["image generate"]
+            defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .senseNovaU15,
+                family: .senseNova,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: .init(steps: 50, cfg: 4.0, sigmaShift: 3.0),
+                supports: [.txt2img, .img2img, .referenceEdit, .subjectPersonalization],
+                components: .rootTextTransformer,
+                upstream: .explicit("OpenSenseNova/SenseNova-U1")
+            ),
+            capability: .init(
+                "Image, SenseNova U1.5",
+                "Runs the native raw-pixel SenseNova U1.5 model for text-to-image and multi-image editing.",
+                minimum: 64,
+                recommended: 96
+            )
         ),
         ManagedModelSpec(
             id: Krea2RawResources.modelId,
@@ -464,7 +821,23 @@ extension ManagedModelCatalog {
             validationKind: .krea2,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: Krea2RawResources.estimatedDownloadBytes,
-            defaultCLICommands: ["image generate", "image train-lora"]
+            defaultCLICommands: ["image generate", "image train-lora"],
+            manifestTemplate: .init(
+                engine: .krea2,
+                family: .krea,
+                tier: .max,
+                variant: .base,
+                precision: .bf16,
+                defaults: .init(steps: 52, cfg: 3.5, sigmaShift: 1.149999976158142),
+                supports: [.txt2img, .loraTraining],
+                components: .diffusers
+            ),
+            capability: .init(
+                "Image training, Krea 2 Raw",
+                "Installs the Krea 2 Raw base checkpoint for LoRA training and post-training workflows.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: Krea2Resources.modelId,
@@ -484,7 +857,23 @@ extension ManagedModelCatalog {
             validationKind: .krea2,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: Krea2Resources.estimatedDownloadBytes,
-            defaultCLICommands: ["image generate"]
+            defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .krea2,
+                family: .krea,
+                tier: .turbo,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: .init(steps: 8, cfg: 0.0, sigmaShift: 1.149999976158142),
+                supports: [.txt2img, .loraInference],
+                components: .diffusers
+            ),
+            capability: .init(
+                "Image, Krea 2 Turbo",
+                "Runs the Krea 2 Turbo 8-step text-to-image model and Raw-trained LoRAs through the native Swift MLX image runtime.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: QwenImage21Resources.modelID,
@@ -499,7 +888,23 @@ extension ManagedModelCatalog {
                 licenseURL: "https://huggingface.co/Qwen/Qwen-Image-2.1/blob/b3179ad355be050328e483a9dfdd9e60cd62adfa/LICENSE"
             ),
             validationKind: .qwenImage21, runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: 33_131_616_240, defaultCLICommands: ["image generate"]
+            estimatedDownloadBytes: 33_131_616_240, defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .qwenImage21,
+                family: .qwen,
+                tier: .latest,
+                variant: .base,
+                precision: .bf16,
+                defaults: .init(steps: 40, cfg: 1.0),
+                supports: [.txt2img, .referenceEdit],
+                components: .init(tokenizer: .local(path: "processor"), textEncoder: .local(path: "text_encoder"), transformer: .local(path: "transformer"), vae: .local(path: "vae"), scheduler: .local(path: "scheduler"))
+            ),
+            capability: .init(
+                "Image, Qwen 2.1 RGBA",
+                "Experimental native generation and editing with ten references and RGBA output. Bounded qualification used an M4 Max with 128 GiB; memory estimates for smaller hosts remain provisional.",
+                minimum: 48,
+                recommended: 96
+            )
         ),
         ManagedModelSpec(
             id: QwenImage21Resources.turboModelID,
@@ -514,7 +919,23 @@ extension ManagedModelCatalog {
                 licenseURL: "https://huggingface.co/\(QwenImage21Resources.turboRepoID)/blob/\(QwenImage21Resources.turboRevision)/LICENSE"
             ),
             validationKind: .qwenImage21, runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: 32_451_607_098, defaultCLICommands: ["image generate"]
+            estimatedDownloadBytes: 32_451_607_098, defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .qwenImage21,
+                family: .qwen,
+                tier: .turbo,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: .init(steps: 8, cfg: 1.0),
+                supports: [.txt2img, .referenceEdit],
+                components: .init(tokenizer: .local(path: "processor"), textEncoder: .local(path: "text_encoder"), transformer: .local(path: "transformer"), vae: .local(path: "vae"), scheduler: .local(path: "scheduler"))
+            ),
+            capability: .init(
+                "Image, Qwen 2.1 Turbo RGBA",
+                "Experimental native eight-step generation and editing with original BF16 safetensors and the checkpoint's saved schedule. Trained Turbo checkpoint inference and smaller-host memory remain unqualified.",
+                minimum: 48,
+                recommended: 96
+            )
         ),
         ManagedModelSpec(
             id: QwenImageEditRepository.model2511Id,
@@ -526,7 +947,23 @@ extension ManagedModelCatalog {
             validationKind: .qwenImageEdit,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 57_720_463_453,
-            defaultCLICommands: ["image generate"]
+            defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .qwenImageEdit,
+                family: .qwen,
+                tier: .latest,
+                variant: .base,
+                precision: .bf16,
+                defaults: .init(steps: 40, cfg: 4.0),
+                supports: [.referenceEdit],
+                components: .diffusers
+            ),
+            capability: .init(
+                "Image edit, Qwen 2511 quality",
+                "Runs the pinned BF16 Qwen Image Edit 2511 stack for one-to-three-image editing with the 40-step guided recipe.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: QwenImageEditRepository.lightning2511Id,
@@ -544,7 +981,23 @@ extension ManagedModelCatalog {
             validationKind: .qwenImageEdit,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 58_570_071_749,
-            defaultCLICommands: ["image generate"]
+            defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .qwenImageEdit,
+                family: .qwen,
+                tier: .turbo,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: .init(steps: 4, cfg: 1.0),
+                supports: [.referenceEdit],
+                components: .diffusers
+            ),
+            capability: .init(
+                "Image edit, Qwen 2511 Lightning",
+                "Runs the pinned BF16 Qwen Image Edit 2511 stack with its exact four-step Lightning adapter.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: Ideogram4Resources.modelId,
@@ -567,7 +1020,24 @@ extension ManagedModelCatalog {
             validationKind: .ideogram4SDNQ,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: Ideogram4Resources.estimatedDownloadBytes,
-            defaultCLICommands: ["image generate"]
+            defaultCLICommands: ["image generate"],
+            manifestTemplate: .init(
+                engine: .ideogram4,
+                family: .ideogram,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 64, scheme: "sdnq-uint4"),
+                defaults: .init(steps: 20, cfg: 7.0),
+                supports: [.txt2img],
+                components: .ideogram4
+            ),
+            capability: .init(
+                "Image, Ideogram 4 typography",
+                "Installs the SDNQ uint4 Ideogram 4 text-to-image stack with dedicated positive and unconditional transformers.",
+                minimum: 48,
+                recommended: 64
+            )
         ),
     ]
 

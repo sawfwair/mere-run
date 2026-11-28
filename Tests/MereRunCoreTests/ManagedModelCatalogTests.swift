@@ -47,15 +47,32 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertFalse(localOnly.hasAnyManagedDownloadSource())
     }
 
+    func testExactIDLookupNormalizesAndIgnoresRepositoryAliases() {
+        XCTAssertEqual(
+            ManagedModelCatalog.spec(forExactID: " TEXT-CHAT-GEMMA4\n")?.id,
+            "text-chat-gemma4"
+        )
+        XCTAssertNil(ManagedModelCatalog.spec(forExactID: "google/gemma-4-31B-it"))
+        XCTAssertNil(ManagedModelCatalog.spec(forExactID: "unknown-catalog-model"))
+        for spec in ManagedModelCatalog.allKnownSpecs {
+            XCTAssertEqual(ManagedModelCatalog.spec(for: spec.id)?.id, spec.id, "Exact ID must win over aliases")
+        }
+    }
+
     func testEveryCanonicalManagedModelIDHasCatalogSpec() {
         for modelID in ModelResolver.ModelID.allCases {
-            let spec = ManagedModelCatalog.spec(for: modelID.rawValue)
+            let spec = ManagedModelCatalog.spec(forExactID: modelID.rawValue)
             XCTAssertNotNil(spec, "Missing catalog spec for \(modelID.rawValue)")
+            XCTAssertNotNil(spec?.manifestTemplate, "Missing manifest template for \(modelID.rawValue)")
         }
     }
 
     func testEveryCatalogSpecMapsToManifestTemplate() {
-        for spec in ManagedModelCatalog.allSpecs {
+        var seenIDs: Set<String> = []
+        for spec in ManagedModelCatalog.allKnownSpecs {
+            XCTAssertTrue(seenIDs.insert(spec.id).inserted, "Duplicate catalog spec id: \(spec.id)")
+            XCTAssertNotNil(spec.manifestTemplate, "Catalog spec is missing manifestTemplate: \(spec.id)")
+            XCTAssertNotNil(spec.capability, "Catalog spec is missing capability metadata: \(spec.id)")
             guard let modelID = ModelResolver.ModelID(rawValue: spec.id) else {
                 XCTFail("Catalog spec does not map to a canonical ModelID: \(spec.id)")
                 continue

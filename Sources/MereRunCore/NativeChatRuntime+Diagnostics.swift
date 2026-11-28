@@ -12,19 +12,7 @@ public struct NativeChatDiagnostics: Sendable {
 
 extension NativeChatRuntime {
     public func diagnostics() async -> NativeChatDiagnostics {
-        var result = NativeChatDiagnostics()
-        switch self {
-        case .textChatGemma4(let generator, _): result.gemma4MTP = await generator.mtpStats()
-        case .textChatLaguna(let generator, _): result.lagunaDFlash = await generator.dflashStats()
-        case .textChatMuseGlimmer(let generator, _): result.museDFlash = await generator.dflashStats()
-        case .textChatNemotronH(let generator, _): result.nemotronDSpark = await generator.dsparkStats()
-        case .textChatLFM2(let generator, _): result.lfm2DSpark = await generator.dsparkStats()
-        case .textChatInkling2(let generator, _): result.inkling2DSpark = await generator.dsparkStats()
-        case .textChatFlint, .textChatKolibri, .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatQ35,
-             .textChatDeepseekV4Flash, .textChatNemotronBolt, .textChatNemotronOmni, .textChatPsi, .textChatInkling:
-            break
-        }
-        return result
+        await adapter.diagnostics()
     }
 }
 #endif

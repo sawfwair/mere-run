@@ -7,7 +7,22 @@ extension ManagedModelCatalog {
             hubFallback: HubFallbackConfig(repoId: Inkling2Resources.repository, revision: Inkling2Resources.revision, patterns: Inkling2Resources.snapshotPatterns),
             upstreamRepoId: Inkling2Resources.repository, upstreamRevision: Inkling2Resources.revision,
             validationKind: .inkling2, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 393_500_000_000,
-            defaultCLICommands: ["text chat", "api serve"], apiProfile: .inkling2()
+            defaultCLICommands: ["text chat", "api serve"], apiProfile: .inkling2(),
+            manifestTemplate: .init(
+                engine: .inkling2,
+                family: .inkling,
+                tier: .small,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 16, scheme: "mixed-nvfp4-mxfp8"),
+                supports: [.chat, .codeGeneration, .visionChat]
+            ),
+            capability: .init(
+                "Inkling 2 Small 594B-A17B",
+                "Native Swift/MLX reference inference with selected experts streamed from the original checkpoint; requires about 394 GB of disk space.",
+                minimum: 32,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: Inkling2Resources.miniModelID, category: .visionChat, installShape: .directoryRoot,
@@ -17,7 +32,22 @@ extension ManagedModelCatalog {
             ),
             upstreamRepoId: Inkling2Resources.miniRepository, upstreamRevision: Inkling2Resources.miniRevision,
             validationKind: .inkling2, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 18_430_000_000,
-            defaultCLICommands: ["text chat", "text train-lora", "api serve"], apiProfile: .inkling2()
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"], apiProfile: .inkling2(),
+            manifestTemplate: .init(
+                engine: .inkling2,
+                family: .inkling,
+                tier: .tiny,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 16, scheme: "mixed-nvfp4-mxfp8-with-affine-q8-attention-and-head"),
+                supports: [.chat, .codeGeneration, .visionChat]
+            ),
+            capability: .init(
+                "Inkling 2 Mini 26.4B Speed",
+                "Default Mini checkpoint with packed experts, affine 8-bit attention, and a bundled DSpark draft head.",
+                minimum: 32,
+                recommended: 32
+            )
         ),
         ManagedModelSpec(
             id: Inkling2Resources.miniOfficialModelID, category: .visionChat, installShape: .directoryRoot,
@@ -27,7 +57,22 @@ extension ManagedModelCatalog {
             ),
             upstreamRepoId: Inkling2Resources.miniOfficialRepository, upstreamRevision: Inkling2Resources.miniOfficialRevision,
             validationKind: .inkling2, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 20_200_000_000,
-            defaultCLICommands: ["text chat", "text train-lora", "api serve"], apiProfile: .inkling2()
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"], apiProfile: .inkling2(),
+            manifestTemplate: .init(
+                engine: .inkling2,
+                family: .inkling,
+                tier: .tiny,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 16, scheme: "mixed-nvfp4-mxfp8"),
+                supports: [.chat, .codeGeneration, .visionChat]
+            ),
+            capability: .init(
+                "Inkling 2 Mini 26.4B Official",
+                "Uses the original Thinking Machines Lab checkpoint with a BF16 output head.",
+                minimum: 32,
+                recommended: 32
+            )
         ),
         ManagedModelSpec(
             id: Inkling2Resources.miniQ8HeadModelID, category: .visionChat, installShape: .directoryRoot,
@@ -37,21 +82,69 @@ extension ManagedModelCatalog {
             ),
             upstreamRepoId: Inkling2Resources.miniQ8HeadRepository, upstreamRevision: Inkling2Resources.miniQ8HeadRevision,
             validationKind: .inkling2, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 19_809_895_923,
-            defaultCLICommands: ["text chat", "text train-lora", "api serve"], apiProfile: .inkling2()
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"], apiProfile: .inkling2(),
+            manifestTemplate: .init(
+                engine: .inkling2,
+                family: .inkling,
+                tier: .tiny,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 16, scheme: "mixed-nvfp4-mxfp8-with-affine-q8-head"),
+                supports: [.chat, .codeGeneration, .visionChat]
+            ),
+            capability: .init(
+                "Inkling 2 Mini 26.4B Q8 Head",
+                "Shares a prepacked 8-bit output head between native target verification and DSpark. Includes text and vision weights in one checkpoint.",
+                minimum: 32,
+                recommended: 32
+            )
         ),
         ManagedModelSpec(
             id: FlintResources.modelID, category: .textChat, installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(repoId: FlintResources.repository, revision: FlintResources.revision, patterns: FlintResources.snapshotPatterns),
             upstreamRepoId: FlintResources.repository, upstreamRevision: FlintResources.revision,
             validationKind: .flint, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 22_580_000_000,
-            defaultCLICommands: ["text chat", "api serve"], apiProfile: .flint()
+            defaultCLICommands: ["text chat", "api serve"], apiProfile: .flint(),
+            manifestTemplate: .init(
+                engine: .flint,
+                family: .flint,
+                tier: .large,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 64, scheme: "mlx-affine-int4-int8-embedding"),
+                supports: [.chat, .codeGeneration],
+                components: .rootText,
+                upstream: .spec
+            ),
+            capability: .init(
+                "Recursive Flint INT4",
+                "Runs the pinned group-64 INT4 export through native Swift/MLX with BF16 attention caches.",
+                minimum: 48,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: FlintResources.bf16ModelID, category: .textChat, installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(repoId: FlintResources.bf16Repository, revision: FlintResources.bf16Revision, patterns: FlintResources.snapshotPatterns),
             upstreamRepoId: FlintResources.bf16Repository, upstreamRevision: FlintResources.bf16Revision,
             validationKind: .flint, runtimeAutoDownloadAllowed: false, estimatedDownloadBytes: 79_590_000_000,
-            defaultCLICommands: ["text chat", "api serve"], apiProfile: .flint()
+            defaultCLICommands: ["text chat", "api serve"], apiProfile: .flint(),
+            manifestTemplate: .init(
+                engine: .flint,
+                family: .flint,
+                tier: .large,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.chat, .codeGeneration],
+                components: .rootText,
+                upstream: .spec
+            ),
+            capability: .init(
+                "Recursive Flint BF16",
+                "Loads the original BF16 checkpoint through native Swift/MLX.",
+                minimum: 128,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: "text-chat-mebot",
@@ -60,7 +153,22 @@ extension ManagedModelCatalog {
             validationKind: .hfTextChat,
             runtimeAutoDownloadAllowed: false,
             defaultCLICommands: ["api serve"],
-            apiProfile: .klein()
+            apiProfile: .klein(),
+            manifestTemplate: .init(
+                engine: .flux2Klein,
+                family: .klein,
+                tier: .nano,
+                variant: .distilled,
+                precision: .unknown,
+                supports: [.chat, .loraInference],
+                components: .mebotText
+            ),
+            capability: .init(
+                "Local personal chat",
+                "Adds a compact local chat model for API serving and personal-agent style workflows.",
+                minimum: 8,
+                recommended: 16
+            )
         ),
         ManagedModelSpec(
             id: "text-chat-psi-agent",
@@ -68,7 +176,22 @@ extension ManagedModelCatalog {
             installShape: .directoryRoot,
             validationKind: .hfTextChat,
             runtimeAutoDownloadAllowed: false,
-            defaultCLICommands: ["text chat"]
+            defaultCLICommands: ["text chat"],
+            manifestTemplate: .init(
+                engine: .psiChat,
+                family: .psi,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.chat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Agent chat, large",
+                "Adds the larger Psi agent chat model for local reasoning-heavy assistant workflows.",
+                minimum: 64,
+                recommended: 96
+            )
         ),
         ManagedModelSpec(
             id: "text-chat-gemma4",
@@ -83,7 +206,22 @@ extension ManagedModelCatalog {
             resolutionFallbackIDs: ["text-chat-gemma4-max", "text-chat-gemma4-nano"],
             estimatedDownloadBytes: 62_578_654_199,
             defaultCLICommands: ["text chat", "text train-lora", "api serve"],
-            apiProfile: .gemma4()
+            apiProfile: .gemma4(),
+            manifestTemplate: .init(
+                engine: .gemma4,
+                family: .gemma,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.chat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Gemma 4 dense bf16 alias",
+                "Resolves to dense bf16 Gemma 4 chat models for native Swift text chat; use the TurboQuant tier on 32 GB Macs.",
+                minimum: 48,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: DiffusionGemmaResources.modelID,
@@ -99,7 +237,23 @@ extension ManagedModelCatalog {
             validationKind: .diffusionGemma,
             estimatedDownloadBytes: DiffusionGemmaResources.estimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve"],
-            apiProfile: .diffusionGemma()
+            apiProfile: .diffusionGemma(),
+            manifestTemplate: .init(
+                engine: .gemma4,
+                family: .gemma,
+                tier: .max,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 64, scheme: "optiq-mixed-affine"),
+                supports: [.chat, .codeGeneration],
+                components: .rootText
+            ),
+            capability: .init(
+                "DiffusionGemma 26B-A4B OptiQ",
+                "Runs the mixed 4-bit and 8-bit DiffusionGemma checkpoint through native Swift/MLX parallel block denoising.",
+                minimum: 48,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: Gemma4Resources.turboModelId,
@@ -114,7 +268,23 @@ extension ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 31 * 1_073_741_824,
             defaultCLICommands: ["text chat", "text train-lora", "api serve"],
-            apiProfile: .gemma4()
+            apiProfile: .gemma4(),
+            manifestTemplate: .init(
+                engine: .gemma4,
+                family: .gemma,
+                tier: .turbo,
+                variant: .standard,
+                precision: .int4,
+                supports: [.chat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Gemma 4 NVFP4 MoE",
+                "Installs the MLX NVFP4 Gemma 4 26B-A4B-it MoE snapshot for the native Swift 32 GB tier.",
+                minimum: 24,
+                recommended: 32,
+                setup: true
+            )
         ),
         ManagedModelSpec(
             id: Gemma4Resources.a4bBF16ModelId,
@@ -131,7 +301,22 @@ extension ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 51_644_318_400,
             defaultCLICommands: ["text chat", "text train-lora", "api serve"],
-            apiProfile: .gemma4()
+            apiProfile: .gemma4(),
+            manifestTemplate: .init(
+                engine: .gemma4,
+                family: .gemma,
+                tier: .large,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.chat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Gemma 4 26B-A4B BF16",
+                "Runs the pinned MLX BF16 Gemma 4 26B-A4B instruction checkpoint through the native text runtime.",
+                minimum: 64,
+                recommended: 96
+            )
         ),
         ManagedModelSpec(
             id: Gemma4Resources.twelveBModelId,
@@ -146,7 +331,22 @@ extension ManagedModelCatalog {
             estimatedDownloadBytes: 25 * 1_073_741_824,
             defaultCLICommands: ["text chat", "text train-lora", "api serve"],
             companionModelIDs: [Gemma4MTPResources.modelId],
-            apiProfile: .gemma4()
+            apiProfile: .gemma4(),
+            manifestTemplate: .init(
+                engine: .gemma4,
+                family: .gemma,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.chat, .codeGeneration],
+                components: .rootText
+            ),
+            capability: .init(
+                "Gemma 4 12B chat",
+                "Runs the dense Gemma 4 12B instruction model through the native Swift text runtime.",
+                minimum: 24,
+                recommended: 32
+            )
         ),
         ManagedModelSpec(
             id: Gemma4Resources.twelveB4BitModelId,
@@ -163,7 +363,24 @@ extension ManagedModelCatalog {
             estimatedDownloadBytes: 6_773_374_762,
             defaultCLICommands: ["text chat", "text train-lora", "api serve"],
             companionModelIDs: [Gemma4MTPResources.modelId],
-            apiProfile: .gemma4()
+            apiProfile: .gemma4(),
+            manifestTemplate: .init(
+                engine: .gemma4,
+                family: .gemma,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 64, scheme: "mlx-affine"),
+                supports: [.chat, .codeGeneration],
+                components: .rootText
+            ),
+            capability: .init(
+                "Gemma 4 12B 4-bit chat",
+                "Installs the MLX 4-bit Gemma 4 12B instruction snapshot for faster native Swift text chat.",
+                minimum: 16,
+                recommended: 24,
+                setup: true
+            )
         ),
         ManagedModelSpec(
             id: Gemma4Resources.visionTwelveBModelId,
@@ -178,7 +395,22 @@ extension ManagedModelCatalog {
             estimatedDownloadBytes: 25 * 1_073_741_824,
             defaultCLICommands: ["text chat", "text train-lora", "api serve"],
             companionModelIDs: [Gemma4MTPResources.modelId],
-            apiProfile: .gemma4(inputModalities: [.text, .image])
+            apiProfile: .gemma4(inputModalities: [.text, .image]),
+            manifestTemplate: .init(
+                engine: .gemma4,
+                family: .gemma,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Gemma 4 12B vision chat",
+                "Runs the dense Gemma 4 12B unified model for single-image chat through the native Swift runtime.",
+                minimum: 32,
+                recommended: 48
+            )
         ),
         ManagedModelSpec(
             id: "text-chat-gemma4-nano",
@@ -192,7 +424,23 @@ extension ManagedModelCatalog {
             validationKind: .gemma4,
             estimatedDownloadBytes: 16_024_791_983,
             defaultCLICommands: ["text chat", "text train-lora", "api serve"],
-            apiProfile: .gemma4()
+            apiProfile: .gemma4(),
+            manifestTemplate: .init(
+                engine: .gemma4,
+                family: .gemma,
+                tier: .nano,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.chat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Gemma 4 chat nano",
+                "Runs the smaller Gemma 4 native Swift chat model for lower-memory machines.",
+                minimum: 16,
+                recommended: 24,
+                setup: true
+            )
         ),
         ManagedModelSpec(
             id: "text-chat-gemma4-max",
@@ -206,7 +454,22 @@ extension ManagedModelCatalog {
             validationKind: .gemma4,
             estimatedDownloadBytes: 62_578_654_199,
             defaultCLICommands: ["text chat", "text train-lora", "api serve"],
-            apiProfile: .gemma4()
+            apiProfile: .gemma4(),
+            manifestTemplate: .init(
+                engine: .gemma4,
+                family: .gemma,
+                tier: .max,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.chat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Gemma 4 chat max",
+                "Runs the larger Gemma 4 native Swift chat model for higher-quality local chat.",
+                minimum: 48,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: LagunaResources.modelID,
@@ -224,7 +487,23 @@ extension ManagedModelCatalog {
             estimatedDownloadBytes: LagunaResources.estimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
             companionModelIDs: [LagunaResources.dflashModelID],
-            apiProfile: .laguna()
+            apiProfile: .laguna(),
+            manifestTemplate: .init(
+                engine: .laguna,
+                family: .laguna,
+                tier: .max,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 16, scheme: "mlx-nvfp4"),
+                supports: [.chat, .codeGeneration],
+                components: .rootText
+            ),
+            capability: .init(
+                "Laguna S 2.1 agentic chat",
+                "Runs Poolside's 118B-A8B Laguna S 2.1 NVFP4 model with verified DFlash speculative decoding through the native Swift runtime.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: LagunaResources.xsModelID,
@@ -246,7 +525,23 @@ extension ManagedModelCatalog {
                 "api serve",
                 "model benchmark chat",
             ],
-            apiProfile: .laguna()
+            apiProfile: .laguna(),
+            manifestTemplate: .init(
+                engine: .laguna,
+                family: .laguna,
+                tier: .small,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 16, scheme: "mlx-nvfp4"),
+                supports: [.chat, .codeGeneration],
+                components: .rootText
+            ),
+            capability: .init(
+                "Laguna XS 2.1 agentic chat",
+                "Runs Poolside's released 33B-A3B Laguna XS 2.1 through its NVFP4 MLX serialization and the native Swift runtime.",
+                minimum: 36,
+                recommended: 48
+            )
         ),
         ManagedModelSpec(
             id: InklingResources.modelID,
@@ -258,7 +553,22 @@ extension ManagedModelCatalog {
             validationKind: .inkling,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: InklingResources.estimatedDownloadBytes,
-            defaultCLICommands: ["text chat", "text train-lora"]
+            defaultCLICommands: ["text chat", "text train-lora"],
+            manifestTemplate: .init(
+                engine: .inkling,
+                family: .inkling,
+                tier: .small,
+                variant: .standard,
+                precision: .int2,
+                quantization: .init(bits: 2, groupSize: 128, scheme: "affine-routed-experts"),
+                supports: [.chat, .codeGeneration]
+            ),
+            capability: .init(
+                "Inkling-Small 276B-A12B",
+                "Runs Inkling-Small through native Swift/MLX with affine 2-bit/group-128 routed experts and BF16 non-routed weights.",
+                minimum: 128,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: MuseGlimmerResources.modelId,
@@ -289,7 +599,23 @@ extension ManagedModelCatalog {
             estimatedDownloadBytes: MuseGlimmerResources.estimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve"],
             companionModelIDs: [MuseGlimmerResources.dflash2ModelId],
-            apiProfile: .museGlimmer()
+            apiProfile: .museGlimmer(),
+            manifestTemplate: .init(
+                engine: .museGlimmer,
+                family: .muse,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 64, scheme: "mlx-affine"),
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Muse Glimmer 30B vision agent",
+                "Runs Sawfwair's pinned selective MLX Q4 conversion of Meta Muse Glimmer with its managed DFlash2 speculative companion through the native Swift/MLX stack.",
+                minimum: 32,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: NemotronBoltResources.modelID,
@@ -306,7 +632,23 @@ extension ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: NemotronBoltResources.estimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
-            apiProfile: .nemotronBolt()
+            apiProfile: .nemotronBolt(),
+            manifestTemplate: .init(
+                engine: .nemotronH,
+                family: .nemotron,
+                tier: .latest,
+                variant: .standard,
+                precision: .int2,
+                quantization: .init(bits: 2, groupSize: 256, scheme: "ggml-iq2-xxs-q8-0-nvfp4-mixed"),
+                supports: [.chat, .codeGeneration, .visionChat, .visionOCR],
+                components: .rootText
+            ),
+            capability: .init(
+                "Nemotron 3.5 Bolt 74B-A9B 24GB",
+                "Text and image chat from NVIDIA's original packed checkpoint. Full-checkpoint quality and peak memory remain unqualified.",
+                minimum: 32,
+                recommended: 48
+            )
         ),
         ManagedModelSpec(
             id: NemotronHResources.modelID,
@@ -324,7 +666,24 @@ extension ManagedModelCatalog {
             estimatedDownloadBytes: NemotronHResources.estimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
             companionModelIDs: [NemotronHResources.dsparkModelID],
-            apiProfile: .nemotronH()
+            apiProfile: .nemotronH(),
+            manifestTemplate: .init(
+                engine: .nemotronH,
+                family: .nemotron,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 16, scheme: "modelopt-nvfp4-mlx"),
+                supports: [.chat, .codeGeneration],
+                components: .rootText,
+                upstream: .explicit("\(NemotronHResources.upstreamRepoID)@\(NemotronHResources.upstreamRevision)")
+            ),
+            capability: .init(
+                "Nemotron 3.5 Lightning 30B-A3B",
+                "Runs NVIDIA's hybrid Nemotron-H NVFP4 checkpoint with its verified DSpark speculative companion through native Swift/MLX.",
+                minimum: 32,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: NemotronOmniResources.modelID,
@@ -354,7 +713,22 @@ extension ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: NemotronOmniResources.estimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
-            apiProfile: .nemotronOmni()
+            apiProfile: .nemotronOmni(),
+            manifestTemplate: .init(
+                engine: .nemotronOmni,
+                family: .nemotron,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.chat, .codeGeneration, .visionChat, .visionOCR, .audioUnderstanding, .videoUnderstanding, .documentUnderstanding],
+                components: .rootText
+            ),
+            capability: .init(
+                "Nemotron 3 Nano Omni 30B-A3B BF16",
+                "Runs NVIDIA's pinned BF16 text, image, video, and audio understanding checkpoint through native Swift/MLX media towers and Nemotron-H language runtime.",
+                minimum: 112,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: Q35Resources.q36NanoModelId,
@@ -366,7 +740,24 @@ extension ManagedModelCatalog {
             validationKind: .q35,
             estimatedDownloadBytes: 24 * 1_073_741_824,
             defaultCLICommands: ["text chat", "api serve"],
-            apiProfile: .q36(contextWindow: Q35Resources.defaultContextLength)
+            apiProfile: .q36(contextWindow: Q35Resources.defaultContextLength),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .nano,
+                variant: .base,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 64, scheme: "mlx-optiq-mixed-affine"),
+                supports: [.chat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Qwen3.6 A3B chat nano",
+                "Runs the Qwen3.6 35B-A3B OptiQ 4-bit MLX/MTP snapshot through the native Qwen-family runtime.",
+                minimum: 24,
+                recommended: 32,
+                setup: true
+            )
         ),
         ManagedModelSpec(
             id: Q35Resources.q38TwentySevenBModelId,
@@ -385,7 +776,22 @@ extension ManagedModelCatalog {
                 "model benchmark code",
                 "model benchmark vlm",
             ],
-            apiProfile: .q38(contextWindow: Q35Resources.q38TwentySevenBContextLength)
+            apiProfile: .q38(contextWindow: Q35Resources.q38TwentySevenBContextLength),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.chat, .codeGeneration, .visionChat, .loraInference],
+                components: .rootText
+            ),
+            capability: .init(
+                "Qwen3.8 27B vision chat",
+                "Runs Qwen's official dense 27B BF16 vision-language checkpoint through the native Qwen-family runtime.",
+                minimum: 64,
+                recommended: 96
+            )
         ),
         ManagedModelSpec(
             id: Q35Resources.q38TwentySevenB4BitModelId,
@@ -441,7 +847,23 @@ extension ManagedModelCatalog {
                 "model benchmark code",
                 "model benchmark vlm",
             ],
-            apiProfile: .q38(contextWindow: Q35Resources.q38TwentySevenBContextLength)
+            apiProfile: .q38(contextWindow: Q35Resources.q38TwentySevenBContextLength),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 64, scheme: "mlx-affine"),
+                supports: [.chat, .codeGeneration, .visionChat, .loraInference],
+                components: .rootText
+            ),
+            capability: .init(
+                "Qwen3.8 27B 4-bit vision chat",
+                "Runs LM Studio's pinned MLX 4-bit conversion with Qwen's official MTP shard available for explicit speculative decode.",
+                minimum: 32,
+                recommended: 48
+            )
         ),
         ManagedModelSpec(
             id: Q35Resources.q38FlashNextMixedModelId,
@@ -474,7 +896,23 @@ extension ManagedModelCatalog {
                 "model benchmark chat",
                 "model benchmark code",
             ],
-            apiProfile: .q38(contextWindow: Q35Resources.q38TwentySevenBContextLength)
+            apiProfile: .q38(contextWindow: Q35Resources.q38TwentySevenBContextLength),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .int2,
+                quantization: .init(bits: 2, groupSize: 128, scheme: "mlx-mixed-q2-q4-bf16-affine"),
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Qwen3.8 Flash Next mixed Q2/Q4 vision chat",
+                "Runs Sawfwair's pinned 128 GB Mac profile with routed experts at Q2, core matrices at Q4, and sensitive paths in BF16.",
+                minimum: 112,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: Q35Resources.q38FlashNext3BitModelId,
@@ -507,7 +945,23 @@ extension ManagedModelCatalog {
                 "model benchmark chat",
                 "model benchmark code",
             ],
-            apiProfile: .q38(contextWindow: Q35Resources.q38TwentySevenBContextLength)
+            apiProfile: .q38(contextWindow: Q35Resources.q38TwentySevenBContextLength),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .int3,
+                quantization: .init(bits: 3, groupSize: 64, scheme: "mlx-mixed-q3-q4-activation-refit-affine"),
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Qwen3.8 Flash Next activation-weighted Q3 vision chat",
+                "Runs Sawfwair's pinned Q3 expert profile with Q4 core matrices and a measured 62.1 GB peak on the 128 GiB qualification host.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: Q35Resources.q38FlashNext3BitNativePLEModelId,
@@ -540,7 +994,23 @@ extension ManagedModelCatalog {
                 "model benchmark chat",
                 "model benchmark code",
             ],
-            apiProfile: .q38(contextWindow: Q35Resources.q38TwentySevenBContextLength)
+            apiProfile: .q38(contextWindow: Q35Resources.q38TwentySevenBContextLength),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .int3,
+                quantization: .init(bits: 3, groupSize: 64, scheme: "mlx-mixed-q3-q4-activation-refit-affine-native-ple"),
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Qwen3.8 Flash Next activation-weighted Q3 native PLE",
+                "Runs the complete pinned Q3 checkpoint and automatically stages its disk-backed PLE shards on the internal SSD when the model store is external.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: Q35Resources.q38FlashNext4BitModelId,
@@ -573,7 +1043,23 @@ extension ManagedModelCatalog {
                 "model benchmark chat",
                 "model benchmark code",
             ],
-            apiProfile: .q38(contextWindow: Q35Resources.q38TwentySevenBContextLength)
+            apiProfile: .q38(contextWindow: Q35Resources.q38TwentySevenBContextLength),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 64, scheme: "mlx-affine"),
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Qwen3.8 Flash Next Q4 vision chat",
+                "Runs Sawfwair's pinned all-Q4-compatible profile for higher quality on Macs with more than 128 GB unified memory.",
+                minimum: 160,
+                recommended: 192
+            )
         ),
         ManagedModelSpec(
             id: Q35Resources.bonsai27B1BitModelId,
@@ -588,6 +1074,22 @@ extension ManagedModelCatalog {
             apiProfile: .q36(
                 contextWindow: Q35Resources.bonsai27B1BitContextLength,
                 fixedReasoning: true
+            ),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .int1,
+                quantization: .init(bits: 1, groupSize: 128, scheme: "prism-packed-affine-binary"),
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Bonsai 27B 1-bit vision chat",
+                "Runs Prism ML's dense Qwen3.6 27B reasoning and vision model from packed 1-bit MLX weights.",
+                minimum: 12,
+                recommended: 16
             )
         ),
         ManagedModelSpec(
@@ -603,6 +1105,22 @@ extension ManagedModelCatalog {
             apiProfile: .q36(
                 contextWindow: Q35Resources.bonsai27B2BitContextLength,
                 fixedReasoning: true
+            ),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .int2,
+                quantization: .init(bits: 2, groupSize: 128, scheme: "prism-packed-affine-ternary"),
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Ternary Bonsai 27B 2-bit vision chat",
+                "Runs Prism ML's dense Qwen3.6 27B reasoning and vision model from packed ternary 2-bit MLX weights.",
+                minimum: 16,
+                recommended: 24
             )
         ),
         ManagedModelSpec(
@@ -615,7 +1133,23 @@ extension ManagedModelCatalog {
             validationKind: .q35,
             estimatedDownloadBytes: 1_213_254_984,
             defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
-            apiProfile: .q36(contextWindow: Q35Resources.bonsai2ContextLength, fixedReasoning: true)
+            apiProfile: .q36(contextWindow: Q35Resources.bonsai2ContextLength, fixedReasoning: true),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .int2,
+                quantization: .init(bits: 2, groupSize: 128, scheme: "prism-hadamard-affine-ternary"),
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Ternary Bonsai 2 2B 2-bit vision chat",
+                "Runs Prism ML's Qwen3.5 2B vision model from Hadamard-transformed ternary 2-bit MLX weights.",
+                minimum: 8,
+                recommended: 12
+            )
         ),
         ManagedModelSpec(
             id: Q35Resources.bonsai2FourBModelId,
@@ -627,7 +1161,23 @@ extension ManagedModelCatalog {
             validationKind: .q35,
             estimatedDownloadBytes: 1_884_421_442,
             defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
-            apiProfile: .q36(contextWindow: Q35Resources.bonsai2ContextLength, fixedReasoning: true)
+            apiProfile: .q36(contextWindow: Q35Resources.bonsai2ContextLength, fixedReasoning: true),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .int2,
+                quantization: .init(bits: 2, groupSize: 128, scheme: "prism-hadamard-affine-ternary"),
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Ternary Bonsai 2 4B 2-bit vision chat",
+                "Runs Prism ML's Qwen3.5 4B vision model from Hadamard-transformed ternary 2-bit MLX weights.",
+                minimum: 8,
+                recommended: 16
+            )
         ),
         ManagedModelSpec(
             id: Q35Resources.bonsai2NineBModelId,
@@ -639,7 +1189,23 @@ extension ManagedModelCatalog {
             validationKind: .q35,
             estimatedDownloadBytes: 3_475_209_704,
             defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
-            apiProfile: .q36(contextWindow: Q35Resources.bonsai2ContextLength, fixedReasoning: true)
+            apiProfile: .q36(contextWindow: Q35Resources.bonsai2ContextLength, fixedReasoning: true),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .int2,
+                quantization: .init(bits: 2, groupSize: 128, scheme: "prism-hadamard-affine-ternary"),
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Ternary Bonsai 2 9B 2-bit vision chat",
+                "Runs Prism ML's Qwen3.5 9B vision model from Hadamard-transformed ternary 2-bit MLX weights.",
+                minimum: 12,
+                recommended: 16
+            )
         ),
         ManagedModelSpec(
             id: Q35Resources.bonsai2ModelId,
@@ -654,6 +1220,22 @@ extension ManagedModelCatalog {
             apiProfile: .q36(
                 contextWindow: Q35Resources.bonsai2ContextLength,
                 fixedReasoning: true
+            ),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .int2,
+                quantization: .init(bits: 2, groupSize: 128, scheme: "prism-hadamard-affine-ternary"),
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Ternary Bonsai 2 27B 2-bit vision chat",
+                "Runs Prism ML's dense Qwen3.8 27B reasoning and vision model from Hadamard-transformed ternary 2-bit MLX weights.",
+                minimum: 16,
+                recommended: 24
             )
         ),
         ManagedModelSpec(
@@ -666,7 +1248,23 @@ extension ManagedModelCatalog {
             validationKind: .q35,
             estimatedDownloadBytes: Q35Resources.bonsai25EstimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
-            apiProfile: .q38(contextWindow: Q35Resources.bonsai2ContextLength)
+            apiProfile: .q38(contextWindow: Q35Resources.bonsai2ContextLength),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .int2,
+                quantization: .init(bits: 2, groupSize: 128, scheme: "prism-hadamard-affine-ternary"),
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Ternary Bonsai 2.5 27B vision chat",
+                "Runs Prism ML's dense Qwen3.8 27B vision and tool-calling model from 2-bit Hadamard MLX weights.",
+                minimum: 16,
+                recommended: 24
+            )
         ),
         ManagedModelSpec(
             id: Q35Resources.ornith9BModelId,
@@ -681,6 +1279,22 @@ extension ManagedModelCatalog {
             apiProfile: .q36(
                 contextWindow: Q35Resources.defaultContextLength,
                 fixedReasoning: true
+            ),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .code,
+                tier: .nano,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 64, scheme: "mlx-optiq-mixed-affine"),
+                supports: [.chat, .codeGeneration],
+                components: .rootText
+            ),
+            capability: .init(
+                "Ornith 1.0 9B OptiQ",
+                "Runs DeepReinforce's Ornith 1.0 9B agentic coding model through the native Qwen-family MLX runtime.",
+                minimum: 16,
+                recommended: 24
             )
         ),
         ManagedModelSpec(
@@ -704,6 +1318,22 @@ extension ManagedModelCatalog {
             apiProfile: .q36(
                 contextWindow: Q35Resources.ornith35BMLXContextLength,
                 fixedReasoning: true
+            ),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .code,
+                tier: .large,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 64, scheme: "mlx-affine"),
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Ornith 1.5 35B-A3B 4-bit vision agent",
+                "Runs the official 4-bit Ornith target with its BF16 vision tower and MTP head in one bundle.",
+                minimum: 32,
+                recommended: 48
             )
         ),
         ManagedModelSpec(
@@ -721,6 +1351,22 @@ extension ManagedModelCatalog {
             apiProfile: .q36(
                 contextWindow: Q35Resources.ornith35BMLXContextLength,
                 fixedReasoning: true
+            ),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .code,
+                tier: .large,
+                variant: .standard,
+                precision: .int6,
+                quantization: .init(bits: 6, groupSize: 64, scheme: "mlx-affine"),
+                supports: [.chat, .codeGeneration],
+                components: .rootText
+            ),
+            capability: .init(
+                "Ornith 1.5 35B-A3B MLX 6-bit",
+                "Balanced official Ornith 35B MLX tier with the shared BF16 MTP companion for verified speculative decode.",
+                minimum: 48,
+                recommended: 64
             )
         ),
         ManagedModelSpec(
@@ -738,6 +1384,22 @@ extension ManagedModelCatalog {
             apiProfile: .q36(
                 contextWindow: Q35Resources.ornith35BMLXContextLength,
                 fixedReasoning: true
+            ),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .code,
+                tier: .large,
+                variant: .standard,
+                precision: .int8,
+                quantization: .init(bits: 8, groupSize: 64, scheme: "mlx-affine"),
+                supports: [.chat, .codeGeneration],
+                components: .rootText
+            ),
+            capability: .init(
+                "Ornith 1.5 35B-A3B MLX 8-bit",
+                "Highest-precision official quantized Ornith 35B MLX tier with the shared BF16 MTP companion.",
+                minimum: 64,
+                recommended: 96
             )
         ),
         ManagedModelSpec(
@@ -755,6 +1417,21 @@ extension ManagedModelCatalog {
             apiProfile: .q36(
                 contextWindow: Q35Resources.ornith35BMLXContextLength,
                 fixedReasoning: true
+            ),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .code,
+                tier: .large,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.chat, .codeGeneration],
+                components: .rootText
+            ),
+            capability: .init(
+                "Ornith 1.5 35B-A3B MLX BF16",
+                "Runs Ornith's official unquantized BF16 coding agent with the shared BF16 MTP companion.",
+                minimum: 96,
+                recommended: 128
             )
         ),
         ManagedModelSpec(
@@ -778,6 +1455,21 @@ extension ManagedModelCatalog {
             apiProfile: .q36(
                 contextWindow: Q35Resources.ornith35BMLXContextLength,
                 fixedReasoning: true
+            ),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .code,
+                tier: .large,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Ornith 1.5 35B-A3B vision agent",
+                "Runs Ornith's full BF16 agentic coding and vision checkpoint through the native Qwen-family runtime.",
+                minimum: 96,
+                recommended: 128
             )
         ),
         ManagedModelSpec(
@@ -790,7 +1482,22 @@ extension ManagedModelCatalog {
             validationKind: .codegenGGUF,
             estimatedDownloadBytes: 5_680_522_464,
             defaultCLICommands: ["api serve", "text code"],
-            apiProfile: .textCode()
+            apiProfile: .textCode(),
+            manifestTemplate: .init(
+                engine: .qwen3Coder,
+                family: .code,
+                tier: .nano,
+                variant: .standard,
+                precision: .int4,
+                supports: [.chat, .codeGeneration]
+            ),
+            capability: .init(
+                "Qwen3.5 9B agent",
+                "Runs the Qwen3.5 9B Q4 GGUF setup agent for lower-memory Macs.",
+                minimum: 16,
+                recommended: 16,
+                setup: true
+            )
         ),
         ManagedModelSpec(
             id: NorthMiniCodeResources.modelId,
@@ -805,6 +1512,20 @@ extension ManagedModelCatalog {
             apiProfile: .textCode(
                 contextWindow: NorthMiniCodeResources.runtimeContextLength,
                 maximumOutputTokens: NorthMiniCodeResources.maxOutputTokens
+            ),
+            manifestTemplate: .init(
+                engine: .northMiniCode,
+                family: .code,
+                tier: .small,
+                variant: .standard,
+                precision: .int4,
+                supports: [.chat, .codeGeneration]
+            ),
+            capability: .init(
+                "North Mini Code Q4",
+                "Runs Cohere's compact 30B-A3B coding model through the native llama.cpp/GGUF code runtime.",
+                minimum: 24,
+                recommended: 32
             )
         ),
         ManagedModelSpec(
@@ -820,6 +1541,21 @@ extension ManagedModelCatalog {
             apiProfile: .textCode(
                 contextWindow: Ornith35BCodeResources.runtimeContextLength,
                 maximumOutputTokens: Ornith35BCodeResources.maxOutputTokens
+            ),
+            manifestTemplate: .init(
+                engine: .qwen3Coder,
+                family: .code,
+                tier: .small,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 64, scheme: "gguf-q4-k-m"),
+                supports: [.chat, .codeGeneration]
+            ),
+            capability: .init(
+                "Ornith 1.0 35B Q4",
+                "Runs DeepReinforce's larger Ornith coding-agent GGUF through the native llama.cpp/GGUF code runtime.",
+                minimum: 32,
+                recommended: 64
             )
         ),
         ManagedModelSpec(
@@ -841,7 +1577,23 @@ extension ManagedModelCatalog {
             validationKind: .codegenGGUF,
             estimatedDownloadBytes: 22 * 1_073_741_824,
             defaultCLICommands: ["text chat", "api serve"],
-            apiProfile: .textCode()
+            apiProfile: .textCode(),
+            manifestTemplate: .init(
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .nano,
+                variant: .base,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 64, scheme: "gguf-q4-k-m"),
+                supports: [.chat],
+                components: .rootText
+            ),
+            capability: .init(
+                "Qwen3.6 A3B chat nano (GGUF)",
+                "Runs Qwen3.6 35B-A3B GGUF through llama.cpp; the default chat model on Linux CUDA hosts.",
+                minimum: 24,
+                recommended: 32
+            )
         ),
         ManagedModelSpec(
             id: DeepseekV4FlashResources.defaultModelId,
@@ -853,7 +1605,23 @@ extension ManagedModelCatalog {
             validationKind: .deepseekV4FlashIMatrixGGUF,
             estimatedDownloadBytes: DeepseekV4FlashResources.defaultGGUFByteCount,
             defaultCLICommands: ["api serve", "agent start"],
-            apiProfile: .deepseekV4Flash()
+            apiProfile: .deepseekV4Flash(),
+            manifestTemplate: .init(
+                engine: .deepseekV4Flash,
+                family: .deepseek,
+                tier: .max,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 2, groupSize: 32, scheme: "iq2-xxs-imatrix"),
+                supports: [.chat]
+            ),
+            capability: .init(
+                "DeepSeek V4 Flash IQ2 imatrix",
+                "Premier 284B MoE agent tier served by the bundled ds4-server engine (imatrix-tuned q2 GGUF, ~81 GB) for 96 GB+ Apple Silicon Macs.",
+                minimum: 96,
+                recommended: 128,
+                setup: true
+            )
         ),
         ManagedModelSpec(
             id: LFM2Resources.defaultModelId,
@@ -877,7 +1645,24 @@ extension ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 10 * 1_073_741_824,
             defaultCLICommands: ["text chat", "text train-lora", "api serve"],
-            apiProfile: .lfm2()
+            apiProfile: .lfm2(),
+            manifestTemplate: .init(
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .int8,
+                quantization: .init(bits: 8, groupSize: 64, scheme: "mlx-affine"),
+                supports: [.chat],
+                components: .rootText
+            ),
+            capability: .init(
+                "LFM2.5 A1B 8-bit",
+                "Runs the LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot through the native Swift LFM2 runtime.",
+                minimum: 16,
+                recommended: 24,
+                setup: true
+            )
         ),
         ManagedModelSpec(
             id: LFM2Resources.a1bBF16ModelId,
@@ -902,7 +1687,23 @@ extension ManagedModelCatalog {
             estimatedDownloadBytes: LFM2Resources.a1bBF16EstimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve"],
             companionModelIDs: [LFM2Resources.defaultDSparkModelId],
-            apiProfile: .lfm2()
+            apiProfile: .lfm2(),
+            manifestTemplate: .init(
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.chat],
+                components: .rootText
+            ),
+            capability: .init(
+                "LFM2.5 A1B BF16 + DSpark",
+                "Runs the exact LiquidAI LFM2.5 8B-A1B BF16 target with its native DSpark accelerator.",
+                minimum: 32,
+                recommended: 48,
+                setup: true
+            )
         ),
         ManagedModelSpec(
             id: LFM2Resources.a2b24BBF16ModelId,
@@ -926,7 +1727,22 @@ extension ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: LFM2Resources.a2b24BEstimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve"],
-            apiProfile: .lfm2(contextWindow: LFM2Resources.a2b24BContextLength, thinkingLevels: [.high])
+            apiProfile: .lfm2(contextWindow: LFM2Resources.a2b24BContextLength, thinkingLevels: [.high]),
+            manifestTemplate: .init(
+                engine: .lfm2,
+                family: .liquid,
+                tier: .medium,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.chat],
+                components: .rootText
+            ),
+            capability: .init(
+                "LFM2.5 24B-A2B BF16",
+                "Runs LiquidAI's reasoning and tool-use MoE directly from original BF16 safetensors.",
+                minimum: 64,
+                recommended: 96
+            )
         ),
         ManagedModelSpec(
             id: LFM2Resources.smallModelId,
@@ -951,7 +1767,23 @@ extension ManagedModelCatalog {
             estimatedDownloadBytes: LFM2Resources.smallEstimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve"],
             companionModelIDs: [LFM2Resources.smallDSparkModelId],
-            apiProfile: .lfm2()
+            apiProfile: .lfm2(),
+            manifestTemplate: .init(
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.chat],
+                components: .rootText
+            ),
+            capability: .init(
+                "LFM2.5 1.2B BF16",
+                "Runs the compact LiquidAI LFM2.5 1.2B Instruct checkpoint with its optional native DSpark accelerator.",
+                minimum: 8,
+                recommended: 12,
+                setup: true
+            )
         ),
         ManagedModelSpec(
             id: LFM2Resources.smallQADModelId,
@@ -975,7 +1807,24 @@ extension ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: LFM2Resources.smallQADEstimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve"],
-            apiProfile: .lfm2()
+            apiProfile: .lfm2(),
+            manifestTemplate: .init(
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 32, scheme: "liquid-qad-q4_0-mlx-affine-g32"),
+                supports: [.chat],
+                components: .rootText
+            ),
+            capability: .init(
+                "LFM2.5 1.2B QAD 4-bit",
+                "Runs the compact QAD-trained LFM2.5 1.2B checkpoint in native MLX; choose it when memory matters more than BF16 or DSpark throughput.",
+                minimum: 4,
+                recommended: 8,
+                setup: true
+            )
         ),
         ManagedModelSpec(
             id: LFM2Resources.denseModelId,
@@ -999,7 +1848,24 @@ extension ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 1_601_108_788,
             defaultCLICommands: ["text chat", "api serve"],
-            apiProfile: .lfm2()
+            apiProfile: .lfm2(),
+            manifestTemplate: .init(
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 64, scheme: "mlx-affine"),
+                supports: [.chat],
+                components: .denseLFM2Text
+            ),
+            capability: .init(
+                "LFM2.5 2.6B 4-bit",
+                "Runs the LiquidAI LFM2.5 2.6B dense MLX 4-bit snapshot through the native Swift LFM2 runtime.",
+                minimum: 8,
+                recommended: 12,
+                setup: true
+            )
         ),
         ManagedModelSpec(
             id: LFM2Resources.denseQADModelId,
@@ -1023,7 +1889,23 @@ extension ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: LFM2Resources.denseQADEstimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve"],
-            apiProfile: .lfm2()
+            apiProfile: .lfm2(),
+            manifestTemplate: .init(
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 32, scheme: "liquid-qad-q4_0-mlx-affine-g32"),
+                supports: [.chat],
+                components: .rootText
+            ),
+            capability: .init(
+                "LFM2.5 2.6B QAD 4-bit",
+                "Runs the QAD-trained LFM2.5 2.6B checkpoint in native MLX for quantized quality recovery; the standard MLX 4-bit model remains the faster compact lane.",
+                minimum: 8,
+                recommended: 12
+            )
         ),
         ManagedModelSpec(
             id: LFM2Resources.denseBF16ModelId,
@@ -1048,7 +1930,23 @@ extension ManagedModelCatalog {
             estimatedDownloadBytes: LFM2Resources.denseBF16EstimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve"],
             companionModelIDs: [LFM2Resources.denseDSparkModelId],
-            apiProfile: .lfm2()
+            apiProfile: .lfm2(),
+            manifestTemplate: .init(
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.chat],
+                components: .rootText
+            ),
+            capability: .init(
+                "LFM2.5 2.6B BF16 + DSpark",
+                "Runs the exact LiquidAI LFM2.5 2.6B BF16 target with its native DSpark accelerator.",
+                minimum: 16,
+                recommended: 24,
+                setup: true
+            )
         ),
         ManagedModelSpec(
             id: LFM2Resources.visionModelId,
@@ -1072,7 +1970,24 @@ extension ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: LFM2Resources.visionEstimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve"],
-            apiProfile: .lfm2(inputModalities: [.text, .image])
+            apiProfile: .lfm2(inputModalities: [.text, .image]),
+            manifestTemplate: .init(
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .int8,
+                quantization: .init(bits: 8, groupSize: 64, scheme: "mlx-affine"),
+                supports: [.chat, .visionChat],
+                components: .rootText
+            ),
+            capability: .init(
+                "LFM2.5-VL 3B 8-bit",
+                "Runs LiquidAI's compact LFM2.5-VL vision-language model through the native Swift LFM2 runtime.",
+                minimum: 8,
+                recommended: 16,
+                setup: true
+            )
         ),
         ManagedModelSpec(
             id: LFM2Resources.visionBF16ModelId,
@@ -1097,7 +2012,23 @@ extension ManagedModelCatalog {
             estimatedDownloadBytes: LFM2Resources.visionBF16EstimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve"],
             companionModelIDs: [LFM2Resources.visionDSparkModelId],
-            apiProfile: .lfm2(inputModalities: [.text, .image])
+            apiProfile: .lfm2(inputModalities: [.text, .image]),
+            manifestTemplate: .init(
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .bf16,
+                supports: [.chat, .visionChat],
+                components: .rootText
+            ),
+            capability: .init(
+                "LFM2.5-VL 3B BF16",
+                "Runs LiquidAI's BF16 vision-language model with its native DSpark companion.",
+                minimum: 16,
+                recommended: 24,
+                setup: true
+            )
         ),
     ]
 }

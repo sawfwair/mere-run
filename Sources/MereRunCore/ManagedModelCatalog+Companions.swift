@@ -6,7 +6,8 @@ extension ManagedModelCatalog {
         repoId: String,
         revision: String,
         estimatedDownloadBytes: Int64,
-        isVision: Bool = false
+        isVision: Bool = false,
+        capability: ManagedModelCapabilityMetadata
     ) -> ManagedModelSpec {
         ManagedModelSpec(
             id: id,
@@ -28,7 +29,16 @@ extension ManagedModelCatalog {
             ),
             validationKind: .lfm2DSpark,
             runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: estimatedDownloadBytes
+            estimatedDownloadBytes: estimatedDownloadBytes,
+            manifestTemplate: .init(
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .bf16,
+                supports: []
+            ),
+            capability: capability
         )
     }
 
@@ -40,7 +50,22 @@ extension ManagedModelCatalog {
                                                patterns: ["config.json", "model*.safetensors", "model.safetensors.index.json", "README.md", "LICENSE*"]),
                 upstreamRepoId: SOVTranscribeResources.draftRepository, upstreamRevision: SOVTranscribeResources.draftRevision,
                 validationKind: .sovTranscribeDFlash, runtimeAutoDownloadAllowed: false,
-                estimatedDownloadBytes: 860_000_000, apiAvailability: .cliOnly
+                estimatedDownloadBytes: 860_000_000, apiAvailability: .cliOnly,
+                manifestTemplate: .init(
+                    engine: .sovTranscribeASR,
+                    family: .asr,
+                    tier: .latest,
+                    variant: .standard,
+                    precision: .bf16,
+                    supports: [],
+                    components: .rootText
+                ),
+                capability: .init(
+                    "SOV-Transcribe-1 DFlash companion",
+                    "Auxiliary draft for SOV-Transcribe-1; select it with --draft-model when transcribing with the target.",
+                    minimum: 64,
+                    recommended: 96
+                )
             ),
             ManagedModelSpec(
                 id: Q35Resources.ornith35BMTPModelId,
@@ -55,7 +80,21 @@ extension ManagedModelCatalog {
                 upstreamRevision: Q35Resources.ornith35BMTPUpstreamRevision,
                 validationKind: .q35MTPAssistant,
                 runtimeAutoDownloadAllowed: false,
-                estimatedDownloadBytes: Q35Resources.ornith35BMTPEstimatedDownloadBytes
+                estimatedDownloadBytes: Q35Resources.ornith35BMTPEstimatedDownloadBytes,
+                manifestTemplate: .init(
+                    engine: .qwen35HybridMoE,
+                    family: .code,
+                    tier: .small,
+                    variant: .standard,
+                    precision: .bf16,
+                    supports: []
+                ),
+                capability: .init(
+                    "Ornith 1.5 35B-A3B MTP assistant",
+                    "Installs the shared BF16 next-token prediction layer used for verified Ornith speculative decode.",
+                    minimum: 32,
+                    recommended: 48
+                )
             ),
             ManagedModelSpec(
                 id: Gemma4MTPResources.modelId,
@@ -68,7 +107,21 @@ extension ManagedModelCatalog {
                 upstreamRepoId: Gemma4MTPResources.upstreamModelId,
                 validationKind: .gemma4MTPAssistant,
                 runtimeAutoDownloadAllowed: false,
-                estimatedDownloadBytes: 4 * 1_073_741_824
+                estimatedDownloadBytes: 4 * 1_073_741_824,
+                manifestTemplate: .init(
+                    engine: .gemma4,
+                    family: .gemma,
+                    tier: .latest,
+                    variant: .standard,
+                    precision: .bf16,
+                    supports: []
+                ),
+                capability: .init(
+                    "Gemma 4 12B MTP assistant",
+                    "Installs the companion drafter used for verified Gemma 4 12B decode-tail speculation.",
+                    minimum: 24,
+                    recommended: 32
+                )
             ),
             ManagedModelSpec(
                 id: LagunaResources.dflashModelID,
@@ -83,7 +136,21 @@ extension ManagedModelCatalog {
                 upstreamRevision: LagunaResources.dflashUpstreamRevision,
                 validationKind: .lagunaDFlash,
                 runtimeAutoDownloadAllowed: false,
-                estimatedDownloadBytes: LagunaResources.dflashEstimatedDownloadBytes
+                estimatedDownloadBytes: LagunaResources.dflashEstimatedDownloadBytes,
+                manifestTemplate: .init(
+                    engine: .laguna,
+                    family: .laguna,
+                    tier: .small,
+                    variant: .standard,
+                    precision: .bf16,
+                    supports: []
+                ),
+                capability: .init(
+                    "Laguna S 2.1 DFlash assistant",
+                    "Installs the companion drafter used for verified Laguna S 2.1 speculative decoding.",
+                    minimum: 96,
+                    recommended: 128
+                )
             ),
             ManagedModelSpec(
                 id: MuseGlimmerResources.dflash2ModelId,
@@ -98,7 +165,21 @@ extension ManagedModelCatalog {
                 upstreamRevision: MuseGlimmerResources.dflash2UpstreamRevision,
                 validationKind: .museGlimmerAssistant,
                 runtimeAutoDownloadAllowed: false,
-                estimatedDownloadBytes: MuseGlimmerResources.dflash2EstimatedDownloadBytes
+                estimatedDownloadBytes: MuseGlimmerResources.dflash2EstimatedDownloadBytes,
+                manifestTemplate: .init(
+                    engine: .museGlimmer,
+                    family: .muse,
+                    tier: .small,
+                    variant: .standard,
+                    precision: .bf16,
+                    supports: []
+                ),
+                capability: .init(
+                    "Muse Glimmer 30B DFlash2 assistant",
+                    "Installs z-lab's grouped-convolution DFlash2 drafter for Muse Glimmer speculative decoding.",
+                    minimum: 32,
+                    recommended: 64
+                )
             ),
             ManagedModelSpec(
                 id: MuseGlimmerResources.assistantModelId,
@@ -126,7 +207,21 @@ extension ManagedModelCatalog {
                 ),
                 validationKind: .museGlimmerAssistant,
                 runtimeAutoDownloadAllowed: false,
-                estimatedDownloadBytes: MuseGlimmerResources.assistantEstimatedDownloadBytes
+                estimatedDownloadBytes: MuseGlimmerResources.assistantEstimatedDownloadBytes,
+                manifestTemplate: .init(
+                    engine: .museGlimmer,
+                    family: .muse,
+                    tier: .small,
+                    variant: .standard,
+                    precision: .bf16,
+                    supports: []
+                ),
+                capability: .init(
+                    "Muse Glimmer 30B DFlash assistant",
+                    "Preserves the original Muse Glimmer DFlash drafter for compatible existing installations.",
+                    minimum: 32,
+                    recommended: 64
+                )
             ),
             ManagedModelSpec(
                 id: NemotronHResources.dsparkModelID,
@@ -141,32 +236,74 @@ extension ManagedModelCatalog {
                 upstreamRevision: NemotronHResources.dsparkArtifactRevision,
                 validationKind: .nemotronHDSpark,
                 runtimeAutoDownloadAllowed: false,
-                estimatedDownloadBytes: NemotronHResources.dsparkEstimatedDownloadBytes
+                estimatedDownloadBytes: NemotronHResources.dsparkEstimatedDownloadBytes,
+                manifestTemplate: .init(
+                    engine: .nemotronH,
+                    family: .nemotron,
+                    tier: .small,
+                    variant: .standard,
+                    precision: .int4,
+                    quantization: .init(bits: 4, groupSize: 16, scheme: "modelopt-nvfp4-mlx"),
+                    supports: [],
+                    upstream: .explicit(
+                        "\(NemotronHResources.dsparkUpstreamRepoID)@\(NemotronHResources.dsparkUpstreamRevision)"
+                    )
+                ),
+                capability: .init(
+                    "Nemotron 3.5 DSpark assistant",
+                    "Installs the companion drafter used for verified Nemotron 3.5 speculative decoding.",
+                    minimum: 32,
+                    recommended: 64
+                )
             ),
             lfm2DSparkSpec(
                 id: LFM2Resources.defaultDSparkModelId,
                 repoId: LFM2Resources.defaultDSparkRepoId,
                 revision: LFM2Resources.defaultDSparkRevision,
-                estimatedDownloadBytes: LFM2Resources.defaultDSparkEstimatedDownloadBytes
+                estimatedDownloadBytes: LFM2Resources.defaultDSparkEstimatedDownloadBytes,
+                capability: .init(
+                    "LFM2.5 8B-A1B DSpark assistant",
+                    "Installs the verified speculative-decoding assistant for LFM2.5 8B-A1B.",
+                    minimum: 16,
+                    recommended: 24
+                )
             ),
             lfm2DSparkSpec(
                 id: LFM2Resources.smallDSparkModelId,
                 repoId: LFM2Resources.smallDSparkRepoId,
                 revision: LFM2Resources.smallDSparkRevision,
-                estimatedDownloadBytes: LFM2Resources.smallDSparkEstimatedDownloadBytes
+                estimatedDownloadBytes: LFM2Resources.smallDSparkEstimatedDownloadBytes,
+                capability: .init(
+                    "LFM2.5 1.2B DSpark assistant",
+                    "Installs the verified speculative-decoding assistant for LFM2.5 1.2B Instruct.",
+                    minimum: 8,
+                    recommended: 12
+                )
             ),
             lfm2DSparkSpec(
                 id: LFM2Resources.denseDSparkModelId,
                 repoId: LFM2Resources.denseDSparkRepoId,
                 revision: LFM2Resources.denseDSparkRevision,
-                estimatedDownloadBytes: LFM2Resources.denseDSparkEstimatedDownloadBytes
+                estimatedDownloadBytes: LFM2Resources.denseDSparkEstimatedDownloadBytes,
+                capability: .init(
+                    "LFM2.5 2.6B DSpark assistant",
+                    "Installs the verified speculative-decoding assistant for LFM2.5 2.6B.",
+                    minimum: 8,
+                    recommended: 12
+                )
             ),
             lfm2DSparkSpec(
                 id: LFM2Resources.visionDSparkModelId,
                 repoId: LFM2Resources.visionDSparkRepoId,
                 revision: LFM2Resources.visionDSparkRevision,
                 estimatedDownloadBytes: LFM2Resources.visionDSparkEstimatedDownloadBytes,
-                isVision: true
+                isVision: true,
+                capability: .init(
+                    "LFM2.5-VL 3B DSpark assistant",
+                    "Installs the speculative-decoding assistant for LFM2.5-VL 3B BF16.",
+                    minimum: 16,
+                    recommended: 24
+                )
             ),
             ManagedModelSpec(
                 id: ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue,
@@ -181,7 +318,24 @@ extension ManagedModelCatalog {
                 upstreamRevision: ltxGemma3TextEncoderRevision,
                 validationKind: .hfTextChat,
                 runtimeAutoDownloadAllowed: false,
-                estimatedDownloadBytes: 8 * 1_073_741_824
+                estimatedDownloadBytes: 8 * 1_073_741_824,
+                manifestTemplate: .init(
+                    engine: .gemma4,
+                    family: .gemma,
+                    tier: .latest,
+                    variant: .standard,
+                    precision: .int4,
+                    quantization: .init(bits: 4, groupSize: 64, scheme: "mlx-affine"),
+                    supports: [],
+                    components: .rootText,
+                    upstream: .spec
+                ),
+                capability: .init(
+                    "LTX Gemma 3 12B text encoder",
+                    "Installs the shared 4-bit Gemma text encoder used by managed LTX video models.",
+                    minimum: 96,
+                    recommended: 128
+                )
             ),
         ]
     }

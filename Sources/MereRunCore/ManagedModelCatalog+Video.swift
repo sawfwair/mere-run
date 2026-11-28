@@ -27,7 +27,23 @@ extension ManagedModelCatalog {
             validationKind: .ltxVideo,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 93_069_609_104,
-            defaultCLICommands: ["video generate", "video export-latents"]
+            defaultCLICommands: ["video generate", "video export-latents"],
+            manifestTemplate: .init(
+                engine: .ltxVideo,
+                family: .video,
+                tier: .latest,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: .init(steps: 8, cfg: 1.0),
+                supports: [.videoGeneration],
+                upstream: .spec
+            ),
+            capability: .init(
+                "Video generation",
+                "Generates short audio-video clips with the LTX unified AV model stack.",
+                minimum: 64,
+                recommended: 96
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.ltxVideo23AVMLX.rawValue,
@@ -49,7 +65,23 @@ extension ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 120 * 1_073_741_824,
             defaultCLICommands: ["video generate", "video session"],
-            companionModelIDs: [ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue]
+            companionModelIDs: [ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue],
+            manifestTemplate: .init(
+                engine: .ltxVideo,
+                family: .video,
+                tier: .latest,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: .init(steps: 8, cfg: 1.0),
+                supports: [.videoGeneration],
+                upstream: .explicit("dgrauet/ltx-2.3-mlx@main")
+            ),
+            capability: .init(
+                "LTX 2.3 Distilled MLX",
+                "Installs the standalone distilled LTX 2.3 MLX checkpoint for fast draft renders.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.ltxVideo23FullMLX.rawValue,
@@ -72,7 +104,22 @@ extension ManagedModelCatalog {
             resolutionFallbackIDs: [ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue],
             estimatedDownloadBytes: 56_000_000_000,
             defaultCLICommands: ["video generate", "video session"],
-            companionModelIDs: [ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue]
+            companionModelIDs: [ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue],
+            manifestTemplate: .init(
+                engine: .ltxVideo,
+                family: .video,
+                tier: .latest,
+                variant: .base,
+                precision: .bf16,
+                defaults: .init(steps: 30, cfg: 3.0),
+                supports: [.videoGeneration, .audioToVideoGeneration]
+            ),
+            capability: .init(
+                "LTX 2.3 Full MLX",
+                "Installs the final-quality dev transformer, distilled LoRA, and optional generated-audio components.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue,
@@ -95,7 +142,22 @@ extension ManagedModelCatalog {
             resolutionFallbackIDs: [ModelResolver.ModelID.ltxVideo23FullMLX.rawValue],
             estimatedDownloadBytes: 54_000_000_000,
             defaultCLICommands: ["video generate"],
-            companionModelIDs: [ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue]
+            companionModelIDs: [ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue],
+            manifestTemplate: .init(
+                engine: .ltxVideo,
+                family: .video,
+                tier: .latest,
+                variant: .base,
+                precision: .bf16,
+                defaults: .init(steps: 30, cfg: 3.0),
+                supports: [.videoGeneration, .audioToVideoGeneration]
+            ),
+            capability: .init(
+                "LTX 2.3 A2Vid MLX (compatibility)",
+                "Preserves the legacy narrow A2Vid install ID; prefer video-ltx23-full-mlx for new installs.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue,
@@ -116,7 +178,22 @@ extension ManagedModelCatalog {
             validationKind: .ltxVideo25,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: LTX25Resources.estimatedDownloadBytes,
-            defaultCLICommands: ["video generate", "video retake", "video session", "video dub-it"]
+            defaultCLICommands: ["video generate", "video retake", "video session", "video dub-it"],
+            manifestTemplate: .init(
+                engine: .ltxVideo,
+                family: .video,
+                tier: .latest,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: .init(steps: 8, cfg: 3.0),
+                supports: [.videoGeneration]
+            ),
+            capability: .init(
+                "LTX 2.5 Distilled BF16",
+                "Generates synchronized video and audio with the BF16 LTX pipeline and a bundled MLX Q4 Gemma 4 text tower.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.ltxVideo25FullBF16.rawValue,
@@ -137,7 +214,22 @@ extension ManagedModelCatalog {
             validationKind: .ltxVideo25,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: LTX25Resources.fullEstimatedDownloadBytes,
-            defaultCLICommands: ["video generate", "video retake", "video session", "video dub-it"]
+            defaultCLICommands: ["video generate", "video retake", "video session", "video dub-it"],
+            manifestTemplate: .init(
+                engine: .ltxVideo,
+                family: .video,
+                tier: .latest,
+                variant: .base,
+                precision: .bf16,
+                defaults: .init(steps: 30, cfg: 3.0),
+                supports: [.videoGeneration, .audioToVideoGeneration]
+            ),
+            capability: .init(
+                "LTX 2.5 Full BF16",
+                "Installs the full LTX 2.5 dev, distilled, LoRA, VAE, upscaler, and duration components for every native pipeline.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.wan22TI2V5BMLX.rawValue,
@@ -153,7 +245,23 @@ extension ManagedModelCatalog {
             validationKind: .wan22TI2VMLX,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 24_200_000_000,
-            defaultCLICommands: ["video generate"]
+            defaultCLICommands: ["video generate"],
+            manifestTemplate: .init(
+                engine: .wanVideo,
+                family: .video,
+                tier: .base,
+                variant: .base,
+                precision: .bf16,
+                defaults: .init(steps: 40, cfg: 5.0, sigmaShift: 5.0),
+                supports: [.videoGeneration],
+                components: .rootTextTransformerVAE
+            ),
+            capability: .init(
+                "Wan2.2 TI2V 5B MLX",
+                "Generates text- and image-conditioned pixel video with the native Swift MLX Wan2.2 runtime.",
+                minimum: 64,
+                recommended: 96
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue,
@@ -170,7 +278,24 @@ extension ManagedModelCatalog {
             validationKind: .miniMaxH3MLX,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 46_250_104_566,
-            defaultCLICommands: ["video generate"]
+            defaultCLICommands: ["video generate"],
+            manifestTemplate: .init(
+                engine: .miniMaxH3,
+                family: .video,
+                tier: .latest,
+                variant: .distilled,
+                precision: .int4,
+                quantization: .init(bits: 4, groupSize: 64, scheme: "mlx-affine"),
+                defaults: .init(steps: 31, cfg: 1.0, sigmaShift: 12.0),
+                supports: [.videoGeneration],
+                components: .rootTextTransformerVAE
+            ),
+            capability: .init(
+                "MiniMax-H3 FL2VA MLX (legacy Q4)",
+                "Preserves compatibility with the original compact Q4 package; prefer the BF16 or 8-bit model for quality.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
@@ -187,7 +312,23 @@ extension ManagedModelCatalog {
             validationKind: .miniMaxH3MLX,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 77_094_088_403,
-            defaultCLICommands: ["video generate"]
+            defaultCLICommands: ["video generate"],
+            manifestTemplate: .init(
+                engine: .miniMaxH3,
+                family: .video,
+                tier: .latest,
+                variant: .base,
+                precision: .bf16,
+                defaults: .init(steps: 31, cfg: 1.0, sigmaShift: 12.0),
+                supports: [.videoGeneration],
+                components: .rootTextTransformerVAE
+            ),
+            capability: .init(
+                "MiniMax-H3 FL2VA BF16 MLX",
+                "Uses the faithful BF16 H3 transformer for maximum visual quality while reusing the native tokenizer, conditioner, and audio/video decoders.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue,
@@ -204,7 +345,24 @@ extension ManagedModelCatalog {
             validationKind: .miniMaxH3MLX,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 58_308_237_969,
-            defaultCLICommands: ["video generate"]
+            defaultCLICommands: ["video generate"],
+            manifestTemplate: .init(
+                engine: .miniMaxH3,
+                family: .video,
+                tier: .latest,
+                variant: .distilled,
+                precision: .int8,
+                quantization: .init(bits: 8, groupSize: 64, scheme: "mlx-affine"),
+                defaults: .init(steps: 31, cfg: 1.0, sigmaShift: 12.0),
+                supports: [.videoGeneration],
+                components: .rootTextTransformerVAE
+            ),
+            capability: .init(
+                "MiniMax-H3 FL2VA 8-bit MLX",
+                "Uses affine Q8 core linears with the compact exact-cache package as the smaller high-quality H3 option.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue,
@@ -221,7 +379,24 @@ extension ManagedModelCatalog {
             validationKind: .miniMaxH3MLX,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 57_559_079_710,
-            defaultCLICommands: ["video generate"]
+            defaultCLICommands: ["video generate"],
+            manifestTemplate: .init(
+                engine: .miniMaxH3,
+                family: .video,
+                tier: .latest,
+                variant: .distilled,
+                precision: .int8,
+                quantization: .init(bits: 8, groupSize: 64, scheme: "mlx-affine"),
+                defaults: .init(steps: 5, cfg: 1.0, sigmaShift: 12.0),
+                supports: [.videoGeneration],
+                components: .rootTextTransformerVAE
+            ),
+            capability: .init(
+                "MiniMax-H3 FastH3 VSA DataFree MLX",
+                "Runs the premerged Q8 FastH3 student and compact VSA-H3 sparse attention with no separate model assets.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue,
@@ -238,7 +413,24 @@ extension ManagedModelCatalog {
             validationKind: .miniMaxH3MLX,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 70_941_103_245,
-            defaultCLICommands: ["video generate"]
+            defaultCLICommands: ["video generate"],
+            manifestTemplate: .init(
+                engine: .miniMaxH3,
+                family: .video,
+                tier: .latest,
+                variant: .distilled,
+                precision: .int8,
+                quantization: .init(bits: 8, groupSize: 64, scheme: "mlx-affine"),
+                defaults: .init(steps: 31, cfg: 1.0, sigmaShift: 12.0),
+                supports: [.videoGeneration],
+                components: .rootTextTransformerVAE
+            ),
+            capability: .init(
+                "MiniMax-H3 Ref2VA MLX",
+                "Runs the explicit-pull 8-bit Ref2VA package with ordered image, video, and audio references and synchronized generated audio.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.cosmos3EdgeMLX.rawValue,
@@ -258,7 +450,23 @@ extension ManagedModelCatalog {
                 "video cosmos3",
                 "video cosmos3 --mode reasoner",
                 "world serve --backend cosmos3",
-            ]
+            ],
+            manifestTemplate: .init(
+                engine: .cosmos3Edge,
+                family: .video,
+                tier: .latest,
+                variant: .base,
+                precision: .bf16,
+                defaults: .init(steps: 35, cfg: 6.0, sigmaShift: 10.0),
+                supports: [.videoGeneration, .actionGeneration, .worldSimulation, .visionReasoning],
+                components: .init(tokenizer: .local(path: "text_tokenizer"), textEncoder: .local(path: "."), transformer: .local(path: "transformer"), vae: .local(path: "vae"), scheduler: .local(path: "scheduler"))
+            ),
+            capability: .init(
+                "Cosmos3-Edge MLX",
+                "Runs NVIDIA Cosmos3-Edge video, action, navigation, and reasoner modes with native Swift MLX.",
+                minimum: 32,
+                recommended: 64
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.scail2Video14BMLX.rawValue,
@@ -274,7 +482,23 @@ extension ManagedModelCatalog {
             validationKind: .scail2MLX,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 46_648_000_000,
-            defaultCLICommands: ["video animate"]
+            defaultCLICommands: ["video animate"],
+            manifestTemplate: .init(
+                engine: .wanVideo,
+                family: .video,
+                tier: .latest,
+                variant: .base,
+                precision: .bf16,
+                defaults: .init(steps: 40, cfg: 5.0, sigmaShift: 3.0),
+                supports: [.videoGeneration],
+                components: .rootTextTransformerVAE
+            ),
+            capability: .init(
+                "SCAIL-2 14B MLX",
+                "Animates or replaces masked subjects from reference images and driving videos with native Swift/MLX.",
+                minimum: 96,
+                recommended: 128
+            )
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.dreamXWorld5BARMLX.rawValue,
@@ -286,7 +510,23 @@ extension ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 10_566_339_320,
             defaultCLICommands: ["world serve"],
-            companionModelIDs: [ModelResolver.ModelID.wan22TI2V5BMLX.rawValue]
+            companionModelIDs: [ModelResolver.ModelID.wan22TI2V5BMLX.rawValue],
+            manifestTemplate: .init(
+                engine: .wanVideo,
+                family: .video,
+                tier: .latest,
+                variant: .base,
+                precision: .bf16,
+                defaults: .init(steps: 4, cfg: 1.0, sigmaShift: 5.0),
+                supports: [.videoGeneration],
+                components: .init(transformer: .local(path: Wan2DreamXCausalResources.weightsFilename))
+            ),
+            capability: .init(
+                "DreamX World 5B AR MLX",
+                "Runs persistent camera-conditioned world generation with the native causal Swift MLX runtime.",
+                minimum: 64,
+                recommended: 128
+            )
         ),
     ]
 
