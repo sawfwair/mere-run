@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXNN
 
@@ -9,11 +10,7 @@ public actor Gemma4Generator: ChatGenerator {
     /// bursts inside the pipelined loop. A no-match token costs one host-side
     /// scan (microseconds) and no GPU work, so this is enabled by default;
     /// MERERUN_GEMMA4_PROMPT_LOOKUP=0 disables.
-    static let promptLookupSpeculationEnabled: Bool = {
-        let raw = ProcessInfo.processInfo.environment["MERERUN_GEMMA4_PROMPT_LOOKUP"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return raw != "0" && raw != "false" && raw != "off"
-    }()
+    static let promptLookupSpeculationEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_GEMMA4_PROMPT_LOOKUP", default: true)
 
     /// Draft length for prompt-lookup speculation
     /// (MERERUN_GEMMA4_PROMPT_LOOKUP_BLOCK, default 8). Lookup drafts cost
@@ -96,8 +93,8 @@ public actor Gemma4Generator: ChatGenerator {
     public init(
         modelId: String = Gemma4Resources.defaultModelId,
         kvCacheQuantization: Gemma4KVCacheQuantization = Gemma4KVCacheQuantization(),
-        prefixKVCacheEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_GEMMA4_PREFIX_KV_CACHE"] == "1",
-        continuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_GEMMA4_CONTINUOUS_BATCHING"] == "1"
+        prefixKVCacheEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_GEMMA4_PREFIX_KV_CACHE", default: false),
+        continuousBatchingEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_GEMMA4_CONTINUOUS_BATCHING", default: false)
     ) {
         self.modelId = modelId
         self.kvCacheQuantization = kvCacheQuantization

@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MediaIO
 import MLX
 #if canImport(Darwin)
@@ -221,8 +222,7 @@ extension MiniMaxH3Generator {
         transformer.dynamicSparseAttentionPolicy = dynamicSparseAttentionPolicy
         transformer.dynamicSparseAttentionStepCount = videoSchedule.timesteps.count
         transformer.dynamicSparseAttentionLogHandler = stepProfileLogger
-        transformer.usesFusedPostAttention = ProcessInfo.processInfo
-            .environment["MERERUN_H3_FUSED_POST_ATTENTION"] == "1"
+        transformer.usesFusedPostAttention = MereRunEnvironmentSwitch.isEnabled("MERERUN_H3_FUSED_POST_ATTENTION", default: false)
         transformer.usesLayerwiseEvaluation = executionMode.usesLayerwiseEvaluation
         transformer.clearsCacheAfterLayerwiseEvaluation = executionMode == .eagerStep
         let attentionHeadsPerKernel = transformer.maximumAttentionHeadsPerKernel

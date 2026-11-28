@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MediaIO
 import MLX
 import MLXNN
@@ -63,13 +64,11 @@ extension Q35Generator {
         enabledByDefault: Bool = true,
         environment env: [String: String]
     ) -> Bool {
-        let rawPolicy = env["MERERUN_Q35_MTP_SPECULATION"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if rawPolicy == "0" || rawPolicy == "false" || rawPolicy == "no" {
+        let policy = MereRunEnvironmentSwitch.value("MERERUN_Q35_MTP_SPECULATION", environment: env)
+        if policy == false {
             return false
         }
-        let explicitlyEnabled = rawPolicy == "1" || rawPolicy == "true"
-            || rawPolicy == "yes" || rawPolicy == "on"
+        let explicitlyEnabled = policy == true
         if !enabledByDefault, !explicitlyEnabled {
             return false
         }

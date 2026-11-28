@@ -1,11 +1,12 @@
 #if os(macOS)
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXFast
 
 extension M5TiledAffineQ4 {
     @TaskLocal static var prefillFFNRowReuse =
-        ProcessInfo.processInfo.environment["MERERUN_Q38_PREFILL_FFN_ROW_REUSE"] == "1"
+        MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_PREFILL_FFN_ROW_REUSE", default: false)
 
     static func prefillFFNRowTiles(width: Int, input: Int, output: Int) -> Int {
         guard prefillFFNRowReuse, width >= 512 else { return 1 }

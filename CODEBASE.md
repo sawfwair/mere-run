@@ -18,6 +18,7 @@ compatibility facade; owned runtime targets hold model computation.
 
 - `Sources/MereRunCLI/Commands/`: public command families
 - `Sources/MereRunContract/`: CLI capability and result contracts
+- `Sources/MereRunEnvironment/`: the shared `MERERUN_*` on/off switch parser
 - `Sources/MereRunEvaluation/`: evaluation-pack schema and hashing
 - `Sources/MereRunRelayKit/`: relay client and workflow wire types
 - `Sources/MereRunModelKit/`: model identities, manifests, paths, and installed lookup

@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXFast
 
@@ -82,10 +83,7 @@ enum GLM47FusedMoEPolicy {
     static func isEnabled(
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> Bool {
-        let raw = environment["MERERUN_PSI_FUSED_MOE"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-        return raw == "1" || raw == "true" || raw == "yes" || raw == "on"
+        MereRunEnvironmentSwitch.isEnabled("MERERUN_PSI_FUSED_MOE", default: false, environment: environment)
     }
 }
 

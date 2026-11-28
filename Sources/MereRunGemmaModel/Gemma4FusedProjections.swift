@@ -1,14 +1,11 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXNN
 
 enum Gemma4FusedProjectionPolicy {
     /// Kill switch: MERERUN_GEMMA4_FUSED_PROJ=0 disables fused projections.
-    static let enabled: Bool = {
-        let raw = ProcessInfo.processInfo.environment["MERERUN_GEMMA4_FUSED_PROJ"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return raw != "0" && raw != "false" && raw != "off"
-    }()
+    static let enabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_GEMMA4_FUSED_PROJ", default: true)
 
     /// Opt-in: MERERUN_GEMMA4_COMPILED_SEGMENTS=1 enables MLX-compiled per-layer
     /// decode segments. Off by default: mlx-swift 0.31.4 routes every compiled
@@ -16,11 +13,7 @@ enum Gemma4FusedProjectionPolicy {
     /// measured 2.6x SLOWER than the interpreted path at 96 calls/token
     /// (70.8ms vs 27.1ms per token). Revisit if CompiledFunction.call gets
     /// cheaper in a future mlx-swift.
-    static let compiledSegmentsEnabled: Bool = {
-        let raw = ProcessInfo.processInfo.environment["MERERUN_GEMMA4_COMPILED_SEGMENTS"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return raw == "1" || raw == "true" || raw == "on"
-    }()
+    static let compiledSegmentsEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_GEMMA4_COMPILED_SEGMENTS", default: false)
 
     /// Opt-in: MERERUN_GEMMA4_FUSED_DECODE_KERNELS=1 enables the custom fused
     /// Metal kernels on the seq==1 decode path. Off by default: they hold
@@ -30,11 +23,7 @@ enum Gemma4FusedProjectionPolicy {
     /// acceptance at long context (measured 43.7 -> 28.9 tok/s at 7.4k).
     /// They reduce per-token dispatches ~45%, which still pays off when the
     /// GPU is shared with training — enable explicitly for that.
-    static let fusedDecodeKernelsEnabled: Bool = {
-        let raw = ProcessInfo.processInfo.environment["MERERUN_GEMMA4_FUSED_DECODE_KERNELS"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return raw == "1" || raw == "true" || raw == "on"
-    }()
+    static let fusedDecodeKernelsEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_GEMMA4_FUSED_DECODE_KERNELS", default: false)
 }
 
 /// An MLX-compiled decode segment plus the identity fingerprint of every module

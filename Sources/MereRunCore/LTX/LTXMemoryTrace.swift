@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 
 let ltxMemoryTraceEnvironmentKey = "MERERUN_LTX_MEMORY_TRACE"
@@ -7,7 +8,7 @@ func ltxTraceMemory(
     _ phase: String,
     environment: [String: String] = ProcessInfo.processInfo.environment
 ) {
-    guard environment[ltxMemoryTraceEnvironmentKey] == "1" else { return }
+    guard MereRunEnvironmentSwitch.isEnabled(ltxMemoryTraceEnvironmentKey, default: false, environment: environment) else { return }
     let snapshot = Memory.snapshot()
     let line = ltxMemoryTraceLine(
         phase: phase,

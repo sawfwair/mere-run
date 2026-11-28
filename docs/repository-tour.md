@@ -133,6 +133,9 @@ The public command-line surface. To understand the CLI end to end, start here.
 
 ## Shared runtime libraries
 
+- `Sources/MereRunEnvironment`: the one parser for `MERERUN_*` on/off switches.
+  It has no dependencies, so every runtime target reads switches the same way.
+  It is internal and has no product.
 - `Sources/MereRunTensor`: checkpoint loading and shared tensor kernels.
 - `Sources/MereRunDecode`: shared autoregressive token sampling, streaming, and
   logprob diagnostics. Core keeps model loading, tokenizer adapters, resource
@@ -282,7 +285,7 @@ SwiftPM test targets live under `Tests/`:
 - `MereRunCLITests`: command parsing, CLI behavior, serving, and the
   documentation contract. When you change the public surface or command
   semantics, add or update coverage here.
-- Library tests: `MereRunContractTests`, `MereRunEvaluationTests`,
+- Library tests: `MereRunContractTests`, `MereRunEnvironmentTests`, `MereRunEvaluationTests`,
   `MereRunRelayKitTests`, `MereRunModelKitTests`, `MereRunExecutionTests`,
   `MereRunAdmissionTests`, `MereRunResidencyTests`, `AudioCoreTests`, and
   `AudioTTSTests`.

@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 #if canImport(Darwin)
 import Darwin
@@ -38,7 +39,7 @@ final class Q35MTPProfile {
     private var repairStart: UInt64?
 
     static func make(environment: [String: String] = ProcessInfo.processInfo.environment) -> Q35MTPProfile? {
-        guard environment["MERERUN_Q35_MTP_PROFILE"] == "1" else { return nil }
+        guard MereRunEnvironmentSwitch.isEnabled("MERERUN_Q35_MTP_PROFILE", default: false, environment: environment) else { return nil }
         let profile = Q35MTPProfile()
         #if canImport(Darwin)
         profile.result.thermalState = ProcessInfo.processInfo.thermalState.rawValue

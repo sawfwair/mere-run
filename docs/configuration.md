@@ -958,10 +958,11 @@ are left alone, since build, release, and benchmark scripts use their own `MERER
 settings. Warnings stay off `stdout` and are suppressed under
 `--quiet`, `--help`, and `--version`.
 
-Switches do not all parse the same words. Many runtime switches honor only `0` and `1`,
-so the validator rejects `true` or `off` for them rather than letting the value be
-ignored or inverted. Use `0` and `1` when in doubt; the warning names the accepted
-values for each variable.
+Every on/off switch reads its value the same way: `1`, `true`, `yes`, and `on` turn it
+on, and `0`, `false`, `no`, and `off` turn it off, ignoring case and surrounding spaces.
+Any other value leaves the switch at its default and prints a warning. Variables that
+select a mode or a number, such as `MERERUN_Q35_PRISM_FUSION=shared`, keep their own
+values, and the warning names them.
 
 When any `MERERUN_*` overrides are set, `mere.run status`, `mere.run status --json`,
 and the API server's `/runtime/status` payload report the active overrides and any

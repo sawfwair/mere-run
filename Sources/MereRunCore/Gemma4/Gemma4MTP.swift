@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXNN
 
@@ -80,8 +81,7 @@ struct Gemma4MTPResources: Sendable, Hashable {
 
 enum Gemma4MTPPolicy {
     static func enabled(environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
-        let raw = environment["MERERUN_GEMMA4_MTP"]?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return raw != "0" && raw != "false" && raw != "off"
+        MereRunEnvironmentSwitch.isEnabled("MERERUN_GEMMA4_MTP", default: true, environment: environment)
     }
 
     static func promptThreshold(environment: [String: String] = ProcessInfo.processInfo.environment) -> Int {
@@ -95,9 +95,7 @@ enum Gemma4MTPPolicy {
     static func sampledSpeculationEnabled(
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> Bool {
-        let raw = environment["MERERUN_GEMMA4_MTP_SAMPLED"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return raw == "1" || raw == "true" || raw == "on"
+        MereRunEnvironmentSwitch.isEnabled("MERERUN_GEMMA4_MTP_SAMPLED", default: false, environment: environment)
     }
 
     static func blockSize(

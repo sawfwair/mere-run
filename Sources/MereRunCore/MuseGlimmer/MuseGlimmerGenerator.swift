@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 
 private struct MuseGlimmerDecodeResult {
@@ -205,7 +206,7 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         try Task.checkCancellation()
         let densePrefillModules = try loadedModel.installQuantizedPrefill()
         prefillAdapterIdentity = densePrefillModules > 0 ? "affine-dense-prefill-v1" : "native-prefill"
-        let fusedNormalization = ProcessInfo.processInfo.environment["MERERUN_MUSE_GLIMMER_FUSED_NORM"] == "1"
+        let fusedNormalization = MereRunEnvironmentSwitch.isEnabled("MERERUN_MUSE_GLIMMER_FUSED_NORM", default: false)
         loadedModel.configureFusedNormalization(fusedNormalization)
         if fusedNormalization { prefillAdapterIdentity += "/fp32-rms-v1" }
         if let verification = ProcessInfo.processInfo.environment["MERERUN_MUSE_GLIMMER_Q8_VERIFY"], verification != "native" {

@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXNN
 
@@ -83,11 +84,7 @@ enum TextLoRATrainingEnvironment {
     /// gradients to the full-logits path; skips the `[B*T, 262k]` matmul and
     /// float32 chain over prompt/pad rows. MERERUN_TEXT_LORA_TRAIN_GATHERED_LOSS=0
     /// restores the legacy full-logits loss.
-    static let gatheredLossEnabled: Bool = {
-        let raw = ProcessInfo.processInfo.environment["MERERUN_TEXT_LORA_TRAIN_GATHERED_LOSS"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return raw != "0" && raw != "false" && raw != "off"
-    }()
+    static let gatheredLossEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_TEXT_LORA_TRAIN_GATHERED_LOSS", default: true)
 
     /// Loss-readback cadence in steps. Between boundaries the step is
     /// scheduled with asyncEval and the loop continues without a GPU→CPU

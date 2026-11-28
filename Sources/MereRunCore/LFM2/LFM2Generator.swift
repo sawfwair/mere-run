@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXNN
 
@@ -198,9 +199,9 @@ public actor LFM2Generator: ChatGenerator {
     public init(
         modelId: String = LFM2Resources.defaultModelId,
         prefixKVCacheEnabled: Bool =
-            ProcessInfo.processInfo.environment["MERERUN_LFM2_PREFIX_KV_CACHE"] == "1",
+            MereRunEnvironmentSwitch.isEnabled("MERERUN_LFM2_PREFIX_KV_CACHE", default: false),
         continuousBatchingEnabled: Bool =
-            ProcessInfo.processInfo.environment["MERERUN_LFM2_CONTINUOUS_BATCHING"] == "1"
+            MereRunEnvironmentSwitch.isEnabled("MERERUN_LFM2_CONTINUOUS_BATCHING", default: false)
     ) {
         self.modelId = modelId
         self.prefixKVCacheEnabled = prefixKVCacheEnabled

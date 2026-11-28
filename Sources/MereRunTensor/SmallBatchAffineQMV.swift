@@ -1,5 +1,6 @@
 #if os(macOS)
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXFast
 
@@ -42,12 +43,7 @@ enum SmallBatchAffineQMV {
         "2560x2560", "2560x6144", "6144x2560", "10240x320",
         "10240x2560", "12288x2560", "248320x2560",
     ]
-    private static let exactWideEnabled: Bool = {
-        let value = ProcessInfo.processInfo.environment["MERERUN_Q38_EXACT_WIDE_Q4"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-        return value != "0" && value != "false" && value != "off"
-    }()
+    private static let exactWideEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_EXACT_WIDE_Q4", default: true)
     private static let exactWideShapes: Set<String>? = {
         guard let raw = ProcessInfo.processInfo.environment["MERERUN_Q38_EXACT_WIDE_Q4_SHAPES"]?
             .trimmingCharacters(in: .whitespacesAndNewlines),

@@ -1,13 +1,12 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 
 enum Q35Sampling {
     static func packedGreedyVerificationEnabled(
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> Bool {
-        let raw = environment["MERERUN_Q35_PACKED_GREEDY_VERIFICATION"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return raw == "1" || raw == "true" || raw == "on"
+        MereRunEnvironmentSwitch.isEnabled("MERERUN_Q35_PACKED_GREEDY_VERIFICATION", default: false, environment: environment)
     }
 
     static func greedyVerificationTokenIDs(

@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXFast
 
@@ -6,11 +7,7 @@ enum Ideogram4FusedKernelPolicy {
     /// Opt-in for the experimental Apple-Silicon fused denoiser kernels.
     /// The exact portable MLX graph remains the production default until the
     /// custom kernels demonstrate an end-to-end checkpoint win.
-    static let enabled: Bool = {
-        let raw = ProcessInfo.processInfo.environment["MERERUN_IDEOGRAM4_FUSED_KERNELS"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return raw == "1" || raw == "true" || raw == "on"
-    }()
+    static let enabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_IDEOGRAM4_FUSED_KERNELS", default: false)
 }
 
 struct Ideogram4FusedKernelSavings: Equatable, Sendable {

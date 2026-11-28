@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXNN
 
@@ -135,18 +136,8 @@ public final class QwenVLEncoder: Module {
         }
     }
 
-    private static let debugVisionStats: Bool = {
-        guard let raw = ProcessInfo.processInfo.environment["MERERUN_VLM_DEBUG_STATS"]?.lowercased() else {
-            return false
-        }
-        return raw == "1" || raw == "true" || raw == "yes"
-    }()
-    private static let disableDeepstack: Bool = {
-        guard let raw = ProcessInfo.processInfo.environment["MERERUN_VLM_DISABLE_DEEPSTACK"]?.lowercased() else {
-            return false
-        }
-        return raw == "1" || raw == "true" || raw == "yes"
-    }()
+    private static let debugVisionStats: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_VLM_DEBUG_STATS", default: false)
+    private static let disableDeepstack: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_VLM_DISABLE_DEEPSTACK", default: false)
 
     @ModuleInfo(key: "textEncoder") public var textEncoder: QwenTextEncoder
     @ModuleInfo(key: "visionTower") var visionTower: QwenVisionTower

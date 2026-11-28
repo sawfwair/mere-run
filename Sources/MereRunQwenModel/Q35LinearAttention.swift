@@ -1,5 +1,6 @@
 import MereRunTensor
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXFast
 import MLXNN
@@ -896,7 +897,7 @@ final class Q35LinearAttention: Module {
     }
 
     #if os(macOS)
-    private static let splitGateEnabled = ProcessInfo.processInfo.environment["MERERUN_Q38_GDN_MATRIX_Z"] == "1"
+    private static let splitGateEnabled = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_GDN_MATRIX_Z", default: false)
         && !Q35NativeExecutionPolicy.enabled
     private static let splitGateLayers = Q35GDNProjectionPolicy.parseMatrixLayers(
         ProcessInfo.processInfo.environment["MERERUN_Q38_GDN_MATRIX_Z_LAYERS"])

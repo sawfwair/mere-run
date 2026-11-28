@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import MereRunEnvironment
 import MereRunCore
 
 #if canImport(Darwin)
@@ -238,9 +239,7 @@ enum MLXBundleSupport {
     }
 
     private static var mismatchOverrideEnabled: Bool {
-      let raw = (ProcessInfo.processInfo.environment["MERERUN_ALLOW_METALLIB_MISMATCH"] ?? "")
-        .lowercased()
-      return raw == "1" || raw == "true" || raw == "yes"
+      MereRunEnvironmentSwitch.isEnabled("MERERUN_ALLOW_METALLIB_MISMATCH", default: false)
     }
 
     private static func validateLinkedRuntime() throws {

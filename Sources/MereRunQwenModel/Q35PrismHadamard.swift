@@ -1,10 +1,11 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXFast
 
 /// One launch for Prism's FP32 signed butterfly and activation conversion.
 package enum Q35PrismHadamard {
-    private static let enabled = ProcessInfo.processInfo.environment["MERERUN_Q35_PRISM_METAL"] != "0"
+    private static let enabled = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q35_PRISM_METAL", default: true)
 
     #if os(macOS)
     private static let kernel = MLXFast.metalKernel(

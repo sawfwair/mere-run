@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXFast
 import MLXNN
@@ -411,10 +412,7 @@ final class LFM2SwitchLinear: Module {
 }
 
 enum LFM2MoEAccelerationPolicy {
-    static let fusedAffine8MoEEnabled = RoutedMoERouting.parseBoolean(
-        ProcessInfo.processInfo.environment["MERERUN_LFM2_FUSED_AFFINE8_MOE"],
-        default: true
-    )
+    static let fusedAffine8MoEEnabled = MereRunEnvironmentSwitch.isEnabled("MERERUN_LFM2_FUSED_AFFINE8_MOE", default: true)
 }
 
 final class LFM2SwitchGLU: Module {

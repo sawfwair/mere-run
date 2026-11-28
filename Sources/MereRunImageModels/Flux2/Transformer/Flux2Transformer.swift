@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MereRunTensor
 import MLX
 import MLXFast
@@ -859,12 +860,7 @@ public final class Flux2Transformer2DModel: Module {
     /// It is not invoked while the transformer runs under `MLX.compile` or
     /// gradient checkpointing, where a mid-graph evaluation is not allowed.
     public var forwardStageHandler: ((Flux2TransformerForwardStage, [MLXArray]) -> Void)?
-    private static let compileEnabled: Bool = {
-        guard let raw = ProcessInfo.processInfo.environment["MERERUN_FLUX2_COMPILE"]?.lowercased() else {
-            return false
-        }
-        return raw == "1" || raw == "true" || raw == "yes"
-    }()
+    private static let compileEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_FLUX2_COMPILE", default: false)
 
     public init(config: Flux2TransformerConfiguration) {
         self.config = config

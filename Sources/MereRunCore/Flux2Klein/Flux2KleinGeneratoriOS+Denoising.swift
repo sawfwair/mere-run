@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXRandom
 import MLXNN
@@ -25,10 +26,7 @@ extension Flux2KleinGeneratoriOS {
         outputURL: URL,
         progressHandler: (@Sendable (GenerationProgress) -> Void)?
     ) async throws {
-        let timingEnabled = {
-            guard let raw = ProcessInfo.processInfo.environment["MERERUN_FLUX2_TIMING"]?.lowercased() else { return false }
-            return raw == "1" || raw == "true" || raw == "yes"
-        }()
+        let timingEnabled = MereRunEnvironmentSwitch.isEnabled("MERERUN_FLUX2_TIMING", default: false)
 
         let numRefs = referenceLatents.count
 

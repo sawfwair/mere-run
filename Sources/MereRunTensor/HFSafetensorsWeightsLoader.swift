@@ -1,21 +1,12 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXNN
 
 public enum HFSafetensorsWeightsLoader {
-    private static let residualEnabled: Bool = {
-        guard let raw = ProcessInfo.processInfo.environment["MERERUN_SVD_RESIDUAL"]?.lowercased() else {
-            return false
-        }
-        return raw == "1" || raw == "true" || raw == "yes"
-    }()
+    private static let residualEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_SVD_RESIDUAL", default: false)
 
-    private static let residualDebug: Bool = {
-        guard let raw = ProcessInfo.processInfo.environment["MERERUN_SVD_RESIDUAL_DEBUG"]?.lowercased() else {
-            return false
-        }
-        return raw == "1" || raw == "true" || raw == "yes"
-    }()
+    private static let residualDebug: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_SVD_RESIDUAL_DEBUG", default: false)
 
     private static let verifyUnusedKeys: Bool = {
         guard let raw = ProcessInfo.processInfo.environment["MERERUN_VERIFY_UNUSED_KEYS"]?.lowercased() else {

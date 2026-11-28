@@ -1,10 +1,11 @@
 #if os(macOS)
 import Foundation
+import MereRunEnvironment
 import MereRunTensor
 import MLX
 
 package enum Q35NativeExecutionPolicy {
-    package static let enabled = ProcessInfo.processInfo.environment["MERERUN_Q38_SWIFT_METAL"] == "1"
+    package static let enabled = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_SWIFT_METAL", default: false)
     static let promptRows: Int = {
         let rows = Int(ProcessInfo.processInfo.environment["MERERUN_Q38_SWIFT_METAL_PROMPT_ROWS"] ?? "")
         return rows.flatMap { [16, 64, 128, 256].contains($0) ? $0 : nil } ?? 128

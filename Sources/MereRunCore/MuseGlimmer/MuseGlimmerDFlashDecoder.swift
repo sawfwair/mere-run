@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import Dispatch
 import MLX
 
@@ -116,7 +117,7 @@ enum MuseGlimmerDFlashScheduling: String, Decodable {
     case deferred
 
     static var selected: Self {
-        ProcessInfo.processInfo.environment["MERERUN_MUSE_GLIMMER_DFLASH_DEFERRED"] == "1" ? .deferred : .eager
+        MereRunEnvironmentSwitch.isEnabled("MERERUN_MUSE_GLIMMER_DFLASH_DEFERRED", default: false) ? .deferred : .eager
     }
 }
 

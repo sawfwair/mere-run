@@ -1,10 +1,11 @@
 import Foundation
+import MereRunEnvironment
 import MereRunKVCache
 import MereRunTensor
 import MLX
 
 enum Q35TreePipeline {
-    @TaskLocal static var enabled = ProcessInfo.processInfo.environment["MERERUN_Q38_TREE_PIPELINED_KEEP"] == "1"
+    @TaskLocal static var enabled = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_TREE_PIPELINED_KEEP", default: false)
 
     struct Match {
         let path: MLXArray

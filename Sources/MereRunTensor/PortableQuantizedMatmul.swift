@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXNN
 #if os(macOS)
@@ -170,9 +171,7 @@ public final class PortableQuantizedLinear: QuantizedLinear {
         QuantizedVerificationContext.suppressM5 ? .reference : verificationBackend
     }
     package static let m5TiledWeightsEnabled: Bool = {
-        let value = ProcessInfo.processInfo.environment["MERERUN_Q38_M5_TILED_WEIGHTS"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return value == nil || value == "1" || value == "true" || value == "yes" || value == "on"
+        MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_M5_TILED_WEIGHTS", default: true)
     }()
     #if os(macOS)
     private var cachedM5TiledWeights: M5TiledAffineQ4.Weights?
@@ -187,11 +186,7 @@ public final class PortableQuantizedLinear: QuantizedLinear {
         return prepared
     }
     #endif
-    private static let m5FusedFFNEnabled: Bool = {
-        let value = ProcessInfo.processInfo.environment["MERERUN_Q38_M5_FUSED_FFN"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return value != "0" && value != "false" && value != "off"
-    }()
+    private static let m5FusedFFNEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_M5_FUSED_FFN", default: true)
 
     package static func fusedVerificationSwiGLU(_ x: MLXArray, gate: Linear, up: Linear) -> MLXArray? {
         #if os(macOS)

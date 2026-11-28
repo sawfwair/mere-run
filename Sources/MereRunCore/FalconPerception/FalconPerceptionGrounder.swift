@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MediaIO
 @preconcurrency import MLX
 import MLXNN
@@ -663,7 +664,7 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
         let gridH = gridHW.indices.contains(0) ? gridHW[0] : 0
         let gridW = gridHW.indices.contains(1) ? gridHW[1] : 0
 
-        let disableSegmentationFeatures = ProcessInfo.processInfo.environment["MERERUN_FALCON_DISABLE_SEGM_FEATURES"] == "1"
+        let disableSegmentationFeatures = MereRunEnvironmentSwitch.isEnabled("MERERUN_FALCON_DISABLE_SEGM_FEATURES", default: false)
         var segmentationFeatures: MLXArray?
         if !disableSegmentationFeatures, let hiddenState = model.lastHiddenState {
             segmentationFeatures = model.computeSegmentationFeatures(

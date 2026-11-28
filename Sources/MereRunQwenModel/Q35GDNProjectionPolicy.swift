@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MereRunTensor
 import MLX
 import MLXNN
@@ -6,9 +7,9 @@ import MLXNN
 /// A separately qualified arithmetic change for the dense 27B fused GDN input.
 package enum Q35GDNProjectionPolicy {
     @TaskLocal package static var matrixEnabled =
-        ProcessInfo.processInfo.environment["MERERUN_Q38_GDN_MATRIX"] == "1"
+        MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_GDN_MATRIX", default: false)
     @TaskLocal package static var prefillMatrixEnabled =
-        ProcessInfo.processInfo.environment["MERERUN_Q38_GDN_MATRIX_PREFILL"] == "1"
+        MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_GDN_MATRIX_PREFILL", default: false)
     @TaskLocal package static var matrixLayers = parseMatrixLayers(
         ProcessInfo.processInfo.environment["MERERUN_Q38_GDN_MATRIX_LAYERS"])
     static let matrixArithmetic: GroupAffineArithmetic = {

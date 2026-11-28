@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXFast
 import MLXNN
@@ -83,7 +84,7 @@ public final class LoRALinear: Linear, TrainableLoRALayer {
         let loraOut = MLX.matmul(MLX.matmul(xF, down.T), up.T) * MLXArray(scale)
 
         // Debug: log layers with non-zero weights (those that were actually trained)
-        if ProcessInfo.processInfo.environment["MERERUN_LORA_DEBUG"] != nil {
+        if MereRunEnvironmentSwitch.isEnabled("MERERUN_LORA_DEBUG", default: false) {
             let downNorm = MLX.sqrt(MLX.sum(down * down)).item(Float.self)
             let upNorm = MLX.sqrt(MLX.sum(up * up)).item(Float.self)
             if !Self.hasLoggedOnce && upNorm > 0.1 {

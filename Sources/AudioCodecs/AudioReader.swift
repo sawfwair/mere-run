@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MediaIO
 
 /// Audio reader supporting WAV, M4A, MP3, and other formats via platform media backends.
@@ -91,10 +92,7 @@ public enum AudioReader {
     }
 
     private static var isDebugEnabled: Bool {
-        guard let raw = ProcessInfo.processInfo.environment["MERERUN_ASR_DEBUG"]?.lowercased() else {
-            return false
-        }
-        return raw == "1" || raw == "true" || raw == "yes"
+        MereRunEnvironmentSwitch.isEnabled("MERERUN_ASR_DEBUG", default: false)
     }
 
     private static func audioStats(_ samples: [Float]) -> (rms: Float, peak: Float) {

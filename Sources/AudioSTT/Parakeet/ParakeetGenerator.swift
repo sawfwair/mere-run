@@ -1,5 +1,6 @@
 import AudioParakeetModel
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXNN
 import AudioCore
@@ -15,12 +16,7 @@ public actor ParakeetGenerator: ASRGenerator {
     let modelId: String
     let executionProvider: ParakeetExecutionProvider
 
-    static let debugEnabled: Bool = {
-        guard let raw = ProcessInfo.processInfo.environment["MERERUN_ASR_DEBUG"]?.lowercased() else {
-            return false
-        }
-        return raw == "1" || raw == "true" || raw == "yes"
-    }()
+    static let debugEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_ASR_DEBUG", default: false)
 
     public init(
         modelId: String = ParakeetResources.defaultModelId,

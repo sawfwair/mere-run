@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MediaIO
 import MLX
 import MLXNN
@@ -162,11 +163,9 @@ extension Q35Generator {
         // by the model-specific policy in Self.shouldSpeculate. BF16 Qwen3.8
         // remains opt-in, Q4 Qwen3.8 and Ornith use their short-context
         // paths, and Qwen3.6 hybrid MoE retains the measured long-context threshold.
-        let mtpPolicy = ProcessInfo.processInfo.environment["MERERUN_Q35_MTP_SPECULATION"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let mtpExplicitlyDisabled = mtpPolicy == "0" || mtpPolicy == "false" || mtpPolicy == "no"
-        let mtpExplicitlyEnabled = mtpPolicy == "1" || mtpPolicy == "true"
-            || mtpPolicy == "yes" || mtpPolicy == "on"
+        let mtpPolicy = MereRunEnvironmentSwitch.value("MERERUN_Q35_MTP_SPECULATION")
+        let mtpExplicitlyDisabled = mtpPolicy == false
+        let mtpExplicitlyEnabled = mtpPolicy == true
         let q38Q4 = modelId == Q35Resources.q38TwentySevenB4BitModelId
         let shouldLoadMTP = lora == nil && dflash2 == nil && !mtpExplicitlyDisabled
             && (config.textConfig.usesMoE || q38Q4 || mtpExplicitlyEnabled)

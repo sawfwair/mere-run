@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MediaIO
 import MLX
 import MLXNN
@@ -22,11 +23,7 @@ public actor Q35Generator: ChatGenerator {
     /// sync per step; the legacy path performed one blocking readback per row
     /// per step. MERERUN_Q35_BATCHED_GPU_SAMPLING=0 restores per-row host
     /// sampling.
-    static let batchedGPUSamplingEnabled: Bool = {
-        let raw = ProcessInfo.processInfo.environment["MERERUN_Q35_BATCHED_GPU_SAMPLING"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return raw != "0" && raw != "false" && raw != "off"
-    }()
+    static let batchedGPUSamplingEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q35_BATCHED_GPU_SAMPLING", default: true)
     public static let qwen3VLMinPixels = 2_048
     public static let qwen3VLMaxPixels = 16_777_216
 
@@ -87,8 +84,8 @@ public actor Q35Generator: ChatGenerator {
 
     public init(
         modelId: String = Q35Resources.defaultModelId,
-        prefixKVCacheEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_PREFIX_KV_CACHE"] == "1",
-        continuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_CONTINUOUS_BATCHING"] == "1",
+        prefixKVCacheEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q35_PREFIX_KV_CACHE", default: false),
+        continuousBatchingEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q35_CONTINUOUS_BATCHING", default: false),
         dflash2ModelPath: String? = ProcessInfo.processInfo.environment["MERERUN_Q35_DFLASH2_PATH"],
         dflash2Enabled: Bool = true,
         visionMinPixels: Int? = nil,

@@ -1,5 +1,6 @@
 import MereRunTensor
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXFast
 import MLXNN
@@ -36,11 +37,7 @@ package enum Q35FusedSwitchGLUPolicy {
     /// gate+up expert matmul. The fusion halves the gather-matmul launches per
     /// MoE block. The loader materializes this stack one layer at a time and
     /// releases the two source arrays before preparing the next layer.
-    package static let enabled: Bool = {
-        let raw = ProcessInfo.processInfo.environment["MERERUN_Q35_FUSED_SWITCH_GLU"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return raw != "0" && raw != "false" && raw != "off"
-    }()
+    package static let enabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q35_FUSED_SWITCH_GLU", default: true)
 }
 
 /// Expert projection shared with Inkling's LoRA adapter. Swift requires open
@@ -599,10 +596,7 @@ final class Q35FeedForward: Module {
     private let usesMoE: Bool
     private let isQwen4Exp: Bool
     private let usesQ4ExpertVerification: Bool
-    private static let exactQ4Experts: Bool = {
-        let value = ProcessInfo.processInfo.environment["MERERUN_Q35_EXACT_Q4_EXPERTS"]?.lowercased()
-        return value != "0" && value != "false" && value != "off"
-    }()
+    private static let exactQ4Experts: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q35_EXACT_Q4_EXPERTS", default: true)
 
     init(config: Q35Config) {
         let text = config.textConfig

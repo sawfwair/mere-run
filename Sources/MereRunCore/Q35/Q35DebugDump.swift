@@ -1,9 +1,10 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 
 /// Request-boundary allocator measurements for diagnosing long-running sessions.
 enum Q35MemoryTrace {
-    private static let enabled = ProcessInfo.processInfo.environment["MERERUN_Q35_DEBUG_MEMORY"] == "1"
+    private static let enabled = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q35_DEBUG_MEMORY", default: false)
 
     private struct Record: Encodable {
         let model: String

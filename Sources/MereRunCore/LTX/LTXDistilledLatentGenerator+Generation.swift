@@ -1,5 +1,6 @@
 import AudioCodecs
 import Foundation
+import MereRunEnvironment
 import MediaIO
 import MLX
 import MLXFast
@@ -39,7 +40,7 @@ extension LTXDistilledLatentGenerator {
 
         let encoding = try await textEncoder.encode(prompt: prompt, maxLength: options.maxTextLength)
         let context = encoding.videoEmbeddings
-        let debugDenoise = ProcessInfo.processInfo.environment["MERERUN_VIDEO_LTX_DEBUG_DENOISE"] == "1"
+        let debugDenoise = MereRunEnvironmentSwitch.isEnabled("MERERUN_VIDEO_LTX_DEBUG_DENOISE", default: false)
         if debugDenoise {
             print("[LTX] context shape=\(context.shape) \(tensorStatsString(context))")
         }

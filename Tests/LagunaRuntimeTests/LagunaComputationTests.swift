@@ -571,18 +571,7 @@ final class LagunaComputationTests: MLXTestCase {
         XCTAssertEqual(projection.scales?.shape, [256, 1_024, 192])
     }
 
-    func testMoEAccelerationBooleanParsing() {
-        XCTAssertTrue(LagunaMoEAccelerationPolicy.parseBoolean("on", default: false))
-        XCTAssertTrue(LagunaMoEAccelerationPolicy.parseBoolean(" YES ", default: false))
-        XCTAssertFalse(LagunaMoEAccelerationPolicy.parseBoolean("off", default: true))
-        XCTAssertFalse(LagunaMoEAccelerationPolicy.parseBoolean("0", default: true))
-        XCTAssertTrue(LagunaMoEAccelerationPolicy.parseBoolean(nil, default: true))
-        XCTAssertFalse(LagunaMoEAccelerationPolicy.parseBoolean("unexpected", default: false))
-    }
-
-    func testGraphAccelerationPolicyParsing() {
-        XCTAssertTrue(LagunaGraphAccelerationPolicy.parseBoolean(nil, default: true))
-        XCTAssertFalse(LagunaGraphAccelerationPolicy.parseBoolean("off", default: true))
+    func testGraphAccelerationLadderStrideParsing() {
         XCTAssertEqual(
             LagunaGraphAccelerationPolicy.parseLadderStride(nil, default: 8),
             8

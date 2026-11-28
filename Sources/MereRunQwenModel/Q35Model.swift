@@ -1,6 +1,7 @@
 import MereRunKVCache
 import MereRunTensor
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXFast
 import MLXNN
@@ -631,7 +632,7 @@ public final class Q35Model: Module, @unchecked Sendable {
 
     public init(
         config: Q35Config,
-        asynchronousDecodeBlocks: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_ASYNC_DECODE_BLOCKS"] == "1"
+        asynchronousDecodeBlocks: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q35_ASYNC_DECODE_BLOCKS", default: false)
     ) {
         self.config = config
         self._model.wrappedValue = Q35Transformer(config: config, asynchronousDecodeBlocks: asynchronousDecodeBlocks)

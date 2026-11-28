@@ -1,5 +1,6 @@
 #if os(macOS)
 import Foundation
+import MereRunEnvironment
 import MLX
 
 @available(macOS 26.0, *)
@@ -43,7 +44,7 @@ extension Q35DFlash2Decoder {
         let initial = initialLogits[0, -1, 0...].view(dtype: .uint16).asArray(UInt16.self)
         var anchor = initial.withUnsafeBufferPointer { sampler.choose($0, position: prefix) }
         var generated = 0, stats = Q35DFlash2Stats()
-        let serial = ProcessInfo.processInfo.environment["MERERUN_Q38_SAMPLED_TREE_SERIAL"] == "1"
+        let serial = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_SAMPLED_TREE_SERIAL", default: false)
         let blockDepth = ProcessInfo.processInfo.environment["MERERUN_Q38_SAMPLED_DRAFT_DEPTH"] == "15"
             ? 15 : draft.config.dflash.blockSize - 1
         stats.treeRoundsByNodeCount = Array(repeating: 0, count: 16)

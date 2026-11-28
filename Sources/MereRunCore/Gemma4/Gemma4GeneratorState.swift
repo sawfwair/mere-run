@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXNN
 
@@ -8,7 +9,7 @@ public typealias Gemma4ContinuousBatchingStats = RuntimeDecodeBatchingStats
 /// Set MERERUN_GEMMA4_DECODE_TRACE=1 to log the per-token split between graph
 /// construction (CPU) and evaluation waits (GPU) to stderr after each decode.
 enum Gemma4DecodeTrace {
-    static let enabled = ProcessInfo.processInfo.environment["MERERUN_GEMMA4_DECODE_TRACE"] == "1"
+    static let enabled = MereRunEnvironmentSwitch.isEnabled("MERERUN_GEMMA4_DECODE_TRACE", default: false)
 
     static func emit(_ message: String) {
         FileHandle.standardError.write(Data((message + "\n").utf8))

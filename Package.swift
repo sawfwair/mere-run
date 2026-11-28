@@ -191,6 +191,7 @@ mereRunCoreDependencies.append("MereRunModelKit")
 mereRunCoreDependencies.append("MereRunExecution")
 // Shared video plans consume the public quality, output-mode, and variant enums.
 mereRunCoreDependencies.append("MereRunContract")
+mereRunCoreDependencies.append("MereRunEnvironment")
 mereRunCoreDependencies.append("MereRunTensor")
 mereRunCoreDependencies.append("MereRunTextEncoder")
 mereRunCoreDependencies.append("MereRunLayaModel")
@@ -335,7 +336,7 @@ if !isLinuxPackage {
   mereRunCoreLinkerSettings.append(.linkedFramework("IOKit", .when(platforms: [.macOS])))
 }
 
-var audioCodecsDependencies: [Target.Dependency] = mlxDependency("MLX")
+var audioCodecsDependencies: [Target.Dependency] = ["MereRunEnvironment"] + mlxDependency("MLX")
 if hasMediaIOTarget {
   audioCodecsDependencies.append("MediaIO")
 }
@@ -388,6 +389,7 @@ audioRuntimeDependencies.append(contentsOf: mlxDependency("MLXNN"))
 audioRuntimeDependencies.append(contentsOf: mlxDependency("MLXRandom"))
 
 var mereRunCLIDependencies: [Target.Dependency] = [
+  "MereRunEnvironment",
   "MereRunExecution",
   "MereRunAdmission",
   "MereRunResidency",
@@ -499,7 +501,7 @@ targets.append(
 targets.append(
   .target(
     name: "MereRunInkling2Model",
-    dependencies: mlxDependency("MLX"),
+    dependencies: ["MereRunEnvironment"] + mlxDependency("MLX"),
     path: "Sources/MereRunInkling2Model",
     exclude: ["README.md"],
     swiftSettings: commonSwiftSettings
@@ -515,7 +517,7 @@ targets.append(
   )
 )
 
-var mereRunLagunaModelDependencies: [Target.Dependency] = ["MereRunTensor", "MereRunGemmaModel", "MereRunDecode"]
+var mereRunLagunaModelDependencies: [Target.Dependency] = ["MereRunEnvironment", "MereRunTensor", "MereRunGemmaModel", "MereRunDecode"]
 mereRunLagunaModelDependencies.append(contentsOf: mlxDependency("MLX"))
 mereRunLagunaModelDependencies.append(contentsOf: mlxDependency("MLXFast"))
 mereRunLagunaModelDependencies.append(contentsOf: mlxDependency("MLXNN"))
@@ -540,7 +542,9 @@ targets.append(
   )
 )
 
-var mereRunGemmaModelDependencies: [Target.Dependency] = [.target(name: "MereRunTensor"), .target(name: "MereRunDecode")]
+var mereRunGemmaModelDependencies: [Target.Dependency] = [
+  .target(name: "MereRunEnvironment"), .target(name: "MereRunTensor"), .target(name: "MereRunDecode")
+]
 mereRunGemmaModelDependencies.append(contentsOf: mlxDependency("MLX"))
 mereRunGemmaModelDependencies.append(contentsOf: mlxDependency("MLXFast"))
 mereRunGemmaModelDependencies.append(contentsOf: mlxDependency("MLXNN"))
@@ -556,7 +560,10 @@ targets.append(
   )
 )
 
-var mereRunQwenModelDependencies: [Target.Dependency] = [.target(name: "MereRunTensor"), .target(name: "MereRunKVCache"), .target(name: "MereRunTextEncoder")]
+var mereRunQwenModelDependencies: [Target.Dependency] = [
+  .target(name: "MereRunEnvironment"), .target(name: "MereRunTensor"), .target(name: "MereRunKVCache"),
+  .target(name: "MereRunTextEncoder")
+]
 mereRunQwenModelDependencies.append(contentsOf: mlxDependency("MLX"))
 mereRunQwenModelDependencies.append(contentsOf: mlxDependency("MLXFast"))
 mereRunQwenModelDependencies.append(contentsOf: mlxDependency("MLXNN"))
@@ -666,7 +673,7 @@ targets.append(
 targets.append(
   .target(
     name: "MereRunTensor",
-    dependencies: [.target(name: "MereRunModelKit")]
+    dependencies: [.target(name: "MereRunEnvironment"), .target(name: "MereRunModelKit")]
       + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
     path: "Sources/MereRunTensor",
     exclude: ["README.md"],
@@ -718,7 +725,7 @@ targets.append(
 targets.append(
   .target(
     name: "MereRunImageModels",
-    dependencies: [.target(name: "MereRunTensor")]
+    dependencies: [.target(name: "MereRunEnvironment"), .target(name: "MereRunTensor")]
       + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN") + mlxDependency("MLXRandom"),
     path: "Sources/MereRunImageModels",
     exclude: [
@@ -834,7 +841,7 @@ targets.append(
 targets.append(
   .target(
     name: "AudioQwen3ASRModel",
-    dependencies: [.target(name: "MereRunKVCache")]
+    dependencies: [.target(name: "MereRunEnvironment"), .target(name: "MereRunKVCache")]
       + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
     path: "Sources/AudioQwen3ASRModel",
     exclude: ["README.md"],
@@ -850,6 +857,15 @@ targets.append(
     path: "Sources/AudioSortformer",
     exclude: ["README.md"],
     swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "MereRunEnvironment",
+    dependencies: [],
+    path: "Sources/MereRunEnvironment",
+    exclude: ["README.md"]
   )
 )
 
@@ -1045,7 +1061,7 @@ targets.append(
 targets.append(
   .target(
     name: "AudioSTT",
-    dependencies: ["AudioSOVTranscribeModel", .product(name: "Crypto", package: "swift-crypto")] + audioRuntimeDependencies + (hasMediaIOTarget ? ["MediaIO"] : []) + ["AudioNemotronTranscribeModel", "AudioQwen3ASRModel", "AudioSortformer", "AudioParakeetModel", "AudioWhistleModel"],
+    dependencies: ["AudioSOVTranscribeModel", "MereRunEnvironment", .product(name: "Crypto", package: "swift-crypto")] + audioRuntimeDependencies + (hasMediaIOTarget ? ["MediaIO"] : []) + ["AudioNemotronTranscribeModel", "AudioQwen3ASRModel", "AudioSortformer", "AudioParakeetModel", "AudioWhistleModel"],
     path: "Sources/AudioSTT",
     exclude: [
       "README.md",
@@ -1064,7 +1080,7 @@ targets.append(
 targets.append(
   .target(
     name: "AudioTTS",
-    dependencies: audioRuntimeDependencies + ["AudioQwen3TTSModel", "AudioBreezeTTSModel", "AudioPhononModel", "AudioDrama3Model"],
+    dependencies: audioRuntimeDependencies + ["MereRunEnvironment","AudioQwen3TTSModel", "AudioBreezeTTSModel", "AudioPhononModel", "AudioDrama3Model"],
     path: "Sources/AudioTTS",
     exclude: [
       "Qwen3TTS/README.md"
@@ -1209,6 +1225,14 @@ targets.append(
     resources: [.copy("Fixtures")],
     swiftSettings: commonSwiftSettings,
     linkerSettings: linuxNativeLinkerSettings
+  )
+)
+
+targets.append(
+  .testTarget(
+    name: "MereRunEnvironmentTests",
+    dependencies: ["MereRunEnvironment"],
+    path: "Tests/MereRunEnvironmentTests"
   )
 )
 

@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXNN
 
@@ -7,12 +8,7 @@ import MLXNN
 /// This is intentionally lightweight: it loads only the multimodal encoder pieces needed to
 /// generate short captions for LoRA training datasets (one caption per image).
 public final class QwenVLCaptioner: @unchecked Sendable {
-    private static let debugLogits: Bool = {
-        guard let raw = ProcessInfo.processInfo.environment["MERERUN_VLM_DEBUG_LOGITS"]?.lowercased() else {
-            return false
-        }
-        return raw == "1" || raw == "true" || raw == "yes"
-    }()
+    private static let debugLogits: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_VLM_DEBUG_LOGITS", default: false)
 
     public struct ModelConfig: Sendable, Hashable {
         public var maxNewTokens: Int
