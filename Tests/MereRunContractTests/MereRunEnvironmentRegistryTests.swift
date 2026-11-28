@@ -44,10 +44,73 @@ final class MereRunEnvironmentRegistryTests: XCTestCase {
         XCTAssertNotNil(MereRunEnvironmentValueKind.number.validate("inf"))
         XCTAssertNotNil(MereRunEnvironmentValueKind.number.validate("nope"))
 
+        XCTAssertNil(MereRunEnvironmentValueKind.flag.validate("0"))
+        XCTAssertNil(MereRunEnvironmentValueKind.flag.validate("1"))
+        XCTAssertNotNil(MereRunEnvironmentValueKind.flag.validate("true"))
+        XCTAssertNotNil(MereRunEnvironmentValueKind.flag.validate(" 1"))
+        XCTAssertNotNil(MereRunEnvironmentValueKind.integer.validate(" 256"))
+
         let choice = MereRunEnvironmentValueKind.choice(["0", "1", "none"])
         XCTAssertNil(choice.validate("NONE"))
         XCTAssertNil(choice.validate("1"))
         XCTAssertNotNil(choice.validate("all"))
+    }
+
+    /// Kinds must match how each variable's reader parses it: a value that validates has to
+    /// behave as written. These pin the readers that only understand part of the vocabulary.
+    func testValueKindsMatchHowReadersParseValues() {
+        func expected(_ name: String, _ value: String) -> String? {
+            MereRunEnvironmentRegistry.variable(named: name)?.valueKind.validate(value)
+        }
+        // `!= "0"` readers: `false` would leave the feature on.
+        XCTAssertNotNil(expected("MERERUN_Q38_TUNED_DEFAULTS", "false"))
+        XCTAssertNotNil(expected("MERERUN_Q35_PRISM_METAL", "off"))
+        XCTAssertNil(expected("MERERUN_Q35_PRISM_METAL", "0"))
+        // `== "1"` readers: `true` would be ignored.
+        XCTAssertNotNil(expected("MERERUN_MUSE_GLIMMER_FUSED_NORM", "true"))
+        // Off-list readers (`0/false/off` disable): `no` would leave the feature on.
+        XCTAssertNotNil(expected("MERERUN_FUSED_SDPA", "no"))
+        XCTAssertNil(expected("MERERUN_FUSED_SDPA", "off"))
+        // On-list readers (`1/true/yes` enable): `on` would be ignored.
+        XCTAssertNotNil(expected("MERERUN_ALLOW_METALLIB_MISMATCH", "on"))
+        XCTAssertNil(expected("MERERUN_ALLOW_METALLIB_MISMATCH", "yes"))
+        // Shared parsers accept the full vocabulary.
+        XCTAssertNil(expected("MERERUN_LAGUNA_SHARED_ATTENTION_MASKS", "on"))
+        // Non-boolean modes.
+        XCTAssertNil(expected("MERERUN_Q35_PRISM_FUSION", "shared"))
+        XCTAssertNil(expected("MERERUN_LAGUNA_PREFILL_ASYNC_LADDER", "16"))
+        XCTAssertNotNil(expected("MERERUN_LAGUNA_PREFILL_ASYNC_LADDER", "41"))
+        XCTAssertNotNil(expected("MERERUN_Q38_DECODE_ASYNC_BLOCKS", "2"))
+        XCTAssertNotNil(expected("MERERUN_Q35_PREFIX_KV_CACHE", "on"))
+        XCTAssertNil(expected("MERERUN_H3_CACHE_STRATEGY", "scheduled-tail"))
+    }
+
+    func testRemoteAuditRedactsPathsAndStringsButKeepsSwitches() {
+        let audit = MereRunEnvironmentRegistry.redactingFreeformValues(
+            MereRunEnvironmentRegistry.audit(environment: [
+                "MERERUN_MODELS_DIR": "/Users/someone/models",
+                "MERERUN_INKLING2_PREFILL_CHUNK": "512",
+                "MERERUN_Q35_PRISM_METAL": "0",
+                "MERERUN_API_KEY": "sk-secret",
+            ])
+        )
+        let byName = Dictionary(uniqueKeysWithValues: audit.activeOverrides.map { ($0.name, $0.value) })
+        XCTAssertEqual(byName["MERERUN_MODELS_DIR"], MereRunEnvironmentRegistry.redactedPlaceholder)
+        XCTAssertEqual(byName["MERERUN_API_KEY"], MereRunEnvironmentRegistry.redactedPlaceholder)
+        XCTAssertEqual(byName["MERERUN_INKLING2_PREFILL_CHUNK"], "512")
+        XCTAssertEqual(byName["MERERUN_Q35_PRISM_METAL"], "0")
+    }
+
+    /// Build, release, and benchmark scripts export their own `MERERUN_*` settings into shells
+    /// that also run `mere.run`. They stay unregistered and must not produce warnings.
+    func testNamesThatResembleNoRegisteredVariableAreNotReported() {
+        let audit = MereRunEnvironmentRegistry.audit(environment: [
+            "MERERUN_CUDA_ARCHITECTURES": "80;90",
+            "MERERUN_NATIVE_BUILD_JOBS": "8",
+            "MERERUN_H3_BENCH_FRAMES": "49",
+        ])
+        XCTAssertTrue(audit.isEmpty)
+        XCTAssertNil(MereRunEnvironmentRegistry.variable(named: "MERERUN_CUDA_ARCHITECTURES"))
     }
 
     func testSecretRedactionForExactVariablesAndDynamicPrefix() {
@@ -95,15 +158,12 @@ final class MereRunEnvironmentRegistryTests: XCTestCase {
         XCTAssertEqual(unknownByName["MERERUN_INKLING2_PREFILL_CHUNKS"], "MERERUN_INKLING2_PREFILL_CHUNK")
         XCTAssertEqual(unknownByName["MERERUN_Q38_TUNED_DEFAULT"], "MERERUN_Q38_TUNED_DEFAULTS")
         XCTAssertEqual(unknownByName["MERERUN_MODLES_DIR"], "MERERUN_MODELS_DIR")
-        XCTAssertEqual(unknownByName["MERERUN_COMPLETELY_UNRELATED_XYZ"], Optional<String>.none)
+        XCTAssertNil(unknownByName["MERERUN_COMPLETELY_UNRELATED_XYZ"])
 
         let invalidByName = Dictionary(uniqueKeysWithValues: audit.invalidValues.map { ($0.name, $0) })
         XCTAssertEqual(invalidByName["MERERUN_INKLING2_PREFILL_CHUNK"]?.expected, "expected an integer")
-        XCTAssertEqual(
-            invalidByName["MERERUN_GEMMA4_CONTINUOUS_BATCHING"]?.expected,
-            "expected a boolean (0, 1, true, false, yes, no, on, off)"
-        )
-        XCTAssertEqual(audit.warnings.count, 6)
+        XCTAssertEqual(invalidByName["MERERUN_GEMMA4_CONTINUOUS_BATCHING"]?.expected, "expected 0 or 1")
+        XCTAssertEqual(audit.warnings.count, 5)
         XCTAssertTrue(audit.warnings.contains(where: { $0.contains("did you mean MERERUN_INKLING2_PREFILL_CHUNK?") }))
     }
 

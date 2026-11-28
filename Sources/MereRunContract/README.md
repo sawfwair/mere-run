@@ -19,10 +19,12 @@ replace runtime constraints.
 `MereRunEnvironmentCatalog.swift`, and `MereRunEnvironmentCatalog+Qwen.swift`)
 holds the canonical registry of `MERERUN_*` environment variables and dynamic
 prefixes (`MERERUN_SECRET_*`, `MERERUN_TEST_*`), their categories, expected
-value kinds, and secret redaction rules. The CLI audits process environments at
-startup to warn on typos or invalid values and surfaces active overrides in
-`mere.run status` and `/runtime/status`. `MereRunEnvironmentRegistryTests`
-enforces that every production `MERERUN_*` variable literal stays registered.
+value kinds, and secret redaction rules. It covers only what the `mere.run`
+process reads, and a variable's value kind must match how its reader parses it.
+The CLI audits process environments at startup to warn on likely typos or invalid
+values and surfaces active overrides in `mere.run status` and `/runtime/status`.
+`MereRunEnvironmentRegistryTests` enforces that every production `MERERUN_*`
+variable literal stays registered.
 
 To change a capability, open its `CommandCapabilityCatalog+<family>.swift` file.
 Model benchmark definitions have their own file. Shared receipt and progress

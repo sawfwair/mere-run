@@ -951,13 +951,23 @@ exported by the pinned upstream MLX pipeline.
 
 Every recognized `MERERUN_*` variable is registered in `MereRunEnvironmentRegistry`
 (`Sources/MereRunContract/`). At CLI startup, `mere.run` checks active `MERERUN_*`
-variables and prints a non-fatal warning on `stderr` when a variable name is unknown
-(including a closest-match suggestion for typos) or when its value does not match
-the expected syntax. Warnings stay off `stdout` and are suppressed under `--quiet`,
-`--help`, and `--version`.
+variables and prints a non-fatal warning on `stderr` when a name looks like a typo of
+a registered variable (with the closest match as a suggestion) or when a value does
+not match the syntax its reader honors. Names that resemble no registered variable
+are left alone, since build, release, and benchmark scripts use their own `MERERUN_*`
+settings. Warnings stay off `stdout` and are suppressed under
+`--quiet`, `--help`, and `--version`.
+
+Switches do not all parse the same words. Many runtime switches honor only `0` and `1`,
+so the validator rejects `true` or `off` for them rather than letting the value be
+ignored or inverted. Use `0` and `1` when in doubt; the warning names the accepted
+values for each variable.
 
 When any `MERERUN_*` overrides are set, `mere.run status`, `mere.run status --json`,
 and the API server's `/runtime/status` payload report the active overrides and any
-validation warnings. Sensitive variables (`MERERUN_API_KEY`, `MERERUN_RELAY_TOKEN`,
-`MERERUN_CONFIG_VALUE`, `MERERUN_OPEN_WEBUI_ADMIN_PASSWORD`, and `MERERUN_SECRET_*`)
-are always reported as `[redacted]`.
+validation warnings. `mere.run status` prints its warnings once, in its own output.
+Sensitive variables (`MERERUN_API_KEY`, `MERERUN_RELAY_TOKEN`, `MERERUN_CONFIG_VALUE`,
+`MERERUN_OPEN_WEBUI_ADMIN_PASSWORD`, and `MERERUN_SECRET_*`) are always reported as
+`[redacted]`. `/runtime/status` also redacts path and free-form string values, which
+often contain local usernames, and keeps switch and numeric values for tuning
+diagnostics.

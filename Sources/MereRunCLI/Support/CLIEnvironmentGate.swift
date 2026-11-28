@@ -12,13 +12,15 @@ enum CLIEnvironmentGate {
     }
 
     /// Returns stderr warning lines for `arguments` (process argv, executable first).
-    /// Skips built-in help/version/completion invocations and suppresses output under `--quiet`.
+    /// Skips built-in help/version/completion invocations and `status`, which reports the
+    /// same warnings in its own output, and suppresses output under `--quiet`.
     static func stderrLines(
         arguments: [String],
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> [String] {
         let commandLine = Array(arguments.dropFirst())
-        guard !CLICapabilityGate.requestsBuiltIn(commandLine),
+        guard commandLine.first != "status",
+              !CLICapabilityGate.requestsBuiltIn(commandLine),
               !isQuiet(commandLine) else {
             return []
         }

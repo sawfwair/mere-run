@@ -12,8 +12,14 @@ public enum MereRunEnvironmentCategory: String, Codable, Equatable, Hashable, Ca
 }
 
 /// Expected value syntax for a `MERERUN_*` environment variable.
+///
+/// A kind describes what the variable's reader honors, not what would be convenient to
+/// accept: a value that validates must behave as written at runtime.
 public enum MereRunEnvironmentValueKind: Equatable, Hashable, Sendable {
+    /// A switch whose reader parses `0/1`, `true/false`, `yes/no`, and `on/off`.
     case bool
+    /// A switch whose reader honors only the exact values `0` and `1`.
+    case flag
     case integer
     case number
     case choice([String])
@@ -30,6 +36,8 @@ public enum MereRunEnvironmentValueKind: Equatable, Hashable, Sendable {
         switch self {
         case .bool:
             return "boolean"
+        case .flag:
+            return "flag(0|1)"
         case .integer:
             return "integer"
         case .number:
@@ -47,6 +55,9 @@ public enum MereRunEnvironmentValueKind: Equatable, Hashable, Sendable {
 
     /// Validates a non-empty environment value. Returns `nil` when valid, or a short
     /// description of what was expected when invalid.
+    ///
+    /// Flags and numbers are checked untrimmed because their readers compare or parse the
+    /// raw value (`== "1"`, `Int(raw)`); a stray space would silently disable them.
     public func validate(_ rawValue: String) -> String? {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -58,13 +69,18 @@ public enum MereRunEnvironmentValueKind: Equatable, Hashable, Sendable {
                 return nil
             }
             return "expected a boolean (0, 1, true, false, yes, no, on, off)"
+        case .flag:
+            if rawValue == "0" || rawValue == "1" {
+                return nil
+            }
+            return "expected 0 or 1"
         case .integer:
-            if Int(trimmed) != nil {
+            if Int(rawValue) != nil {
                 return nil
             }
             return "expected an integer"
         case .number:
-            if let value = Double(trimmed), value.isFinite {
+            if let value = Double(rawValue), value.isFinite {
                 return nil
             }
             return "expected a finite number"
@@ -92,6 +108,8 @@ extension MereRunEnvironmentValueKind: Codable {
         switch kind {
         case "bool":
             self = .bool
+        case "flag":
+            self = .flag
         case "integer":
             self = .integer
         case "number":
@@ -119,6 +137,8 @@ extension MereRunEnvironmentValueKind: Codable {
         switch self {
         case .bool:
             try container.encode("bool", forKey: .kind)
+        case .flag:
+            try container.encode("flag", forKey: .kind)
         case .integer:
             try container.encode("integer", forKey: .kind)
         case .number:
@@ -212,13 +232,13 @@ public struct MereRunEnvironmentOverride: Codable, Equatable, Hashable, Sendable
     }
 }
 
-/// One unrecognized `MERERUN_*` environment variable detected at runtime, with an optional
-/// closest-match suggestion for typo recovery.
+/// One unrecognized `MERERUN_*` environment variable that is a likely typo of a registered
+/// variable, with that variable as the suggestion.
 public struct MereRunEnvironmentUnknownVariable: Codable, Equatable, Hashable, Sendable {
     public let name: String
-    public let suggestion: String?
+    public let suggestion: String
 
-    public init(name: String, suggestion: String?) {
+    public init(name: String, suggestion: String) {
         self.name = name
         self.suggestion = suggestion
     }
@@ -266,13 +286,9 @@ public struct MereRunEnvironmentAudit: Codable, Equatable, Hashable, Sendable {
         var result: [String] = []
         result.reserveCapacity(unknownVariables.count + invalidValues.count)
         for unknown in unknownVariables {
-            if let suggestion = unknown.suggestion {
-                result.append(
-                    "Unknown environment variable \(unknown.name) (did you mean \(suggestion)?)."
-                )
-            } else {
-                result.append("Unknown environment variable \(unknown.name).")
-            }
+            result.append(
+                "Unknown environment variable \(unknown.name) (did you mean \(unknown.suggestion)?)."
+            )
         }
         for invalid in invalidValues {
             result.append(
@@ -329,6 +345,48 @@ public enum MereRunEnvironmentRegistry {
         variablesByName[name] != nil || matchingPrefix(for: name) != nil
     }
 
+    /// The registered value kind for an exact variable or dynamic prefix.
+    public static func valueKind(for name: String) -> MereRunEnvironmentValueKind? {
+        variablesByName[name]?.valueKind ?? matchingPrefix(for: name)?.valueKind
+    }
+
+    /// Returns a copy of `audit` that is safe to serve to API clients: free-form `path` and
+    /// `string` values (local paths, usernames, URLs) are redacted, while switches and numbers
+    /// stay visible for runtime tuning diagnostics.
+    public static func redactingFreeformValues(
+        _ audit: MereRunEnvironmentAudit
+    ) -> MereRunEnvironmentAudit {
+        func isFreeform(_ name: String) -> Bool {
+            switch valueKind(for: name) {
+            case .path, .string, .secret:
+                return true
+            case .bool, .flag, .integer, .number, .choice, nil:
+                return false
+            }
+        }
+        return MereRunEnvironmentAudit(
+            activeOverrides: audit.activeOverrides.map { override in
+                guard isFreeform(override.name) else { return override }
+                return MereRunEnvironmentOverride(
+                    name: override.name,
+                    value: redactedPlaceholder,
+                    category: override.category,
+                    owner: override.owner,
+                    isSecret: override.isSecret
+                )
+            },
+            unknownVariables: audit.unknownVariables,
+            invalidValues: audit.invalidValues.map { invalid in
+                guard isFreeform(invalid.name) else { return invalid }
+                return MereRunEnvironmentInvalidValue(
+                    name: invalid.name,
+                    value: redactedPlaceholder,
+                    expected: invalid.expected
+                )
+            }
+        )
+    }
+
     public static func variables(in category: MereRunEnvironmentCategory) -> [MereRunEnvironmentVariable] {
         variables.filter { $0.category == category }
     }
@@ -338,7 +396,7 @@ public enum MereRunEnvironmentRegistry {
     }
 
     /// Audits every `MERERUN_*` key in `environment`, reporting active overrides (redacting
-    /// secrets), unknown variables with typo suggestions, and syntax-invalid values.
+    /// secrets), likely typos of registered variables, and syntax-invalid values.
     public static func audit(
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> MereRunEnvironmentAudit {
@@ -389,13 +447,11 @@ public enum MereRunEnvironmentRegistry {
                         )
                     )
                 }
-            } else {
-                unknown.append(
-                    MereRunEnvironmentUnknownVariable(
-                        name: key,
-                        suggestion: closestMatch(for: key)
-                    )
-                )
+            } else if let suggestion = closestMatch(for: key) {
+                // Only near misses are reported: an unknown name that resembles no registered
+                // variable most likely belongs to another tool (build, release, or benchmark
+                // scripts), not to `mere.run`.
+                unknown.append(MereRunEnvironmentUnknownVariable(name: key, suggestion: suggestion))
             }
         }
 
@@ -418,23 +474,20 @@ public enum MereRunEnvironmentRegistry {
 
         for candidate in variables {
             let candidateSuffix = suffix(of: candidate.name)
-            let lengthDiff = abs(candidateSuffix.count - targetSuffix.count)
-            guard lengthDiff < bestDistance else { continue }
-
             let proportionalLimit = min(
                 maxDistance,
                 max(1, (max(candidateSuffix.count, targetSuffix.count) + 1) / 3)
             )
-            let cutoff = min(bestDistance - 1, proportionalLimit)
+            // Candidates as close as the best so far stay in play so ties resolve alphabetically.
+            let cutoff = min(bestDistance, proportionalLimit)
+            let lengthDiff = abs(candidateSuffix.count - targetSuffix.count)
             guard lengthDiff <= cutoff else { continue }
 
             let distance = damerauLevenshteinDistance(targetSuffix, candidateSuffix)
-            if distance <= cutoff {
-                if distance < bestDistance
-                    || (distance == bestDistance && (bestName.map { candidate.name < $0 } ?? true)) {
-                    bestDistance = distance
-                    bestName = candidate.name
-                }
+            guard distance <= cutoff else { continue }
+            if distance < bestDistance || bestName.map({ candidate.name < $0 }) ?? true {
+                bestDistance = distance
+                bestName = candidate.name
             }
         }
         return bestName

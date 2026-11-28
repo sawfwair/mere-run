@@ -6,7 +6,7 @@ import XCTest
 final class CLIEnvironmentGateTests: XCTestCase {
     func testStderrLinesWarnOnUnknownAndInvalidVariables() {
         let lines = CLIEnvironmentGate.stderrLines(
-            arguments: ["mere.run", "status"],
+            arguments: ["mere.run", "model", "list"],
             environment: [
                 "MERERUN_INKLING2_PREFILL_CHUNKS": "256",
                 "MERERUN_INKLING2_PREFILL_CHUNK": "not-an-int",
@@ -25,6 +25,8 @@ final class CLIEnvironmentGateTests: XCTestCase {
         XCTAssertTrue(CLIEnvironmentGate.stderrLines(arguments: ["mere.run", "--help"], environment: env).isEmpty)
         XCTAssertTrue(CLIEnvironmentGate.stderrLines(arguments: ["mere.run", "status", "-h"], environment: env).isEmpty)
         XCTAssertTrue(CLIEnvironmentGate.stderrLines(arguments: ["mere.run", "--version"], environment: env).isEmpty)
+        // `status` prints the same warnings in its own output.
+        XCTAssertTrue(CLIEnvironmentGate.stderrLines(arguments: ["mere.run", "status"], environment: env).isEmpty)
         XCTAssertTrue(CLIEnvironmentGate.stderrLines(arguments: ["mere.run", "text", "chat", "--quiet"], environment: env).isEmpty)
         XCTAssertTrue(CLIEnvironmentGate.stderrLines(arguments: ["mere.run", "text", "chat", "-q"], environment: env).isEmpty)
         XCTAssertFalse(CLIEnvironmentGate.stderrLines(arguments: ["mere.run", "text", "chat", "--", "--quiet"], environment: env).isEmpty)

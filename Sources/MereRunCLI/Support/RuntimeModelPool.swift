@@ -74,8 +74,8 @@ struct RuntimeModelPoolStatus: Codable, Equatable, Sendable {
     var process: RuntimeProcessTelemetry? = nil
     /// Model locations the last installed-model scan skipped. Older servers omit it.
     var modelLocationIssues: [ModelLocationIssue]? = nil
-    /// Active `MERERUN_*` environment overrides (secrets redacted) and validation warnings.
-    /// Older servers omit it and empty audits stay `nil`.
+    /// Active `MERERUN_*` environment overrides and validation warnings. Secret, path, and
+    /// free-form string values are redacted. Older servers omit it and empty audits stay `nil`.
     var environment: MereRunEnvironmentAudit? = nil
 }
 
@@ -874,7 +874,8 @@ actor RuntimeModelPool {
             + (sidecars?.activeRequests ?? 0)
         let loadedCount = snapshots.filter { $0.loaded }.count
             + (sidecars?.loadedCount ?? 0)
-        let environmentAudit = CLIEnvironmentGate.audit()
+        // Served to API clients, so local paths and free-form strings are redacted.
+        let environmentAudit = MereRunEnvironmentRegistry.redactingFreeformValues(CLIEnvironmentGate.audit())
         return RuntimeModelPoolStatus(
             object: "runtime.status",
             defaultModel: defaultModelID,
