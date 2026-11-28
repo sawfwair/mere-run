@@ -45,7 +45,6 @@ export default defineConfig({
   },
   srcExclude: [
     'README.md',
-    'macos-studio-roadmap.md',
     'macos-studio-capability-review.md',
     'macos-studio-v2.md',
     'falcon-perception-disparity-report.md',

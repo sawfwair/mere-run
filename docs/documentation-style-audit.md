@@ -122,7 +122,6 @@ measurements, hashes, versions, and limitations when improving historical prose.
 - `docs/ltx25-upstream-parity.md`
 - `docs/macos-deep-links.md`
 - `docs/macos-studio-capability-review.md`
-- `docs/macos-studio-roadmap.md`
 - `docs/macos-studio-v2-completion.md`
 - `docs/macos-studio-v2.md`
 - `docs/mlx-swift-fork.md`
