@@ -1,10 +1,11 @@
 #if canImport(Metal)
 import Foundation
+import MereRunEnvironment
 import MLX
 
 enum Q35IndexedTreeAttention {
     @TaskLocal static var enabled =
-        ProcessInfo.processInfo.environment["MERERUN_Q38_TREE_INDEXED_ATTENTION"] == "1"
+        MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_TREE_INDEXED_ATTENTION", default: false)
 
     /// Uses native vector-SDPA reduction geometry with indexed KV loads. Prefix
     /// buffers stay shared; only compact queries, paths, and partials are owned.

@@ -2,6 +2,7 @@ import MereRunKVCache
 import MereRunTensor
 import MereRunTextEncoder
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXFast
 import MLXNN
@@ -23,11 +24,7 @@ final class Q35FullAttention: Module {
     /// the attention projection weights for the fused matmul.
     private let prismQKV = Q35PrismFusion()
     private var fusedQKV: FusedQuantizedProjection?
-    private static let fusedQKVEnabled: Bool = {
-        let raw = ProcessInfo.processInfo.environment["MERERUN_Q35_FUSED_QKV"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return raw != "0" && raw != "false" && raw != "off"
-    }()
+    private static let fusedQKVEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q35_FUSED_QKV", default: true)
     private static let logFusionOnce: Void = {
         FileHandle.standardError.write(Data("[q35] fused_qkv=true\n".utf8))
     }()

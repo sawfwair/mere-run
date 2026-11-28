@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Read every `MERERUN_*` on/off switch the same way. `1`, `true`, `yes`, and
+  `on` now turn any switch on, and `0`, `false`, `no`, and `off` turn it off,
+  ignoring case and surrounding spaces. Before, many switches honored only
+  `1`, and four (`MERERUN_Q35_PRISM_METAL`, `MERERUN_Q38_TUNED_DEFAULTS`,
+  `MERERUN_INKLING2_PACKED_EXPERTS`, and `MERERUN_Q38_INCREMENTAL_PROGRESS`)
+  stayed on when set to `false`. A value outside that list now keeps the
+  switch's default instead of turning it on or off, and `MERERUN_LORA_DEBUG`
+  needs an on value rather than any value.
+
 ## 0.79.0 - 2026-11-27
 
 - Generate images on Apple Silicon with Nemotron Labs Image 30B-A3B. Pull the recommended mixed Q6

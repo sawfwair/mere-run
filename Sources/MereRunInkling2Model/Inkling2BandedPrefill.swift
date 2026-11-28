@@ -3,12 +3,13 @@
 // See THIRD_PARTY_NOTICES.md.
 #if os(macOS)
 import Foundation
+import MereRunEnvironment
 import MLX
 
 enum Inkling2BandedPrefill {
-    static let enabled = ProcessInfo.processInfo.environment["MERERUN_INKLING2_NAX_PREFILL"] == "1"
+    static let enabled = MereRunEnvironmentSwitch.isEnabled("MERERUN_INKLING2_NAX_PREFILL", default: false)
         && GPU.deviceInfo().architecture == "applegpu_g17s"
-    static let localEnabled = ProcessInfo.processInfo.environment["MERERUN_INKLING2_NAX_LOCAL_PREFILL"] == "1"
+    static let localEnabled = MereRunEnvironmentSwitch.isEnabled("MERERUN_INKLING2_NAX_LOCAL_PREFILL", default: false)
 
     private static let kernel = MLXFast.metalKernel(
         name: "mererun_inkling2_nax_banded_prefill",

@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MereRunQwenModel
 import MereRunTensor
 import MLX
@@ -6,7 +7,7 @@ import MLXNN
 
 extension Q35Generator {
     static func dflash2LoRAEnabled(environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
-        environment["MERERUN_Q35_DFLASH2_LORA"] == "1"
+        MereRunEnvironmentSwitch.isEnabled("MERERUN_Q35_DFLASH2_LORA", default: false, environment: environment)
     }
 
     static func adaptiveDFlash2Enabled(environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
@@ -20,7 +21,7 @@ extension Q35Generator {
     static func dflash2PrefixCacheEnabled(
         hasLoRA: Bool, environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> Bool {
-        environment["MERERUN_Q35_DFLASH2_PREFIX_CACHE"].map { $0 == "1" } ?? hasLoRA
+        MereRunEnvironmentSwitch.value("MERERUN_Q35_DFLASH2_PREFIX_CACHE", environment: environment) ?? hasLoRA
     }
 
     static func automaticDFlash2Enabled(
@@ -33,7 +34,7 @@ extension Q35Generator {
 
     func useQualifiedDFlashDefaults(config: Q35Config) -> Bool {
         let text = config.textConfig
-        return ProcessInfo.processInfo.environment["MERERUN_Q38_TUNED_DEFAULTS"] != "0"
+        return MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_TUNED_DEFAULTS", default: true)
             && Self.automaticDFlash2Enabled(modelID: modelId)
             && Self.shouldUseM5Verification(modelID: modelId, draftAvailable: true)
             && PortableQuantizedLinear.m5TiledWeightsEnabled
@@ -87,7 +88,8 @@ extension Q35Generator {
         // Match the compact affine Q4/group-64 projection layout used by Splash.
         // Norms, convolution bases, and selector codebooks retain their BF16 values.
         draft.quantizeProjections()
-        let matrixFFN = ProcessInfo.processInfo.environment["MERERUN_Q38_DFLASH2_M5_FFN"] == nil
+        // An explicit MERERUN_Q38_DFLASH2_M5_FFN setting replaces the qualified default.
+        let matrixFFN = MereRunEnvironmentSwitch.value("MERERUN_Q38_DFLASH2_M5_FFN") == nil
             && useQualifiedDFlashDefaults(config: target)
         draft.prepareDrafting(qualifiedMatrixFFN: matrixFFN)
         return draft
@@ -206,7 +208,7 @@ extension Q35Generator {
             }
         ) : nil
         var progressText: Q35ByteLevelProgress? = byteLevelProgress && progressHandler != nil
-            && ProcessInfo.processInfo.environment["MERERUN_Q38_INCREMENTAL_PROGRESS"] != "0" ? .init() : nil
+            && MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_INCREMENTAL_PROGRESS", default: true) ? .init() : nil
         var toolDetector = Q35ToolParser.StreamingCompletionDetector()
         var completedToolCall = false
         func emit(_ token: Int) {
@@ -228,7 +230,7 @@ extension Q35Generator {
             && generationConfig.temperature == 1 && generationConfig.topK == 20 && generationConfig.topP == 0.95
             && generationConfig.minP == 0 && !generationConfig.hasActivePenalties && generationConfig.bannedTokens.isEmpty
             && (treeMode != nil
-                || ProcessInfo.processInfo.environment["MERERUN_Q38_SAMPLED_CHAIN"] == "1")
+                || MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_SAMPLED_CHAIN", default: false))
         var positionSampler = keyed ? Q35PositionSampler(seed: seed ?? .random(in: .min ... .max),
             temperature: Double(generationConfig.temperature), topP: Double(generationConfig.topP), topK: generationConfig.topK) : nil
         positionSampler?.treeMode = treeMode

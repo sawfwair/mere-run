@@ -1,5 +1,6 @@
 #if os(macOS)
 import Foundation
+import MereRunEnvironment
 import Metal
 import MereRunKVCache
 import MereRunTensor
@@ -15,7 +16,7 @@ package enum Q35NativeVerificationPolicy {
     package static var directEmbedding: Bool { directEmbeddingFlag.enabled }
     private static let wideQKVZFlag = QwenDFlashDefaults.Flag("MERERUN_Q38_NATIVE_VERIFY_WIDE_QKVZ")
     package static var wideQKVZ: Bool { wideQKVZFlag.enabled }
-    static let precomputeQKVZBiasSums = ProcessInfo.processInfo.environment["MERERUN_Q38_NATIVE_VERIFY_QKVZ_BIAS_SUMS"] == "1"
+    static let precomputeQKVZBiasSums = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_NATIVE_VERIFY_QKVZ_BIAS_SUMS", default: false)
         && !Q35NativeExecutionPolicy.enabled
     private static let fuseProjectionSumsFlag = QwenDFlashDefaults.Flag("MERERUN_Q38_NATIVE_FUSE_SUMS")
     static var fuseProjectionSums: Bool { fuseProjectionSumsFlag.enabled && !Q35NativeExecutionPolicy.enabled }

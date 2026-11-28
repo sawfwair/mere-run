@@ -1,12 +1,13 @@
 #if os(macOS)
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXFast
 
 /// Tile-major inference buffers. Original parameters remain available to prefill.
 enum M5TiledAffineQ4 {
     private static let configuredLayout = ProcessInfo.processInfo.environment["MERERUN_Q38_M5_GROUP_AFFINE"]
-    private static let nativeExecution = ProcessInfo.processInfo.environment["MERERUN_Q38_SWIFT_METAL"] == "1"
+    private static let nativeExecution = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_SWIFT_METAL", default: false)
     @TaskLocal static var groupAffineEnabledOverride: Bool?
     @TaskLocal static var groupAffinePrefillEnabledOverride: Bool?
     static var groupAffineEnabled: Bool {
@@ -16,7 +17,7 @@ enum M5TiledAffineQ4 {
         groupAffinePrefillEnabledOverride ?? (configuredLayout.map { $0 == "all" } ?? QwenDFlashDefaults.active)
     }
     @TaskLocal static var registerOperandsEnabled =
-        ProcessInfo.processInfo.environment["MERERUN_Q38_M5_REGISTER_OPERANDS"] == "1"
+        MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_M5_REGISTER_OPERANDS", default: false)
     private static let configuredHeadTileGroups: Int? = ProcessInfo.processInfo.environment["MERERUN_Q38_M5_HEAD_TILE_GROUPS"]
         .flatMap(Int.init).flatMap { [1, 2, 4, 8].contains($0) ? $0 : nil }
 

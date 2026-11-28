@@ -1,12 +1,13 @@
 #if os(macOS)
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXFast
 import MereRunTensor
 
 enum Q35PrefillGDNRecurrence {
     @TaskLocal static var enabled =
-        ProcessInfo.processInfo.environment["MERERUN_Q38_PREFILL_GDN_WIDE_RECURRENCE"] == "1"
+        MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_PREFILL_GDN_WIDE_RECURRENCE", default: false)
 
     static func eligible(q: MLXArray, k: MLXArray, v: MLXArray, keyHeads: Int, valueHeads: Int) -> Bool {
         enabled && QuantizedPrefillContext.mode == .gdnRepaired && q.dim(0) == 1 && q.dim(1) >= 512

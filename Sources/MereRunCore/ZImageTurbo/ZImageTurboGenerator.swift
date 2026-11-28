@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXNN
 import MLXRandom
@@ -54,12 +55,7 @@ public actor ZImageTurboGenerator: ImageGenerator, ChatGenerator {
     var currentTransformerLoRA: LoRA?
     var transformerLoRALayers: [String: TrainableLoRALayer]?
     var transformerLoRARank: Int?
-    static let loraDebugEnabled: Bool = {
-        guard let raw = ProcessInfo.processInfo.environment["MERERUN_LORA_DEBUG"]?.lowercased() else {
-            return false
-        }
-        return raw == "1" || raw == "true" || raw == "yes"
-    }()
+    static let loraDebugEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_LORA_DEBUG", default: false)
 
     public init() {}
 

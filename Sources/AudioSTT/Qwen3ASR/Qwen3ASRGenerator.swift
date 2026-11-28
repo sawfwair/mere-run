@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXNN
 import MLXRandom
@@ -20,22 +21,13 @@ public actor Qwen3ASRGenerator: ASRGenerator {
     var loadedModelPath: String?
 
     let modelId: String
-    static let debugEnabled: Bool = {
-        guard let raw = ProcessInfo.processInfo.environment["MERERUN_ASR_DEBUG"]?.lowercased() else {
-            return false
-        }
-        return raw == "1" || raw == "true" || raw == "yes"
-    }()
+    static let debugEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_ASR_DEBUG", default: false)
 
     /// Depth-1 pipelined decode (default on): the sampled token feeds the
     /// next forward as a GPU array and the previous token is read back while
     /// the current step executes. MERERUN_STT_PIPELINED_DECODE=0 restores
     /// the legacy two-syncs-per-token loop.
-    static let pipelinedDecodeEnabled: Bool = {
-        let raw = ProcessInfo.processInfo.environment["MERERUN_STT_PIPELINED_DECODE"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return raw != "0" && raw != "false" && raw != "off"
-    }()
+    static let pipelinedDecodeEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_STT_PIPELINED_DECODE", default: true)
 
     public init(modelId: String = Qwen3ASRResources.defaultModelId) {
         self.modelId = modelId

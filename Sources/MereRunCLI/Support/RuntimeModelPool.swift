@@ -1,24 +1,11 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MereRunContract
 import MereRunCore
 #if canImport(Darwin)
 import Darwin
 #endif
-
-/// Tri-state environment flag: nil when unset, so callers can supply a
-/// context-dependent default (e.g. continuous batching following
-/// --max-active-requests).
-func runtimeOptionalEnvironmentFlag(
-    _ key: String,
-    environment: [String: String] = ProcessInfo.processInfo.environment
-) -> Bool? {
-    guard let rawValue = environment[key] else {
-        return nil
-    }
-    let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    return !["0", "false", "no", "off"].contains(normalized)
-}
 
 struct RuntimeContinuousBatchingConfiguration: Equatable, Sendable {
     let gemma4: Bool
@@ -31,31 +18,23 @@ struct RuntimeContinuousBatchingConfiguration: Equatable, Sendable {
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) {
         let defaultEnabled = maxActiveRequests > 1
-        gemma4 = runtimeOptionalEnvironmentFlag(
+        gemma4 = MereRunEnvironmentSwitch.value(
             "MERERUN_GEMMA4_CONTINUOUS_BATCHING",
             environment: environment
         ) ?? defaultEnabled
-        laguna = runtimeOptionalEnvironmentFlag(
+        laguna = MereRunEnvironmentSwitch.value(
             "MERERUN_LAGUNA_CONTINUOUS_BATCHING",
             environment: environment
         ) ?? defaultEnabled
-        q35 = runtimeOptionalEnvironmentFlag(
+        q35 = MereRunEnvironmentSwitch.value(
             "MERERUN_Q35_CONTINUOUS_BATCHING",
             environment: environment
         ) ?? defaultEnabled
-        lfm2 = runtimeOptionalEnvironmentFlag(
+        lfm2 = MereRunEnvironmentSwitch.value(
             "MERERUN_LFM2_CONTINUOUS_BATCHING",
             environment: environment
         ) ?? defaultEnabled
     }
-}
-
-private func runtimeDefaultOnEnvironmentFlag(_ key: String) -> Bool {
-    guard let rawValue = ProcessInfo.processInfo.environment[key] else {
-        return true
-    }
-    let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    return !["0", "false", "no", "off"].contains(normalized)
 }
 
 struct RuntimeModelPoolStatus: Codable, Equatable, Sendable {
@@ -641,16 +620,16 @@ actor RuntimeModelPool {
         fallbackLoraPath: String? = nil,
         settingsStore: RuntimeModelSettingsStore = RuntimeModelSettingsStore(),
         gemma4KVCacheQuantization: Gemma4KVCacheQuantization = Gemma4KVCacheQuantization(),
-        gemma4PrefixKVCacheEnabled: Bool = runtimeDefaultOnEnvironmentFlag("MERERUN_GEMMA4_PREFIX_KV_CACHE"),
-        gemma4ContinuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_GEMMA4_CONTINUOUS_BATCHING"] == "1",
+        gemma4PrefixKVCacheEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_GEMMA4_PREFIX_KV_CACHE", default: true),
+        gemma4ContinuousBatchingEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_GEMMA4_CONTINUOUS_BATCHING", default: false),
         lagunaContinuousBatchingEnabled: Bool =
-            ProcessInfo.processInfo.environment["MERERUN_LAGUNA_CONTINUOUS_BATCHING"] == "1",
-        q35PrefixKVCacheEnabled: Bool = runtimeDefaultOnEnvironmentFlag("MERERUN_Q35_PREFIX_KV_CACHE"),
-        q35ContinuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_CONTINUOUS_BATCHING"] == "1",
-        lfm2PrefixKVCacheEnabled: Bool = runtimeDefaultOnEnvironmentFlag("MERERUN_LFM2_PREFIX_KV_CACHE"),
+            MereRunEnvironmentSwitch.isEnabled("MERERUN_LAGUNA_CONTINUOUS_BATCHING", default: false),
+        q35PrefixKVCacheEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q35_PREFIX_KV_CACHE", default: true),
+        q35ContinuousBatchingEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q35_CONTINUOUS_BATCHING", default: false),
+        lfm2PrefixKVCacheEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_LFM2_PREFIX_KV_CACHE", default: true),
         lfm2ContinuousBatchingEnabled: Bool =
-            ProcessInfo.processInfo.environment["MERERUN_LFM2_CONTINUOUS_BATCHING"] == "1",
-        inkling2PrefixKVCacheEnabled: Bool = runtimeDefaultOnEnvironmentFlag("MERERUN_INKLING2_PREFIX_KV_CACHE"),
+            MereRunEnvironmentSwitch.isEnabled("MERERUN_LFM2_CONTINUOUS_BATCHING", default: false),
+        inkling2PrefixKVCacheEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_INKLING2_PREFIX_KV_CACHE", default: true),
         currentDate: @escaping @Sendable () -> Date = { Date() },
         currentMemorySample: @escaping @Sendable () -> RuntimeMemorySample = { RuntimeMemorySample.current() },
         memoryPressurePolicy: RuntimeMemoryPressurePolicy = .default,

@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXNN
 
@@ -37,7 +38,7 @@ package final class Q35CompiledOperations: @unchecked Sendable {
     }
 
     static func withNewDefaultStream<Result>(
-        scoped enabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_SCOPED_COMPILE"] == "1",
+        scoped enabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q35_SCOPED_COMPILE", default: false),
         isolation _: isolated (any Actor)? = #isolation,
         _ operation: () async throws -> Result
     ) async rethrows -> Result {

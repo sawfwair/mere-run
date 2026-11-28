@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXRandom
 import MLXNN
@@ -390,12 +391,7 @@ extension Flux2KleinGenerator {
 
     private static let noMatchingTransformerLayersMessage = "No matching transformer layers found for this LoRA."
 
-    static let compileEnabled: Bool = {
-        guard let raw = ProcessInfo.processInfo.environment["MERERUN_FLUX2_COMPILE"]?.lowercased() else {
-            return false
-        }
-        return raw == "1" || raw == "true" || raw == "yes"
-    }()
+    static let compileEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_FLUX2_COMPILE", default: false)
 
     func transformerForward(
         _ transformer: Flux2Transformer2DModel,

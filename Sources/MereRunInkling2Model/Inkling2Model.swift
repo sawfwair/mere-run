@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 
 public final class Inkling2Model {
@@ -56,7 +57,7 @@ public final class Inkling2Model {
         self.loopCDStrength = loopCDStrength
         #if os(macOS)
         usePackedExperts = config.textConfig.loopConfig != nil && Device.defaultDevice().deviceType == .gpu
-            && ProcessInfo.processInfo.environment["MERERUN_INKLING2_PACKED_EXPERTS"] != "0"
+            && MereRunEnvironmentSwitch.isEnabled("MERERUN_INKLING2_PACKED_EXPERTS", default: true)
             && weights.storedBytes <= ProcessInfo.processInfo.physicalMemory / 4 * 3
             && (0..<config.textConfig.numHiddenLayers).allSatisfy { layer in
                 let prefix = "model.llm.layers.\(layer).mlp.experts."

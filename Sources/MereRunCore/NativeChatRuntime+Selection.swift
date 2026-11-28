@@ -1,5 +1,6 @@
 #if os(macOS) || os(Linux)
 import Foundation
+import MereRunEnvironment
 import MereRunContract
 
 extension NativeChatRuntime {
@@ -12,7 +13,7 @@ extension NativeChatRuntime {
         defaultQwenLoRA: LoRA? = nil
     ) -> Self {
         func option(_ value: Bool?, _ key: String) -> Bool {
-            value ?? (ProcessInfo.processInfo.environment[key] == "1")
+            value ?? MereRunEnvironmentSwitch.isEnabled(key, default: false)
         }
         switch engine {
         case .textCode:

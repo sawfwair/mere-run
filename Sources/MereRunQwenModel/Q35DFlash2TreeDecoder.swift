@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MereRunKVCache
 import MereRunTensor
 import MLX
@@ -81,12 +82,12 @@ extension Q35Model {
 
 package enum Q35DFlash2TreePolicy {
     @TaskLocal package static var pricedNodesEnabled =
-        ProcessInfo.processInfo.environment["MERERUN_Q38_TREE_PRICED_NODES"] == "1"
+        MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_TREE_PRICED_NODES", default: false)
     private static let calibratedScoresFlag = QwenDFlashDefaults.Flag("MERERUN_Q38_TREE_CALIBRATED_SCORES")
     @TaskLocal package static var calibratedScoresEnabledOverride: Bool?
     package static var calibratedScoresEnabled: Bool { calibratedScoresEnabledOverride ?? calibratedScoresFlag.enabled }
     @TaskLocal package static var contextCopiesEnabled =
-        ProcessInfo.processInfo.environment["MERERUN_Q38_TREE_CONTEXT_COPIES"] == "1"
+        MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_TREE_CONTEXT_COPIES", default: false)
     private static let enabledFlag = QwenDFlashDefaults.Flag("MERERUN_Q38_DFLASH2_TREE")
     @TaskLocal package static var enabledOverride: Bool?
     package static var enabled: Bool { enabledOverride ?? enabledFlag.enabled }
@@ -102,7 +103,7 @@ package enum Q35DFlash2TreePolicy {
     }()
 
     static func calibratedScoresDefault(environment: [String: String]) -> Bool {
-        environment["MERERUN_Q38_TREE_CALIBRATED_SCORES"] == "1"
+        MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_TREE_CALIBRATED_SCORES", default: false, environment: environment)
     }
 
     static func proposalDimensions(remaining: Int, nodeLimit: Int? = nil) -> (depth: Int, nodes: Int) {

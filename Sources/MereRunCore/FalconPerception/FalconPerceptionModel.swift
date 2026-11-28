@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 @preconcurrency import MLX
 import MLXFast
 import MLXNN
@@ -20,7 +21,7 @@ private func falconPerceptionContiguous(_ x: MLXArray) -> MLXArray {
 }
 
 private func falconPerceptionShouldForceKernelDecodeAttention() -> Bool {
-    ProcessInfo.processInfo.environment["MERERUN_FALCON_FORCE_KERNEL_DECODE_ATTENTION"] == "1"
+    MereRunEnvironmentSwitch.isEnabled("MERERUN_FALCON_FORCE_KERNEL_DECODE_ATTENTION", default: false)
 }
 
 func falconPerceptionAttentionBiasMask(_ mask: MLXArray, dtype: DType) -> MLXArray {

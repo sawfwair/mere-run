@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXNN
 import MLXRandom
@@ -180,11 +181,7 @@ extension Qwen3ASRGenerator {
     }
 
     private func shouldUseMRoPE(_ thinker: Qwen3ASRThinker) -> Bool {
-        guard let raw = ProcessInfo.processInfo.environment["MERERUN_ASR_USE_MROPE"]?.lowercased() else {
-            return false
-        }
-        let enabled = raw == "1" || raw == "true" || raw == "yes"
-        guard enabled else { return false }
+        guard MereRunEnvironmentSwitch.isEnabled("MERERUN_ASR_USE_MROPE", default: false) else { return false }
         return thinker.config.textConfig.ropeScaling?.mropeSection?.isEmpty == false
     }
 

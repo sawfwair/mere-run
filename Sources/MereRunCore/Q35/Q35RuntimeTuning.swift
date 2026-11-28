@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 
 /// Selects scheduling features qualified for each managed checkpoint family.
 enum Q35RuntimeTuning {
@@ -13,8 +14,8 @@ enum Q35RuntimeTuning {
         modelID: String,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> Bool {
-        if let override = environment[feature.rawValue] {
-            return override == "1"
+        if let override = MereRunEnvironmentSwitch.value(feature.rawValue, environment: environment) {
+            return override
         }
         // Shared activation graphs retain the first generator's MLX stream.
         // Keep later Small models on their own request streams as well.

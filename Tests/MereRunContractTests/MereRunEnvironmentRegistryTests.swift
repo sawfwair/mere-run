@@ -56,33 +56,69 @@ final class MereRunEnvironmentRegistryTests: XCTestCase {
         XCTAssertNotNil(choice.validate("all"))
     }
 
-    /// Kinds must match how each variable's reader parses it: a value that validates has to
-    /// behave as written. These pin the readers that only understand part of the vocabulary.
+    /// A value that validates has to behave as written. Runtime switches share one parser, so
+    /// they accept the whole vocabulary; modes and strides keep their own values.
     func testValueKindsMatchHowReadersParseValues() {
         func expected(_ name: String, _ value: String) -> String? {
             MereRunEnvironmentRegistry.variable(named: name)?.valueKind.validate(value)
         }
-        // `!= "0"` readers: `false` would leave the feature on.
-        XCTAssertNotNil(expected("MERERUN_Q38_TUNED_DEFAULTS", "false"))
-        XCTAssertNotNil(expected("MERERUN_Q35_PRISM_METAL", "off"))
-        XCTAssertNil(expected("MERERUN_Q35_PRISM_METAL", "0"))
-        // `== "1"` readers: `true` would be ignored.
-        XCTAssertNotNil(expected("MERERUN_MUSE_GLIMMER_FUSED_NORM", "true"))
-        // Off-list readers (`0/false/off` disable): `no` would leave the feature on.
-        XCTAssertNotNil(expected("MERERUN_FUSED_SDPA", "no"))
-        XCTAssertNil(expected("MERERUN_FUSED_SDPA", "off"))
-        // On-list readers (`1/true/yes` enable): `on` would be ignored.
-        XCTAssertNotNil(expected("MERERUN_ALLOW_METALLIB_MISMATCH", "on"))
-        XCTAssertNil(expected("MERERUN_ALLOW_METALLIB_MISMATCH", "yes"))
-        // Shared parsers accept the full vocabulary.
-        XCTAssertNil(expected("MERERUN_LAGUNA_SHARED_ATTENTION_MASKS", "on"))
-        // Non-boolean modes.
+        for name in ["MERERUN_Q38_TUNED_DEFAULTS", "MERERUN_Q35_PRISM_METAL", "MERERUN_FUSED_SDPA"] {
+            for value in ["1", "true", "yes", "on", "0", "false", "no", "off"] {
+                XCTAssertNil(expected(name, value), "\(name)=\(value)")
+            }
+            XCTAssertNotNil(expected(name, "sometimes"))
+        }
+        // Read outside the runtime parser by build scripts and test fixtures.
+        XCTAssertNotNil(expected("MERERUN_SWIFT_DISABLE_INDEX_STORE", "true"))
+        XCTAssertNil(expected("MERERUN_SWIFT_DISABLE_INDEX_STORE", "1"))
+        // Modes and strides.
         XCTAssertNil(expected("MERERUN_Q35_PRISM_FUSION", "shared"))
         XCTAssertNil(expected("MERERUN_LAGUNA_PREFILL_ASYNC_LADDER", "16"))
         XCTAssertNotNil(expected("MERERUN_LAGUNA_PREFILL_ASYNC_LADDER", "41"))
         XCTAssertNotNil(expected("MERERUN_Q38_DECODE_ASYNC_BLOCKS", "2"))
-        XCTAssertNotNil(expected("MERERUN_Q35_PREFIX_KV_CACHE", "on"))
         XCTAssertNil(expected("MERERUN_H3_CACHE_STRATEGY", "scheduled-tail"))
+    }
+
+    /// Runtime switches must be read through `MereRunEnvironmentSwitch`, so a registered `bool`
+    /// variable may not be subscripted out of an environment dictionary and compared by hand.
+    /// Writes (`env["X"] = "1"`) and presence checks (`env["X"] == nil`) stay allowed.
+    func testRuntimeSwitchesAreReadThroughTheSharedParser() throws {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // MereRunContractTests
+            .deletingLastPathComponent() // Tests
+            .deletingLastPathComponent() // repo root
+        let switches = MereRunEnvironmentRegistry.variables(ofKind: .bool).map(\.name)
+        // A subscript follows an expression (`env[`, `environment?[`); array literals like
+        // `keys: ["MERERUN_X"]` hand the name to the shared parser and are allowed.
+        let pattern = #"(?<=[\w\)\]\?])\[\s*"(MERERUN_[A-Z0-9_]+)"\s*\](?!\s*(=[^=]|== nil))"#
+        let regex = try NSRegularExpression(pattern: pattern)
+        let switchSet = Set(switches)
+        var handParsed: [String: Set<String>] = [:]
+
+        let sources = repoRoot.appendingPathComponent("Sources")
+        let enumerator = try XCTUnwrap(
+            FileManager.default.enumerator(at: sources, includingPropertiesForKeys: [.isRegularFileKey])
+        )
+        for case let fileURL as URL in enumerator where fileURL.pathExtension == "swift" {
+            let content = try String(contentsOf: fileURL, encoding: .utf8)
+            guard content.contains("MERERUN_") else { continue }
+            let nsContent = content as NSString
+            for match in regex.matches(in: content, range: NSRange(location: 0, length: nsContent.length)) {
+                let name = nsContent.substring(with: match.range(at: 1))
+                guard switchSet.contains(name) else { continue }
+                let relativePath = fileURL.path.replacingOccurrences(of: repoRoot.path + "/", with: "")
+                handParsed[name, default: []].insert(relativePath)
+            }
+        }
+
+        let details = handParsed.keys.sorted().map { name in
+            "  - \(name) (\(handParsed[name, default: []].sorted().joined(separator: ", ")))"
+        }
+        XCTAssertTrue(
+            details.isEmpty,
+            "Read these switches with MereRunEnvironmentSwitch instead of comparing raw values:\n"
+                + details.joined(separator: "\n")
+        )
     }
 
     func testRemoteAuditRedactsPathsAndStringsButKeepsSwitches() {
@@ -162,7 +198,10 @@ final class MereRunEnvironmentRegistryTests: XCTestCase {
 
         let invalidByName = Dictionary(uniqueKeysWithValues: audit.invalidValues.map { ($0.name, $0) })
         XCTAssertEqual(invalidByName["MERERUN_INKLING2_PREFILL_CHUNK"]?.expected, "expected an integer")
-        XCTAssertEqual(invalidByName["MERERUN_GEMMA4_CONTINUOUS_BATCHING"]?.expected, "expected 0 or 1")
+        XCTAssertEqual(
+            invalidByName["MERERUN_GEMMA4_CONTINUOUS_BATCHING"]?.expected,
+            "expected a boolean (0, 1, true, false, yes, no, on, off)"
+        )
         XCTAssertEqual(audit.warnings.count, 5)
         XCTAssertTrue(audit.warnings.contains(where: { $0.contains("did you mean MERERUN_INKLING2_PREFILL_CHUNK?") }))
     }

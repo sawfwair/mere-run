@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MediaIO
 import MLX
 import MLXRandom
@@ -14,10 +15,7 @@ extension Flux2KleinGenerator {
         progressHandler: (@Sendable (GenerationProgress) -> Void)?
     ) async throws -> GenerationResult {
         try await withRequestStream {
-            let timingEnabled = {
-                guard let raw = ProcessInfo.processInfo.environment["MERERUN_FLUX2_TIMING"]?.lowercased() else { return false }
-                return raw == "1" || raw == "true" || raw == "yes"
-            }()
+            let timingEnabled = MereRunEnvironmentSwitch.isEnabled("MERERUN_FLUX2_TIMING", default: false)
 
             // Load models if needed (also reload if only chat models were loaded - vae is nil)
             if loadedModelPath != modelPath || vae == nil {
@@ -36,7 +34,7 @@ extension Flux2KleinGenerator {
             }
 
             let debugLog: ((String) -> Void)? = {
-                guard ProcessInfo.processInfo.environment["MERERUN_FLUX2_DEBUG"] == "1" else { return nil }
+                guard MereRunEnvironmentSwitch.isEnabled("MERERUN_FLUX2_DEBUG", default: false) else { return nil }
                 return { message in
                     FileHandle.standardError.write(Data((message + "\n").utf8))
                 }

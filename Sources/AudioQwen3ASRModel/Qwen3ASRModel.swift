@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXNN
 import MLXFast
@@ -310,12 +311,7 @@ final class Qwen3ASRDecoderModel: Module {
         tokenIds: MLXArray,
         audioTokenId: Int
     ) -> MLXArray {
-        let debugEnabled: Bool
-        if let raw = ProcessInfo.processInfo.environment["MERERUN_ASR_DEBUG"]?.lowercased() {
-            debugEnabled = raw == "1" || raw == "true" || raw == "yes"
-        } else {
-            debugEnabled = false
-        }
+        let debugEnabled = MereRunEnvironmentSwitch.isEnabled("MERERUN_ASR_DEBUG", default: false)
 
         // Audio features are now projected to 1024 (same as text embeddings)
         let audioLen = audioFeatures.dim(1)
@@ -451,12 +447,7 @@ final class Qwen3ASRDecoderAttention: Module {
         self._qNorm.wrappedValue = RMSNorm(dimensions: headDim, eps: config.rmsNormEps)
         self._kNorm.wrappedValue = RMSNorm(dimensions: headDim, eps: config.rmsNormEps)
 
-        let useMRoPE: Bool = {
-            guard let raw = ProcessInfo.processInfo.environment["MERERUN_ASR_USE_MROPE"]?.lowercased() else {
-                return false
-            }
-            return raw == "1" || raw == "true" || raw == "yes"
-        }()
+        let useMRoPE: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_ASR_USE_MROPE", default: false)
 
         if useMRoPE,
            let ropeScaling = config.ropeScaling,

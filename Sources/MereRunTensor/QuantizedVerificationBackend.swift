@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 
 /// Arithmetic policy belongs to each projection, so a target can opt in while
 /// its independent draft and other resident models retain their own policy.
@@ -46,7 +47,7 @@ package enum QwenDFlashDefaults {
         private let configured: Bool?
 
         package init(_ key: String) {
-            configured = ProcessInfo.processInfo.environment[key].map { $0 == "1" }
+            configured = MereRunEnvironmentSwitch.value(key)
         }
 
         package var enabled: Bool { configured ?? QwenDFlashDefaults.active }

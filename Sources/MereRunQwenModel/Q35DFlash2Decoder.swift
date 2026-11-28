@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MereRunTensor
 
@@ -41,7 +42,7 @@ package enum Q35DFlash2Decoder {
     ) throws -> Q35DFlash2Stats {
         #if os(macOS)
         if #available(macOS 26.0, *), stopAfterEmission == nil, let positionSampler, let sampling, costs == nil,
-           ProcessInfo.processInfo.environment["MERERUN_Q38_SAMPLED_CHAIN"] == "1",
+           MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_SAMPLED_CHAIN", default: false),
            Q35DFlash2TreePolicy.eligible(model: model, caches: layerCaches, sampled: false),
            let stats = try decodeNativeSampledChain(model: model, draft: draft, draftCache: draftCache,
                initialLogits: initialLogits, layerCaches: layerCaches, eosSet: eosSet, tokenBudget: tokenBudget,

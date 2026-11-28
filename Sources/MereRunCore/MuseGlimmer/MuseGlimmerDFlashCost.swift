@@ -1,11 +1,12 @@
 import Foundation
+import MereRunEnvironment
 
 enum MuseGlimmerDFlashFallback: String, Decodable {
     case acceptance
     case throughput
 
     static var selected: Self {
-        ProcessInfo.processInfo.environment["MERERUN_MUSE_GLIMMER_DFLASH_COST_FALLBACK"] == "1" ? .throughput : .acceptance
+        MereRunEnvironmentSwitch.isEnabled("MERERUN_MUSE_GLIMMER_DFLASH_COST_FALLBACK", default: false) ? .throughput : .acceptance
     }
 }
 

@@ -1,5 +1,6 @@
 import AudioCodecs
 import Foundation
+import MereRunEnvironment
 import MediaIO
 import MLX
 import MLXFast
@@ -16,9 +17,9 @@ func denoiseLoop(
 ) -> MLXArray {
     var current = latents
     let dtype = latents.dtype
-    let debugDenoise = ProcessInfo.processInfo.environment["MERERUN_VIDEO_LTX_DEBUG_DENOISE"] == "1"
+    let debugDenoise = MereRunEnvironmentSwitch.isEnabled("MERERUN_VIDEO_LTX_DEBUG_DENOISE", default: false)
     let debugDumpPrefix = ProcessInfo.processInfo.environment["MERERUN_VIDEO_LTX_DEBUG_DUMP_PREFIX"]
-    let debugDumpAll = ProcessInfo.processInfo.environment["MERERUN_VIDEO_LTX_DEBUG_DUMP_ALL"] == "1"
+    let debugDumpAll = MereRunEnvironmentSwitch.isEnabled("MERERUN_VIDEO_LTX_DEBUG_DUMP_ALL", default: false)
 
     for i in 0..<(max(0, sigmas.count - 1)) {
         let sigma = sigmas[i]

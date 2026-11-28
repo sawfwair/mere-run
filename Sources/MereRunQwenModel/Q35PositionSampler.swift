@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 
 package enum Q35SampledTreeMode: String, Sendable {
     case position = "1"
@@ -6,11 +7,10 @@ package enum Q35SampledTreeMode: String, Sendable {
 
     package static func resolve(automatic: Bool, environment: [String: String] = ProcessInfo.processInfo.environment) -> Self? {
         if let value = environment["MERERUN_Q38_SAMPLED_TREE"] { return Self(rawValue: value) }
-        return automatic && environment["MERERUN_Q38_SAMPLED_CHAIN"] != "1" ? .vocabulary : nil
+        return automatic && !MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_SAMPLED_CHAIN", default: false, environment: environment) ? .vocabulary : nil
     }
 
-    static let gpuHeadOverride = ProcessInfo.processInfo.environment["MERERUN_Q38_SAMPLED_GPU_HEAD"]
-        .map { $0 == "1" }
+    static let gpuHeadOverride = MereRunEnvironmentSwitch.value("MERERUN_Q38_SAMPLED_GPU_HEAD")
 }
 
 /// The target and draft share one Gumbel variate for each output position and vocabulary ID.

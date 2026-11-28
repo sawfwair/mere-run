@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXRandom
 import MereRunInkling2Model
@@ -21,7 +22,7 @@ public actor Inkling2Generator: ChatGenerator {
     var imageFeatureCache: [Int: MLXArray] = [:]
     var imageFeatureOrder: [Int] = []
 
-    public init(prefixKVCacheEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_INKLING2_PREFIX_KV_CACHE"] == "1") {
+    public init(prefixKVCacheEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_INKLING2_PREFIX_KV_CACHE", default: false)) {
         self.prefixKVCacheEnabled = prefixKVCacheEnabled
     }
 

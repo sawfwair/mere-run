@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXRandom
 
@@ -33,10 +34,7 @@ public final class Krea2Generator: ImageGenerator {
     private var transformerLoRALayers: [String: TrainableLoRALayer]?
     private var transformerLoRARank: Int?
 
-    private static let loraDebugEnabled: Bool = {
-        let raw = ProcessInfo.processInfo.environment["MERERUN_LORA_DEBUG"]?.lowercased()
-        return raw == "1" || raw == "true" || raw == "yes"
-    }()
+    private static let loraDebugEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_LORA_DEBUG", default: false)
 
     public init() {}
 

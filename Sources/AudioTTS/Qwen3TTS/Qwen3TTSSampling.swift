@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 
 /// Environment gates for the Qwen3 TTS talker decode path.
@@ -8,11 +9,7 @@ enum Qwen3TTSEnvironment {
     /// frame (one per sampled code) and re-uploads the ~1k-entry suppress
     /// list and the host-side repetition history every token.
     /// MERERUN_TTS_PIPELINED_DECODE=0 restores the legacy synchronous loop.
-    static let pipelinedDecodeEnabled: Bool = {
-        let raw = ProcessInfo.processInfo.environment["MERERUN_TTS_PIPELINED_DECODE"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return raw != "0" && raw != "false" && raw != "off"
-    }()
+    static let pipelinedDecodeEnabled: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_TTS_PIPELINED_DECODE", default: true)
 }
 
 /// Generation-constant sampling state for the talker loop, kept on GPU so a

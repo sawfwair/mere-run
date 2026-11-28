@@ -16,9 +16,11 @@ public enum MereRunEnvironmentCategory: String, Codable, Equatable, Hashable, Ca
 /// A kind describes what the variable's reader honors, not what would be convenient to
 /// accept: a value that validates must behave as written at runtime.
 public enum MereRunEnvironmentValueKind: Equatable, Hashable, Sendable {
-    /// A switch whose reader parses `0/1`, `true/false`, `yes/no`, and `on/off`.
+    /// An on/off switch read through `MereRunEnvironmentSwitch`, which accepts `0/1`,
+    /// `true/false`, `yes/no`, and `on/off`.
     case bool
-    /// A switch whose reader honors only the exact values `0` and `1`.
+    /// A switch read outside the runtime (build scripts, test fixtures) that honors only the
+    /// exact values `0` and `1`.
     case flag
     case integer
     case number
@@ -389,6 +391,10 @@ public enum MereRunEnvironmentRegistry {
 
     public static func variables(in category: MereRunEnvironmentCategory) -> [MereRunEnvironmentVariable] {
         variables.filter { $0.category == category }
+    }
+
+    public static func variables(ofKind valueKind: MereRunEnvironmentValueKind) -> [MereRunEnvironmentVariable] {
+        variables.filter { $0.valueKind == valueKind }
     }
 
     public static func variables(ownedBy owner: String) -> [MereRunEnvironmentVariable] {

@@ -1,20 +1,12 @@
 import Foundation
+import MereRunEnvironment
 
 public enum MereRunRuntimeDebug {
     public static func isEnabled(
         _ keys: [String],
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> Bool {
-        for key in keys {
-            guard let raw = environment[key]?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-                  !raw.isEmpty else {
-                continue
-            }
-            if raw == "1" || raw == "true" || raw == "yes" || raw == "on" {
-                return true
-            }
-        }
-        return false
+        keys.contains { MereRunEnvironmentSwitch.isEnabled($0, default: false, environment: environment) }
     }
 
     public static func write(

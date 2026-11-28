@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MediaIO
 import MLX
 import MLXRandom
@@ -208,7 +209,7 @@ public final class Wan2TI2VGenerator: @unchecked Sendable {
         let usesDreamXSampler = options.cameraConditioning != nil
         let timesteps = usesDreamXSampler ? eulerScheduler.timesteps : uniPCScheduler.timesteps
         var latent = initialLatent
-        let debugStats = ProcessInfo.processInfo.environment["MERERUN_WAN2_DEBUG_STATS"] == "1"
+        let debugStats = MereRunEnvironmentSwitch.isEnabled("MERERUN_WAN2_DEBUG_STATS", default: false)
         for (stepIndex, timestep) in timesteps.enumerated() {
             try Task.checkCancellation()
             progressHandler?(GenerationProgress(

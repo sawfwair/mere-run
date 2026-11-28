@@ -65,10 +65,22 @@ func checkBoundary(_ manifest: PackageManifest) -> [String] {
     let modelTargets: Set<String> = [
         "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioParakeetModel", "AudioSortformer", "AudioWhistleModel"
     ]
-    let supportTargets: Set<String> = ["MereRunKVCache", "MereRunModelKit"]
+    // Zero-dependency leaves every model runtime may read. `MereRunEnvironment` parses
+    // `MERERUN_*` switches; it adds no further local or product dependencies.
+    let sharedLeafTargets: Set<String> = ["MereRunEnvironment"]
+    let supportTargets: Set<String> = Set(["MereRunKVCache", "MereRunModelKit"]).union(sharedLeafTargets)
     let allowedProducts: Set<String> = ["MLX", "MLXFast", "MLXNN", "MLXRandom", "Crypto"]
     let checked = modelTargets.union(["MereRunKVCache", "MereRunMLXTestSupport", "SpeechRuntimeTests"])
     var failures: [String] = []
+    for leaf in sharedLeafTargets.sorted() {
+        let closure = dependencyClosure([leaf], targets: targets)
+        let extra = closure.local.subtracting([leaf]).union(closure.products)
+        if targets[leaf] == nil {
+            failures.append("Missing shared leaf target: \(leaf)")
+        } else if !extra.isEmpty {
+            failures.append("\(leaf) must stay dependency-free: " + extra.sorted().joined(separator: ", "))
+        }
+    }
     for root in checked.sorted() {
         guard targets[root] != nil else {
             failures.append("Missing speech boundary target: \(root)")
@@ -144,7 +156,7 @@ func checkBoundary(_ manifest: PackageManifest) -> [String] {
             continue
         }
         let closure = dependencyClosure([root], targets: targets)
-        let unexpectedLocal = closure.local.subtracting(allowedDependencies.union([root]))
+        let unexpectedLocal = closure.local.subtracting(allowedDependencies.union([root]).union(sharedLeafTargets))
         let runtimeProducts: Set<String> = root == "MereRunDecode"
             ? ["MLX", "MLXRandom"] : allowedProducts
         let unexpectedProducts = closure.products.subtracting(runtimeProducts)

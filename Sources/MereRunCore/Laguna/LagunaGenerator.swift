@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 
 public actor LagunaGenerator: ChatGenerator {
@@ -44,7 +45,7 @@ public actor LagunaGenerator: ChatGenerator {
 
     public init(
         continuousBatchingEnabled: Bool =
-            ProcessInfo.processInfo.environment["MERERUN_LAGUNA_CONTINUOUS_BATCHING"] == "1",
+            MereRunEnvironmentSwitch.isEnabled("MERERUN_LAGUNA_CONTINUOUS_BATCHING", default: false),
         dflashModelPath: String? =
             ProcessInfo.processInfo.environment["MERERUN_LAGUNA_DFLASH_PATH"],
         dflashSpeculativeTokens: Int =

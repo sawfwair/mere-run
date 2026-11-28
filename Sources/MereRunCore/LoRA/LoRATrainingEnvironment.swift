@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 #if canImport(Darwin)
 import Darwin
 #endif
@@ -65,11 +66,7 @@ public enum LoRATrainingEnvironment {
 
     /// MERERUN_LORA_TRAIN_SYNC_EVAL=1 evaluates each training step
     /// synchronously, capping in-flight activations at one step's worth.
-    public static let synchronousStepEval: Bool = {
-        let raw = ProcessInfo.processInfo.environment["MERERUN_LORA_TRAIN_SYNC_EVAL"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return raw == "1" || raw == "true" || raw == "on"
-    }()
+    public static let synchronousStepEval: Bool = MereRunEnvironmentSwitch.isEnabled("MERERUN_LORA_TRAIN_SYNC_EVAL", default: false)
 
     /// Physical memory footprint (the metric jetsam actually enforces —
     /// resident plus compressed), in gigabytes.

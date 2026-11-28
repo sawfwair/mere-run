@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 
 enum MiniMaxH3ImageProfile {
     private struct Event: Encodable {
@@ -10,7 +11,7 @@ enum MiniMaxH3ImageProfile {
     }
 
     static func install(on model: MiniMaxH3ImageTransformer) {
-        guard ProcessInfo.processInfo.environment["MERERUN_H3_IMAGE_PROFILE"] == "1" else { return }
+        guard MereRunEnvironmentSwitch.isEnabled("MERERUN_H3_IMAGE_PROFILE", default: false) else { return }
         model.profile = { phase, step, block, seconds in
             let event = Event(phase: phase, step: step, block: block, seconds: seconds)
             if let data = try? JSONEncoder().encode(event) {

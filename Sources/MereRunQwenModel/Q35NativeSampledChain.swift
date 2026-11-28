@@ -1,5 +1,6 @@
 #if os(macOS)
 import Foundation
+import MereRunEnvironment
 import MLX
 import MereRunTensor
 
@@ -65,7 +66,7 @@ extension Q35DFlash2Decoder {
               }).first, prefix > 0,
               let target = try model.model.nativeExecutionTarget(head: head, capacity: prefix + tokenBudget + 16,
                   capture: Set(draft.config.dflash.targetLayerIDs), importingPrompt: true) else { return nil }
-        let native = ProcessInfo.processInfo.environment["MERERUN_Q38_SAMPLED_CHAIN_DRAFT"] == "1"
+        let native = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_SAMPLED_CHAIN_DRAFT", default: false)
             ? try draft.makeNativeDraftSession(target: model, cache: draftCache) as? Q35NativeDraftProgram.Session : nil
         try target.importPrompt(from: layerCaches, count: prefix)
         var published = false
@@ -76,7 +77,7 @@ extension Q35DFlash2Decoder {
             }
         }
         var anchor = Q35DFlash2Sampling.sample(sampling.distribution(initialLogits[0, -1, 0...], nil)).item(Int.self)
-        let deviceRejection = ProcessInfo.processInfo.environment["MERERUN_Q38_SAMPLED_GPU_HEAD"] == "1"
+        let deviceRejection = MereRunEnvironmentSwitch.isEnabled("MERERUN_Q38_SAMPLED_GPU_HEAD", default: false)
         let depth = draft.config.dflash.blockSize - 1
         var stats = Q35DFlash2Stats(), generated = 0
         stats.roundsByDepth = Array(repeating: 0, count: depth + 1)

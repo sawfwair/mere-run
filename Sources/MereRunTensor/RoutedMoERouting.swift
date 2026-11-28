@@ -1,4 +1,5 @@
 import Foundation
+import MereRunEnvironment
 import MLX
 import MLXFast
 
@@ -9,18 +10,6 @@ import MLXFast
 /// use gather-GEMV kernels. Each helper returns `nil` outside its measured
 /// quantization and alignment boundary so callers fall back to MLX.
 package enum RoutedMoERouting {
-    package static func parseBoolean(_ raw: String?, default defaultValue: Bool) -> Bool {
-        guard let raw else { return defaultValue }
-        switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-        case "1", "true", "yes", "on":
-            return true
-        case "0", "false", "no", "off":
-            return false
-        default:
-            return defaultValue
-        }
-    }
-
     static var supportsExpertAlignedNVFP4Metal: Bool {
         #if os(macOS)
         let architecture = GPU.deviceInfo().architecture
@@ -32,10 +21,7 @@ package enum RoutedMoERouting {
         #endif
     }
 
-    static let lagunaNVFP4QDotFastEnabled = parseBoolean(
-        ProcessInfo.processInfo.environment["MERERUN_LAGUNA_NVFP4_QDOT_FAST"],
-        default: true
-    )
+    static let lagunaNVFP4QDotFastEnabled = MereRunEnvironmentSwitch.isEnabled("MERERUN_LAGUNA_NVFP4_QDOT_FAST", default: true)
 
     /// Computes an unsorted NVFP4 gate/up gather-GEMV and SwiGLU activation.
     ///
