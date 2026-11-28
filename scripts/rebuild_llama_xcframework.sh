@@ -40,4 +40,13 @@ rm -rf "${VENDOR_DIR}"
 cp -R "${tmpdir}/llama.cpp/build-apple/llama.xcframework" "${VENDOR_DIR}"
 find "${VENDOR_DIR}" -type d -name dSYMs -prune -exec rm -rf {} +
 
+# The dSYMs are not vendored, so drop the Info.plist entries that point at
+# them. The swiftbuild backend rejects an XCFramework whose DebugSymbolsPath
+# does not exist.
+info_plist="${VENDOR_DIR}/Info.plist"
+library_count="$(plutil -extract AvailableLibraries raw -o - "${info_plist}")"
+for ((index = 0; index < library_count; index++)); do
+  plutil -remove "AvailableLibraries.${index}.DebugSymbolsPath" "${info_plist}"
+done
+
 echo "[llama-xcframework] done"

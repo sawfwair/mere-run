@@ -1201,6 +1201,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 - upstream project: [`ggml-org/llama.cpp`](https://github.com/ggml-org/llama.cpp)
 - pinned upstream commit: `4988f6e866057afd130c1515ecef0c9bab9a15f8` (`Add arch support for cohere2-MoE (#24260)`, 2026-06-13)
 - rebuild note: regenerated from a neutral temporary checkout using the upstream `build-xcframework.sh` script; see [`scripts/rebuild_llama_xcframework.sh`](./scripts/rebuild_llama_xcframework.sh)
+- local modification: upstream `dSYMs` debug-symbol bundles are not vendored, and the matching `DebugSymbolsPath` entries are removed from `Info.plist`
 - license: MIT
 
 ```
