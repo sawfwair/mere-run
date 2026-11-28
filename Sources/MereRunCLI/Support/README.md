@@ -34,6 +34,9 @@ Shared helpers and runtime adapters for the public command surface.
 - `CLICapabilityGate.swift`: the pre-admission model scope check.
   `CLIGateWarnings.swift` carries its warnings for the run into the JSON a
   command prints on stdout (`GateWarned`, and `RunReceipt.warnings`).
+- `CLIEnvironmentGate.swift`: startup `MERERUN_*` environment auditing over
+  `MereRunEnvironmentRegistry`, printing non-fatal typo and value warnings to
+  stderr (suppressed under `--quiet` and built-in help/version flags).
 - `TerminalMarkdownPresentation.swift` and `TerminalMarkdownStream.swift`:
   safe, append-only Markdown presentation for interactive token streams while
   preserving raw piped output.
