@@ -1,4 +1,5 @@
 import Foundation
+@testable import MereRunVideo
 import XCTest
 @testable import MereRunCLI
 @testable import MereRunCore

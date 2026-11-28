@@ -1,4 +1,5 @@
 import ArgumentParser
+import MereRunGeo
 import Foundation
 @preconcurrency import MLX
 import MereRunCore

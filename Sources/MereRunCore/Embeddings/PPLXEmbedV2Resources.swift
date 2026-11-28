@@ -84,10 +84,25 @@ public struct PPLXEmbedV2Result: Codable, Sendable {
     public let dimensions: Int
     public let normalized: Bool
     public let data: [Row]
+
+    package init(model: String, representation: String, dimensions: Int, normalized: Bool, data: [Row]) {
+        self.model = model
+        self.representation = representation
+        self.dimensions = dimensions
+        self.normalized = normalized
+        self.data = data
+    }
+
     public struct Row: Codable, Sendable {
         public let index: Int
         public let embeddings: [[Float]]
         public let tokenCount: Int
+
+        package init(index: Int, embeddings: [[Float]], tokenCount: Int) {
+            self.index = index
+            self.embeddings = embeddings
+            self.tokenCount = tokenCount
+        }
     }
 
     public static func maxSim(query: [[Float]], document: [[Float]]) throws -> Float {

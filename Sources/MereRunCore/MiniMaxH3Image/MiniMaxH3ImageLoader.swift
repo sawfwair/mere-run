@@ -11,7 +11,7 @@ enum MiniMaxH3ImageLoader {
         try loadShards(resources, component: "transformer", model: model,
             excludedParameters: ["final_layer.pdd_weight", "final_layer.pdd_bias"], nativeQ8: native != nil) { key, value in
             if key == "rope.inv_freq" || key.hasPrefix("final_layer.video_out.") { return [] }
-            return MiniMaxH3ModelLoader.releasedBF16TransformerWeight(key: key, value: value, omitCachedAdaLNWeights: false)
+            return MiniMaxH3SharedWeightHelpers.releasedBF16TransformerWeight(key: key, value: value, omitCachedAdaLNWeights: false)
         }
         let heads = try MLX.loadArrays(url: resources.rootURL.appending(path: "pdd_fused_heads.safetensors"))
         guard Set(heads.keys) == ["video_out.weight", "video_out.bias"],
@@ -26,11 +26,11 @@ enum MiniMaxH3ImageLoader {
     }
 
     static func conditioner(_ resources: MiniMaxH3ImageResources) throws -> QwenVLEncoder {
-        let encoder = MiniMaxH3ModelLoader.makeConditioner()
+        let encoder = MiniMaxH3SharedWeightHelpers.makeConditioner()
         // Layer-50 activation conditioning never evaluates the stack's final output norm.
         try loadShards(resources, component: "text_encoder", model: encoder,
                        excludedParameters: ["textEncoder.encoder.norm.weight"], nativeQ8: try resources.mlxFormat() != nil) { key, value in
-            MiniMaxH3ModelLoader.conditionerWeight(key: MiniMaxH3ModelLoader.conditionerWeightKey(key), value: value)
+            MiniMaxH3SharedWeightHelpers.conditionerWeight(key: MiniMaxH3SharedWeightHelpers.conditionerWeightKey(key), value: value)
         }
         return encoder
     }

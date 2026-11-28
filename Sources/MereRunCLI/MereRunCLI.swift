@@ -1,7 +1,9 @@
 import ArgumentParser
 import MereRunRelayKit
+import MereRunVideo
 
 private let _mereRunCLIModelStoreBootstrap: Void = {
+    MereRunVideoRuntime.registerImageBackends()
     CLIModelStoreBootstrap.bootstrap(arguments: CommandLine.arguments)
 }()
 
@@ -23,6 +25,7 @@ struct MereRunCLI: AsyncParsableCommand {
         arguments: [String],
         admit: ([String]) throws -> Void = CLIProcessAdmissionBootstrap.acquireIfNeeded
     ) throws {
+        MereRunVideoRuntime.registerImageBackends()
         if let modelsRoot, !modelsRoot.isEmpty {
             CLIModelStoreBootstrap.applyOverridePath(modelsRoot)
         } else {

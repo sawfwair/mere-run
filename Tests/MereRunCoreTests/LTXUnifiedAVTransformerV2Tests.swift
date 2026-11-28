@@ -1,5 +1,6 @@
 import MLX
 @testable import MereRunCore
+@testable import MereRunVideo
 @testable import MereRunLTXModel
 import XCTest
 

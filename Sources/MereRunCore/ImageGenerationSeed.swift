@@ -2,8 +2,8 @@ import Foundation
 
 /// Preserve each runtime's default seed policy when a run records its seed
 /// before inference. Prompt-derived seeds use the existing FNV-1a algorithm.
-enum ImageGenerationSeed {
-    static func resolve(_ seed: UInt64?, prompt: String, backend: ImageGenerationBackend) -> UInt64 {
+package enum ImageGenerationSeed {
+    package static func resolve(_ seed: UInt64?, prompt: String, backend: ImageGenerationBackend) -> UInt64 {
         if let seed { return seed }
         switch backend {
         case .nemotronImage, .miniMaxH3Image, .flux2Klein, .flux3, .zImageTurbo, .qwenImageEdit, .qwenImage21, .cosmos3Super:

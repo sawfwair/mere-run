@@ -1,4 +1,5 @@
 import MLX
+@testable import MereRunVision
 import XCTest
 @testable import MereRunCore
 

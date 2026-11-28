@@ -134,7 +134,7 @@ public enum MiniMaxH3TurboAdapter {
         return inferenceRecipe(filename: url.lastPathComponent)
     }
 
-    static func isPremergedFastH3Artifact(_ url: URL) -> Bool {
+    package static func isPremergedFastH3Artifact(_ url: URL) -> Bool {
         (try? SafetensorsStreamingLoader.fileMetadata(url: url)["format"])
             == fastH3PremergedFormat
     }
@@ -156,13 +156,13 @@ public enum MiniMaxH3TurboAdapter {
         }
     }
 
-    enum SourceFormat: Equatable {
+    package enum SourceFormat: Equatable {
         case runtime
         case lightX2V
         case fastVideo
         case fastH3Premerged
 
-        var pairSuffixes: (String, String) {
+        package var pairSuffixes: (String, String) {
             switch self {
             case .runtime:
                 return (".lora_A.weight", ".lora_B.weight")
@@ -173,7 +173,7 @@ public enum MiniMaxH3TurboAdapter {
             }
         }
 
-        var expectedPairCount: Int {
+        package var expectedPairCount: Int {
             switch self {
             case .runtime:
                 return MiniMaxH3TurboAdapter.expectedPairCount
@@ -187,28 +187,43 @@ public enum MiniMaxH3TurboAdapter {
         }
     }
 
-    enum QKVBranch: String, CaseIterable {
+    package enum QKVBranch: String, CaseIterable {
         case query
         case key
         case value
     }
 
-    struct LoRAPair {
-        let down: MLXArray
-        let up: MLXArray
+    package struct LoRAPair {
+        package let down: MLXArray
+        package let up: MLXArray
+
+        package init(down: MLXArray, up: MLXArray) {
+            self.down = down
+            self.up = up
+        }
     }
 
-    struct Installation {
-        let pairCount: Int
-        let adaLNCache: MiniMaxH3AdaLNCache?
+    package struct Installation {
+        package let pairCount: Int
+        package let adaLNCache: MiniMaxH3AdaLNCache?
+
+        package init(pairCount: Int, adaLNCache: MiniMaxH3AdaLNCache?) {
+            self.pairCount = pairCount
+            self.adaLNCache = adaLNCache
+        }
     }
 
-    struct LightX2VTarget {
-        let modulePath: String
-        let qkvBranch: QKVBranch?
+    package struct LightX2VTarget {
+        package let modulePath: String
+        package let qkvBranch: QKVBranch?
+
+        package init(modulePath: String, qkvBranch: QKVBranch?) {
+            self.modulePath = modulePath
+            self.qkvBranch = qkvBranch
+        }
     }
 
-    enum AdapterError: LocalizedError {
+    package enum AdapterError: LocalizedError {
         case unrecognizedFormat(URL)
         case noPairs(URL)
         case unexpectedPairCount(expected: Int, actual: Int)
@@ -224,7 +239,7 @@ public enum MiniMaxH3TurboAdapter {
         case unexpectedAuxiliaryTensorCount(kind: String, expected: Int, actual: Int)
         case missingTargetParameter(String)
 
-        var errorDescription: String? {
+        package var errorDescription: String? {
             switch self {
             case .unrecognizedFormat(let url):
                 return "Unsupported MiniMax-H3 LoRA tensor format in \(url.path)."

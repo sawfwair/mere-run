@@ -1,4 +1,73 @@
 import Foundation
+
+public enum OlmoEarthModality: String, Codable, CaseIterable, Hashable, Sendable {
+    case sentinel2L2A = "sentinel2_l2a"
+    case sentinel1 = "sentinel1"
+    case landsat = "landsat"
+
+    public var inputTensorName: String {
+        switch self {
+        case .sentinel2L2A: "S2L2A"
+        case .sentinel1: "S1RTC"
+        case .landsat: "LANDSAT"
+        }
+    }
+
+    public var outputTensorName: String {
+        switch self {
+        case .sentinel2L2A: "S2L2A_EMBEDDINGS"
+        case .sentinel1: "S1RTC_EMBEDDINGS"
+        case .landsat: "LANDSAT_EMBEDDINGS"
+        }
+    }
+
+    public var channelCount: Int {
+        switch self {
+        case .sentinel2L2A: 12
+        case .sentinel1: 2
+        case .landsat: 11
+        }
+    }
+
+    public var bandOrder: [String] {
+        switch self {
+        case .sentinel2L2A:
+            ["B02", "B03", "B04", "B08", "B05", "B06", "B07", "B8A", "B11", "B12", "B01", "B09"]
+        case .sentinel1:
+            ["vv", "vh"]
+        case .landsat:
+            ["B8", "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B9", "B10", "B11"]
+        }
+    }
+}
+
+public struct OlmoEarthArchitecture: Codable, Equatable, Sendable {
+    public let embeddingDimension: Int
+    public let headCount: Int
+    public let depth: Int
+    public let mlpRatio: Float
+    public let maximumSequenceLength: Int
+    public let maximumPatchSize: Int
+    public let patchHiddenDimension: Int
+    public let positionEncoding: String
+    public let temporalCoordinateScale: Float
+
+    public var headDimension: Int { embeddingDimension / headCount }
+    public var feedForwardDimension: Int { Int(Float(embeddingDimension) * mlpRatio) }
+
+    private enum CodingKeys: String, CodingKey {
+        case embeddingDimension = "embedding_dimension"
+        case headCount = "head_count"
+        case depth
+        case mlpRatio = "mlp_ratio"
+        case maximumSequenceLength = "maximum_sequence_length"
+        case maximumPatchSize = "maximum_patch_size"
+        case patchHiddenDimension = "patch_hidden_dimension"
+        case positionEncoding = "position_encoding"
+        case temporalCoordinateScale = "temporal_coordinate_scale"
+    }
+}
+
 @preconcurrency import MLX
 
 public enum OlmoEarthVariant: String, Codable, CaseIterable, Sendable {
@@ -384,25 +453,5 @@ public enum OlmoEarthResources {
                 actual: configuration.scalarCount
             )
         }
-    }
-
-    public static func loadModel(from checkpoint: OlmoEarthCheckpoint) throws -> OlmoEarthModel {
-        let arrays = try MLX.loadArrays(url: checkpoint.weightsURL)
-        guard arrays.count == checkpoint.source.tensorCount else {
-            throw OlmoEarthResourceError.tensorInventory(
-                expected: checkpoint.source.tensorCount,
-                actual: arrays.count
-            )
-        }
-        let scalarCount = arrays.values.reduce(0) { partial, value in
-            partial + value.shape.reduce(1, *)
-        }
-        guard scalarCount == checkpoint.source.scalarCount else {
-            throw OlmoEarthResourceError.scalarInventory(
-                expected: checkpoint.source.scalarCount,
-                actual: scalarCount
-            )
-        }
-        return try OlmoEarthModel(weights: arrays, architecture: checkpoint.source.architecture)
     }
 }

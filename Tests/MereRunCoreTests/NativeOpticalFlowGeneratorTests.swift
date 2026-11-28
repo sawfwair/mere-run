@@ -1,4 +1,5 @@
 import Foundation
+import MereRunVision
 import MereRunCore
 import XCTest
 

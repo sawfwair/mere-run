@@ -22,7 +22,7 @@ public enum ClefCatalog {
     }
 
     public static func validate(root: URL, fileManager: FileManager = .default) -> [URL] {
-        if (try? isOmni(root: root)) == true { return ClefOmniResources(root: root).validate(fileManager: fileManager) }
+        if (try? isOmni(root: root)) == true { return ClefOmniCatalog.validate(root: root, fileManager: fileManager) }
         var missing = Q35Resources(rootURL: root).validate(fileManager: fileManager)
         missing += ["tokenizer_config.json", "processor_config.json", "joint_head_config.json", "joint_head.safetensors"]
             .map { root.appending(path: $0) }.filter { !fileManager.fileExists(atPath: $0.path) }
@@ -42,10 +42,12 @@ public enum ClefCatalog {
     }
 }
 
-struct ClefResources {
-    let root: URL
+package struct ClefResources {
+    package let root: URL
 
-    func configuration() throws -> (backbone: Q35Config, head: ClefHeadConfiguration, processor: ClefProcessorConfiguration) {
+    package init(root: URL) { self.root = root }
+
+    package func configuration() throws -> (backbone: Q35Config, head: ClefHeadConfiguration, processor: ClefProcessorConfiguration) {
         let decoder = JSONDecoder()
         let backbone = try decoder.decode(Q35Config.self, from: Data(contentsOf: root.appending(path: "config.json")))
         let head = try decoder.decode(ClefHeadConfiguration.self, from: Data(contentsOf: root.appending(path: "joint_head_config.json")))
@@ -65,24 +67,24 @@ struct ClefResources {
     }
 }
 
-struct ClefProcessorConfiguration: Decodable {
-    struct Size: Decodable { let longest_edge: Int; let shortest_edge: Int }
-    struct Processor: Decodable {
-        let patch_size: Int
-        let temporal_patch_size: Int
-        let merge_size: Int
-        let image_mean: [Double]
-        let image_std: [Double]
-        let rescale_factor: Double
-        let size: Size
-        let fps: Double?
-        let min_frames: Int?
-        let max_frames: Int?
+package struct ClefProcessorConfiguration: Decodable {
+    package struct Size: Decodable { package let longest_edge: Int; package let shortest_edge: Int }
+    package struct Processor: Decodable {
+        package let patch_size: Int
+        package let temporal_patch_size: Int
+        package let merge_size: Int
+        package let image_mean: [Double]
+        package let image_std: [Double]
+        package let rescale_factor: Double
+        package let size: Size
+        package let fps: Double?
+        package let min_frames: Int?
+        package let max_frames: Int?
     }
-    let image_processor: Processor
-    let video_processor: Processor
+    package let image_processor: Processor
+    package let video_processor: Processor
 
-    func validate() throws {
+    package func validate() throws {
         for processor in [image_processor, video_processor] {
             guard processor.patch_size == 16, processor.temporal_patch_size == 2, processor.merge_size == 2,
                   processor.image_mean == [0.5, 0.5, 0.5], processor.image_std == [0.5, 0.5, 0.5],

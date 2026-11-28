@@ -294,7 +294,7 @@ extension Q35Generator {
         }
     }
 
-    nonisolated func makeLayerCaches(
+    package nonisolated func makeLayerCaches(
         config: Q35Config,
         kvCacheMode: RuntimeKVCacheMode = .default
     ) -> [Q35LayerCache?] {

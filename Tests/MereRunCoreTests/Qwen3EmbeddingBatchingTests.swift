@@ -1,4 +1,5 @@
 import XCTest
+@testable import MereRunTextUtilities
 @testable import MereRunCore
 
 final class Qwen3EmbeddingBatchingTests: XCTestCase {

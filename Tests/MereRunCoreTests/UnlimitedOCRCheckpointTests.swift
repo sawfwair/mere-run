@@ -1,3 +1,4 @@
+@testable import MereRunVision
 #if canImport(Metal)
 import Foundation
 import Metal

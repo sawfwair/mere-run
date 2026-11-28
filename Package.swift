@@ -201,29 +201,15 @@ mereRunCoreDependencies.append("MereRunQwenModel")
 mereRunCoreDependencies.append("MereRunKolibriModel")
 mereRunCoreDependencies.append("MereRunFlintModel")
 mereRunCoreDependencies.append("MereRunInkling2Model")
-mereRunCoreDependencies.append("MereRunUnlimitedOCRModel")
 mereRunCoreDependencies.append("MereRunNemotronBoltModel")
 mereRunCoreDependencies.append("MereRunGemmaModel")
-mereRunCoreDependencies.append("MereRunCoreMLModel")
 mereRunCoreDependencies.append("MereRunLTXModel")
 mereRunCoreDependencies.append("AudioCodecs")
 mereRunCoreDependencies.append("AudioDrama3Model")
 mereRunCoreDependencies.append("AudioHaruModel")
-mereRunCoreDependencies.append("AudioQwen3ASRModel")
 mereRunCoreDependencies.append(.product(name: "Crypto", package: "swift-crypto"))
 mereRunCoreDependencies.append(.product(name: "Transformers", package: "swift-transformers"))
-if !isLinuxPackage {
-  mereRunCoreDependencies.append(
-    .product(
-      name: "CONNXRuntime",
-      package: "swift-onnxruntime",
-      condition: .when(platforms: [.macOS])
-    )
-  )
-  mereRunCoreDependencies.append(
-    .target(name: "COnnxRuntimeCoreML", condition: .when(platforms: [.macOS]))
-  )
-}
+
 
 if hasMediaIOTarget {
   targets.append(
@@ -357,6 +343,10 @@ var mereRunCoreTestDependencies: [Target.Dependency] = [
   "MereRunCore",
   "MereRun3D",
   "MereRunMusic",
+  "MereRunGeo",
+  "MereRunVision",
+  "MereRunTextUtilities",
+  "MereRunVideo",
   "AudioCore",
   "AudioCodecs",
   "AudioSTT",
@@ -394,6 +384,10 @@ var mereRunCLIDependencies: [Target.Dependency] = [
   "MereRunCore",
   "MereRun3D",
   "MereRunMusic",
+  "MereRunGeo",
+  "MereRunVision",
+  "MereRunTextUtilities",
+  "MereRunVideo",
   "AudioCore",
   "AudioCodecs",
   "AudioSTT",
@@ -922,70 +916,50 @@ targets.append(
     dependencies: mereRunCoreDependencies,
     path: "Sources/MereRunCore",
     exclude: [
-      "README.md",
       "ACEStep/README.md",
       "CodeGen/README.md",
       "Cosmos3/README.md",
       "Decode/README.md",
       "DeepseekV4Flash/README.md",
       "DiffusionGemma/README.md",
-      "FaceAnalysis/README.md",
-      "FalconPerception/README.md",
+      "Flint/README.md",
       "Flux1/README.md",
       "Flux2Klein/README.md",
       "Flux3/README.md",
       "Gemma4/README.md",
-      "Embeddings/README.md",
-      "GLiNER/README.md",
       "HiDreamO1/README.md",
       "Ideogram4/README.md",
       "Inkling/README.md",
       "Inkling2/README.md",
       "Krea2/README.md",
-      "Laguna/README.md",
-      "Flint/README.md",
-      "MuseGlimmer/README.md",
-      "NemotronH/README.md",
-      "NemotronBolt/README.md",
-      "NemotronImage/README.md",
-      "NemotronOmni/README.md",
       "LFM2/README.md",
-      "LightOnOCR/README.md",
-      "UnlimitedOCR/README.md",
       "LTX/README.md",
+      "Laguna/README.md",
       "LoRA/README.md",
       "MLX/README.md",
-      "MultimodalEmbeddings/README.md",
       "MiniMaxH3/README.md",
       "MiniMaxH3Image/README.md",
-      "PrivacyFilter/README.md",
-      "Laya/README.md",
-      "Clef/README.md",
-      "Clairic/README.md",
-      "D1/README.md",
-      "RoFormer/README.md",
-      "Pose/README.md",
-      "OpticalFlow/README.md",
-      "OlmoEarth/README.md",
+      "MultimodalEmbeddings/README.md",
+      "MuseGlimmer/README.md",
+      "NemotronBolt/README.md",
+      "NemotronH/README.md",
+      "NemotronImage/README.md",
+      "NemotronOmni/README.md",
       "Psi/README.md",
       "Q35/README.md",
       "Quantization/README.md",
-      "QwenImageEdit/README.md",
       "QwenImage21/README.md",
       "QwenImageEdit/Model/Transformer/README.md",
       "QwenImageEdit/Model/VAE/README.md",
-      "SAM3/README.md",
+      "QwenImageEdit/README.md",
+      "README.md",
+      "RoFormer/README.md",
       "SenseNovaU15/README.md",
-      "SCAIL2/README.md",
       "Support/README.md",
-      "TESSERA/README.md",
-      "TerraMindFire/README.md",
-      "TerraMindFlood/README.md",
       "VLM/README.md",
-      "Wan2/README.md",
       "Woosh/README.md",
-      "ZImageI2L/README.md",
       "ZImageI2L/Model/README.md",
+      "ZImageI2L/README.md",
       "ZImageTurbo/README.md",
       "ZImageTurbo/Tokenizer/README.md",
       "ZImageTurbo/Util/README.md"
@@ -1086,6 +1060,162 @@ targets.append(
     ],
     swiftSettings: commonSwiftSettings,
     linkerSettings: mereRunMusicLinkerSettings
+  )
+)
+
+var mereRunGeoDependencies: [Target.Dependency] = ["MereRunCore"]
+mereRunGeoDependencies.append(contentsOf: mlxDependency("MLX"))
+mereRunGeoDependencies.append(contentsOf: mlxDependency("MLXFast"))
+mereRunGeoDependencies.append(contentsOf: mlxDependency("MLXNN"))
+targets.append(
+  .target(
+    name: "MereRunGeo",
+    dependencies: mereRunGeoDependencies,
+    path: "Sources/MereRunGeo",
+    exclude: [
+      "OlmoEarth/README.md",
+      "README.md",
+      "TESSERA/README.md",
+      "TerraMindFire/README.md",
+      "TerraMindFlood/README.md"
+    ],
+    swiftSettings: commonSwiftSettings,
+    linkerSettings: linuxNativeLinkerSettings
+  )
+)
+
+var mereRunVisionDependencies: [Target.Dependency] = [
+  "MereRunCore",
+  "MereRunDecode",
+  "MereRunQwenModel",
+  "MereRunUnlimitedOCRModel"
+]
+mereRunVisionDependencies.append(contentsOf: mlxDependency("MLX"))
+mereRunVisionDependencies.append(contentsOf: mlxDependency("MLXFast"))
+mereRunVisionDependencies.append(contentsOf: mlxDependency("MLXNN"))
+mereRunVisionDependencies.append(contentsOf: mlxDependency("MLXRandom"))
+mereRunVisionDependencies.append(.product(name: "Crypto", package: "swift-crypto"))
+mereRunVisionDependencies.append(.product(name: "Transformers", package: "swift-transformers"))
+if hasMediaIOTarget {
+  mereRunVisionDependencies.append("MediaIO")
+}
+if !isLinuxPackage {
+  mereRunVisionDependencies.append(
+    .product(
+      name: "CONNXRuntime",
+      package: "swift-onnxruntime",
+      condition: .when(platforms: [.macOS])
+    )
+  )
+  mereRunVisionDependencies.append(
+    .target(name: "COnnxRuntimeCoreML", condition: .when(platforms: [.macOS]))
+  )
+}
+var mereRunVisionLinkerSettings: [LinkerSetting] = linuxNativeLinkerSettings
+if !isLinuxPackage {
+  mereRunVisionLinkerSettings.append(.linkedFramework("Metal"))
+  mereRunVisionLinkerSettings.append(.linkedFramework("Vision"))
+  mereRunVisionLinkerSettings.append(.linkedFramework("ImageIO"))
+  mereRunVisionLinkerSettings.append(.linkedFramework("CoreVideo"))
+  mereRunVisionLinkerSettings.append(.linkedFramework("AVFoundation"))
+}
+targets.append(
+  .target(
+    name: "MereRunVision",
+    dependencies: mereRunVisionDependencies,
+    path: "Sources/MereRunVision",
+    exclude: [
+      "Clairic/README.md",
+      "FaceAnalysis/README.md",
+      "FalconPerception/README.md",
+      "LightOnOCR/README.md",
+      "OpticalFlow/README.md",
+      "Pose/README.md",
+      "README.md",
+      "SAM3/README.md",
+      "UnlimitedOCR/README.md"
+    ],
+    swiftSettings: commonSwiftSettings,
+    linkerSettings: mereRunVisionLinkerSettings
+  )
+)
+
+var mereRunTextUtilitiesDependencies: [Target.Dependency] = [
+  "MereRunCore",
+  "AudioCodecs",
+  "AudioQwen3ASRModel",
+  "MereRunCoreMLModel",
+  "MereRunD1Model",
+  "MereRunGLiNERModel",
+  "MereRunLayaModel",
+  "MereRunQwenModel",
+  "MereRunTensor"
+]
+mereRunTextUtilitiesDependencies.append(contentsOf: mlxDependency("MLX"))
+mereRunTextUtilitiesDependencies.append(contentsOf: mlxDependency("MLXFast"))
+mereRunTextUtilitiesDependencies.append(contentsOf: mlxDependency("MLXNN"))
+mereRunTextUtilitiesDependencies.append(contentsOf: mlxDependency("MLXRandom"))
+mereRunTextUtilitiesDependencies.append(.product(name: "Transformers", package: "swift-transformers"))
+if hasMediaIOTarget {
+  mereRunTextUtilitiesDependencies.append("MediaIO")
+}
+targets.append(
+  .target(
+    name: "MereRunTextUtilities",
+    dependencies: mereRunTextUtilitiesDependencies,
+    path: "Sources/MereRunTextUtilities",
+    exclude: [
+      "Clef/README.md",
+      "D1/README.md",
+      "Embeddings/README.md",
+      "GLiNER/README.md",
+      "Laya/README.md",
+      "PrivacyFilter/README.md",
+      "README.md"
+    ],
+    swiftSettings: commonSwiftSettings,
+    linkerSettings: linuxNativeLinkerSettings
+  )
+)
+
+var mereRunVideoDependencies: [Target.Dependency] = [
+  "MereRunCore",
+  "MereRunVision",
+  "MereRunContract",
+  "AudioCodecs"
+]
+mereRunVideoDependencies.append(contentsOf: mlxDependency("MLX"))
+mereRunVideoDependencies.append(contentsOf: mlxDependency("MLXFast"))
+mereRunVideoDependencies.append(contentsOf: mlxDependency("MLXNN"))
+mereRunVideoDependencies.append(contentsOf: mlxDependency("MLXRandom"))
+mereRunVideoDependencies.append(.product(name: "Transformers", package: "swift-transformers"))
+if hasMediaIOTarget {
+  mereRunVideoDependencies.append("MediaIO")
+}
+var mereRunVideoLinkerSettings: [LinkerSetting] = linuxNativeLinkerSettings
+if !isLinuxPackage {
+  mereRunVideoLinkerSettings.append(.linkedFramework("Metal"))
+  mereRunVideoLinkerSettings.append(.linkedFramework("Accelerate"))
+  mereRunVideoLinkerSettings.append(.linkedFramework("IOKit", .when(platforms: [.macOS])))
+}
+targets.append(
+  .target(
+    name: "MereRunVideo",
+    dependencies: mereRunVideoDependencies,
+    path: "Sources/MereRunVideo",
+    exclude: [
+      "Cosmos3/README.md",
+      "LTX/README.md",
+      "MiniMaxH3/README.md",
+      "README.md",
+      "SCAIL2/README.md",
+      "Wan2/README.md"
+    ],
+    resources: [
+      .process("Resources")
+    ],
+    swiftSettings: commonSwiftSettings,
+    linkerSettings: mereRunVideoLinkerSettings
   )
 )
 
@@ -1357,7 +1487,7 @@ targets.append(
 targets.append(
   .testTarget(
     name: "MereRunCLITests",
-    dependencies: ["MereRunCLI", "MereRun3D", "MereRunMusic", "MereRunEvaluation", "MediaIO", "AudioCore", "MereRunMLXTestSupport"],
+    dependencies: ["MereRunCLI", "MereRun3D", "MereRunMusic", "MereRunGeo", "MereRunVision", "MereRunTextUtilities", "MereRunVideo", "MereRunEvaluation", "MediaIO", "AudioCore", "MereRunMLXTestSupport"],
     path: "Tests/MereRunCLITests",
     resources: [
       .copy("Fixtures")

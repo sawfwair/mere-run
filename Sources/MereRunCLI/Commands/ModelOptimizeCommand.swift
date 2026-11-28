@@ -1,6 +1,7 @@
 import ArgumentParser
 import Foundation
 import MereRunCore
+import MereRunVideo
 
 struct ModelOptimize: ParsableCommand {
     static let configuration = CommandConfiguration(

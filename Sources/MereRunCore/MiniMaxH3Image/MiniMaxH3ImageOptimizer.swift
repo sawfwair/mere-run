@@ -96,7 +96,7 @@ public enum MiniMaxH3ImageOptimizer {
     }
 
     private static func linearWeightKeys(component: String) -> Set<String> {
-        let model: Module = component == "transformer" ? MiniMaxH3ImageTransformer() : MiniMaxH3ModelLoader.makeConditioner()
+        let model: Module = component == "transformer" ? MiniMaxH3ImageTransformer() : MiniMaxH3SharedWeightHelpers.makeConditioner()
         return Set(model.leafModules().flattened().compactMap { path, module in
             module is Linear ? "\(path).weight" : nil
         })
@@ -112,9 +112,9 @@ public enum MiniMaxH3ImageOptimizer {
         let mapped = raw.flatMap { key, value -> [(String, MLXArray)] in
             if component == "transformer" {
                 if key == "rope.inv_freq" || key.hasPrefix("final_layer.video_out.") { return [] }
-                return MiniMaxH3ModelLoader.releasedBF16TransformerWeight(key: key, value: value, omitCachedAdaLNWeights: true)
+                return MiniMaxH3SharedWeightHelpers.releasedBF16TransformerWeight(key: key, value: value, omitCachedAdaLNWeights: true)
             }
-            return MiniMaxH3ModelLoader.conditionerWeight(key: MiniMaxH3ModelLoader.conditionerWeightKey(key), value: value)
+            return MiniMaxH3SharedWeightHelpers.conditionerWeight(key: MiniMaxH3SharedWeightHelpers.conditionerWeightKey(key), value: value)
         }
         let arrays = quantizeArrays(Dictionary(uniqueKeysWithValues: mapped), linearKeys: linearKeys)
         if !arrays.isEmpty { try MLX.save(arrays: arrays, url: url) }

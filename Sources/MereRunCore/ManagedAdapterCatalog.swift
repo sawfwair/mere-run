@@ -223,7 +223,7 @@ public enum ManagedAdapterCatalog {
             version: String(scail2LightX2VFourStepRevision.prefix(12)),
             summary: "Apache-2.0 four-step distilled Wan 2.1 I2V adapter for native SCAIL-2.",
             baseModelID: SCAIL2Resources.modelID,
-            format: SCAIL2DistilledAdapter.format,
+            format: SCAIL2Resources.distilledAdapterFormat,
             license: "Apache-2.0",
             upstreamRevision: scail2LightX2VFourStepRevision,
             releaseManifestURL: URL(

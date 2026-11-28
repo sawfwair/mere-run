@@ -1,4 +1,5 @@
 import Foundation
+import MereRunVideo
 import MereRunRelayKit
 import ArgumentParser
 import MereRunContract

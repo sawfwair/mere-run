@@ -43,9 +43,10 @@ It also defines two executable products:
   The Linux package graph omits it.
 
 Many runtime targets are internal: they build as part of the package but
-aren't products. They include the modality targets `MereRun3D` and
-`MereRunMusic` (carved above `MereRunCore` so on-device consumers don't link
-desktop 3D or music runtimes), along with `MereRunCoreMLModel`,
+aren't products. They include the modality targets `MereRun3D`, `MereRunMusic`,
+`MereRunGeo`, `MereRunVision`, `MereRunTextUtilities`, and `MereRunVideo`
+(carved above `MereRunCore` so on-device consumers don't link desktop 3D,
+music, geo, vision, text-utility, or video runtimes), along with `MereRunCoreMLModel`,
 `MereRunD1Model`, `MereRunFlintModel`, `MereRunInkling2Model`,
 `MereRunGLiNERModel`, `MereRunKolibriModel`, `MereRunLayaModel`,
 `MereRunNemotronBoltModel`, `AudioBreezeTTSModel`, `AudioDrama3Model`,

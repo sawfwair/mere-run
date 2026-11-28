@@ -1,4 +1,5 @@
 import XCTest
+@testable import MereRunVision
 @testable import MereRunCore
 
 final class FalconPerceptionCoordinateDecoderTests: XCTestCase {

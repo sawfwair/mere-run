@@ -6,19 +6,19 @@ import ImageIO
 import MediaIO
 import MLX
 
-enum QwenVLImageLoader {
+package enum QwenVLImageLoader {
 #if canImport(CoreGraphics)
-    static func loadCGImage(url: URL) -> CGImage? {
+    package static func loadCGImage(url: URL) -> CGImage? {
         guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
         return CGImageSourceCreateImageAtIndex(src, 0, nil)
     }
 #endif
 
     /// Default pixel constraints - nil means no constraint (matches mlx-community model configs)
-    static let defaultMinPixels: Int? = nil
-    static let defaultMaxPixels: Int? = nil
+    package static let defaultMinPixels: Int? = nil
+    package static let defaultMaxPixels: Int? = nil
 
-    static func pixelValues(
+    package static func pixelValues(
         imageURL: URL,
         minPixels: Int? = defaultMinPixels,
         maxPixels: Int? = defaultMaxPixels,
@@ -35,7 +35,7 @@ enum QwenVLImageLoader {
         )
     }
 
-    static func pixelValues(
+    package static func pixelValues(
         image: MediaImage,
         minPixels: Int? = defaultMinPixels,
         maxPixels: Int? = defaultMaxPixels,
@@ -57,7 +57,7 @@ enum QwenVLImageLoader {
     }
 
 #if canImport(CoreGraphics)
-    static func pixelValues(
+    package static func pixelValues(
         cgImage: CGImage,
         minPixels: Int? = defaultMinPixels,
         maxPixels: Int? = defaultMaxPixels,

@@ -1,4 +1,5 @@
 import ArgumentParser
+import MereRunTextUtilities
 import Foundation
 import MereRunCore
 

@@ -1,4 +1,5 @@
 import Foundation
+@testable import MereRunVideo
 import MediaIO
 import MLX
 import MLXNN

@@ -1,4 +1,5 @@
 import XCTest
+@testable import MereRunVideo
 import MLX
 import MLXNN
 import MLXRandom

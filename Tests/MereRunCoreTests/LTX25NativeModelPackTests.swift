@@ -2,6 +2,7 @@ import Foundation
 import MLX
 import XCTest
 @testable import MereRunCore
+@testable import MereRunVideo
 @testable import MereRunLTXModel
 
 final class LTX25NativeModelPackTests: MereRunCoreTestCase {

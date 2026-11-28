@@ -1,4 +1,16 @@
 import Foundation
+
+package enum ClairicError: LocalizedError {
+    case invalid(String)
+    case unsupported(String)
+    case inference(String)
+
+    package var errorDescription: String? {
+        switch self {
+        case .invalid(let message), .unsupported(let message), .inference(let message): message
+        }
+    }
+}
 import MereRunQwenModel
 
 public enum ClairicCatalog {
@@ -35,7 +47,7 @@ public enum ClairicCatalog {
     private static let flashShardPrefix = "model.safetensors-"
     private static let standardShardPrefix = "model-"
 
-    static func validate(root: URL, fileManager: FileManager) -> [URL] {
+    package static func validate(root: URL, fileManager: FileManager) -> [URL] {
         let missing = required.map { root.appending(path: $0) }.filter { !fileManager.fileExists(atPath: $0.path) }
         if !missing.isEmpty { return missing }
         let indexURL = root.appending(path: "model.safetensors.index.json")
@@ -48,7 +60,7 @@ public enum ClairicCatalog {
         return []
     }
 
-    static func shardFilenames(at url: URL) throws -> [String] {
+    package static func shardFilenames(at url: URL) throws -> [String] {
         let index = try JSONDecoder().decode(HFSafetensorsIndex.self, from: Data(contentsOf: url))
         let files = Set(index.weightMap.values)
         guard index.weightMap["lm_head.weight"] != nil, !files.isEmpty, files.allSatisfy({
@@ -61,15 +73,15 @@ public enum ClairicCatalog {
     }
 }
 
-struct ClairicConfiguration {
-    struct Processor: Decodable {
-        struct Size: Decodable { let longest_edge: Int; let shortest_edge: Int }
-        let size: Size
-        let patch_size: Int
-        let temporal_patch_size: Int
-        let merge_size: Int
-        let image_mean: [Double]
-        let image_std: [Double]
+package struct ClairicConfiguration {
+    package struct Processor: Decodable {
+        package struct Size: Decodable { package let longest_edge: Int; package let shortest_edge: Int }
+        package let size: Size
+        package let patch_size: Int
+        package let temporal_patch_size: Int
+        package let merge_size: Int
+        package let image_mean: [Double]
+        package let image_std: [Double]
     }
 
     private struct HeadIdentity: Decodable {
@@ -78,11 +90,11 @@ struct ClairicConfiguration {
         let answer_slots: Bool
     }
 
-    let backbone: Q35Config
-    let processor: Processor
-    let isFlash: Bool
+    package let backbone: Q35Config
+    package let processor: Processor
+    package let isFlash: Bool
 
-    init(root: URL) throws {
+    package init(root: URL) throws {
         let decoder = JSONDecoder()
         backbone = try decoder.decode(Q35Config.self, from: Data(contentsOf: root.appending(path: "config.json")))
         processor = try decoder.decode(Processor.self, from: Data(contentsOf: root.appending(path: "preprocessor_config.json")))

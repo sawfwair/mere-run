@@ -1,4 +1,5 @@
 import MereRunCore
+import MereRunVideo
 
 struct CLIVideoGenerationPresentation: Sendable {
     let quiet: Bool

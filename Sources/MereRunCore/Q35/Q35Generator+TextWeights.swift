@@ -7,7 +7,7 @@ import Darwin
 #endif
 
 extension Q35Generator {
-    nonisolated func loadTextWeights(
+    package nonisolated func loadTextWeights(
         into q35Model: Q35Model,
         from resources: Q35Resources,
         groupSize: Int,

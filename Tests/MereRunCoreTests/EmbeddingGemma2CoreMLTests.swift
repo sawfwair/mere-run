@@ -1,4 +1,5 @@
 import XCTest
+@testable import MereRunTextUtilities
 import MereRunCoreMLModel
 @testable import MereRunCore
 

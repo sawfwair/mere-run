@@ -74,14 +74,24 @@ enum Q35DecodePath: Equatable {
     case pipelined
 }
 
-struct Q35VisionReplacement {
-    let embeddings: MLXArray
-    let gridTHW: (Int, Int, Int)
+package struct Q35VisionReplacement {
+    package let embeddings: MLXArray
+    package let gridTHW: (Int, Int, Int)
+
+    package init(embeddings: MLXArray, gridTHW: (Int, Int, Int)) {
+        self.embeddings = embeddings
+        self.gridTHW = gridTHW
+    }
 }
 
-struct Q35MRoPEPositionData {
-    let positionIds: MLXArray
-    let ropeDelta: Int
+package struct Q35MRoPEPositionData {
+    package let positionIds: MLXArray
+    package let ropeDelta: Int
+
+    package init(positionIds: MLXArray, ropeDelta: Int) {
+        self.positionIds = positionIds
+        self.ropeDelta = ropeDelta
+    }
 }
 
 final class Q35BatchedDecodeRow: @unchecked Sendable {

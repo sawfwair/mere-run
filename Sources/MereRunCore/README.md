@@ -46,6 +46,15 @@ Core retains resource loading and generation for these families.
   `MiniMaxMusic3`, `YuE2`, `MagentaRT2`, `MuScriptor`, `RoFormer`, `MMAudio`,
   `Woosh`, `APBWE`, `UniverSR`) live in `MereRunMusic`; Core retains their
   resource metadata and bundled configuration definitions.
+- Earth-observation runtimes (`OlmoEarth`, `TESSERA`, `TerraMind`) live in
+  `MereRunGeo`.
+- Vision-specialist runtimes (`SAM3`, `FalconPerception`, `LightOnOCR`,
+  `UnlimitedOCR`, `Clairic`, `FaceAnalysis`, `Pose`, `OpticalFlow`) live in
+  `MereRunVision`.
+- Text-utility and embedding runtimes (`Embeddings`, `PrivacyFilter`, `Clef`,
+  `GLiNER`, `D1`, `Laya`) live in `MereRunTextUtilities`.
+- Video and world generation runtimes (`LTX`, `Wan2`, `MiniMaxH3`, `Cosmos3`,
+  `SCAIL2`, and `VideoGenerationOperation*`) live in `MereRunVideo`.
 - `ManagedModelCatalog.swift`: ordered catalog assembly and model lookup.
   `ManagedModelCatalog+*.swift` keeps definitions, pinned sources, and usage terms
   with their model families. Companion models remain discoverable by lookup

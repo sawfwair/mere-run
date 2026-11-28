@@ -20,6 +20,18 @@ public enum ImageGenerationEvent: Sendable {
 /// Owns the image operation's preparation, execution, and terminal result. The
 /// executor owns admission and runtime residency; this layer never acquires a
 /// second machine permit or unloads a runtime borrowed from a resident pool.
+public protocol Cosmos3SuperUnloadableImageGenerator: ImageGenerator {
+    func unload()
+}
+
+public enum Cosmos3SuperImageBackendError: LocalizedError, Sendable {
+    case unavailable
+
+    public var errorDescription: String? {
+        "Cosmos3-Super text-to-image backend requires MereRunVideo to be registered."
+    }
+}
+
 public enum ImageGenerationOperation {
     public typealias Executor = @Sendable (
         ImageGenerationBackend, GenerationRequest, (@Sendable (GenerationProgress) -> Void)?
@@ -158,7 +170,7 @@ public enum ImageGenerationOperation {
         case .qwenImage21:
             return try await QwenImage21Generator().generate(request, progressHandler: progressHandler)
         case .cosmos3Super:
-            let generator = Cosmos3SuperImageGenerator()
+            let generator = try Self.makeCosmos3SuperGenerator()
             defer { generator.unload() }
             return try await generator.generate(request, progressHandler: progressHandler)
         case .qwenImageEdit:
@@ -167,6 +179,27 @@ public enum ImageGenerationOperation {
                 try await generator.generate(request, progressHandler: progressHandler)
             } cleanup: { await generator.clearCache() }
         }
+    }
+
+    private static let cosmos3SuperBackendLock = NSLock()
+    private nonisolated(unsafe) static var cosmos3SuperGeneratorFactory: (@Sendable () -> any Cosmos3SuperUnloadableImageGenerator)?
+
+    package static func registerCosmos3SuperGeneratorFactory(
+        _ factory: @escaping @Sendable () -> any Cosmos3SuperUnloadableImageGenerator
+    ) {
+        cosmos3SuperBackendLock.lock()
+        defer { cosmos3SuperBackendLock.unlock() }
+        cosmos3SuperGeneratorFactory = factory
+    }
+
+    private static func makeCosmos3SuperGenerator() throws -> any Cosmos3SuperUnloadableImageGenerator {
+        cosmos3SuperBackendLock.lock()
+        let factory = cosmos3SuperGeneratorFactory
+        cosmos3SuperBackendLock.unlock()
+        guard let factory else {
+            throw Cosmos3SuperImageBackendError.unavailable
+        }
+        return factory()
     }
 
     private static func withCleanup(
