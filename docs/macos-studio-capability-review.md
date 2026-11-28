@@ -256,11 +256,9 @@ These account for the other 31 uncovered commands. No action is needed.
 `executor` (12), and `relay serve` are deliberately delegated. Studio ships
 `graphStudio` and `nodeConsole` as `externalURL` templates pointing at
 `studio.mere.run/app` and `relay.mere.run`, both declared through
-`StudioProductBoundary`. `docs/macos-studio-roadmap.md` records the decision
-("Graph Studio and Node remain explicit external boundaries"), and
-`apps/macos/README.md` restates it: Relay owns node identity, placement,
-scheduling policy, and fleet telemetry, and the app links to the Relay console
-instead of copying those controls.
+`StudioProductBoundary`. `apps/macos/README.md` records the decision: Relay owns
+node identity, placement, scheduling policy, and fleet telemetry, and the app
+links to the Relay console instead of copying those controls.
 
 **Aliases already covered — 3 commands.** `vision image-to-3d`,
 `vision image-to-3d-trellis2`, and `vision image-to-3d-multiview` are VFX
@@ -295,9 +293,9 @@ that Studio compiles against, so the app has no need to shell out for it.
    `loadConfigurationSummary()` and `loadConfigurationPath()`. `speech listen`
    and `vision serve` are typed resident-service surfaces.
 
-4. **Stale counts corrected.** `docs/macos-studio-roadmap.md` described the app
-   as consuming an "89-command capability contract"; it now names the current
-   127 and records the external boundaries as named exemptions.
+4. **Stale counts corrected.** The Studio roadmap, since retired, described the
+   app as consuming an "89-command capability contract". The contract now has
+   127 commands, with the external boundaries recorded as named exemptions.
 
 ## Where the closed gaps live now
 

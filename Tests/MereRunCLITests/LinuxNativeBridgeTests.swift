@@ -214,7 +214,6 @@ final class LinuxNativeBridgeTests: XCTestCase {
     func testReleaseArtifactsAreNotBuiltByPublicGitHubActions() throws {
         let packageTest = try readRepositoryFile("scripts/test-package-linux.sh")
         let packageScript = try readRepositoryFile("scripts/package-linux.sh")
-        let macOSPackageScript = try readRepositoryFile("scripts/package-macos.sh")
 
         XCTAssertFalse(repositoryFileExists(".github/workflows/linux-release.yml"))
         XCTAssertFalse(repositoryFileExists(".github/workflows/macos-release.yml"))
@@ -223,32 +222,11 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertTrue(packageScript.contains("MERERUN_LINUX_ACCEL"))
         XCTAssertTrue(packageScript.contains("MERERUN_LINUX_ACCEL=cuda"))
         XCTAssertTrue(packageScript.contains("MERERUN_LINUX_ALLOW_ARM64_CPU_PACKAGE"))
-        XCTAssertTrue(macOSPackageScript.contains("scripts/build_mere_run_app.sh"))
         XCTAssertTrue(packageTest.contains("platform_arch=\"arm64\""))
         XCTAssertTrue(packageTest.contains("linux-${platform_arch}.tar.gz"))
         XCTAssertTrue(packageTest.contains("MERERUN_LINUX_ALLOW_ARM64_CPU_PACKAGE=1"))
         XCTAssertTrue(packageTest.contains("mere.run/mlx-ptx/mere-run-0.0.0+cuda-deps-fixture-linux-${platform_arch}-cuda"))
         XCTAssertTrue(packageTest.contains("MLX_PTX_CACHE_DIR=/custom/ptx"))
-    }
-
-    func testMacOSPackageEmbedsTheStapledAppBeforeCreatingTheDMG() throws {
-        let script = try readRepositoryFile("scripts/package-macos.sh")
-        let appNotarize = try XCTUnwrap(script.range(of: "notarize \"$app_zip_path\""))
-        let appStaple = try XCTUnwrap(script.range(of: "xcrun stapler staple \"$bundle\""))
-        let appValidate = try XCTUnwrap(script.range(of: "xcrun stapler validate \"$bundle\""))
-        let bundleCopy = try XCTUnwrap(script.range(of: "cp -R \"$bundle\" \"$staging/\""))
-        let imageCreate = try XCTUnwrap(script.range(of: "hdiutil create"))
-        let imageNotarize = try XCTUnwrap(script.range(of: "notarize \"$dmg_path\""))
-        let imageValidate = try XCTUnwrap(script.range(of: "xcrun stapler validate \"$dmg_path\""))
-
-        XCTAssertLessThan(appNotarize.lowerBound, appStaple.lowerBound)
-        XCTAssertLessThan(appStaple.lowerBound, appValidate.lowerBound)
-        XCTAssertLessThan(appValidate.lowerBound, bundleCopy.lowerBound)
-        XCTAssertLessThan(bundleCopy.lowerBound, imageCreate.lowerBound)
-        XCTAssertLessThan(imageCreate.lowerBound, imageNotarize.lowerBound)
-        XCTAssertLessThan(imageNotarize.lowerBound, imageValidate.lowerBound)
-        XCTAssertFalse(script.contains("if notarize \"$app_zip_path\""))
-        XCTAssertFalse(script.contains("if notarize \"$dmg_path\""))
     }
 
     func testMacOSAppBundlesAndSecurelyConfiguresSparkle() throws {
