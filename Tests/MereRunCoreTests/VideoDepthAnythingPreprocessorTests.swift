@@ -1,4 +1,5 @@
 import MLX
+import MereRun3D
 import MediaIO
 import MereRunCore
 import XCTest

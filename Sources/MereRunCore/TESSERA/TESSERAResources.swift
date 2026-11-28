@@ -1,4 +1,49 @@
 import Foundation
+
+public struct TESSERAArchitecture: Codable, Equatable, Sendable {
+    public let representationDimension: Int
+    public let latentDimension: Int
+    public let layerCount: Int
+    public let headCount: Int
+    public let feedForwardDimension: Int
+    public let maximumSequenceLength: Int
+    public let qkNormalization: Bool?
+    public let fusionLayerCount: Int?
+
+    public var hiddenDimension: Int { latentDimension * 4 }
+
+    public init(
+        representationDimension: Int,
+        latentDimension: Int,
+        layerCount: Int,
+        headCount: Int,
+        feedForwardDimension: Int,
+        maximumSequenceLength: Int,
+        qkNormalization: Bool? = nil,
+        fusionLayerCount: Int? = nil
+    ) {
+        self.representationDimension = representationDimension
+        self.latentDimension = latentDimension
+        self.layerCount = layerCount
+        self.headCount = headCount
+        self.feedForwardDimension = feedForwardDimension
+        self.maximumSequenceLength = maximumSequenceLength
+        self.qkNormalization = qkNormalization
+        self.fusionLayerCount = fusionLayerCount
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case representationDimension = "representation_dimension"
+        case latentDimension = "latent_dimension"
+        case layerCount = "layer_count"
+        case headCount = "head_count"
+        case feedForwardDimension = "feed_forward_dimension"
+        case maximumSequenceLength = "maximum_sequence_length"
+        case qkNormalization = "qk_normalization"
+        case fusionLayerCount = "fusion_layer_count"
+    }
+}
+
 @preconcurrency import MLX
 
 public enum TESSERAVariant: String, Codable, CaseIterable, Sendable {
@@ -409,25 +454,5 @@ public enum TESSERAResources {
                 actual: configuration.scalarCount
             )
         }
-    }
-
-    public static func loadModel(from checkpoint: TESSERACheckpoint) throws -> TESSERAModel {
-        let arrays = try MLX.loadArrays(url: checkpoint.weightsURL)
-        guard arrays.count == checkpoint.source.tensorCount else {
-            throw TESSERAResourceError.tensorInventory(
-                expected: checkpoint.source.tensorCount,
-                actual: arrays.count
-            )
-        }
-        let scalarCount = arrays.values.reduce(0) { partial, value in
-            partial + value.shape.reduce(1, *)
-        }
-        guard scalarCount == checkpoint.source.scalarCount else {
-            throw TESSERAResourceError.scalarInventory(
-                expected: checkpoint.source.scalarCount,
-                actual: scalarCount
-            )
-        }
-        return try TESSERAModel(weights: arrays, architecture: checkpoint.source.architecture)
     }
 }

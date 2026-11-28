@@ -1,4 +1,5 @@
 import Foundation
+@testable import MereRunTextUtilities
 import XCTest
 @testable import MereRunCore
 

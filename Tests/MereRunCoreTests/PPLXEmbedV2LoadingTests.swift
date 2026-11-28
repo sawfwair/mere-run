@@ -1,4 +1,5 @@
 import Foundation
+@testable import MereRunTextUtilities
 import MLX
 import MLXNN
 import MediaIO

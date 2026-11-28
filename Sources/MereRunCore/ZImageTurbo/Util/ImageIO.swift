@@ -17,7 +17,7 @@ public enum QwenImageIOError: Error {
 
 public enum QwenImageIO {
 #if canImport(CoreGraphics)
-  static func resizedCGImage(
+  package static func resizedCGImage(
     from image: CGImage,
     width: Int,
     height: Int,

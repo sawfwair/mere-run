@@ -1,4 +1,5 @@
 import ArgumentParser
+import MereRunMusic
 import AudioCodecs
 import Foundation
 import MereRunCore

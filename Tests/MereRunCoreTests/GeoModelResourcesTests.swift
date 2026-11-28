@@ -1,4 +1,5 @@
 import XCTest
+@testable import MereRunGeo
 @testable import MereRunCore
 
 final class GeoModelResourcesTests: XCTestCase {

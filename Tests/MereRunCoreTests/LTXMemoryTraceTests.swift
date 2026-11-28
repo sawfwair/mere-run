@@ -1,5 +1,6 @@
 import XCTest
 @testable import MereRunCore
+@testable import MereRunVideo
 @testable import MereRunLTXModel
 
 final class LTXMemoryTraceTests: XCTestCase {

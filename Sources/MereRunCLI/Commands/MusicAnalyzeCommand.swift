@@ -1,4 +1,5 @@
 import ArgumentParser
+import MereRunMusic
 import Foundation
 import MLX
 import MereRunCore

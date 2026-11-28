@@ -2,7 +2,7 @@ import Foundation
 import MLX
 
 extension MiniMaxH3AdaLNCache {
-    func save(to url: URL, replacing: Bool) throws {
+    package func save(to url: URL, replacing: Bool) throws {
         var arrays = [
             "time_embeddings": timeEmbeddings,
             "final_modulations": finalModulations,
@@ -34,7 +34,7 @@ extension MiniMaxH3AdaLNCache {
         try FileManager.default.moveItem(at: temporaryURL, to: url)
     }
 
-    static func load(
+    package static func load(
         from url: URL,
         configuration: MiniMaxH3TransformerConfiguration,
         videoSchedule: MiniMaxH3Schedule,
@@ -91,11 +91,11 @@ extension MiniMaxH3AdaLNCache {
     }
 }
 
-struct MiniMaxH3AdaLNCachePack: Codable, Sendable {
-    struct Schedule: Codable, Hashable, Sendable {
-        let pointCount: Int
-        let videoFlowShift: Float
-        let audioFlowShift: Float
+package struct MiniMaxH3AdaLNCachePack: Codable, Sendable {
+    package struct Schedule: Codable, Hashable, Sendable {
+        package let pointCount: Int
+        package let videoFlowShift: Float
+        package let audioFlowShift: Float
 
         enum CodingKeys: String, CodingKey {
             case pointCount = "point_count"
@@ -103,21 +103,21 @@ struct MiniMaxH3AdaLNCachePack: Codable, Sendable {
             case audioFlowShift = "audio_flow_shift"
         }
 
-        var filename: String {
+        package var filename: String {
             if self == Self(pointCount: 31, videoFlowShift: 12, audioFlowShift: 3) {
                 return MiniMaxH3AdaLNCache.filename
             }
             return "adaln_cache-p\(pointCount)-v\(Self.label(videoFlowShift))-a\(Self.label(audioFlowShift)).safetensors"
         }
 
-        func schedules() throws -> (video: MiniMaxH3Schedule, audio: MiniMaxH3Schedule) {
+        package func schedules() throws -> (video: MiniMaxH3Schedule, audio: MiniMaxH3Schedule) {
             (
                 try MiniMaxH3Schedule(pointCount: pointCount, shift: videoFlowShift),
                 try MiniMaxH3Schedule(pointCount: pointCount, shift: audioFlowShift)
             )
         }
 
-        func matches(video: MiniMaxH3Schedule, audio: MiniMaxH3Schedule) -> Bool {
+        package func matches(video: MiniMaxH3Schedule, audio: MiniMaxH3Schedule) -> Bool {
             guard let schedules = try? schedules() else { return false }
             return schedules.video.sigmas == video.sigmas && schedules.audio.sigmas == audio.sigmas
         }
@@ -127,11 +127,11 @@ struct MiniMaxH3AdaLNCachePack: Codable, Sendable {
         }
     }
 
-    struct Entry: Codable, Hashable, Sendable {
-        let schedule: Schedule
-        let filename: String
-        let byteCount: Int64
-        let sha256: String
+    package struct Entry: Codable, Hashable, Sendable {
+        package let schedule: Schedule
+        package let filename: String
+        package let byteCount: Int64
+        package let sha256: String
 
         enum CodingKeys: String, CodingKey {
             case schedule
@@ -141,16 +141,16 @@ struct MiniMaxH3AdaLNCachePack: Codable, Sendable {
         }
     }
 
-    struct Selection {
-        let cache: MiniMaxH3AdaLNCache
-        let exact: Bool
-        let sourceSchedule: Schedule
+    package struct Selection {
+        package let cache: MiniMaxH3AdaLNCache
+        package let exact: Bool
+        package let sourceSchedule: Schedule
     }
 
-    static let filename = "adaln_cache.index.json"
-    static let schemaVersion = 1
-    static let format = "mere.run.minimax-h3-adaln-cache-pack"
-    static let productionSchedules = [5, 9, 12, 16, 21, 31].map {
+    package static let filename = "adaln_cache.index.json"
+    package static let schemaVersion = 1
+    package static let format = "mere.run.minimax-h3-adaln-cache-pack"
+    package static let productionSchedules = [5, 9, 12, 16, 21, 31].map {
         Schedule(pointCount: $0, videoFlowShift: 12, audioFlowShift: 3)
     } + [5, 9].map {
         Schedule(pointCount: $0, videoFlowShift: 6, audioFlowShift: 3)
@@ -168,7 +168,7 @@ struct MiniMaxH3AdaLNCachePack: Codable, Sendable {
         case entries
     }
 
-    static func load(
+    package static func load(
         from rootURL: URL,
         configuration: MiniMaxH3TransformerConfiguration,
         videoSchedule: MiniMaxH3Schedule,
@@ -297,7 +297,7 @@ struct MiniMaxH3AdaLNCachePack: Codable, Sendable {
         }
     }
 
-    static func write(entries: [Entry], sourceIdentity: String, to rootURL: URL) throws -> URL {
+    package static func write(entries: [Entry], sourceIdentity: String, to rootURL: URL) throws -> URL {
         let indexURL = rootURL.appending(path: filename)
         let temporaryURL = rootURL.appending(path: ".\(filename).\(UUID().uuidString).tmp")
         defer { try? FileManager.default.removeItem(at: temporaryURL) }
@@ -322,7 +322,7 @@ struct MiniMaxH3AdaLNCachePack: Codable, Sendable {
         return indexURL
     }
 
-    static func entry(
+    package static func entry(
         schedule: Schedule,
         url: URL
     ) throws -> Entry {
@@ -392,77 +392,6 @@ struct MiniMaxH3AdaLNCachePack: Codable, Sendable {
             videoSchedule: schedules.video,
             audioSchedule: schedules.audio,
             sourceIdentity: sourceIdentity
-        )
-    }
-}
-
-public enum MiniMaxH3ModelOptimizer {
-    public static func artifactURLs(resources: MiniMaxH3Resources) -> [URL] {
-        [resources.adaLNCachePackIndexURL] + MiniMaxH3AdaLNCachePack.productionSchedules.map {
-            resources.rootURL.appending(path: $0.filename)
-        }
-    }
-
-    @discardableResult
-    public static func optimize(
-        resources: MiniMaxH3Resources,
-        replacing: Bool = false,
-        progressHandler: (@Sendable (Int, Int) -> Void)? = nil
-    ) throws -> URL {
-        let missing = resources.validate()
-        guard missing.isEmpty else { throw MiniMaxH3GeneratorError.missingModelFiles(missing) }
-        let configuration = try resources.loadConfiguration()
-        let sourceIdentity = try resources.adaLNCacheSourceIdentity()
-        let indexURL = resources.adaLNCachePackIndexURL
-        if FileManager.default.fileExists(atPath: indexURL.path) {
-            for schedule in MiniMaxH3AdaLNCachePack.productionSchedules {
-                let schedules = try schedule.schedules()
-                let selection = try MiniMaxH3AdaLNCachePack.load(
-                    from: resources.rootURL,
-                    configuration: .init(configuration),
-                    videoSchedule: schedules.video,
-                    audioSchedule: schedules.audio,
-                    sourceIdentity: sourceIdentity
-                )
-                guard selection.exact else {
-                    throw MiniMaxH3AdaLNCacheError.incompatible(
-                        "exact production schedule is missing: \(schedule.filename)"
-                    )
-                }
-            }
-            if !replacing {
-                return indexURL
-            }
-            if try resources.requiresAdaLNCache() {
-                return indexURL
-            }
-        }
-        if try resources.requiresAdaLNCache() {
-            throw MiniMaxH3AdaLNCacheError.incompatible(
-                "a pruned transformer cannot synthesize a missing exact cache pack"
-            )
-        }
-        let transformer = try MiniMaxH3ModelLoader.loadTransformer(
-            resources: resources,
-            configuration: configuration
-        )
-        var entries: [MiniMaxH3AdaLNCachePack.Entry] = []
-        for schedule in MiniMaxH3AdaLNCachePack.productionSchedules {
-            let schedules = try schedule.schedules()
-            let cache = transformer.precomputeAdaLN(
-                videoSchedule: schedules.video,
-                audioSchedule: schedules.audio,
-                sourceIdentity: sourceIdentity,
-                progressHandler: progressHandler
-            )
-            let url = resources.rootURL.appending(path: schedule.filename)
-            try cache.save(to: url, replacing: replacing)
-            entries.append(try MiniMaxH3AdaLNCachePack.entry(schedule: schedule, url: url))
-        }
-        return try MiniMaxH3AdaLNCachePack.write(
-            entries: entries,
-            sourceIdentity: sourceIdentity,
-            to: resources.rootURL
         )
     }
 }

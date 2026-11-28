@@ -1,9 +1,11 @@
 import Foundation
+@testable import MereRunVision
 import MLX
 import MLXFast
 import MLXRandom
 import XCTest
 @testable import MereRunCore
+@testable import MereRunMusic
 
 final class FusedInferenceKernelTests: MereRunCoreTestCase {
     func testFusedFullAttentionMatchesMaterializedReference() {

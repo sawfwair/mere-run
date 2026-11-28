@@ -1,4 +1,5 @@
 import Foundation
+@testable import MereRunMusic
 @testable import MereRunCore
 import XCTest
 

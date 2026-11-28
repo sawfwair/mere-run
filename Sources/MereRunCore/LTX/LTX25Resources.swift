@@ -212,7 +212,7 @@ public func isLTX25FullModelRoot(
     LTX25Resources(rootURL: rootURL).validateFull(fileManager: fileManager).isEmpty
 }
 
-func ltxStandaloneAudioVAEWeightsURL(
+package func ltxStandaloneAudioVAEWeightsURL(
     modelRoot: URL,
     isLTX23: Bool,
     isLTX25: Bool,

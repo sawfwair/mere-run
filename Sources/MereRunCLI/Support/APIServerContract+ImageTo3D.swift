@@ -1,4 +1,5 @@
 import Foundation
+import MereRun3D
 import MereRunCore
 
 struct APIImageTo3DCheckpointResponse: Codable, Equatable, Sendable {

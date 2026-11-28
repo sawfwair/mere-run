@@ -141,6 +141,7 @@ public struct SCAIL2Configuration: Codable, Hashable, Sendable {
 }
 
 public struct SCAIL2Resources: Hashable, Sendable {
+    public static let distilledAdapterFormat = "scail2-distilled-wan-i2v-lora-v1"
     public static let modelID = "video-scail2-14b-mlx"
     public static let upstreamRepoID = "zai-org/SCAIL-2"
     public static let upstreamRevision = "150cc0ca4e98e50e60b9295dacde39442fdccab2"

@@ -58,24 +58,31 @@ required_module_readmes=(
   apps/macos/README.md
   Sources/MereRunCLI/Commands/README.md
   Sources/MereRunCLI/Support/README.md
-  Sources/MereRunCore/ACEStep/Model/README.md
+  Sources/MereRun3D/README.md
+  Sources/MereRunMusic/README.md
+  Sources/MereRunGeo/README.md
+  Sources/MereRunVision/README.md
+  Sources/MereRunTextUtilities/README.md
+  Sources/MereRunVideo/README.md
+  Sources/MereRunMusic/ACEStep/Model/README.md
+  Sources/MereRunMusic/ACEStep/README.md
+  Sources/MereRunMusic/ACEStep/VAE/README.md
   Sources/MereRunCore/ACEStep/README.md
-  Sources/MereRunCore/ACEStep/VAE/README.md
   Sources/MereRunCore/CodeGen/README.md
-  Sources/MereRunCore/FalconPerception/README.md
+  Sources/MereRunVision/FalconPerception/README.md
   Sources/MereRunImageModels/Flux2/Transformer/README.md
   Sources/MereRunCore/Flux2Klein/README.md
   Sources/MereRunCore/Gemma4/README.md
-  Sources/MereRunCore/LightOnOCR/README.md
+  Sources/MereRunVision/LightOnOCR/README.md
   Sources/MereRunCore/LoRA/README.md
-  Sources/MereRunCore/LTX/README.md
-  Sources/MereRunCore/PrivacyFilter/README.md
+  Sources/MereRunVideo/LTX/README.md
+  Sources/MereRunTextUtilities/PrivacyFilter/README.md
   Sources/MereRunCore/Psi/README.md
   Sources/MereRunCore/Q35/README.md
   Sources/MereRunCore/QwenImageEdit/Model/Transformer/README.md
   Sources/MereRunCore/QwenImageEdit/Model/VAE/README.md
   Sources/MereRunCore/QwenImageEdit/README.md
-  Sources/MereRunCore/SAM3/README.md
+  Sources/MereRunVision/SAM3/README.md
   Sources/MereRunCore/Support/README.md
   Sources/MereRunCore/VLM/README.md
   Sources/MereRunCore/ZImageI2L/Model/README.md
@@ -111,12 +118,12 @@ dynamic_boundary_files=(
   # runs.
   "apps/macos/StudioUI/StudioTrainingView.swift"
   "Sources/MereRunCLI/Support/ResumeLoRABootstrap.swift"
-  "Sources/MereRunCore/Asset3D/MeshGLBWriter.swift"
-  "Sources/MereRunCore/FalconPerception/FalconPerceptionTokenizer.swift"
+  "Sources/MereRun3D/Asset3D/MeshGLBWriter.swift"
+  "Sources/MereRunVision/FalconPerception/FalconPerceptionTokenizer.swift"
   "Sources/MereRunCore/Flux2Klein/Flux2KleinGenerator+Chat.swift"
-  "Sources/MereRunCore/Geometry/MultiViewGeometryExporter.swift"
-  "Sources/MereRunCore/Geometry/PointCloudGLBWriter.swift"
-  "Sources/MereRunCore/LTX/LTXVideoMP4Writer.swift"
+  "Sources/MereRun3D/Geometry/MultiViewGeometryExporter.swift"
+  "Sources/MereRun3D/Geometry/PointCloudGLBWriter.swift"
+  "Sources/MereRunVideo/LTX/LTXVideoMP4Writer.swift"
   "Sources/MereRunCore/LoRA/LoRACheckpointResolver.swift"
   "Sources/MereRunCore/LoRA/LoRAWeightLoader.swift"
   "Sources/MereRunCore/LoRA/QwenTextLoRAWeightLoader.swift"
@@ -124,9 +131,9 @@ dynamic_boundary_files=(
   "Sources/MereRunCore/Psi/GLM47Tokenizer.swift"
   "Sources/MereRunCore/QwenImageEdit/Model/VAE/AutoencoderKL3D.swift"
   "Sources/MereRunCore/QwenImageEdit/Tokenizer/Qwen25VLTokenizer.swift"
-  "Sources/MereRunCore/SAM3/SAM31Tokenizer.swift"
-  "Sources/MereRunCore/SAM3/SAM31VideoIO.swift"
-  "Sources/MereRunCore/Trellis2/Trellis2TexturedGLBWriter.swift"
+  "Sources/MereRunVision/SAM3/SAM31Tokenizer.swift"
+  "Sources/MereRunVision/SAM3/SAM31VideoIO.swift"
+  "Sources/MereRun3D/Trellis2/Trellis2TexturedGLBWriter.swift"
   "Sources/MereRunCore/VLM/Qwen3VLAutoCaptioner.swift"
   "Sources/MereRunCore/Decode/QwenGeneration.swift"
   "Sources/MereRunCore/ZImageTurbo/Tokenizer/QwenTokenizer.swift"

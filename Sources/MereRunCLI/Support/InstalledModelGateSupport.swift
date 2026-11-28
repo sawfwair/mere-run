@@ -1,4 +1,6 @@
 import Foundation
+import MereRunTextUtilities
+import MereRunVision
 @preconcurrency import MLX
 import MediaIO
 import MereRunCore

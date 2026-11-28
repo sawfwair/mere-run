@@ -1,4 +1,5 @@
 import Foundation
+@testable import MereRunMusic
 import MLX
 import MLXRandom
 import XCTest

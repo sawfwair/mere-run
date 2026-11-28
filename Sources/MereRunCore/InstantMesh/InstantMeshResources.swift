@@ -111,10 +111,14 @@ public enum InstantMeshResources {
             .appendingPathComponent(managedConvertedDirectoryName, isDirectory: true)
             .path
     }
+    public static let convertedSafetensorsByteCount: Int64 = 1_253_463_832
+    public static let convertedSafetensorsSHA256 =
+        "2380601d17f6a817de0bf5328188ccea397af9d75c07b4b3cc476322dcca76af"
+
     public static let convertedWeightsPin = ModelArtifactPin(
         filename: "model.safetensors",
-        byteCount: InstantMeshWeights.convertedSafetensorsByteCount,
-        sha256: InstantMeshWeights.convertedSafetensorsSHA256
+        byteCount: convertedSafetensorsByteCount,
+        sha256: convertedSafetensorsSHA256
     )
     public static let convertedConfigurationPin = ModelArtifactPin(
         filename: "config.json",
@@ -198,20 +202,6 @@ public enum InstantMeshResources {
         }
     }
 
-    public static func loadModel(from checkpoint: InstantMeshCheckpoint) throws -> InstantMeshModel {
-        let verified = try inspectConvertedDirectory(checkpoint.rootURL)
-        guard verified == checkpoint else {
-            throw InstantMeshResourceError.checkpointIdentityChanged
-        }
-        let model = InstantMeshModel()
-        try InstantMeshWeights.load(
-            model: model,
-            safetensorsURL: verified.weightsURL,
-            dtype: .float32
-        )
-        return model
-    }
-
     private static var pin: GeometryModelPin { GeometryModelPins.instantMeshBase }
 
     private static var sourceWeightsPin: ModelArtifactPin {
@@ -221,7 +211,7 @@ public enum InstantMeshResources {
         return artifact
     }
 
-    private static func inspectConvertedDirectory(_ rootURL: URL) throws -> InstantMeshCheckpoint {
+    package static func inspectConvertedDirectory(_ rootURL: URL) throws -> InstantMeshCheckpoint {
         do {
             let weightsURL = try convertedWeightsPin.verify(in: rootURL)
             let configurationURL = try convertedConfigurationPin.verify(in: rootURL)

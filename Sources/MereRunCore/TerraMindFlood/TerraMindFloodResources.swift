@@ -199,32 +199,12 @@ public enum TerraMindFloodResources {
                 actual: configuration.scalarCount
             )
         }
-        guard configuration.tileSize == TerraMindFloodModel.tileSize,
-              configuration.timestamps == TerraMindFloodModel.timestampCount else {
+        guard configuration.tileSize == 256,
+              configuration.timestamps == 4 else {
             throw TerraMindFloodResourceError.unsupportedDimensions(
                 tileSize: configuration.tileSize,
                 timestamps: configuration.timestamps
             )
         }
-    }
-
-    public static func loadModel(from checkpoint: TerraMindFloodCheckpoint) throws -> TerraMindFloodModel {
-        let arrays = try MLX.loadArrays(url: checkpoint.weightsURL)
-        guard arrays.count == checkpoint.configuration.tensorCount else {
-            throw TerraMindFloodResourceError.tensorInventory(
-                expected: checkpoint.configuration.tensorCount,
-                actual: arrays.count
-            )
-        }
-        let scalarCount = arrays.values.reduce(0) { partial, value in
-            partial + value.shape.reduce(1, *)
-        }
-        guard scalarCount == checkpoint.configuration.scalarCount else {
-            throw TerraMindFloodResourceError.scalarInventory(
-                expected: checkpoint.configuration.scalarCount,
-                actual: scalarCount
-            )
-        }
-        return try TerraMindFloodModel(weights: arrays)
     }
 }

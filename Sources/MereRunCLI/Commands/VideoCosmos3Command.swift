@@ -1,4 +1,5 @@
 import ArgumentParser
+import MereRunVideo
 import Foundation
 import MLX
 import MereRunCore

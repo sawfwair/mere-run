@@ -1,4 +1,5 @@
 import ArgumentParser
+import MereRun3D
 import MereRunCore
 
 struct ImageReconstruct3DTrellis2: AsyncParsableCommand {

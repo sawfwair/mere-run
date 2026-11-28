@@ -1,3 +1,4 @@
+@testable import MereRunTextUtilities
 #if canImport(CoreML) && os(macOS) && arch(arm64)
 import Foundation
 import MLX

@@ -1,4 +1,5 @@
 import Foundation
+@testable import MereRunTextUtilities
 import MediaIO
 import XCTest
 @testable import MereRunCore

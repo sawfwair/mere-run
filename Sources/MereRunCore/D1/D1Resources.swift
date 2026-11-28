@@ -16,7 +16,7 @@ public enum D1Catalog {
             revision: modelID == omniModelID ? omniRevision : revision,
             patterns: ["config.json", "tokenizer.json", "tokenizer_config.json", "model.safetensors", "model.safetensors.index.json", "model-*.safetensors", "LICENSE", "README.md"])
     }
-    static func configuration(root: URL) throws -> D1Configuration {
+    package static func configuration(root: URL) throws -> D1Configuration {
         let config = try JSONDecoder().decode(D1Configuration.self, from: Data(contentsOf: root.appending(path: "config.json")))
         try config.validate()
         return config

@@ -1,4 +1,5 @@
 import Foundation
+import MereRunVideo
 import MereRunCore
 
 /// Translates the API's typed fields and optional CLI syntax into shared settings.

@@ -84,7 +84,7 @@ extension Q35Generator {
         }
     }
 
-    static func qwen3VLTargetSize(
+    package static func qwen3VLTargetSize(
         originalWidth width: Int,
         originalHeight height: Int,
         patchSize: Int,

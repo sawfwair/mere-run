@@ -305,7 +305,7 @@ public struct MiniMaxH3Resources: Sendable {
         FileManager.default.fileExists(atPath: bf16TextEncoderIndexURL.path)
     }
 
-    func adaLNCacheSourceIdentity() throws -> String {
+    package func adaLNCacheSourceIdentity() throws -> String {
         if usesShardedBF16Transformer {
             return Self.officialTransformerSourceIdentity
         }
@@ -369,7 +369,7 @@ public struct MiniMaxH3Resources: Sendable {
         }
     }
 
-    func requiresAdaLNCache() throws -> Bool {
+    package func requiresAdaLNCache() throws -> Bool {
         if usesShardedBF16Transformer { return false }
         return try transformerMetadata()["cache_covered_weights_omitted"] == "true"
     }

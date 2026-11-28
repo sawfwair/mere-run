@@ -1,4 +1,5 @@
 import Foundation
+import MereRunTextUtilities
 import MereRunCore
 
 struct GLiNERAPIRequest: Decodable, Sendable {

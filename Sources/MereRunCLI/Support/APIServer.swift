@@ -1,4 +1,6 @@
 import Foundation
+import MereRunTextUtilities
+import MereRun3D
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
@@ -12,6 +14,7 @@ import AudioTTS
 import MediaIO
 import MereRunContract
 import MereRunCore
+import MereRunVideo
 
 extension APIServerContract {
     static let videoGenerationRouterPath = RouterPath(videoGenerationRoutePath)

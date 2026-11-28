@@ -1,4 +1,5 @@
 import Foundation
+@testable import MereRunVision
 import XCTest
 import MLX
 import MLXRandom

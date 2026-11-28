@@ -82,8 +82,8 @@ public enum MelBandRoFormerProfile: String, CaseIterable, Sendable {
         ]
     }
 
-    var expectedTensorCount: Int { 684 }
-    var expectedScalarCount: Int { 228_203_172 }
+    package var expectedTensorCount: Int { 684 }
+    package var expectedScalarCount: Int { 228_203_172 }
 }
 
 public struct MelBandRoFormerCheckpoint: Sendable {

@@ -1,10 +1,12 @@
 import Foundation
+@testable import MereRun3D
 import XCTest
 import AudioCore
 import MediaIO
 import NIOCore
 @testable import MereRunCLI
 @testable import MereRunCore
+@testable import MereRunVideo
 
 private actor VFXRequestAdmissionTestGate {
     private var continuation: CheckedContinuation<Void, Never>?

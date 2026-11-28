@@ -1,4 +1,5 @@
 import XCTest
+@testable import MereRunMusic
 @testable import MereRunCore
 
 final class ACEStepContinuousSchedulerTests: MereRunCoreTestCase {

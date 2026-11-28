@@ -1,3 +1,4 @@
+@testable import MereRunVision
 #if !os(iOS)
 import Foundation
 import MLX

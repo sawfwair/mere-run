@@ -9,7 +9,7 @@ import IOKit.ps
 #endif
 
 @inline(__always)
-func withMiniMaxH3AutoreleasePool<T>(_ body: () throws -> T) rethrows -> T {
+package func withMiniMaxH3AutoreleasePool<T>(_ body: () throws -> T) rethrows -> T {
     #if canImport(ObjectiveC)
     return try autoreleasepool(invoking: body)
     #else

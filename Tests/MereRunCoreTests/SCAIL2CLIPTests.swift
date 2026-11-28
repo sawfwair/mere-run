@@ -1,4 +1,5 @@
 import MediaIO
+@testable import MereRunVideo
 import MLX
 import XCTest
 @testable import MereRunCore
