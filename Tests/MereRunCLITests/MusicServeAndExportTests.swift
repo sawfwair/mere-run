@@ -1,4 +1,5 @@
 import AudioCore
+@testable import MereRunMusic
 import ArgumentParser
 import Foundation
 import MLX

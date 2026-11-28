@@ -1,4 +1,5 @@
 import Foundation
+@testable import MereRunMusic
 import MediaIO
 import MLX
 import MLXNN

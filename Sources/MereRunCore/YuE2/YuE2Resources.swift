@@ -38,20 +38,4 @@ public struct YuE2Resources: Sendable, Hashable {
               let identity = try? JSONDecoder().decode(Identity.self, from: data) else { return false }
         return identity.model_type == "yue2"
     }
-
-    func configuration() throws -> YuE2Configuration {
-        let value = try JSONDecoder().decode(
-            YuE2Configuration.self, from: Data(contentsOf: rootURL.appendingPathComponent("config.json"))
-        )
-        try value.validateReleased()
-        return value
-    }
-
-    func vaeConfiguration() throws -> YuE2VAEConfiguration {
-        let value = try JSONDecoder().decode(
-            YuE2VAEConfiguration.self, from: Data(contentsOf: vaeURL.appendingPathComponent("config.json"))
-        )
-        try value.validateReleased()
-        return value
-    }
 }

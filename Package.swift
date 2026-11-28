@@ -182,9 +182,7 @@ mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXFFT"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXNN"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXOptimizers"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXRandom"))
-mereRunCoreDependencies.append("AudioCore")
 mereRunCoreDependencies.append("MereRunAudioModels")
-mereRunCoreDependencies.append("MereRunSheetSageModel")
 mereRunCoreDependencies.append("MereRunH3Model")
 mereRunCoreDependencies.append("MereRunLagunaModel")
 mereRunCoreDependencies.append("MereRunModelKit")
@@ -295,9 +293,6 @@ if hasMagentaRT2Binary {
       path: "vendor/magentart.xcframework"
     )
   )
-  // The Magenta RT2 binary ships macOS slices only; iOS builds of the core
-  // exclude realtime music.
-  mereRunCoreDependencies.append(.target(name: "magentart", condition: .when(platforms: [.macOS])))
 }
 if !isLinuxPackage {
   targets.append(
@@ -360,6 +355,8 @@ var mereRunCoreTestDependencies: [Target.Dependency] = [
   "MereRunGLiNERModel",
   "MereRunImageModels",
   "MereRunCore",
+  "MereRun3D",
+  "MereRunMusic",
   "AudioCore",
   "AudioCodecs",
   "AudioSTT",
@@ -395,6 +392,8 @@ var mereRunCLIDependencies: [Target.Dependency] = [
   "MereRunEvaluation",
   "MereRunRelayKit",
   "MereRunCore",
+  "MereRun3D",
+  "MereRunMusic",
   "AudioCore",
   "AudioCodecs",
   "AudioSTT",
@@ -925,16 +924,11 @@ targets.append(
     exclude: [
       "README.md",
       "ACEStep/README.md",
-      "ACEStep/Model/README.md",
-      "ACEStep/VAE/README.md",
-      "APBWE/README.md",
-      "Asset3D/README.md",
       "CodeGen/README.md",
       "Cosmos3/README.md",
       "Decode/README.md",
       "DeepseekV4Flash/README.md",
       "DiffusionGemma/README.md",
-      "DepthAnything3/README.md",
       "FaceAnalysis/README.md",
       "FalconPerception/README.md",
       "Flux1/README.md",
@@ -943,16 +937,13 @@ targets.append(
       "Gemma4/README.md",
       "Embeddings/README.md",
       "GLiNER/README.md",
-      "Geometry/README.md",
       "HiDreamO1/README.md",
       "Ideogram4/README.md",
       "Inkling/README.md",
       "Inkling2/README.md",
-      "InstantMesh/README.md",
       "Krea2/README.md",
       "Laguna/README.md",
       "Flint/README.md",
-      "MuScriptor/README.md",
       "MuseGlimmer/README.md",
       "NemotronH/README.md",
       "NemotronBolt/README.md",
@@ -963,28 +954,22 @@ targets.append(
       "UnlimitedOCR/README.md",
       "LTX/README.md",
       "LoRA/README.md",
-      "MagentaRT2/README.md",
       "MLX/README.md",
-      "MMAudio/README.md",
       "MultimodalEmbeddings/README.md",
       "MiniMaxH3/README.md",
       "MiniMaxH3Image/README.md",
-      "MiniMaxMusic3/README.md",
-      "YuE2/README.md",
       "PrivacyFilter/README.md",
       "Laya/README.md",
       "Clef/README.md",
       "Clairic/README.md",
       "D1/README.md",
       "RoFormer/README.md",
-      "UniverSR/README.md",
       "Pose/README.md",
       "OpticalFlow/README.md",
       "OlmoEarth/README.md",
       "Psi/README.md",
       "Q35/README.md",
       "Quantization/README.md",
-      "MarigoldV2/README.md",
       "QwenImageEdit/README.md",
       "QwenImage21/README.md",
       "QwenImageEdit/Model/Transformer/README.md",
@@ -994,15 +979,9 @@ targets.append(
       "SCAIL2/README.md",
       "Support/README.md",
       "TESSERA/README.md",
-      "Trellis2/README.md",
-      "Idol/README.md",
       "TerraMindFire/README.md",
       "TerraMindFlood/README.md",
-      "TripoSR/README.md",
       "VLM/README.md",
-      "VideoDepth/README.md",
-      "VideoDepth/VDA/README.md",
-      "VisionGeometry/MoGe2/README.md",
       "Wan2/README.md",
       "Woosh/README.md",
       "ZImageI2L/README.md",
@@ -1016,6 +995,97 @@ targets.append(
     ],
     swiftSettings: commonSwiftSettings,
     linkerSettings: mereRunCoreLinkerSettings
+  )
+)
+
+var mereRun3DDependencies: [Target.Dependency] = ["MereRunCore"]
+mereRun3DDependencies.append(contentsOf: mlxDependency("MLX"))
+mereRun3DDependencies.append(contentsOf: mlxDependency("MLXFast"))
+mereRun3DDependencies.append(contentsOf: mlxDependency("MLXNN"))
+mereRun3DDependencies.append(contentsOf: mlxDependency("MLXRandom"))
+mereRun3DDependencies.append(.product(name: "Crypto", package: "swift-crypto"))
+if hasMediaIOTarget {
+  mereRun3DDependencies.append("MediaIO")
+}
+var mereRun3DLinkerSettings: [LinkerSetting] = linuxNativeLinkerSettings
+if !isLinuxPackage {
+  mereRun3DLinkerSettings.append(.linkedFramework("Metal"))
+  mereRun3DLinkerSettings.append(.linkedFramework("Vision"))
+  mereRun3DLinkerSettings.append(.linkedFramework("ImageIO"))
+  mereRun3DLinkerSettings.append(.linkedFramework("CoreVideo"))
+}
+targets.append(
+  .target(
+    name: "MereRun3D",
+    dependencies: mereRun3DDependencies,
+    path: "Sources/MereRun3D",
+    exclude: [
+      "README.md",
+      "Asset3D/README.md",
+      "DepthAnything3/README.md",
+      "Geometry/README.md",
+      "Idol/README.md",
+      "InstantMesh/README.md",
+      "MarigoldV2/README.md",
+      "Trellis2/README.md",
+      "TripoSR/README.md",
+      "VideoDepth/README.md",
+      "VideoDepth/VDA/README.md",
+      "VisionGeometry/MoGe2/README.md"
+    ],
+    swiftSettings: commonSwiftSettings,
+    linkerSettings: mereRun3DLinkerSettings
+  )
+)
+
+var mereRunMusicDependencies: [Target.Dependency] = [
+  "MereRunCore",
+  "AudioCore",
+  "AudioCodecs",
+  "MereRunAudioModels",
+  "MereRunSheetSageModel"
+]
+mereRunMusicDependencies.append(contentsOf: mlxDependency("MLX"))
+mereRunMusicDependencies.append(contentsOf: mlxDependency("MLXFast"))
+mereRunMusicDependencies.append(contentsOf: mlxDependency("MLXFFT"))
+mereRunMusicDependencies.append(contentsOf: mlxDependency("MLXNN"))
+mereRunMusicDependencies.append(contentsOf: mlxDependency("MLXOptimizers"))
+mereRunMusicDependencies.append(contentsOf: mlxDependency("MLXRandom"))
+mereRunMusicDependencies.append(.product(name: "Crypto", package: "swift-crypto"))
+mereRunMusicDependencies.append(.product(name: "Transformers", package: "swift-transformers"))
+if hasMediaIOTarget {
+  mereRunMusicDependencies.append("MediaIO")
+}
+if hasMagentaRT2Binary {
+  mereRunMusicDependencies.append(.target(name: "magentart", condition: .when(platforms: [.macOS])))
+}
+var mereRunMusicLinkerSettings: [LinkerSetting] = linuxNativeLinkerSettings
+if !isLinuxPackage {
+  mereRunMusicLinkerSettings.append(.linkedFramework("Metal"))
+  mereRunMusicLinkerSettings.append(.linkedFramework("Accelerate"))
+}
+targets.append(
+  .target(
+    name: "MereRunMusic",
+    dependencies: mereRunMusicDependencies,
+    path: "Sources/MereRunMusic",
+    exclude: [
+      "README.md",
+      "ACEStep/Model/README.md",
+      "ACEStep/README.md",
+      "ACEStep/VAE/README.md",
+      "APBWE/README.md",
+      "MMAudio/README.md",
+      "MagentaRT2/README.md",
+      "MiniMaxMusic3/README.md",
+      "MuScriptor/README.md",
+      "RoFormer/README.md",
+      "UniverSR/README.md",
+      "Woosh/README.md",
+      "YuE2/README.md"
+    ],
+    swiftSettings: commonSwiftSettings,
+    linkerSettings: mereRunMusicLinkerSettings
   )
 )
 
@@ -1287,7 +1357,7 @@ targets.append(
 targets.append(
   .testTarget(
     name: "MereRunCLITests",
-    dependencies: ["MereRunCLI", "MereRunEvaluation", "MediaIO", "AudioCore", "MereRunMLXTestSupport"],
+    dependencies: ["MereRunCLI", "MereRun3D", "MereRunMusic", "MereRunEvaluation", "MediaIO", "AudioCore", "MereRunMLXTestSupport"],
     path: "Tests/MereRunCLITests",
     resources: [
       .copy("Fixtures")

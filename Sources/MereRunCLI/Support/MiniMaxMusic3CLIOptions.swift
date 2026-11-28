@@ -1,4 +1,5 @@
 import ArgumentParser
+import MereRunMusic
 import MereRunCore
 
 extension MiniMaxMusic3LoadingStrategy: ExpressibleByArgument {}

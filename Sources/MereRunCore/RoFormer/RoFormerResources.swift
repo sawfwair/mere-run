@@ -34,14 +34,14 @@ public enum RoFormerModelProfile: String, CaseIterable, Sendable {
         }
     }
 
-    var expectedTensorCount: Int {
+    package var expectedTensorCount: Int {
         switch self {
         case .viperX1297: 699
         case .fourStem: 1_355
         }
     }
 
-    var expectedScalarCount: Int {
+    package var expectedScalarCount: Int {
         switch self {
         case .viperX1297: 159_758_796
         case .fourStem: 131_704_612
@@ -86,7 +86,7 @@ public enum RoFormerModelProfile: String, CaseIterable, Sendable {
         [weightsPin, sourceConfigurationPin, RoFormerResources.licensePin, RoFormerResources.readmePin]
     }
 
-    var derivesInstrumental: Bool { self == .viperX1297 }
+    package var derivesInstrumental: Bool { self == .viperX1297 }
 }
 
 public struct RoFormerCheckpoint: Sendable {

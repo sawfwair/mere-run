@@ -1,4 +1,5 @@
 import Foundation
+@testable import MereRun3D
 import MLX
 import MLXNN
 import XCTest

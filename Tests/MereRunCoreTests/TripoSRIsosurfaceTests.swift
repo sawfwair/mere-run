@@ -1,4 +1,5 @@
 import Foundation
+@testable import MereRun3D
 @testable import MereRunCore
 import XCTest
 

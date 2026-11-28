@@ -43,13 +43,15 @@ It also defines two executable products:
   The Linux package graph omits it.
 
 Many runtime targets are internal: they build as part of the package but
-aren't products. They include `MereRunCoreMLModel`, `MereRunD1Model`,
-`MereRunFlintModel`, `MereRunInkling2Model`, `MereRunGLiNERModel`, `MereRunKolibriModel`,
-`MereRunLayaModel`, `MereRunNemotronBoltModel`, `AudioBreezeTTSModel`,
-`AudioDrama3Model`, `AudioHaruModel`, `AudioNemotronTranscribeModel`,
-`AudioSOVTranscribeModel`, `AudioPhononModel`, and
-`AudioWhistleModel`. Platform adapters (`llama`, `magentart`, and
-`COnnxRuntimeCoreML`), the `MediaIOSmoke` executable, and the
+aren't products. They include the modality targets `MereRun3D` and
+`MereRunMusic` (carved above `MereRunCore` so on-device consumers don't link
+desktop 3D or music runtimes), along with `MereRunCoreMLModel`,
+`MereRunD1Model`, `MereRunFlintModel`, `MereRunInkling2Model`,
+`MereRunGLiNERModel`, `MereRunKolibriModel`, `MereRunLayaModel`,
+`MereRunNemotronBoltModel`, `AudioBreezeTTSModel`, `AudioDrama3Model`,
+`AudioHaruModel`, `AudioNemotronTranscribeModel`, `AudioSOVTranscribeModel`,
+`AudioPhononModel`, and `AudioWhistleModel`. Platform adapters (`llama`,
+`magentart`, and `COnnxRuntimeCoreML`), the `MediaIOSmoke` executable, and the
 `MereRunMLXTestSupport` test fixtures are internal too.
 
 Every target and product is registered in `scripts/package-policy.json`, which

@@ -380,7 +380,7 @@ extension QwenImageEditGenerator {
         return rawKey
     }
 
-    static func transformerWeightMapper(
+    package static func transformerWeightMapper(
         config: QwenImageEditTransformerConfig
     ) -> (String, MLXArray) -> [(String, MLXArray)] {
         return { rawKey, value in
@@ -431,7 +431,7 @@ extension QwenImageEditGenerator {
         return key
     }
 
-    static func validateTransformerCheckpointCoverage(
+    package static func validateTransformerCheckpointCoverage(
         rawKeys: Set<String>,
         model: MMDiT
     ) throws {

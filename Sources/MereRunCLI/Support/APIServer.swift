@@ -1,4 +1,5 @@
 import Foundation
+import MereRun3D
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif

@@ -1,4 +1,5 @@
 import Foundation
+import MereRun3D
 import MediaIO
 import MereRunCore
 import XCTest

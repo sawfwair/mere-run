@@ -1,4 +1,5 @@
 import MereRunCore
+import MereRun3D
 import XCTest
 
 final class DepthAnything3ValidationTests: XCTestCase {

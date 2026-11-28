@@ -189,7 +189,7 @@ public enum Krea2LoRAInjector {
         ZImageLoRAInjector.applyWeights(loraWeights, to: loraLayers, debug: debug)
     }
 
-    static func applyModuleReplacements(
+    package static func applyModuleReplacements(
         _ replacements: [String: Module],
         leafModules: [(String, Module)],
         to model: Module

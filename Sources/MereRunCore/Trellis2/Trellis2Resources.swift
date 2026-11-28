@@ -1,5 +1,15 @@
 import Foundation
 
+public struct Trellis2CheckpointComponentManifest: Codable, Equatable, Sendable {
+    public let name: String
+    public let repository: String
+    public let revision: String
+    public let relativePath: String
+    public let byteCount: Int64
+    public let sha256: String
+    public let license: String
+}
+
 public struct Trellis2Checkpoint: Hashable, Sendable {
     public let modelID: String
     public let rootURL: URL

@@ -1,4 +1,5 @@
 import MLX
+@testable import MereRunMusic
 import MLXRandom
 import XCTest
 @testable import MereRunCore

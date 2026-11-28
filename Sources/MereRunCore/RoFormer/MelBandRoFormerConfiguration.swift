@@ -28,7 +28,7 @@ public struct MelBandRoFormerConfiguration: Codable, Equatable, Sendable {
     public let transformerExpansionFactor: Int
     public let mlpExpansionFactor: Int
 
-    var frequencyLayout: MelBandFrequencyLayout {
+    package var frequencyLayout: MelBandFrequencyLayout {
         MelBandFrequencyLayout(
             sampleRate: sampleRate,
             nFFT: stftNFFT,
@@ -108,13 +108,13 @@ public struct MelBandRoFormerConfiguration: Codable, Equatable, Sendable {
     }
 }
 
-struct MelBandFrequencyLayout: Equatable, Sendable {
-    let frequencyIndicesByBand: [[Int]]
-    let interleavedFrequencyChannelIndices: [Int]
-    let inputDimensions: [Int]
-    let bandsPerFrequency: [Int]
+package struct MelBandFrequencyLayout: Equatable, Sendable {
+    package let frequencyIndicesByBand: [[Int]]
+    package let interleavedFrequencyChannelIndices: [Int]
+    package let inputDimensions: [Int]
+    package let bandsPerFrequency: [Int]
 
-    init(sampleRate: Int, nFFT: Int, numBands: Int, audioChannels: Int) {
+    package init(sampleRate: Int, nFFT: Int, numBands: Int, audioChannels: Int) {
         let frequencyCount = nFFT / 2 + 1
         let minimumLogHertz = 1_000.0
         let hertzPerMel = 200.0 / 3.0

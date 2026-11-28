@@ -1,4 +1,5 @@
 import AudioCodecs
+@testable import MereRunMusic
 import Foundation
 import MLX
 import XCTest

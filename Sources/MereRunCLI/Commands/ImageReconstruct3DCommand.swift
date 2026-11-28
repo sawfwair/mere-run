@@ -1,4 +1,5 @@
 import ArgumentParser
+import MereRun3D
 import MereRunCore
 
 /// Canonical image-family spelling retained by the managed model catalog.

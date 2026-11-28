@@ -39,13 +39,13 @@ Core retains resource loading and generation for these families.
   compound input parsing and checkpoint lookup shared by preflight and execution.
 - `ManagedAdapterArgumentResolver.swift`: installed adapter lookup and base-model
   compatibility shared by image, text, video, and evaluation adapters.
-- `VisionGeometry/MoGe2/MoGe2GenerationOperation.swift`: shared single-image
-  geometry settings, observational plans, execution, and awaited unloading.
-- `MarigoldV2/MarigoldV2GenerationOperation.swift`: the same shape for
-  single-image depth; the command is CLI-only, so no API adapter calls it.
-- Family `*GenerationOperation.swift` files under `TripoSR/`, `InstantMesh/`,
-  `DepthAnything3/`, and `VideoDepth/VDA/`: shared CLI/API settings, preparation,
-  execution, and awaited per-request cleanup. DA3 also owns scene export.
+- 3D reconstruction, geometry, and depth generation operations (`TripoSR`,
+  `InstantMesh`, `Trellis2`, `DepthAnything3`, `MoGe2`, `MarigoldV2`, `VDA`,
+  `Idol`) live in `MereRun3D`; Core retains their checkpoint pin/resource metadata.
+- Music, SFX, stem separation, and audio restoration runtimes (`ACEStep`,
+  `MiniMaxMusic3`, `YuE2`, `MagentaRT2`, `MuScriptor`, `RoFormer`, `MMAudio`,
+  `Woosh`, `APBWE`, `UniverSR`) live in `MereRunMusic`; Core retains their
+  resource metadata and bundled configuration definitions.
 - `ManagedModelCatalog.swift`: ordered catalog assembly and model lookup.
   `ManagedModelCatalog+*.swift` keeps definitions, pinned sources, and usage terms
   with their model families. Companion models remain discoverable by lookup
