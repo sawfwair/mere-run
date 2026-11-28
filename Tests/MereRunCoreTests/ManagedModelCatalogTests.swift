@@ -47,10 +47,23 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertFalse(localOnly.hasAnyManagedDownloadSource())
     }
 
+    func testExactIDLookupNormalizesAndIgnoresRepositoryAliases() {
+        XCTAssertEqual(
+            ManagedModelCatalog.spec(forExactID: " TEXT-CHAT-GEMMA4\n")?.id,
+            "text-chat-gemma4"
+        )
+        XCTAssertNil(ManagedModelCatalog.spec(forExactID: "google/gemma-4-31B-it"))
+        XCTAssertNil(ManagedModelCatalog.spec(forExactID: "unknown-catalog-model"))
+        for spec in ManagedModelCatalog.allKnownSpecs {
+            XCTAssertEqual(ManagedModelCatalog.spec(for: spec.id)?.id, spec.id, "Exact ID must win over aliases")
+        }
+    }
+
     func testEveryCanonicalManagedModelIDHasCatalogSpec() {
         for modelID in ModelResolver.ModelID.allCases {
-            let spec = ManagedModelCatalog.spec(for: modelID.rawValue)
+            let spec = ManagedModelCatalog.spec(forExactID: modelID.rawValue)
             XCTAssertNotNil(spec, "Missing catalog spec for \(modelID.rawValue)")
+            XCTAssertNotNil(spec?.manifestTemplate, "Missing manifest template for \(modelID.rawValue)")
         }
     }
 

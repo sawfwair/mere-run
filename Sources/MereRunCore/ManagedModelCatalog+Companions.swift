@@ -245,7 +245,9 @@ extension ManagedModelCatalog {
                     precision: .int4,
                     quantization: .init(bits: 4, groupSize: 16, scheme: "modelopt-nvfp4-mlx"),
                     supports: [],
-                    upstream: .explicit("nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark@e3af76fbff445ef795958bee96bc1126af70fd57")
+                    upstream: .explicit(
+                        "\(NemotronHResources.dsparkUpstreamRepoID)@\(NemotronHResources.dsparkUpstreamRevision)"
+                    )
                 ),
                 capability: .init(
                     "Nemotron 3.5 DSpark assistant",

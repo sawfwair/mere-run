@@ -48,11 +48,6 @@ public enum ManagedModelCatalog {
     public static let allKnownSpecs: [ManagedModelSpec] = allSpecs + companionSpecs
 
     private static let specsByExactID: [String: ManagedModelSpec] = {
-        var map: [String: ManagedModelSpec] = [:]
-        map.reserveCapacity(allKnownSpecs.count)
-        for spec in allKnownSpecs where map[spec.id] == nil {
-            map[spec.id] = spec
-        }
-        return map
+        Dictionary(uniqueKeysWithValues: allKnownSpecs.map { ($0.id, $0) })
     }()
 }

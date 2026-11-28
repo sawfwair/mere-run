@@ -676,7 +676,7 @@ extension ManagedModelCatalog {
                 quantization: .init(bits: 4, groupSize: 16, scheme: "modelopt-nvfp4-mlx"),
                 supports: [.chat, .codeGeneration],
                 components: .rootText,
-                upstream: .explicit("nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4@e0b753dc24903ad4d62f5696077da22020eca89a")
+                upstream: .explicit("\(NemotronHResources.upstreamRepoID)@\(NemotronHResources.upstreamRevision)")
             ),
             capability: .init(
                 "Nemotron 3.5 Lightning 30B-A3B",
@@ -1857,7 +1857,7 @@ extension ManagedModelCatalog {
                 precision: .int4,
                 quantization: .init(bits: 4, groupSize: 64, scheme: "mlx-affine"),
                 supports: [.chat],
-                components: .init(tokenizer: .local(path: "4bit"), textEncoder: .local(path: "4bit"))
+                components: .denseLFM2Text
             ),
             capability: .init(
                 "LFM2.5 2.6B 4-bit",

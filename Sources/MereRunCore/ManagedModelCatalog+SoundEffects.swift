@@ -293,7 +293,10 @@ extension ManagedModelCatalog {
                 tier: .max,
                 variant: .standard,
                 precision: .fp16,
-                defaults: .init(steps: 25, cfg: 4.5),
+                defaults: .init(
+                    steps: MMAudioResources.defaultSteps,
+                    cfg: Double(MMAudioResources.defaultGuidanceScale)
+                ),
                 supports: [.soundEffectGeneration, .videoToAudioGeneration],
                 upstream: .spec
             ),

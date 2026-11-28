@@ -519,7 +519,7 @@ extension ManagedModelCatalog {
                 precision: .bf16,
                 defaults: .init(steps: 4, cfg: 1.0, sigmaShift: 5.0),
                 supports: [.videoGeneration],
-                components: .init(transformer: .local(path: "model.safetensors"))
+                components: .init(transformer: .local(path: Wan2DreamXCausalResources.weightsFilename))
             ),
             capability: .init(
                 "DreamX World 5B AR MLX",
